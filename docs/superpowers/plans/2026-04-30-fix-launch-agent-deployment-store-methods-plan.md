@@ -38,7 +38,7 @@ git worktree add .worktrees/fix-launch-agent-deployment-store-methods \
 - `apps/api/src/routes/governance.ts` — refactor emergency-halt (line 184) and resume (line 318) handlers.
 - `apps/api/src/routes/billing.ts` — refactor subscription-canceled branch (line 247).
 - `apps/api/src/__tests__/api-governance.test.ts` — add `mockDeploymentLifecycleStore` decoration; assert it's called.
-- `apps/api/src/routes/__tests__/billing.test.ts` — add `mockDeploymentLifecycleStore` decoration; assert it's called on `customer.subscription.deleted`.
+- `apps/api/src/routes/__tests__/billing.test.ts` — add `mockDeploymentLifecycleStore` decoration; assert it's called on `customer.subscription.updated` when `status: "canceled"`.
 - `.audit/08-launch-blocker-sequence.md` — mark Risk #2 shipped (final task).
 
 **Read-only references (do NOT modify)**
@@ -654,7 +654,9 @@ describe("PrismaDeploymentLifecycleStore.suspendAll", () => {
 
     const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(trace.intent).toBe("agent_deployment.suspend");
-    expect(trace.trigger).toBe("webhook");
+    // "internal" matches the Trigger union (chat|api|schedule|internal) and the
+    // existing Stripe-driven pattern in apps/api/src/bootstrap/contained-workflows.ts.
+    expect(trace.trigger).toBe("internal");
     expect(trace.actor).toEqual({ type: "service", id: "stripe-webhook" });
     expect(trace.parameters).toMatchObject({
       actionKind: "agent_deployment.suspend",
@@ -699,7 +701,7 @@ Expected: FAIL — `not implemented yet`.
         mode: "operator_mutation",
         organizationId: input.organizationId,
         actor: input.operator,
-        trigger: "webhook",
+        trigger: "internal",
         parameters: {
           actionKind: "agent_deployment.suspend",
           orgId: input.organizationId,
@@ -787,24 +789,55 @@ export { PrismaDeploymentLifecycleStore } from "./stores/prisma-deployment-lifec
       import("@switchboard/core/platform").DeploymentLifecycleStore | null;
 ```
 
-- [ ] **Step 3: Construct + decorate** — in `apps/api/src/app.ts`, find the block that constructs `conversationStateStore` (around line 415–431) and add a parallel construction:
+- [ ] **Step 3: Construct inside the existing `if (prismaClient)` block** — Risk #1 established the pattern at `apps/api/src/app.ts:419–425` of constructing every store that needs the concrete `PrismaWorkTraceStore` *inside the same block where `prismaWorkTraceStore` is in lexical scope*. Doing this avoids the public `WorkTraceStore` interface (which intentionally does not expose `recordOperatorMutation`) and removes the need for a downcast. Mirror that pattern exactly.
+
+In the file (around lines 412–425 on `origin/main`), the existing block looks like:
+
+```ts
+  let workTraceStore: import("@switchboard/core/platform").WorkTraceStore | undefined;
+  let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
+  let conversationStateStore:
+    | import("@switchboard/core/platform").ConversationStateStore
+    | null = null;
+  if (prismaClient) {
+    const { PrismaWorkTraceStore } = await import("@switchboard/db");
+    const prismaWorkTraceStore = new PrismaWorkTraceStore(prismaClient, {
+      auditLedger: ledger,
+      operatorAlerter,
+    });
+    workTraceStore = prismaWorkTraceStore;
+    conversationStateStore = new PrismaConversationStateStore(prismaClient, prismaWorkTraceStore);
+    deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
+  }
+```
+
+Add a third local declaration alongside `conversationStateStore`:
 
 ```ts
   let deploymentLifecycleStore:
     | import("@switchboard/core/platform").DeploymentLifecycleStore
     | null = null;
-  if (prismaClient && workTraceStore) {
+```
+
+Then, **inside** the existing `if (prismaClient) { … }` block, immediately after the `conversationStateStore = new PrismaConversationStateStore(...)` line, add:
+
+```ts
     const { PrismaDeploymentLifecycleStore } = await import("@switchboard/db");
     deploymentLifecycleStore = new PrismaDeploymentLifecycleStore(
       prismaClient,
-      // workTraceStore is the typed PrismaWorkTraceStore at this point — recordOperatorMutation lives on the concrete class
-      workTraceStore as never,
+      prismaWorkTraceStore,
     );
-  }
+```
+
+`prismaWorkTraceStore` is already typed as the concrete `PrismaWorkTraceStore` class in this scope, so `recordOperatorMutation` is statically visible — no cast needed.
+
+After the block, alongside the existing `app.decorate("conversationStateStore", …)` decoration, add:
+
+```ts
   app.decorate("deploymentLifecycleStore", deploymentLifecycleStore ?? null);
 ```
 
-Place this immediately after the `app.decorate("conversationStateStore", …)` line.
+Do not introduce a separate `if (prismaClient && workTraceStore) { ... }` block — that loses the concrete-typed `prismaWorkTraceStore` reference and would force an `as unknown as never` cast (a code smell that hides actual contract violations and would break if `workTraceStore` is ever swapped for a non-`PrismaWorkTraceStore` impl).
 
 - [ ] **Step 4: Run typecheck**
 
@@ -846,9 +879,29 @@ git commit -m "feat(api): decorate app.deploymentLifecycleStore"
   };
 ```
 
-In the `beforeEach` block, add the decorations after the existing `app.decorate` calls:
+In the `beforeEach` block, add the decorations and **default resolved values** AFTER the existing `vi.clearAllMocks()` so the pre-existing happy-path tests (which never call `.mockResolvedValue` on the store mock themselves) don't crash when the route reads `result.count` / `result.affectedDeploymentIds` on `undefined`:
 
 ```ts
+    // Default resolved values — pre-existing tests rely on the route receiving a
+    // benign object so it can read `.count` / `.affectedDeploymentIds` without
+    // throwing. Tests that care about specific values override via
+    // mockDeploymentLifecycleStore.haltAll.mockResolvedValueOnce(...) inside the test body.
+    mockDeploymentLifecycleStore.haltAll.mockResolvedValue({
+      workTraceId: "wt_default_halt",
+      affectedDeploymentIds: [],
+      count: 0,
+    });
+    mockDeploymentLifecycleStore.resume.mockResolvedValue({
+      workTraceId: "wt_default_resume",
+      affectedDeploymentIds: [],
+      count: 0,
+    });
+    mockDeploymentLifecycleStore.suspendAll.mockResolvedValue({
+      workTraceId: "wt_default_suspend",
+      affectedDeploymentIds: [],
+      count: 0,
+    });
+
     app.decorate("deploymentLifecycleStore", mockDeploymentLifecycleStore as unknown as never);
     app.decorate("auditLedger", mockAuditLedger as unknown as never);
 ```
@@ -1057,7 +1110,9 @@ The route-level test asserts exactly one thing: when readiness passes, the route
   });
 ```
 
-> **Caveat for executor:** if `vi.mock("../routes/readiness.js", …)` interacts badly with the existing `import` ordering in `api-governance.test.ts`, hoist the mock to the top of the file (vitest convention) and re-run. If after one good-faith attempt the readiness mock cannot be made to work cleanly, drop the happy-path test and keep only the 503 assertion — Task 9's integration test will cover the happy path against a real DB.
+> **Caveat for executor:** Vitest hoists `vi.mock(...)` calls to the top of the file regardless of where they appear, but the hoist only works at module scope (NOT inside a `describe` block). Place the `vi.mock("../routes/readiness.js", …)` at the **top of the file**, immediately after the imports — that is the load-bearing version. If the mock factory cannot be made to satisfy both `checkReadiness` and `buildReadinessContext` consumers cleanly, see the coverage policy below before dropping the test.
+
+> **Coverage policy (load-bearing — read before deciding to drop the happy-path test):** The "calls deploymentLifecycleStore.resume" assertion is the **only** test that proves the route delegates to the new store on the happy path. Task 9's integration test is `describe.skipIf(!process.env.DATABASE_URL)`, and the Switchboard CI for this repo does NOT export `DATABASE_URL` to the unit-test job (see `.github/workflows/` and `package.json` `test` scripts on `origin/main` — verify before executing). That means: in CI, dropping the route-level happy-path test leaves `resume` route delegation **uncovered until a developer manually runs the integration test locally**. **Do not drop this test.** If `vi.mock` hoisting at module top still fails after one good-faith attempt, escalate to the planner rather than dropping coverage. Acceptable fallback: stub `app.prisma` deeply enough to satisfy `buildReadinessContext` (the four models listed earlier) and call `checkReadiness` for real — slower than mocking, but unambiguous.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -1133,6 +1188,16 @@ const mockDeploymentLifecycleStore = {
   resume: vi.fn(),
   suspendAll: mockSuspendAll,
 };
+```
+
+In the file's existing top-level `beforeEach` (the one that already calls `vi.clearAllMocks()`), add a default resolved value so any future webhook test paths that flow through the canceled branch don't crash:
+
+```ts
+  mockSuspendAll.mockResolvedValue({
+    workTraceId: "wt_default_suspend",
+    affectedDeploymentIds: [],
+    count: 0,
+  });
 ```
 
 In `buildTestApp`, add the decoration after `app.decorate("prisma", …)`:

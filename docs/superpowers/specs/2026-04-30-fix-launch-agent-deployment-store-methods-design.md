@@ -55,7 +55,7 @@ Risk #2 reuses every one of those primitives. No schema migration, no hash versi
 - **Not** changing the existing `PrismaDeploymentStore` (`packages/db/src/stores/prisma-deployment-store.ts`) — its `create`, `update`, `updateStatus`, `delete`, `findById`, `listByOrg`, `listByListing` methods are CRUD/provisioning surfaces and stay as-is. The new store is a separate, focused class.
 - **Not** widening the schema enum. `AgentDeployment.status` is `String` (the schema comment says `provisioning|active|paused|deactivated`); billing.ts already writes `"suspended"`, which is undocumented in the comment. Pre-existing drift; flag-only, do not fix here.
 - **Not** fixing the `marketplace-persona.ts`, `ensure-alex-listing.ts`, or seed-marketplace `upsert` paths. Those are provisioning-time creates, not operator mutations of running state.
-- **Not** introducing per-deployment trace fan-out. One bulk halt produces one trace whose `parameters.affectedDeploymentIds` carries the granular detail (matches Risk #1's "1 logical operator action = 1 trace" convention).
+- **Not** introducing per-deployment trace fan-out. One bulk halt produces one trace whose `parameters.before.ids` carries the granular detail (matches Risk #1's "1 logical operator action = 1 trace" convention). The store also returns `affectedDeploymentIds` on the result DTO for callers; the trace persists the same list under `parameters.before.ids`.
 
 ## 4. Architecture
 
@@ -147,7 +147,7 @@ Following the Risk #1 template:
 | `riskScore`        | `0`                                                                                             |
 | `matchedPolicies`  | `[]`                                                                                            |
 | `modeMetrics`      | `{ governanceMode: "operator_auto_allow" }`                                                     |
-| `trigger`          | `"api"` for halt/resume; `"webhook"` for suspend                                                |
+| `trigger`          | `"api"` for halt/resume; `"internal"` for suspend (Stripe-driven; matches existing pattern in `contained-workflows.ts`) |
 | `actor`            | from `input.operator`                                                                           |
 | `requestedAt`      | `new Date().toISOString()` at the start of the tx                                               |
 | `governanceCompletedAt` | same as `requestedAt`                                                                      |
