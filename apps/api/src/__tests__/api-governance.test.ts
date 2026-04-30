@@ -21,14 +21,46 @@ describe("Governance API", () => {
     submit: vi.fn(),
   };
 
+  const mockDeploymentLifecycleStore = {
+    haltAll: vi.fn(),
+    resume: vi.fn(),
+    suspendAll: vi.fn(),
+  };
+
+  const mockAuditLedger = {
+    record: vi.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     vi.clearAllMocks();
+
+    // Default resolved values — pre-existing tests rely on the route receiving a
+    // benign object so it can read `.count` / `.affectedDeploymentIds` without
+    // throwing. Tests that care about specific values override via
+    // mockDeploymentLifecycleStore.haltAll.mockResolvedValueOnce(...) inside the test body.
+    mockDeploymentLifecycleStore.haltAll.mockResolvedValue({
+      workTraceId: "wt_default_halt",
+      affectedDeploymentIds: [],
+      count: 0,
+    });
+    mockDeploymentLifecycleStore.resume.mockResolvedValue({
+      workTraceId: "wt_default_resume",
+      affectedDeploymentIds: [],
+      count: 0,
+    });
+    mockDeploymentLifecycleStore.suspendAll.mockResolvedValue({
+      workTraceId: "wt_default_suspend",
+      affectedDeploymentIds: [],
+      count: 0,
+    });
 
     app = Fastify({ logger: false });
 
     app.decorate("governanceProfileStore", mockGovernanceProfileStore);
     app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
     app.decorate("platformIngress", mockPlatformIngress as unknown as never);
+    app.decorate("deploymentLifecycleStore", mockDeploymentLifecycleStore as unknown as never);
+    app.decorate("auditLedger", mockAuditLedger as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);
@@ -289,6 +321,52 @@ describe("Governance API", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().reason).toBeNull();
+    });
+
+    it("calls deploymentLifecycleStore.haltAll and surfaces the count", async () => {
+      mockGovernanceProfileStore.set.mockResolvedValue(undefined);
+      mockCartridges.get.mockReturnValue(undefined);
+      mockDeploymentLifecycleStore.haltAll.mockResolvedValueOnce({
+        workTraceId: "wt_halt_1",
+        affectedDeploymentIds: ["d1", "d2"],
+        count: 2,
+      });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/governance/emergency-halt",
+        payload: { organizationId: "org_123", reason: "incident" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.deploymentsPaused).toBe(2);
+      expect(mockDeploymentLifecycleStore.haltAll).toHaveBeenCalledWith({
+        organizationId: "org_123",
+        operator: { type: "user", id: "operator" },
+        reason: "incident",
+      });
+    });
+
+    it("returns 503 when deploymentLifecycleStore is null", async () => {
+      const localApp = Fastify({ logger: false });
+      localApp.decorate("governanceProfileStore", mockGovernanceProfileStore);
+      localApp.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+      localApp.decorate("platformIngress", mockPlatformIngress as unknown as never);
+      localApp.decorate("deploymentLifecycleStore", null);
+      localApp.decorate("auditLedger", mockAuditLedger as unknown as never);
+      localApp.decorateRequest("organizationIdFromAuth", undefined);
+      localApp.decorateRequest("principalIdFromAuth", undefined);
+      await localApp.register(governanceRoutes, { prefix: "/api/governance" });
+
+      const res = await localApp.inject({
+        method: "POST",
+        url: "/api/governance/emergency-halt",
+        payload: { organizationId: "org_123" },
+      });
+
+      expect(res.statusCode).toBe(503);
+      await localApp.close();
     });
   });
 

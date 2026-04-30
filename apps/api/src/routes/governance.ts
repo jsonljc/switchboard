@@ -8,6 +8,7 @@ import {
 } from "../validation.js";
 import { checkReadiness, buildReadinessContext } from "./readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { resolveOperatorActor } from "./operator-actor.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -178,28 +179,36 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       const store = app.governanceProfileStore;
       await store.set(orgId, "locked");
 
-      // Pause all active deployments
-      let deploymentsPaused = 0;
-      if (app.prisma) {
-        const result = await app.prisma.agentDeployment.updateMany({
-          where: { organizationId: orgId, status: "active" },
-          data: { status: "paused" },
-        });
-        deploymentsPaused = result.count;
-
-        // Audit entry
-        await app.auditLedger.record({
-          eventType: "agent.emergency-halted",
-          actorType: "user",
-          actorId: request.principalIdFromAuth ?? "system",
-          entityType: "organization",
-          entityId: orgId,
-          riskCategory: "high",
-          organizationId: orgId,
-          summary: `Emergency halt: locked governance and paused ${deploymentsPaused} deployment(s)`,
-          snapshot: { reason: body.reason ?? null, deploymentsPaused },
-        });
+      // Halt all active deployments via the lifecycle store (writes WorkTrace).
+      if (!app.deploymentLifecycleStore) {
+        return reply.code(503).send({ error: "Deployment store unavailable", statusCode: 503 });
       }
+
+      const operator = resolveOperatorActor(request);
+      const haltResult = await app.deploymentLifecycleStore.haltAll({
+        organizationId: orgId,
+        operator,
+        reason: body.reason ?? null,
+      });
+      const deploymentsPaused = haltResult.count;
+
+      // Domain-event audit row preserved for the /status reader (see spec §3 / §4.6).
+      await app.auditLedger.record({
+        eventType: "agent.emergency-halted",
+        actorType: "user",
+        actorId: operator.id,
+        entityType: "organization",
+        entityId: orgId,
+        riskCategory: "high",
+        organizationId: orgId,
+        summary: `Emergency halt: locked governance and paused ${deploymentsPaused} deployment(s)`,
+        snapshot: {
+          reason: body.reason ?? null,
+          deploymentsPaused,
+          workTraceId: haltResult.workTraceId,
+          affectedDeploymentIds: haltResult.affectedDeploymentIds,
+        },
+      });
 
       const paused: string[] = [];
       const failures: Array<{ campaignId: string; error: string }> = [];
