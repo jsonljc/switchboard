@@ -3,7 +3,10 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
+import { ConversationStateNotFoundError } from "@switchboard/core/platform";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { resolveOperatorActor } from "./operator-actor.js";
+import { finalizeOperatorTrace } from "./work-trace-delivery-enrichment.js";
 
 export const escalationsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/escalations — list escalations filtered by status
@@ -169,7 +172,10 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
       }
 
-      // Update handoff status to released
+      // Update handoff status to released. The handoff mutation is owned by
+      // the escalations route directly — only the conversationState-side work
+      // (message append + status transition + WorkTrace) is delegated to
+      // ConversationStateStore.
       const updatedHandoff = await app.prisma.handoff.update({
         where: { id },
         data: {
@@ -177,34 +183,6 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
           acknowledgedAt: new Date(),
         },
       });
-
-      // If sessionId exists, append owner reply to conversation and set status to active
-      if (handoff.sessionId) {
-        const conversation = await app.prisma.conversationState.findUnique({
-          where: { threadId: handoff.sessionId },
-        });
-
-        if (conversation) {
-          const currentMessages = Array.isArray(conversation.messages) ? conversation.messages : [];
-
-          const ownerReply = {
-            role: "owner",
-            text: message,
-            timestamp: new Date().toISOString(),
-          };
-
-          const updatedMessages = [...currentMessages, ownerReply];
-
-          await app.prisma.conversationState.update({
-            where: { threadId: handoff.sessionId },
-            data: {
-              messages: updatedMessages,
-              lastActivityAt: new Date(),
-              status: "active",
-            },
-          });
-        }
-      }
 
       const escalation = {
         id: updatedHandoff.id,
@@ -221,29 +199,68 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         updatedAt: updatedHandoff.updatedAt.toISOString(),
       };
 
-      // Deliver reply to customer's channel
-      let channelDelivered = false;
-      if (handoff.sessionId) {
-        const conversation = await app.prisma.conversationState.findUnique({
-          where: { threadId: handoff.sessionId },
+      // No session means no conversation to release back to AI. Skip the
+      // store call (and channel delivery) and return 502 — same shape as
+      // before for compatibility.
+      if (!handoff.sessionId) {
+        return reply.code(502).send({
+          escalation,
+          replySent: false,
+          error: "Reply saved but channel delivery failed. Retry or contact customer directly.",
+          statusCode: 502,
         });
+      }
 
-        if (conversation && app.agentNotifier) {
-          try {
-            await app.agentNotifier.sendProactive(
-              conversation.principalId,
-              conversation.channel,
-              message,
-            );
-            channelDelivered = true;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[escalations] Channel delivery failed for ${handoff.sessionId}: ${msg}`);
-          }
+      if (!app.conversationStateStore || !app.workTraceStore) {
+        return reply.code(503).send({ error: "Conversation store unavailable", statusCode: 503 });
+      }
+
+      let storeResult;
+      try {
+        storeResult = await app.conversationStateStore.releaseEscalationToAi({
+          organizationId: orgId,
+          handoffId: handoff.id,
+          threadId: handoff.sessionId,
+          operator: resolveOperatorActor(request),
+          reply: { text: message },
+        });
+      } catch (err) {
+        if (err instanceof ConversationStateNotFoundError) {
+          return reply
+            .code(404)
+            .send({ error: "Conversation not found for escalation", statusCode: 404 });
+        }
+        throw err;
+      }
+
+      const executionStartedAt = new Date();
+      let deliveryAttempted = false;
+      let deliveryResult = "no_notifier";
+      if (app.agentNotifier) {
+        deliveryAttempted = true;
+        try {
+          await app.agentNotifier.sendProactive(
+            storeResult.destinationPrincipalId,
+            storeResult.channel,
+            message,
+          );
+          deliveryResult = "delivered";
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[escalations] Channel delivery failed for ${handoff.sessionId}: ${msg}`);
+          deliveryResult = `failed: ${msg}`;
         }
       }
 
-      if (!channelDelivered) {
+      await finalizeOperatorTrace(app.workTraceStore, storeResult.workTraceId, {
+        deliveryAttempted,
+        deliveryResult,
+        executionStartedAt,
+        completedAt: new Date(),
+        caller: "escalations.reply",
+      });
+
+      if (deliveryResult !== "delivered") {
         return reply.code(502).send({
           escalation,
           replySent: false,

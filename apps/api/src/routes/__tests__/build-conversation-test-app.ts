@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { ConversationStateStore, WorkTraceStore } from "@switchboard/core/platform";
 import type { AgentNotifier } from "@switchboard/core";
 import { conversationsRoutes } from "../conversations.js";
+import { escalationsRoutes } from "../escalations.js";
 
 export interface ConversationTestAppOptions {
   conversationStateStore?: ConversationStateStore | null;
@@ -32,6 +33,7 @@ export async function buildConversationTestApp(
   });
 
   await app.register(conversationsRoutes, { prefix: "/api/conversations" });
+  await app.register(escalationsRoutes, { prefix: "/api/escalations" });
 
   return app;
 }
