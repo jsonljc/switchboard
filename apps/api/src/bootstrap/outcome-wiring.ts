@@ -16,7 +16,14 @@ import type { OutcomeDispatcher, OutcomeEvent } from "@switchboard/ad-optimizer"
 /**
  * Minimal bus interface required for outcome wiring. The wiring layer is
  * decoupled from the broader ConversionBus contract: it only needs a string
- * keyed subscribe() that delivers `{ contactId, value?, currency? }` payloads.
+ * keyed subscribe() that delivers payloads carrying enough context to dispatch
+ * an idempotent CAPI event.
+ *
+ * The `occurredAt` field is required so the dispatcher can synthesize a stable
+ * `event_id` for Meta CAPI deduplication on Inngest retry — see
+ * `synthesizeOutcomeEventId` in `@switchboard/ad-optimizer`. Bootstrap adapters
+ * (e.g. ConversionBus → LifecycleEventBus) MUST forward the *original* event
+ * timestamp, not `Date.now()` at delivery time.
  *
  * Bootstrap is responsible for adapting the application's actual lifecycle
  * event source (e.g. ConversionBus, Inngest events) onto this interface.
@@ -24,7 +31,14 @@ import type { OutcomeDispatcher, OutcomeEvent } from "@switchboard/ad-optimizer"
 export interface LifecycleEventBus {
   subscribe(
     event: string,
-    handler: (payload: { contactId: string; value?: number; currency?: string }) => Promise<void>,
+    handler: (payload: {
+      contactId: string;
+      occurredAt: Date;
+      eventId?: string;
+      bookingId?: string;
+      value?: number;
+      currency?: string;
+    }) => Promise<void>,
   ): void;
 }
 
@@ -44,9 +58,11 @@ const KIND_MAP: Record<string, OutcomeEvent["kind"]> = {
  * LifecycleEventBus. Each lifecycle.* event triggers a CAPI dispatch via the
  * OutcomeDispatcher.
  *
- * Idempotency: at-least-once delivery is mitigated downstream by deterministic
- * CAPI event_ids (synthesized in MetaCAPIDispatcher from `event.eventId`),
- * so duplicate deliveries dedupe at Meta's side.
+ * Idempotency: the dispatcher synthesizes a deterministic `event_id` from
+ * (contactId, kind, bookingId, occurredAt) when the bus payload doesn't supply
+ * one, letting Meta CAPI deduplicate on Inngest retry. Adapters that already
+ * have a stable upstream id (e.g. an Inngest event id) should forward it via
+ * `payload.eventId` to skip synthesis entirely.
  *
  * Validation: KIND_MAP statically constrains output kinds to OutcomeKindSchema
  * values, so no runtime parse is required here. The bus interface enforces the
@@ -62,6 +78,9 @@ export function subscribeOutcomeDispatcher(deps: {
         await deps.dispatcher.handle({
           contactId: payload.contactId,
           kind,
+          occurredAt: payload.occurredAt,
+          eventId: payload.eventId,
+          bookingId: payload.bookingId,
           value: payload.value,
           currency: payload.currency,
         });
