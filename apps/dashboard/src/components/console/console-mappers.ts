@@ -9,6 +9,7 @@ import type {
   OpStrip,
   QueueCard,
 } from "./console-data";
+import { consoleFixture } from "./console-data";
 
 // ── Op strip ──────────────────────────────────────────────────────────────
 export function mapOpStrip(orgName: string, now: Date, dispatch: "live" | "halted"): OpStrip {
@@ -246,8 +247,21 @@ export type MapConsoleInput = {
   modules: ModuleEnablementMap;
   auditEntries: AuditEntry[];
 };
-export function mapConsoleData(_input: MapConsoleInput): ConsoleData {
-  throw new Error("not implemented");
+export function mapConsoleData(input: MapConsoleInput): ConsoleData {
+  const queue = mapQueue(input.escalations, input.approvals, input.now);
+  return {
+    opStrip: mapOpStrip(input.orgName, input.now, input.dispatch),
+    numbers: mapNumbersStrip({
+      leadsToday: input.leadsToday,
+      leadsYesterday: input.leadsYesterday,
+      bookingsToday: input.bookingsToday,
+    }),
+    queueLabel: { count: `${queue.length} pending` },
+    queue,
+    agents: mapAgents(input.modules),
+    novaPanel: consoleFixture.novaPanel, // option C replaces this with real ad-set aggregation
+    activity: mapActivity(input.auditEntries),
+  };
 }
 
 // Re-export AgentKey so consumers can import from one place
