@@ -23,7 +23,13 @@ describe.skipIf(!process.env["DATABASE_URL"])(
 
       try {
         const listing = await prisma.agentListing.create({
-          data: { slug: `dls-it-${Date.now()}`, title: "DLS IT", trustScore: 75, status: "active" },
+          data: {
+            slug: `dls-it-${Date.now()}`,
+            name: "DLS IT",
+            description: "Deployment lifecycle store integration test",
+            trustScore: 75,
+            status: "listed",
+          },
         });
         listingId = listing.id;
 
