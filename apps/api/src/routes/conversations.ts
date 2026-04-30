@@ -1,7 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { ConversationStateNotFoundError } from "@switchboard/core/platform";
+import {
+  ConversationStateNotFoundError,
+  ConversationStateInvalidTransitionError,
+} from "@switchboard/core/platform";
 import { resolveOperatorActor } from "./operator-actor.js";
+import { finalizeOperatorTrace } from "./work-trace-delivery-enrichment.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,7 +95,7 @@ interface PrismaLike {
     count: (args: Record<string, unknown>) => Promise<number>;
     findFirst: (args: Record<string, unknown>) => Promise<ConversationRow | null>;
     findUnique: (args: Record<string, unknown>) => Promise<ConversationRow | null>;
-    update: (args: Record<string, unknown>) => Promise<ConversationRow>;
+    // update intentionally omitted — mutations go through app.conversationStateStore.
   };
 }
 
@@ -316,8 +320,9 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const prisma = app.prisma;
-      if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
+      if (!app.conversationStateStore || !app.workTraceStore) {
+        return reply.code(503).send({ error: "Conversation store unavailable", statusCode: 503 });
+      }
 
       const { threadId } = request.params as { threadId: string };
       const { message } = request.body as { message: string };
@@ -326,59 +331,72 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send({ error: "Organization scope required", statusCode: 403 });
       }
 
-      const conversation = await (prisma as unknown as PrismaLike).conversationState.findFirst({
-        where: { threadId, organizationId: orgId },
-      });
-      if (!conversation) {
-        return reply.code(404).send({ error: "Conversation not found", statusCode: 404 });
-      }
-
-      if (conversation.status !== "human_override") {
-        return reply.code(409).send({
-          error: "Conversation must be in human_override status to send operator messages",
-          statusCode: 409,
+      let storeResult;
+      try {
+        storeResult = await app.conversationStateStore.sendOperatorMessage({
+          organizationId: orgId,
+          threadId,
+          operator: resolveOperatorActor(request),
+          message: { text: message },
         });
+      } catch (err) {
+        if (err instanceof ConversationStateNotFoundError) {
+          return reply.code(404).send({ error: "Conversation not found", statusCode: 404 });
+        }
+        if (err instanceof ConversationStateInvalidTransitionError) {
+          return reply.code(409).send({
+            error: "Conversation must be in human_override status to send operator messages",
+            statusCode: 409,
+          });
+        }
+        throw err;
       }
 
-      // Append owner message to conversation
-      const currentMessages = safeParseMessages(conversation.messages);
-      const ownerMessage = {
-        role: "owner",
-        text: message,
-        timestamp: new Date().toISOString(),
-      };
-      await (prisma as unknown as PrismaLike).conversationState.update({
-        where: { id: conversation.id },
-        data: {
-          messages: [...currentMessages, ownerMessage],
-          lastActivityAt: new Date(),
-        },
-      });
+      const executionStartedAt = new Date();
 
-      // Deliver to channel
       if (!app.agentNotifier) {
+        await finalizeOperatorTrace(app.workTraceStore, storeResult.workTraceId, {
+          deliveryAttempted: false,
+          deliveryResult: "no_notifier",
+          executionStartedAt,
+          completedAt: new Date(),
+          caller: "conversations.send",
+        });
         return reply.code(502).send({
           error: "Channel delivery not configured (agentNotifier is null)",
           statusCode: 502,
         });
       }
 
+      let deliveryResult: string;
+      let httpResult: { code: number; body: Record<string, unknown> };
       try {
         await app.agentNotifier.sendProactive(
-          conversation.principalId,
-          conversation.channel,
+          storeResult.destinationPrincipalId,
+          storeResult.channel,
           message,
         );
+        deliveryResult = "delivered";
+        httpResult = { code: 200, body: { sent: true, threadId } };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[conversations] Channel delivery failed for ${threadId}: ${msg}`);
-        return reply.code(502).send({
-          error: "Message saved but channel delivery failed",
-          statusCode: 502,
-        });
+        deliveryResult = `failed: ${msg}`;
+        httpResult = {
+          code: 502,
+          body: { error: "Message saved but channel delivery failed", statusCode: 502 },
+        };
       }
 
-      return reply.send({ sent: true, threadId });
+      await finalizeOperatorTrace(app.workTraceStore, storeResult.workTraceId, {
+        deliveryAttempted: true,
+        deliveryResult,
+        executionStartedAt,
+        completedAt: new Date(),
+        caller: "conversations.send",
+      });
+
+      return reply.code(httpResult.code).send(httpResult.body);
     },
   );
 };
