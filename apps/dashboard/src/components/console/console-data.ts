@@ -9,7 +9,7 @@
  * these types stay stable.
  */
 
-export type AgentKey = "alex" | "nova" | "mira";
+export type AgentKey = "alex" | "nova" | "mira" | "system";
 
 /** Inline text with optional <b> spans, used in queue + activity rows. */
 export type RichSegment = string | { bold: string } | { coral: string };
@@ -36,6 +36,8 @@ export type NumbersCell = {
   delta: RichText;
   /** Optional tonal cue for the delta line. */
   tone?: "good" | "coral" | "neutral";
+  /** When true, render value as muted "—" placeholder; data not yet wired. */
+  placeholder?: boolean;
 };
 
 export type NumbersStrip = {
