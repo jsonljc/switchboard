@@ -147,11 +147,16 @@ export function mapApprovalGateCard(row: ApprovalApiRow, now: Date): ApprovalGat
 }
 
 export function mapQueue(
-  _escalations: EscalationApiRow[],
-  _approvals: ApprovalApiRow[],
-  _now: Date,
+  escalations: EscalationApiRow[],
+  approvals: ApprovalApiRow[],
+  now: Date,
 ): QueueCard[] {
-  throw new Error("not implemented");
+  const escCards = escalations.map((e) => mapEscalationCard(e, now));
+  const gateCards = approvals
+    .filter((a) => a.riskCategory === "creative")
+    .map((a) => mapApprovalGateCard(a, now));
+  // Recommendation cards are not exposed by the backend in option B; option C wires them.
+  return [...escCards, ...gateCards];
 }
 
 // ── Agents ────────────────────────────────────────────────────────────────
