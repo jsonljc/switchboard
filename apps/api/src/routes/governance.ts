@@ -323,23 +323,33 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       const store = app.governanceProfileStore;
       await store.set(orgId, "guarded");
 
-      // Reactivate paused Alex deployment
-      await app.prisma.agentDeployment.updateMany({
-        where: { organizationId: orgId, skillSlug: "alex", status: "paused" },
-        data: { status: "active" },
+      // Reactivate paused deployment(s) for the alex skill via the lifecycle store.
+      if (!app.deploymentLifecycleStore) {
+        return reply.code(503).send({ error: "Deployment store unavailable", statusCode: 503 });
+      }
+      const operator = resolveOperatorActor(request);
+      const resumeResult = await app.deploymentLifecycleStore.resume({
+        organizationId: orgId,
+        skillSlug: "alex",
+        operator,
       });
 
-      // Audit entry
+      // Domain-event audit row preserved.
       await app.auditLedger.record({
         eventType: "agent.resumed",
         actorType: "user",
-        actorId: request.principalIdFromAuth ?? "system",
+        actorId: operator.id,
         entityType: "organization",
         entityId: orgId,
         riskCategory: "medium",
         organizationId: orgId,
         summary: `Agent resumed for organization ${orgId}`,
-        snapshot: { previousProfile: "locked", newProfile: "guarded" },
+        snapshot: {
+          previousProfile: "locked",
+          newProfile: "guarded",
+          workTraceId: resumeResult.workTraceId,
+          affectedDeploymentIds: resumeResult.affectedDeploymentIds,
+        },
       });
 
       return reply.code(200).send({
