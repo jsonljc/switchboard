@@ -69,6 +69,14 @@ const SOURCE_TO_ACTION_SOURCE: Record<string, ActionSource> = {
 /**
  * Synthesize a deterministic event_id from (contactId, kind, bookingId, occurredAt).
  * Identical inputs across Inngest retries produce the same id, letting Meta's CAPI dedupe.
+ *
+ * value/currency are intentionally excluded: a paid-event correction (same logical event,
+ * adjusted amount) must dedupe against the original. Adding them to the hash would break
+ * that invariant. Do not "fix" this without re-reading Meta's CAPI dedup contract.
+ *
+ * Delimiter is ASCII Unit Separator (\x1F) — never appears in UUIDs, the four OutcomeKind
+ * values, or ISO-8601 timestamps. Robust to future contactId/bookingId formats that might
+ * include arbitrary printable characters.
  */
 export function synthesizeOutcomeEventId(event: OutcomeEvent): string {
   const parts = [
@@ -76,7 +84,7 @@ export function synthesizeOutcomeEventId(event: OutcomeEvent): string {
     event.kind,
     event.bookingId ?? "",
     event.occurredAt.toISOString(),
-  ].join("|");
+  ].join("\x1F");
   return createHash("sha256").update(parts).digest("hex");
 }
 
