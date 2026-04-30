@@ -27,8 +27,61 @@ export type NumbersInput = {
   leadsYesterday: number;
   bookingsToday: Array<{ startsAt: string; contactName: string }>;
 };
-export function mapNumbersStrip(_input: NumbersInput): NumbersStrip {
-  throw new Error("not implemented");
+export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
+  const leadsDelta = input.leadsToday - input.leadsYesterday;
+  const leadsTone: "good" | "coral" = leadsDelta >= 0 ? "good" : "coral";
+  const leadsArrow = leadsDelta >= 0 ? "↑" : "↓";
+  const leadsAbs = Math.abs(leadsDelta);
+
+  const appts = input.bookingsToday.length;
+  const next = input.bookingsToday[0];
+  const nextTime = next
+    ? new Date(next.startsAt).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: false,
+      })
+    : null;
+
+  return {
+    cells: [
+      {
+        label: "Revenue today",
+        value: "—",
+        delta: ["pending option C"],
+        tone: "neutral",
+        placeholder: true,
+      },
+      {
+        label: "Leads today",
+        value: String(input.leadsToday),
+        delta: [`${leadsArrow} `, { bold: String(leadsAbs) }, " vs yesterday"],
+        tone: leadsTone,
+      },
+      {
+        label: "Appointments",
+        value: String(appts),
+        delta: next
+          ? ["next: ", { bold: nextTime ?? "" }, ` · ${next.contactName}`]
+          : ["none scheduled"],
+        tone: "neutral",
+      },
+      {
+        label: "Spend today",
+        value: "—",
+        delta: ["pending option C"],
+        tone: "neutral",
+        placeholder: true,
+      },
+      {
+        label: "Reply time",
+        value: "—",
+        delta: ["pending option C"],
+        tone: "neutral",
+        placeholder: true,
+      },
+    ],
+  };
 }
 
 // ── Queue ─────────────────────────────────────────────────────────────────
