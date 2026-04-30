@@ -136,3 +136,44 @@ describe("PrismaDeploymentLifecycleStore.resume", () => {
     });
   });
 });
+
+describe("PrismaDeploymentLifecycleStore.suspendAll", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("flips active deployments to suspended and writes a service-actor trace", async () => {
+    const { prisma, tx } = makePrismaMock({
+      findMany: [{ id: "d1" }, { id: "d2" }, { id: "d3" }],
+      updateCount: 3,
+    });
+    const wts = makeWorkTraceStoreMock();
+    const store = new PrismaDeploymentLifecycleStore(prisma, wts);
+
+    const result = await store.suspendAll({
+      organizationId: "org_1",
+      operator: { type: "service", id: "stripe-webhook" },
+      reason: "subscription_canceled",
+    });
+
+    expect(result.count).toBe(3);
+    expect(result.affectedDeploymentIds).toEqual(["d1", "d2", "d3"]);
+
+    expect(tx.agentDeployment.updateMany).toHaveBeenCalledWith({
+      where: { organizationId: "org_1", status: "active" },
+      data: { status: "suspended" },
+    });
+
+    const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(trace.intent).toBe("agent_deployment.suspend");
+    // "internal" matches the Trigger union (chat|api|schedule|internal) and the
+    // existing Stripe-driven pattern in apps/api/src/bootstrap/contained-workflows.ts.
+    expect(trace.trigger).toBe("internal");
+    expect(trace.actor).toEqual({ type: "service", id: "stripe-webhook" });
+    expect(trace.parameters).toMatchObject({
+      actionKind: "agent_deployment.suspend",
+      orgId: "org_1",
+      before: { status: "active", ids: ["d1", "d2", "d3"] },
+      after: { status: "suspended", count: 3 },
+      reason: "subscription_canceled",
+    });
+  });
+});

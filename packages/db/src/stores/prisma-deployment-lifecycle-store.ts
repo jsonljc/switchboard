@@ -178,7 +178,79 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     };
   }
 
-  async suspendAll(_input: SuspendAllInput): Promise<SuspendAllResult> {
-    throw new Error("not implemented yet — see Task 4");
+  async suspendAll(input: SuspendAllInput): Promise<SuspendAllResult> {
+    const requestedAt = new Date();
+    const executionStartedAt = new Date();
+
+    const txResult = await this.prisma.$transaction(async (tx) => {
+      const before = await tx.agentDeployment.findMany({
+        where: { organizationId: input.organizationId, status: "active" },
+        select: { id: true },
+      });
+      const ids = before.map((r) => r.id);
+
+      const updateResult = await tx.agentDeployment.updateMany({
+        where: { organizationId: input.organizationId, status: "active" },
+        data: { status: "suspended" },
+      });
+
+      const workUnitId = randomUUID();
+      const trace: WorkTrace = {
+        workUnitId,
+        traceId: workUnitId,
+        intent: "agent_deployment.suspend",
+        mode: "operator_mutation",
+        organizationId: input.organizationId,
+        actor: input.operator,
+        trigger: "internal",
+        parameters: {
+          actionKind: "agent_deployment.suspend",
+          orgId: input.organizationId,
+          before: { status: "active", ids },
+          after: { status: "suspended", count: updateResult.count },
+          reason: input.reason,
+        },
+        governanceOutcome: "execute",
+        riskScore: 0,
+        matchedPolicies: [],
+        outcome: "running",
+        durationMs: 0,
+        executionSummary: `service ${input.operator.id} suspended ${updateResult.count} deployment(s) for org ${input.organizationId} (${input.reason})`,
+        modeMetrics: { governanceMode: "operator_auto_allow" },
+        ingressPath: "store_recorded_operator_mutation",
+        hashInputVersion: 2,
+        requestedAt: requestedAt.toISOString(),
+        governanceCompletedAt: requestedAt.toISOString(),
+      };
+
+      await this.workTraceStore.recordOperatorMutation(trace, {
+        tx: tx as Prisma.TransactionClient,
+      });
+
+      return { workUnitId, ids, count: updateResult.count };
+    });
+
+    const completedAt = new Date();
+    const finalize = await this.workTraceStore.update(
+      txResult.workUnitId,
+      {
+        outcome: "completed",
+        executionStartedAt: executionStartedAt.toISOString(),
+        completedAt: completedAt.toISOString(),
+        durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
+      },
+      { caller: "DeploymentLifecycleStore.suspendAll" },
+    );
+    if (!finalize.ok) {
+      console.warn(
+        `[deployment-lifecycle-store] suspendAll finalize rejected for ${txResult.workUnitId}: ${finalize.reason}`,
+      );
+    }
+
+    return {
+      workTraceId: txResult.workUnitId,
+      affectedDeploymentIds: txResult.ids,
+      count: txResult.count,
+    };
   }
 }
