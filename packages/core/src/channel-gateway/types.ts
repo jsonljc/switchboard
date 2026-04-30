@@ -2,6 +2,7 @@ import type { DeploymentResolver } from "../platform/deployment-resolver.js";
 import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
 import type { ApprovalStore } from "../storage/interfaces.js";
+import type { HandleApprovalResponseConfig } from "./handle-approval-response.js";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -37,6 +38,13 @@ export interface ChannelGatewayConfig {
    * cannot be silently skipped by misconfiguration.
    */
   approvalStore: ApprovalStore;
+  /**
+   * Optional config to enable chat approval execution. When omitted, approval-shaped
+   * payloads with valid binding hashes are rejected with a "not authorized" reply
+   * (channel-possession is NOT authority). When provided, hash match → binding lookup →
+   * role check → shared respondToApproval call mutates the lifecycle.
+   */
+  approvalResponseConfig?: HandleApprovalResponseConfig;
 }
 
 export interface GatewayConversationStore {

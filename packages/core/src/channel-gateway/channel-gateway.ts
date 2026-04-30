@@ -109,8 +109,14 @@ export class ChannelGateway {
       await handleApprovalResponse({
         payload: approvalPayload,
         organizationId: resolved.organizationId,
+        // sessionId IS the stable external identity for WhatsApp (phone). For other channels,
+        // the inbound adapter MUST set sessionId to a stable identity (channel user id), never
+        // an ephemeral message thread id. See OperatorChannelBinding model docs.
+        channel: message.channel,
+        channelIdentifier: message.sessionId,
         approvalStore: this.config.approvalStore,
         replySink,
+        config: this.config.approvalResponseConfig,
       });
       return;
     }
