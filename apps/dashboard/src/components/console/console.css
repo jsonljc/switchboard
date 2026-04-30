@@ -213,6 +213,14 @@
   color: var(--c-coral);
   font-weight: 600;
 }
+[data-v6-console] .num-cell.placeholder .n-value {
+  color: var(--c-text-4);
+  font-weight: 500;
+}
+[data-v6-console] .num-cell.placeholder .n-delta {
+  color: var(--c-text-4);
+  font-style: italic;
+}
 
 @media (max-width: 880px) {
   [data-v6-console] .numbers {

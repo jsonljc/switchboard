@@ -186,7 +186,10 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
         {/* ZONE 1.5 — Numbers strip */}
         <section aria-label="At-a-glance numbers" className="numbers">
           {numbers.cells.map((cell) => (
-            <div key={cell.label} className={`num-cell${cell.tone ? ` tone-${cell.tone}` : ""}`}>
+            <div
+              key={cell.label}
+              className={`num-cell${cell.tone ? ` tone-${cell.tone}` : ""}${cell.placeholder ? " placeholder" : ""}`}
+            >
               <span className="n-label">{cell.label}</span>
               <span className="n-value">{cell.value}</span>
               <span className="n-delta">
