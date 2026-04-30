@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mapAgents,
   mapApprovalGateCard,
   mapEscalationCard,
   mapNumbersStrip,
@@ -182,5 +183,30 @@ describe("mapQueue", () => {
 
   it("returns [] when both inputs empty", () => {
     expect(mapQueue([], [], now)).toEqual([]);
+  });
+});
+
+describe("mapAgents", () => {
+  it("returns 3 entries (Alex / Nova / Mira) with viewLink hrefs", () => {
+    const result = mapAgents({ alex: true, nova: true, mira: true });
+    expect(result).toHaveLength(3);
+    expect(result.map((a) => a.key)).toEqual(["alex", "nova", "mira"]);
+    expect(result[0].viewLink.href).toBe("/conversations");
+    expect(result[1].viewLink.href).toBe("/modules/ad-optimizer");
+    expect(result[2].viewLink.href).toBe("/modules/creative");
+  });
+
+  it("makes Nova the active panel when enabled, otherwise Alex", () => {
+    expect(mapAgents({ alex: true, nova: true, mira: true }).find((a) => a.active)?.key).toBe(
+      "nova",
+    );
+    expect(mapAgents({ alex: true, nova: false, mira: true }).find((a) => a.active)?.key).toBe(
+      "alex",
+    );
+  });
+
+  it("primaryStat reads 'pending option C' until per-agent stats land", () => {
+    const result = mapAgents({ alex: true, nova: true, mira: true });
+    expect(result.every((a) => a.primaryStat === "pending option C")).toBe(true);
   });
 });

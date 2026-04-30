@@ -165,8 +165,22 @@ export type ModuleEnablementMap = {
   nova: boolean;
   mira: boolean;
 };
-export function mapAgents(_modules: ModuleEnablementMap): AgentStripEntry[] {
-  throw new Error("not implemented");
+export function mapAgents(modules: ModuleEnablementMap): AgentStripEntry[] {
+  const activeKey: AgentKey = modules.nova ? "nova" : modules.alex ? "alex" : "mira";
+  return (
+    [
+      { key: "alex", name: "Alex", href: "/conversations", label: "view conversations →" },
+      { key: "nova", name: "Nova", href: "/modules/ad-optimizer", label: "view ad actions →" },
+      { key: "mira", name: "Mira", href: "/modules/creative", label: "view creative →" },
+    ] as const
+  ).map((a) => ({
+    key: a.key,
+    name: a.name,
+    primaryStat: "pending option C",
+    subStat: ["—"],
+    viewLink: { label: a.label, href: a.href },
+    active: a.key === activeKey,
+  }));
 }
 
 // ── Activity ──────────────────────────────────────────────────────────────
