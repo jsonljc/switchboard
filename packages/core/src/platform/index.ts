@@ -150,3 +150,15 @@ export {
   ConversationStateNotFoundError,
   ConversationStateInvalidTransitionError,
 } from "./conversation-state-store.js";
+
+// Deployment Lifecycle Store
+export type {
+  DeploymentLifecycleStore,
+  DeploymentLifecycleActionKind,
+  HaltAllInput,
+  HaltAllResult,
+  ResumeInput,
+  ResumeResult,
+  SuspendAllInput,
+  SuspendAllResult,
+} from "./deployment-lifecycle-store.js";
