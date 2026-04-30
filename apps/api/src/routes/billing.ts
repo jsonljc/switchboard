@@ -244,10 +244,18 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
 
           // Side effect: deactivate resources on cancellation
           if (result.data.status === "canceled") {
-            await app.prisma.agentDeployment.updateMany({
-              where: { organizationId: orgId, status: "active" },
-              data: { status: "suspended" },
-            });
+            if (app.deploymentLifecycleStore) {
+              await app.deploymentLifecycleStore.suspendAll({
+                organizationId: orgId,
+                operator: { type: "service", id: "stripe-webhook" },
+                reason: "subscription_canceled",
+              });
+            } else {
+              app.log.warn(
+                { orgId },
+                "Subscription canceled but deploymentLifecycleStore unavailable; skipping deployment suspend",
+              );
+            }
             await app.prisma.managedChannel.updateMany({
               where: { organizationId: orgId, status: "active" },
               data: { status: "suspended" },

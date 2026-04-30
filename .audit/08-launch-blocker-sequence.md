@@ -101,26 +101,25 @@ Live ledger of which entries below have shipped. Updated after each verification
 
 ### Launch-Risks
 
-| #   | Item                                               | Status     | Evidence / PR                                                                                                   |
-| --- | -------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
-| 1   | ConversationState direct Prisma bypass             | ✅ SHIPPED | PRs #318 (schema + store), #319 (route refactor + bypass closure), #320 (integration test + audit closeout)     |
-| 2   | AgentDeployment updateMany bypass                  | 🔴 OPEN    | `apps/api/src/routes/governance.ts:184,318` calls `agentDeployment.updateMany()` directly (verified 2026-04-29) |
-| 3   | Ad-optimizer outcome dispatcher idempotency        | 🟡 UNCLEAR | Local idempotency guard incomplete; relies on Meta-side dedup via eventId (verified 2026-04-29)                 |
-| 4   | Chat approval binding hash not verified            | ✅ SHIPPED | PR #305 (gateway interception, terminal branch)                                                                 |
-| 4a  | Follow-up: Chat Approval Response Identity Binding | 🔴 OPEN    | New entry — see §4a below                                                                                       |
-| 5   | Rate limits not per-endpoint                       | 🔴 OPEN    | `apps/api/src/middleware/rate-limit.ts:17` `SENSITIVE_PREFIXES` excludes approval/execute (verified 2026-04-29) |
-| 6   | Policy conflict resolution untested                | 🔴 OPEN    | No conflict-resolution tests in `packages/core/src/skill-runtime/__tests__/` (verified 2026-04-29)              |
-| 7   | Credential decryption failures silent in cron      | ✅ SHIPPED | `apps/api/src/services/cron/meta-token-refresh.ts:81–94` warns + notifies operator (verified 2026-04-29)        |
+| #   | Item                                               | Status     | Evidence / PR                                                                                                                                                                                                                                                                                                                                                                    |
+| --- | -------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | ConversationState direct Prisma bypass             | ✅ SHIPPED | PRs #318 (schema + store), #319 (route refactor + bypass closure), #320 (integration test + audit closeout)                                                                                                                                                                                                                                                                      |
+| 2   | AgentDeployment updateMany bypass                  | ✅ SHIPPED | PR #321 (spec + plan), PR #322 (implementation). `governance.ts` halt + resume and `billing.ts` subscription-canceled now route through `PrismaDeploymentLifecycleStore` with `intent: "agent_deployment.{halt\|resume\|suspend}"`, `mode: "operator_mutation"`, `ingressPath: "store_recorded_operator_mutation"` traces. Circuit-breaker write deferred (no current callsite). |
+| 3   | Ad-optimizer outcome dispatcher idempotency        | 🟡 UNCLEAR | Local idempotency guard incomplete; relies on Meta-side dedup via eventId (verified 2026-04-29)                                                                                                                                                                                                                                                                                  |
+| 4   | Chat approval binding hash not verified            | ✅ SHIPPED | PR #305 (gateway interception, terminal branch)                                                                                                                                                                                                                                                                                                                                  |
+| 4a  | Follow-up: Chat Approval Response Identity Binding | 🔴 OPEN    | New entry — see §4a below                                                                                                                                                                                                                                                                                                                                                        |
+| 5   | Rate limits not per-endpoint                       | 🔴 OPEN    | `apps/api/src/middleware/rate-limit.ts:17` `SENSITIVE_PREFIXES` excludes approval/execute (verified 2026-04-29)                                                                                                                                                                                                                                                                  |
+| 6   | Policy conflict resolution untested                | 🔴 OPEN    | No conflict-resolution tests in `packages/core/src/skill-runtime/__tests__/` (verified 2026-04-29)                                                                                                                                                                                                                                                                               |
+| 7   | Credential decryption failures silent in cron      | ✅ SHIPPED | `apps/api/src/services/cron/meta-token-refresh.ts:81–94` warns + notifies operator (verified 2026-04-29)                                                                                                                                                                                                                                                                         |
 
 ### Open work, ordered by recommended next-slice priority
 
 1. **Blocker #18** — Creative-pipeline DLQ. S per function × 3, identical pattern, doctrine compliance.
 2. **Blocker #19** — WorkTrace cryptographic integrity. M-L, scaffolding (hash-chain machinery in `AuditLedger`) already exists; missing piece is `WorkTrace` schema + recorder integration.
-3. **Risk #2** — AgentDeployment Store methods. M.
-4. **Risk #5** — Per-endpoint rate limits for approval/execute. S.
-5. **Risk #3** — Outcome dispatcher idempotency completeness. S (decide whether local guard is needed beyond Meta-side dedup).
-6. **Risk #6** — Policy conflict resolution tests. S.
-7. **Risk #4a** — Chat approval response identity binding. M (depends on chat contact→principal mapping).
+3. **Risk #5** — Per-endpoint rate limits for approval/execute. S.
+4. **Risk #3** — Outcome dispatcher idempotency completeness. S (decide whether local guard is needed beyond Meta-side dedup).
+5. **Risk #6** — Policy conflict resolution tests. S.
+6. **Risk #4a** — Chat approval response identity binding. M (depends on chat contact→principal mapping).
 
 ---
 
@@ -546,6 +545,21 @@ Verification:
 **Branch slug:** `fix/launch-agent-deployment-store-methods`
 
 **Acceptance:** Store.halt() and Store.updateCircuitBreaker() methods created. Governance routes refactored to use them. Halt enforcement auditable via WorkTrace.
+
+**Status — 2026-04-30:** ✅ SHIPPED. Implementation lands `PrismaDeploymentLifecycleStore` (`packages/db/src/stores/`) with `haltAll`/`resume`/`suspendAll` methods. Each method writes a transactional `operator_mutation` `WorkTrace` via `recordOperatorMutation`, then finalizes the trace post-tx. Routes refactored:
+
+- `apps/api/src/routes/governance.ts` `POST /emergency-halt` → `haltAll`.
+- `apps/api/src/routes/governance.ts` `POST /resume` → `resume`.
+- `apps/api/src/routes/billing.ts` `customer.subscription.updated → canceled` → `suspendAll`.
+
+The pre-existing `auditLedger.record({eventType:"agent.emergency-halted"|"agent.resumed"})` writes are preserved — the `/api/governance/:orgId/status` reader still queries `AuditEntry` for halt history. Migrating that reader off `AuditEntry` and onto `WorkTrace` is a UI-touching follow-up not blocked by this slice.
+
+Out of scope deferrals (see spec §3 / §7):
+
+- `Store.updateCircuitBreaker()` — no current write callsite.
+- `ManagedChannelLifecycleStore` for `billing.ts` channel-suspend (still direct `updateMany`).
+- Stripe-event idempotency on `suspendAll` traces (today: idempotent on Postgres but each redelivery writes a fresh trace with `count: 0`).
+- Schema doc-comment drift: `AgentDeployment.status` enum comment doesn't list `"suspended"`.
 
 ---
 

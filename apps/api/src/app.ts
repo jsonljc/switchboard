@@ -1,3 +1,10 @@
+/* eslint-disable max-lines -- bootstrap module: accumulates store wiring,
+   middleware, and route registration for the Fastify app. Crossed the 600-line
+   guideline when DeploymentLifecycleStore wiring was added (PR #322 / Risk #2).
+   Splitting this file (e.g. into a separate `bootstrap/decorate-stores.ts`) is
+   tracked as a follow-up — it has architectural reach beyond Risk #2's scope
+   and is best done when consolidating the store-wiring pattern across all
+   stores at once. */
 import Fastify from "fastify";
 import crypto from "node:crypto";
 import type { FastifyError } from "fastify";
@@ -53,6 +60,7 @@ declare module "fastify" {
     lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null;
     workTraceStore: import("@switchboard/core/platform").WorkTraceStore | null;
     conversationStateStore: import("@switchboard/core/platform").ConversationStateStore | null;
+    deploymentLifecycleStore: import("@switchboard/core/platform").DeploymentLifecycleStore | null;
     executionQueue: import("bullmq").Queue | null;
     executionWorker: import("bullmq").Worker | null;
     simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null;
@@ -415,20 +423,29 @@ export async function buildServer() {
   let conversationStateStore:
     | import("@switchboard/core/platform").ConversationStateStore
     | undefined;
+  let deploymentLifecycleStore:
+    | import("@switchboard/core/platform").DeploymentLifecycleStore
+    | null = null;
   if (prismaClient) {
-    const { PrismaWorkTraceStore, PrismaConversationStateStore } = await import("@switchboard/db");
+    const { PrismaWorkTraceStore, PrismaConversationStateStore, PrismaDeploymentLifecycleStore } =
+      await import("@switchboard/db");
     const prismaWorkTraceStore = new PrismaWorkTraceStore(prismaClient, {
       auditLedger: ledger,
       operatorAlerter,
     });
     workTraceStore = prismaWorkTraceStore;
     conversationStateStore = new PrismaConversationStateStore(prismaClient, prismaWorkTraceStore);
+    deploymentLifecycleStore = new PrismaDeploymentLifecycleStore(
+      prismaClient,
+      prismaWorkTraceStore,
+    );
     const { PrismaDeploymentResolver } = await import("@switchboard/core/platform");
     deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
   }
   app.decorate("deploymentResolver", deploymentResolver);
   app.decorate("workTraceStore", workTraceStore ?? null);
   app.decorate("conversationStateStore", conversationStateStore ?? null);
+  app.decorate("deploymentLifecycleStore", deploymentLifecycleStore ?? null);
 
   let lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null = null;
   if (prismaClient) {

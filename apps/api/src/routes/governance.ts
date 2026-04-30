@@ -8,6 +8,7 @@ import {
 } from "../validation.js";
 import { checkReadiness, buildReadinessContext } from "./readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { resolveOperatorActor } from "./operator-actor.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -175,31 +176,44 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      // Guard the lifecycle store BEFORE mutating the governance profile, so a
+      // missing infra component doesn't leave the org half-halted (governance
+      // locked, deployments still active). Cannot fire today — app.ts co-creates
+      // both stores in the same `if (prismaClient)` block — but the ordering is
+      // the right defensive shape if that wiring ever drifts.
+      if (!app.deploymentLifecycleStore) {
+        return reply.code(503).send({ error: "Deployment store unavailable", statusCode: 503 });
+      }
+
       const store = app.governanceProfileStore;
       await store.set(orgId, "locked");
 
-      // Pause all active deployments
-      let deploymentsPaused = 0;
-      if (app.prisma) {
-        const result = await app.prisma.agentDeployment.updateMany({
-          where: { organizationId: orgId, status: "active" },
-          data: { status: "paused" },
-        });
-        deploymentsPaused = result.count;
+      // Halt all active deployments via the lifecycle store (writes WorkTrace).
+      const operator = resolveOperatorActor(request);
+      const haltResult = await app.deploymentLifecycleStore.haltAll({
+        organizationId: orgId,
+        operator,
+        reason: body.reason ?? null,
+      });
+      const deploymentsPaused = haltResult.count;
 
-        // Audit entry
-        await app.auditLedger.record({
-          eventType: "agent.emergency-halted",
-          actorType: "user",
-          actorId: request.principalIdFromAuth ?? "system",
-          entityType: "organization",
-          entityId: orgId,
-          riskCategory: "high",
-          organizationId: orgId,
-          summary: `Emergency halt: locked governance and paused ${deploymentsPaused} deployment(s)`,
-          snapshot: { reason: body.reason ?? null, deploymentsPaused },
-        });
-      }
+      // Domain-event audit row preserved for the /status reader (see spec §3 / §4.6).
+      await app.auditLedger.record({
+        eventType: "agent.emergency-halted",
+        actorType: "user",
+        actorId: operator.id,
+        entityType: "organization",
+        entityId: orgId,
+        riskCategory: "high",
+        organizationId: orgId,
+        summary: `Emergency halt: locked governance and paused ${deploymentsPaused} deployment(s)`,
+        snapshot: {
+          reason: body.reason ?? null,
+          deploymentsPaused,
+          workTraceId: haltResult.workTraceId,
+          affectedDeploymentIds: haltResult.affectedDeploymentIds,
+        },
+      });
 
       const paused: string[] = [];
       const failures: Array<{ campaignId: string; error: string }> = [];
@@ -310,27 +324,41 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      // Guard the lifecycle store BEFORE mutating the governance profile, so a
+      // missing infra component doesn't leave the org half-resumed (governance
+      // unlocked, deployments still paused). See emergency-halt for the same pattern.
+      if (!app.deploymentLifecycleStore) {
+        return reply.code(503).send({ error: "Deployment store unavailable", statusCode: 503 });
+      }
+
       // Restore governance to guarded (safe default)
       const store = app.governanceProfileStore;
       await store.set(orgId, "guarded");
 
-      // Reactivate paused Alex deployment
-      await app.prisma.agentDeployment.updateMany({
-        where: { organizationId: orgId, skillSlug: "alex", status: "paused" },
-        data: { status: "active" },
+      // Reactivate paused deployment(s) for the alex skill via the lifecycle store.
+      const operator = resolveOperatorActor(request);
+      const resumeResult = await app.deploymentLifecycleStore.resume({
+        organizationId: orgId,
+        skillSlug: "alex",
+        operator,
       });
 
-      // Audit entry
+      // Domain-event audit row preserved.
       await app.auditLedger.record({
         eventType: "agent.resumed",
         actorType: "user",
-        actorId: request.principalIdFromAuth ?? "system",
+        actorId: operator.id,
         entityType: "organization",
         entityId: orgId,
         riskCategory: "medium",
         organizationId: orgId,
         summary: `Agent resumed for organization ${orgId}`,
-        snapshot: { previousProfile: "locked", newProfile: "guarded" },
+        snapshot: {
+          previousProfile: "locked",
+          newProfile: "guarded",
+          workTraceId: resumeResult.workTraceId,
+          affectedDeploymentIds: resumeResult.affectedDeploymentIds,
+        },
       });
 
       return reply.code(200).send({

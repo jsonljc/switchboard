@@ -30,6 +30,12 @@ const mockWebhookFindUnique = vi.fn();
 const mockWebhookCreate = vi.fn();
 const mockDeploymentUpdateMany = vi.fn();
 const mockChannelUpdateMany = vi.fn();
+const mockSuspendAll = vi.fn();
+const mockDeploymentLifecycleStore = {
+  haltAll: vi.fn(),
+  resume: vi.fn(),
+  suspendAll: mockSuspendAll,
+};
 
 const mockPrisma = {
   organizationConfig: {
@@ -77,6 +83,10 @@ async function buildTestApp() {
   });
 
   app.decorate("prisma", mockPrisma as unknown as typeof app.prisma);
+  app.decorate(
+    "deploymentLifecycleStore",
+    mockDeploymentLifecycleStore as unknown as typeof app.deploymentLifecycleStore,
+  );
   await app.register(billingRoutes, { prefix: "/api/billing" });
   return app;
 }
@@ -94,6 +104,11 @@ describe("billing routes", () => {
     mockWebhookCreate.mockResolvedValue({});
     mockDeploymentUpdateMany.mockResolvedValue({ count: 0 });
     mockChannelUpdateMany.mockResolvedValue({ count: 0 });
+    mockSuspendAll.mockResolvedValue({
+      workTraceId: "wt_default_suspend",
+      affectedDeploymentIds: [],
+      count: 0,
+    });
   });
 
   // ── POST /api/billing/checkout ──────────────────────────────────────────
@@ -311,6 +326,54 @@ describe("billing routes", () => {
         }),
       }),
     );
+  });
+
+  it("webhook customer.subscription.updated → canceled calls suspendAll, not direct updateMany", async () => {
+    mockConstructEvent.mockReturnValue({
+      id: "evt_cancel",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          metadata: { organizationId: "org-1" },
+          status: "canceled",
+          items: { data: [{ price: { id: "price_pro" }, current_period_end: 1787875200 }] },
+          cancel_at_period_end: false,
+          trial_end: null,
+        },
+      },
+    });
+    mockUpdate.mockResolvedValue({});
+    mockChannelUpdateMany.mockResolvedValue({ count: 0 });
+    mockSuspendAll.mockResolvedValue({
+      workTraceId: "wt_suspend_1",
+      affectedDeploymentIds: ["d1"],
+      count: 1,
+    });
+
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/billing/webhook",
+      headers: {
+        "stripe-signature": "sig_valid",
+        "content-type": "application/json",
+      },
+      payload: JSON.stringify({ id: "evt_cancel" }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockSuspendAll).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      operator: { type: "service", id: "stripe-webhook" },
+      reason: "subscription_canceled",
+    });
+    // Direct updateMany must no longer be called by the canceled branch.
+    expect(mockDeploymentUpdateMany).not.toHaveBeenCalled();
+    // Channels are out of scope for this slice — channel updateMany still direct.
+    expect(mockChannelUpdateMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", status: "active" },
+      data: { status: "suspended" },
+    });
   });
 
   it("webhook returns 400 for invalid signature", async () => {
