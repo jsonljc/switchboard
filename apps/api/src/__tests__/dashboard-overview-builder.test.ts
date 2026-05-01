@@ -75,4 +75,23 @@ describe("buildDashboardOverview (option C1 shape)", () => {
     expect(result.today.revenue.currency).toBe("EUR");
     expect(result.today.spend.currency).toBe("EUR");
   });
+
+  it("populates today.revenue from sumRevenue with today's window + 7-day baseline for delta", async () => {
+    const sumRevenue = vi.fn(async (_org: string, range: { from: Date; to: Date }) => {
+      const days = Math.round((range.to.getTime() - range.from.getTime()) / 86_400_000);
+      // 7-day window → $700; today window (1 day) → $140
+      if (days >= 6) return { totalAmount: 700, count: 14 };
+      return { totalAmount: 140, count: 2 };
+    });
+    const result = await buildDashboardOverview("org-1", makeStores({ sumRevenue }), "USD");
+    expect(result.today.revenue.amount).toBe(140);
+    // 7-day daily avg = 100; today is 140 → +40%
+    expect(result.today.revenue.deltaPctVsAvg).toBeCloseTo(0.4, 2);
+  });
+
+  it("today.revenue.deltaPctVsAvg is null when 7-day baseline is zero", async () => {
+    const sumRevenue = vi.fn(async () => ({ totalAmount: 0, count: 0 }));
+    const result = await buildDashboardOverview("org-1", makeStores({ sumRevenue }), "USD");
+    expect(result.today.revenue.deltaPctVsAvg).toBeNull();
+  });
 });

@@ -135,6 +135,7 @@ export async function buildDashboardOverview(
     inquiriesToday,
     inquiriesYesterday,
     auditEntries,
+    revenueTodayRaw,
   ] = await Promise.all([
     stores.queryOperatorName(orgId),
     stores.queryApprovals(orgId),
@@ -146,6 +147,7 @@ export async function buildDashboardOverview(
     stores.countByType(orgId, "inquiry", todayStart, now),
     stores.countByType(orgId, "inquiry", yesterdayStart, todayStart),
     stores.queryAudit({ organizationId: orgId, limit: 8 }),
+    stores.sumRevenue(orgId, { from: todayStart, to: now }),
   ]);
 
   // Map pending approvals (top 3). stageProgress is added in Task 12.
@@ -187,6 +189,11 @@ export async function buildDashboardOverview(
     agent: null as null,
   }));
 
+  // Compute today.revenue delta vs 7-day daily average
+  const sevenDayAvg = revenueSummary.totalAmount / 7;
+  const deltaPctVsAvg =
+    sevenDayAvg > 0 ? (revenueTodayRaw.totalAmount - sevenDayAvg) / sevenDayAvg : null;
+
   // Tier B fields ship as placeholders in C1; the staleness check is a no-op until C2
   // gives spendUpdatedAt a real value, but the call site stays here so C2 doesn't have to thread it in.
   const spendUpdatedAt: string | null = null;
@@ -210,8 +217,7 @@ export async function buildDashboardOverview(
     },
 
     today: {
-      // today.revenue real wiring lands in Task 6.
-      revenue: { amount: 0, currency: orgCurrency, deltaPctVsAvg: null },
+      revenue: { amount: revenueTodayRaw.totalAmount, currency: orgCurrency, deltaPctVsAvg },
       // today.spend stays as a Tier-B placeholder. updatedAt=null mutes the cell.
       spend: { amount: 0, currency: orgCurrency, capPct: 0, updatedAt: spendUpdatedAt },
       // today.replyTime real wiring lands in Task 8.

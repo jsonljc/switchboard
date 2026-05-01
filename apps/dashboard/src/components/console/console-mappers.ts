@@ -11,6 +11,14 @@ import type {
 } from "./console-data";
 import { consoleFixture } from "./console-data";
 
+function formatCurrency(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 // ── Op strip ──────────────────────────────────────────────────────────────
 export function mapOpStrip(orgName: string, now: Date, dispatch: "live" | "halted"): OpStrip {
   const day = now.toLocaleDateString("en-US", { weekday: "short" });
@@ -27,6 +35,7 @@ export type NumbersInput = {
   leadsToday: number;
   leadsYesterday: number;
   bookingsToday: Array<{ startsAt: string; contactName: string }>;
+  revenue: { amount: number; currency: string; deltaPctVsAvg: number | null };
 };
 export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
   const leadsDelta = input.leadsToday - input.leadsYesterday;
@@ -48,10 +57,21 @@ export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
     cells: [
       {
         label: "Revenue today",
-        value: "—",
-        delta: ["pending option C"],
-        tone: "neutral",
-        placeholder: true,
+        value: formatCurrency(input.revenue.amount, input.revenue.currency),
+        delta:
+          input.revenue.deltaPctVsAvg === null
+            ? ["—"]
+            : [
+                input.revenue.deltaPctVsAvg >= 0 ? "+" : "",
+                { bold: `${Math.round(input.revenue.deltaPctVsAvg * 100)}%` },
+                " vs avg",
+              ],
+        tone:
+          input.revenue.deltaPctVsAvg === null
+            ? "neutral"
+            : input.revenue.deltaPctVsAvg >= 0
+              ? "good"
+              : "coral",
       },
       {
         label: "Leads today",
@@ -242,6 +262,7 @@ export type MapConsoleInput = {
   leadsToday: number;
   leadsYesterday: number;
   bookingsToday: Array<{ startsAt: string; contactName: string }>;
+  revenue: { amount: number; currency: string; deltaPctVsAvg: number | null };
   escalations: EscalationApiRow[];
   approvals: ApprovalApiRow[];
   modules: ModuleEnablementMap;
@@ -255,6 +276,7 @@ export function mapConsoleData(input: MapConsoleInput): ConsoleData {
       leadsToday: input.leadsToday,
       leadsYesterday: input.leadsYesterday,
       bookingsToday: input.bookingsToday,
+      revenue: input.revenue,
     }),
     queueLabel: { count: `${queue.length} pending` },
     queue,

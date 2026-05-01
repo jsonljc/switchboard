@@ -22,7 +22,12 @@ describe("mapOpStrip", () => {
 });
 
 describe("mapNumbersStrip", () => {
-  const baseInput = { leadsToday: 7, leadsYesterday: 5, bookingsToday: [] };
+  const baseInput = {
+    leadsToday: 7,
+    leadsYesterday: 5,
+    bookingsToday: [],
+    revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+  };
 
   it("returns 5 cells", () => {
     const result = mapNumbersStrip(baseInput);
@@ -58,15 +63,44 @@ describe("mapNumbersStrip", () => {
     expect(text).toContain("Sarah");
   });
 
-  it("Revenue / Spend / Reply Time are placeholder cells with '—'", () => {
+  it("Spend / Reply Time stay as placeholder cells in C1 (Tier B + null replyTime)", () => {
     const result = mapNumbersStrip(baseInput);
-    const rev = result.cells.find((c) => c.label === "Revenue today");
     const spend = result.cells.find((c) => c.label === "Spend today");
     const reply = result.cells.find((c) => c.label === "Reply time");
-    for (const cell of [rev, spend, reply]) {
+    for (const cell of [spend, reply]) {
       expect(cell?.placeholder).toBe(true);
       expect(cell?.value).toBe("—");
     }
+  });
+});
+
+describe("mapNumbersStrip — Revenue cell (option C1)", () => {
+  const base = {
+    leadsToday: 0,
+    leadsYesterday: 0,
+    bookingsToday: [] as Array<{ startsAt: string; contactName: string }>,
+  };
+
+  it("formats amount as currency and shows positive delta", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      revenue: { amount: 1240, currency: "USD", deltaPctVsAvg: 0.18 },
+    });
+    const cell = result.cells.find((c) => c.label === "Revenue today");
+    expect(cell?.value).toBe("$1,240");
+    expect(cell?.tone).toBe("good");
+    expect(cell?.placeholder).not.toBe(true);
+  });
+
+  it("shows muted '—' delta when deltaPctVsAvg is null but value is a real number", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+    });
+    const cell = result.cells.find((c) => c.label === "Revenue today");
+    expect(cell?.value).toBe("$0");
+    expect(cell?.delta).toEqual(["—"]);
+    expect(cell?.tone).toBe("neutral");
   });
 });
 
@@ -255,6 +289,7 @@ describe("mapConsoleData", () => {
       leadsToday: 7,
       leadsYesterday: 5,
       bookingsToday: [{ startsAt: "2026-04-30T11:00:00", contactName: "Sarah" }],
+      revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
       escalations: [],
       approvals: [],
       modules: { alex: true, nova: true, mira: true },

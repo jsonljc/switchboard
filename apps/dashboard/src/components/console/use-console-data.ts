@@ -101,6 +101,7 @@ export function useConsoleData(): {
           },
         ]
       : [],
+    revenue: overview.data.today.revenue,
     escalations: escalationRows,
     approvals: approvalRows,
     modules: moduleMap,
