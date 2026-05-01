@@ -22,7 +22,13 @@ describe("mapOpStrip", () => {
 });
 
 describe("mapNumbersStrip", () => {
-  const baseInput = { leadsToday: 7, leadsYesterday: 5, bookingsToday: [] };
+  const baseInput = {
+    leadsToday: 7,
+    leadsYesterday: 5,
+    bookingsToday: [],
+    revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+    replyTime: null,
+  };
 
   it("returns 5 cells", () => {
     const result = mapNumbersStrip(baseInput);
@@ -58,15 +64,45 @@ describe("mapNumbersStrip", () => {
     expect(text).toContain("Sarah");
   });
 
-  it("Revenue / Spend / Reply Time are placeholder cells with '—'", () => {
+  it("Spend / Reply Time stay as placeholder cells in C1 (Tier B + null replyTime)", () => {
     const result = mapNumbersStrip(baseInput);
-    const rev = result.cells.find((c) => c.label === "Revenue today");
     const spend = result.cells.find((c) => c.label === "Spend today");
     const reply = result.cells.find((c) => c.label === "Reply time");
-    for (const cell of [rev, spend, reply]) {
+    for (const cell of [spend, reply]) {
       expect(cell?.placeholder).toBe(true);
       expect(cell?.value).toBe("—");
     }
+  });
+});
+
+describe("mapNumbersStrip — Revenue cell (option C1)", () => {
+  const base = {
+    leadsToday: 0,
+    leadsYesterday: 0,
+    bookingsToday: [] as Array<{ startsAt: string; contactName: string }>,
+    replyTime: null,
+  };
+
+  it("formats amount as currency and shows positive delta", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      revenue: { amount: 1240, currency: "USD", deltaPctVsAvg: 0.18 },
+    });
+    const cell = result.cells.find((c) => c.label === "Revenue today");
+    expect(cell?.value).toBe("$1,240");
+    expect(cell?.tone).toBe("good");
+    expect(cell?.placeholder).not.toBe(true);
+  });
+
+  it("shows muted '—' delta when deltaPctVsAvg is null but value is a real number", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+    });
+    const cell = result.cells.find((c) => c.label === "Revenue today");
+    expect(cell?.value).toBe("$0");
+    expect(cell?.delta).toEqual(["—"]);
+    expect(cell?.tone).toBe("neutral");
   });
 });
 
@@ -190,7 +226,13 @@ describe("mapQueue", () => {
 
 describe("mapAgents", () => {
   it("returns 3 entries (Alex / Nova / Mira) with viewLink hrefs", () => {
-    const result = mapAgents({ alex: true, nova: true, mira: true });
+    const result = mapAgents({
+      modules: { alex: true, nova: true, mira: true },
+      alex: null,
+      nova: null,
+      mira: null,
+      todaySpend: null,
+    });
     expect(result).toHaveLength(3);
     expect(result.map((a) => a.key)).toEqual(["alex", "nova", "mira"]);
     expect(result[0].viewLink.href).toBe("/conversations");
@@ -199,37 +241,114 @@ describe("mapAgents", () => {
   });
 
   it("makes Nova the active panel when enabled, otherwise Alex", () => {
-    expect(mapAgents({ alex: true, nova: true, mira: true }).find((a) => a.active)?.key).toBe(
-      "nova",
-    );
-    expect(mapAgents({ alex: true, nova: false, mira: true }).find((a) => a.active)?.key).toBe(
-      "alex",
-    );
+    expect(
+      mapAgents({
+        modules: { alex: true, nova: true, mira: true },
+        alex: null,
+        nova: null,
+        mira: null,
+        todaySpend: null,
+      }).find((a) => a.active)?.key,
+    ).toBe("nova");
+    expect(
+      mapAgents({
+        modules: { alex: true, nova: false, mira: true },
+        alex: null,
+        nova: null,
+        mira: null,
+        todaySpend: null,
+      }).find((a) => a.active)?.key,
+    ).toBe("alex");
   });
 
-  it("primaryStat reads 'pending option C' until per-agent stats land", () => {
-    const result = mapAgents({ alex: true, nova: true, mira: true });
-    expect(result.every((a) => a.primaryStat === "pending option C")).toBe(true);
+  it("primaryStat reads 'pending option C2' when module enabled but stats null", () => {
+    const result = mapAgents({
+      modules: { alex: true, nova: true, mira: true },
+      alex: null,
+      nova: null,
+      mira: null,
+      todaySpend: null,
+    });
+    expect(result.every((a) => a.primaryStat === "pending option C2")).toBe(true);
+  });
+});
+
+describe("mapAgents — Alex cell (option C1)", () => {
+  const base = {
+    modules: { alex: true, nova: true, mira: true },
+    nova: null,
+    mira: null,
+    todaySpend: null,
+  } as const;
+
+  it("renders Alex's today-stats from agentsToday.alex when module enabled and data present", () => {
+    const result = mapAgents({
+      ...base,
+      alex: { repliedToday: 14, qualifiedToday: 6, bookedToday: 3 },
+    });
+    const alex = result.find((a) => a.key === "alex");
+    expect(alex?.primaryStat).toBe("14 replied");
+    expect(JSON.stringify(alex?.subStat)).toContain("6 qualified");
+    expect(JSON.stringify(alex?.subStat)).toContain("3 booked");
+  });
+
+  it("renders 'Hire Alex' when module is disabled", () => {
+    const result = mapAgents({
+      ...base,
+      modules: { alex: false, nova: true, mira: true },
+      alex: null,
+    });
+    const alex = result.find((a) => a.key === "alex");
+    expect(alex?.primaryStat).toBe("Hire Alex");
+    expect(alex?.active).toBe(false);
+  });
+
+  it("renders 'pending option C2' for Nova/Mira when module enabled but stats null", () => {
+    const result = mapAgents({ ...base, alex: null });
+    const nova = result.find((a) => a.key === "nova");
+    const mira = result.find((a) => a.key === "mira");
+    expect(nova?.primaryStat).toBe("pending option C2");
+    expect(mira?.primaryStat).toBe("pending option C2");
   });
 });
 
 describe("mapActivity", () => {
-  it("formats createdAt to HH:MM and synthesizes agent from action prefix", () => {
+  it("formats createdAt to HH:MM and reads agent from structured field", () => {
     const result = mapActivity([
-      { id: "1", action: "alex.replied", actorId: "agent:alex", createdAt: "2026-04-30T10:42:00" },
+      {
+        id: "1",
+        action: "alex.replied",
+        actorId: "agent:alex",
+        createdAt: "2026-04-30T10:42:00",
+        agent: "alex",
+      },
       {
         id: "2",
         action: "nova.draft.created",
         actorId: "agent:nova",
         createdAt: "2026-04-30T10:38:00",
+        agent: "nova",
       },
-      { id: "3", action: "system.audit.tick", actorId: null, createdAt: "2026-04-30T10:00:00" },
+      {
+        id: "3",
+        action: "system.audit.tick",
+        actorId: null,
+        createdAt: "2026-04-30T10:00:00",
+        agent: null,
+      },
     ]);
     expect(result.rows).toHaveLength(3);
     expect(result.rows[0].agent).toBe("alex");
     expect(result.rows[0].time).toBe("10:42");
     expect(result.rows[1].agent).toBe("nova");
     expect(result.rows[2].agent).toBe("system");
+  });
+
+  it("renders 'system' for entries with agent=null", () => {
+    const result = mapActivity([
+      { id: "x", action: "tick", actorId: null, createdAt: "2026-05-01T10:00:00Z", agent: null },
+    ]);
+    expect(result.rows[0].agent).toBe("system");
   });
 
   it("caps display at 9 rows and counts moreToday from today's overflow", () => {
@@ -239,6 +358,7 @@ describe("mapActivity", () => {
       action: "alex.replied",
       actorId: "agent:alex",
       createdAt: today,
+      agent: "alex" as const,
     }));
     const result = mapActivity(entries);
     expect(result.rows).toHaveLength(9);
@@ -255,10 +375,16 @@ describe("mapConsoleData", () => {
       leadsToday: 7,
       leadsYesterday: 5,
       bookingsToday: [{ startsAt: "2026-04-30T11:00:00", contactName: "Sarah" }],
+      revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+      replyTime: null,
       escalations: [],
       approvals: [],
       modules: { alex: true, nova: true, mira: true },
       auditEntries: [],
+      alex: null,
+      nova: null,
+      mira: null,
+      todaySpend: null,
     });
     expect(result.opStrip.orgName).toBe("Aurora Dental");
     expect(result.numbers.cells).toHaveLength(5);
@@ -268,5 +394,83 @@ describe("mapConsoleData", () => {
     expect(result.activity.rows).toEqual([]);
     // Nova panel stays fixture-shaped in option B (visual-only until C)
     expect(result.novaPanel.rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe("mapApprovalGateCard with stageProgress (option C1)", () => {
+  it("renders 'Stage 2 of 5' + countdown when stageProgress is present", () => {
+    const now = new Date("2026-05-01T10:00:00Z");
+    const card = mapApprovalGateCard(
+      {
+        id: "apr-1",
+        summary: "Campaign 01",
+        riskContext: null,
+        riskCategory: "creative",
+        createdAt: "2026-05-01T08:00:00Z",
+        stageProgress: {
+          stageIndex: 1,
+          stageTotal: 5,
+          stageLabel: "hooks",
+          closesAt: "2026-05-02T10:00:00Z",
+        },
+      },
+      now,
+    );
+    expect(card.stageProgress).toBe("Stage 2 of 5");
+    expect(card.timer.stageLabel).toBe("hooks");
+    expect(card.countdown).toBe("24h 0m left");
+  });
+
+  it("falls back to '—' stage + countdown when stageProgress is absent (option-B behavior preserved)", () => {
+    const card = mapApprovalGateCard(
+      {
+        id: "apr-2",
+        summary: "Generic",
+        riskContext: "Hooks ready",
+        riskCategory: "creative",
+        createdAt: "2026-05-01T08:00:00Z",
+      },
+      new Date("2026-05-01T10:00:00Z"),
+    );
+    expect(card.stageProgress).toBe("—");
+    expect(card.countdown).toBe("—");
+  });
+});
+
+describe("mapNumbersStrip — Reply time cell (option C1)", () => {
+  const base = {
+    leadsToday: 0,
+    leadsYesterday: 0,
+    bookingsToday: [] as Array<{ startsAt: string; contactName: string }>,
+    revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+  };
+
+  it("renders muted '—' when replyTime is null", () => {
+    const result = mapNumbersStrip({ ...base, replyTime: null });
+    const cell = result.cells.find((c) => c.label === "Reply time");
+    expect(cell?.value).toBe("—");
+    expect(cell?.placeholder).toBe(true);
+  });
+
+  it("formats medianSeconds and shows '↓ from' delta when faster than yesterday", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      replyTime: { medianSeconds: 12, previousSeconds: 18, sampleSize: 7 },
+    });
+    const cell = result.cells.find((c) => c.label === "Reply time");
+    expect(cell?.value).toBe("12s");
+    expect(cell?.tone).toBe("good");
+    expect(JSON.stringify(cell?.delta)).toContain("↓");
+    expect(JSON.stringify(cell?.delta)).toContain("18s");
+    expect(cell?.placeholder).not.toBe(true);
+  });
+
+  it("shows 'new today' when previousSeconds is null", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      replyTime: { medianSeconds: 12, previousSeconds: null, sampleSize: 1 },
+    });
+    const cell = result.cells.find((c) => c.label === "Reply time");
+    expect(cell?.delta).toEqual(["new today"]);
   });
 });

@@ -4,7 +4,6 @@ import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import { useEscalations } from "@/hooks/use-escalations";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { useModuleStatus } from "@/hooks/use-module-status";
-import { useAudit } from "@/hooks/use-audit";
 import type { ConsoleData } from "./console-data";
 import { consoleFixture } from "./console-data";
 import {
@@ -36,21 +35,15 @@ export function useConsoleData(): {
   const escalations = useEscalations();
   const org = useOrgConfig();
   const modules = useModuleStatus();
-  const audit = useAudit();
 
   const isLoading =
-    overview.isLoading ||
-    escalations.isLoading ||
-    org.isLoading ||
-    modules.isLoading ||
-    audit.isLoading;
+    overview.isLoading || escalations.isLoading || org.isLoading || modules.isLoading;
 
   const error =
     (overview.error as Error | null) ??
     (escalations.error as Error | null) ??
     (org.error as Error | null) ??
     (modules.error as Error | null) ??
-    (audit.error as Error | null) ??
     null;
 
   if (isLoading || error || !overview.data || !org.data) {
@@ -61,20 +54,16 @@ export function useConsoleData(): {
     (escalations.data as { escalations?: EscalationApiRow[] } | undefined)?.escalations ?? [];
   const approvalRows: ApprovalApiRow[] = overview.data.approvals as ApprovalApiRow[];
 
-  const auditEntries: AuditEntry[] = (
-    (audit.data?.entries ?? []) as Array<{
-      id: string;
-      eventType: string;
-      actorId: string;
-      timestamp: string;
-      snapshot: Record<string, unknown>;
-    }>
-  ).map((e) => ({
+  // Source activity from overview.data.activity — this array has already passed through
+  // translateActivities() in dashboard-overview.ts, so the structured `agent` field is
+  // populated. Reading from useAudit() instead would bypass the translator, leaving
+  // agent undefined in production (fix for option-C1 review).
+  const auditEntries: AuditEntry[] = (overview.data.activity ?? []).map((e) => ({
     id: e.id,
-    action: e.eventType,
-    actorId: e.actorId ?? null,
-    createdAt: e.timestamp,
-    metadata: e.snapshot,
+    action: e.type,
+    actorId: null,
+    createdAt: e.createdAt,
+    agent: e.agent ?? null,
   }));
 
   const moduleList = (modules.data ?? []) as Array<{ id: string; state: string }>;
@@ -85,24 +74,38 @@ export function useConsoleData(): {
     mira: moduleEnabled("creative"),
   };
 
-  const todayStr = new Date().toDateString();
-  const bookingsToday = overview.data.bookings
-    .filter((b) => new Date(b.startsAt).toDateString() === todayStr)
-    .map((b) => ({ startsAt: b.startsAt, contactName: b.contactName }));
-
   const orgName = (org.data as { config?: { name?: string } })?.config?.name ?? "Switchboard";
 
   const data = mapConsoleData({
     orgName,
     now: new Date(),
     dispatch: "live", // TODO option C: read halt-state from useDispatchStatus or org config
-    leadsToday: overview.data.stats.newInquiriesToday,
-    leadsYesterday: overview.data.stats.newInquiriesYesterday,
-    bookingsToday,
+    leadsToday: overview.data.today.leads.count,
+    leadsYesterday: overview.data.today.leads.yesterdayCount,
+    bookingsToday: overview.data.today.appointments.next
+      ? [
+          {
+            startsAt: overview.data.today.appointments.next.startsAt,
+            contactName: overview.data.today.appointments.next.contactName,
+          },
+        ]
+      : [],
+    revenue: overview.data.today.revenue,
+    replyTime: overview.data.today.replyTime,
     escalations: escalationRows,
     approvals: approvalRows,
     modules: moduleMap,
     auditEntries,
+    alex: overview.data.agentsToday.alex,
+    nova: overview.data.agentsToday.nova,
+    mira: overview.data.agentsToday.mira,
+    todaySpend:
+      overview.data.today.spend.updatedAt === null
+        ? null
+        : {
+            amount: overview.data.today.spend.amount,
+            currency: overview.data.today.spend.currency,
+          },
   });
 
   return { data, isLoading: false, error: null };

@@ -15,6 +15,7 @@ type DashboardSummaryStats = DashboardOverview["stats"] & { activeEscalations?: 
 
 function buildSummary(
   stats: DashboardOverview["stats"],
+  today: DashboardOverview["today"],
   period: "morning" | "afternoon" | "evening",
 ): string {
   const activeEscalations = (stats as DashboardSummaryStats).activeEscalations ?? 0;
@@ -22,8 +23,8 @@ function buildSummary(
     { count: stats.pendingApprovals, label: "approval" },
     // TODO(PR4): add activeEscalations to DashboardOverviewSchema, remove cast
     { count: activeEscalations, label: "escalation" },
-    { count: stats.bookingsToday, label: "booking" },
-    { count: stats.newInquiriesToday, label: "new inquiry" },
+    { count: today.appointments.count, label: "booking" },
+    { count: today.leads.count, label: "new inquiry" },
     { count: stats.overdueTasks, label: "overdue task" },
   ];
 
@@ -60,7 +61,7 @@ export function DashboardHeader({ overview }: DashboardHeaderProps) {
         <time style={{ fontSize: "13px", color: "var(--sw-text-muted)" }}>{today}</time>
       </div>
       <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", marginTop: "8px" }}>
-        {buildSummary(overview.stats, overview.greeting.period)}
+        {buildSummary(overview.stats, overview.today, overview.greeting.period)}
       </p>
     </div>
   );

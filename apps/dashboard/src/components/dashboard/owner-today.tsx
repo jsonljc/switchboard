@@ -182,19 +182,19 @@ export function OwnerToday() {
     { label: "Pending approvals", value: overview.stats.pendingApprovals },
     {
       label: "New inquiries",
-      value: overview.stats.newInquiriesToday,
+      value: overview.today.leads.count,
       delta:
-        overview.stats.newInquiriesYesterday > 0
+        overview.today.leads.yesterdayCount > 0
           ? {
-              direction: (overview.stats.newInquiriesToday >= overview.stats.newInquiriesYesterday
+              direction: (overview.today.leads.count >= overview.today.leads.yesterdayCount
                 ? "up"
                 : "down") as "up" | "down",
-              text: `${Math.abs(overview.stats.newInquiriesToday - overview.stats.newInquiriesYesterday)} vs yesterday`,
+              text: `${Math.abs(overview.today.leads.count - overview.today.leads.yesterdayCount)} vs yesterday`,
             }
           : undefined,
     },
     { label: "Qualified leads", value: overview.stats.qualifiedLeads },
-    { label: "Bookings today", value: overview.stats.bookingsToday },
+    { label: "Bookings today", value: overview.today.appointments.count },
     {
       label: "Revenue (7d)",
       value: formatOrgCurrency(overview.stats.revenue7d.total, currency),

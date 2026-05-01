@@ -1,3 +1,5 @@
+import type { AgentKey } from "@switchboard/schemas";
+
 export interface RawAuditEntry {
   id: string;
   eventType: string;
@@ -16,6 +18,8 @@ export interface TranslatedActivity {
   description: string;
   dotColor: "green" | "amber" | "blue" | "gray";
   createdAt: string;
+  /** Structured agent attribution. null for non-agent actors and unknown agent ids. */
+  agent: AgentKey | null;
 }
 
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-/;
@@ -62,6 +66,20 @@ function buildDescription(entry: RawAuditEntry): string {
   return `${actor} performed an action`;
 }
 
+/**
+ * Returns the structured agent key for an audit entry, or null when the entry
+ * isn't attributable to one of our named agents (Alex/Nova/Mira).
+ * Non-agent actors (owner/operator/system) always return null.
+ */
+export function resolveAgentKey(entry: RawAuditEntry): AgentKey | null {
+  if (entry.actorType !== "agent") return null;
+  const id = (entry.actorId ?? "").toLowerCase();
+  if (id.startsWith("alex")) return "alex";
+  if (id.startsWith("nova")) return "nova";
+  if (id.startsWith("mira")) return "mira";
+  return null;
+}
+
 export function translateActivity(entry: RawAuditEntry): TranslatedActivity {
   return {
     id: entry.id,
@@ -69,6 +87,7 @@ export function translateActivity(entry: RawAuditEntry): TranslatedActivity {
     description: buildDescription(entry),
     dotColor: resolveDotColor(entry.eventType),
     createdAt: entry.timestamp,
+    agent: resolveAgentKey(entry),
   };
 }
 

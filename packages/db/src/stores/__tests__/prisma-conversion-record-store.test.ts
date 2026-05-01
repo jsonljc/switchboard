@@ -110,4 +110,24 @@ describe("PrismaConversionRecordStore", () => {
       expect(call.where.OR[1].occurredAt.gte).toBeInstanceOf(Date);
     });
   });
+
+  describe("alexStatsToday", () => {
+    it("alexStatsToday returns counts of replies, qualified leads, and bookings created today", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { type: "inquiry", _count: { _all: 3 } },
+        { type: "qualified", _count: { _all: 1 } },
+        { type: "booked", _count: { _all: 1 } },
+      ]);
+
+      const stats = await store.alexStatsToday("org-alex", new Date());
+      expect(stats).toEqual({ repliedToday: 3, qualifiedToday: 1, bookedToday: 1 });
+    });
+
+    it("alexStatsToday returns zeros for an empty org", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      const stats = await store.alexStatsToday("org-empty", new Date());
+      expect(stats).toEqual({ repliedToday: 0, qualifiedToday: 0, bookedToday: 0 });
+    });
+  });
 });

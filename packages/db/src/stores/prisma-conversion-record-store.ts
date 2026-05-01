@@ -1,3 +1,4 @@
+import { dayWindow } from "@switchboard/schemas";
 import type { PrismaDbClient } from "../prisma-db.js";
 
 interface DateRange {
@@ -146,6 +147,37 @@ export class PrismaConversionRecordStore {
         occurredAt: { gte: from, lte: to },
       },
     });
+  }
+
+  /**
+   * Per-agent today-stats for Alex. "Replied" is approximated by the count of
+   * inquiry records created today (each inquiry reaching the system implies Alex's first response).
+   * Refine with a more direct first-reply event later if needed.
+   */
+  async alexStatsToday(
+    orgId: string,
+    day: Date,
+  ): Promise<{ repliedToday: number; qualifiedToday: number; bookedToday: number }> {
+    const { from: dayStart, to: dayEnd } = dayWindow(day);
+
+    const groups = await this.prisma.conversionRecord.groupBy({
+      by: ["type"],
+      where: {
+        organizationId: orgId,
+        type: { in: ["inquiry", "qualified", "booked"] },
+        occurredAt: { gte: dayStart, lt: dayEnd },
+      },
+      _count: { _all: true },
+    });
+
+    const counts: Record<string, number> = {};
+    for (const g of groups) counts[g.type] = g._count._all;
+
+    return {
+      repliedToday: counts.inquiry ?? 0,
+      qualifiedToday: counts.qualified ?? 0,
+      bookedToday: counts.booked ?? 0,
+    };
   }
 
   async activePipelineCounts(orgId: string): Promise<{

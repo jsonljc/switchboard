@@ -140,11 +140,13 @@ model ConversationState {
   firstReplyAt          DateTime?
   lastInboundAt         DateTime?
   lastActivityAt        DateTime  @default(now())
+  createdAt             DateTime  @default(now())
   expiresAt             DateTime
 
   @@index([principalId])
   @@index([organizationId])
   @@index([status])
+  @@index([organizationId, createdAt])
 }
 
 model AuditEntry {

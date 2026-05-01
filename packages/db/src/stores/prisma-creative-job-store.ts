@@ -206,6 +206,32 @@ export class PrismaCreativeJobStore {
     }) as unknown as CreativeJob;
   }
 
+  /**
+   * Returns stage-progress info for the given approval IDs.
+   *
+   * NOTE (option C1, Path B): in the current schema, creative-pipeline approvals
+   * don't materialize as ApprovalRecord rows — the pipeline waits on Inngest events
+   * (event: "creative-pipeline/stage.approved") directly via step.waitForEvent().
+   * There is no join target between ApprovalRecord and CreativeJob.
+   * This method returns an empty Map until a future spec adds the
+   * ApprovalRecord ↔ CreativeJob bridge.
+   */
+  async stageProgressByApproval(
+    approvalIds: string[],
+  ): Promise<
+    Map<
+      string,
+      { stageIndex: number; stageTotal: number; stageLabel: string; closesAt: string | null }
+    >
+  > {
+    if (approvalIds.length > 0) {
+      console.warn(
+        `[PrismaCreativeJobStore.stageProgressByApproval] called with ${approvalIds.length} approval IDs but no ApprovalRecord ↔ CreativeJob bridge exists in the current schema. Returning empty Map. See option-C spec for the bridge plan.`,
+      );
+    }
+    return new Map();
+  }
+
   async markRegistryBackfilled(
     jobId: string,
     input: MarkRegistryBackfilledInput,

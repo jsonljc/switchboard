@@ -8,8 +8,24 @@ import type {
   NumbersStrip,
   OpStrip,
   QueueCard,
+  RichText,
 } from "./console-data";
 import { consoleFixture } from "./console-data";
+
+function formatCurrency(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
+}
 
 // ── Op strip ──────────────────────────────────────────────────────────────
 export function mapOpStrip(orgName: string, now: Date, dispatch: "live" | "halted"): OpStrip {
@@ -27,6 +43,8 @@ export type NumbersInput = {
   leadsToday: number;
   leadsYesterday: number;
   bookingsToday: Array<{ startsAt: string; contactName: string }>;
+  revenue: { amount: number; currency: string; deltaPctVsAvg: number | null };
+  replyTime: { medianSeconds: number; previousSeconds: number | null; sampleSize: number } | null;
 };
 export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
   const leadsDelta = input.leadsToday - input.leadsYesterday;
@@ -48,10 +66,21 @@ export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
     cells: [
       {
         label: "Revenue today",
-        value: "—",
-        delta: ["pending option C"],
-        tone: "neutral",
-        placeholder: true,
+        value: formatCurrency(input.revenue.amount, input.revenue.currency),
+        delta:
+          input.revenue.deltaPctVsAvg === null
+            ? ["—"]
+            : [
+                input.revenue.deltaPctVsAvg >= 0 ? "+" : "",
+                { bold: `${Math.round(input.revenue.deltaPctVsAvg * 100)}%` },
+                " vs avg",
+              ],
+        tone:
+          input.revenue.deltaPctVsAvg === null
+            ? "neutral"
+            : input.revenue.deltaPctVsAvg >= 0
+              ? "good"
+              : "coral",
       },
       {
         label: "Leads today",
@@ -76,10 +105,23 @@ export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
       },
       {
         label: "Reply time",
-        value: "—",
-        delta: ["pending option C"],
-        tone: "neutral",
-        placeholder: true,
+        value: input.replyTime === null ? "—" : formatDuration(input.replyTime.medianSeconds),
+        delta:
+          input.replyTime === null
+            ? ["pending"]
+            : input.replyTime.previousSeconds === null
+              ? ["new today"]
+              : input.replyTime.medianSeconds <= input.replyTime.previousSeconds
+                ? ["↓ from ", { bold: formatDuration(input.replyTime.previousSeconds) }]
+                : ["↑ from ", { bold: formatDuration(input.replyTime.previousSeconds) }],
+        tone:
+          input.replyTime === null
+            ? "neutral"
+            : input.replyTime.previousSeconds !== null &&
+                input.replyTime.medianSeconds <= input.replyTime.previousSeconds
+              ? "good"
+              : "neutral",
+        placeholder: input.replyTime === null,
       },
     ],
   };
@@ -128,23 +170,42 @@ export type ApprovalApiRow = {
   riskContext: string | null;
   riskCategory: string;
   createdAt: string;
+  stageProgress?: {
+    stageIndex: number;
+    stageTotal: number;
+    stageLabel: string;
+    closesAt: string | null;
+  };
 };
 export function mapApprovalGateCard(row: ApprovalApiRow, now: Date): ApprovalGateCard {
+  const sp = row.stageProgress;
   return {
     kind: "approval_gate",
     id: row.id,
     agent: "mira",
     jobName: row.summary,
     timer: {
-      stageLabel: row.riskContext?.trim() || "Approval needed",
+      stageLabel: sp?.stageLabel ?? row.riskContext?.trim() ?? "Approval needed",
       ageDisplay: formatAge(row.createdAt, now),
     },
-    stageProgress: "—",
-    stageDetail: row.riskContext?.trim() || "",
-    countdown: "—",
+    stageProgress: sp ? `Stage ${sp.stageIndex + 1} of ${sp.stageTotal}` : "—",
+    stageDetail: row.riskContext?.trim() ?? sp?.stageLabel ?? "",
+    countdown: sp?.closesAt ? formatCountdown(sp.closesAt, now) : "—",
     primary: { label: "Review →" },
     stop: { label: "Stop campaign" },
   };
+}
+
+function formatCountdown(closesAt: string, now: Date): string {
+  const ms = new Date(closesAt).getTime() - now.getTime();
+  if (ms <= 0) return "expired";
+  const totalMin = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (hours === 0) return `${min}m left`;
+  if (hours <= 24) return `${hours}h ${min}m left`;
+  const days = Math.floor(hours / 24);
+  return `${days}d left`;
 }
 
 export function mapQueue(
@@ -166,39 +227,102 @@ export type ModuleEnablementMap = {
   nova: boolean;
   mira: boolean;
 };
-export function mapAgents(modules: ModuleEnablementMap): AgentStripEntry[] {
-  const activeKey: AgentKey = modules.nova ? "nova" : modules.alex ? "alex" : "mira";
-  return (
-    [
-      { key: "alex", name: "Alex", href: "/conversations", label: "view conversations →" },
-      { key: "nova", name: "Nova", href: "/modules/ad-optimizer", label: "view ad actions →" },
-      { key: "mira", name: "Mira", href: "/modules/creative", label: "view creative →" },
-    ] as const
-  ).map((a) => ({
-    key: a.key,
-    name: a.name,
-    primaryStat: "pending option C",
-    subStat: ["—"],
-    viewLink: { label: a.label, href: a.href },
-    active: a.key === activeKey,
-  }));
+
+export type AgentsInput = {
+  modules: ModuleEnablementMap;
+  alex: { repliedToday: number; qualifiedToday: number; bookedToday: number } | null;
+  nova: { draftsPending: number } | null;
+  mira: { inFlight: number; winningHook: string | null } | null;
+  todaySpend: { amount: number; currency: string } | null;
+};
+
+function mapAlexEntry(
+  modulesEnabled: boolean,
+  alex: AgentsInput["alex"],
+): { primaryStat: string; subStat: RichText } {
+  if (!modulesEnabled) return { primaryStat: "Hire Alex", subStat: ["module disabled"] };
+  if (!alex) return { primaryStat: "pending option C2", subStat: ["—"] };
+  return {
+    primaryStat: `${alex.repliedToday} replied`,
+    subStat: [`${alex.qualifiedToday} qualified · `, { bold: `${alex.bookedToday} booked` }],
+  };
+}
+
+function mapNovaEntry(
+  modulesEnabled: boolean,
+  nova: AgentsInput["nova"],
+  todaySpend: AgentsInput["todaySpend"],
+): { primaryStat: string; subStat: RichText } {
+  if (!modulesEnabled) return { primaryStat: "Hire Nova", subStat: ["module disabled"] };
+  if (!nova) return { primaryStat: "pending option C2", subStat: ["—"] };
+  // Nova's primary stat reads today.spend directly (not duplicated on agentsToday.nova) — by design.
+  const primaryStat = todaySpend
+    ? new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: todaySpend.currency,
+        maximumFractionDigits: 0,
+      }).format(todaySpend.amount)
+    : "—";
+  return {
+    primaryStat,
+    subStat: [`${nova.draftsPending} drafts pending`],
+  };
+}
+
+function mapMiraEntry(
+  modulesEnabled: boolean,
+  mira: AgentsInput["mira"],
+): { primaryStat: string; subStat: RichText } {
+  if (!modulesEnabled) return { primaryStat: "Hire Mira", subStat: ["module disabled"] };
+  if (!mira) return { primaryStat: "pending option C2", subStat: ["—"] };
+  return {
+    primaryStat: `${mira.inFlight} in flight`,
+    subStat: mira.winningHook ? [{ bold: mira.winningHook }, " hook winning"] : ["—"],
+  };
+}
+
+export function mapAgents(input: AgentsInput): AgentStripEntry[] {
+  const activeKey: AgentKey = input.modules.nova ? "nova" : input.modules.alex ? "alex" : "mira";
+  const meta = [
+    { key: "alex" as const, name: "Alex", href: "/conversations", label: "view conversations →" },
+    {
+      key: "nova" as const,
+      name: "Nova",
+      href: "/modules/ad-optimizer",
+      label: "view ad actions →",
+    },
+    { key: "mira" as const, name: "Mira", href: "/modules/creative", label: "view creative →" },
+  ];
+
+  return meta.map((a) => {
+    const enabled = input.modules[a.key];
+    const entry =
+      a.key === "alex"
+        ? mapAlexEntry(enabled, input.alex)
+        : a.key === "nova"
+          ? mapNovaEntry(enabled, input.nova, input.todaySpend)
+          : mapMiraEntry(enabled, input.mira);
+    return {
+      key: a.key,
+      name: a.name,
+      primaryStat: entry.primaryStat,
+      subStat: entry.subStat,
+      viewLink: enabled ? { label: a.label, href: a.href } : { label: "", href: a.href },
+      active: a.key === activeKey && enabled,
+    };
+  });
 }
 
 // ── Activity ──────────────────────────────────────────────────────────────
 export type AuditEntry = {
   id: string;
-  action: string;
+  action: string; // existing — comes from `entry.type` on the API side, kept for compatibility
   actorId: string | null;
   createdAt: string;
   metadata?: Record<string, unknown> | null;
+  /** NEW: structured agent attribution from the API (option C1). */
+  agent: AgentKey | null;
 };
-function agentForAction(action: string, actorId: string | null): AgentKey {
-  const key = (actorId ?? action).toLowerCase();
-  if (key.includes("alex")) return "alex";
-  if (key.includes("nova")) return "nova";
-  if (key.includes("mira")) return "mira";
-  return "system";
-}
 
 function formatHHMM(createdAt: string): string {
   return new Date(createdAt).toLocaleTimeString("en-US", {
@@ -217,10 +341,7 @@ function isToday(createdAt: string, now: Date): boolean {
   );
 }
 
-export function mapActivity(entries: AuditEntry[]): {
-  moreToday: number;
-  rows: ActivityRow[];
-} {
+export function mapActivity(entries: AuditEntry[]): { moreToday: number; rows: ActivityRow[] } {
   const now = new Date();
   const todayEntries = entries.filter((e) => isToday(e.createdAt, now));
   const displayed = entries.slice(0, 9);
@@ -228,7 +349,8 @@ export function mapActivity(entries: AuditEntry[]): {
   const rows: ActivityRow[] = displayed.map((e) => ({
     id: e.id,
     time: formatHHMM(e.createdAt),
-    agent: agentForAction(e.action, e.actorId),
+    // Read the structured field. Fallback to "system" preserves the option-B render shape for null agents.
+    agent: e.agent ?? "system",
     message: [e.action.replace(/^[^.]+\./, "").replace(/[._]/g, " ")],
   }));
   return { moreToday, rows };
@@ -242,10 +364,16 @@ export type MapConsoleInput = {
   leadsToday: number;
   leadsYesterday: number;
   bookingsToday: Array<{ startsAt: string; contactName: string }>;
+  revenue: { amount: number; currency: string; deltaPctVsAvg: number | null };
+  replyTime: { medianSeconds: number; previousSeconds: number | null; sampleSize: number } | null;
   escalations: EscalationApiRow[];
   approvals: ApprovalApiRow[];
   modules: ModuleEnablementMap;
   auditEntries: AuditEntry[];
+  alex: { repliedToday: number; qualifiedToday: number; bookedToday: number } | null;
+  nova: { draftsPending: number } | null;
+  mira: { inFlight: number; winningHook: string | null } | null;
+  todaySpend: { amount: number; currency: string } | null;
 };
 export function mapConsoleData(input: MapConsoleInput): ConsoleData {
   const queue = mapQueue(input.escalations, input.approvals, input.now);
@@ -255,10 +383,18 @@ export function mapConsoleData(input: MapConsoleInput): ConsoleData {
       leadsToday: input.leadsToday,
       leadsYesterday: input.leadsYesterday,
       bookingsToday: input.bookingsToday,
+      revenue: input.revenue,
+      replyTime: input.replyTime,
     }),
     queueLabel: { count: `${queue.length} pending` },
     queue,
-    agents: mapAgents(input.modules),
+    agents: mapAgents({
+      modules: input.modules,
+      alex: input.alex,
+      nova: input.nova,
+      mira: input.mira,
+      todaySpend: input.todaySpend,
+    }),
     novaPanel: consoleFixture.novaPanel, // option C replaces this with real ad-set aggregation
     activity: mapActivity(input.auditEntries),
   };

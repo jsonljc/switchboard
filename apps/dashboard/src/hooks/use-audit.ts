@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import type { AgentKey } from "@switchboard/schemas";
 
 export interface AuditEntryResponse {
   id: string;
@@ -15,6 +16,8 @@ export interface AuditEntryResponse {
   summary: string;
   snapshot: Record<string, unknown>;
   envelopeId: string | null;
+  /** Structured agent attribution from the API (option C1). null for non-agent actors. */
+  agent: AgentKey | null;
 }
 
 export interface AuditResponse {
