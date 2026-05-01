@@ -231,10 +231,11 @@ export async function buildDashboardOverview(
   const spendUpdatedAt: string | null = null;
   checkStaleness("today.spend", spendUpdatedAt, now);
 
-  // today.appointments — derive from today's bookings
-  const todayBookings = bookings.filter(
-    (b) => new Date(b.startsAt).toDateString() === now.toDateString(),
-  );
+  // today.appointments — derive from today's bookings using UTC window (consistent with dayWindow)
+  const todayBookings = bookings.filter((b) => {
+    const t = new Date(b.startsAt);
+    return t >= today.from && t < today.to;
+  });
   const nextAppt = todayBookings.length > 0 ? todayBookings[0] : null;
 
   return {
