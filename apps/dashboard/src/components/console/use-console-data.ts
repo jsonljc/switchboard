@@ -4,7 +4,6 @@ import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import { useEscalations } from "@/hooks/use-escalations";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { useModuleStatus } from "@/hooks/use-module-status";
-import { useAudit } from "@/hooks/use-audit";
 import type { ConsoleData } from "./console-data";
 import { consoleFixture } from "./console-data";
 import {
@@ -36,21 +35,15 @@ export function useConsoleData(): {
   const escalations = useEscalations();
   const org = useOrgConfig();
   const modules = useModuleStatus();
-  const audit = useAudit();
 
   const isLoading =
-    overview.isLoading ||
-    escalations.isLoading ||
-    org.isLoading ||
-    modules.isLoading ||
-    audit.isLoading;
+    overview.isLoading || escalations.isLoading || org.isLoading || modules.isLoading;
 
   const error =
     (overview.error as Error | null) ??
     (escalations.error as Error | null) ??
     (org.error as Error | null) ??
     (modules.error as Error | null) ??
-    (audit.error as Error | null) ??
     null;
 
   if (isLoading || error || !overview.data || !org.data) {
@@ -61,13 +54,17 @@ export function useConsoleData(): {
     (escalations.data as { escalations?: EscalationApiRow[] } | undefined)?.escalations ?? [];
   const approvalRows: ApprovalApiRow[] = overview.data.approvals as ApprovalApiRow[];
 
-  const auditEntries: AuditEntry[] = (audit.data?.entries ?? []).map((e) => ({
+  // Source activity from overview.data.activity — this array has already passed through
+  // translateActivities() in dashboard-overview.ts, so the structured `agent` field is
+  // populated. Reading from useAudit() instead would bypass the translator, leaving
+  // agent undefined in production (fix for option-C1 review).
+  const auditEntries: AuditEntry[] = (overview.data.activity ?? []).map((e) => ({
     id: e.id,
-    action: e.eventType,
-    actorId: e.actorId ?? null,
-    createdAt: e.timestamp,
+    action: e.type,
+    actorId: null,
+    createdAt: e.createdAt,
     agent: e.agent ?? null,
-  })) as AuditEntry[];
+  }));
 
   const moduleList = (modules.data ?? []) as Array<{ id: string; state: string }>;
   const moduleEnabled = (id: string) => moduleList.some((m) => m.id === id && m.state === "live");
