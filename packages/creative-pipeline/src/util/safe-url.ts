@@ -184,11 +184,22 @@ function isPrivateIpv6(hostname: string): boolean {
   const lower = hostname.toLowerCase();
   // Loopback: ::1 (any number of leading zero groups collapsed to `::`).
   if (lower === "::1") return true;
+  // Unspecified address ::/128 — never a valid outbound destination.
+  if (lower === "::") return true;
   // Unique local addresses fc00::/7 — first byte has top 7 bits = 1111110,
   // which means the leading hex group starts with `fc` or `fd`.
   if (/^fc[0-9a-f]{2}:/.test(lower) || /^fd[0-9a-f]{2}:/.test(lower)) return true;
   // IPv6 link-local fe80::/10.
   if (/^fe[89ab][0-9a-f]:/.test(lower)) return true;
+  // IPv4-mapped IPv6 (`::ffff:a.b.c.d`) — Node's WHATWG URL parser
+  // normalizes the IPv4 tail to two hex groups, e.g. `::ffff:7f00:1`
+  // (127.0.0.1) or `::ffff:a9fe:a9fe` (169.254.169.254). Without this
+  // branch, `::ffff:127.0.0.1` slips past the IPv4 private-range checks.
+  // WHY: IPv4-mapped IPv6 (`::ffff:a.b.c.d`) is overwhelmingly an SSRF-bypass form; reject unconditionally.
+  if (/^::ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(lower)) return true;
+  // NAT64 well-known prefix 64:ff9b::/96 — synthesized IPv4 destinations
+  // that bypass the IPv4 private-range checks for the same reason.
+  if (/^64:ff9b:(:|0:)/.test(lower)) return true;
   return false;
 }
 

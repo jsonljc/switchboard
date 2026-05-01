@@ -53,9 +53,23 @@ describe("isSafeUrl", () => {
       ["https://localhost/", /private-host/],
       ["https://app.localhost/", /private-host/],
       ["https://[::1]/", /private-ipv6/],
+      ["https://[::]/", /private-ipv6/],
       ["https://[fc00::1]/", /private-ipv6/],
       ["https://[fd12:3456::1]/", /private-ipv6/],
       ["https://[fe80::1]/", /private-ipv6/],
+      // IPv4-mapped IPv6 (::ffff:0:0/96): Node normalizes the IPv4 tail
+      // to hex groups, so `[::ffff:127.0.0.1]` becomes `[::ffff:7f00:1]`
+      // at parse time. We reject the whole /96 unconditionally as SSRF
+      // hardening — the form exists almost exclusively to bypass IPv4
+      // private-range filters.
+      ["https://[::ffff:127.0.0.1]/", /private-ipv6/],
+      ["https://[::ffff:169.254.169.254]/", /private-ipv6/],
+      ["https://[::ffff:7f00:1]/", /private-ipv6/],
+      ["https://[::ffff:8.8.8.8]/", /private-ipv6/],
+      // NAT64 well-known prefix 64:ff9b::/96 — synthesized IPv4 routes,
+      // same bypass shape as IPv4-mapped.
+      ["https://[64:ff9b::1]/", /private-ipv6/],
+      ["https://[64:ff9b::8.8.8.8]/", /private-ipv6/],
     ];
 
     for (const [url, expected] of cases) {
