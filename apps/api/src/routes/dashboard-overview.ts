@@ -257,6 +257,8 @@ export async function buildDashboardOverview(
           ? null
           : {
               medianSeconds: replyTimeToday.medianSeconds,
+              // Yesterday's median is also gated by MIN_REPLY_SAMPLE so the headline value
+              // and its baseline both meet the same noise floor.
               previousSeconds:
                 replyTimeYesterday.sampleSize < MIN_REPLY_SAMPLE
                   ? null
