@@ -114,7 +114,7 @@ export * from "./playbook.js";
 export * from "./website-scan.js";
 
 // Dashboard aggregate (operator dashboard overview)
-export { DashboardOverviewSchema, type DashboardOverview } from "./dashboard.js";
+export * from "./dashboard.js";
 
 // Approval Lifecycle (approval lifecycle authority objects)
 export * from "./approval-lifecycle.js";

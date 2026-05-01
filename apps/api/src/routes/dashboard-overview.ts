@@ -4,6 +4,7 @@
 
 import type { FastifyPluginAsync } from "fastify";
 import type { DashboardOverview } from "@switchboard/schemas";
+import { dayWindow, previousDayWindow, STALE_AFTER_MINUTES } from "@switchboard/schemas";
 import type { AuditQueryFilter } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { translateActivities } from "../services/activity-translator.js";
@@ -17,6 +18,20 @@ function greetingPeriod(hour: number): "morning" | "afternoon" | "evening" {
   if (hour < 12) return "morning";
   if (hour < 18) return "afternoon";
   return "evening";
+}
+
+/**
+ * Logs a one-line warning when a Tier-B rollup is older than the freshness contract.
+ * No-op when updatedAt is null (no successful sync yet). Pure side-effect — never throws.
+ */
+function checkStaleness(label: string, updatedAt: string | null, now: Date): void {
+  if (updatedAt === null) return;
+  const ageMin = (now.getTime() - new Date(updatedAt).getTime()) / 60_000;
+  if (ageMin > STALE_AFTER_MINUTES) {
+    console.warn(
+      `[dashboard-overview] ${label} is stale (${Math.round(ageMin)} min old; threshold ${STALE_AFTER_MINUTES} min)`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -95,19 +110,17 @@ export interface DashboardStores {
 export async function buildDashboardOverview(
   orgId: string,
   stores: DashboardStores,
+  orgCurrency = "USD",
 ): Promise<DashboardOverview> {
   const now = new Date();
+  const today = dayWindow(now);
+  const yesterday = previousDayWindow(now);
 
-  // Date boundaries
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  const todayStart = today.from;
+  const yesterdayStart = yesterday.from;
 
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
   const revenueRange = { from: sevenDaysAgo, to: now };
 
   // Run all queries in parallel
@@ -135,14 +148,14 @@ export async function buildDashboardOverview(
     stores.queryAudit({ organizationId: orgId, limit: 8 }),
   ]);
 
-  // Map pending approvals (top 3)
+  // Map pending approvals (top 3). stageProgress is added in Task 12.
   const approvals = pendingApprovals
     .filter((a) => a.state.status === "pending")
     .slice(0, 3)
     .map((a) => ({
       id: a.request.id,
       summary: a.request.summary,
-      riskContext: null,
+      riskContext: null as string | null,
       createdAt:
         a.request.createdAt instanceof Date
           ? a.request.createdAt.toISOString()
@@ -162,40 +175,71 @@ export async function buildDashboardOverview(
     channel: b.sourceChannel ?? null,
   }));
 
-  // Map tasks
-  const tasks = tasksRaw.map((t) => ({
-    id: t.id,
-    title: t.title,
-    dueAt: t.dueAt instanceof Date ? t.dueAt.toISOString() : t.dueAt ? String(t.dueAt) : null,
-    isOverdue: t.isOverdue,
-    status: t.status,
-  }));
-
   // Top revenue source
   const topCampaign =
     revenueByCampaign.length > 0
       ? revenueByCampaign.sort((a, b) => b.totalAmount - a.totalAmount)[0]
       : null;
 
-  // Translate activity
-  const activity = translateActivities(auditEntries, 8);
+  // Translate activity. agent field is added in Task 13.
+  const activity = translateActivities(auditEntries, 8).map((a) => ({
+    ...a,
+    agent: null as null,
+  }));
+
+  // Tier B fields ship as placeholders in C1; the staleness check is a no-op until C2
+  // gives spendUpdatedAt a real value, but the call site stays here so C2 doesn't have to thread it in.
+  const spendUpdatedAt: string | null = null;
+  checkStaleness("today.spend", spendUpdatedAt, now);
+
+  // today.appointments — derive from today's bookings
+  const todayBookings = bookings.filter(
+    (b) => new Date(b.startsAt).toDateString() === now.toDateString(),
+  );
+  const nextAppt = todayBookings.length > 0 ? todayBookings[0] : null;
 
   return {
     generatedAt: now.toISOString(),
-    greeting: {
-      period: greetingPeriod(now.getHours()),
-      operatorName,
-    },
+    greeting: { period: greetingPeriod(now.getHours()), operatorName },
     stats: {
       pendingApprovals: pendingApprovals.filter((a) => a.state.status === "pending").length,
-      newInquiriesToday: inquiriesToday,
-      newInquiriesYesterday: inquiriesYesterday,
       qualifiedLeads: funnel.qualified,
-      bookingsToday: bookings.length,
       revenue7d: { total: revenueSummary.totalAmount, count: revenueSummary.count },
       openTasks: tasksRaw.openCount,
       overdueTasks: tasksRaw.overdueCount,
     },
+
+    today: {
+      // today.revenue real wiring lands in Task 6.
+      revenue: { amount: 0, currency: orgCurrency, deltaPctVsAvg: null },
+      // today.spend stays as a Tier-B placeholder. updatedAt=null mutes the cell.
+      spend: { amount: 0, currency: orgCurrency, capPct: 0, updatedAt: spendUpdatedAt },
+      // today.replyTime real wiring lands in Task 8.
+      replyTime: null,
+      leads: { count: inquiriesToday, yesterdayCount: inquiriesYesterday },
+      appointments: {
+        count: todayBookings.length,
+        next: nextAppt
+          ? {
+              startsAt: nextAppt.startsAt,
+              contactName: nextAppt.contactName,
+              service: nextAppt.service,
+            }
+          : null,
+      },
+    },
+
+    agentsToday: {
+      // agentsToday.alex real wiring lands in Task 10.
+      alex: null,
+      // Tier B — stay null until C2.
+      nova: null,
+      mira: null,
+    },
+
+    // Tier B — stays empty until C2.
+    novaAdSets: [],
+
     approvals,
     bookings,
     funnel,
@@ -207,7 +251,13 @@ export async function buildDashboardOverview(
         : null,
       periodDays: 7,
     },
-    tasks,
+    tasks: tasksRaw.map((t) => ({
+      id: t.id,
+      title: t.title,
+      dueAt: t.dueAt instanceof Date ? t.dueAt.toISOString() : t.dueAt ? String(t.dueAt) : null,
+      isOverdue: t.isOverdue,
+      status: t.status,
+    })),
     activity,
   };
 }
@@ -272,7 +322,8 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
     };
 
     try {
-      const overview = await buildDashboardOverview(orgId, stores);
+      const orgCurrency = "USD";
+      const overview = await buildDashboardOverview(orgId, stores, orgCurrency);
       return reply.send(overview);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Dashboard query failed";
