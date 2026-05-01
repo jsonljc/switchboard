@@ -30,7 +30,7 @@ From `git ls-tree -r origin/main --name-only | grep "apps/dashboard/src/app/(aut
 - [x] C — Copy (Claude reads + cross-references; **human confirms claims**)
 - [ ] D — State (**human forces states**; Claude prepares script + files findings)
 - [ ] E — Responsive (**human resizes**; Claude prepares script + files findings)
-- [ ] F — A11y (Claude code-reads static a11y; **human runs axe + keyboard + VO**)
+- [x] F — A11y (Claude code-reads static a11y; **human runs axe + keyboard + VO**)
 - [ ] G — Performance (**human runs Lighthouse**; Claude reads JSON + files findings)
 - [x] H — Contract (Claude code-reads hooks↔API↔schema)
 - [x] I-light — Auth (Claude code-reads guards + RQ scoping; **human two-tenant repro**)

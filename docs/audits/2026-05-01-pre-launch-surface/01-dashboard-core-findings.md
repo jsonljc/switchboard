@@ -17,7 +17,7 @@ Checked: B — see findings below
 Checked: C — see findings below
 Checked: D — pending session
 Checked: E — pending session
-Checked: F — pending session
+Checked: F — see findings below (static a11y code-read; human axe + keyboard + VO at closeout)
 Checked: G — pending session
 Checked: H — see findings below
 Checked: I-light — see findings below (human two-tenant repro pending closeout)
@@ -1185,3 +1185,265 @@ An escalation has a `sessionId` that ties it to a conversation thread (`escalati
 
 **Fix:**
 Add a "Open in Conversations →" link on the expanded escalation card (linking to `/conversations` filtered by the thread / channel + lead), and on `/conversations` for any conversation in `awaiting_approval` or referenced by a pending escalation, show a "View pending decision →" link to the relevant `/decide/[id]` or `/escalations` deep-link. This is the kind of finding the human walk should confirm — it may be acceptable to leave the surfaces decoupled if the inline experience is sufficient.
+
+---
+
+## DC-47
+
+- **Surface:** /console
+- **Sub-surface:** global (page heading + heading order)
+- **Dimension:** F
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+`/console` ships with **no `<h1>`** anywhere on the page, and zone heads ("Queue", "Agents", "Activity") are rendered as `<span className="label">` rather than `<h2>`. Queue cards then jump straight to `<h3>` for `card.contactName` / `card.action` / `card.jobName` (`console-view.tsx:43,82,120`). Net effect: a screen-reader user navigating by heading on the highest-traffic operator surface lands directly on H3 rows with no top-level page name and no zone group above them, and the operator chat widget header (`<h3>Operator Chat</h3>`) is at the same heading level as a queue card. The other three audited routes (`/decide`, `/escalations`, `/conversations`) all have a single `<h1>`; `/console` is the outlier.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:158-342 (no h1; zone heads at lines 205, 218, 316 use `<span className="label">`)
+- File: apps/dashboard/src/components/console/console-view.tsx:43,82,120 (queue-card titles render as `<h3>` with no preceding h1/h2)
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:52 (`<h3>Operator Chat</h3>` collides with queue-card h3s)
+- Repro (human, screen-reader at closeout): with VoiceOver enabled, navigate `/console` by heading (VO+CMD+H). Confirm there is no H1, that zone heads are not announced as headings, and that queue cards announce as H3 with no parent group.
+
+**Fix:**
+Add an `<h1 className="sr-only">Console</h1>` (or visible if it fits the design) at the top of the page, promote each zone head to `<h2>` (Queue, Agents, Activity), and keep queue-card titles at `<h3>`. Apply the same fix in operator-chat-widget if it remains in scope: an `<h2>`-equivalent heading or downgrade to a non-heading element if the panel is not part of the page outline.
+
+---
+
+## DC-48
+
+- **Surface:** /escalations
+- **Sub-surface:** EscalationCard reply form — Send button
+- **Dimension:** F
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+The Send button on each expanded escalation card is icon-only — its only content is `<Loader2 />` while pending or `<Send />` otherwise. The button has no `aria-label`, no visible text, no `<span className="sr-only">` fallback. Screen readers announce the control as just "button" with no purpose. This is the primary CTA for the only mutating action on `/escalations` (sending an operator reply to a customer in escalation), so an AT user cannot identify which control sends their reply.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:233-244 (`<button …><Loader2 …/> | <Send …/></button>` — no aria-label, no text)
+- Repro (human, VoiceOver at closeout): expand any escalation card, type a reply, navigate to the Send button. Confirm VO announces "button" with no name. Confirm with axe DevTools that the button shows a "button-name" violation.
+
+**Fix:**
+Add `aria-label="Send reply"` to the button (and `aria-label="Sending reply"` or similar live state when `replyMutation.isPending`), or render the icon with an adjacent `<span className="sr-only">Send reply</span>`.
+
+---
+
+## DC-49
+
+- **Surface:** /decide, /escalations, /conversations (anywhere OperatorChatWidget mounts)
+- **Sub-surface:** OperatorChatWidget input
+- **Dimension:** F
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+The operator-chat input (`<input type="text" placeholder="Type a command..." …>`) has no `<label>`, no `aria-label`, no `aria-labelledby`. Placeholder is not an accessible name — screen readers will announce the input as "edit text" with no purpose. The sibling toggle button at line 39-45 carries `aria-label="Operator Chat"` (and the panel header is also "Operator Chat"), so the form control inside the panel is the only unlabeled control in this widget. Compounded by the fact that the chat panel has no `role="dialog"` and no focus management — opening the panel does not move focus to the input.
+
+**Evidence:**
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:71-78 (input with placeholder only, no label/aria-label, no `id`)
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:48-80 (panel `<div>` is not a dialog; opening it does not move focus)
+- Repro (human, VoiceOver at closeout): on `/decide`, click the floating Chat button to open the panel, then VO+Right-Arrow to the input. Confirm VO announces "edit text" with no associated label.
+
+**Fix:**
+Add `aria-label="Ask your assistant"` (or similar — see DC-34 for naming) to the input, and either (a) render an actual `<label htmlFor>` paired with the input, or (b) add `aria-labelledby` pointing at the panel `<h3>`. Also wire focus to the input on panel open via a `ref.focus()` in a `useEffect` that fires when `isOpen` flips to true.
+
+---
+
+## DC-50
+
+- **Surface:** /escalations
+- **Sub-surface:** EscalationCard resolution form — internal note textarea
+- **Dimension:** F
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+The resolution form renders a `<label className="text-xs font-medium text-muted-foreground">Internal note (optional)</label>` immediately followed by a `<textarea …>`, but the label has no `htmlFor` and the textarea has no `id` — they are not programmatically associated. Visually adjacent, but a screen reader navigating into the textarea will not announce the label as the field's name. This is a secondary affordance (resolve flow), not the primary reply path, hence Medium not High.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:259-270 (`<label …>Internal note (optional)</label>` + `<textarea …>` with no id/htmlFor pair)
+
+**Fix:**
+Generate a unique id (e.g. `useId()`), set `htmlFor={id}` on the label and `id={id}` on the textarea. Or wrap the textarea inside the label element. Either correctly associates the two for AT.
+
+---
+
+## DC-51
+
+- **Surface:** /console
+- **Sub-surface:** global (focus visibility)
+- **Dimension:** F
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+`console.css` (968 lines) contains zero `:focus`, `:focus-visible`, or `outline` rules, and the global button reset at `[data-v6-console] button { … border: none; … padding: 0; }` removes the default border. Net effect: every interactive control in the `/console` subtree (`Halt`, `esc-reply`, queue-card primary/secondary/dismiss/stop, `agent-col`, panel-note anchor, Activity scroller `tabIndex={0}`) relies entirely on the browser's default outline ring for focus indication, with no scoped style. The rest of the dashboard uses the `--ring` token via shadcn primitives; the console subtree does not. Suspected low or absent focus visibility on the highest-traffic operator surface — confirm with keyboard walk at closeout.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console.css (no focus / outline rules; `grep -c focus console.css` returns 0)
+- File: apps/dashboard/src/components/console/console.css:41-48 (`[data-v6-console] button` reset removes background and border with no focus rule)
+- File: apps/dashboard/src/components/console/console-view.tsx:222-238 (the agent-col toggle is the most consequential focusable control; relies on default outline)
+- Repro (human, keyboard walk at closeout): navigate `/console` with Tab only. For every focusable element (op-halt, queue-card buttons once DC-39 is fixed, agent-col toggles, Nova panel-note, panel "View full ad actions", Activity scroller), confirm a visible focus ring. If any is missing or invisible against the warm-clay background, log here.
+
+**Fix:**
+Add a `[data-v6-console] :focus-visible` rule that produces a clearly visible ring against `--c-bg` (e.g. `outline: 2px solid var(--c-coral); outline-offset: 2px;`), and verify against the warm-clay background. Or — preferred — fold console.css into the global token system per DC-14, which inherits the existing `--ring` styling.
+
+---
+
+## DC-52
+
+- **Surface:** /console
+- **Sub-surface:** Error banner (above ConsoleView)
+- **Dimension:** F
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+The console error banner ("Couldn't load live data. Showing the last known shape.") is rendered as a plain `<div className="console-error">` with no `role="alert"`, no `aria-live`, no `aria-atomic`. When a hook fails mid-session and the banner appears, screen-reader users are not notified — the banner just enters the DOM silently. This is the only error surface on `/console`, so any contract-failure that happens after first paint is invisible to AT.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/console/page.tsx:16-22 (`<div className="console-error">` — no role / aria-live)
+
+**Fix:**
+Add `role="alert"` (assertive — appropriate here because the message changes the operator's understanding of what they are seeing) or `role="status" aria-live="polite"` if a softer announcement is preferred. Either makes mid-session error appearance audible to AT.
+
+---
+
+## DC-53
+
+- **Surface:** /console
+- **Sub-surface:** placeholder text in numbers strip + agent strip sub-stats
+- **Dimension:** F
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+The "placeholder" treatment used by the numbers strip ("Revenue today" / "Spend today" / "Reply time" cells, see DC-03) and the agent-strip "pending option C" sub-stat (see DC-02) renders text with `--c-text-3` (a deliberately muted token) on the warm-clay `--c-bg` background. By design these read as "not yet available," but the contrast ratio between `--c-text-3` and `--c-bg` is suspected to fall below WCAG AA (4.5:1 for body text). Same suspicion applies to `text-blue-800` on `bg-blue-50` (escalation reply banner, DC-23) and the conversation card monospace channel text (`text-xs text-muted-foreground font-mono` against `bg-background`). Code-only, cannot confirm without axe — flag for closeout run.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console.css (placeholder / muted-token usage; tokens in `:root[data-v6-console]` block at lines 9-23)
+- File: apps/dashboard/src/components/console/console-view.tsx:188-199 (numbers cells with `placeholder` class)
+- File: apps/dashboard/src/components/console/console-view.tsx:230-235 (a-stat / a-sub use muted tokens with `pending option C` text from DC-02)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:210 (`bg-blue-50 text-blue-800` reply banner)
+- Repro (human, axe at closeout): run axe on `/console` and `/escalations`; check `color-contrast` violations on `.placeholder .n-value`, `.a-stat`, `.a-sub`, and the blue reply-confirmation banner. Confirm or downgrade.
+
+**Fix:**
+After axe confirms specific violations, either bump the token darkness for the muted text where it falls under 4.5:1 (or 3:1 for >= 18pt), or replace the placeholder treatment with a text-only fallback that meets contrast (e.g. body color on the same background). Pair with DC-16 to consolidate the colors against design tokens.
+
+---
+
+## DC-54
+
+- **Surface:** /escalations, /conversations, /decide/[id]
+- **Sub-surface:** decorative Lucide icons inside text-bearing elements
+- **Dimension:** F
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+Multiple Lucide SVG icons that are purely decorative (text label is adjacent and conveys the meaning) lack `aria-hidden="true"`. Screen readers announce each as a graphic with the icon's filename / role, adding noise to every traversal. Examples: `Clock` inside SlaIndicator chips ("Overdue" / "Nh left" — text already conveys the meaning, the clock is decoration), `ChevronUp`/`ChevronDown` inside the EscalationCard expand/collapse button (the whole button text already says what it does), `Info` inside the post-reply banner, `FileText` inside the resolution-note display, `CheckCircle2` / `AlertCircle` in empty states, `ChevronDown` / `ChevronRight` in conversation card toggles, `MessageSquare` next to the Conversations h1, `AlertTriangle` next to error / expired text on `/decide/[id]`. None are interactive, none carry their own meaning beyond decoration.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:50,59 (`Clock` in SlaIndicator)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:162-165 (ChevronUp/ChevronDown in expand toggle)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:194,211,343,348 (FileText, Info, CheckCircle2, AlertCircle)
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:105-108,171 (ChevronDown/ChevronRight, MessageSquare next to h1)
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:93,222 (AlertTriangle next to error and expired text)
+
+**Fix:**
+Add `aria-hidden="true"` to each decorative Lucide icon. Lucide's React components accept the prop directly. Where the icon is the *only* indicator (none of the cases above qualify, but a future icon-only chip would), instead add an accessible name via `aria-label` on the parent.
+
+---
+
+## DC-55
+
+- **Surface:** /console
+- **Sub-surface:** global (page semantic landmarks)
+- **Dimension:** F
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+On `/console` the layout chain renders **two nested `<main>` elements**: AppShell renders `<main className="min-h-screen bg-background">` because the path is in `CHROME_HIDDEN_PATHS` (`app-shell.tsx:36-42`), and ConsoleView renders its own `<main className="console-main">` inside that (`console-view.tsx:185`). HTML allows only one `<main>` per document; nested mains confuse landmark navigation and trip axe's `landmark-no-duplicate-main` rule. Additionally the `<header className="opstrip">` at line 164 sits *outside* either main, which means the operating-strip is not inside the main landmark even though it carries the page's brand + dispatch state.
+
+**Evidence:**
+- File: apps/dashboard/src/components/layout/app-shell.tsx:36-42 (outer `<main>` on `/console`)
+- File: apps/dashboard/src/components/console/console-view.tsx:185 (inner `<main className="console-main">`)
+- File: apps/dashboard/src/components/console/console-view.tsx:164-183 (operating-strip `<header>` outside the inner main)
+
+**Fix:**
+Either drop the outer `<main>` in `AppShell`'s `hideChrome` branch (use `<div>` and let ConsoleView own the landmark), or drop the inner `<main>` in ConsoleView (use `<div className="console-main">`). Whichever stays should wrap the operating-strip header so it's part of the page's main landmark.
+
+---
+
+## DC-56
+
+- **Surface:** /console
+- **Sub-surface:** Op-strip — Live/Halted status indicator
+- **Dimension:** F
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+The dispatch-status indicator (`<span className="op-live"><span className="pulse" aria-hidden /> {dispatch === "live" ? "Live" : "Halted"}</span>`) flips its text content when org dispatch changes state. There is no `role="status"` and no `aria-live` on the wrapping span, so a screen-reader user has no way to know that dispatch transitioned from Live to Halted unless they re-traverse. The pulse is correctly marked `aria-hidden`. This is a Low because today (per DC-41) the Halt button is unwired, so the status never flips — but if/when DC-41 is fixed, the lack of live-region wiring will silently strand AT users.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:174-177 (`<span className="op-live">…</span>` no role/aria-live)
+
+**Fix:**
+Add `role="status" aria-live="polite"` to the `<span className="op-live">`. Pair with DC-41 — once Halt is wired, the announcement is meaningful.
+
+---
+
+## DC-57
+
+- **Surface:** /escalations, /conversations
+- **Sub-surface:** filter pill groups
+- **Dimension:** F
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** e66874d05e1b6cdf0c96f2dec3a8fa2b97c1202a
+- **Effort:** S
+
+**What:**
+Both `/escalations` (Pending / Released / Resolved) and `/conversations` (All / Active / Overridden) render filter pills as a row of `<button>` elements with no semantic grouping and no `aria-pressed` to indicate which is selected. A screen-reader user navigating the pills hears "Pending button. Released button. Resolved button." with no signal that exactly one is active. The active state is currently conveyed only by visual styling (`bg-foreground text-background` on /escalations, underline on /conversations).
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:314-329 (filter buttons; no aria-pressed; no parent role)
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:175-190 (filter buttons; no aria-pressed; no parent role)
+
+**Fix:**
+Add `aria-pressed={filter === status}` to each filter button (toggle pattern), or wrap the group in `role="radiogroup" aria-label="Filter by status"` and switch each button to `role="radio"` with `aria-checked`. Either makes the active selection audible to AT.
