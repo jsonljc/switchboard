@@ -1,7 +1,16 @@
+import {
+  defaultSafeUrlPolicy,
+  isSafeUrl,
+  readBodyWithLimit,
+  SsrfRejectedError,
+  type SafeUrlPolicy,
+} from "../util/safe-url.js";
+
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 
 interface WhisperConfig {
   apiKey: string;
+  safeUrlPolicy?: SafeUrlPolicy;
 }
 
 interface TranscribeRequest {
@@ -22,16 +31,26 @@ interface TranscribeResult {
 
 export class WhisperClient {
   private apiKey: string;
+  private safeUrlPolicy: SafeUrlPolicy;
 
   constructor(config: WhisperConfig) {
     this.apiKey = config.apiKey;
+    this.safeUrlPolicy = config.safeUrlPolicy ?? defaultSafeUrlPolicy();
   }
 
   async transcribe(request: TranscribeRequest): Promise<TranscribeResult> {
-    // Download audio file
-    const audioRes = await fetch(request.audioUrl);
+    // Download audio file — guard against SSRF since `audioUrl` originates
+    // from upstream pipeline input.
+    const verdict = isSafeUrl(request.audioUrl, this.safeUrlPolicy);
+    if (!verdict.ok) {
+      throw new SsrfRejectedError(request.audioUrl, verdict.reason);
+    }
+    const audioRes = await fetch(verdict.url);
     if (!audioRes.ok) throw new Error(`Failed to download audio: ${audioRes.status}`);
-    const audioBlob = await audioRes.blob();
+    const audioBuffer = await readBodyWithLimit(audioRes, this.safeUrlPolicy.maxResponseBytes);
+    // Wrap as Uint8Array to satisfy Blob's BlobPart typing across Node versions
+    // (Buffer's `.buffer` may be SharedArrayBuffer-typed under DOM lib).
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)]);
 
     // Send to Whisper API
     const formData = new FormData();

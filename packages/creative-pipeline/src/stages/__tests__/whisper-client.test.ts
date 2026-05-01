@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { WhisperClient } from "../whisper-client.js";
+import { DEFAULT_MAX_RESPONSE_BYTES, type SafeUrlPolicy } from "../../util/safe-url.js";
+
+const PERMISSIVE_POLICY: SafeUrlPolicy = {
+  allowedSchemes: ["https:"],
+  allowedHostsRegex: [/example\.com$/i],
+  rejectPrivateIPs: true,
+  maxResponseBytes: DEFAULT_MAX_RESPONSE_BYTES,
+};
 
 describe("WhisperClient", () => {
   let client: WhisperClient;
@@ -8,7 +16,7 @@ describe("WhisperClient", () => {
   beforeEach(() => {
     fetchSpy = vi.fn();
     global.fetch = fetchSpy;
-    client = new WhisperClient({ apiKey: "test-key" });
+    client = new WhisperClient({ apiKey: "test-key", safeUrlPolicy: PERMISSIVE_POLICY });
   });
 
   afterEach(() => {
@@ -16,11 +24,9 @@ describe("WhisperClient", () => {
   });
 
   it("transcribes audio and returns SRT content", async () => {
-    // Mock fetching the audio file
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      blob: () => Promise.resolve(new Blob(["fake-audio"])),
-    });
+    // Mock fetching the audio file — return a real Response so the
+    // streaming size-guard can read its body.
+    fetchSpy.mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 }));
     // Mock Whisper API response
     fetchSpy.mockResolvedValueOnce({
       ok: true,
