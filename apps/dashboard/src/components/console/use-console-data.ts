@@ -102,6 +102,7 @@ export function useConsoleData(): {
         ]
       : [],
     revenue: overview.data.today.revenue,
+    replyTime: overview.data.today.replyTime,
     escalations: escalationRows,
     approvals: approvalRows,
     modules: moduleMap,

@@ -19,6 +19,13 @@ function formatCurrency(amount: number, currency: string): string {
   }).format(amount);
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
+}
+
 // ── Op strip ──────────────────────────────────────────────────────────────
 export function mapOpStrip(orgName: string, now: Date, dispatch: "live" | "halted"): OpStrip {
   const day = now.toLocaleDateString("en-US", { weekday: "short" });
@@ -36,6 +43,7 @@ export type NumbersInput = {
   leadsYesterday: number;
   bookingsToday: Array<{ startsAt: string; contactName: string }>;
   revenue: { amount: number; currency: string; deltaPctVsAvg: number | null };
+  replyTime: { medianSeconds: number; previousSeconds: number | null; sampleSize: number } | null;
 };
 export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
   const leadsDelta = input.leadsToday - input.leadsYesterday;
@@ -96,10 +104,23 @@ export function mapNumbersStrip(input: NumbersInput): NumbersStrip {
       },
       {
         label: "Reply time",
-        value: "—",
-        delta: ["pending option C"],
-        tone: "neutral",
-        placeholder: true,
+        value: input.replyTime === null ? "—" : formatDuration(input.replyTime.medianSeconds),
+        delta:
+          input.replyTime === null
+            ? ["pending"]
+            : input.replyTime.previousSeconds === null
+              ? ["new today"]
+              : input.replyTime.medianSeconds <= input.replyTime.previousSeconds
+                ? ["↓ from ", { bold: formatDuration(input.replyTime.previousSeconds) }]
+                : ["↑ from ", { bold: formatDuration(input.replyTime.previousSeconds) }],
+        tone:
+          input.replyTime === null
+            ? "neutral"
+            : input.replyTime.previousSeconds !== null &&
+                input.replyTime.medianSeconds <= input.replyTime.previousSeconds
+              ? "good"
+              : "neutral",
+        placeholder: input.replyTime === null,
       },
     ],
   };
@@ -263,6 +284,7 @@ export type MapConsoleInput = {
   leadsYesterday: number;
   bookingsToday: Array<{ startsAt: string; contactName: string }>;
   revenue: { amount: number; currency: string; deltaPctVsAvg: number | null };
+  replyTime: { medianSeconds: number; previousSeconds: number | null; sampleSize: number } | null;
   escalations: EscalationApiRow[];
   approvals: ApprovalApiRow[];
   modules: ModuleEnablementMap;
@@ -277,6 +299,7 @@ export function mapConsoleData(input: MapConsoleInput): ConsoleData {
       leadsYesterday: input.leadsYesterday,
       bookingsToday: input.bookingsToday,
       revenue: input.revenue,
+      replyTime: input.replyTime,
     }),
     queueLabel: { count: `${queue.length} pending` },
     queue,

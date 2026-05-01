@@ -34,6 +34,12 @@ function checkStaleness(label: string, updatedAt: string | null, now: Date): voi
   }
 }
 
+/**
+ * Below this sample size, the median is too noisy to surface as a headline metric
+ * (one fast reply would read as "12s avg"). Treat the cell as muted instead.
+ */
+const MIN_REPLY_SAMPLE = 3;
+
 // ---------------------------------------------------------------------------
 // Structural store interface — keeps builder testable without Fastify or Prisma
 // ---------------------------------------------------------------------------
@@ -101,6 +107,10 @@ export interface DashboardStores {
   queryApprovals: (orgId: string) => Promise<ApprovalRecord[]>;
   queryAudit: (filter: AuditQueryFilter) => Promise<RawAuditEntry[]>;
   queryOperatorName: (orgId: string) => Promise<string>;
+  replyTimeStats: (
+    orgId: string,
+    day: Date,
+  ) => Promise<{ medianSeconds: number; sampleSize: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +146,8 @@ export async function buildDashboardOverview(
     inquiriesYesterday,
     auditEntries,
     revenueTodayRaw,
+    replyTimeToday,
+    replyTimeYesterday,
   ] = await Promise.all([
     stores.queryOperatorName(orgId),
     stores.queryApprovals(orgId),
@@ -148,6 +160,8 @@ export async function buildDashboardOverview(
     stores.countByType(orgId, "inquiry", yesterdayStart, todayStart),
     stores.queryAudit({ organizationId: orgId, limit: 8 }),
     stores.sumRevenue(orgId, { from: todayStart, to: now }),
+    stores.replyTimeStats(orgId, todayStart),
+    stores.replyTimeStats(orgId, yesterdayStart),
   ]);
 
   // Map pending approvals (top 3). stageProgress is added in Task 12.
@@ -220,8 +234,17 @@ export async function buildDashboardOverview(
       revenue: { amount: revenueTodayRaw.totalAmount, currency: orgCurrency, deltaPctVsAvg },
       // today.spend stays as a Tier-B placeholder. updatedAt=null mutes the cell.
       spend: { amount: 0, currency: orgCurrency, capPct: 0, updatedAt: spendUpdatedAt },
-      // today.replyTime real wiring lands in Task 8.
-      replyTime: null,
+      replyTime:
+        replyTimeToday.sampleSize < MIN_REPLY_SAMPLE
+          ? null
+          : {
+              medianSeconds: replyTimeToday.medianSeconds,
+              previousSeconds:
+                replyTimeYesterday.sampleSize < MIN_REPLY_SAMPLE
+                  ? null
+                  : replyTimeYesterday.medianSeconds,
+              sampleSize: replyTimeToday.sampleSize,
+            },
       leads: { count: inquiriesToday, yesterdayCount: inquiriesYesterday },
       appointments: {
         count: todayBookings.length,
@@ -291,12 +314,14 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       PrismaOwnerTaskStore,
       PrismaConversionRecordStore,
       PrismaRevenueStore,
+      PrismaConversationStateStore,
     } = await import("@switchboard/db");
 
     const bookingStore = new PrismaBookingStore(prisma);
     const ownerTaskStore = new PrismaOwnerTaskStore(prisma);
     const conversionStore = new PrismaConversionRecordStore(prisma);
     const revenueStore = new PrismaRevenueStore(prisma);
+    const conversationStateStore = new PrismaConversationStateStore(prisma, {} as never);
 
     const stores: DashboardStores = {
       listBookingsByDate: (id, date, limit) => bookingStore.listByDate(id, date, limit),
@@ -305,6 +330,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       sumRevenue: (id, range) => revenueStore.sumByOrg(id, range),
       sumRevenueByCampaign: (id, range) => revenueStore.sumByCampaign(id, range),
       countByType: (id, type, from, to) => conversionStore.countByType(id, type, from, to),
+      replyTimeStats: (id, day) => conversationStateStore.replyTimeStats(id, day),
 
       queryApprovals: async (id) => {
         if (!app.storageContext?.approvals) return [];

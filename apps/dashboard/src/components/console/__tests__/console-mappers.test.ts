@@ -27,6 +27,7 @@ describe("mapNumbersStrip", () => {
     leadsYesterday: 5,
     bookingsToday: [],
     revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+    replyTime: null,
   };
 
   it("returns 5 cells", () => {
@@ -79,6 +80,7 @@ describe("mapNumbersStrip — Revenue cell (option C1)", () => {
     leadsToday: 0,
     leadsYesterday: 0,
     bookingsToday: [] as Array<{ startsAt: string; contactName: string }>,
+    replyTime: null,
   };
 
   it("formats amount as currency and shows positive delta", () => {
@@ -290,6 +292,7 @@ describe("mapConsoleData", () => {
       leadsYesterday: 5,
       bookingsToday: [{ startsAt: "2026-04-30T11:00:00", contactName: "Sarah" }],
       revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+      replyTime: null,
       escalations: [],
       approvals: [],
       modules: { alex: true, nova: true, mira: true },
@@ -303,5 +306,43 @@ describe("mapConsoleData", () => {
     expect(result.activity.rows).toEqual([]);
     // Nova panel stays fixture-shaped in option B (visual-only until C)
     expect(result.novaPanel.rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe("mapNumbersStrip — Reply time cell (option C1)", () => {
+  const base = {
+    leadsToday: 0,
+    leadsYesterday: 0,
+    bookingsToday: [] as Array<{ startsAt: string; contactName: string }>,
+    revenue: { amount: 0, currency: "USD", deltaPctVsAvg: null },
+  };
+
+  it("renders muted '—' when replyTime is null", () => {
+    const result = mapNumbersStrip({ ...base, replyTime: null });
+    const cell = result.cells.find((c) => c.label === "Reply time");
+    expect(cell?.value).toBe("—");
+    expect(cell?.placeholder).toBe(true);
+  });
+
+  it("formats medianSeconds and shows '↓ from' delta when faster than yesterday", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      replyTime: { medianSeconds: 12, previousSeconds: 18, sampleSize: 7 },
+    });
+    const cell = result.cells.find((c) => c.label === "Reply time");
+    expect(cell?.value).toBe("12s");
+    expect(cell?.tone).toBe("good");
+    expect(JSON.stringify(cell?.delta)).toContain("↓");
+    expect(JSON.stringify(cell?.delta)).toContain("18s");
+    expect(cell?.placeholder).not.toBe(true);
+  });
+
+  it("shows 'new today' when previousSeconds is null", () => {
+    const result = mapNumbersStrip({
+      ...base,
+      replyTime: { medianSeconds: 12, previousSeconds: null, sampleSize: 1 },
+    });
+    const cell = result.cells.find((c) => c.label === "Reply time");
+    expect(cell?.delta).toEqual(["new today"]);
   });
 });

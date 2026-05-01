@@ -18,6 +18,7 @@ function makeStores(overrides: Partial<DashboardStores> = {}): DashboardStores {
     queryApprovals: vi.fn().mockResolvedValue([]),
     queryAudit: vi.fn().mockResolvedValue([]),
     queryOperatorName: vi.fn().mockResolvedValue("Jane"),
+    replyTimeStats: vi.fn().mockResolvedValue({ medianSeconds: 0, sampleSize: 0 }),
     ...overrides,
   };
 }
@@ -93,5 +94,30 @@ describe("buildDashboardOverview (option C1 shape)", () => {
     const sumRevenue = vi.fn(async () => ({ totalAmount: 0, count: 0 }));
     const result = await buildDashboardOverview("org-1", makeStores({ sumRevenue }), "USD");
     expect(result.today.revenue.deltaPctVsAvg).toBeNull();
+  });
+
+  it("populates today.replyTime from replyTimeStats (today + yesterday for previousSeconds)", async () => {
+    const replyTimeStats = vi.fn().mockImplementation(async (_org: string, day: Date) => {
+      const isToday = day.toDateString() === new Date().toDateString();
+      return isToday ? { medianSeconds: 12, sampleSize: 7 } : { medianSeconds: 18, sampleSize: 5 };
+    });
+    const result = await buildDashboardOverview("org-1", makeStores({ replyTimeStats }), "USD");
+    expect(result.today.replyTime).toEqual({
+      medianSeconds: 12,
+      previousSeconds: 18,
+      sampleSize: 7,
+    });
+  });
+
+  it("today.replyTime is null when sampleSize=0 today", async () => {
+    const replyTimeStats = vi.fn().mockResolvedValue({ medianSeconds: 0, sampleSize: 0 });
+    const result = await buildDashboardOverview("org-1", makeStores({ replyTimeStats }), "USD");
+    expect(result.today.replyTime).toBeNull();
+  });
+
+  it("today.replyTime is null when sampleSize < MIN_REPLY_SAMPLE (=3) — guards against single-reply skew", async () => {
+    const replyTimeStats = vi.fn().mockResolvedValue({ medianSeconds: 5, sampleSize: 2 });
+    const result = await buildDashboardOverview("org-1", makeStores({ replyTimeStats }), "USD");
+    expect(result.today.replyTime).toBeNull();
   });
 });
