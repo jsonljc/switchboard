@@ -106,11 +106,100 @@ describe("Auth Middleware", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().data).toBe("open");
 
+      // authDisabled flag must be set so org-access helpers know it's dev mode.
+      expect(app.authDisabled).toBe(true);
+
       await app.close();
 
       if (original !== undefined) {
         process.env["API_KEYS"] = original;
       }
+    });
+  });
+
+  describe("production hardening — unscoped static keys", () => {
+    const originalKeys = process.env["API_KEYS"];
+    const originalMeta = process.env["API_KEY_METADATA"];
+    const originalNodeEnv = process.env["NODE_ENV"];
+
+    afterEach(() => {
+      if (originalKeys === undefined) {
+        delete process.env["API_KEYS"];
+      } else {
+        process.env["API_KEYS"] = originalKeys;
+      }
+      if (originalMeta === undefined) {
+        delete process.env["API_KEY_METADATA"];
+      } else {
+        process.env["API_KEY_METADATA"] = originalMeta;
+      }
+      if (originalNodeEnv === undefined) {
+        delete process.env["NODE_ENV"];
+      } else {
+        process.env["NODE_ENV"] = originalNodeEnv;
+      }
+    });
+
+    it("refuses to start when API_KEYS lacks API_KEY_METADATA in production", async () => {
+      process.env["API_KEYS"] = "unscoped-key";
+      delete process.env["API_KEY_METADATA"];
+      process.env["NODE_ENV"] = "production";
+
+      const app = Fastify({ logger: false });
+      await expect(app.register(authMiddleware)).rejects.toThrow(/Refusing to start/);
+      await app.close();
+    });
+
+    it("starts but logs a warning when API_KEYS lacks metadata in non-production", async () => {
+      process.env["API_KEYS"] = "unscoped-key";
+      delete process.env["API_KEY_METADATA"];
+      process.env["NODE_ENV"] = "development";
+
+      const app = Fastify({ logger: false });
+      await app.register(authMiddleware);
+      app.get("/api/test", async () => ({ data: "ok" }));
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/test",
+        headers: { authorization: "Bearer unscoped-key" },
+      });
+      expect(res.statusCode).toBe(200);
+      // Even though the request was accepted, no org binding was set.
+      expect(app.authDisabled).toBe(false);
+      await app.close();
+    });
+
+    it("rejects an unscoped static key with 401 in production at request time", async () => {
+      // Belt-and-braces: if a key is hot-reloaded without metadata in production,
+      // the per-request guard rejects it even though startup validation already
+      // refused that configuration on a fresh boot.
+      process.env["API_KEYS"] = "k1";
+      process.env["API_KEY_METADATA"] = "k1:org-a::p1";
+      process.env["NODE_ENV"] = "development";
+
+      const app = Fastify({ logger: false });
+      await app.register(authMiddleware);
+      app.get("/api/test", async () => ({ data: "ok" }));
+
+      // Re-pretend production for the per-request guard.
+      process.env["NODE_ENV"] = "production";
+      // Swap to a key with NO metadata via SIGHUP-style reload.
+      process.env["API_KEYS"] = "k2";
+      delete process.env["API_KEY_METADATA"];
+      process.kill(process.pid, "SIGHUP");
+      // Allow the SIGHUP handler to run.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/test",
+        headers: { authorization: "Bearer k2" },
+      });
+      expect(res.statusCode).toBe(401);
+      expect(res.json().error).toContain("not scoped to an organization");
+
+      await app.close();
     });
   });
 });
