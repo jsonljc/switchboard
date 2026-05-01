@@ -14,12 +14,17 @@ export {
 export { ParameterResolutionError, validateBuilderRegistration } from "./parameter-builder.js";
 export {
   createCrmQueryTool,
-  createCrmWriteTool,
-  createCalendarBookTool,
+  createCrmWriteToolFactory,
+  createCalendarBookToolFactory,
   createWebScannerTool,
   createEscalateToolFactory,
 } from "./tools/index.js";
-export type { EscalateToolFactory } from "./tools/index.js";
+export type {
+  EscalateToolFactory,
+  CalendarBookToolFactory,
+  CrmWriteToolFactory,
+  CalendarProviderFactory,
+} from "./tools/index.js";
 export {
   alexBuilder,
   salesPipelineBuilder,
@@ -75,6 +80,7 @@ export type {
   SkillExecutionResult,
   ToolCallRecord,
   SkillTool,
+  SkillToolFactory,
   SkillToolOperation,
   SkillExecutor,
   OutputFieldDeclaration,

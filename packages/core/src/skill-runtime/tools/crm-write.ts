@@ -1,4 +1,4 @@
-import type { SkillTool } from "../types.js";
+import type { SkillTool, SkillRequestContext } from "../types.js";
 import { ok } from "../tool-result.js";
 
 interface OpportunityStoreSubset {
@@ -20,11 +20,19 @@ interface ActivityStoreSubset {
   }): Promise<void>;
 }
 
-export function createCrmWriteTool(
+export type CrmWriteToolFactory = (ctx: SkillRequestContext) => SkillTool;
+
+/**
+ * Factory-with-context pattern (matches `escalate.ts`). `orgId` and
+ * `deploymentId` are sourced from the trusted `SkillRequestContext` injected
+ * at execution time, NEVER from LLM-controlled tool input. This closes the
+ * AI-1 prompt-injection vector for crm-write.
+ */
+export function createCrmWriteToolFactory(
   opportunityStore: OpportunityStoreSubset,
   activityStore: ActivityStoreSubset,
-): SkillTool {
-  return {
+): CrmWriteToolFactory {
+  return (ctx: SkillRequestContext): SkillTool => ({
     id: "crm-write",
     operations: {
       "stage.update": {
@@ -34,7 +42,6 @@ export function createCrmWriteTool(
         inputSchema: {
           type: "object",
           properties: {
-            orgId: { type: "string" },
             opportunityId: { type: "string", description: "Opportunity UUID" },
             stage: {
               type: "string",
@@ -50,15 +57,14 @@ export function createCrmWriteTool(
               ],
             },
           },
-          required: ["orgId", "opportunityId", "stage"],
+          required: ["opportunityId", "stage"],
         },
         execute: async (params: unknown) => {
-          const { orgId, opportunityId, stage } = params as {
-            orgId: string;
+          const { opportunityId, stage } = params as {
             opportunityId: string;
             stage: string;
           };
-          const result = await opportunityStore.updateStage(orgId, opportunityId, stage);
+          const result = await opportunityStore.updateStage(ctx.orgId, opportunityId, stage);
           return ok(result as Record<string, unknown>, {
             entityState: { opportunityId, stage },
           });
@@ -71,27 +77,28 @@ export function createCrmWriteTool(
         inputSchema: {
           type: "object",
           properties: {
-            organizationId: { type: "string" },
-            deploymentId: { type: "string" },
             eventType: {
               type: "string",
               description: "e.g. opt-out, qualification, handoff",
             },
             description: { type: "string" },
           },
-          required: ["organizationId", "deploymentId", "eventType", "description"],
+          required: ["eventType", "description"],
         },
         execute: async (params: unknown) => {
           const input = params as {
-            organizationId: string;
-            deploymentId: string;
             eventType: string;
             description: string;
           };
-          await activityStore.write(input);
+          await activityStore.write({
+            organizationId: ctx.orgId,
+            deploymentId: ctx.deploymentId,
+            eventType: input.eventType,
+            description: input.description,
+          });
           return ok(undefined, { entityState: { eventType: input.eventType } });
         },
       },
     },
-  };
+  });
 }

@@ -73,6 +73,12 @@ export interface SkillExecutionParams {
   orgId: string;
   trustScore: number;
   trustLevel: "supervised" | "guided" | "autonomous";
+  /**
+   * Optional session identifier. When provided it flows into the per-request
+   * `SkillRequestContext` used by tool factories. Falls back to the work-unit
+   * trace id (or a synthetic id) when omitted.
+   */
+  sessionId?: string;
 }
 
 export interface SkillExecutionResult {
@@ -137,6 +143,14 @@ export interface SkillTool {
   id: string;
   operations: Record<string, SkillToolOperation>;
 }
+
+/**
+ * Per-request tool factory. The skill runtime materializes a fresh `SkillTool`
+ * for each invocation, closing trusted context (`orgId`, `sessionId`,
+ * `deploymentId`) into the operations so the LLM cannot influence trust-bound
+ * identifiers via tool input.
+ */
+export type SkillToolFactory = (ctx: SkillRequestContext) => SkillTool;
 
 export interface SkillToolOperation {
   description: string;

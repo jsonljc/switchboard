@@ -31,8 +31,10 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
     slugs: vi.fn(() => []),
   })),
   createCrmQueryTool: vi.fn(() => ({ operations: { get: { effectCategory: "read" } } })),
-  createCrmWriteTool: vi.fn(() => ({ operations: { upsert: { effectCategory: "write" } } })),
-  createCalendarBookTool: vi.fn(() => ({
+  createCrmWriteToolFactory: vi.fn(() => () => ({
+    operations: { upsert: { effectCategory: "write" } },
+  })),
+  createCalendarBookToolFactory: vi.fn(() => () => ({
     operations: { create: { effectCategory: "external_mutation" } },
   })),
   createEscalateToolFactory: vi.fn(() => () => ({

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { SkillTool } from "../types.js";
+import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
 import type { CalendarProvider, SlotQuery } from "@switchboard/schemas";
@@ -69,16 +69,9 @@ interface CalendarBookToolDeps {
   failureHandler: BookingFailureHandler;
 }
 
-function isMissingOrgId(value: unknown): boolean {
-  return typeof value !== "string" || value.trim() === "";
-}
-
 const NOT_CONFIGURED_REMEDIATION =
   "Do not tell the customer there are no available slots. Escalate to the operator because calendar booking is not configured.";
 
-// TODO(per-request-trust): orgId is read from LLM-controlled tool input.
-// The follow-up executor-contract PR should source this from SkillRequestContext
-// (see escalate.ts for the target shape) so it cannot be spoofed by tool args.
 async function resolveProviderOrFail(
   deps: Pick<CalendarBookToolDeps, "calendarProviderFactory" | "isCalendarProviderConfigured">,
   orgId: string,
@@ -106,8 +99,15 @@ async function resolveProviderOrFail(
   return { provider };
 }
 
-export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
-  return {
+export type CalendarBookToolFactory = (ctx: SkillRequestContext) => SkillTool;
+
+/**
+ * Factory-with-context pattern (matches `escalate.ts`). The `orgId` is sourced
+ * from the trusted `SkillRequestContext` injected at execution time, NEVER from
+ * LLM-controlled tool input. This closes the AI-1 prompt-injection vector.
+ */
+export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): CalendarBookToolFactory {
+  return (ctx: SkillRequestContext): SkillTool => ({
     id: "calendar-book",
     operations: {
       "slots.query": {
@@ -117,25 +117,17 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
         inputSchema: {
           type: "object",
           properties: {
-            // Temporary: orgId currently comes from model/tool input.
-            // Move to trusted SkillRequestContext in the executor-contract follow-up PR.
-            orgId: { type: "string" },
             dateFrom: { type: "string", description: "ISO 8601 start date" },
             dateTo: { type: "string", description: "ISO 8601 end date" },
             durationMinutes: { type: "number", description: "Appointment duration in minutes" },
             service: { type: "string", description: "Service type" },
             timezone: { type: "string", description: "IANA timezone" },
           },
-          required: ["orgId", "dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
+          required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
         },
         execute: async (params: unknown) => {
-          const query = params as SlotQuery & { orgId?: string };
-          if (isMissingOrgId(query.orgId)) {
-            return fail("ORG_ID_REQUIRED", "Calendar booking requires an orgId.", {
-              retryable: false,
-            });
-          }
-          const resolved = await resolveProviderOrFail(deps, query.orgId as string);
+          const query = params as SlotQuery;
+          const resolved = await resolveProviderOrFail(deps, ctx.orgId);
           if ("failure" in resolved) return resolved.failure;
           const slots = await resolved.provider.listAvailableSlots(query);
           return ok({ slots } as Record<string, unknown>);
@@ -149,7 +141,6 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
         inputSchema: {
           type: "object",
           properties: {
-            orgId: { type: "string" },
             contactId: { type: "string" },
             service: { type: "string" },
             slotStart: { type: "string", description: "ISO 8601" },
@@ -158,11 +149,10 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
             attendeeName: { type: "string" },
             attendeeEmail: { type: "string" },
           },
-          required: ["orgId", "contactId", "service", "slotStart", "slotEnd", "calendarId"],
+          required: ["contactId", "service", "slotStart", "slotEnd", "calendarId"],
         },
         execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as {
-            orgId?: string;
             contactId: string;
             service: string;
             slotStart: string;
@@ -172,26 +162,19 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
             attendeeEmail?: string;
           };
 
-          if (isMissingOrgId(input.orgId)) {
-            return fail("ORG_ID_REQUIRED", "Calendar booking requires an orgId.", {
-              retryable: false,
-            });
-          }
-          const resolved = await resolveProviderOrFail(deps, input.orgId as string);
+          const orgId = ctx.orgId;
+          const resolved = await resolveProviderOrFail(deps, orgId);
           if ("failure" in resolved) return resolved.failure;
           const provider = resolved.provider;
 
           // Resolve or create opportunity
           let opportunityId: string | null = null;
-          const existing = await deps.opportunityStore.findActiveByContact(
-            input.orgId as string,
-            input.contactId,
-          );
+          const existing = await deps.opportunityStore.findActiveByContact(orgId, input.contactId);
           if (existing) {
             opportunityId = existing.id;
           } else {
             const created = await deps.opportunityStore.create({
-              organizationId: input.orgId as string,
+              organizationId: orgId,
               contactId: input.contactId,
               service: input.service,
             });
@@ -202,7 +185,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
           let booking: { id: string };
           try {
             booking = await deps.bookingStore.create({
-              organizationId: input.orgId as string,
+              organizationId: orgId,
               contactId: input.contactId,
               opportunityId,
               service: input.service,
@@ -214,7 +197,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
           } catch (err) {
             if (isPrismaUniqueConstraintError(err)) {
               const existingBooking = await deps.bookingStore.findBySlot(
-                input.orgId as string,
+                orgId,
                 input.contactId,
                 input.service,
                 new Date(input.slotStart),
@@ -239,7 +222,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
           try {
             calendarResult = await provider.createBooking({
               contactId: input.contactId,
-              organizationId: input.orgId as string,
+              organizationId: orgId,
               opportunityId,
               slot: {
                 start: input.slotStart,
@@ -255,7 +238,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
           } catch (error) {
             const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
-              orgId: input.orgId as string,
+              orgId,
               contactId: input.contactId,
               service: input.service,
               provider: "google_calendar",
@@ -287,7 +270,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
                   payload: {
                     type: "booked",
                     contactId: input.contactId,
-                    organizationId: input.orgId as string,
+                    organizationId: orgId,
                     value: 0,
                     occurredAt: new Date().toISOString(),
                     source: "calendar-book",
@@ -305,7 +288,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
           } catch (error) {
             const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
-              orgId: input.orgId as string,
+              orgId,
               contactId: input.contactId,
               service: input.service,
               provider: "google_calendar",
@@ -331,5 +314,5 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
         },
       },
     },
-  };
+  });
 }

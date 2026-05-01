@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createCalendarBookTool } from "./calendar-book.js";
+import { createCalendarBookToolFactory } from "./calendar-book.js";
+import type { SkillRequestContext } from "../types.js";
 
 function makeCalendarProvider() {
   return {
@@ -51,7 +52,13 @@ function makeFailureHandler() {
   };
 }
 
-describe("createCalendarBookTool", () => {
+const TRUSTED_CTX: SkillRequestContext = {
+  sessionId: "sess_1",
+  orgId: "org_trusted",
+  deploymentId: "dep_1",
+};
+
+describe("createCalendarBookToolFactory", () => {
   let calendarProvider: ReturnType<typeof makeCalendarProvider>;
   let calendarProviderFactory: ReturnType<typeof vi.fn>;
   let isCalendarProviderConfigured: ReturnType<typeof vi.fn>;
@@ -59,7 +66,8 @@ describe("createCalendarBookTool", () => {
   let opportunityStore: ReturnType<typeof makeOpportunityStore>;
   let runTransaction: ReturnType<typeof makeRunTransaction>;
   let failureHandler: ReturnType<typeof makeFailureHandler>;
-  let tool: ReturnType<typeof createCalendarBookTool>;
+  let factory: ReturnType<typeof createCalendarBookToolFactory>;
+  let tool: ReturnType<typeof factory>;
 
   beforeEach(() => {
     calendarProvider = makeCalendarProvider();
@@ -69,7 +77,7 @@ describe("createCalendarBookTool", () => {
     opportunityStore = makeOpportunityStore();
     runTransaction = makeRunTransaction();
     failureHandler = makeFailureHandler();
-    tool = createCalendarBookTool({
+    factory = createCalendarBookToolFactory({
       calendarProviderFactory: calendarProviderFactory as never,
       isCalendarProviderConfigured: isCalendarProviderConfigured as never,
       bookingStore: bookingStore as never,
@@ -77,6 +85,7 @@ describe("createCalendarBookTool", () => {
       runTransaction: runTransaction as never,
       failureHandler: failureHandler as never,
     });
+    tool = factory(TRUSTED_CTX);
   });
 
   it("has id 'calendar-book'", () => {
@@ -87,7 +96,7 @@ describe("createCalendarBookTool", () => {
     expect(tool.operations["slots.query"]!.effectCategory).toBe("read");
   });
 
-  it("booking.create has governance tier 'external_write'", () => {
+  it("booking.create has governance tier 'external_mutation'", () => {
     expect(tool.operations["booking.create"]!.effectCategory).toBe("external_mutation");
   });
 
@@ -99,7 +108,25 @@ describe("createCalendarBookTool", () => {
     expect(tool.operations["booking.create"]!.idempotent).toBe(true);
   });
 
-  it("slots.query delegates to calendarProvider", async () => {
+  it("slots.query inputSchema does NOT contain orgId", () => {
+    const schema = tool.operations["slots.query"]!.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).not.toHaveProperty("orgId");
+    expect(schema.required).not.toContain("orgId");
+  });
+
+  it("booking.create inputSchema does NOT contain orgId", () => {
+    const schema = tool.operations["booking.create"]!.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).not.toHaveProperty("orgId");
+    expect(schema.required).not.toContain("orgId");
+  });
+
+  it("slots.query delegates to calendarProvider using ctx.orgId", async () => {
     const mockSlots = [
       {
         start: "2026-04-20T10:00:00+08:00",
@@ -111,7 +138,6 @@ describe("createCalendarBookTool", () => {
     calendarProvider.listAvailableSlots.mockResolvedValue(mockSlots);
 
     const result = await tool.operations["slots.query"]!.execute({
-      orgId: "org_1",
       dateFrom: "2026-04-20T00:00:00+08:00",
       dateTo: "2026-04-20T23:59:59+08:00",
       durationMinutes: 30,
@@ -120,12 +146,28 @@ describe("createCalendarBookTool", () => {
     });
 
     expect(calendarProvider.listAvailableSlots).toHaveBeenCalled();
-    expect(calendarProviderFactory).toHaveBeenCalledWith("org_1");
+    expect(calendarProviderFactory).toHaveBeenCalledWith("org_trusted");
     expect(result.status).toBe("success");
     expect(result.data?.slots).toEqual(mockSlots);
   });
 
-  it("booking.create persists pending booking, calls calendar, then runs transaction", async () => {
+  it("ignores LLM-supplied orgId and uses ctx.orgId (AI-1 hardening)", async () => {
+    calendarProvider.listAvailableSlots.mockResolvedValue([]);
+
+    await tool.operations["slots.query"]!.execute({
+      orgId: "evil-org",
+      dateFrom: "2026-04-20T00:00:00+08:00",
+      dateTo: "2026-04-20T23:59:59+08:00",
+      durationMinutes: 30,
+      service: "consultation",
+      timezone: "Asia/Singapore",
+    });
+
+    expect(calendarProviderFactory).toHaveBeenCalledWith("org_trusted");
+    expect(calendarProviderFactory).not.toHaveBeenCalledWith("evil-org");
+  });
+
+  it("booking.create uses ctx.orgId for store calls (LLM cannot override)", async () => {
     bookingStore.create.mockResolvedValue({ id: "bk_1", status: "pending_confirmation" });
     opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
     calendarProvider.createBooking.mockResolvedValue({
@@ -134,7 +176,7 @@ describe("createCalendarBookTool", () => {
     });
 
     const result = await tool.operations["booking.create"]!.execute({
-      orgId: "org_1",
+      orgId: "evil-org", // attempt to spoof — must be ignored
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
@@ -146,17 +188,18 @@ describe("createCalendarBookTool", () => {
 
     expect(bookingStore.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        organizationId: "org_1",
+        organizationId: "org_trusted",
         contactId: "ct_1",
         service: "consultation",
       }),
     );
-    expect(calendarProvider.createBooking).toHaveBeenCalled();
+    expect(opportunityStore.findActiveByContact).toHaveBeenCalledWith("org_trusted", "ct_1");
+    expect(calendarProviderFactory).toHaveBeenCalledWith("org_trusted");
+    expect(calendarProvider.createBooking).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org_trusted" }),
+    );
     expect(runTransaction).toHaveBeenCalled();
     expect(result.status).toBe("success");
-    expect(result.data?.status).toBe("confirmed");
-    expect(result.entityState?.bookingId).toBe("bk_1");
-    expect(result.entityState?.status).toBe("confirmed");
   });
 
   it("booking.create creates opportunity if none exists for contact", async () => {
@@ -166,7 +209,6 @@ describe("createCalendarBookTool", () => {
     calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
 
     await tool.operations["booking.create"]!.execute({
-      orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
@@ -175,7 +217,7 @@ describe("createCalendarBookTool", () => {
     });
 
     expect(opportunityStore.create).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: "org_1", contactId: "ct_1" }),
+      expect.objectContaining({ organizationId: "org_trusted", contactId: "ct_1" }),
     );
   });
 
@@ -186,7 +228,6 @@ describe("createCalendarBookTool", () => {
     opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
 
     const result = await tool.operations["booking.create"]!.execute({
-      orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
@@ -207,7 +248,6 @@ describe("createCalendarBookTool", () => {
     calendarProvider.createBooking.mockRejectedValue(new Error("503 Service Unavailable"));
 
     const result = await tool.operations["booking.create"]!.execute({
-      orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
@@ -222,6 +262,7 @@ describe("createCalendarBookTool", () => {
         bookingId: "bk_1",
         failureType: "provider_error",
         retryable: false,
+        orgId: "org_trusted",
       }),
     );
   });
@@ -243,7 +284,6 @@ describe("createCalendarBookTool", () => {
     });
 
     const result = await tool.operations["booking.create"]!.execute({
-      orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
@@ -263,39 +303,10 @@ describe("createCalendarBookTool", () => {
   });
 
   describe("slots.query failure paths", () => {
-    it("fails ORG_ID_REQUIRED when orgId missing", async () => {
-      const result = await tool.operations["slots.query"]!.execute({
-        dateFrom: "2026-04-20T00:00:00+08:00",
-        dateTo: "2026-04-20T23:59:59+08:00",
-        durationMinutes: 30,
-        service: "consultation",
-        timezone: "Asia/Singapore",
-      });
-
-      expect(result.status).toBe("error");
-      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
-      expect(calendarProviderFactory).not.toHaveBeenCalled();
-    });
-
-    it("fails ORG_ID_REQUIRED when orgId is whitespace", async () => {
-      const result = await tool.operations["slots.query"]!.execute({
-        orgId: "   ",
-        dateFrom: "2026-04-20T00:00:00+08:00",
-        dateTo: "2026-04-20T23:59:59+08:00",
-        durationMinutes: 30,
-        service: "consultation",
-        timezone: "Asia/Singapore",
-      });
-
-      expect(result.status).toBe("error");
-      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
-    });
-
     it("fails CALENDAR_NOT_CONFIGURED when provider is unconfigured (no slots leak)", async () => {
       isCalendarProviderConfigured.mockReturnValue(false);
 
       const result = await tool.operations["slots.query"]!.execute({
-        orgId: "org_1",
         dateFrom: "2026-04-20T00:00:00+08:00",
         dateTo: "2026-04-20T23:59:59+08:00",
         durationMinutes: 30,
@@ -314,7 +325,6 @@ describe("createCalendarBookTool", () => {
       calendarProviderFactory.mockRejectedValue(new Error("Boom"));
 
       const result = await tool.operations["slots.query"]!.execute({
-        orgId: "org_1",
         dateFrom: "2026-04-20T00:00:00+08:00",
         dateTo: "2026-04-20T23:59:59+08:00",
         durationMinutes: 30,
@@ -329,40 +339,10 @@ describe("createCalendarBookTool", () => {
   });
 
   describe("booking.create failure paths", () => {
-    it("fails ORG_ID_REQUIRED when orgId missing", async () => {
-      const result = await tool.operations["booking.create"]!.execute({
-        contactId: "ct_1",
-        service: "consultation",
-        slotStart: "2026-04-20T10:00:00+08:00",
-        slotEnd: "2026-04-20T10:30:00+08:00",
-        calendarId: "primary",
-      });
-
-      expect(result.status).toBe("error");
-      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
-      expect(calendarProviderFactory).not.toHaveBeenCalled();
-      expect(bookingStore.create).not.toHaveBeenCalled();
-    });
-
-    it("fails ORG_ID_REQUIRED when orgId whitespace", async () => {
-      const result = await tool.operations["booking.create"]!.execute({
-        orgId: "   ",
-        contactId: "ct_1",
-        service: "consultation",
-        slotStart: "2026-04-20T10:00:00+08:00",
-        slotEnd: "2026-04-20T10:30:00+08:00",
-        calendarId: "primary",
-      });
-
-      expect(result.status).toBe("error");
-      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
-    });
-
     it("fails CALENDAR_NOT_CONFIGURED when provider is unconfigured", async () => {
       isCalendarProviderConfigured.mockReturnValue(false);
 
       const result = await tool.operations["booking.create"]!.execute({
-        orgId: "org_1",
         contactId: "ct_1",
         service: "consultation",
         slotStart: "2026-04-20T10:00:00+08:00",
@@ -381,7 +361,6 @@ describe("createCalendarBookTool", () => {
       calendarProviderFactory.mockRejectedValue(new Error("Boom"));
 
       const result = await tool.operations["booking.create"]!.execute({
-        orgId: "org_1",
         contactId: "ct_1",
         service: "consultation",
         slotStart: "2026-04-20T10:00:00+08:00",
