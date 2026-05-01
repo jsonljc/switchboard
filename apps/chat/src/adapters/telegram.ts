@@ -65,12 +65,16 @@ export class TelegramAdapter implements ChannelAdapter {
     this.principalLookup = principalLookup ?? null;
     this.webhookSecret = webhookSecret ?? null;
 
-    if (process.env.NODE_ENV === "production" && !webhookSecret) {
-      throw new Error("TELEGRAM_WEBHOOK_SECRET must be set in production for webhook verification");
-    }
-    if (!webhookSecret && process.env.NODE_ENV !== "test") {
+    // Production misconfiguration: log loudly but do not throw — other adapters
+    // may still be functional. verifyRequest fails closed in production below.
+    if (process.env["NODE_ENV"] === "production" && !webhookSecret) {
+      console.error(
+        "[TelegramAdapter] TELEGRAM_WEBHOOK_SECRET is not set in production — " +
+          "webhook verification will fail closed (all incoming webhooks rejected).",
+      );
+    } else if (!webhookSecret && process.env["NODE_ENV"] !== "test") {
       console.warn(
-        "[TelegramAdapter] No webhook secret configured — webhook verification is disabled",
+        "[TelegramAdapter] No webhook secret configured — webhook verification is disabled (dev only).",
       );
     }
   }
@@ -78,9 +82,24 @@ export class TelegramAdapter implements ChannelAdapter {
   /**
    * Verify Telegram webhook secret token using timing-safe comparison.
    * Telegram sends the secret in the X-Telegram-Bot-Api-Secret-Token header.
+   *
+   * Failure modes when `webhookSecret` is unset:
+   *   - production (`NODE_ENV === "production"`): fail closed (returns `false`).
+   *   - dev/test: allow with a warning so local development is not blocked.
    */
   verifyRequest(_rawBody: string, headers: Record<string, string | undefined>): boolean {
-    if (!this.webhookSecret) return true; // No secret configured
+    if (!this.webhookSecret) {
+      if (process.env["NODE_ENV"] === "production") {
+        console.error(
+          "[TelegramAdapter] verifyRequest called without webhookSecret in production — failing closed",
+        );
+        return false;
+      }
+      console.warn(
+        "[TelegramAdapter] verifyRequest allowing request without webhookSecret (dev mode)",
+      );
+      return true;
+    }
     const token = headers["x-telegram-bot-api-secret-token"];
     if (!token) return false;
     try {

@@ -4,7 +4,7 @@ import type { ChannelGatewayConfig, IncomingChannelMessage } from "../types.js";
 import {
   NOT_FOUND_MSG,
   STALE_MSG,
-  DASHBOARD_HANDOFF_MSG,
+  NOT_AUTHORIZED_MSG,
   APPROVAL_LOOKUP_ERROR_MSG,
 } from "../handle-approval-response.js";
 import { DeploymentInactiveError } from "../../platform/deployment-resolver.js";
@@ -163,7 +163,10 @@ describe("ChannelGateway approval-payload interception", () => {
     expect(addMessage).not.toHaveBeenCalled();
   });
 
-  it("replies DASHBOARD_HANDOFF_MSG on hash match", async () => {
+  it("replies NOT_AUTHORIZED_MSG on hash match when no approvalResponseConfig is wired (fail-closed)", async () => {
+    // Audit invariant (Risk #4a): channel-possession (matching binding hash) MUST NOT
+    // execute the approval. Without an explicit OperatorChannelBinding config, the gateway
+    // refuses — never silently approves. See handle-approval-response.ts.
     const sendSpy = vi.fn().mockResolvedValue(undefined);
     const submit = vi.fn();
     const addMessage = vi.fn();
@@ -184,7 +187,7 @@ describe("ChannelGateway approval-payload interception", () => {
     const gateway = new ChannelGateway(config);
     await gateway.handleIncoming(makeMessage(), { send: sendSpy });
 
-    expect(sendSpy).toHaveBeenCalledWith(DASHBOARD_HANDOFF_MSG);
+    expect(sendSpy).toHaveBeenCalledWith(NOT_AUTHORIZED_MSG);
     expect(submit).not.toHaveBeenCalled();
     expect(addMessage).not.toHaveBeenCalled();
   });
