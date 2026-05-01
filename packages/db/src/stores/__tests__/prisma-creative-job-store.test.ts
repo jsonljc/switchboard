@@ -357,6 +357,18 @@ describe("PrismaCreativeJobStore", () => {
     });
   });
 
+  describe("stageProgressByApproval", () => {
+    it("stageProgressByApproval returns an empty Map (no link between ApprovalRecord and CreativeJob in current schema — Path B per option-C1 plan)", async () => {
+      const result = await store.stageProgressByApproval(["any-id"]);
+      expect(result.size).toBe(0);
+    });
+
+    it("stageProgressByApproval returns an empty Map for an empty input array", async () => {
+      const result = await store.stageProgressByApproval([]);
+      expect(result.size).toBe(0);
+    });
+  });
+
   describe("registry methods", () => {
     it("attachIdentityRefs calls update with all identity fields", async () => {
       const input = {
