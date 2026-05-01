@@ -85,20 +85,22 @@ export function useConsoleData(): {
     mira: moduleEnabled("creative"),
   };
 
-  const todayStr = new Date().toDateString();
-  const bookingsToday = overview.data.bookings
-    .filter((b) => new Date(b.startsAt).toDateString() === todayStr)
-    .map((b) => ({ startsAt: b.startsAt, contactName: b.contactName }));
-
   const orgName = (org.data as { config?: { name?: string } })?.config?.name ?? "Switchboard";
 
   const data = mapConsoleData({
     orgName,
     now: new Date(),
     dispatch: "live", // TODO option C: read halt-state from useDispatchStatus or org config
-    leadsToday: overview.data.stats.newInquiriesToday,
-    leadsYesterday: overview.data.stats.newInquiriesYesterday,
-    bookingsToday,
+    leadsToday: overview.data.today.leads.count,
+    leadsYesterday: overview.data.today.leads.yesterdayCount,
+    bookingsToday: overview.data.today.appointments.next
+      ? [
+          {
+            startsAt: overview.data.today.appointments.next.startsAt,
+            contactName: overview.data.today.appointments.next.contactName,
+          },
+        ]
+      : [],
     escalations: escalationRows,
     approvals: approvalRows,
     modules: moduleMap,
