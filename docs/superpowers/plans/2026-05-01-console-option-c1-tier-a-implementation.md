@@ -32,6 +32,8 @@
 | `apps/api/src/__tests__/dashboard-overview-builder.test.ts` | New: unit tests for the pure `buildDashboardOverview` function with mock stores. Covers: empty org, partial-data org, full-data org. | Create |
 | `apps/dashboard/src/components/console/console-mappers.ts` | Rebases existing mappers to read from new schema paths. Updates `mapNumbersStrip` (Revenue, Reply-time cells), `mapAgents` (Alex cell), `mapApprovalGateCard` (real `stageProgress`), `mapActivity` (read structured `agent` field, remove `agentForAction` synth). Spend cell + Nova/Mira cells stay muted via `placeholder: true`. | Modify |
 | `apps/dashboard/src/components/console/__tests__/console-mappers.test.ts` | Rebases existing 18 tests to new paths; adds tests for the new field consumption. | Modify |
+| `packages/schemas/src/time-windows.ts` | New: `dayWindow(day, timezone?): { from: Date; to: Date }` — the single source of truth for "today" boundaries. Used by the API builder and DB store queries to avoid timezone/boundary drift. C1 hardcodes UTC; org-timezone awareness is its own future spec. | Create |
+| `packages/schemas/src/__tests__/time-windows.test.ts` | Tests for `dayWindow` covering UTC boundary cases. | Create |
 
 **Files NOT touched:** `console-view.tsx`, `console-data.ts`, `use-console-data.ts`, `console.css`, `(auth)/console/page.tsx`. Option B's view + composer + view-model types are stable across C.
 
@@ -283,6 +285,113 @@ Pure additive change. Defines the building blocks consumed in later tasks. Nothi
 
 ---
 
+## Task 2.5: Add central `dayWindow` time helper to `packages/schemas`
+
+Time-window math currently lives in three places (the builder's `todayWindow`, the `replyTimeStats` store method, the `alexStatsToday` store method). One central helper avoids drift.
+
+**Files:**
+
+- Create: `packages/schemas/src/time-windows.ts`
+- Create: `packages/schemas/src/__tests__/time-windows.test.ts`
+
+- [ ] **Step 1:** Create the helper.
+
+  ```ts
+  // packages/schemas/src/time-windows.ts
+  /**
+   * Returns a [from, to) half-open window covering the day that contains `at`.
+   * `from` is the local-midnight of `at`; `to` is the next day's local-midnight.
+   * UTC timezone is assumed for C1; pass an explicit timezone in a future iteration.
+   */
+  export function dayWindow(at: Date): { from: Date; to: Date } {
+    const from = new Date(at);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(from);
+    to.setDate(to.getDate() + 1);
+    return { from, to };
+  }
+
+  /** Returns the day-window for the day before `at`. */
+  export function previousDayWindow(at: Date): { from: Date; to: Date } {
+    const today = dayWindow(at);
+    const from = new Date(today.from);
+    from.setDate(from.getDate() - 1);
+    return { from, to: today.from };
+  }
+  ```
+
+- [ ] **Step 2:** Create the test file.
+
+  ```ts
+  // packages/schemas/src/__tests__/time-windows.test.ts
+  import { describe, it, expect } from "vitest";
+  import { dayWindow, previousDayWindow } from "../time-windows.js";
+
+  describe("dayWindow", () => {
+    it("returns midnight-to-next-midnight for a mid-afternoon timestamp", () => {
+      const at = new Date("2026-05-01T14:30:00");
+      const { from, to } = dayWindow(at);
+      expect(from.getHours()).toBe(0);
+      expect(from.getMinutes()).toBe(0);
+      expect(to.getTime() - from.getTime()).toBe(24 * 60 * 60 * 1000);
+    });
+
+    it("returns same window when called twice with timestamps from the same day", () => {
+      const a = dayWindow(new Date("2026-05-01T01:00:00"));
+      const b = dayWindow(new Date("2026-05-01T23:59:59"));
+      expect(a.from.getTime()).toBe(b.from.getTime());
+      expect(a.to.getTime()).toBe(b.to.getTime());
+    });
+
+    it("does not mutate the input", () => {
+      const at = new Date("2026-05-01T14:30:00");
+      const original = at.getTime();
+      dayWindow(at);
+      expect(at.getTime()).toBe(original);
+    });
+  });
+
+  describe("previousDayWindow", () => {
+    it("returns the day-window directly preceding today's", () => {
+      const at = new Date("2026-05-01T14:30:00");
+      const today = dayWindow(at);
+      const yesterday = previousDayWindow(at);
+      expect(yesterday.to.getTime()).toBe(today.from.getTime());
+      expect(today.from.getTime() - yesterday.from.getTime()).toBe(24 * 60 * 60 * 1000);
+    });
+  });
+  ```
+
+- [ ] **Step 3:** Re-export from the package index. Add to `packages/schemas/src/index.ts`:
+
+  ```ts
+  export { dayWindow, previousDayWindow } from "./time-windows.js";
+  ```
+
+- [ ] **Step 4:** Run tests.
+
+  ```bash
+  pnpm --filter @switchboard/schemas test src/__tests__/time-windows.test.ts
+  ```
+
+  Expected: PASS (4 tests).
+
+- [ ] **Step 5:** Commit.
+
+  ```bash
+  git add packages/schemas/src/time-windows.ts packages/schemas/src/__tests__/time-windows.test.ts packages/schemas/src/index.ts
+  git commit -m "feat(schemas): central dayWindow / previousDayWindow helpers (UTC; future timezone-aware)"
+  ```
+
+**Subsequent tasks use these helpers:**
+
+- Task 4's `todayWindow(now)` is replaced by `dayWindow(now)` from `@switchboard/schemas`.
+- Task 7's `replyTimeStats` uses `dayWindow(day)` instead of inline `setHours/setDate` math.
+- Task 9's `alexStatsToday` uses `dayWindow(day)`.
+- Task 8's builder change uses `previousDayWindow(now)` instead of `new Date(todayStart); yesterdayStart.setDate(...)`.
+
+---
+
 ## Task 3: Migrate `DashboardOverviewSchema` — add `today.*`, `agentsToday.*`, `novaAdSets`; move 3 stats fields; add `stageProgress` + `activity[].agent`
 
 This is the schema-shape change. After this commit, the API builder + the option-B mapper both fail to typecheck. Tasks 4-5 fix them in the same conceptual unit, but each task lands in its own commit so the failure surface stays narrow.
@@ -348,6 +457,13 @@ This is the schema-shape change. After this commit, the API builder + the option
     agentsToday: z.object({
       alex: z
         .object({
+          /**
+           * APPROXIMATION: in C1, repliedToday = today's `inquiry`-type ConversionRecord count
+           * (each inquiry reaching the system implies Alex's first response). This is wrong if
+           * Alex sometimes fails to reply or if the inquiry record predates the reply.
+           * A future iteration replaces this with a direct first-reply event count once the
+           * conversation pipeline emits one.
+           */
           repliedToday: z.number().int().nonnegative(),
           qualifiedToday: z.number().int().nonnegative(),
           bookedToday: z.number().int().nonnegative(),
@@ -612,16 +728,27 @@ This is the schema-shape change. After this commit, the API builder + the option
 
 The builder still uses only existing query methods at this task. New stores (`replyTimeStats`, `alexStatsToday`, `stageProgressByApproval`) come in later tasks.
 
-- [ ] **Step 1:** Add a helper at the top of the file (near `greetingPeriod`):
+- [ ] **Step 1:** Import the central `dayWindow` + `previousDayWindow` from `@switchboard/schemas` (added in Task 2.5). Replace any inline `setHours/setDate` math in the builder with calls to these helpers.
 
   ```ts
-  // Returns [todayStart, tomorrowStart) — tomorrowStart is exclusive upper bound.
-  function todayWindow(now: Date): { from: Date; to: Date } {
-    const from = new Date(now);
-    from.setHours(0, 0, 0, 0);
-    const to = new Date(from);
-    to.setDate(to.getDate() + 1);
-    return { from, to };
+  import { dayWindow, previousDayWindow, STALE_AFTER_MINUTES } from "@switchboard/schemas";
+  ```
+
+  Add a small staleness logger near the top of the file (no-op in C1 because `today.spend.updatedAt` is always `null`; ready for C2):
+
+  ```ts
+  /**
+   * Logs a one-line warning when a Tier-B rollup is older than the freshness contract.
+   * No-op when updatedAt is null (no successful sync yet). Pure side-effect — never throws.
+   */
+  function checkStaleness(label: string, updatedAt: string | null, now: Date): void {
+    if (updatedAt === null) return;
+    const ageMin = (now.getTime() - new Date(updatedAt).getTime()) / 60_000;
+    if (ageMin > STALE_AFTER_MINUTES) {
+      console.warn(
+        `[dashboard-overview] ${label} is stale (${Math.round(ageMin)} min old; threshold ${STALE_AFTER_MINUTES} min)`,
+      );
+    }
   }
   ```
 
@@ -634,11 +761,11 @@ The builder still uses only existing query methods at this task. New stores (`re
     orgCurrency = "USD",
   ): Promise<DashboardOverview> {
     const now = new Date();
-    const today = todayWindow(now);
+    const today = dayWindow(now);
+    const yesterday = previousDayWindow(now);
 
     const todayStart = today.from;
-    const yesterdayStart = new Date(todayStart);
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    const yesterdayStart = yesterday.from;
 
     const sevenDaysAgo = new Date(now);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -708,6 +835,11 @@ The builder still uses only existing query methods at this task. New stores (`re
       agent: null as null,
     }));
 
+    // Tier B fields ship as placeholders in C1; the staleness check is a no-op until C2
+    // gives spendUpdatedAt a real value, but the call site stays here so C2 doesn't have to thread it in.
+    const spendUpdatedAt: string | null = null;
+    checkStaleness("today.spend", spendUpdatedAt, now);
+
     // today.appointments — derive from today's bookings
     const todayBookings = bookings.filter(
       (b) => new Date(b.startsAt).toDateString() === now.toDateString(),
@@ -729,7 +861,7 @@ The builder still uses only existing query methods at this task. New stores (`re
         // today.revenue real wiring lands in Task 6.
         revenue: { amount: 0, currency: orgCurrency, deltaPctVsAvg: null },
         // today.spend stays as a Tier-B placeholder. updatedAt=null mutes the cell.
-        spend: { amount: 0, currency: orgCurrency, capPct: 0, updatedAt: null },
+        spend: { amount: 0, currency: orgCurrency, capPct: 0, updatedAt: spendUpdatedAt },
         // today.replyTime real wiring lands in Task 8.
         replyTime: null,
         leads: { count: inquiriesToday, yesterdayCount: inquiriesYesterday },
@@ -1298,7 +1430,13 @@ The smallest mapper change that compiles against the new schema. Subsequent task
   pnpm --filter @switchboard/db test src/stores/__tests__/prisma-conversation-state-store.test.ts
   ```
 
-- [ ] **Step 4:** Implement the method on the class. Add inside `PrismaConversationStateStore`:
+- [ ] **Step 4:** Implement the method on the class. First, add the import at the top of the file:
+
+  ```ts
+  import { dayWindow } from "@switchboard/schemas";
+  ```
+
+  Then add inside `PrismaConversationStateStore`:
 
   ```ts
   /**
@@ -1310,10 +1448,7 @@ The smallest mapper change that compiles against the new schema. Subsequent task
     orgId: string,
     day: Date,
   ): Promise<{ medianSeconds: number; sampleSize: number }> {
-    const dayStart = new Date(day);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
+    const { from: dayStart, to: dayEnd } = dayWindow(day);
     const slaCutoffMs = 24 * 60 * 60 * 1000;
 
     const rows = await this.prisma.conversationState.findMany({
@@ -1443,18 +1578,40 @@ The smallest mapper change that compiles against the new schema. Subsequent task
   stores.replyTimeStats(orgId, yesterdayStart),
   ```
 
-  Destructure as `replyTimeToday`, `replyTimeYesterday`. Replace the `today.replyTime: null` placeholder:
+  Destructure as `replyTimeToday`, `replyTimeYesterday`. Add a small-sample guard at the top of the file (near the other helpers):
+
+  ```ts
+  /**
+   * Below this sample size, the median is too noisy to surface as a headline metric
+   * (one fast reply would read as "12s avg"). Treat the cell as muted instead.
+   */
+  const MIN_REPLY_SAMPLE = 3;
+  ```
+
+  Replace the `today.replyTime: null` placeholder:
 
   ```ts
   replyTime:
-    replyTimeToday.sampleSize === 0
+    replyTimeToday.sampleSize < MIN_REPLY_SAMPLE
       ? null
       : {
           medianSeconds: replyTimeToday.medianSeconds,
           previousSeconds:
-            replyTimeYesterday.sampleSize === 0 ? null : replyTimeYesterday.medianSeconds,
+            replyTimeYesterday.sampleSize < MIN_REPLY_SAMPLE
+              ? null
+              : replyTimeYesterday.medianSeconds,
           sampleSize: replyTimeToday.sampleSize,
         },
+  ```
+
+  Add a builder test asserting the threshold:
+
+  ```ts
+  it("today.replyTime is null when sampleSize < MIN_REPLY_SAMPLE (=3) — guards against single-reply skew", async () => {
+    const replyTimeStats = vi.fn().mockResolvedValue({ medianSeconds: 5, sampleSize: 2 });
+    const result = await buildDashboardOverview("org-1", makeStores({ replyTimeStats }), "USD");
+    expect(result.today.replyTime).toBeNull();
+  });
   ```
 
 - [ ] **Step 5:** Wire the new store method into the Fastify plugin's `stores` object:
@@ -1620,7 +1777,13 @@ The smallest mapper change that compiles against the new schema. Subsequent task
 
 - [ ] **Step 2:** Run test — confirm fail.
 
-- [ ] **Step 3:** Implement the method. Add to `PrismaConversionRecordStore`:
+- [ ] **Step 3:** Implement the method. First, add the import at the top of the file (if not already present):
+
+  ```ts
+  import { dayWindow } from "@switchboard/schemas";
+  ```
+
+  Then add to `PrismaConversionRecordStore`:
 
   ```ts
   /**
@@ -1632,10 +1795,7 @@ The smallest mapper change that compiles against the new schema. Subsequent task
     orgId: string,
     day: Date,
   ): Promise<{ repliedToday: number; qualifiedToday: number; bookedToday: number }> {
-    const dayStart = new Date(day);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
+    const { from: dayStart, to: dayEnd } = dayWindow(day);
 
     const groups = await this.prisma.conversionRecord.groupBy({
       by: ["type"],
@@ -2489,8 +2649,10 @@ The smallest mapper change that compiles against the new schema. Subsequent task
 - **Spec coverage:** Each spec section maps to a task.
   - Schema additions (today/agentsToday/novaAdSets/stageProgress/activity.agent) → Tasks 2, 3.
   - Migration of stats fields → Task 3.
-  - Builder rewrite → Task 4.
+  - Central time helpers (single source of truth for day boundaries) → Task 2.5.
+  - Builder rewrite + staleness scaffold → Task 4.
   - Tier A field wiring (revenue, replyTime, alexStats, stageProgress, activity.agent) → Tasks 6, 7+8, 9+10, 11+12, 13+14.
+  - Small-sample guard (`MIN_REPLY_SAMPLE = 3`) → Task 8.
   - Mapper rewires → Tasks 5, 6, 8, 10, 12, 14.
   - Tier B placeholder shape → Task 4 (sets the zero/null values).
   - Manual verification → Task 15.
