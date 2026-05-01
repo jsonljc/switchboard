@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@switchboard/db";
 import type { IntentRegistry, ExecutionModeRegistry } from "@switchboard/core/platform";
-import type { SkillExecutor, SkillDefinition } from "@switchboard/core/skill-runtime";
+import type {
+  SkillExecutor,
+  SkillDefinition,
+  SkillToolFactory,
+} from "@switchboard/core/skill-runtime";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
 
@@ -28,8 +32,8 @@ export async function bootstrapSkillMode(
     AnthropicToolCallingAdapter,
     BuilderRegistry,
     createCrmQueryTool,
-    createCrmWriteTool,
-    createCalendarBookTool,
+    createCrmWriteToolFactory,
+    createCalendarBookToolFactory,
     createEscalateToolFactory,
     BookingFailureHandler,
   } = await import("@switchboard/core/skill-runtime");
@@ -147,67 +151,77 @@ export async function bootstrapSkillMode(
     notifier: handoffNotifier,
   });
 
-  const baseTools = new Map([
-    ["crm-query", createCrmQueryTool(contactStore, activityStore)],
-    ["crm-write", createCrmWriteTool(opportunityStore, activityStore)],
-    [
-      "calendar-book",
-      createCalendarBookTool({
-        calendarProviderFactory,
-        isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
-        bookingStore,
-        opportunityStore: {
-          findActiveByContact: async (orgId: string, contactId: string) => {
-            const active = await opportunityStore.findActiveByContact(orgId, contactId);
-            return active.length > 0 ? { id: active[0]!.id } : null;
-          },
-          create: async (input: { organizationId: string; contactId: string; service: string }) => {
-            const created = await opportunityStore.create({
-              organizationId: input.organizationId,
-              contactId: input.contactId,
-              serviceId: input.service,
-              serviceName: input.service,
-            });
-            return { id: created.id };
-          },
-        },
-        runTransaction: (
-          fn: (tx: {
-            booking: {
-              update(args: {
-                where: { id: string };
-                data: Record<string, unknown>;
-              }): Promise<unknown>;
-            };
-            outboxEvent: {
-              create(args: { data: Record<string, unknown> }): Promise<unknown>;
-            };
-          }) => Promise<unknown>,
-        ) =>
-          prismaClient.$transaction((tx) =>
-            fn({ booking: tx.booking, outboxEvent: tx.outboxEvent }),
-          ),
-        failureHandler,
-      }),
-    ],
+  const calendarBookFactory = createCalendarBookToolFactory({
+    calendarProviderFactory,
+    isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
+    bookingStore,
+    opportunityStore: {
+      findActiveByContact: async (orgId: string, contactId: string) => {
+        const active = await opportunityStore.findActiveByContact(orgId, contactId);
+        return active.length > 0 ? { id: active[0]!.id } : null;
+      },
+      create: async (input: { organizationId: string; contactId: string; service: string }) => {
+        const created = await opportunityStore.create({
+          organizationId: input.organizationId,
+          contactId: input.contactId,
+          serviceId: input.service,
+          serviceName: input.service,
+        });
+        return { id: created.id };
+      },
+    },
+    runTransaction: (
+      fn: (tx: {
+        booking: {
+          update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+        };
+        outboxEvent: {
+          create(args: { data: Record<string, unknown> }): Promise<unknown>;
+        };
+      }) => Promise<unknown>,
+    ) =>
+      prismaClient.$transaction((tx) => fn({ booking: tx.booking, outboxEvent: tx.outboxEvent })),
+    failureHandler,
+  });
+
+  const crmWriteFactory = createCrmWriteToolFactory(opportunityStore, activityStore);
+
+  // Per-request tool factories — the executor materializes a fresh tool per
+  // execution with a trusted SkillRequestContext closed in. These are the
+  // canonical execution path for trust-bound tools (AI-1).
+  const toolFactories = new Map<string, SkillToolFactory>([
+    ["calendar-book", calendarBookFactory],
+    ["crm-write", crmWriteFactory],
+    ["escalate", escalateFactory],
   ]);
 
-  // Schema-only instance for Anthropic tool registration; real execution uses per-request context.
-  const toolsMap = new Map(baseTools);
-  toolsMap.set(
-    "escalate",
-    escalateFactory({
-      sessionId: "__schema_only__",
-      orgId: "__schema_only__",
-      deploymentId: "__schema_only__",
-    }),
-  );
+  // Schema-only tool map for Anthropic tool registration & GovernanceHook.
+  // Trust-bound tools are materialized with a synthetic context here to
+  // expose their schemas; real execution dispatches against the runtime map.
+  const SCHEMA_ONLY_CTX = {
+    sessionId: "__schema_only__",
+    orgId: "__schema_only__",
+    deploymentId: "__schema_only__",
+  };
+  const toolsMap = new Map([
+    ["crm-query", createCrmQueryTool(contactStore, activityStore)],
+    ["crm-write", crmWriteFactory(SCHEMA_ONLY_CTX)],
+    ["calendar-book", calendarBookFactory(SCHEMA_ONLY_CTX)],
+    ["escalate", escalateFactory(SCHEMA_ONLY_CTX)],
+  ]);
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
   const adapter = new AnthropicToolCallingAdapter(anthropicClient);
   const hooks = [new GovernanceHook(toolsMap)];
-  const skillExecutor = new SkillExecutorImpl(adapter, toolsMap, undefined, hooks);
+  const skillExecutor = new SkillExecutorImpl(
+    adapter,
+    toolsMap,
+    undefined,
+    hooks,
+    undefined,
+    toolFactories,
+  );
 
   const builderRegistry = new BuilderRegistry();
 

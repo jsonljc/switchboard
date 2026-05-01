@@ -5,9 +5,11 @@ import type {
   SkillExecutor,
   ToolCallRecord,
   SkillTool,
+  SkillToolFactory,
   SkillHook,
   ResolvedModelProfile,
   SkillRuntimePolicy,
+  SkillRequestContext,
 } from "./types.js";
 import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types.js";
 import type { GovernanceLogEntry } from "./governance.js";
@@ -17,6 +19,7 @@ import { denied, pendingApproval, fail, ok } from "./tool-result.js";
 import type { ToolResult } from "./tool-result.js";
 import { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
 import type { SkillToolOperation } from "./types.js";
+import { validateToolInput, redactInputForLog } from "./input-schema-validator.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelRouter } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
@@ -42,7 +45,36 @@ export class SkillExecutorImpl implements SkillExecutor {
     private router?: ModelRouter,
     private hooks: SkillHook[] = [],
     private policy: SkillRuntimePolicy = DEFAULT_SKILL_RUNTIME_POLICY,
+    /**
+     * Per-request tool factories. When a tool id is present here, the executor
+     * materializes a fresh `SkillTool` for each `execute()` call with a trusted
+     * `SkillRequestContext` closed in. This is the canonical path; the
+     * `tools` map is retained for schema-only registration (`buildAnthropicTools`)
+     * and for tools with no per-request trust context.
+     */
+    private toolFactories: Map<string, SkillToolFactory> = new Map(),
   ) {}
+
+  /**
+   * Materialize the per-request tool map. Factories override schema-only
+   * registrations on the same id. The returned map is what tool execution
+   * dispatches against — never `this.tools` directly.
+   */
+  private materializeRuntimeTools(ctx: SkillRequestContext): Map<string, SkillTool> {
+    const runtime = new Map<string, SkillTool>(this.tools);
+    for (const [id, factory] of this.toolFactories.entries()) {
+      runtime.set(id, factory(ctx));
+    }
+    return runtime;
+  }
+
+  private buildRequestContext(params: SkillExecutionParams): SkillRequestContext {
+    return {
+      sessionId: params.sessionId ?? `${params.deploymentId}-${Date.now()}`,
+      orgId: params.orgId,
+      deploymentId: params.deploymentId,
+    };
+  }
 
   private resolveProfile(
     params: SkillExecutionParams,
@@ -83,6 +115,12 @@ export class SkillExecutorImpl implements SkillExecutor {
     const system = `${interpolated}\n\n${getGovernanceConstraints()}`;
 
     const anthropicTools = this.buildAnthropicTools(params.skill.tools);
+
+    // Materialize per-request tools with trusted SkillRequestContext closed in.
+    // Tool factories produce a fresh SkillTool per execution so trust-bound
+    // identifiers (orgId, deploymentId, sessionId) cannot be supplied by the LLM.
+    const requestCtx = this.buildRequestContext(params);
+    const runtimeTools = this.materializeRuntimeTools(requestCtx);
 
     const messages: Anthropic.MessageParam[] = params.messages.map((m) => ({
       role: m.role as "user" | "assistant",
@@ -177,7 +215,7 @@ export class SkillExecutorImpl implements SkillExecutor {
             status: "success" as const,
             responseSummary: responseText.slice(0, 500),
             writeCount: toolCallRecords.filter((tc) => {
-              const tool = this.tools.get(tc.toolId);
+              const tool = runtimeTools.get(tc.toolId);
               const opDef = tool?.operations[tc.operation];
               return (
                 opDef?.effectCategory === "write" ||
@@ -212,7 +250,7 @@ export class SkillExecutorImpl implements SkillExecutor {
         const start = Date.now();
         const [toolId, ...opParts] = toolUse.name.split(".");
         const operation = opParts.join(".");
-        const tool = this.tools.get(toolId!);
+        const tool = runtimeTools.get(toolId!);
         const op = tool?.operations[operation];
 
         const toolCtx = {
@@ -244,12 +282,37 @@ export class SkillExecutorImpl implements SkillExecutor {
             governanceOutcome = "denied";
           }
         } else if (op) {
-          result = await op.execute(toolUse.input);
-          governanceOutcome = "auto-approved";
+          // Defense-in-depth: validate LLM-supplied input against the tool's
+          // declared inputSchema BEFORE invoking execute(). If validation fails
+          // we surface a structured INVALID_TOOL_INPUT result and skip the
+          // tool. The factory-with-context pattern is the primary safeguard;
+          // this guard catches accidental schema drift / leftover fields.
+          const validation = validateToolInput(op.inputSchema, toolUse.input);
+          if (!validation.ok) {
+            console.warn(
+              `[SkillExecutor] tool_input_invalid: ${toolUse.name} issues=${validation.issues
+                .join("; ")
+                .slice(0, 200)} redacted=${redactInputForLog(toolUse.input)}`,
+            );
+            result = fail(
+              "execution",
+              "INVALID_TOOL_INPUT",
+              `Tool input did not match declared schema: ${validation.issues.join("; ")}`,
+              {
+                modelRemediation:
+                  "Re-issue the tool call with input matching the declared inputSchema. Do not include trust-bound identifiers (orgId, deploymentId) — those are injected by the runtime.",
+                retryable: false,
+              },
+            );
+            governanceOutcome = "auto-approved";
+          } else {
+            result = await op.execute(toolUse.input);
+            governanceOutcome = "auto-approved";
+          }
         } else {
           const availableTools = params.skill.tools
             .flatMap((tid) => {
-              const t = this.tools.get(tid);
+              const t = runtimeTools.get(tid);
               return t ? Object.keys(t.operations).map((opN) => `${tid}.${opN}`) : [];
             })
             .join(", ");
@@ -276,10 +339,13 @@ export class SkillExecutorImpl implements SkillExecutor {
           op ?? FALLBACK_READ_OP,
           DEFAULT_REINJECTION_POLICY,
         );
+        // Defense-in-depth: wrap re-injected tool output in sentinels so the
+        // model treats untrusted tool content as data, not instructions.
+        const wrappedContent = `<|tool-output|>\n${decision.content}\n<|/tool-output|>`;
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
-          content: decision.content,
+          content: wrappedContent,
         });
       }
 

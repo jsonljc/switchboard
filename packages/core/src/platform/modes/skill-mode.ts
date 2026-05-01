@@ -62,6 +62,7 @@ export class SkillMode implements ExecutionMode {
         orgId: workUnit.organizationId,
         trustScore: workUnit.deployment?.trustScore ?? 0,
         trustLevel: constraints.trustLevel,
+        sessionId: workUnit.traceId ?? workUnit.id,
       });
 
       const durationMs = Date.now() - startMs;
