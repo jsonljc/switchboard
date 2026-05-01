@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 280" role="img" aria-label="Switchboard control plane architecture">
+  <title>Switchboard control plane</title>
+  <desc>Channel feeds PlatformIngress, which calls GovernanceGate, which routes to ExecutionMode, whose results land in WorkTrace.</desc>
+  <style>
+    .box { fill: #fefcf7; stroke: #8a6a3a; stroke-width: 1.5; }
+    .label { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; fill: #2a2218; font-weight: 500; }
+    .sub { font-family: 'Inter', system-ui, sans-serif; font-size: 11px; fill: #6a5a44; }
+    .arrow { fill: none; stroke: #8a6a3a; stroke-width: 1.5; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#8a6a3a"/>
+    </marker>
+  </defs>
+
+  <!-- Channel -->
+  <rect class="box" x="20" y="100" width="140" height="80" rx="6"/>
+  <text class="label" x="90" y="135" text-anchor="middle">Channel</text>
+  <text class="sub" x="90" y="155" text-anchor="middle">WhatsApp · Slack</text>
+  <text class="sub" x="90" y="170" text-anchor="middle">Telegram · API · MCP</text>
+
+  <!-- PlatformIngress -->
+  <rect class="box" x="190" y="100" width="160" height="80" rx="6"/>
+  <text class="label" x="270" y="135" text-anchor="middle">PlatformIngress</text>
+  <text class="sub" x="270" y="155" text-anchor="middle">Normalize WorkUnit</text>
+  <text class="sub" x="270" y="170" text-anchor="middle">Idempotency dedup</text>
+
+  <!-- GovernanceGate -->
+  <rect class="box" x="380" y="100" width="160" height="80" rx="6"/>
+  <text class="label" x="460" y="135" text-anchor="middle">GovernanceGate</text>
+  <text class="sub" x="460" y="155" text-anchor="middle">Identity · Policy · Risk</text>
+  <text class="sub" x="460" y="170" text-anchor="middle">Approval routing</text>
+
+  <!-- ExecutionMode -->
+  <rect class="box" x="570" y="100" width="160" height="80" rx="6"/>
+  <text class="label" x="650" y="135" text-anchor="middle">ExecutionMode</text>
+  <text class="sub" x="650" y="155" text-anchor="middle">Skill · Pipeline</text>
+  <text class="sub" x="650" y="170" text-anchor="middle">Cartridge · Workflow</text>
+
+  <!-- WorkTrace -->
+  <rect class="box" x="760" y="100" width="100" height="80" rx="6"/>
+  <text class="label" x="810" y="135" text-anchor="middle">WorkTrace</text>
+  <text class="sub" x="810" y="155" text-anchor="middle">Hash-chained</text>
+  <text class="sub" x="810" y="170" text-anchor="middle">audit record</text>
+
+  <!-- Arrows -->
+  <line class="arrow" x1="160" y1="140" x2="186" y2="140"/>
+  <line class="arrow" x1="350" y1="140" x2="376" y2="140"/>
+  <line class="arrow" x1="540" y1="140" x2="566" y2="140"/>
+  <line class="arrow" x1="730" y1="140" x2="756" y2="140"/>
+
+  <!-- Human approval branch -->
+  <rect class="box" x="380" y="220" width="160" height="40" rx="6"/>
+  <text class="label" x="460" y="245" text-anchor="middle">Human approval</text>
+  <line class="arrow" x1="460" y1="180" x2="460" y2="216"/>
+</svg>
