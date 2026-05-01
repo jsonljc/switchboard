@@ -218,11 +218,8 @@ export async function buildDashboardOverview(
       ? revenueByCampaign.sort((a, b) => b.totalAmount - a.totalAmount)[0]
       : null;
 
-  // Translate activity. agent field is added in Task 13.
-  const activity = translateActivities(auditEntries, 8).map((a) => ({
-    ...a,
-    agent: null as null,
-  }));
+  // Translate activity. agent field set by translator (resolveAgentKey).
+  const activity = translateActivities(auditEntries, 8);
 
   // Compute today.revenue delta vs 7-day daily average
   const sevenDayAvg = revenueSummary.totalAmount / 7;

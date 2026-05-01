@@ -195,4 +195,34 @@ describe("buildDashboardOverview (option C1 shape)", () => {
     const result = await buildDashboardOverview("org-1", makeStores({ queryApprovals }), "USD");
     expect(result.approvals[0]?.stageProgress).toBeUndefined();
   });
+
+  it("propagates structured agent attribution from translator to activity[]", async () => {
+    const queryAudit = vi.fn().mockResolvedValue([
+      {
+        id: "1",
+        eventType: "action.executed",
+        timestamp: "2026-05-01T10:00:00Z",
+        actorType: "agent",
+        actorId: "alex",
+        entityType: "x",
+        entityId: "y",
+        summary: "did a thing",
+        snapshot: {},
+      },
+      {
+        id: "2",
+        eventType: "action.executed",
+        timestamp: "2026-05-01T10:01:00Z",
+        actorType: "system",
+        actorId: "",
+        entityType: "x",
+        entityId: "y",
+        summary: "tick",
+        snapshot: {},
+      },
+    ]);
+    const result = await buildDashboardOverview("org-1", makeStores({ queryAudit }), "USD");
+    expect(result.activity[0]?.agent).toBe("alex");
+    expect(result.activity[1]?.agent).toBeNull();
+  });
 });

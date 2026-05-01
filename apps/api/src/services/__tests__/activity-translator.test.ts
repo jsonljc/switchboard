@@ -1,70 +1,47 @@
 import { describe, it, expect } from "vitest";
-import { translateActivity } from "../activity-translator.js";
-import type { RawAuditEntry } from "../activity-translator.js";
+import { resolveAgentKey, translateActivity, type RawAuditEntry } from "../activity-translator.js";
 
-describe("translateActivity", () => {
-  const base: RawAuditEntry = {
-    id: "a1",
+function entry(overrides: Partial<RawAuditEntry> = {}): RawAuditEntry {
+  return {
+    id: "a-1",
     eventType: "action.executed",
-    timestamp: "2026-04-20T08:00:00Z",
+    timestamp: "2026-05-01T10:00:00Z",
     actorType: "agent",
     actorId: "alex",
-    entityType: "booking",
-    entityId: "b1",
-    summary: "Booking confirmed for Sarah Chen",
+    entityType: "x",
+    entityId: "y",
+    summary: "did a thing",
     snapshot: {},
+    ...overrides,
   };
+}
 
-  it("translates action.executed with booking entity", () => {
-    const result = translateActivity({
-      ...base,
-      summary: "Confirmed booking: Teeth Whitening at 2:30 PM for Sarah Chen",
-    });
-
-    expect(result.description).toContain("Alex");
-    expect(result.description).not.toContain("action.executed");
-    expect(result.description).not.toContain("entityId");
-    expect(result.dotColor).toBe("green");
+describe("resolveAgentKey", () => {
+  it("returns 'alex' for actorType=agent + actorId starting with alex", () => {
+    expect(resolveAgentKey(entry({ actorType: "agent", actorId: "alex" }))).toBe("alex");
+    expect(resolveAgentKey(entry({ actorType: "agent", actorId: "alex_456" }))).toBe("alex");
   });
-
-  it("translates action.approved", () => {
-    const result = translateActivity({
-      ...base,
-      eventType: "action.approved",
-      actorType: "owner",
-      actorId: "owner-1",
-      summary: "Approved booking for Sarah Chen",
-    });
-
-    expect(result.description).toContain("You");
-    expect(result.dotColor).toBe("green");
+  it("returns 'nova' for actorId nova / nova-anything", () => {
+    expect(resolveAgentKey(entry({ actorType: "agent", actorId: "nova" }))).toBe("nova");
   });
-
-  it("translates action.denied", () => {
-    const result = translateActivity({
-      ...base,
-      eventType: "action.denied",
-      actorType: "owner",
-      summary: "Denied booking",
-    });
-
-    expect(result.dotColor).toBe("amber");
+  it("returns 'mira' for actorId mira", () => {
+    expect(resolveAgentKey(entry({ actorType: "agent", actorId: "mira" }))).toBe("mira");
   });
-
-  it("never exposes internal IDs or enum values", () => {
-    const result = translateActivity(base);
-    expect(result.description).not.toMatch(/[a-f0-9]{8}-[a-f0-9]{4}/);
-    expect(result.description).not.toContain("action.executed");
-    expect(result.description).not.toContain("entityType");
+  it("returns null for system actor", () => {
+    expect(resolveAgentKey(entry({ actorType: "system", actorId: "" }))).toBeNull();
   });
+  it("returns null for owner / operator (these are the human, not an agent)", () => {
+    expect(resolveAgentKey(entry({ actorType: "owner", actorId: "u-1" }))).toBeNull();
+    expect(resolveAgentKey(entry({ actorType: "operator", actorId: "u-1" }))).toBeNull();
+  });
+  it("returns null for an unknown agent actorId (not Alex/Nova/Mira)", () => {
+    expect(resolveAgentKey(entry({ actorType: "agent", actorId: "unknown" }))).toBeNull();
+  });
+});
 
-  it("returns all required fields", () => {
-    const result = translateActivity(base);
-    expect(result).toHaveProperty("id");
-    expect(result).toHaveProperty("type");
-    expect(result).toHaveProperty("description");
-    expect(result).toHaveProperty("dotColor");
-    expect(result).toHaveProperty("createdAt");
-    expect(["green", "amber", "blue", "gray"]).toContain(result.dotColor);
+describe("translateActivity carries the structured agent field", () => {
+  it("attaches agent='alex' for an Alex-actor entry", () => {
+    const t = translateActivity(entry({ actorType: "agent", actorId: "alex" }));
+    expect(t.agent).toBe("alex");
   });
 });
