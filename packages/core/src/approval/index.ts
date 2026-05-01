@@ -19,3 +19,13 @@ export * from "./dispatch-admission.js";
 export * from "./executable-materializer.js";
 export * from "./lifecycle-service.js";
 export * from "./lifecycle-expiry.js";
+export {
+  respondToApproval,
+  type RespondToApprovalDeps,
+  type RespondToApprovalParams,
+  type RespondToApprovalResult,
+  type ApprovalRecordForResponse,
+  type PlatformLifecycleLike,
+  type SessionManagerLike,
+  type RespondToApprovalLogger,
+} from "./respond-to-approval.js";
