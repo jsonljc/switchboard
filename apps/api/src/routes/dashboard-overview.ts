@@ -105,6 +105,14 @@ export interface DashboardStores {
   ) => Promise<CampaignRevenueSummary[]>;
   countByType: (orgId: string, type: string, from: Date, to: Date) => Promise<number>;
   queryApprovals: (orgId: string) => Promise<ApprovalRecord[]>;
+  stageProgressByApproval: (
+    approvalIds: string[],
+  ) => Promise<
+    Map<
+      string,
+      { stageIndex: number; stageTotal: number; stageLabel: string; closesAt: string | null }
+    >
+  >;
   queryAudit: (filter: AuditQueryFilter) => Promise<RawAuditEntry[]>;
   queryOperatorName: (orgId: string) => Promise<string>;
   replyTimeStats: (
@@ -170,7 +178,7 @@ export async function buildDashboardOverview(
     stores.alexStatsToday(orgId, todayStart),
   ]);
 
-  // Map pending approvals (top 3). stageProgress is added in Task 12.
+  // Map pending approvals (top 3).
   const approvals = pendingApprovals
     .filter((a) => a.state.status === "pending")
     .slice(0, 3)
@@ -186,6 +194,13 @@ export async function buildDashboardOverview(
       bindingHash: a.request.bindingHash,
       riskCategory: a.request.riskCategory,
     }));
+
+  const approvalIds = approvals.map((a) => a.id);
+  const stageMap = await stores.stageProgressByApproval(approvalIds);
+  const approvalsWithStage = approvals.map((a) => {
+    const sp = stageMap.get(a.id);
+    return sp ? { ...a, stageProgress: sp } : a;
+  });
 
   // Map bookings
   const bookings = bookingsRaw.map((b) => ({
@@ -274,7 +289,7 @@ export async function buildDashboardOverview(
     // Tier B — stays empty until C2.
     novaAdSets: [],
 
-    approvals,
+    approvals: approvalsWithStage,
     bookings,
     funnel,
     revenue: {
@@ -320,6 +335,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       PrismaConversionRecordStore,
       PrismaRevenueStore,
       PrismaConversationStateStore,
+      PrismaCreativeJobStore,
     } = await import("@switchboard/db");
 
     const bookingStore = new PrismaBookingStore(prisma);
@@ -327,6 +343,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
     const conversionStore = new PrismaConversionRecordStore(prisma);
     const revenueStore = new PrismaRevenueStore(prisma);
     const conversationStateStore = new PrismaConversationStateStore(prisma, {} as never);
+    const creativeJobStore = new PrismaCreativeJobStore(prisma);
 
     const stores: DashboardStores = {
       listBookingsByDate: (id, date, limit) => bookingStore.listByDate(id, date, limit),
@@ -337,6 +354,8 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       countByType: (id, type, from, to) => conversionStore.countByType(id, type, from, to),
       replyTimeStats: (id, day) => conversationStateStore.replyTimeStats(id, day),
       alexStatsToday: (id, day) => conversionStore.alexStatsToday(id, day),
+
+      stageProgressByApproval: (ids) => creativeJobStore.stageProgressByApproval(ids),
 
       queryApprovals: async (id) => {
         if (!app.storageContext?.approvals) return [];

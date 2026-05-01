@@ -16,6 +16,7 @@ function makeStores(overrides: Partial<DashboardStores> = {}): DashboardStores {
     sumRevenueByCampaign: vi.fn().mockResolvedValue([]),
     countByType: vi.fn().mockResolvedValue(0),
     queryApprovals: vi.fn().mockResolvedValue([]),
+    stageProgressByApproval: vi.fn().mockResolvedValue(new Map()),
     queryAudit: vi.fn().mockResolvedValue([]),
     queryOperatorName: vi.fn().mockResolvedValue("Jane"),
     replyTimeStats: vi.fn().mockResolvedValue({ medianSeconds: 0, sampleSize: 0 }),
@@ -136,5 +137,62 @@ describe("buildDashboardOverview (option C1 shape)", () => {
       qualifiedToday: 6,
       bookedToday: 3,
     });
+  });
+
+  it("populates approvals[].stageProgress from stageProgressByApproval map", async () => {
+    const stageProgressByApproval = vi.fn(async (ids: string[]) => {
+      const m = new Map();
+      if (ids.includes("apr-1")) {
+        m.set("apr-1", {
+          stageIndex: 1,
+          stageTotal: 5,
+          stageLabel: "hooks",
+          closesAt: "2026-05-02T08:00:00.000Z",
+        });
+      }
+      return m;
+    });
+    const queryApprovals = vi.fn().mockResolvedValue([
+      {
+        request: {
+          id: "apr-1",
+          summary: "Campaign 01",
+          riskCategory: "creative",
+          bindingHash: "h1",
+          createdAt: new Date(),
+        },
+        envelopeId: "env-1",
+        state: { status: "pending" },
+      },
+    ]);
+    const result = await buildDashboardOverview(
+      "org-1",
+      makeStores({ stageProgressByApproval, queryApprovals }),
+      "USD",
+    );
+    expect(result.approvals[0]?.stageProgress).toEqual({
+      stageIndex: 1,
+      stageTotal: 5,
+      stageLabel: "hooks",
+      closesAt: "2026-05-02T08:00:00.000Z",
+    });
+  });
+
+  it("approvals[].stageProgress is undefined when not found in the map", async () => {
+    const queryApprovals = vi.fn().mockResolvedValue([
+      {
+        request: {
+          id: "apr-2",
+          summary: "Generic",
+          riskCategory: "high",
+          bindingHash: "h2",
+          createdAt: new Date(),
+        },
+        envelopeId: "env-2",
+        state: { status: "pending" },
+      },
+    ]);
+    const result = await buildDashboardOverview("org-1", makeStores({ queryApprovals }), "USD");
+    expect(result.approvals[0]?.stageProgress).toBeUndefined();
   });
 });

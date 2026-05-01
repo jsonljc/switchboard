@@ -376,6 +376,46 @@ describe("mapConsoleData", () => {
   });
 });
 
+describe("mapApprovalGateCard with stageProgress (option C1)", () => {
+  it("renders 'Stage 2 of 5' + countdown when stageProgress is present", () => {
+    const now = new Date("2026-05-01T10:00:00Z");
+    const card = mapApprovalGateCard(
+      {
+        id: "apr-1",
+        summary: "Campaign 01",
+        riskContext: null,
+        riskCategory: "creative",
+        createdAt: "2026-05-01T08:00:00Z",
+        stageProgress: {
+          stageIndex: 1,
+          stageTotal: 5,
+          stageLabel: "hooks",
+          closesAt: "2026-05-02T10:00:00Z",
+        },
+      },
+      now,
+    );
+    expect(card.stageProgress).toBe("Stage 2 of 5");
+    expect(card.timer.stageLabel).toBe("hooks");
+    expect(card.countdown).toBe("24h 0m left");
+  });
+
+  it("falls back to '—' stage + countdown when stageProgress is absent (option-B behavior preserved)", () => {
+    const card = mapApprovalGateCard(
+      {
+        id: "apr-2",
+        summary: "Generic",
+        riskContext: "Hooks ready",
+        riskCategory: "creative",
+        createdAt: "2026-05-01T08:00:00Z",
+      },
+      new Date("2026-05-01T10:00:00Z"),
+    );
+    expect(card.stageProgress).toBe("—");
+    expect(card.countdown).toBe("—");
+  });
+});
+
 describe("mapNumbersStrip — Reply time cell (option C1)", () => {
   const base = {
     leadsToday: 0,

@@ -170,23 +170,42 @@ export type ApprovalApiRow = {
   riskContext: string | null;
   riskCategory: string;
   createdAt: string;
+  stageProgress?: {
+    stageIndex: number;
+    stageTotal: number;
+    stageLabel: string;
+    closesAt: string | null;
+  };
 };
 export function mapApprovalGateCard(row: ApprovalApiRow, now: Date): ApprovalGateCard {
+  const sp = row.stageProgress;
   return {
     kind: "approval_gate",
     id: row.id,
     agent: "mira",
     jobName: row.summary,
     timer: {
-      stageLabel: row.riskContext?.trim() || "Approval needed",
+      stageLabel: sp?.stageLabel ?? row.riskContext?.trim() ?? "Approval needed",
       ageDisplay: formatAge(row.createdAt, now),
     },
-    stageProgress: "—",
-    stageDetail: row.riskContext?.trim() || "",
-    countdown: "—",
+    stageProgress: sp ? `Stage ${sp.stageIndex + 1} of ${sp.stageTotal}` : "—",
+    stageDetail: row.riskContext?.trim() ?? sp?.stageLabel ?? "",
+    countdown: sp?.closesAt ? formatCountdown(sp.closesAt, now) : "—",
     primary: { label: "Review →" },
     stop: { label: "Stop campaign" },
   };
+}
+
+function formatCountdown(closesAt: string, now: Date): string {
+  const ms = new Date(closesAt).getTime() - now.getTime();
+  if (ms <= 0) return "expired";
+  const totalMin = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (hours === 0) return `${min}m left`;
+  if (hours <= 24) return `${hours}h ${min}m left`;
+  const days = Math.floor(hours / 24);
+  return `${days}d left`;
 }
 
 export function mapQueue(
