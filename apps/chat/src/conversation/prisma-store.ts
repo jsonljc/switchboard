@@ -3,12 +3,22 @@ import type { ConversationStateData, ConversationMessage } from "./state.js";
 import type { ConversationStore } from "./store.js";
 import type { ConversationStatus } from "@switchboard/schemas";
 
+/**
+ * Prisma-backed ConversationStore. All reads/writes are scoped by
+ * `(threadId, organizationId)` for tenant isolation (TI-5/TI-6).
+ *
+ * `listActiveAcrossAllTenants()` is a recovery-only path (e.g. system-startup
+ * orchestration) — request handlers MUST use the org-scoped `listActive`.
+ */
 export class PrismaConversationStore implements ConversationStore {
   constructor(private prisma: PrismaClient) {}
 
-  async get(threadId: string): Promise<ConversationStateData | undefined> {
-    const row = await this.prisma.conversationState.findUnique({
-      where: { threadId },
+  async get(threadId: string, organizationId: string): Promise<ConversationStateData | undefined> {
+    // findFirst (not findUnique) because we are scoping by (threadId, organizationId)
+    // even though threadId is @unique — this prevents stale cross-tenant rows from
+    // leaking when organizationId on the row is null or differs.
+    const row = await this.prisma.conversationState.findFirst({
+      where: { threadId, organizationId },
     });
     if (!row) return undefined;
     return toConversationStateData(row as PrismaConversationRow);
@@ -55,13 +65,28 @@ export class PrismaConversationStore implements ConversationStore {
     });
   }
 
-  async delete(threadId: string): Promise<void> {
+  async delete(threadId: string, organizationId: string): Promise<void> {
     await this.prisma.conversationState.deleteMany({
-      where: { threadId },
+      where: { threadId, organizationId },
     });
   }
 
-  async listActive(): Promise<ConversationStateData[]> {
+  async listActive(organizationId: string): Promise<ConversationStateData[]> {
+    const rows = await this.prisma.conversationState.findMany({
+      where: {
+        organizationId,
+        status: { notIn: ["completed", "expired"] },
+      },
+    });
+    return (rows as PrismaConversationRow[]).map(toConversationStateData);
+  }
+
+  /**
+   * Recovery-only: returns active conversations across ALL tenants. Intended for
+   * system-startup orchestrators (e.g. resuming pending escalations after a restart).
+   * Request-path code MUST NOT call this — use `listActive(organizationId)`.
+   */
+  async listActiveAcrossAllTenants(): Promise<ConversationStateData[]> {
     const rows = await this.prisma.conversationState.findMany({
       where: {
         status: { notIn: ["completed", "expired"] },
