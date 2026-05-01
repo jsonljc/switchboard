@@ -27,7 +27,7 @@ Checked: C — <...>
 - **Sub-surface:** <zone or "global">
 - **Dimension:** <primary>[, <secondary>]
 - **Severity:** <Launch-blocker | High | Medium | Low | Defer>
-- **Affects:** <all users | new users | returning users | tenant admins | operators only | other:\_\_\_\_>
+- **Affects:** <all users | new users | returning users | tenant admins | operators only | other:____>
 - **Status:** Open
 - **Discovered-at:** <commit SHA>
 - **Effort:** <S | M | L>
@@ -36,7 +36,6 @@ Checked: C — <...>
 <1–3 sentences>
 
 **Evidence:**
-
 - File: <path:line>
 - Screenshot: <artifacts/...>
 - Repro: <numbered steps>
