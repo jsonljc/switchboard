@@ -78,8 +78,41 @@ function shaExists(sha: string): boolean {
 export function validateFindings(doc: string, opts: { checkSha?: boolean } = {}): ValidationResult {
   const errors: string[] = [];
   const findings = parseFindings(doc);
+
+  // Detect headings that *look* like finding IDs but didn't match the canonical
+  // `## <PREFIX>-<NN>` form (PREFIX = two uppercase letters). Without this pass,
+  // drifts like `## dc-01` or `## DCO-01` would silently produce zero findings.
+  const parsedIds = new Set(findings.map((f) => f.id));
+  const headingPattern = /^## ([A-Za-z]{2,4}-?\d+\w*)/gm;
+  const seenHeadings = new Set<string>();
+  let h: RegExpExecArray | null;
+  while ((h = headingPattern.exec(doc)) !== null) {
+    const heading = h[1];
+    if (!heading || seenHeadings.has(heading)) continue;
+    seenHeadings.add(heading);
+    const isCanonical = /^[A-Z]{2}-\d+$/.test(heading);
+    if (!isCanonical && !parsedIds.has(heading)) {
+      errors.push(
+        `Heading "## ${heading}" looks like a finding ID but doesn't match the required form "## <PREFIX>-<NN>" (PREFIX is two uppercase letters, e.g., DC, DS, MK).`,
+      );
+    }
+  }
+
+  // Detect duplicate finding IDs. The parser splits cleanly on each heading so
+  // duplicates produce two parsed Finding entries with the same id; the rollup
+  // downstream would otherwise conflate them.
+  const seenIds = new Set<string>();
+  for (const f of findings) {
+    if (seenIds.has(f.id)) {
+      errors.push(`${f.id}: duplicate finding ID — IDs must be unique within a surface`);
+    } else {
+      seenIds.add(f.id);
+    }
+  }
+
   if (findings.length === 0) {
     // Empty findings docs are valid — surface may have no findings.
+    // (Orphan-heading errors above still surface if any exist.)
     return { errors };
   }
   for (const f of findings) {

@@ -91,4 +91,68 @@ describe("validateFindings", () => {
       expect.arrayContaining([expect.stringMatching(/DC-01.*placeholder/i)]),
     );
   });
+
+  it("accepts Discovered-at: HEAD with checkSha enabled (HEAD is exempt)", () => {
+    const result = validateFindings(validDoc, { checkSha: true });
+    const shaErrors = result.errors.filter((e) => /Discovered-at|SHA/i.test(e));
+    expect(shaErrors).toEqual([]);
+  });
+
+  it("rejects a non-existent Discovered-at SHA when checkSha is enabled", () => {
+    const bad = validDoc.replace(
+      "- **Discovered-at:** HEAD",
+      "- **Discovered-at:** 0000000000000000000000000000000000000000",
+    );
+    const result = validateFindings(bad, { checkSha: true });
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/DC-01.*Discovered-at.*SHA/i)]),
+    );
+  });
+
+  it("rejects a lowercase finding-ID heading", () => {
+    const bad = validDoc.replace("## DC-01", "## dc-01");
+    const result = validateFindings(bad);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/Heading.*dc-01.*finding ID/i)]),
+    );
+  });
+
+  it("rejects a three-letter-prefix finding-ID heading", () => {
+    const bad = validDoc.replace("## DC-01", "## DCO-01");
+    const result = validateFindings(bad);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/Heading.*DCO-01.*finding ID/i)]),
+    );
+  });
+
+  it("rejects duplicate finding IDs", () => {
+    const second = `
+
+## DC-01
+
+- **Surface:** /console
+- **Sub-surface:** queue zone
+- **Dimension:** D
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** HEAD
+- **Effort:** S
+
+**What:**
+Duplicate copy.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:200
+- Repro: Visit /console.
+
+**Fix:**
+Render EmptyState component.
+`;
+    const bad = validDoc + second;
+    const result = validateFindings(bad);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/DC-01.*duplicate/i)]),
+    );
+  });
 });
