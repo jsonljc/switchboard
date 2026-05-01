@@ -14,7 +14,7 @@ session_closed: open
 
 Checked: A — see findings below
 Checked: B — pending session
-Checked: C — pending session
+Checked: C — see findings below
 Checked: D — pending session
 Checked: E — pending session
 Checked: F — pending session
@@ -592,3 +592,387 @@ The operator chat widget is a permanent floating button at `fixed bottom-4 right
 
 **Fix:**
 Re-style the toggle to use design tokens (e.g. `bg-foreground text-background` or `bg-operator text-operator-foreground`) and pick one form factor — either a small icon button or a labeled pill, not both. Lift the bottom offset above the 64px nav (`bottom-20` minimum on small viewports) so it never overlaps tab hit areas. Consider whether this widget should be visible on every authenticated page or limited to a subset (settings / dashboard) by default.
+
+---
+
+## DC-23
+
+- **Surface:** /escalations
+- **Sub-surface:** EscalationCard post-reply info banner
+- **Dimension:** C, H
+- **Severity:** Launch-blocker
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+After a successful escalation reply, the card renders a blue info banner that reads: *"Your reply has been saved. It will be included in the conversation when the customer sends their next message. Direct message delivery is coming in a future update."* This is factually false today — the API path only returns 200 OK when proactive channel delivery to Telegram/WhatsApp/Slack succeeds (`apps/api/src/routes/escalations.ts:266-275` returns 502 unless `deliveryResult === "delivered"`). The mutation only fires `setSent(true)` on a 200, so by the time this banner appears the customer has already received the message via their channel. Telling the operator the reply will *only* arrive when the customer next messages — and that direct delivery is "coming in a future update" — risks the operator either re-sending the reply through another channel, or simply not trusting the system to deliver.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:209-217 (banner text + render condition `sent && !isResolved`)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:102-113 (`setSent(true)` only fires on `onSuccess`)
+- File: apps/dashboard/src/hooks/use-escalations.ts:38-50 (mutation throws unless `res.ok`)
+- File: apps/api/src/routes/escalations.ts:241-275 (200 path requires `agentNotifier.sendProactive` to succeed)
+- Repro:
+  1. Sign in as a tenant with at least one channel credential wired (so `agentNotifier` is non-null at API startup — see `apps/api/src/app.ts:320-346`).
+  2. Trigger or open a pending escalation with a `sessionId` (i.e. has a real conversation thread). Navigate to `/escalations`, expand the card.
+  3. Type any reply and click Send.
+  4. On success (200 from `/api/dashboard/escalations/{id}/reply`), the blue info banner appears reading *"Your reply has been saved. It will be included in the conversation when the customer sends their next message. Direct message delivery is coming in a future update."*
+  5. Inspect the customer's channel (Telegram/WhatsApp/Slack) — the message has already been delivered. The banner is making a claim that contradicts what the system just did.
+
+**Fix:**
+Replace the banner with a confirmation that matches reality: *"Reply sent to {customer} on {channel}."* If channel delivery is degraded (e.g. notifier missing, 502 path), surface that as an explicit error state with retry guidance, not the generic "saved" banner.
+
+---
+
+## DC-24
+
+- **Surface:** /escalations
+- **Sub-surface:** EscalationList empty state (filter = "released")
+- **Dimension:** C
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The empty state branches on `filter === "pending"` only. The else-branch covers both the *Released* and *Resolved* tabs and renders the literal string "No resolved escalations yet." When the operator clicks the *Released* filter and finds it empty, the page tells them they have no resolved escalations — wrong noun, different lifecycle stage. The pill they just clicked says *Released*; the empty state should match it.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:339-352 (else-branch fires for both `released` and `resolved`)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:315-328 (filter values: `pending`, `released`, `resolved`)
+
+**Fix:**
+Branch the empty-state copy on the actual filter value: "No pending escalations" / "No released escalations yet" / "No resolved escalations yet."
+
+---
+
+## DC-25
+
+- **Surface:** /decide
+- **Sub-surface:** ApprovalCard primary actions
+- **Dimension:** C
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The negative action on each pending approval reads "Not now," but the click flow is *not* a deferral — it opens the *Confirm Rejection* dialog and on confirm fires `action.rejected`, which is recorded in the audit log and prevents the action from ever executing. "Not now" reads like "I'll review this later" or "snooze," which suggests the approval re-queues. There is no defer/snooze path in the system — the only options are approve and reject. The mismatch risks an operator clicking what they think is a soft "later" and instead permanently rejecting the request. The dialog catches it, but the button label sets the wrong expectation on every approval.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:54-59 (button text "Not now"; onClick = onReject)
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:177-191 (handleReject opens RespondDialog with `action: "reject"`)
+- File: apps/dashboard/src/components/approvals/respond-dialog.tsx:41-47 (dialog title "Confirm Rejection"; description: "This will cancel the request.")
+
+**Fix:**
+Use a label that matches the action — "Reject" or "Decline" — and reserve "Not now" / "Snooze" for the day a real defer path exists. Pair with DC-26 to land one consistent verb across button, dialog, toast, and history.
+
+---
+
+## DC-26
+
+- **Surface:** /decide, /decide/[id]
+- **Sub-surface:** approval reject/decline terminology
+- **Dimension:** C
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The same negative-decision action surfaces under five different nouns/verbs on the same surface: button "Not now" (decide list) / "Reject" (decide detail), dialog title "Confirm Rejection," dialog button "Reject," toast title "Declined" (decide list approvals) / "Rejected" (decide list tasks), History item label "rejected" (audit eventType, derived from `action.rejected`), consequence sentence "Your assistant won't take this action." Operators see the action under a different label at every step of the flow, which makes it harder to mentally bind "the thing I just clicked" to "the row that appears in History."
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:58 ("Not now" button)
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:140 (toast title "Declined")
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:211 (toast title "Rejected" for tasks)
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:215 ("Reject" button)
+- File: apps/dashboard/src/components/approvals/respond-dialog.tsx:41,47,68 (dialog title "Confirm Rejection"; description; primary "Reject")
+
+**Fix:**
+Pick one verb (recommended: *Decline*, since the dialog explicitly tells the user the action will be cancelled) and use it across button, dialog, toast, and history. Or pick *Reject* and ditch "Not now" / "Declined." Either choice is fine — the inconsistency is the issue.
+
+---
+
+## DC-27
+
+- **Surface:** /decide/[id]
+- **Sub-surface:** page heading
+- **Dimension:** C
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The detail page is titled "Decision Detail" — internal-feeling, code-name-shaped phrasing that contradicts the editorial "Decide" + subtitle "Decisions only you can make." voice on the index. Operators navigated here from a card titled by its summary; landing on a generic "Decision Detail" header strips the human voice the rest of /decide carries.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:129 (`<h1>Decision Detail</h1>`)
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:230-232 ("Decide" + "Decisions only you can make.")
+
+**Fix:**
+Drop the heading or replace it with the approval summary itself (already shown as `CardTitle` on line 134, so the page H1 currently echoes nothing). If a heading is needed, something like "Decision" or "Approval" matches the parent voice.
+
+---
+
+## DC-28
+
+- **Surface:** /decide/[id]
+- **Sub-surface:** detail page metadata fields
+- **Dimension:** C
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The detail page renders a labeled, copy-pasteable "Binding Hash" field with a monospaced multi-line block, and an "Approvers" list of opaque principal IDs in monospace badges. *Binding hash* is an internal cryptographic primitive used for replay-prevention in the API request body (`packages/core` approval flow) — operators do not act on it, do not need to read it, and have nothing to do with it. *Approvers* shown as raw principal IDs (e.g. `op-abc123`) is similarly internal. Both leak the audit/security plumbing into the operator's primary decision view, which makes the page look engineering-facing rather than owner-facing.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:182-187 ("Binding Hash" label + monospace block of the raw hash)
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:189-200 ("Approvers" + Badge per principal ID, monospace)
+
+**Fix:**
+Remove "Binding Hash" from the operator view entirely (it's still POSTed in the request body — the operator never needs to see it). Replace "Approvers" with named operator labels if that data is available, or hide the row when the only entries are opaque IDs.
+
+---
+
+## DC-29
+
+- **Surface:** /decide/[id]
+- **Sub-surface:** Status badge
+- **Dimension:** C
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The Status badge renders `{state.status}` directly, so the operator sees lowercase enum strings — `pending`, `approved`, `rejected`, `expired` — verbatim. No casing fix, no humanization, no badge variant copy ("Awaiting your call," "Approved," etc.). Reads as a debug field. The Risk Category badge sibling has the same issue (`{request.riskCategory} risk` → `low risk`, `medium risk`, etc.) but at least gets a noun appended; the status badge does not.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:142-152 (`{state.status}`)
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:155-159 (`{request.riskCategory} risk`)
+
+**Fix:**
+Map the enum to user copy at render time: `pending → "Awaiting your call"`, `approved → "Approved"`, `rejected → "Declined"`, `expired → "Expired"`. Apply the same map on the index page and toast labels (DC-26) so all three render the same noun for the same state.
+
+---
+
+## DC-30
+
+- **Surface:** /escalations
+- **Sub-surface:** SlaIndicator chip
+- **Dimension:** C
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+`SlaIndicator` floors the time-left to one hour: `Math.max(1, Math.ceil(diff / hour))`. An escalation that is 5 minutes from its SLA deadline displays the same `1h left` chip as one that is 59 minutes out. The chip is the only visible urgency signal on the collapsed card row, and it's positioned next to the relative timestamp ("4m ago") — so an operator scanning the list sees a calm-looking "1h left" right up until the deadline crosses zero and the chip flips to "Overdue." This understates urgency by up to an hour on the escalations that need attention most.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:42-63 (`hoursLeft = Math.max(1, Math.ceil(diff / hour))`)
+
+**Fix:**
+Drop the `Math.max(1, …)` clamp and switch to minutes when the diff is under an hour: `< 60min → "{n}m left"`, otherwise `"{n}h left"`. Mirrors `formatCountdown` on the approvals side.
+
+---
+
+## DC-31
+
+- **Surface:** /conversations
+- **Sub-surface:** StatusPill fallback branch
+- **Dimension:** C
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+`StatusPill` only humanizes three of the six values in `ConversationStatusSchema` (`active`, `human_override`, `awaiting_approval`). The fallback branch renders the raw enum string verbatim, so an operator can see pills reading `awaiting_clarification`, `completed`, or `expired` (snake_case in a gray pill). On any conversation in those three states, the operator sees a code-shaped status string instead of a human label.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:18-45 (StatusPill mapping; fallback at line 41-44)
+- File: packages/schemas/src/chat.ts:37-44 (ConversationStatusSchema enumerates all six values)
+
+**Fix:**
+Add explicit cases for `awaiting_clarification`, `completed`, `expired` (e.g. "Waiting on customer," "Done," "Stale"), and only render the raw enum in development if a brand-new status arrives.
+
+---
+
+## DC-32
+
+- **Surface:** /conversations
+- **Sub-surface:** filter pill labels
+- **Dimension:** C
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The filter pill for `human_override` reads "Overridden," but the StatusPill on every conversation in that state reads "You control." Two different terms for the same state on the same screen, ~40px apart vertically.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:12-16 (`{ value: "human_override", label: "Overridden" }`)
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:26-32 (StatusPill for `human_override` reads "You control")
+
+**Fix:**
+Pick one. Either rename the filter to "You control" or rename the pill to "Overridden." Recommend "You control" — it's a verb, owner-second-person, and matches the rest of the dashboard's voice.
+
+---
+
+## DC-33
+
+- **Surface:** /conversations
+- **Sub-surface:** ConversationCard intent line
+- **Dimension:** C
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+When `currentIntent` is null, the conversation card renders the literal "No intent yet." *Intent* is internal taxonomy from the agent runtime; an operator scanning a list of customer threads doesn't think of conversations as having an "intent." The empty-state copy reads engineering-y and offers no signal as to why the field is blank.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:115 (`{conversation.currentIntent ?? "No intent yet"}`)
+
+**Fix:**
+Replace with a humanized fallback such as "—" or "Just opened" or "Customer hasn't said much yet." Or hide the line entirely when null and surface the channel + last-activity instead.
+
+---
+
+## DC-34
+
+- **Surface:** /decide, /escalations, /conversations (anywhere OwnerShell mounts the widget)
+- **Sub-surface:** OperatorChatWidget header + placeholder hints
+- **Dimension:** C
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The widget header label reads "Operator Chat" and the empty-state hint inside the panel says: *"Type a command like 'show pipeline' or 'pause low-performing ads'."* Two issues: (1) "Operator" is internal/ops jargon — the dashboard elsewhere addresses the user as "you" / "your assistant," not as the operator. (2) The two example commands look like they are guaranteed to work, but neither is documented as a registered intent in `packages/core/src/intents/`. If those commands fail or return a generic "Sorry, something went wrong" (the widget's error fallback at `use-operator-chat.ts:54`), the empty-state hint sets up an embarrassing first interaction.
+
+**Evidence:**
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:42 (`aria-label="Operator Chat"`)
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:52 (`<h3>Operator Chat</h3>`)
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:58-61 (placeholder hints "show pipeline" / "pause low-performing ads")
+- File: apps/dashboard/src/components/operator-chat/use-operator-chat.ts:52-59 (error path message "Sorry, something went wrong. Please try again.")
+- Repro (human, fact-check needed): open the widget, type each example command verbatim. If either returns a "Sorry, something went wrong" or a non-actionable system reply, the hint copy is making a promise the product can't keep.
+
+**Fix:**
+Rename "Operator Chat" to "Your assistant" or "Ask your assistant." Replace the example commands with hints that are guaranteed to work today (e.g. confirmed registered intents) — or drop the examples and use a generic prompt ("Ask anything…") until a real command catalogue exists.
+
+---
+
+## DC-35
+
+- **Surface:** /decide, /decide/[id]
+- **Sub-surface:** RespondDialog risk badge
+- **Dimension:** C
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+RespondDialog collapses the four risk categories (`low`, `medium`, `high`, `critical`) into two pills — "Lower impact" and "Higher impact." The list page already shows distinct consequence copy per category (`CONSEQUENCE`: "Routine — asked as a precaution" vs. "Affects a customer or involves money" vs. "Significant — take a moment to review"), so the operator was just shown a per-category sentence and is now told the four categories actually only have two tiers. The conflation also means a `medium`-risk approval shows the same badge as a `low`-risk one inside the confirm dialog, even though the consequence sentence differs.
+
+**Evidence:**
+- File: apps/dashboard/src/components/approvals/respond-dialog.tsx:51-57 (badge collapses 4 → 2)
+- File: apps/dashboard/src/lib/approval-constants.ts:1-6 (CONSEQUENCE keeps all 4)
+
+**Fix:**
+Either show all four levels with distinct labels, or align the per-category consequence copy to the same two tiers so the dialog and the list agree.
+
+---
+
+## DC-36
+
+- **Surface:** /console (Activity zone-head)
+- **Sub-surface:** "+N more today ↓" subhead
+- **Dimension:** C
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The Activity zone-head always renders "+{moreToday} more today ↓" — including when `moreToday === 0`. With nothing to show below, the operator reads "+0 more today ↓" with a downward arrow that points to no content.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:316-318 (unconditional render)
+- File: apps/dashboard/src/components/console/console-mappers.ts:220-235 (`mapActivity` returns `moreToday: 0` when nothing's pending)
+
+**Fix:**
+Hide the "+N more today" affordance when `moreToday === 0`, or replace it with a quiet "All caught up" / "" when zero.
+
+---
+
+## DC-37
+
+- **Surface:** /escalations, /console (activity row), /decide ("just now"-style relatives)
+- **Sub-surface:** relative-time formatting
+- **Dimension:** C
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+Three local relative-time helpers are in use across the audited routes, with subtly inconsistent output: `formatRelative` (used by /decide list and history) returns capital "Just now"; `formatRelativeTime` (lib/utils, used by /decide/[id] indirectly) returns lowercase "just now"; `relativeTime` in `escalation-list.tsx` returns lowercase "just now"; `formatAge` in `console-mappers.ts` returns lowercase "just now". Same surface, two different casings depending on which page rendered the timestamp. Minor, but visible when comparing /decide and /escalations side-by-side.
+
+**Evidence:**
+- File: apps/dashboard/src/lib/format.ts:4 (`return "Just now"`)
+- File: apps/dashboard/src/lib/utils.ts:36 (`return "just now"`)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:72 (`return "just now"`)
+- File: apps/dashboard/src/components/console/console-mappers.ts:99 (`return "just now"`)
+
+**Fix:**
+Pick one casing (lowercase "just now" matches the rest) and consolidate the four helpers behind `formatRelativeTime` from `lib/utils.ts`. The console mapper's `formatAge` is currently the only helper that uses 24h time; the others abbreviate ("4m ago"). Align the units too while you're in there.
+
+---
+
+## DC-38
+
+- **Surface:** /escalations
+- **Sub-surface:** EscalationCard resolution form
+- **Dimension:** C
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
+- **Effort:** S
+
+**What:**
+The trigger link reads "Resolve with note..." (sentence case) and the action button below reads "Mark Resolved" (Title Case) — same flow, two casings. The textarea label "Internal note (optional)" is sentence case; the success-state header in resolved cards reads "Internal note" (also sentence case, fine). Cancel button "Cancel" (Title Case). Mixed within a single inline form.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:254 ("Resolve with note...")
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:278 ("Mark Resolved")
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:289 ("Cancel")
+
+**Fix:**
+Pick a casing (sentence case matches the rest of the audited copy) and apply consistently: "Resolve with note", "Mark resolved", "Cancel."
