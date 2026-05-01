@@ -3,6 +3,13 @@ import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { tmpdir } from "os";
+import {
+  defaultSafeUrlPolicy,
+  isSafeUrl,
+  readBodyWithLimit,
+  SsrfRejectedError,
+  type SafeUrlPolicy,
+} from "../util/safe-url.js";
 
 interface ClipInput {
   videoUrl: string;
@@ -31,6 +38,12 @@ const ASPECT_SIZES: Record<string, string> = {
 };
 
 export class VideoAssembler {
+  private readonly safeUrlPolicy: SafeUrlPolicy;
+
+  constructor(options: { safeUrlPolicy?: SafeUrlPolicy } = {}) {
+    this.safeUrlPolicy = options.safeUrlPolicy ?? defaultSafeUrlPolicy();
+  }
+
   /**
    * Build FFmpeg arguments for assembly. Exposed for testing.
    * workDir must match where assemble() writes its temp files.
@@ -137,10 +150,16 @@ export class VideoAssembler {
     const paths: string[] = [];
     for (let i = 0; i < clips.length; i++) {
       const clip = clips[i]!;
-      if (clip.videoUrl.startsWith("http")) {
-        const res = await fetch(clip.videoUrl);
+      // Treat any URL-shaped input (has a scheme) as remote and gate it through
+      // the SSRF guard. Bare paths (no `://`) are passed through as local files.
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(clip.videoUrl)) {
+        const verdict = isSafeUrl(clip.videoUrl, this.safeUrlPolicy);
+        if (!verdict.ok) {
+          throw new SsrfRejectedError(clip.videoUrl, verdict.reason);
+        }
+        const res = await fetch(verdict.url);
         if (!res.ok) throw new Error(`Failed to download clip: ${res.status}`);
-        const buffer = Buffer.from(await res.arrayBuffer());
+        const buffer = await readBodyWithLimit(res, this.safeUrlPolicy.maxResponseBytes);
         const localPath = join(workDir, `clip-${i}.mp4`);
         writeFileSync(localPath, buffer);
         paths.push(localPath);
