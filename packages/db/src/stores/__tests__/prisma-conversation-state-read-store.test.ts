@@ -82,9 +82,9 @@ describe("PrismaConversationStateReadStore.replyTimeStats", () => {
 
   it("passes correct where clause to Prisma (organizationId, createdAt range, firstReplyAt not null)", async () => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
     const prisma = makeReplyTimeStatsPrisma([]);
     const store = new PrismaConversationStateReadStore(prisma as never);

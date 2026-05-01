@@ -364,8 +364,8 @@ describe("PrismaCreativeJobStore", () => {
         const result = await store.stageProgressByApproval(["any-id"]);
         expect(result.size).toBe(0);
         expect(warnSpy).toHaveBeenCalledOnce();
-        expect(warnSpy.mock.calls[0][0]).toContain("stageProgressByApproval");
-        expect(warnSpy.mock.calls[0][0]).toContain("1 approval IDs");
+        expect(warnSpy.mock.calls[0]![0]).toContain("stageProgressByApproval");
+        expect(warnSpy.mock.calls[0]![0]).toContain("1 approval IDs");
       } finally {
         warnSpy.mockRestore();
       }
