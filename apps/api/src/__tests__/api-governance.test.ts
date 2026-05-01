@@ -67,6 +67,7 @@ describe("Governance API", () => {
 
     app = Fastify({ logger: false });
 
+    app.decorate("authDisabled", true);
     app.decorate("governanceProfileStore", mockGovernanceProfileStore);
     app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
     app.decorate("platformIngress", mockPlatformIngress as unknown as never);
@@ -361,6 +362,7 @@ describe("Governance API", () => {
 
     it("returns 503 when deploymentLifecycleStore is null", async () => {
       const localApp = Fastify({ logger: false });
+      localApp.decorate("authDisabled", true);
       localApp.decorate("governanceProfileStore", mockGovernanceProfileStore);
       localApp.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
       localApp.decorate("platformIngress", mockPlatformIngress as unknown as never);
@@ -414,6 +416,7 @@ describe("Governance API", () => {
 
     it("returns 503 when deploymentLifecycleStore is null", async () => {
       const localApp = Fastify({ logger: false });
+      localApp.decorate("authDisabled", true);
       localApp.decorate("governanceProfileStore", mockGovernanceProfileStore);
       localApp.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
       localApp.decorate("platformIngress", mockPlatformIngress as unknown as never);
@@ -456,6 +459,9 @@ describe("Governance API", () => {
       const scopedMockCartridges = { get: vi.fn() };
       const scopedMockOrchestrator = { propose: vi.fn(), executeApproved: vi.fn() };
 
+      // Auth-enabled scoped app — set authDisabled=false so the scoped routes treat
+      // the request as coming from a real, org-bound API key.
+      scopedApp.decorate("authDisabled", false);
       scopedApp.decorate("governanceProfileStore", scopedMockGovernanceProfileStore);
       scopedApp.decorate("storageContext", {
         cartridges: scopedMockCartridges,
@@ -494,18 +500,20 @@ describe("Governance API", () => {
       expect(res.json().error).toContain("organization mismatch");
     });
 
-    it("emergency-halt returns 403 for cross-org request", async () => {
+    it("emergency-halt returns 400 for cross-org body claim", async () => {
       const res = await scopedApp.inject({
         method: "POST",
         url: "/api/governance/emergency-halt",
         payload: { organizationId: "org_B", reason: "test" },
       });
-      expect(res.statusCode).toBe(403);
-      expect(res.json().error).toContain("organization mismatch");
+      // Auth says org_A; body says org_B → mismatch is a 400 (caller bug), not a 403.
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("does not match authenticated context");
     });
 
-    it("emergency-halt returns 400 when no orgId can be resolved", async () => {
-      // Create app with no org auth and no body orgId
+    it("emergency-halt returns 403 when auth is enabled but no org binding", async () => {
+      // Auth is enabled (authDisabled=false) but the request has no organizationIdFromAuth.
+      // This is the unscoped-static-API-key scenario. Must fail closed, not be treated as dev mode.
       const noOrgApp = Fastify({ logger: false });
       const noOrgStore = {
         get: vi.fn(),
@@ -514,6 +522,7 @@ describe("Governance API", () => {
         setConfig: vi.fn(),
       };
 
+      noOrgApp.decorate("authDisabled", false);
       noOrgApp.decorate("governanceProfileStore", noOrgStore);
       noOrgApp.decorate("storageContext", { cartridges: { get: vi.fn() } } as unknown as never);
       noOrgApp.decorate("orchestrator", {
@@ -527,10 +536,10 @@ describe("Governance API", () => {
       const res = await noOrgApp.inject({
         method: "POST",
         url: "/api/governance/emergency-halt",
-        payload: {},
+        payload: { organizationId: "org_X" },
       });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("organizationId is required");
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toContain("no organization binding");
 
       await noOrgApp.close();
     });

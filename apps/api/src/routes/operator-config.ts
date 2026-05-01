@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
+import { assertOrgAccess, resolveOrganizationForMutation } from "../utils/org-access.js";
 
 // TODO: These imports reference modules that don't exist yet.
 // Stubbed to allow typecheck to pass. Re-enable when the feature is built.
@@ -81,16 +82,9 @@ export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
         active?: boolean;
       };
 
-      if (!body.organizationId) {
-        return reply.code(400).send({ error: "organizationId is required", statusCode: 400 });
-      }
-
-      if (
-        request.organizationIdFromAuth &&
-        body.organizationId !== request.organizationIdFromAuth
-      ) {
-        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
-      }
+      // Auth trust binding: only request.organizationIdFromAuth is trusted in production.
+      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
+      if (!organizationId) return reply;
 
       const principalId = body.principalId ?? request.principalIdFromAuth ?? "system";
 
@@ -101,6 +95,7 @@ export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
         updatedAt: true,
       }).safeParse({
         ...body,
+        organizationId,
         principalId,
         active: body.active ?? true,
       });
@@ -136,9 +131,7 @@ export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
 
       const { orgId } = request.params as { orgId: string };
 
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
-        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
-      }
+      if (!assertOrgAccess(request, orgId, reply)) return;
 
       const store = new PrismaAdsOperatorConfigStore(app.prisma);
       const config = await store.getByOrg(orgId);
@@ -167,9 +160,7 @@ export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
 
       const { orgId } = request.params as { orgId: string };
 
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
-        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
-      }
+      if (!assertOrgAccess(request, orgId, reply)) return;
 
       const store = new PrismaAdsOperatorConfigStore(app.prisma);
       const existing = await store.getByOrg(orgId);
@@ -203,9 +194,7 @@ export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
 
       const { orgId } = request.params as { orgId: string };
 
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
-        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
-      }
+      if (!assertOrgAccess(request, orgId, reply)) return;
 
       const store = new PrismaAdsOperatorConfigStore(app.prisma);
       const opConfig = await store.getByOrg(orgId);

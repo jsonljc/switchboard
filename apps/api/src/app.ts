@@ -41,6 +41,14 @@ import type Redis from "ioredis";
 
 declare module "fastify" {
   interface FastifyInstance {
+    /**
+     * True when no auth middleware is enforcing API keys (dev mode).
+     * False when at least one source of org-bound auth is configured.
+     * Set explicitly by the auth middleware (or by tests/standalone harnesses).
+     * Mutation routes consult this flag to decide whether body-supplied
+     * organizationId is acceptable.
+     */
+    authDisabled: boolean;
     approvalRoutingConfig: import("@switchboard/core/approval").ApprovalRoutingConfig;
     storageContext: StorageContext;
     auditLedger: AuditLedger;
@@ -538,7 +546,13 @@ export async function buildServer() {
     }
   });
 
-  // Register middleware (idempotency picks up shared redis via app.redis)
+  // Register middleware (idempotency picks up shared redis via app.redis).
+  // authDisabled defaults to false so that any code path which forgets to register
+  // authMiddleware fails closed rather than silently allowing body-orgId to win.
+  // The middleware flips this to true if and only if dev-mode (no API_KEYS, no DB) is detected.
+  if (!app.hasDecorator("authDisabled")) {
+    app.decorate("authDisabled", false);
+  }
   await app.register(authMiddleware);
   await app.register(authRateLimit);
   await app.register(apiVersionPlugin);

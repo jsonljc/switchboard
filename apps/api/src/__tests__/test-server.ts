@@ -70,6 +70,7 @@ class InMemoryWorkTraceStore implements WorkTraceStore {
 // Re-declare Fastify augmentation for test context
 declare module "fastify" {
   interface FastifyInstance {
+    authDisabled: boolean;
     approvalRoutingConfig: ApprovalRoutingConfig;
     storageContext: StorageContext;
     auditLedger: AuditLedger;
@@ -234,6 +235,9 @@ export async function buildTestServer(): Promise<TestContext> {
     denyWhenNoApprovers: true,
   };
 
+  // Test harness runs without auth middleware; mark dev mode so org-derivation helpers
+  // accept body.organizationId (matches the documented dev-mode behavior).
+  app.decorate("authDisabled", true);
   app.decorate("approvalRoutingConfig", approvalRoutingConfig);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);

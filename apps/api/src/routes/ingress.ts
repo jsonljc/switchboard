@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { resolveOrganizationForMutation } from "../utils/org-access.js";
 
 export const ingressRoutes: FastifyPluginAsync = async (app) => {
   app.post("/ingress/submit", async (request, reply) => {
@@ -7,7 +8,7 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const body = request.body as {
-      organizationId: string;
+      organizationId?: string;
       actor: { id: string; type: string };
       intent: string;
       parameters: Record<string, unknown>;
@@ -18,13 +19,16 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
       idempotencyKey?: string;
     };
 
-    if (!body.organizationId || !body.intent) {
-      return reply.code(400).send({ error: "Missing organizationId or intent", statusCode: 400 });
+    if (!body.intent) {
+      return reply.code(400).send({ error: "Missing intent", statusCode: 400 });
     }
+
+    const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
+    if (!organizationId) return reply;
 
     try {
       const response = await app.platformIngress.submit({
-        organizationId: body.organizationId,
+        organizationId,
         actor: { id: body.actor?.id ?? "anonymous", type: (body.actor?.type ?? "user") as "user" },
         intent: body.intent,
         parameters: body.parameters ?? {},

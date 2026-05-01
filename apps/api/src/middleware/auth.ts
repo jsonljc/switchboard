@@ -54,7 +54,41 @@ const authPlugin: FastifyPluginAsync = async (app) => {
           "Set API_KEYS to a comma-separated list of valid API keys, or set NODE_ENV to something other than 'production'.",
       );
     }
+    // Mark auth as disabled so org-access helpers know they are in dev mode.
+    if (!app.hasDecorator("authDisabled")) {
+      app.decorate("authDisabled", true);
+    } else {
+      app.authDisabled = true;
+    }
     return;
+  }
+
+  // Auth is enabled — startup validation. In production, every static API key MUST be
+  // mapped to an organizationId via API_KEY_METADATA. Without it, the key acts as a
+  // tenant-impersonation primitive (any orgId can be supplied via the request body).
+  if (keyEntries.length > 0) {
+    const unscopedKeyCount = keyEntries.filter((entry) => !entry.metadata?.organizationId).length;
+    if (unscopedKeyCount > 0) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(
+          `Refusing to start: ${unscopedKeyCount} static API key(s) lack an organizationId in API_KEY_METADATA. ` +
+            "Every entry in API_KEYS must have a corresponding API_KEY_METADATA entry of the form 'key:orgId:runtimeId:principalId'. " +
+            "Unscoped keys are a cross-tenant impersonation primitive and are forbidden in production.",
+        );
+      }
+      app.log.warn(
+        { unscopedKeyCount },
+        "API_KEYS contains entries without an API_KEY_METADATA organizationId. " +
+          "Requests using those keys will be denied org-bound mutations. Set API_KEY_METADATA before deploying.",
+      );
+    }
+  }
+
+  // Auth middleware is registering — mark auth as enabled.
+  if (!app.hasDecorator("authDisabled")) {
+    app.decorate("authDisabled", false);
+  } else {
+    app.authDisabled = false;
   }
 
   // SIGHUP handler for hot-reloading API keys without restart
@@ -112,6 +146,17 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     }
 
     if (matchedEntry) {
+      const metadataOrgId = matchedEntry.metadata?.organizationId;
+      // In production, refuse any static API key that is not bound to an organizationId.
+      // The startup check above already rejects this configuration; this is the
+      // belt-and-braces runtime guard for hot-reloaded keys without metadata.
+      if (!metadataOrgId && process.env.NODE_ENV === "production") {
+        return reply.code(401).send({
+          error: "API key is not scoped to an organization",
+          hint: "Configure API_KEY_METADATA to bind this key to an organizationId.",
+          statusCode: 401,
+        });
+      }
       if (matchedEntry.metadata) {
         request.organizationIdFromAuth = matchedEntry.metadata.organizationId;
         request.runtimeIdFromAuth = matchedEntry.metadata.runtimeId;

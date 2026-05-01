@@ -14,6 +14,9 @@ function buildDlqTestServer() {
       updateMany: vi.fn(),
     },
   };
+  // Test harness simulates dev mode (no auth middleware registered) so
+  // assertOrgAccess does not require an org binding on the request.
+  app.decorate("authDisabled", true);
   app.decorate("prisma", mockPrisma as unknown as never);
   app.register(dlqRoutes, { prefix: "/api/dlq" });
   return { app, mockPrisma };

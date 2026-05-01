@@ -4,7 +4,7 @@ import { matchesAny, NeedsClarificationError, NotFoundError } from "@switchboard
 import type { CanonicalSubmitRequest } from "@switchboard/core/platform";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
-import { assertOrgAccess } from "../utils/org-access.js";
+import { assertOrgAccess, resolveOrganizationForMutation } from "../utils/org-access.js";
 import { createApprovalForWorkUnit } from "./approval-factory.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
@@ -59,13 +59,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
-      if (!organizationId) {
-        return reply.code(400).send({
-          error: "organizationId is required (set via API key metadata or request body)",
-          statusCode: 400,
-        });
-      }
+      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
+      if (!organizationId) return reply;
 
       const submitRequest: CanonicalSubmitRequest = {
         intent: body.actionType,
@@ -348,13 +343,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
-      if (!organizationId) {
-        return reply.code(400).send({
-          error: "organizationId is required (set via API key metadata or request body)",
-          statusCode: 400,
-        });
-      }
+      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
+      if (!organizationId) return reply;
 
       const results = [];
       for (let i = 0; i < body.proposals.length; i++) {
