@@ -74,7 +74,7 @@ WorkTrace persisted  →  canonical lifecycle record
 ### What's Live Today
 
 - **Ad Optimization:** Meta CAPI + Google Offline Conversions integration is real and shipping data. Funnel analysis, saturation detection, and Inngest-driven daily/weekly audits are wired and running.
-- **Alex (Lead-to-Booking):** WhatsApp ingress, governance gating, and the calendar-booking tool are all wired end-to-end. The skill is in alpha — three known launch blockers are tracked in `.audit/` and being worked off before we promote it to production.
+- **Alex (Lead-to-Booking):** WhatsApp ingress, governance gating, and the calendar-booking tool are all wired end-to-end. The skill is in alpha — the remaining launch blockers are tracked in `.audit/` and being worked off before we promote it to production.
 - **PCD (Creative Studio):** Lives in [`creativeagent`](https://github.com/jsonljc/creativeagent) today. Switchboard's `packages/creative-pipeline` carries UGC scaffolding (Kling provider, scripting, scene casting, realism QA) for the future integration.
 
 For deeper architecture: [`docs/DOCTRINE.md`](docs/DOCTRINE.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
