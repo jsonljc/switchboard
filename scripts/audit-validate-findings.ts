@@ -12,9 +12,9 @@ const SEVERITIES = new Set(["Launch-blocker", "High", "Medium", "Low", "Defer"])
 const DIMENSIONS = new Set(["A", "B", "C", "D", "E", "F", "G", "H", "I", "I-light", "J"]);
 const STATUS_PATTERNS = [
   /^Open$/,
-  /^Accepted \(ship-with(, .+)?\)$/,
+  /^Accepted \(ship-with\)$/,
   /^Fixed \(PR #\d+\)$/,
-  /^False positive(.+)?$/,
+  /^False positive \(.+\)$/,
 ];
 const REQUIRED_FIELDS = [
   "Surface",

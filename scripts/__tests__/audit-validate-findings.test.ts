@@ -155,4 +155,38 @@ Render EmptyState component.
       expect.arrayContaining([expect.stringMatching(/DC-01.*duplicate/i)]),
     );
   });
+
+  it("rejects bare 'False positive' Status without parenthesized rationale", () => {
+    const bad = validDoc.replace("- **Status:** Open", "- **Status:** False positive");
+    const result = validateFindings(bad);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/DC-01.*Status.*False positive/)]),
+    );
+  });
+
+  it("accepts 'False positive (rationale)' Status", () => {
+    const ok = validDoc.replace(
+      "- **Status:** Open",
+      "- **Status:** False positive (already fixed in #123)",
+    );
+    const result = validateFindings(ok);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects 'Accepted (ship-with, dated)' Status (dropped form)", () => {
+    const bad = validDoc.replace(
+      "- **Status:** Open",
+      "- **Status:** Accepted (ship-with, 2026-05-01)",
+    );
+    const result = validateFindings(bad);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/DC-01.*Status.*ship-with/)]),
+    );
+  });
+
+  it("accepts canonical 'Accepted (ship-with)' Status", () => {
+    const ok = validDoc.replace("- **Status:** Open", "- **Status:** Accepted (ship-with)");
+    const result = validateFindings(ok);
+    expect(result.errors).toEqual([]);
+  });
 });
