@@ -333,7 +333,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       PrismaOwnerTaskStore,
       PrismaConversionRecordStore,
       PrismaRevenueStore,
-      PrismaConversationStateStore,
+      PrismaConversationStateReadStore,
       PrismaCreativeJobStore,
     } = await import("@switchboard/db");
 
@@ -341,7 +341,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
     const ownerTaskStore = new PrismaOwnerTaskStore(prisma);
     const conversionStore = new PrismaConversionRecordStore(prisma);
     const revenueStore = new PrismaRevenueStore(prisma);
-    const conversationStateStore = new PrismaConversationStateStore(prisma, {} as never);
+    const conversationStateStore = new PrismaConversationStateReadStore(prisma);
     const creativeJobStore = new PrismaCreativeJobStore(prisma);
 
     const stores: DashboardStores = {

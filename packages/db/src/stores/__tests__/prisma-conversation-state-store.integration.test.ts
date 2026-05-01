@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { PrismaConversationStateStore } from "../prisma-conversation-state-store.js";
+import { PrismaConversationStateReadStore } from "../prisma-conversation-state-read-store.js";
 
 const TEST_URL = process.env["DATABASE_URL"] ?? process.env["POSTGRES_TEST_URL"];
 
-describe.skipIf(!TEST_URL)("PrismaConversationStateStore.replyTimeStats (integration)", () => {
+describe.skipIf(!TEST_URL)("PrismaConversationStateReadStore.replyTimeStats (integration)", () => {
   let prisma: PrismaClient;
-  let store: PrismaConversationStateStore;
+  let store: PrismaConversationStateReadStore;
   const orgId = `org-replytime-int-${Date.now()}`;
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasourceUrl: TEST_URL });
-    store = new PrismaConversationStateStore(prisma, {} as never);
+    store = new PrismaConversationStateReadStore(prisma);
   });
 
   afterAll(async () => {
