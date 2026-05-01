@@ -1,14 +1,21 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useOperatorChat } from "./use-operator-chat";
 import { MessageBubble } from "./message-bubble";
 
+const HIDDEN_PATHS = ["/console"];
+
 export function OperatorChatWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const { messages, isLoading, sendCommand } = useOperatorChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const hidden =
+    pathname != null && HIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   useEffect(() => {
     if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === "function") {
@@ -23,6 +30,8 @@ export function OperatorChatWidget() {
     setInput("");
     sendCommand(trimmed);
   };
+
+  if (hidden) return null;
 
   return (
     <>

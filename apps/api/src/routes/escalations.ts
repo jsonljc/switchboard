@@ -96,11 +96,14 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
       }
 
-      // Extract conversation history if sessionId exists
+      // Extract conversation history if sessionId exists. Scope by organizationId
+      // (defense-in-depth, TI-5/TI-6): even though the Handoff orgId guard above
+      // already gates access, the conversation row may have a divergent or null
+      // organizationId — so we re-assert the scope on the conversation lookup.
       let conversationHistory: unknown[] = [];
       if (handoff.sessionId) {
-        const conversation = await app.prisma.conversationState.findUnique({
-          where: { threadId: handoff.sessionId },
+        const conversation = await app.prisma.conversationState.findFirst({
+          where: { threadId: handoff.sessionId, organizationId: orgId },
         });
 
         if (conversation && conversation.messages) {
