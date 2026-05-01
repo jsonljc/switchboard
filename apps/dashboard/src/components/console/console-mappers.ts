@@ -289,18 +289,13 @@ export function mapAgents(input: AgentsInput): AgentStripEntry[] {
 // ── Activity ──────────────────────────────────────────────────────────────
 export type AuditEntry = {
   id: string;
-  action: string;
+  action: string; // existing — comes from `entry.type` on the API side, kept for compatibility
   actorId: string | null;
   createdAt: string;
   metadata?: Record<string, unknown> | null;
+  /** NEW: structured agent attribution from the API (option C1). */
+  agent: AgentKey | null;
 };
-function agentForAction(action: string, actorId: string | null): AgentKey {
-  const key = (actorId ?? action).toLowerCase();
-  if (key.includes("alex")) return "alex";
-  if (key.includes("nova")) return "nova";
-  if (key.includes("mira")) return "mira";
-  return "system";
-}
 
 function formatHHMM(createdAt: string): string {
   return new Date(createdAt).toLocaleTimeString("en-US", {
@@ -319,10 +314,7 @@ function isToday(createdAt: string, now: Date): boolean {
   );
 }
 
-export function mapActivity(entries: AuditEntry[]): {
-  moreToday: number;
-  rows: ActivityRow[];
-} {
+export function mapActivity(entries: AuditEntry[]): { moreToday: number; rows: ActivityRow[] } {
   const now = new Date();
   const todayEntries = entries.filter((e) => isToday(e.createdAt, now));
   const displayed = entries.slice(0, 9);
@@ -330,7 +322,8 @@ export function mapActivity(entries: AuditEntry[]): {
   const rows: ActivityRow[] = displayed.map((e) => ({
     id: e.id,
     time: formatHHMM(e.createdAt),
-    agent: agentForAction(e.action, e.actorId),
+    // Read the structured field. Fallback to "system" preserves the option-B render shape for null agents.
+    agent: e.agent ?? "system",
     message: [e.action.replace(/^[^.]+\./, "").replace(/[._]/g, " ")],
   }));
   return { moreToday, rows };

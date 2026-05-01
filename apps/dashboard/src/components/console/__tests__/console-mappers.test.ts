@@ -313,22 +313,42 @@ describe("mapAgents — Alex cell (option C1)", () => {
 });
 
 describe("mapActivity", () => {
-  it("formats createdAt to HH:MM and synthesizes agent from action prefix", () => {
+  it("formats createdAt to HH:MM and reads agent from structured field", () => {
     const result = mapActivity([
-      { id: "1", action: "alex.replied", actorId: "agent:alex", createdAt: "2026-04-30T10:42:00" },
+      {
+        id: "1",
+        action: "alex.replied",
+        actorId: "agent:alex",
+        createdAt: "2026-04-30T10:42:00",
+        agent: "alex",
+      },
       {
         id: "2",
         action: "nova.draft.created",
         actorId: "agent:nova",
         createdAt: "2026-04-30T10:38:00",
+        agent: "nova",
       },
-      { id: "3", action: "system.audit.tick", actorId: null, createdAt: "2026-04-30T10:00:00" },
+      {
+        id: "3",
+        action: "system.audit.tick",
+        actorId: null,
+        createdAt: "2026-04-30T10:00:00",
+        agent: null,
+      },
     ]);
     expect(result.rows).toHaveLength(3);
     expect(result.rows[0].agent).toBe("alex");
     expect(result.rows[0].time).toBe("10:42");
     expect(result.rows[1].agent).toBe("nova");
     expect(result.rows[2].agent).toBe("system");
+  });
+
+  it("renders 'system' for entries with agent=null", () => {
+    const result = mapActivity([
+      { id: "x", action: "tick", actorId: null, createdAt: "2026-05-01T10:00:00Z", agent: null },
+    ]);
+    expect(result.rows[0].agent).toBe("system");
   });
 
   it("caps display at 9 rows and counts moreToday from today's overflow", () => {
@@ -338,6 +358,7 @@ describe("mapActivity", () => {
       action: "alex.replied",
       actorId: "agent:alex",
       createdAt: today,
+      agent: "alex" as const,
     }));
     const result = mapActivity(entries);
     expect(result.rows).toHaveLength(9);

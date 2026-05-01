@@ -61,21 +61,13 @@ export function useConsoleData(): {
     (escalations.data as { escalations?: EscalationApiRow[] } | undefined)?.escalations ?? [];
   const approvalRows: ApprovalApiRow[] = overview.data.approvals as ApprovalApiRow[];
 
-  const auditEntries: AuditEntry[] = (
-    (audit.data?.entries ?? []) as Array<{
-      id: string;
-      eventType: string;
-      actorId: string;
-      timestamp: string;
-      snapshot: Record<string, unknown>;
-    }>
-  ).map((e) => ({
+  const auditEntries: AuditEntry[] = (audit.data?.entries ?? []).map((e) => ({
     id: e.id,
     action: e.eventType,
     actorId: e.actorId ?? null,
     createdAt: e.timestamp,
-    metadata: e.snapshot,
-  }));
+    agent: e.agent ?? null,
+  })) as AuditEntry[];
 
   const moduleList = (modules.data ?? []) as Array<{ id: string; state: string }>;
   const moduleEnabled = (id: string) => moduleList.some((m) => m.id === id && m.state === "live");
