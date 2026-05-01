@@ -134,8 +134,7 @@ export const DashboardOverviewSchema = z.object({
     }).nullable(),
 
     nova: z.object({
-      /** Redundant with today.spend for the single-Nova case; kept here so the agent panel doesn't cross-section join. */
-      spendToday: z.object({ amount: z.number(), currency: z.string() }),
+      /** Note: per-agent spend is NOT duplicated here — the Nova cell reads today.spend directly to avoid drift. */
       draftsPending: z.number().int().nonnegative(),
     }).nullable(),
 
@@ -189,6 +188,13 @@ export const DashboardOverviewSchema = z.object({
 - The first item of the existing `bookings[]` (filtered to today, sorted ascending by `startsAt`) → `today.appointments.next`
 
 Per `CLAUDE.md` doctrine: no backwards-compat keys. Option B's `console-mappers.ts` is the only consumer of these paths today; it gets updated alongside the schema in C1.
+
+**Block-ownership rule (binding for future additions):**
+
+- `today.*` carries **org-level** time-scoped metrics. If a metric describes the business as a whole (revenue, leads, conversion rate, funnel snapshot), it goes here.
+- `agentsToday.*` carries **per-agent** time-scoped state. If a metric describes one agent's output or queue (drafts pending, jobs in flight), it goes here.
+- A metric that is "Alex did X" is per-agent (`agentsToday.alex`). A metric that is "the business did X" is org-level (`today`), even if Alex contributed to it.
+- When in doubt, default to `today.*`. Cross-section duplication (e.g., having both `today.spend` and `agentsToday.nova.spendToday`) is forbidden — pick one and let the consumer cross-reference.
 
 ## Data sources by field
 
@@ -279,8 +285,17 @@ Each new schema field maps to a precise mapper change. The view (`console-view.t
 - `today.revenue.amount = 0` is a real value, not an absence. Cell renders `$0` with neutral delta. The block is non-nullable.
 - `today.spend.amount = 0` is a real value when zero deployments are enabled or no spend has occurred today. The block is non-nullable. `updatedAt` semantics drive the cell's display state:
   - `updatedAt = null` ⇔ no successful sync ever (rollup table empty, or — during C1 — the rollup table doesn't exist yet). The Console renders the cell as `placeholder: true` (muted `—`).
-  - `updatedAt` set but more than 30 minutes old ⇔ stale data; the Console adds a subtle "X min ago" footer but still renders the value.
-  - `updatedAt` set within the last 30 minutes ⇔ fresh; cell renders normally.
+  - `updatedAt` set but older than `STALE_AFTER_MINUTES` (defined below) ⇔ stale data; the Console adds a subtle "X min ago" footer but still renders the value.
+  - `updatedAt` set within the freshness window ⇔ cell renders normally.
+
+**Freshness contract (single source of truth).** Both the dashboard builder (decides when to log a warning audit row) and the Console (decides when to render the stale footer) import the same constant from `packages/schemas`:
+
+```ts
+// packages/schemas/src/dashboard.ts
+export const STALE_AFTER_MINUTES = 30;
+```
+
+Not a schema response field — that would imply per-org configurability that doesn't exist and would bloat every payload with a constant.
 - `today.replyTime` is `null` when `sampleSize = 0` (no conversations created today, or none have firstReplyAt yet). Cell goes muted with `—`.
 - `agentsToday.{alex,nova,mira}` is `null` ⇔ that agent's module is disabled (Q5). Cell renders the inactive treatment.
 - `approvals[].stageProgress` is `undefined` for non-creative-pipeline approvals. Mapper renders the option-B synthesized fallback.
@@ -366,6 +381,7 @@ Per `CLAUDE.md`, every new module gets co-located `*.test.ts`. Coverage targets:
 - **Inactive-agent (`Hire X`) treatment.** Spec calls for it but its visual design is deferred. C1 ships a minimal muted state; the fuller "Hire Alex" / "Hire Nova" surface is its own design exercise.
 - **`today.revenue.deltaPctVsAvg` baseline window.** Currently spec'd as "trailing 7-day daily average." Reasonable default; revisit if operators want week-over-week instead.
 - **Recommendation cards** — explicitly deferred. The follow-on spec ("Nova Draft Recommendations Feed", working title C3 / E) needs to answer: are drafts insights (read-only) or actions (governed via `ActionRequest`)? The likely direction is `NovaRecommendationDraft → optionally promoted to ActionRequest → approval pipeline`, but that's a governance-semantics design, not a dashboard one.
+- **`novaAdSets` ranking is "top 5 by today's spend" — a deliberate temporary heuristic.** "Highest spend" ≠ "needs attention," but a composite rank (spend × pacing-anomaly × CPA-trend × learning-state) requires `saturation-detector` / `learning-phase-guard` / `period-comparator` outputs to feed into the dashboard layer. Those engines exist in `packages/ad-optimizer` but aren't surfaced here yet. A future spec replaces the spend-rank with a composite "needs attention" score; the schema change is just adding `rank?: "needs_attention" | "winner" | "watch"` to `AdSetRow`. C2 ships the spend-rank baseline.
 
 ## Sequencing
 
