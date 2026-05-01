@@ -8,6 +8,7 @@ import {
 } from "../validation.js";
 import { checkReadiness, buildReadinessContext } from "./readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { resolveOrganizationForMutation } from "../utils/org-access.js";
 import { resolveOperatorActor } from "./operator-actor.js";
 
 declare module "fastify" {
@@ -159,22 +160,8 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       const body = parsed.data;
-      const orgId = body.organizationId ?? request.organizationIdFromAuth ?? null;
-
-      if (!orgId) {
-        return reply.code(400).send({
-          error: "organizationId is required (provide in body or via API key scoping)",
-          statusCode: 400,
-        });
-      }
-
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
-        return reply.code(403).send({
-          error: "Forbidden: organization mismatch",
-          hint: "Verify your API key is scoped to the correct organization.",
-          statusCode: 403,
-        });
-      }
+      const orgId = resolveOrganizationForMutation(request, reply, body.organizationId);
+      if (!orgId) return reply;
 
       // Guard the lifecycle store BEFORE mutating the governance profile, so a
       // missing infra component doesn't leave the org half-halted (governance
@@ -284,22 +271,8 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
           statusCode: 400,
         });
       }
-      const orgId = parsed.data.organizationId ?? request.organizationIdFromAuth ?? null;
-
-      if (!orgId) {
-        return reply.code(400).send({
-          error: "organizationId is required (provide in body or via API key scoping)",
-          statusCode: 400,
-        });
-      }
-
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
-        return reply.code(403).send({
-          error: "Forbidden: organization mismatch",
-          hint: "Verify your API key is scoped to the correct organization.",
-          statusCode: 403,
-        });
-      }
+      const orgId = resolveOrganizationForMutation(request, reply, parsed.data.organizationId);
+      if (!orgId) return reply;
 
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });

@@ -4,6 +4,7 @@ import { NeedsClarificationError, NotFoundError, matchesAny } from "@switchboard
 import type { CanonicalSubmitRequest } from "@switchboard/core/platform";
 import { ExecuteBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
+import { resolveOrganizationForMutation } from "../utils/org-access.js";
 import { createApprovalForWorkUnit } from "./approval-factory.js";
 
 const executeJsonSchema = zodToJsonSchema(ExecuteBodySchema, { target: "openApi3" });
@@ -75,14 +76,10 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      // Phase 2: when API key has org metadata, bind request to that org if body does not set it
-      const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
-      if (!organizationId) {
-        return reply.code(400).send({
-          error: "organizationId is required (set via API key metadata or request body)",
-          statusCode: 400,
-        });
-      }
+      // Auth trust binding: only request.organizationIdFromAuth is trusted in production.
+      // In dev mode (app.authDisabled), the body org may be used.
+      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
+      if (!organizationId) return reply;
 
       const submitRequest: CanonicalSubmitRequest = {
         intent: body.action.actionType,

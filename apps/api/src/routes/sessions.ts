@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { CreateSessionRequestSchema } from "@switchboard/schemas";
-import { assertOrgAccess } from "../utils/org-access.js";
+import { assertOrgAccess, resolveOrganizationForMutation } from "../utils/org-access.js";
 import { issueSessionToken } from "../auth/session-token.js";
 
 export const sessionRoutes: FastifyPluginAsync = async (app) => {
@@ -26,7 +26,10 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
       }
       const body = parsed.data;
 
-      if (!assertOrgAccess(request, body.organizationId, reply)) return;
+      // Auth trust binding: only request.organizationIdFromAuth is trusted in production.
+      // In dev mode (app.authDisabled), the body org may be used.
+      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
+      if (!organizationId) return reply;
 
       // Role manifests removed — use safe defaults for legacy session creation
       const manifestDefaults = {
@@ -42,7 +45,7 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
 
       try {
         const { session, run } = await app.sessionManager.createSession({
-          organizationId: body.organizationId,
+          organizationId,
           roleId: body.roleId,
           principalId: body.principalId,
           manifestDefaults,
