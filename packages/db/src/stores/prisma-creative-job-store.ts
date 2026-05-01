@@ -217,13 +217,18 @@ export class PrismaCreativeJobStore {
    * ApprovalRecord ↔ CreativeJob bridge.
    */
   async stageProgressByApproval(
-    _approvalIds: string[],
+    approvalIds: string[],
   ): Promise<
     Map<
       string,
       { stageIndex: number; stageTotal: number; stageLabel: string; closesAt: string | null }
     >
   > {
+    if (approvalIds.length > 0) {
+      console.warn(
+        `[PrismaCreativeJobStore.stageProgressByApproval] called with ${approvalIds.length} approval IDs but no ApprovalRecord ↔ CreativeJob bridge exists in the current schema. Returning empty Map. See option-C spec for the bridge plan.`,
+      );
+    }
     return new Map();
   }
 

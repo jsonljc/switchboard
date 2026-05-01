@@ -358,14 +358,28 @@ describe("PrismaCreativeJobStore", () => {
   });
 
   describe("stageProgressByApproval", () => {
-    it("stageProgressByApproval returns an empty Map (no link between ApprovalRecord and CreativeJob in current schema — Path B per option-C1 plan)", async () => {
-      const result = await store.stageProgressByApproval(["any-id"]);
-      expect(result.size).toBe(0);
+    it("returns an empty Map and emits a console.warn when called with non-empty ids (no ApprovalRecord ↔ CreativeJob bridge in current schema — Path B per option-C1 plan)", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      try {
+        const result = await store.stageProgressByApproval(["any-id"]);
+        expect(result.size).toBe(0);
+        expect(warnSpy).toHaveBeenCalledOnce();
+        expect(warnSpy.mock.calls[0][0]).toContain("stageProgressByApproval");
+        expect(warnSpy.mock.calls[0][0]).toContain("1 approval IDs");
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
 
-    it("stageProgressByApproval returns an empty Map for an empty input array", async () => {
-      const result = await store.stageProgressByApproval([]);
-      expect(result.size).toBe(0);
+    it("returns an empty Map silently for an empty input array", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      try {
+        const result = await store.stageProgressByApproval([]);
+        expect(result.size).toBe(0);
+        expect(warnSpy).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 
