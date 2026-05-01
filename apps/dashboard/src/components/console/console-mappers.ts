@@ -236,50 +236,77 @@ export type AgentsInput = {
   todaySpend: { amount: number; currency: string } | null;
 };
 
+function mapAlexEntry(
+  modulesEnabled: boolean,
+  alex: AgentsInput["alex"],
+): { primaryStat: string; subStat: RichText } {
+  if (!modulesEnabled) return { primaryStat: "Hire Alex", subStat: ["module disabled"] };
+  if (!alex) return { primaryStat: "pending option C2", subStat: ["—"] };
+  return {
+    primaryStat: `${alex.repliedToday} replied`,
+    subStat: [`${alex.qualifiedToday} qualified · `, { bold: `${alex.bookedToday} booked` }],
+  };
+}
+
+function mapNovaEntry(
+  modulesEnabled: boolean,
+  nova: AgentsInput["nova"],
+  todaySpend: AgentsInput["todaySpend"],
+): { primaryStat: string; subStat: RichText } {
+  if (!modulesEnabled) return { primaryStat: "Hire Nova", subStat: ["module disabled"] };
+  if (!nova) return { primaryStat: "pending option C2", subStat: ["—"] };
+  // Nova's primary stat reads today.spend directly (not duplicated on agentsToday.nova) — by design.
+  const primaryStat = todaySpend
+    ? new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: todaySpend.currency,
+        maximumFractionDigits: 0,
+      }).format(todaySpend.amount)
+    : "—";
+  return {
+    primaryStat,
+    subStat: [`${nova.draftsPending} drafts pending`],
+  };
+}
+
+function mapMiraEntry(
+  modulesEnabled: boolean,
+  mira: AgentsInput["mira"],
+): { primaryStat: string; subStat: RichText } {
+  if (!modulesEnabled) return { primaryStat: "Hire Mira", subStat: ["module disabled"] };
+  if (!mira) return { primaryStat: "pending option C2", subStat: ["—"] };
+  return {
+    primaryStat: `${mira.inFlight} in flight`,
+    subStat: mira.winningHook ? [{ bold: mira.winningHook }, " hook winning"] : ["—"],
+  };
+}
+
 export function mapAgents(input: AgentsInput): AgentStripEntry[] {
   const activeKey: AgentKey = input.modules.nova ? "nova" : input.modules.alex ? "alex" : "mira";
-  return (
-    [
-      { key: "alex", name: "Alex", href: "/conversations", label: "view conversations →" },
-      { key: "nova", name: "Nova", href: "/modules/ad-optimizer", label: "view ad actions →" },
-      { key: "mira", name: "Mira", href: "/modules/creative", label: "view creative →" },
-    ] as const
-  ).map((a) => {
+  const meta = [
+    { key: "alex" as const, name: "Alex", href: "/conversations", label: "view conversations →" },
+    {
+      key: "nova" as const,
+      name: "Nova",
+      href: "/modules/ad-optimizer",
+      label: "view ad actions →",
+    },
+    { key: "mira" as const, name: "Mira", href: "/modules/creative", label: "view creative →" },
+  ];
+
+  return meta.map((a) => {
     const enabled = input.modules[a.key];
-    let primaryStat = "—";
-    let subStat: RichText = ["—"];
-    if (a.key === "alex" && enabled && input.alex) {
-      primaryStat = `${input.alex.repliedToday} replied`;
-      subStat = [
-        `${input.alex.qualifiedToday} qualified · `,
-        { bold: `${input.alex.bookedToday} booked` },
-      ];
-    } else if (a.key === "nova" && enabled && input.nova) {
-      // Reads today.spend (not a duplicate field on agentsToday.nova) — by design.
-      primaryStat = input.todaySpend
-        ? new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: input.todaySpend.currency,
-            maximumFractionDigits: 0,
-          }).format(input.todaySpend.amount)
-        : "—";
-      subStat = [`${input.nova.draftsPending} drafts pending`];
-    } else if (a.key === "mira" && enabled && input.mira) {
-      primaryStat = `${input.mira.inFlight} in flight`;
-      subStat = input.mira.winningHook
-        ? [{ bold: input.mira.winningHook }, " hook winning"]
-        : ["—"];
-    } else if (!enabled) {
-      primaryStat = "Hire " + a.name;
-      subStat = ["module disabled"];
-    } else {
-      primaryStat = "pending option C2";
-    }
+    const entry =
+      a.key === "alex"
+        ? mapAlexEntry(enabled, input.alex)
+        : a.key === "nova"
+          ? mapNovaEntry(enabled, input.nova, input.todaySpend)
+          : mapMiraEntry(enabled, input.mira);
     return {
       key: a.key,
       name: a.name,
-      primaryStat,
-      subStat,
+      primaryStat: entry.primaryStat,
+      subStat: entry.subStat,
       viewLink: enabled ? { label: a.label, href: a.href } : { label: "", href: a.href },
       active: a.key === activeKey && enabled,
     };
