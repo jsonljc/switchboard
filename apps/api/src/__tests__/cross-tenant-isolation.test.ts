@@ -491,7 +491,7 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
   // ── sessions ────────────────────────────────────────────────────────
 
   describe("POST /api/sessions (create)", () => {
-    it("rejects cross-org body.organizationId with 403 via assertOrgAccess", async () => {
+    it("rejects cross-org body.organizationId with 400 (sessions)", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/sessions/",
@@ -502,8 +502,8 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
           principalId: "p_1",
         },
       });
-      expect(res.statusCode).toBe(403);
-      expect(res.json().error).toContain("organization mismatch");
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("does not match authenticated context");
     });
 
     it("rejects unscoped key with 403", async () => {
