@@ -1418,6 +1418,33 @@ model OperatorCommandRecord {
 
 // ── Lifecycle Management (Revenue Growth Phase 6) ──
 
+/// Authorizes a stable channel identity (e.g. WhatsApp phone, Telegram user id) to act as a
+/// specific Principal for actions that require operator authority — primarily approval response
+/// from chat. This is a surface→actor binding, NOT a customer/lead concept; do NOT conflate
+/// with `Contact`. Authorization rule: a chat approval succeeds only when an active binding
+/// exists AND the resolved Principal carries an authorized role (approver/operator/admin).
+///
+/// `channelIdentifier` MUST be a stable external identity (phone number, channel user id),
+/// never an ephemeral message session id. Status is preferred over deletion so the audit trail
+/// survives revocations.
+model OperatorChannelBinding {
+  id                String    @id @default(uuid())
+  organizationId    String
+  channel           String // "whatsapp" | "telegram" | "slack" | etc.
+  channelIdentifier String // stable external identity (phone, channel user id)
+  principalId       String
+  status            String    @default("active") // "active" | "revoked"
+  createdBy         String // principalId of the actor who created this binding
+  revokedBy         String?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([organizationId, channel, channelIdentifier])
+  @@index([organizationId, principalId])
+  @@index([organizationId, status])
+}
+
 model Contact {
   id                String   @id @default(uuid())
   organizationId    String

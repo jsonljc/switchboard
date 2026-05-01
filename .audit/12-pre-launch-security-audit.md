@@ -386,17 +386,35 @@ None. All HIGH+CRITICAL findings triaged as fix-now; the launch-blocking gate is
 
 _Updated as fix-now items ship. One row per launch-blocking finding._
 
-| Finding ID | Severity | Status        | Spec                                                                                     | Notes                                                                                                                                                                           |
+<<<<<<< HEAD
+| Finding ID | Severity | Status | Spec | Notes |
 | ---------- | -------- | ------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TI-1       | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`              | Bundled in auth-trust-binding spec                                                                                                                                              |
-| TI-2       | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`              | Bundled in auth-trust-binding spec                                                                                                                                              |
-| TI-3       | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`              | Bundled in auth-trust-binding spec                                                                                                                                              |
-| TI-4       | HIGH     | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`              | Bundled in auth-trust-binding spec                                                                                                                                              |
-| TI-5       | HIGH     | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md` | Bundled in chat-conversation-store spec                                                                                                                                         |
-| TI-6       | HIGH     | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md` | Bundled in chat-conversation-store spec                                                                                                                                         |
-| AI-1       | CRITICAL | shipped       | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | Factory-with-context: calendar-book + crm-write source orgId/deploymentId from `SkillRequestContext`. PR: fix(launch): skill-runtime executor contract (AI-1..3)                |
-| AI-2       | HIGH     | shipped       | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | Runtime schema validation in `skill-executor.ts`; INVALID_TOOL_INPUT skip-without-execute. PR: fix(launch): skill-runtime executor contract (AI-1..3)                           |
-| AI-3       | HIGH     | shipped       | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | `<\|operator-content\|>` sentinels in system-prompt-assembler + `<\|tool-output\|>` wrapping for reinjected results. PR: fix(launch): skill-runtime executor contract (AI-1..3) |
-| AU-1       | HIGH     | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md`               | Bundled in webhook-hardening spec                                                                                                                                               |
-| AU-2       | HIGH     | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md`               | Bundled in webhook-hardening spec                                                                                                                                               |
-| OW-1       | HIGH     | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-creative-pipeline-ssrf-design.md`          | One-off spec                                                                                                                                                                    |
+| TI-1 | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-2 | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-3 | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-4 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-5 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md` | Bundled in chat-conversation-store spec |
+| TI-6 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md` | Bundled in chat-conversation-store spec |
+| AI-1 | CRITICAL | shipped | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | Factory-with-context: calendar-book + crm-write source orgId/deploymentId from `SkillRequestContext`. PR: fix(launch): skill-runtime executor contract (AI-1..3) |
+| AI-2 | HIGH | shipped | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | Runtime schema validation in `skill-executor.ts`; INVALID_TOOL_INPUT skip-without-execute. PR: fix(launch): skill-runtime executor contract (AI-1..3) |
+| AI-3 | HIGH | shipped | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | `<\|operator-content\|>` sentinels in system-prompt-assembler + `<\|tool-output\|>` wrapping for reinjected results. PR: fix(launch): skill-runtime executor contract (AI-1..3) |
+| AU-1 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md` | Bundled in webhook-hardening spec |
+| AU-2 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md` | Bundled in webhook-hardening spec |
+| OW-1 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-creative-pipeline-ssrf-design.md` | One-off spec |
+=======
+| Finding ID | Severity | Status | Spec | Notes |
+| ---------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TI-1 | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-2 | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-3 | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-4 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md` | Bundled in auth-trust-binding spec |
+| TI-5 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md` | Bundled in chat-conversation-store spec |
+| TI-6 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md` | Bundled in chat-conversation-store spec |
+| AI-1 | CRITICAL | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | Bundled in skill-runtime-executor-contract spec |
+| AI-2 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | Bundled in skill-runtime-executor-contract spec |
+| AI-3 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md` | Bundled in skill-runtime-executor-contract spec |
+| AU-1 | HIGH | shipped | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md` (PR: https://github.com/jsonljc/switchboard/pull/330) | Replay protection verified via existing `(channel, messageId)` dedup at `apps/chat/src/routes/managed-webhook.ts`; new tests `whatsapp-replay.test.ts`, `instagram-replay.test.ts` |
+| AU-2 | HIGH | shipped | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md` (PR: https://github.com/jsonljc/switchboard/pull/330) | Telegram `verifyRequest` fails closed in production; constructor logs error (no throw); test `telegram-fail-closed.test.ts` |
+| OW-1 | HIGH | spec authored | `docs/superpowers/specs/2026-04-29-fix-launch-creative-pipeline-ssrf-design.md` | One-off spec |
+
+> > > > > > > origin/main
