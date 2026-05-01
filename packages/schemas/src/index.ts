@@ -34,6 +34,9 @@ export * from "./capability.js";
 // Goal brief (structured goal decomposition)
 export * from "./goal-brief.js";
 
+// Time window utilities
+export * from "./time-windows.js";
+
 export { LegacyRevenueEventSchema, LegacyRevenueEventSourceSchema } from "./revenue-event.js";
 export type { LegacyRevenueEvent, LegacyRevenueEventSource } from "./revenue-event.js";
 
