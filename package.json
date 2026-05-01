@@ -20,6 +20,9 @@
     "prepare": "husky || true",
     "arch:check": "npx tsx scripts/arch-check.ts",
     "preflight": "bash scripts/preflight.sh",
+    "audit:validate": "npx tsx scripts/audit-validate-findings.ts",
+    "audit:lighthouse": "bash scripts/audit-run-lighthouse.sh",
+    "audit:axe": "bash scripts/audit-run-axe.sh",
     "dashboard:preflight": "pnpm --filter @switchboard/schemas build && pnpm --filter @switchboard/db build && pnpm --filter @switchboard/dashboard typecheck",
     "dashboard:release-check": "pnpm dashboard:preflight && pnpm --filter @switchboard/dashboard test && pnpm --filter @switchboard/dashboard build"
   },
