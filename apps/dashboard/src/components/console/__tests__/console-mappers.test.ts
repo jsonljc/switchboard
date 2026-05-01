@@ -226,7 +226,13 @@ describe("mapQueue", () => {
 
 describe("mapAgents", () => {
   it("returns 3 entries (Alex / Nova / Mira) with viewLink hrefs", () => {
-    const result = mapAgents({ alex: true, nova: true, mira: true });
+    const result = mapAgents({
+      modules: { alex: true, nova: true, mira: true },
+      alex: null,
+      nova: null,
+      mira: null,
+      todaySpend: null,
+    });
     expect(result).toHaveLength(3);
     expect(result.map((a) => a.key)).toEqual(["alex", "nova", "mira"]);
     expect(result[0].viewLink.href).toBe("/conversations");
@@ -235,17 +241,74 @@ describe("mapAgents", () => {
   });
 
   it("makes Nova the active panel when enabled, otherwise Alex", () => {
-    expect(mapAgents({ alex: true, nova: true, mira: true }).find((a) => a.active)?.key).toBe(
-      "nova",
-    );
-    expect(mapAgents({ alex: true, nova: false, mira: true }).find((a) => a.active)?.key).toBe(
-      "alex",
-    );
+    expect(
+      mapAgents({
+        modules: { alex: true, nova: true, mira: true },
+        alex: null,
+        nova: null,
+        mira: null,
+        todaySpend: null,
+      }).find((a) => a.active)?.key,
+    ).toBe("nova");
+    expect(
+      mapAgents({
+        modules: { alex: true, nova: false, mira: true },
+        alex: null,
+        nova: null,
+        mira: null,
+        todaySpend: null,
+      }).find((a) => a.active)?.key,
+    ).toBe("alex");
   });
 
-  it("primaryStat reads 'pending option C' until per-agent stats land", () => {
-    const result = mapAgents({ alex: true, nova: true, mira: true });
-    expect(result.every((a) => a.primaryStat === "pending option C")).toBe(true);
+  it("primaryStat reads 'pending option C2' when module enabled but stats null", () => {
+    const result = mapAgents({
+      modules: { alex: true, nova: true, mira: true },
+      alex: null,
+      nova: null,
+      mira: null,
+      todaySpend: null,
+    });
+    expect(result.every((a) => a.primaryStat === "pending option C2")).toBe(true);
+  });
+});
+
+describe("mapAgents — Alex cell (option C1)", () => {
+  const base = {
+    modules: { alex: true, nova: true, mira: true },
+    nova: null,
+    mira: null,
+    todaySpend: null,
+  } as const;
+
+  it("renders Alex's today-stats from agentsToday.alex when module enabled and data present", () => {
+    const result = mapAgents({
+      ...base,
+      alex: { repliedToday: 14, qualifiedToday: 6, bookedToday: 3 },
+    });
+    const alex = result.find((a) => a.key === "alex");
+    expect(alex?.primaryStat).toBe("14 replied");
+    expect(JSON.stringify(alex?.subStat)).toContain("6 qualified");
+    expect(JSON.stringify(alex?.subStat)).toContain("3 booked");
+  });
+
+  it("renders 'Hire Alex' when module is disabled", () => {
+    const result = mapAgents({
+      ...base,
+      modules: { alex: false, nova: true, mira: true },
+      alex: null,
+    });
+    const alex = result.find((a) => a.key === "alex");
+    expect(alex?.primaryStat).toBe("Hire Alex");
+    expect(alex?.active).toBe(false);
+  });
+
+  it("renders 'pending option C2' for Nova/Mira when module enabled but stats null", () => {
+    const result = mapAgents({ ...base, alex: null });
+    const nova = result.find((a) => a.key === "nova");
+    const mira = result.find((a) => a.key === "mira");
+    expect(nova?.primaryStat).toBe("pending option C2");
+    expect(mira?.primaryStat).toBe("pending option C2");
   });
 });
 
@@ -297,6 +360,10 @@ describe("mapConsoleData", () => {
       approvals: [],
       modules: { alex: true, nova: true, mira: true },
       auditEntries: [],
+      alex: null,
+      nova: null,
+      mira: null,
+      todaySpend: null,
     });
     expect(result.opStrip.orgName).toBe("Aurora Dental");
     expect(result.numbers.cells).toHaveLength(5);

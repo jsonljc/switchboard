@@ -107,6 +107,16 @@ export function useConsoleData(): {
     approvals: approvalRows,
     modules: moduleMap,
     auditEntries,
+    alex: overview.data.agentsToday.alex,
+    nova: overview.data.agentsToday.nova,
+    mira: overview.data.agentsToday.mira,
+    todaySpend:
+      overview.data.today.spend.updatedAt === null
+        ? null
+        : {
+            amount: overview.data.today.spend.amount,
+            currency: overview.data.today.spend.currency,
+          },
   });
 
   return { data, isLoading: false, error: null };

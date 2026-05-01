@@ -19,6 +19,9 @@ function makeStores(overrides: Partial<DashboardStores> = {}): DashboardStores {
     queryAudit: vi.fn().mockResolvedValue([]),
     queryOperatorName: vi.fn().mockResolvedValue("Jane"),
     replyTimeStats: vi.fn().mockResolvedValue({ medianSeconds: 0, sampleSize: 0 }),
+    alexStatsToday: vi
+      .fn()
+      .mockResolvedValue({ repliedToday: 0, qualifiedToday: 0, bookedToday: 0 }),
     ...overrides,
   };
 }
@@ -36,7 +39,9 @@ describe("buildDashboardOverview (option C1 shape)", () => {
     expect(result.today.replyTime).toBeNull();
     expect(result.today.leads).toEqual({ count: 0, yesterdayCount: 0 });
     expect(result.today.appointments).toEqual({ count: 0, next: null });
-    expect(result.agentsToday).toEqual({ alex: null, nova: null, mira: null });
+    expect(result.agentsToday.alex).toEqual({ repliedToday: 0, qualifiedToday: 0, bookedToday: 0 });
+    expect(result.agentsToday.nova).toBeNull();
+    expect(result.agentsToday.mira).toBeNull();
     expect(result.novaAdSets).toEqual([]);
     expect(result.activity).toEqual([]);
   });
@@ -119,5 +124,17 @@ describe("buildDashboardOverview (option C1 shape)", () => {
     const replyTimeStats = vi.fn().mockResolvedValue({ medianSeconds: 5, sampleSize: 2 });
     const result = await buildDashboardOverview("org-1", makeStores({ replyTimeStats }), "USD");
     expect(result.today.replyTime).toBeNull();
+  });
+
+  it("populates agentsToday.alex from alexStatsToday", async () => {
+    const alexStatsToday = vi
+      .fn()
+      .mockResolvedValue({ repliedToday: 14, qualifiedToday: 6, bookedToday: 3 });
+    const result = await buildDashboardOverview("org-1", makeStores({ alexStatsToday }), "USD");
+    expect(result.agentsToday.alex).toEqual({
+      repliedToday: 14,
+      qualifiedToday: 6,
+      bookedToday: 3,
+    });
   });
 });

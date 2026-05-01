@@ -8,6 +8,7 @@ import type {
   NumbersStrip,
   OpStrip,
   QueueCard,
+  RichText,
 } from "./console-data";
 import { consoleFixture } from "./console-data";
 
@@ -207,22 +208,63 @@ export type ModuleEnablementMap = {
   nova: boolean;
   mira: boolean;
 };
-export function mapAgents(modules: ModuleEnablementMap): AgentStripEntry[] {
-  const activeKey: AgentKey = modules.nova ? "nova" : modules.alex ? "alex" : "mira";
+
+export type AgentsInput = {
+  modules: ModuleEnablementMap;
+  alex: { repliedToday: number; qualifiedToday: number; bookedToday: number } | null;
+  nova: { draftsPending: number } | null;
+  mira: { inFlight: number; winningHook: string | null } | null;
+  todaySpend: { amount: number; currency: string } | null;
+};
+
+export function mapAgents(input: AgentsInput): AgentStripEntry[] {
+  const activeKey: AgentKey = input.modules.nova ? "nova" : input.modules.alex ? "alex" : "mira";
   return (
     [
       { key: "alex", name: "Alex", href: "/conversations", label: "view conversations →" },
       { key: "nova", name: "Nova", href: "/modules/ad-optimizer", label: "view ad actions →" },
       { key: "mira", name: "Mira", href: "/modules/creative", label: "view creative →" },
     ] as const
-  ).map((a) => ({
-    key: a.key,
-    name: a.name,
-    primaryStat: "pending option C",
-    subStat: ["—"],
-    viewLink: { label: a.label, href: a.href },
-    active: a.key === activeKey,
-  }));
+  ).map((a) => {
+    const enabled = input.modules[a.key];
+    let primaryStat = "—";
+    let subStat: RichText = ["—"];
+    if (a.key === "alex" && enabled && input.alex) {
+      primaryStat = `${input.alex.repliedToday} replied`;
+      subStat = [
+        `${input.alex.qualifiedToday} qualified · `,
+        { bold: `${input.alex.bookedToday} booked` },
+      ];
+    } else if (a.key === "nova" && enabled && input.nova) {
+      // Reads today.spend (not a duplicate field on agentsToday.nova) — by design.
+      primaryStat = input.todaySpend
+        ? new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: input.todaySpend.currency,
+            maximumFractionDigits: 0,
+          }).format(input.todaySpend.amount)
+        : "—";
+      subStat = [`${input.nova.draftsPending} drafts pending`];
+    } else if (a.key === "mira" && enabled && input.mira) {
+      primaryStat = `${input.mira.inFlight} in flight`;
+      subStat = input.mira.winningHook
+        ? [{ bold: input.mira.winningHook }, " hook winning"]
+        : ["—"];
+    } else if (!enabled) {
+      primaryStat = "Hire " + a.name;
+      subStat = ["module disabled"];
+    } else {
+      primaryStat = "pending option C2";
+    }
+    return {
+      key: a.key,
+      name: a.name,
+      primaryStat,
+      subStat,
+      viewLink: enabled ? { label: a.label, href: a.href } : { label: "", href: a.href },
+      active: a.key === activeKey && enabled,
+    };
+  });
 }
 
 // ── Activity ──────────────────────────────────────────────────────────────
@@ -289,6 +331,10 @@ export type MapConsoleInput = {
   approvals: ApprovalApiRow[];
   modules: ModuleEnablementMap;
   auditEntries: AuditEntry[];
+  alex: { repliedToday: number; qualifiedToday: number; bookedToday: number } | null;
+  nova: { draftsPending: number } | null;
+  mira: { inFlight: number; winningHook: string | null } | null;
+  todaySpend: { amount: number; currency: string } | null;
 };
 export function mapConsoleData(input: MapConsoleInput): ConsoleData {
   const queue = mapQueue(input.escalations, input.approvals, input.now);
@@ -303,7 +349,13 @@ export function mapConsoleData(input: MapConsoleInput): ConsoleData {
     }),
     queueLabel: { count: `${queue.length} pending` },
     queue,
-    agents: mapAgents(input.modules),
+    agents: mapAgents({
+      modules: input.modules,
+      alex: input.alex,
+      nova: input.nova,
+      mira: input.mira,
+      todaySpend: input.todaySpend,
+    }),
     novaPanel: consoleFixture.novaPanel, // option C replaces this with real ad-set aggregation
     activity: mapActivity(input.auditEntries),
   };

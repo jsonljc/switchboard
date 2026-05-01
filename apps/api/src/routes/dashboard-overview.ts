@@ -111,6 +111,10 @@ export interface DashboardStores {
     orgId: string,
     day: Date,
   ) => Promise<{ medianSeconds: number; sampleSize: number }>;
+  alexStatsToday: (
+    orgId: string,
+    day: Date,
+  ) => Promise<{ repliedToday: number; qualifiedToday: number; bookedToday: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +152,7 @@ export async function buildDashboardOverview(
     revenueTodayRaw,
     replyTimeToday,
     replyTimeYesterday,
+    alexToday,
   ] = await Promise.all([
     stores.queryOperatorName(orgId),
     stores.queryApprovals(orgId),
@@ -162,6 +167,7 @@ export async function buildDashboardOverview(
     stores.sumRevenue(orgId, { from: todayStart, to: now }),
     stores.replyTimeStats(orgId, todayStart),
     stores.replyTimeStats(orgId, yesterdayStart),
+    stores.alexStatsToday(orgId, todayStart),
   ]);
 
   // Map pending approvals (top 3). stageProgress is added in Task 12.
@@ -259,8 +265,7 @@ export async function buildDashboardOverview(
     },
 
     agentsToday: {
-      // agentsToday.alex real wiring lands in Task 10.
-      alex: null,
+      alex: alexToday,
       // Tier B — stay null until C2.
       nova: null,
       mira: null,
@@ -331,6 +336,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       sumRevenueByCampaign: (id, range) => revenueStore.sumByCampaign(id, range),
       countByType: (id, type, from, to) => conversionStore.countByType(id, type, from, to),
       replyTimeStats: (id, day) => conversationStateStore.replyTimeStats(id, day),
+      alexStatsToday: (id, day) => conversionStore.alexStatsToday(id, day),
 
       queryApprovals: async (id) => {
         if (!app.storageContext?.approvals) return [];
