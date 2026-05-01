@@ -12,7 +12,7 @@ Switchboard runs the operations side of a business through one control plane. Ev
 |---|---|---|
 | **Lead-to-Booking (Alex)** | `Alpha` | WhatsApp-native conversion agent. Inbound lead → governed qualification → Google Calendar booking. Actively under hardening; not yet shipped. |
 | **Ad Optimization** | `Production-grade` | Meta + Google integrations. Lead ingestion, funnel and saturation analysis, automated budget and creative recommendations — all routed through governance. |
-| **Product / Character / Director (PCD)** | `Planned` | Character-consistent creative across Sora, Veo, Runway, Kling, and HeyGen. Currently developed in a separate repo ([`creativeagent`](https://github.com/jsonljc/creativeagent)); integration into Switchboard targeted for a later release. |
+| **Product / Character / Director (PCD)** | `Planned` | Character-consistent creative across Sora, Veo, Runway, Kling, and HeyGen. Currently developed in a separate repo ([`creative-agent`](https://github.com/jsonljc/creative-agent)); integration into Switchboard targeted for a later release. |
 
 Status labels describe code maturity, not deployment status. We do not claim a wedge is "live" unless it is.
 
@@ -75,7 +75,7 @@ WorkTrace persisted  →  canonical lifecycle record
 
 - **Ad Optimization:** Meta CAPI + Google Offline Conversions integration is real and shipping data. Funnel analysis, saturation detection, and Inngest-driven daily/weekly audits are wired and running.
 - **Alex (Lead-to-Booking):** WhatsApp ingress, governance gating, and the calendar-booking tool are all wired end-to-end. The skill is in alpha — the remaining launch blockers are tracked in `.audit/` and being worked off before we promote it to production.
-- **PCD (Creative Studio):** Lives in [`creativeagent`](https://github.com/jsonljc/creativeagent) today. Switchboard's `packages/creative-pipeline` carries UGC scaffolding (Kling provider, scripting, scene casting, realism QA) for the future integration.
+- **PCD (Creative Studio):** Lives in [`creative-agent`](https://github.com/jsonljc/creative-agent) today. Switchboard's `packages/creative-pipeline` carries UGC scaffolding (Kling provider, scripting, scene casting, realism QA) for the future integration.
 
 For deeper architecture: [`docs/DOCTRINE.md`](docs/DOCTRINE.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -199,7 +199,7 @@ pnpm test -- --coverage                      # with coverage
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — deep architectural reference
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — runbook for operators
 - [`docs/DEPLOYMENT-CHECKLIST.md`](docs/DEPLOYMENT-CHECKLIST.md) — production deploy checklist
-- [`creativeagent`](https://github.com/jsonljc/creativeagent) — separate repo for the PCD wedge (will be integrated)
+- [`creative-agent`](https://github.com/jsonljc/creative-agent) — separate repo for the PCD wedge (will be integrated)
 
 ---
 

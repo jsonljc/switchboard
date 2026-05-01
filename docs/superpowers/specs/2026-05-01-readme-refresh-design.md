@@ -84,7 +84,7 @@ Three short cards in a row (or stacked on mobile via plain markdown):
 
 - **Lead-to-Booking (Alex)** — Alpha. WhatsApp inbound → governed booking → Google Calendar.
 - **Ad Optimization** — Production-grade. Meta + Google integrations, automated budget and creative recommendations through governance.
-- **Product / Character / Director (PCD)** — Planned. Character-consistent creative across Sora / Veo / Runway / Kling / HeyGen. Currently developed in [`~/creativeagent`](https://github.com/jsonljc/creativeagent) (separate repo); integration into Switchboard targeted for a later release.
+- **Product / Character / Director (PCD)** — Planned. Character-consistent creative across Sora / Veo / Runway / Kling / HeyGen. Currently developed in [`~/creativeagent`](https://github.com/jsonljc/creative-agent) (separate repo; local folder is `~/creativeagent`, GitHub repo is `creative-agent`); integration into Switchboard targeted for a later release.
 
 Each card carries a status label (`Alpha`, `Production-grade`, `Planned`) so a visitor reads honest state at a glance. "Production-grade" describes code maturity, not deployment status — we will not imply deployment unless deployed.
 
