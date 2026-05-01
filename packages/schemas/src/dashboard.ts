@@ -43,16 +43,77 @@ export const DashboardOverviewSchema = z.object({
     operatorName: z.string(),
   }),
 
+  // newInquiriesToday/Yesterday + bookingsToday have moved to `today.*`.
   stats: z.object({
     pendingApprovals: z.number(),
-    newInquiriesToday: z.number(),
-    newInquiriesYesterday: z.number(),
     qualifiedLeads: z.number(),
-    bookingsToday: z.number(),
     revenue7d: z.object({ total: z.number(), count: z.number() }),
     openTasks: z.number(),
     overdueTasks: z.number(),
   }),
+
+  // ── NEW ────────────────────────────────────────────────────────────────
+  today: z.object({
+    revenue: z.object({
+      amount: z.number(),
+      currency: z.string(),
+      deltaPctVsAvg: z.number().nullable(),
+    }),
+    spend: z.object({
+      amount: z.number(),
+      currency: z.string(),
+      capPct: z.number(),
+      updatedAt: z.string().nullable(),
+    }),
+    replyTime: z
+      .object({
+        medianSeconds: z.number(),
+        previousSeconds: z.number().nullable(),
+        sampleSize: z.number().int().nonnegative(),
+      })
+      .nullable(),
+    leads: z.object({
+      count: z.number().int().nonnegative(),
+      yesterdayCount: z.number().int().nonnegative(),
+    }),
+    appointments: z.object({
+      count: z.number().int().nonnegative(),
+      next: z
+        .object({ startsAt: z.string(), contactName: z.string(), service: z.string() })
+        .nullable(),
+    }),
+  }),
+
+  agentsToday: z.object({
+    alex: z
+      .object({
+        /**
+         * APPROXIMATION: in C1, repliedToday = today's `inquiry`-type ConversionRecord count
+         * (each inquiry reaching the system implies Alex's first response). This is wrong if
+         * Alex sometimes fails to reply or if the inquiry record predates the reply.
+         * A future iteration replaces this with a direct first-reply event count once the
+         * conversation pipeline emits one.
+         */
+        repliedToday: z.number().int().nonnegative(),
+        qualifiedToday: z.number().int().nonnegative(),
+        bookedToday: z.number().int().nonnegative(),
+      })
+      .nullable(),
+    nova: z
+      .object({
+        /** Per-agent spend is NOT duplicated here — the Nova cell reads today.spend directly to avoid drift. */
+        draftsPending: z.number().int().nonnegative(),
+      })
+      .nullable(),
+    mira: z
+      .object({
+        inFlight: z.number().int().nonnegative(),
+        winningHook: z.string().nullable(),
+      })
+      .nullable(),
+  }),
+
+  novaAdSets: z.array(AdSetRowSchema),
 
   approvals: z.array(
     z.object({
@@ -63,6 +124,8 @@ export const DashboardOverviewSchema = z.object({
       envelopeId: z.string(),
       bindingHash: z.string(),
       riskCategory: z.string(),
+      /** NEW: present only for creative-pipeline approvals. */
+      stageProgress: StageProgressSchema.optional(),
     }),
   ),
 
@@ -110,6 +173,8 @@ export const DashboardOverviewSchema = z.object({
       dotColor: z.enum(["green", "amber", "blue", "gray"]),
       createdAt: z.string(),
       reasoning: z.string().nullable().optional(),
+      /** NEW: structured agent attribution. null for system events / unattributable rows. */
+      agent: AgentKeySchema.nullable(),
     }),
   ),
 });
