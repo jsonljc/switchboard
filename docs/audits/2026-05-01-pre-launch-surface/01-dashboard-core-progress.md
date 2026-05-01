@@ -26,7 +26,7 @@ From `git ls-tree -r origin/main --name-only | grep "apps/dashboard/src/app/(aut
 ## Dimensions
 
 - [x] A — Visual (Claude proposes from code; **human takes screenshots**)
-- [ ] B — UX flow (Claude maps task graph; **human walks tasks**)
+- [x] B — UX flow (Claude maps task graph; **human walks tasks**)
 - [x] C — Copy (Claude reads + cross-references; **human confirms claims**)
 - [ ] D — State (**human forces states**; Claude prepares script + files findings)
 - [ ] E — Responsive (**human resizes**; Claude prepares script + files findings)

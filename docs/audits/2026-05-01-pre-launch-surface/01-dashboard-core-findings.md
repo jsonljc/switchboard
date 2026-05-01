@@ -13,7 +13,7 @@ session_closed: open
 ## Coverage
 
 Checked: A — see findings below
-Checked: B — pending session
+Checked: B — see findings below
 Checked: C — see findings below
 Checked: D — pending session
 Checked: E — pending session
@@ -976,3 +976,212 @@ The trigger link reads "Resolve with note..." (sentence case) and the action but
 
 **Fix:**
 Pick a casing (sentence case matches the rest of the audited copy) and apply consistently: "Resolve with note", "Mark resolved", "Cancel."
+
+---
+
+## DC-39
+
+- **Surface:** /console
+- **Sub-surface:** Queue cards (escalation, recommendation, approval-gate) — every action button
+- **Dimension:** B
+- **Severity:** Launch-blocker
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** M
+
+**What:**
+Every button on every queue card is a stub with no `onClick` and no link wrapper. `EscalationCardView` renders "Reply inline ▾", primary ("Reply"), secondary ("Hold the line"), and self-handle ("I'll handle this") as `<button type="button">{label}</button>` with no handler (`console-view.tsx:48-61`). `ApprovalGateCardView` renders the primary "Review →" and the "Stop campaign" stop button the same way (`console-view.tsx:128-138`). `RecommendationCardView` renders "Approve pause", "Edit", "Dismiss" the same way (`console-view.tsx:90-100`). The view-model types `EscalationCard`, `ApprovalGateCard`, `RecommendationCard` carry only a `label: string` per action — there is no `href`, no `onClick` hook, no action descriptor in the data shape (`console-data.ts:47-89`). Net effect: an operator who spots a pending approval or escalation in the /console queue zone and clicks the obvious primary CTA gets nothing — the click is silently swallowed. **Task 1 (resolve approval) and Task 2 (drill into escalation and reply) cannot be completed via the /console queue zone today.** The user must instead know to navigate to `/decide` or `/escalations` separately. Combined with DC-40 (chrome hidden on /console means there's no nav out at all), this is a hard dead-end on the highest-traffic operator surface.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:48-50 ("Reply inline" button — no onClick)
+- File: apps/dashboard/src/components/console/console-view.tsx:51-61 (escalation primary/secondary/selfHandle buttons — no onClick)
+- File: apps/dashboard/src/components/console/console-view.tsx:90-100 (recommendation primary/secondary/dismiss — no onClick)
+- File: apps/dashboard/src/components/console/console-view.tsx:128-138 (approval-gate primary/stop — no onClick)
+- File: apps/dashboard/src/components/console/console-data.ts:47-89 (view-model types: `primary: { label: string }` — no href/onClick field)
+- File: apps/dashboard/src/components/console/console-mappers.ts:107-148 (mappers fill `primary.label` but no action wiring exists in the type)
+- Repro:
+  1. Sign in as a tenant with at least one pending approval or escalation in the queue.
+  2. Navigate to `/console`.
+  3. Locate any queue card. Click "Reply" (escalation), "Review →" (approval gate), or "Approve pause" (recommendation).
+  4. Observe: nothing happens. No navigation, no modal, no API call, no error. The button visibly takes click focus and that's it.
+  5. Repeat for the secondary, dismiss, and stop buttons. Same result.
+
+**Fix:**
+Wire each queue-card primary action to the corresponding existing surface — escalation primary → expand inline reply (or navigate to `/escalations`); approval-gate primary → `/decide/${card.id}`; recommendation primary → either inline confirm or the relevant module. Extend the view-model types to carry either `href: string` or an `action: () => void`, and have `mapEscalationCard` / `mapApprovalGateCard` populate them. Until handlers exist, do not render bare `<button>`s that look like primary CTAs.
+
+---
+
+## DC-40
+
+- **Surface:** /console
+- **Sub-surface:** global (chrome / navigation)
+- **Dimension:** B
+- **Severity:** Launch-blocker
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** S
+
+**What:**
+`/console` is listed in `CHROME_HIDDEN_PATHS` (`app-shell.tsx:14`), so the bottom-tab nav (`OwnerTabs`) — the dashboard's only persistent navigation — is suppressed on the console route. The `/console` page itself contains zero internal navigation: the operating strip has no links, the queue cards have no handlers (DC-39), the agent-strip "view conversations →" labels are rendered as plain `<span>` text rather than anchors (`console-view.tsx:236`, see DC-42), the activity-row CTA arrows render as decorative `→` text when no `cta` is set (and the live mapper never sets one — `console-mappers.ts:228-233`, also see DC-43), and the only working link out of the page is the Nova-panel "View full ad actions →" pointing to `/modules/ad-optimizer` (out of audit scope). Net effect: an operator landing on `/console` has no in-page path to `/decide`, `/escalations`, `/conversations`, `/dashboard`, `/me`, or any other authenticated route. The only escape is the browser address bar or the back button. **Task 3 (orient as a new operator) ends in a literal dead-end: the user reads the page, forms a mental model, and then has nowhere to act on it from inside the surface.** This compounds DC-39 — even if a user knows what they want to do, they cannot navigate to do it.
+
+**Evidence:**
+- File: apps/dashboard/src/components/layout/app-shell.tsx:14 (`CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup", "/console"]` — bottom nav suppressed)
+- File: apps/dashboard/src/components/console/console-view.tsx:158-342 (no `<Link>` or anchor element to any in-app route except the Nova panel's "View full ad actions" at line 306-308)
+- File: apps/dashboard/src/components/console/console-view.tsx:236 (agent-strip view-link rendered as `<span>`, not `<a>`)
+- Repro:
+  1. Navigate to `/console` while signed in.
+  2. Try to reach `/decide`, `/escalations`, or `/conversations` using only on-page elements (no address bar, no back button).
+  3. Observe: there is no link, button, or click target on the page that takes you to any of those routes. The only outbound link is "View full ad actions →" in the Nova panel, which goes to `/modules/ad-optimizer`.
+  4. Confirm the bottom-tab nav is not rendered (only present when `CHROME_HIDDEN_PATHS` does not match the current path).
+
+**Fix:**
+Either remove `/console` from `CHROME_HIDDEN_PATHS` so the bottom-tab nav is available (preferred — the console is "home base" for the operator and should sit inside the app chrome), or render the queue-card actions and agent-strip view-links as actual `<Link>` elements so the user can drill from the console into the per-domain pages. The current "console as full-bleed dashboard" framing only works if the page itself contains the navigation it currently lacks.
+
+---
+
+## DC-41
+
+- **Surface:** /console
+- **Sub-surface:** Op-strip — "Halt" button
+- **Dimension:** B
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** M
+
+**What:**
+The op-strip renders a primary "Halt" button (`console-view.tsx:178-180`) next to a "Live"/"Halted" status pulse — the visual treatment is that of an emergency stop / kill-switch for autonomous agent dispatch. The button has no `onClick` handler and the `dispatch` prop is hardcoded to `"live"` in `use-console-data.ts:98` with a `// TODO option C: read halt-state from useDispatchStatus or org config` comment. There is no API call, no confirmation dialog, no state change. The most safety-critical-looking control on the highest-traffic operator surface is a label, not a control. An operator who clicks Halt because something looks wrong (over-spend, runaway approvals, wrong-tenant data) will see no acknowledgment that anything happened, and dispatch will continue unchanged. This is dangerous specifically because the affordance reads "stop everything" — the user trusts it.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:178-180 (`<button className="op-halt" type="button">Halt</button>` — no onClick)
+- File: apps/dashboard/src/components/console/use-console-data.ts:98 (`dispatch: "live"` hardcoded with a TODO)
+- Repro:
+  1. Navigate to `/console` while signed in.
+  2. Click "Halt" in the top-right of the operating strip.
+  3. Observe: nothing happens. No dialog, no toast, no status change, no network request. The "Live" pulse continues unchanged.
+
+**Fix:**
+Either wire Halt to a real `useDispatchStatus` mutation that flips the org-level dispatch flag (with confirmation dialog given the blast radius), or — until that exists — hide the button. Showing an unwired emergency stop on a live operator console is worse than not showing it.
+
+---
+
+## DC-42
+
+- **Surface:** /console
+- **Sub-surface:** Agent strip (Zone 3)
+- **Dimension:** B
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** S
+
+**What:**
+The agent-strip cards (Alex / Nova / Mira) carry a `viewLink: { label, href }` view-model field with hrefs `/conversations`, `/modules/ad-optimizer`, `/modules/creative` (`console-mappers.ts:170-184`). The view renders the agent column as a `<button>` and the view-link as a plain `<span className="a-view">{a.viewLink.label}</span>` — the href is never used (`console-view.tsx:222-238`). The label visually reads as a link ("view conversations →") but isn't one. An operator who wants to drill from the agent strip into per-agent details cannot, even though the data shape clearly anticipates that path. Compounded by DC-40, this is one of the few intended exit points from the console surface and it's silently inert.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:222-238 (agent column wrapped in `<button>`; viewLink rendered as `<span>` not `<a>`)
+- File: apps/dashboard/src/components/console/console-data.ts:93-101 (`AgentStripEntry.viewLink: { label, href }` — href present in the shape)
+- File: apps/dashboard/src/components/console/console-mappers.ts:170-184 (mapper sets the hrefs)
+
+**Fix:**
+Render the view-link as an `<a href={a.viewLink.href}>` (or a Next `<Link>`), styled as a link, so the documented destination actually opens. The outer agent-column button can stay as a "select agent" affordance; the view-link is a separate child action.
+
+---
+
+## DC-43
+
+- **Surface:** /console
+- **Sub-surface:** Activity trail (Zone 4) — row CTAs
+- **Dimension:** B
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** S
+
+**What:**
+Each activity row renders either an `<a className="act-cta" href={row.cta.href}>{row.cta.label}</a>` if `cta` is set, or a decorative `<span className="act-arrow">→</span>` if not (`console-view.tsx:328-335`). The live activity mapper (`console-mappers.ts:228-233`) **never** sets `cta` — every row from real data falls through to the decorative arrow. So in the live UI every activity row ends with a `→` glyph that looks like a link, points nowhere, and isn't clickable. The fixture's recommendation row sets `cta: { label: "Approve", href: "#queue-pause-pending" }` (an in-page anchor that points at a recommendation card no longer emitted from real data), so even the fixture path resolves to a no-op when live data is loaded.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console-view.tsx:328-335 (CTA branch vs. decorative arrow fallback)
+- File: apps/dashboard/src/components/console/console-mappers.ts:228-233 (`mapActivity` rows never set `cta`)
+- File: apps/dashboard/src/components/console/console-data.ts:339,352 (fixture CTAs point to `#queue-pause-pending` and `#`)
+
+**Fix:**
+Either drop the decorative `→` (make it visually clearly non-interactive — a divider, a muted dot, or nothing), or have `mapActivity` derive a real CTA per audit-eventType (e.g. `action.approval_requested` → `/decide/${approvalId}`, `action.rejected` → `/decide` History tab) so the arrow leads somewhere.
+
+---
+
+## DC-44
+
+- **Surface:** /escalations
+- **Sub-surface:** EscalationCard — post-reply state
+- **Dimension:** B
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** S
+
+**What:**
+After a successful reply, `setSent(true)` swaps the reply form for a stuck info banner ("Your reply has been saved…" — see DC-23 for the copy issue). The card stays expanded on the page; there is no auto-collapse, no jump to the next pending escalation, no "Done — close" button, and no visible cue that the operator should move on. With multiple escalations pending, the operator must manually scroll back up and click another card's header to expand it. The flow has no terminal state and no path to the next item — it just stops mid-page. For Task 2 (drill into escalation and reply), this means the user finishes the reply and the page tells them nothing about what to do next; the only signal that the work is done is the (factually wrong) blue banner.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:101-113 (`setSent(true)` on success, no further state transition)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:209-217 (info banner persists; no next-item affordance)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:84-300 (no jump-to-next or auto-collapse logic)
+
+**Fix:**
+After `sent`, either auto-collapse the card and scroll the next pending card into view, or surface a primary "Mark resolved & close" / "Next escalation →" affordance so the operator has a clear continuation path. The current "form replaced by a banner that just sits there" leaves the flow unfinished from the operator's perspective.
+
+---
+
+## DC-45
+
+- **Surface:** /decide/[id]
+- **Sub-surface:** post-mutation state (approve / reject)
+- **Dimension:** B
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** S
+
+**What:**
+On `/decide/[id]`, the approve/reject mutation `onSuccess` only invalidates two query keys and closes the dialog (`[id]/page.tsx:70-75`) — there is no toast, no auto-navigate back to `/decide`, and no inline confirmation. The detail page re-renders the same card with the status badge flipped from `pending` to `approved` / `rejected`, the Approve / Reject buttons disappear (because `isPending` is now false), and the user is left on a static detail page with no obvious next step. Compare with the `/decide` list page, which fires a toast on success and re-renders the queue minus the resolved card (`decide/page.tsx:138-149`) — same action, two completely different completion experiences. An operator who navigates `/decide → /decide/[id]` to approve a single decision then has to manually click the back arrow to return; an operator who approved on `/decide` directly stays on /decide and sees the next pending card. The detail-page completion flow is missing a return path.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:70-75 (mutation onSuccess: invalidate + close dialog only)
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:138-149 (list-page mutation onSuccess: toast + invalidate + close)
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:122-130 (no auto-redirect to `/decide` on success)
+
+**Fix:**
+On successful resolve from the detail page, fire the same toast as the list page and `router.push("/decide")` so the user lands back on the queue with one fewer pending item. Or, if the detail page is meant to support reviewing multiple resolutions in sequence, add a "Next decision" button. Either is fine; the current "page goes static, user has to find their own way out" is the issue.
+
+---
+
+## DC-46
+
+- **Surface:** /escalations, /conversations
+- **Sub-surface:** cross-page coupling (escalation ↔ conversation)
+- **Dimension:** B
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
+- **Effort:** M
+
+**What:**
+An escalation has a `sessionId` that ties it to a conversation thread (`escalation-list.tsx:35`). The expanded escalation card renders an inline `ConversationTranscript` and an inline reply form — but there's no link from the escalation card to the corresponding conversation's full thread on `/conversations`, and no link from a `/conversations` thread (which has its own status pill "Awaiting approval" / "You control") to any related pending escalation. An operator who wants to "drill into an escalation conversation" (Task 2) gets only the inline transcript on `/escalations`; if they want to take over the agent on that thread (a feature that exists on `/conversations` via the "Take Over" button), they have to remember the lead's name and search the conversations list manually. Conversely, an operator browsing `/conversations` who sees an "Awaiting approval" pill has no jump to the related approval gate or escalation. The two pages cover overlapping ground without cross-links.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:35 (`sessionId?: string` field on the type)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:170-188 (transcript rendered inline; no link to /conversations)
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:99-156 (ConversationCard expands transcript; no link to /escalations even when status is awaiting_approval / human_override)
+
+**Fix:**
+Add a "Open in Conversations →" link on the expanded escalation card (linking to `/conversations` filtered by the thread / channel + lead), and on `/conversations` for any conversation in `awaiting_approval` or referenced by a pending escalation, show a "View pending decision →" link to the relevant `/decide/[id]` or `/escalations` deep-link. This is the kind of finding the human walk should confirm — it may be acceptable to leave the surfaces decoupled if the inline experience is sufficient.
