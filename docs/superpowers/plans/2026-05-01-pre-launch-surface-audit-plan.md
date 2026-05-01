@@ -305,8 +305,8 @@ Validation rules per spec §13.2:
       const bad = validDoc
         .replace("- **Severity:** High", "- **Severity:** Launch-blocker")
         .replace(
-          "  - File: apps/dashboard/src/components/console/console-view.tsx:142\n  - Repro: Visit /console with no escalations.",
-          "  - Repro: Visit /console with no escalations."
+          "- File: apps/dashboard/src/components/console/console-view.tsx:142\n- Repro: Visit /console with no escalations.",
+          "- Repro: Visit /console with no escalations."
         );
       const result = validateFindings(bad);
       expect(result.errors).toEqual(
@@ -375,9 +375,9 @@ Validation rules per spec §13.2:
   const DIMENSIONS = new Set(["A", "B", "C", "D", "E", "F", "G", "H", "I", "I-light", "J"]);
   const STATUS_PATTERNS = [
     /^Open$/,
-    /^Accepted \(ship-with(, .+)?\)$/,
+    /^Accepted \(ship-with\)$/,
     /^Fixed \(PR #\d+\)$/,
-    /^False positive(.+)?$/,
+    /^False positive \(.+\)$/,
   ];
   const REQUIRED_FIELDS = [
     "Surface",
@@ -492,9 +492,15 @@ Validation rules per spec §13.2:
     return { errors };
   }
 
-  // CLI entry point.
-  const argv = process.argv.slice(2);
-  if (argv[0] && import.meta.url === `file://${process.argv[1]}`) {
+  // CLI entry point — only runs when this file is the script being executed,
+  // not when imported by tests.
+  const isCli = import.meta.url === `file://${process.argv[1]}`;
+  if (isCli) {
+    const argv = process.argv.slice(2);
+    if (argv.length === 0) {
+      console.error("Usage: tsx scripts/audit-validate-findings.ts <findings.md>");
+      process.exit(2);
+    }
     const file = argv[0];
     const doc = readFileSync(file, "utf8");
     const result = validateFindings(doc, { checkSha: true });
@@ -930,9 +936,20 @@ Each surface task follows the same shape. Task 8 (Dashboard core) is documented 
 
 - [ ] **Step 18:** Force error state by stopping the API server (kill the API terminal). Reload `/console`. Confirm the spec's error banner from `1431bfa6` appears. Confirm zones don't show partial / inconsistent data.
 
-- [ ] **Step 19:** Force partial-data state by stubbing one hook to throw (e.g., temporarily edit `use-audit.ts` to `throw new Error("test")`). Confirm graceful degradation.
+- [ ] **Step 19:** Force partial-data state by stubbing one hook to throw. Wrap the experiment in `git stash` so the working tree mutation is reversible regardless of interruption:
 
-  **Important:** undo the stub and `git checkout` the file before continuing.
+  ```bash
+  # before stubbing
+  git -C /Users/jasonli/switchboard/.worktrees/audit-spec stash push -u -m "audit-stub-temp"
+
+  # edit the hook (e.g., apps/dashboard/src/hooks/use-audit.ts) to throw, restart dev server, verify graceful degradation
+  # then unconditionally restore:
+  git -C /Users/jasonli/switchboard/.worktrees/audit-spec stash pop
+  # or, if pop fails / mid-session interruption:
+  git -C /Users/jasonli/switchboard/.worktrees/audit-spec checkout -- apps/dashboard/src/hooks/
+  ```
+
+  Confirm graceful degradation. The stash-pop guarantees a clean tree before the next dimension begins, and a session interruption between stubbing and verifying leaves the dirty edit in the stash (recoverable) rather than on the working tree.
 
 - [ ] **Step 20:** File findings for each missing / broken / jarring state. Tick `D — State`.
 
@@ -1310,39 +1327,74 @@ Each surface task follows the same shape. Task 8 (Dashboard core) is documented 
 
   ## Procedure
 
-  1. **Record SHA.** Update `index.md` field `Re-audit-SHA: <SHA>`.
-  2. **Re-run automated dimensions per surface.**
+  1. **Record SHA.** Update `index.md` field `Re-audit-SHA: <SHA>` (do this on a normal branch off `main`, not in detached HEAD).
+
+  2. **Set up an isolated re-audit worktree at the launch SHA.**
+
+     Avoid `git checkout <SHA>` in the main checkout — detached HEAD writes get lost on next checkout. Use a worktree instead:
+
+     ```bash
+     git fetch origin
+     git worktree add /Users/jasonli/switchboard/.worktrees/re-audit-<short-SHA> <SHA>
+     cd /Users/jasonli/switchboard/.worktrees/re-audit-<short-SHA>
+     pnpm install --frozen-lockfile
+     ```
+
+     Run all subsequent automated re-audits from this worktree.
+
+  3. **Re-run automated dimensions per surface.**
 
      For each surface where G or F was in scope:
 
      ```bash
-     git checkout <SHA>
-     mkdir -p docs/audits/2026-05-01-pre-launch-surface/artifacts/re-audit-<SHA>/0N-<surface>
-     pnpm audit:lighthouse <route> docs/audits/2026-05-01-pre-launch-surface/artifacts/re-audit-<SHA>/0N-<surface>
-     pnpm audit:axe <route> docs/audits/2026-05-01-pre-launch-surface/artifacts/re-audit-<SHA>/0N-<surface>
+     # Inside the re-audit worktree, write artifacts to a temp dir (NOT under docs/audits — that would be lost when this detached worktree is removed)
+     OUT=/tmp/re-audit-<short-SHA>/0N-<surface>
+     mkdir -p "$OUT"
+     pnpm audit:lighthouse <route> "$OUT"
+     pnpm audit:axe <route> "$OUT"
      ```
 
-  3. **Diff against original artifacts.**
+  4. **Move artifacts back to the main repo.**
+
+     Switch to a normal branch off `main` in the main checkout (e.g., `audit/re-audit-<short-SHA>`), copy the artifacts in, and commit:
+
+     ```bash
+     cd /Users/jasonli/switchboard
+     git fetch origin main && git checkout -b audit/re-audit-<short-SHA> origin/main
+     mkdir -p docs/audits/2026-05-01-pre-launch-surface/artifacts/re-audit-<SHA>
+     cp -r /tmp/re-audit-<short-SHA>/* docs/audits/2026-05-01-pre-launch-surface/artifacts/re-audit-<SHA>/
+     ```
+
+  5. **Diff against original artifacts.**
 
      For each Lighthouse JSON, compare top-level scores (Performance, Accessibility, Best Practices, SEO) and key metrics (LCP, TBT, CLS).
      For each axe JSON, compare violation counts by impact level.
-     Any new issue at Launch-blocker severity (per §7 calibrated examples) blocks the launch.
+     Any new issue at Launch-blocker severity (per spec §7 calibrated examples) blocks the launch.
 
-  4. **Stale-finding rule (§13.6).** If >2 weeks have elapsed since a surface's audit AND that surface has substantive UI changes (`git log --oneline <original-SHA>..<re-audit-SHA> -- apps/dashboard/src/app/<surface-routes>` returns >1 commit), re-run that surface's manual dimensions.
+  6. **Stale-finding rule (spec §13.6).** If >2 weeks have elapsed since a surface's audit AND that surface has substantive UI changes (`git log --oneline <original-SHA>..<re-audit-SHA> -- apps/dashboard/src/app/<surface-routes>` returns >1 commit), re-run that surface's manual dimensions in the re-audit worktree.
 
-  5. **Sample manual re-check.** Pick 1 surface (rotate per re-audit). Re-run its manual dimensions on the launch-candidate. Note any new findings as `Post-close: true` per §10 step 7.
+  7. **Sample manual re-check.** Pick 1 surface (rotate per re-audit). Re-run its manual dimensions on the launch-candidate (in the worktree). Note any new findings as `Post-close: true` per spec §10 step 7. Record those findings on the `audit/re-audit-<short-SHA>` branch (in the main checkout), not in the worktree.
 
-  6. **Record result.** Update `index.md`:
+  8. **Record result.** Update `index.md` on the `audit/re-audit-<short-SHA>` branch:
      - `Re-audit-SHA: <SHA>`
      - `Result: PASSED` (no new Launch-blockers) or `BLOCKED` (list new Launch-blockers).
      - Link to the re-audit artifacts dir.
 
-  7. **Commit.**
+  9. **Commit + PR.**
 
      ```bash
      git add docs/audits/2026-05-01-pre-launch-surface/
-     git commit -m "docs(audit): re-audit gate result for <SHA>"
+     git commit -m "docs(audit): re-audit gate result for <short-SHA>"
+     git push -u origin audit/re-audit-<short-SHA>
+     gh pr create --title "audit: re-audit gate result for <short-SHA>" --body "..."
      ```
+
+  10. **Tear down the re-audit worktree** once the PR is merged:
+
+      ```bash
+      git worktree remove /Users/jasonli/switchboard/.worktrees/re-audit-<short-SHA>
+      git worktree prune
+      ```
 
   ## Pass criteria
 

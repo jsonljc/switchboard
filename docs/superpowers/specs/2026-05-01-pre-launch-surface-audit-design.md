@@ -106,7 +106,7 @@ Sub-surface: <zone, component, or "global">
 Dimension: <primary>[, <secondary>]   (codes: A B C D E F G H I J)
 Severity: <Launch-blocker | High | Medium | Low | Defer>
 Affects: <all users | new users | returning users | tenant admins | operators only | other:____>
-Status: <Open | Accepted (ship-with, dated) | Fixed (PR #__) | False positive (rationale)>
+Status: <Open | Accepted (ship-with) | Fixed (PR #__) | False positive (rationale)>
 Discovered-at: <commit SHA at time of finding>
 What:
   <1–3 sentences describing the issue>
@@ -221,7 +221,7 @@ Each surface session is **complete** when *every one* of the following is true:
 3. **Artifacts committed.** Lighthouse JSON (desktop + mobile) and axe JSON exist under `artifacts/<NN-surface>/` whenever G or F is in scope. Screenshots referenced by findings exist on disk.
 4. **Severity assigned.** Every finding has a severity per §7.
 5. **Calibration ritual passed.** The user has confirmed severities for that surface's Launch-blocker and High findings before the session is closed (see "Severity calibration" below).
-6. **Discovered-at SHA recorded.** The findings doc front-matter includes the commit SHA the audit ran against.
+6. **Discovered-at SHA recorded.** Every finding's `Discovered-at` field carries the commit SHA the finding was discovered against. Front-matter `discovered_at` is human-readable session bookkeeping; the load-bearing SHA is per-finding so post-close findings (§10 step 7) can carry their own discovery SHA distinct from the original session.
 7. **Validation passed.** Findings doc parses without missing-field warnings (see §13 validation).
 
 ### Claude / human split (explicit)
