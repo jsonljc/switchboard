@@ -9,6 +9,7 @@ import type {
   RespondToApprovalResult,
 } from "../approval/respond-to-approval.js";
 import { respondToApproval } from "../approval/respond-to-approval.js";
+import { StaleVersionError } from "../approval/state-machine.js";
 
 export const NOT_FOUND_MSG =
   "I couldn't find this approval. It may have expired, been completed, or been replaced. Open the latest approval and try again.";
@@ -22,13 +23,24 @@ export const NOT_AUTHORIZED_MSG =
 export const APPROVAL_LOOKUP_ERROR_MSG =
   "I couldn't verify this approval right now. Please open the dashboard and try again.";
 
+export const ALREADY_RESPONDED_MSG =
+  "This approval was already handled. Open the dashboard to see the latest state.";
+
 export const APPROVE_SUCCESS_MSG = "Approved.";
 export const REJECT_SUCCESS_MSG = "Rejected.";
 
 export const APPROVAL_EXECUTION_ERROR_MSG =
   "I verified your authority but couldn't apply your response. The action remains pending. Please try the dashboard.";
 
-/** Roles that authorize a Principal to respond to approvals from a bound channel. */
+/**
+ * Roles that authorize a Principal to respond to approvals from a bound channel. We
+ * deliberately exclude `emergency_responder` here: emergency overrides exist for incident
+ * response on the API/dashboard surface and do not belong on a chat surface, where the
+ * caller can't see the broader system state required to use that role responsibly. Note
+ * that the API approval route enforces no role check at all (it relies on
+ * `request.principalIdFromAuth === body.respondedBy`); the chat surface is intentionally
+ * stricter because the caller's authority is asserted via a binding lookup, not auth.
+ */
 export const APPROVER_ROLES = ["approver", "operator", "admin"] as const;
 
 function principalHasApproverRole(principal: Principal): boolean {
@@ -75,6 +87,14 @@ export async function handleApprovalResponse(params: {
 
   if (approval.organizationId !== organizationId) {
     await replySink.send(NOT_FOUND_MSG);
+    return;
+  }
+
+  // Pre-check approval state. Once an approval has been responded to or expired, retrying
+  // here is futile and confusing — the dashboard 409s on the same condition; chat needs a
+  // distinct reply so the user knows the action already landed (vs. a downstream failure).
+  if (approval.state.status !== "pending") {
+    await replySink.send(ALREADY_RESPONDED_MSG);
     return;
   }
 
@@ -133,7 +153,18 @@ export async function handleApprovalResponse(params: {
       },
       approval,
     );
-  } catch {
+  } catch (err) {
+    // Race: another responder mutated state between our pre-check and the lifecycle call.
+    // The lifecycle service surfaces this as either StaleVersionError (legacy path) or as
+    // a status-mismatch Error (lifecycle path: "Cannot approve: lifecycle status is ...").
+    if (err instanceof StaleVersionError) {
+      await replySink.send(ALREADY_RESPONDED_MSG);
+      return;
+    }
+    if (err instanceof Error && /lifecycle status is "/.test(err.message)) {
+      await replySink.send(ALREADY_RESPONDED_MSG);
+      return;
+    }
     await replySink.send(APPROVAL_EXECUTION_ERROR_MSG);
     return;
   }

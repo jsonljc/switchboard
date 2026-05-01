@@ -4,12 +4,14 @@ import {
   NOT_FOUND_MSG,
   STALE_MSG,
   NOT_AUTHORIZED_MSG,
+  ALREADY_RESPONDED_MSG,
   APPROVE_SUCCESS_MSG,
   REJECT_SUCCESS_MSG,
   APPROVAL_EXECUTION_ERROR_MSG,
   APPROVAL_LOOKUP_ERROR_MSG,
   type HandleApprovalResponseConfig,
 } from "../handle-approval-response.js";
+import { StaleVersionError } from "../../approval/state-machine.js";
 import type { ApprovalStore, IdentityStore } from "../../storage/interfaces.js";
 import type { ReplySink } from "../types.js";
 import type { ParsedApprovalResponsePayload } from "../approval-response-payload.js";
@@ -35,14 +37,18 @@ const BASE_ARGS = {
 };
 
 function makeApproval(
-  overrides: Partial<{ bindingHash: string; organizationId: string | null }> = {},
+  overrides: Partial<{
+    bindingHash: string;
+    organizationId: string | null;
+    status: string;
+  }> = {},
 ) {
   return {
     request: {
       id: "appr_1",
       bindingHash: overrides.bindingHash ?? "hash123",
     } as never,
-    state: { status: "pending", version: 0 } as never,
+    state: { status: overrides.status ?? "pending", version: 0 } as never,
     envelopeId: "env_1",
     organizationId: overrides.organizationId === undefined ? "org-1" : overrides.organizationId,
   };
@@ -427,6 +433,94 @@ describe("handleApprovalResponse", () => {
       expect.objectContaining({ action: "reject", respondedBy: "principal-1" }),
     );
     expect(sendSpy).toHaveBeenCalledWith(REJECT_SUCCESS_MSG);
+  });
+
+  it("replies ALREADY_RESPONDED_MSG when approval state is no longer pending (pre-check)", async () => {
+    const store = makeStore(vi.fn().mockResolvedValue(makeApproval({ status: "approved" })));
+    const { sink, sendSpy } = makeReplySink();
+
+    await handleApprovalResponse({
+      ...BASE_ARGS,
+      payload: PAYLOAD,
+      approvalStore: store,
+      replySink: sink,
+    });
+
+    expect(sendSpy).toHaveBeenCalledWith(ALREADY_RESPONDED_MSG);
+  });
+
+  it("replies ALREADY_RESPONDED_MSG when shared helper throws StaleVersionError (race)", async () => {
+    const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
+    const { sink, sendSpy } = makeReplySink();
+    const binding = {
+      id: "b-1",
+      organizationId: "org-1",
+      channel: "whatsapp",
+      channelIdentifier: "+15551234567",
+      principalId: "principal-1",
+      status: "active" as const,
+      createdBy: "admin",
+      revokedBy: null,
+      revokedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const respondDeps = makeRespondDeps();
+    respondDeps.platformLifecycle.respondToApproval = vi
+      .fn()
+      .mockRejectedValue(new StaleVersionError("appr_1", 0, 1));
+    const config: HandleApprovalResponseConfig = {
+      bindingStore: makeBindingStore(binding),
+      identityStore: makeIdentityStore(makePrincipal(["operator"])),
+      respondDeps,
+    };
+
+    await handleApprovalResponse({
+      ...BASE_ARGS,
+      payload: PAYLOAD,
+      approvalStore: store,
+      replySink: sink,
+      config,
+    });
+
+    expect(sendSpy).toHaveBeenCalledWith(ALREADY_RESPONDED_MSG);
+  });
+
+  it("replies ALREADY_RESPONDED_MSG when lifecycle throws status-mismatch (race, lifecycle path)", async () => {
+    const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
+    const { sink, sendSpy } = makeReplySink();
+    const binding = {
+      id: "b-1",
+      organizationId: "org-1",
+      channel: "whatsapp",
+      channelIdentifier: "+15551234567",
+      principalId: "principal-1",
+      status: "active" as const,
+      createdBy: "admin",
+      revokedBy: null,
+      revokedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const respondDeps = makeRespondDeps();
+    respondDeps.platformLifecycle.respondToApproval = vi
+      .fn()
+      .mockRejectedValue(new Error('Cannot approve: lifecycle status is "approved"'));
+    const config: HandleApprovalResponseConfig = {
+      bindingStore: makeBindingStore(binding),
+      identityStore: makeIdentityStore(makePrincipal(["operator"])),
+      respondDeps,
+    };
+
+    await handleApprovalResponse({
+      ...BASE_ARGS,
+      payload: PAYLOAD,
+      approvalStore: store,
+      replySink: sink,
+      config,
+    });
+
+    expect(sendSpy).toHaveBeenCalledWith(ALREADY_RESPONDED_MSG);
   });
 
   it("replies APPROVAL_EXECUTION_ERROR_MSG when the shared helper throws", async () => {
