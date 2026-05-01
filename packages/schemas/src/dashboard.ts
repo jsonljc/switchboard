@@ -1,5 +1,40 @@
 import { z } from "zod";
 
+// ── Constants ─────────────────────────────────────────────────────────────
+/**
+ * Single source of truth for the dashboard's freshness contract.
+ * The API builder uses this to decide when to log a stale-rollup warning;
+ * the Console uses it to decide when to render the "X min ago" footer.
+ * Not a response field — would imply per-org configurability that doesn't exist.
+ */
+export const STALE_AFTER_MINUTES = 30;
+
+// ── Building blocks for option C ──────────────────────────────────────────
+export const AgentKeySchema = z.enum(["alex", "nova", "mira", "system"]);
+export type AgentKey = z.infer<typeof AgentKeySchema>;
+
+export const AdSetRowSchema = z.object({
+  adSetId: z.string(),
+  adSetName: z.string(),
+  deploymentId: z.string(),
+  spend: z.object({ amount: z.number(), currency: z.string() }),
+  conversions: z.number(),
+  cpa: z.number().nullable(),
+  trend: z.enum(["up", "down", "flat"]),
+  status: z.enum(["delivering", "learning", "limited", "paused"]),
+  /** True when an approval with kind=pause_ad_set is pending against this row. Drives the Nova-panel cross-link pin. */
+  pausePending: z.boolean(),
+});
+export type AdSetRow = z.infer<typeof AdSetRowSchema>;
+
+export const StageProgressSchema = z.object({
+  stageIndex: z.number().int().nonnegative(),
+  stageTotal: z.number().int().positive(),
+  stageLabel: z.string(),
+  closesAt: z.string().nullable(),
+});
+export type StageProgress = z.infer<typeof StageProgressSchema>;
+
 export const DashboardOverviewSchema = z.object({
   generatedAt: z.string(),
 
