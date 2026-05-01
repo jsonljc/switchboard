@@ -9,6 +9,14 @@ import { z } from "zod";
  */
 export const STALE_AFTER_MINUTES = 30;
 
+/**
+ * Minimum sample size before today.replyTime is surfaced as a headline metric.
+ * Below this, the median is too noisy (one fast reply would read as "12s avg").
+ * Both the API builder and any future direct consumer of replyTimeStats should
+ * compare against this constant.
+ */
+export const MIN_REPLY_SAMPLE = 3;
+
 // ── Building blocks for option C ──────────────────────────────────────────
 export const AgentKeySchema = z.enum(["alex", "nova", "mira", "system"]);
 export type AgentKey = z.infer<typeof AgentKeySchema>;

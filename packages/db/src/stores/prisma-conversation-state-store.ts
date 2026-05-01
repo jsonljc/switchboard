@@ -297,6 +297,9 @@ export class PrismaConversationStateStore implements ConversationStateStore {
    * Median first-reply latency (in seconds) for conversations created on `day`,
    * counting only those where firstReplyAt exists AND (firstReplyAt - createdAt) <= 24h.
    * Returns { medianSeconds: 0, sampleSize: 0 } when no eligible rows.
+   *
+   * Callers should compare sampleSize against MIN_REPLY_SAMPLE from
+   * `@switchboard/schemas` before surfacing the median as a headline metric.
    */
   async replyTimeStats(
     orgId: string,

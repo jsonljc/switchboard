@@ -4,7 +4,12 @@
 
 import type { FastifyPluginAsync } from "fastify";
 import type { DashboardOverview } from "@switchboard/schemas";
-import { dayWindow, previousDayWindow, STALE_AFTER_MINUTES } from "@switchboard/schemas";
+import {
+  dayWindow,
+  previousDayWindow,
+  STALE_AFTER_MINUTES,
+  MIN_REPLY_SAMPLE,
+} from "@switchboard/schemas";
 import type { AuditQueryFilter } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { translateActivities } from "../services/activity-translator.js";
@@ -33,12 +38,6 @@ function checkStaleness(label: string, updatedAt: string | null, now: Date): voi
     );
   }
 }
-
-/**
- * Below this sample size, the median is too noisy to surface as a headline metric
- * (one fast reply would read as "12s avg"). Treat the cell as muted instead.
- */
-const MIN_REPLY_SAMPLE = 3;
 
 // ---------------------------------------------------------------------------
 // Structural store interface — keeps builder testable without Fastify or Prisma

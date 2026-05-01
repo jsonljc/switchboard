@@ -4,12 +4,19 @@ import {
   AdSetRowSchema,
   StageProgressSchema,
   STALE_AFTER_MINUTES,
+  MIN_REPLY_SAMPLE,
   DashboardOverviewSchema,
 } from "../dashboard.js";
 
 describe("STALE_AFTER_MINUTES", () => {
   it("is 30", () => {
     expect(STALE_AFTER_MINUTES).toBe(30);
+  });
+});
+
+describe("MIN_REPLY_SAMPLE", () => {
+  it("is 3", () => {
+    expect(MIN_REPLY_SAMPLE).toBe(3);
   });
 });
 
