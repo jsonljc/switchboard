@@ -33,16 +33,16 @@ Extend `DashboardOverview` so:
 
 ## Locked decisions from brainstorm (2026-05-01)
 
-| # | Decision |
-|---|----------|
-| Q1 | One spec covering all 6 fields, two implementation phases (**C1** = Tier A, data exists; **C2** = Tier B, needs new ingestion). |
-| Q2 | `today.revenue` = recorded payments today (`PrismaRevenueStore.sumByOrg` with today's window). |
-| Q3 | `today.replyTime` = median of `(firstReplyAt − createdAt)` over conversations where `createdAt >= todayStart` AND `firstReplyAt` exists AND `(firstReplyAt − createdAt) <= 24h`. Yesterday baseline = same cohort definition shifted one day. |
-| Q4 | `today.spend` = sum of `AdSpendDaily` rollup rows for today across enabled deployments; populated by a 15-min Inngest job (today-only, idempotent upsert). Dashboard reads are fast and always return last-known data. |
-| Q5 | Per-agent stats are nullable. `agentsToday.{alex,nova,mira} = null` ⇔ that agent's module is disabled. The Console pairs with `useModuleStatus` for the inactive treatment. |
-| Q6 | Stage progress lives **inline** on each `approvals[]` row as `stageProgress?: { stageIndex, stageTotal, stageLabel, closesAt }`. Optional; only present on creative-pipeline approvals. |
-| Q7 | `novaAdSets` sourced from a new `AdSetDailyMetrics` rollup populated by the same Inngest job that fills `AdSpendDaily`. Top 5 by today's spend across enabled deployments. |
-| Q8 | `recommendationConfidence` **deferred** to a separate spec. Reason: introducing a parallel `recommendations[]` queue alongside `approvals[]` is a governance-semantics question, not a dashboard-data question. |
+| #   | Decision                                                                                                                                                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | One spec covering all 6 fields, two implementation phases (**C1** = Tier A, data exists; **C2** = Tier B, needs new ingestion).                                                                                                               |
+| Q2  | `today.revenue` = recorded payments today (`PrismaRevenueStore.sumByOrg` with today's window).                                                                                                                                                |
+| Q3  | `today.replyTime` = median of `(firstReplyAt − createdAt)` over conversations where `createdAt >= todayStart` AND `firstReplyAt` exists AND `(firstReplyAt − createdAt) <= 24h`. Yesterday baseline = same cohort definition shifted one day. |
+| Q4  | `today.spend` = sum of `AdSpendDaily` rollup rows for today across enabled deployments; populated by a 15-min Inngest job (today-only, idempotent upsert). Dashboard reads are fast and always return last-known data.                        |
+| Q5  | Per-agent stats are nullable. `agentsToday.{alex,nova,mira} = null` ⇔ that agent's module is disabled. The Console pairs with `useModuleStatus` for the inactive treatment.                                                                   |
+| Q6  | Stage progress lives **inline** on each `approvals[]` row as `stageProgress?: { stageIndex, stageTotal, stageLabel, closesAt }`. Optional; only present on creative-pipeline approvals.                                                       |
+| Q7  | `novaAdSets` sourced from a new `AdSetDailyMetrics` rollup populated by the same Inngest job that fills `AdSpendDaily`. Top 5 by today's spend across enabled deployments.                                                                    |
+| Q8  | `recommendationConfidence` **deferred** to a separate spec. Reason: introducing a parallel `recommendations[]` queue alongside `approvals[]` is a governance-semantics question, not a dashboard-data question.                               |
 
 ## Schema shape — Approach 2 (namespaced)
 
@@ -198,19 +198,19 @@ Per `CLAUDE.md` doctrine: no backwards-compat keys. Option B's `console-mappers.
 
 ## Data sources by field
 
-| Field | Tier | Source | Store / function |
-| ----- | ---- | ------ | ----------------- |
-| `today.revenue` | A | existing `Revenue` table | `PrismaRevenueStore.sumByOrg(orgId, todayWindow)` (already exists; new caller) + a second call for the 7-day average to compute `deltaPctVsAvg` |
-| `today.replyTime` | A | `ConversationState.firstReplyAt` + `createdAt` | new query `PrismaConversationStateStore.replyTimeStats(orgId, day)` returning `{ medianSeconds, sampleSize }`; called twice (today + yesterday) for `previousSeconds` |
-| `today.leads` | A | existing `ConversionRecord.type=inquiry` | reuse `countByType` (already exists; reshape into the new block) |
-| `today.appointments` | A | existing `bookingStore.listByDate` | reuse the existing today-bookings call (already exists; reshape) |
-| `agentsToday.alex` | A | existing conversion records + booking store | new query `alexStatsToday(orgId)` (or compose from `countByType` calls) |
-| `approvals[].stageProgress` | A | creative-pipeline `CreativeJob` | new query `creativeJobStore.stageProgressByApproval(approvalIds)`; mapper joins by approval id |
-| `activity[].agent` | A | audit ledger `actorType` + `actorId` | promote `activity-translator.ts:resolveActor` from a string to a structured `AgentKey \| null` |
-| `today.spend` | B | new `AdSpendDaily` table | new `PrismaAdSpendDailyStore.sumByOrg(orgId, today)` |
-| `agentsToday.nova` | B | `AdSpendDaily` + new `draftsPending` count | reuse `AdSpendDaily`; new `actionRequestStore.draftsPending(orgId, agent="nova")` |
-| `agentsToday.mira` | B | creative-pipeline jobs | new `creativeJobStore.miraStatsToday(orgId)` returning `{ inFlight, winningHook }` |
-| `novaAdSets` | B | new `AdSetDailyMetrics` table | new `PrismaAdSetDailyMetricsStore.topByOrg(orgId, today, limit=5)`; the `pausePending` flag derives from a join against pending action-requests |
+| Field                       | Tier | Source                                         | Store / function                                                                                                                                                      |
+| --------------------------- | ---- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `today.revenue`             | A    | existing `Revenue` table                       | `PrismaRevenueStore.sumByOrg(orgId, todayWindow)` (already exists; new caller) + a second call for the 7-day average to compute `deltaPctVsAvg`                       |
+| `today.replyTime`           | A    | `ConversationState.firstReplyAt` + `createdAt` | new query `PrismaConversationStateStore.replyTimeStats(orgId, day)` returning `{ medianSeconds, sampleSize }`; called twice (today + yesterday) for `previousSeconds` |
+| `today.leads`               | A    | existing `ConversionRecord.type=inquiry`       | reuse `countByType` (already exists; reshape into the new block)                                                                                                      |
+| `today.appointments`        | A    | existing `bookingStore.listByDate`             | reuse the existing today-bookings call (already exists; reshape)                                                                                                      |
+| `agentsToday.alex`          | A    | existing conversion records + booking store    | new query `alexStatsToday(orgId)` (or compose from `countByType` calls)                                                                                               |
+| `approvals[].stageProgress` | A    | creative-pipeline `CreativeJob`                | new query `creativeJobStore.stageProgressByApproval(approvalIds)`; mapper joins by approval id                                                                        |
+| `activity[].agent`          | A    | audit ledger `actorType` + `actorId`           | promote `activity-translator.ts:resolveActor` from a string to a structured `AgentKey \| null`                                                                        |
+| `today.spend`               | B    | new `AdSpendDaily` table                       | new `PrismaAdSpendDailyStore.sumByOrg(orgId, today)`                                                                                                                  |
+| `agentsToday.nova`          | B    | `AdSpendDaily` + new `draftsPending` count     | reuse `AdSpendDaily`; new `actionRequestStore.draftsPending(orgId, agent="nova")`                                                                                     |
+| `agentsToday.mira`          | B    | creative-pipeline jobs                         | new `creativeJobStore.miraStatsToday(orgId)` returning `{ inFlight, winningHook }`                                                                                    |
+| `novaAdSets`                | B    | new `AdSetDailyMetrics` table                  | new `PrismaAdSetDailyMetricsStore.topByOrg(orgId, today, limit=5)`; the `pausePending` flag derives from a join against pending action-requests                       |
 
 ## New ingestion (Tier B / C2 only)
 
@@ -270,13 +270,13 @@ model AdSetDailyMetrics {
 
 Each new schema field maps to a precise mapper change. The view (`console-view.tsx`) doesn't change.
 
-| Mapper | Change |
-| ------ | ------ |
-| `mapNumbersStrip` | Drops `placeholder: true` on the Revenue, Spend, and Reply-time cells. Each formats from the new `today.*` paths. Reply-time cell becomes muted again when `today.replyTime === null`. |
-| `mapAgents` | Reads `agentsToday.alex` / `agentsToday.nova` / `agentsToday.mira` for primary + secondary stats. When a block is `null`, the cell renders the inactive treatment (deferred fuller "Hire X" UX to a future spec; for now: muted name, no stats, no `view →` link). |
-| `mapApprovalGateCard` | When `stageProgress` is present, renders `Stage ${stageIndex} of ${stageTotal}` + `${stageLabel}` + countdown derived from `closesAt`. Falls back to current synthesized `"—"` when undefined. |
-| **NEW** `mapNovaPanel` | Replaces the fixture-shaped `consoleFixture.novaPanel` with `novaAdSets` rows. The cross-link pin renders only when at least one row has `pausePending=true`; clicking scrolls to the corresponding queue card. |
-| `mapActivity` | Reads `entry.agent` directly. The synthesized `agentForAction(action, actorId)` helper from option B is removed — the structured field replaces it. |
+| Mapper                 | Change                                                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mapNumbersStrip`      | Drops `placeholder: true` on the Revenue, Spend, and Reply-time cells. Each formats from the new `today.*` paths. Reply-time cell becomes muted again when `today.replyTime === null`.                                                                             |
+| `mapAgents`            | Reads `agentsToday.alex` / `agentsToday.nova` / `agentsToday.mira` for primary + secondary stats. When a block is `null`, the cell renders the inactive treatment (deferred fuller "Hire X" UX to a future spec; for now: muted name, no stats, no `view →` link). |
+| `mapApprovalGateCard`  | When `stageProgress` is present, renders `Stage ${stageIndex} of ${stageTotal}` + `${stageLabel}` + countdown derived from `closesAt`. Falls back to current synthesized `"—"` when undefined.                                                                     |
+| **NEW** `mapNovaPanel` | Replaces the fixture-shaped `consoleFixture.novaPanel` with `novaAdSets` rows. The cross-link pin renders only when at least one row has `pausePending=true`; clicking scrolls to the corresponding queue card.                                                    |
+| `mapActivity`          | Reads `entry.agent` directly. The synthesized `agentForAction(action, actorId)` helper from option B is removed — the structured field replaces it.                                                                                                                |
 
 ## Failure & null semantics
 
@@ -296,6 +296,7 @@ export const STALE_AFTER_MINUTES = 30;
 ```
 
 Not a schema response field — that would imply per-org configurability that doesn't exist and would bloat every payload with a constant.
+
 - `today.replyTime` is `null` when `sampleSize = 0` (no conversations created today, or none have firstReplyAt yet). Cell goes muted with `—`.
 - `agentsToday.{alex,nova,mira}` is `null` ⇔ that agent's module is disabled (Q5). Cell renders the inactive treatment.
 - `approvals[].stageProgress` is `undefined` for non-creative-pipeline approvals. Mapper renders the option-B synthesized fallback.
@@ -382,6 +383,7 @@ Per `CLAUDE.md`, every new module gets co-located `*.test.ts`. Coverage targets:
 - **`today.revenue.deltaPctVsAvg` baseline window.** Currently spec'd as "trailing 7-day daily average." Reasonable default; revisit if operators want week-over-week instead.
 - **Recommendation cards** — explicitly deferred. The follow-on spec ("Nova Draft Recommendations Feed", working title C3 / E) needs to answer: are drafts insights (read-only) or actions (governed via `ActionRequest`)? The likely direction is `NovaRecommendationDraft → optionally promoted to ActionRequest → approval pipeline`, but that's a governance-semantics design, not a dashboard one.
 - **`novaAdSets` ranking is "top 5 by today's spend" — a deliberate temporary heuristic.** "Highest spend" ≠ "needs attention," but a composite rank (spend × pacing-anomaly × CPA-trend × learning-state) requires `saturation-detector` / `learning-phase-guard` / `period-comparator` outputs to feed into the dashboard layer. Those engines exist in `packages/ad-optimizer` but aren't surfaced here yet. A future spec replaces the spend-rank with a composite "needs attention" score; the schema change is just adding `rank?: "needs_attention" | "winner" | "watch"` to `AdSetRow`. C2 ships the spend-rank baseline.
+- **`stats.activeEscalations` should move to `today.escalations` in a future iteration.** With C1 introducing the `today.*` namespace, the natural home for an escalations count is `today.escalations` (paralleling `today.leads`, `today.appointments`). The current `stats.activeEscalations` predates the namespace and should be migrated when the next C-tier iteration touches the dashboard schema.
 
 ## Sequencing
 
