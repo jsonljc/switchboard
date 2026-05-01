@@ -317,7 +317,12 @@ async function main() {
 
   // --- Managed channel webhook routes (GET verification + POST messages) ---
   if (registry) {
-    registerManagedWebhookRoutes(app, { registry, failedMessageStore, ctwaAdapter });
+    registerManagedWebhookRoutes(app, {
+      registry,
+      failedMessageStore,
+      ctwaAdapter,
+      dedup: { checkDedup },
+    });
   }
 
   // --- Internal provision-notify endpoint ---

@@ -4,6 +4,7 @@ import { createHmac } from "node:crypto";
 import { InstagramAdapter } from "../instagram.js";
 import { registerManagedWebhookRoutes } from "../../routes/managed-webhook.js";
 import type { GatewayEntry } from "../../managed/runtime-registry.js";
+import { checkDedup } from "../../dedup/redis-dedup.js";
 
 /**
  * AU-1: Same replay-protection guarantee as WhatsApp, applied to the Instagram /
@@ -46,7 +47,9 @@ function signBody(body: string, secret: string): string {
 describe("Instagram webhook replay protection (AU-1)", () => {
   let app: FastifyInstance;
   const handleIncoming = vi.fn(async () => {});
-  const seenMessages = new Set<string>();
+  // Unique prefix per run avoids cross-test pollution in the in-memory dedup
+  // FIFO (the production fallback path when Redis is not initialised).
+  const RUN_PREFIX = `ig_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   beforeAll(async () => {
     const adapter = new InstagramAdapter({
@@ -71,17 +74,11 @@ describe("Instagram webhook replay protection (AU-1)", () => {
       },
     };
 
-    const dedup = {
-      async checkDedup(channel: string, messageId: string): Promise<boolean> {
-        const key = `${channel}:${messageId}`;
-        if (seenMessages.has(key)) return false;
-        seenMessages.add(key);
-        return true;
-      },
-    };
-
+    // Use the real dedup module so this test exercises the same code path as
+    // production. Without `initDedup()`, `checkDedup` falls back to its
+    // in-memory FIFO — which is exactly what we want to validate here.
     app = Fastify({ logger: false });
-    registerManagedWebhookRoutes(app, { registry, dedup });
+    registerManagedWebhookRoutes(app, { registry, dedup: { checkDedup } });
     await app.ready();
   });
 
@@ -91,9 +88,8 @@ describe("Instagram webhook replay protection (AU-1)", () => {
 
   it("invokes the gateway exactly once when the same Instagram mid is delivered twice", async () => {
     handleIncoming.mockClear();
-    seenMessages.clear();
 
-    const payload = buildPayload("m_replay_001");
+    const payload = buildPayload(`m_${RUN_PREFIX}_001`);
     const body = JSON.stringify(payload);
     const headers = { "x-hub-signature-256": signBody(body, APP_SECRET) };
 
@@ -107,12 +103,11 @@ describe("Instagram webhook replay protection (AU-1)", () => {
 
   it("processes distinct mids independently", async () => {
     handleIncoming.mockClear();
-    seenMessages.clear();
 
     const headers = (body: string) => ({ "x-hub-signature-256": signBody(body, APP_SECRET) });
 
-    const payloadA = buildPayload("m_replay_002a");
-    const payloadB = buildPayload("m_replay_002b");
+    const payloadA = buildPayload(`m_${RUN_PREFIX}_002a`);
+    const payloadB = buildPayload(`m_${RUN_PREFIX}_002b`);
 
     await app.inject({
       method: "POST",

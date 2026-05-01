@@ -4,6 +4,7 @@ import { createHmac } from "node:crypto";
 import { WhatsAppAdapter } from "../whatsapp.js";
 import { registerManagedWebhookRoutes } from "../../routes/managed-webhook.js";
 import type { GatewayEntry } from "../../managed/runtime-registry.js";
+import { checkDedup } from "../../dedup/redis-dedup.js";
 
 /**
  * AU-1: A captured Meta webhook must not produce duplicate downstream calls
@@ -54,7 +55,9 @@ function signBody(body: string, secret: string): string {
 describe("WhatsApp webhook replay protection (AU-1)", () => {
   let app: FastifyInstance;
   const handleIncoming = vi.fn(async () => {});
-  const seenMessages = new Set<string>();
+  // Unique prefix per run avoids cross-test pollution in the in-memory dedup
+  // FIFO (the production fallback path when Redis is not initialised).
+  const RUN_PREFIX = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   beforeAll(async () => {
     const adapter = new WhatsAppAdapter({
@@ -80,17 +83,11 @@ describe("WhatsApp webhook replay protection (AU-1)", () => {
       },
     };
 
-    const dedup = {
-      async checkDedup(channel: string, messageId: string): Promise<boolean> {
-        const key = `${channel}:${messageId}`;
-        if (seenMessages.has(key)) return false;
-        seenMessages.add(key);
-        return true;
-      },
-    };
-
+    // Use the real dedup module so this test exercises the same code path as
+    // production. Without `initDedup()`, `checkDedup` falls back to its
+    // in-memory FIFO — which is exactly what we want to validate here.
     app = Fastify({ logger: false });
-    registerManagedWebhookRoutes(app, { registry, dedup });
+    registerManagedWebhookRoutes(app, { registry, dedup: { checkDedup } });
     await app.ready();
   });
 
@@ -100,9 +97,8 @@ describe("WhatsApp webhook replay protection (AU-1)", () => {
 
   it("invokes the gateway exactly once when the same messageId is delivered twice", async () => {
     handleIncoming.mockClear();
-    seenMessages.clear();
 
-    const payload = buildPayload("wamid.replay_001");
+    const payload = buildPayload(`wamid.${RUN_PREFIX}_001`);
     const body = JSON.stringify(payload);
     const headers = { "x-hub-signature-256": signBody(body, APP_SECRET) };
 
@@ -116,12 +112,11 @@ describe("WhatsApp webhook replay protection (AU-1)", () => {
 
   it("processes distinct messageIds independently", async () => {
     handleIncoming.mockClear();
-    seenMessages.clear();
 
     const headers = (body: string) => ({ "x-hub-signature-256": signBody(body, APP_SECRET) });
 
-    const payloadA = buildPayload("wamid.replay_002a");
-    const payloadB = buildPayload("wamid.replay_002b");
+    const payloadA = buildPayload(`wamid.${RUN_PREFIX}_002a`);
+    const payloadB = buildPayload(`wamid.${RUN_PREFIX}_002b`);
 
     await app.inject({
       method: "POST",
