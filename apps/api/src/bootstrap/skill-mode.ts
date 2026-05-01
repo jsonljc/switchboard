@@ -280,10 +280,21 @@ export async function bootstrapSkillMode(
 
   logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
 
-  // Simulation executor: same adapter + tools, but with SimulationPolicyHook to block writes
+  // Simulation executor: same adapter + tools, but with SimulationPolicyHook to block writes.
+  // Pass toolFactories so read-effect tools (e.g. calendar-book.slots.query) materialize
+  // against the simulation request's real orgId/SkillRequestContext rather than the
+  // schema-only synthetic context. SimulationPolicyHook still blocks write/external_send/
+  // external_mutation/irreversible operations.
   const { SimulationPolicyHook } = await import("@switchboard/core/skill-runtime");
   const simulationHooks = [new GovernanceHook(toolsMap), new SimulationPolicyHook()];
-  const simulationExecutor = new SkillExecutorImpl(adapter, toolsMap, undefined, simulationHooks);
+  const simulationExecutor = new SkillExecutorImpl(
+    adapter,
+    toolsMap,
+    undefined,
+    simulationHooks,
+    undefined,
+    toolFactories,
+  );
 
   return { simulationExecutor, alexSkill };
 }

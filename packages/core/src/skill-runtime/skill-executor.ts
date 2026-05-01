@@ -38,6 +38,13 @@ const FALLBACK_READ_OP: SkillToolOperation = {
   execute: async () => ok(),
 };
 
+// Escape sentinel-confusable substrings so tool output can't close the wrapper
+// early. Replaces the ASCII angle brackets in `<|` / `|>` with Unicode
+// mathematical angle brackets (U+27E8/U+27E9) — distinct glyphs to the model.
+function escapeSentinel(value: string): string {
+  return value.replaceAll("<|", "⟨|").replaceAll("|>", "|⟩");
+}
+
 export class SkillExecutorImpl implements SkillExecutor {
   constructor(
     private adapter: ToolCallingAdapter,
@@ -341,7 +348,9 @@ export class SkillExecutorImpl implements SkillExecutor {
         );
         // Defense-in-depth: wrap re-injected tool output in sentinels so the
         // model treats untrusted tool content as data, not instructions.
-        const wrappedContent = `<|tool-output|>\n${decision.content}\n<|/tool-output|>`;
+        // Escape sentinel-confusable substrings inside the payload so
+        // attacker-controlled tool content can't close the wrapper early.
+        const wrappedContent = `<|tool-output|>\n${escapeSentinel(decision.content)}\n<|/tool-output|>`;
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
