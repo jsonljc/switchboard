@@ -67,7 +67,7 @@ async function buildScopedApp(): Promise<ScopedTestApp> {
     if (!auth) {
       return reply.code(401).send({ error: "Missing Authorization header", statusCode: 401 });
     }
-    const match = /^Bearer\s+(.+)$/i.exec(auth);
+    const match = /^Bearer\s+(\S+)$/i.exec(auth);
     const key = match?.[1];
     if (key === KEY_A) {
       request.organizationIdFromAuth = ORG_A;
