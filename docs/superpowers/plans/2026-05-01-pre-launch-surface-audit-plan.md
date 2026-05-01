@@ -244,7 +244,7 @@ Validation rules per spec §13.2:
 2. Every Launch-blocker finding has ≥2 of {File, Screenshot, Repro} in its Evidence block; at least one is File or Repro.
 3. Severity ∈ {Launch-blocker, High, Medium, Low, Defer}.
 4. Dimension(s) ∈ {A, B, C, D, E, F, G, H, I, I-light, J}.
-5. Status ∈ {Open, Accepted (ship-with), Fixed (PR #__), False positive}.
+5. Status ∈ {Open, Accepted (ship-with), Fixed (PR #__), False positive (rationale)}. The `False positive` form requires a parenthesized rationale per spec §12 (FP entries are kept, not deleted, so the rationale stays auditable).
 6. Discovered-at matches `git rev-parse --verify <SHA>` (exists in the repo).
 
 - [ ] **Step 1:** Write the failing test.
@@ -1327,7 +1327,7 @@ Each surface task follows the same shape. Task 8 (Dashboard core) is documented 
 
   ## Procedure
 
-  1. **Record SHA.** Update `index.md` field `Re-audit-SHA: <SHA>` (do this on a normal branch off `main`, not in detached HEAD).
+  1. **Note the launch-candidate SHA.** Capture it (`SHA=$(git rev-parse <ref>)`); the actual `index.md` update happens in step 8 once the audit branch exists.
 
   2. **Set up an isolated re-audit worktree at the launch SHA.**
 
@@ -1371,7 +1371,7 @@ Each surface task follows the same shape. Task 8 (Dashboard core) is documented 
      For each axe JSON, compare violation counts by impact level.
      Any new issue at Launch-blocker severity (per spec §7 calibrated examples) blocks the launch.
 
-  6. **Stale-finding rule (spec §13.6).** If >2 weeks have elapsed since a surface's audit AND that surface has substantive UI changes (`git log --oneline <original-SHA>..<re-audit-SHA> -- apps/dashboard/src/app/<surface-routes>` returns >1 commit), re-run that surface's manual dimensions in the re-audit worktree.
+  6. **Stale-finding rule (spec §13.6).** If >2 weeks have elapsed since a surface's audit AND that surface has substantive UI changes (`git log --oneline <original-SHA>..<re-audit-SHA> -- apps/dashboard/src/app/<surface-routes>` returns >1 commit), re-run that surface's manual dimensions in the re-audit worktree. Record any new findings on the `audit/re-audit-<short-SHA>` branch (in the main checkout), not in the throwaway worktree — the worktree is removed in step 10 and any uncommitted work there is lost.
 
   7. **Sample manual re-check.** Pick 1 surface (rotate per re-audit). Re-run its manual dimensions on the launch-candidate (in the worktree). Note any new findings as `Post-close: true` per spec §10 step 7. Record those findings on the `audit/re-audit-<short-SHA>` branch (in the main checkout), not in the worktree.
 
