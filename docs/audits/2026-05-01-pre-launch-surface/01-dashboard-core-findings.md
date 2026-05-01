@@ -12,7 +12,7 @@ session_closed: open
 
 ## Coverage
 
-Checked: A — pending session
+Checked: A — see findings below
 Checked: B — pending session
 Checked: C — pending session
 Checked: D — pending session
@@ -369,3 +369,226 @@ The single sign-out call site (`signOut({ callbackUrl: "/login" })` at `apps/das
 
 **Fix:**
 Wrap sign-out in a small handler that calls `queryClient.clear()` immediately before `signOut(...)`. Equivalent to: `const queryClient = useQueryClient(); const handleSignOut = () => { queryClient.clear(); signOut({ callbackUrl: "/login" }); };`. Pair with DC-11 fix #2 (session-change-driven cache reset in `QueryProvider`) so the protection holds even if a different sign-out path is added later.
+
+---
+
+## DC-14
+
+- **Surface:** /console
+- **Sub-surface:** global (entire route's design system)
+- **Dimension:** A
+- **Severity:** High
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** L
+
+**What:**
+The `/console` route ships a complete, parallel design system that has no overlap with the rest of the dashboard. `console.css` defines its own background (`hsl(28 30% 92%)` warm clay vs. the app's `hsl(45 25% 98%)` warm white), its own accent (coral `hsl(14 75% 55%)` vs. operator amber `hsl(30 55% 46%)`), its own type stack (General Sans + JetBrains Mono pulled from a third-party CDN vs. Inter + Cormorant Garamond), and its own tokens (`--c-bg`, `--c-coral`, `--c-text-2`, etc.) that do not reference any of `globals.css`'s `--background`, `--operator`, `--font-sans`, etc. The page is also placed in `CHROME_HIDDEN_PATHS` (`app-shell.tsx:14`) so the global owner-tabs nav is suppressed only for `/console`. Net effect: `/console` looks and feels like a different product than `/decide`, `/escalations`, `/conversations`, and `/dashboard`. For the highest-traffic surface this is a sustained brand-incoherence cost, not a one-off polish miss.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console.css:9-23 (parallel token scope under `[data-v6-console]`)
+- File: apps/dashboard/src/components/console/console.css:7 (external font @import bypassing the app's font system)
+- File: apps/dashboard/src/app/globals.css:14-75 (the design system the rest of the dashboard uses)
+- File: apps/dashboard/src/components/layout/app-shell.tsx:14 (`/console` listed in `CHROME_HIDDEN_PATHS` so global nav doesn't render)
+- Repro: open `/console` and `/decide` side-by-side at 1440px. Compare background tone, primary type, accent color, button styling, and chrome.
+
+**Fix:**
+Decide whether `/console` is meant to be its own product surface or part of Switchboard. If part: rebuild console.css against the global tokens (`--background`, `--operator`, `--font-sans`, `--border`) and drop the parallel `--c-*` palette, fold the warm-clay surface into `--surface` if needed, and remove the external Fontshare import in favor of the existing Inter / display-font stack. If standalone: make that an explicit product decision, document it in the design system, and align typography weight/size scale at minimum so it does not read as accidental drift.
+
+---
+
+## DC-15
+
+- **Surface:** /console
+- **Sub-surface:** global (font loading)
+- **Dimension:** A
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** S
+
+**What:**
+`console.css:7` imports two font families ("General Sans" and "JetBrains Mono") via `@import url("https://api.fontshare.com/v2/css?...")` from a third-party CDN that is not the host the rest of the app uses. Until that stylesheet resolves the page renders in the system fallback stack (`ui-sans-serif, system-ui, -apple-system, sans-serif`), so first paint shows generic UI fonts and then re-flows when the custom faces arrive. This is a flash-of-fallback-text moment on the highest-traffic operator surface, and it is also a third-party font dependency the rest of the app does not have.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console.css:7 (`@import url("https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&f[]=jetbrains-mono@400,500,600&display=swap");`)
+- File: apps/dashboard/src/components/console/console.css:22-23 (font-family stack falls back to system fonts before Fontshare resolves)
+- Repro: open `/console` on a fresh load with throttled network in devtools and watch the operating strip / numbers strip re-flow as the Fontshare fonts swap in.
+
+**Fix:**
+Either drop the custom font stack and use the app's existing Inter / display font (preferred — folds into DC-14), or self-host the General Sans / JetBrains Mono faces via `next/font` so they ship with the app bundle, render with `font-display: swap` on the same origin, and don't add a third-party hop on every page load.
+
+---
+
+## DC-16
+
+- **Surface:** /escalations, /conversations, global (operator chat widget)
+- **Sub-surface:** status pills, banners, action buttons
+- **Dimension:** A
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** S
+
+**What:**
+Multiple components on the audited surfaces use raw Tailwind named colors (`bg-blue-50`, `border-blue-200`, `text-blue-800`, `bg-green-100`, `text-green-800`, `bg-amber-100`, `text-amber-800`, `bg-amber-500`, `text-red-600`, `bg-blue-600`, `bg-gray-100`, `text-gray-800`) instead of the design tokens defined in `globals.css` (`positive`, `positive-subtle`, `caution`, `caution-subtle`, `destructive`, `operator`, `muted`). The "Active / You control / Awaiting approval" status pills on `/conversations`, the post-reply info banner and SLA indicators on `/escalations`, the badge on the bottom nav, and the operator chat widget toggle button are all bypassing the warm-neutral / Claude-inspired palette and pulling stock Tailwind blue / green / amber / red. The result is a visibly louder, more web-app-generic palette than the rest of the dashboard.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:49 (`text-red-600` on Overdue chip)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:58 (`text-amber-600` on countdown chip)
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:210 (`border-blue-200 bg-blue-50 text-blue-800` reply-confirmation banner)
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:21,28,35,41 (status pill colors via `bg-{color}-100` + `text-{color}-800`)
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:125-132 (`bg-blue-50`, `border-blue-200`, `bg-white`, `text-blue-700`, `border-blue-300` on the human-override panel)
+- File: apps/dashboard/src/components/layout/owner-tabs.tsx:46 (`bg-amber-500 text-white` on the escalation count badge)
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:41 (`bg-blue-600 text-white hover:bg-blue-700` on the floating chat toggle)
+
+**Fix:**
+Replace the raw color names with semantic tokens: SLA / overdue → `text-destructive` or `text-caution`; "Active" / success → `bg-positive-subtle text-positive`; "You control" / informational → use a neutral `bg-surface-raised text-foreground` or introduce a token for it; "Awaiting approval" → `bg-caution-subtle text-caution`; nav badge → `bg-operator text-operator-foreground`; operator chat toggle → match the rest of the dashboard's primary surface (foreground/background or `bg-operator`).
+
+---
+
+## DC-17
+
+- **Surface:** /escalations
+- **Sub-surface:** page wrapper
+- **Dimension:** A
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** S
+
+**What:**
+`/escalations` (and `/conversations` — see DC-18) wraps its content in `max-w-2xl mx-auto py-6 px-4` instead of using the design-system containers (`page-width`, `content-width`). The ambient `OwnerShell` already wraps non-dashboard pages in `content-width py-6` (42rem max + auto margins + horizontal padding) — so the page nests an inner `max-w-2xl` (32rem) inside the outer `content-width` (42rem), producing double horizontal padding and a constrained 32rem column. Heading style is also `text-xl font-semibold` rather than the editorial display treatment used on `/decide` (`text-[22px] font-semibold tracking-tight`), so the same surface uses two different page-title typographic conventions.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/escalations/page.tsx:4-9 (`<div className="max-w-2xl mx-auto py-6 px-4">` + `<h1 className="text-xl font-semibold mb-4">`)
+- File: apps/dashboard/src/components/layout/owner-shell.tsx:14-16 (outer wrapper already applies `content-width py-6`)
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:228-232 (sibling page uses `text-[22px] font-semibold tracking-tight` + a subtitle)
+- Repro: open `/escalations` and `/decide` at 1440px. The `/escalations` content column is visibly narrower with a smaller, less editorial title; the `/decide` title carries a subtitle while `/escalations` does not.
+
+**Fix:**
+Drop the inner `max-w-2xl mx-auto py-6 px-4` wrapper — the shell already constrains width — and align the page title with the other authenticated pages: a `text-[22px] font-semibold tracking-tight` heading plus a subtitle line in `text-muted-foreground`.
+
+---
+
+## DC-18
+
+- **Surface:** /conversations
+- **Sub-surface:** page wrapper + heading
+- **Dimension:** A
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** S
+
+**What:**
+`/conversations` mirrors DC-17: the page wraps itself in `max-w-2xl mx-auto py-6 px-4 pb-24` and uses `text-xl font-semibold` for the H1 paired with a Lucide `MessageSquare` icon. This double-wraps the `content-width` shell (extra horizontal padding + a narrower column), and the icon-prefixed title contradicts the rest of the dashboard's editorial, text-only heading style. Filter pills below use `border-b-2` underline styling that visually competes with the bottom-tab nav.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:169 (`<div className="max-w-2xl mx-auto py-6 px-4 pb-24">`)
+- File: apps/dashboard/src/app/(auth)/conversations/page.tsx:170-173 (`<MessageSquare className="h-6 w-6" /> <h1 className="text-xl font-semibold">Conversations</h1>`)
+- File: apps/dashboard/src/components/layout/owner-shell.tsx:14-16 (shell already applies `content-width py-6`)
+
+**Fix:**
+Same direction as DC-17: drop the inner `max-w-2xl … pb-24` wrapper, drop the icon, and use the same heading + subtitle pattern (`text-[22px] font-semibold tracking-tight` + a one-line subtitle) used by `/decide`. Keep the bottom padding only as needed to clear the fixed bottom-tab nav.
+
+---
+
+## DC-19
+
+- **Surface:** /decide vs /decide/[id]
+- **Sub-surface:** page chrome (heading, card containers)
+- **Dimension:** A
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** S
+
+**What:**
+The two pages of the Decide surface use visibly different design vocabularies. `/decide` (`page.tsx:230`) renders the heading as `text-[22px] font-semibold tracking-tight` with a muted subtitle, approval cards as `rounded-xl border border-border bg-surface p-6`, and bespoke buttons styled with `bg-positive` / muted ghost. `/decide/[id]` (`[id]/page.tsx:129`) renders the heading as `text-2xl font-bold`, wraps the body in shadcn `Card` / `CardHeader` / `CardContent` chrome with `Badge` components, and uses default `Button` primary / outline pairs for approve/reject. The detail page reads as a different visual style (heavier weight title, generic shadcn card) than the index page that links to it.
+
+**Evidence:**
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:230-232 (`text-[22px] font-semibold tracking-tight` + subtitle)
+- File: apps/dashboard/src/app/(auth)/decide/page.tsx:41-62 (custom approval card chrome: `rounded-xl border border-border bg-surface p-6` + bespoke buttons)
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:129 (`text-2xl font-bold` heading)
+- File: apps/dashboard/src/app/(auth)/decide/[id]/page.tsx:132-227 (shadcn `<Card>` / `<CardHeader>` / `<CardContent>` + `<Badge>` + `<Button>` pairs)
+
+**Fix:**
+Pick one. Most of the rest of the dashboard tracks the editorial, low-chrome treatment used on `/decide` index — port `[id]/page.tsx` to that style: same heading scale and weight, same approval-card chrome, same approve/reject button pair. If the shadcn `Card` chrome stays, use it on the index page too so both pages match.
+
+---
+
+## DC-20
+
+- **Surface:** /console
+- **Sub-surface:** global (stylesheet size)
+- **Dimension:** A
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** M
+
+**What:**
+`apps/dashboard/src/components/console/console.css` is 968 lines, which crosses both the 400-line warn and 600-line error thresholds in `CLAUDE.md`'s "Code Basics" section. The file holds tokens, layout, every zone's styles, every queue-card variant, the table, and the activity scroller in one scope. Files this large hide visual sprawl — multiple unrelated rule blocks share one cascade and minor edits in one zone routinely break another. The companion `console-view.tsx` is also 342 lines, which is fine on its own but compounds the "single-place-for-everything" pattern.
+
+**Evidence:**
+- File: apps/dashboard/src/components/console/console.css (968 lines; CLAUDE.md threshold: 400 warn / 600 error)
+- File: apps/dashboard/src/components/console/console-view.tsx (342 lines)
+
+**Fix:**
+Split `console.css` along the zones already labeled in the file (op-strip, numbers, queue + card variants, agent strip + Nova panel, activity, error banner). Either co-locate per-zone CSS files or, better, fold the tokens into the global system (DC-14) so each zone's local CSS shrinks. Goal is per-file under the 400-line warn line.
+
+---
+
+## DC-21
+
+- **Surface:** /escalations (also visible globally in bottom-tab nav)
+- **Sub-surface:** SLA indicator + escalation count badge
+- **Dimension:** A
+- **Severity:** Low
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** S
+
+**What:**
+The "Overdue" / "h left" SLA chips on `/escalations` and the unread-count badge on the bottom-tab nav don't carry the dashboard's iconographic vocabulary. The chips pair `text-red-600` and `text-amber-600` with a tiny `Clock` icon — louder than the rest of the dashboard's quiet treatment of state — and the nav badge is a saturated `bg-amber-500` circle that does not match the warmer operator amber elsewhere. Each is small in isolation, but they're the only reds and the only saturated yellows on otherwise-warm-neutral surfaces, so they catch the eye disproportionately.
+
+**Evidence:**
+- File: apps/dashboard/src/components/escalations/escalation-list.tsx:42-63 (`SlaIndicator` uses `text-red-600` / `text-amber-600` with a Lucide `Clock`)
+- File: apps/dashboard/src/components/layout/owner-tabs.tsx:45-48 (escalation count badge uses `bg-amber-500 text-white`)
+
+**Fix:**
+Move the chips to design tokens — `text-destructive` for overdue, `text-caution` for time-remaining — and either drop the icon or use the same muted chrome used elsewhere on the surface. Move the nav badge to the `--operator` token so the saturation matches the rest of the operator-amber accents.
+
+---
+
+## DC-22
+
+- **Surface:** /decide, /escalations, /conversations (anywhere the OwnerShell is mounted)
+- **Sub-surface:** floating operator chat widget
+- **Dimension:** A
+- **Severity:** Medium
+- **Affects:** all users
+- **Status:** Open
+- **Discovered-at:** 034813abf90358541353cf0e5fb76b7dc2c40502
+- **Effort:** S
+
+**What:**
+The operator chat widget is a permanent floating button at `fixed bottom-4 right-4 z-50` styled `rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700` — the only blue surface in the dashboard. It's hidden only on `/console`, so on every other page in scope it overlays content and sits directly above the 64px-tall fixed bottom-tab nav (`owner-tabs.tsx:29` — `h-16`). The button's stock-blue color, "Close" / "Chat" text label (instead of an icon), and stacking position next to the nav read as a third-party widget bolted onto the surface rather than a native control.
+
+**Evidence:**
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:8 (`HIDDEN_PATHS = ["/console"]` — visible on every other authenticated page)
+- File: apps/dashboard/src/components/operator-chat/operator-chat-widget.tsx:39-45 (`fixed bottom-4 right-4 z-50 rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700`)
+- File: apps/dashboard/src/components/layout/owner-tabs.tsx:29 (`fixed bottom-0 … h-16` — the nav this button stacks on top of)
+- Repro: open `/decide` at 375px width and at 1440px. Note that the floating chat button visually competes with the bottom-tab nav and on narrow viewports overlaps the rightmost tab's hit area.
+
+**Fix:**
+Re-style the toggle to use design tokens (e.g. `bg-foreground text-background` or `bg-operator text-operator-foreground`) and pick one form factor — either a small icon button or a labeled pill, not both. Lift the bottom offset above the 64px nav (`bottom-20` minimum on small viewports) so it never overlaps tab hit areas. Consider whether this widget should be visible on every authenticated page or limited to a subset (settings / dashboard) by default.
