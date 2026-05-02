@@ -175,9 +175,6 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
               <span className="pulse" aria-hidden="true" />
               {opStrip.dispatch === "live" ? "Live" : "Halted"}
             </span>
-            <button className="op-halt" type="button">
-              Halt
-            </button>
           </div>
         </div>
       </header>
