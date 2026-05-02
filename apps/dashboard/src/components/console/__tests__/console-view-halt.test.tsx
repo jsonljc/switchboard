@@ -36,10 +36,11 @@ async function mockAllZoneHooksLoading() {
   vi.mocked(auditMod.useAudit).mockReturnValue(loading as never);
 }
 
-describe("ConsoleView Halt button (DC-41 ship-with deferral)", () => {
-  it("does not render the Halt button at v1 launch", async () => {
+describe("ConsoleView Halt button", () => {
+  it("renders OpStrip skeleton (and no Halt button) while org config is loading", async () => {
     await mockAllZoneHooksLoading();
     const { queryByText } = render(<ConsoleView />, { wrapper });
+    // When org config is loading, OpStrip renders a skeleton — no Halt button visible
     expect(queryByText(/^Halt$/)).not.toBeInTheDocument();
   });
 });
