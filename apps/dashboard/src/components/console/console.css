@@ -136,12 +136,22 @@
     opacity: 0;
   }
 }
+[data-v6-console] .op-help,
 [data-v6-console] .op-halt {
   color: var(--c-text-3);
-  transition: color 180ms ease;
+  padding: 0.25rem 0.55rem;
+  border-radius: 2px;
+  transition: color 180ms ease, background 180ms ease;
+  font: inherit;
+  letter-spacing: 0.1em;
 }
+[data-v6-console] .op-help:hover,
 [data-v6-console] .op-halt:hover {
   color: var(--c-text);
+  background: hsl(20 10% 14% / 0.05);
+}
+[data-v6-console] .op-halt.is-halted {
+  color: var(--c-coral);
 }
 
 /* ---------- Page frame ---------- */
@@ -965,4 +975,20 @@
 [data-v6-console] .timer .stage {
   color: var(--c-text-2);
   font-weight: 500;
+}
+
+/* ---------- Tour flash (applied transiently by useWelcomeBanner.tour()) ---------- */
+[data-v6-console] section.is-flashing,
+[data-v6-console] .zone3.is-flashing,
+[data-v6-console] .zone4.is-flashing {
+  animation: zone-flash 1000ms ease-out;
+}
+
+@keyframes zone-flash {
+  from {
+    box-shadow: inset 0 0 0 2px var(--c-coral);
+  }
+  to {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
 }
