@@ -80,7 +80,7 @@ if (process.env.EMAIL_SERVER_HOST) {
   );
 }
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authConfig: NextAuthConfig = {
   secret: process.env.NEXTAUTH_SECRET,
   providers,
   adapter: {
@@ -203,6 +203,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.principalId = dashUser.principalId;
           }
         }
+
+        // Read onboardingComplete on initial sign-in only. Per spec §12, this
+        // is intentionally NOT re-queried on every token refresh; if a user
+        // finishes onboarding mid-session, the value stays stale until the
+        // next sign-in. Acceptable trade-off for v1 (avoids a DB hit per req).
+        // The org row lives in the OrganizationConfig table; spec §12 calls it
+        // "Organization.onboardingComplete" — same field, table-name aside.
+        if (token.organizationId) {
+          const org = await prisma.organizationConfig.findUnique({
+            where: { id: token.organizationId as string },
+            select: { onboardingComplete: true },
+          });
+          token.onboardingComplete = org?.onboardingComplete ?? false;
+        }
       }
 
       // Refresh emailVerified from DB on each token refresh so the banner
@@ -228,8 +242,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const ext = session as unknown as Record<string, unknown>;
       ext.organizationId = token.organizationId;
       ext.principalId = token.principalId;
+      ext.onboardingComplete = token.onboardingComplete ?? false;
       ext.emailVerified = token.emailVerified ?? null;
       return session;
     },
   },
-});
+};
+
+export const { handlers, signIn, signOut, auth } = NextAuth(authConfig);
