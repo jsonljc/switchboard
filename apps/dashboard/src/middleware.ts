@@ -25,6 +25,7 @@ const AUTH_PAGE_PREFIXES = [
   "/console",
   "/escalations",
   "/conversations",
+  "/post-auth",
 ] as const;
 
 interface RateLimitEntry {
@@ -129,5 +130,6 @@ export const config = {
     "/console/:path*",
     "/escalations/:path*",
     "/conversations/:path*",
+    "/post-auth/:path*",
   ],
 };

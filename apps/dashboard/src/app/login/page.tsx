@@ -46,14 +46,14 @@ function LoginForm() {
       setError("Invalid email or password");
       setIsLoading(false);
     } else {
-      window.location.href = explicitCallback ?? "/";
+      window.location.href = explicitCallback ?? "/post-auth";
     }
   };
 
   const handleMagicLinkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await signIn("email", { email, callbackUrl: explicitCallback ?? "/" });
+    await signIn("email", { email, callbackUrl: explicitCallback ?? "/post-auth" });
     setIsLoading(false);
   };
 
@@ -188,7 +188,7 @@ function LoginForm() {
             <>
               <button
                 type="button"
-                onClick={() => signIn("google", { callbackUrl: explicitCallback ?? "/" })}
+                onClick={() => signIn("google", { callbackUrl: explicitCallback ?? "/post-auth" })}
                 className="w-full flex items-center justify-center gap-3 transition-colors"
                 style={{
                   height: "48px",
