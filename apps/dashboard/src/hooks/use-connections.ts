@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface Connection {
   id: string;
@@ -19,14 +19,17 @@ async function fetchConnections(): Promise<{ connections: Connection[] }> {
 }
 
 export function useConnections() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.connections.list(),
+    queryKey: keys?.connections.list() ?? ["__disabled_connections_list__"],
     queryFn: fetchConnections,
+    enabled: !!keys,
   });
 }
 
 export function useCreateConnection() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (body: {
       serviceId: string;
@@ -47,13 +50,14 @@ export function useCreateConnection() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.connections.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.connections.all() });
     },
   });
 }
 
 export function useDeleteConnection() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/dashboard/connections/${id}`, { method: "DELETE" });
@@ -64,13 +68,14 @@ export function useDeleteConnection() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.connections.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.connections.all() });
     },
   });
 }
 
 export function useTestConnection() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/dashboard/connections/${id}/test`, { method: "POST" });
@@ -81,13 +86,14 @@ export function useTestConnection() {
       return res.json() as Promise<{ healthy: boolean; detail?: string }>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.connections.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.connections.all() });
     },
   });
 }
 
 export function useUpdateConnection() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async ({
       id,
@@ -111,7 +117,7 @@ export function useUpdateConnection() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.connections.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.connections.all() });
     },
   });
 }

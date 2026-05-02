@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface AuditEntryResponse {
   id: string;
@@ -38,12 +38,14 @@ async function fetchAudit(params?: { eventType?: string; limit?: number }): Prom
 }
 
 export function useAudit(params?: { eventType?: string; limit?: number }) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.audit.list({
+    queryKey: keys?.audit.list({
       eventType: params?.eventType,
       limit: params?.limit?.toString(),
-    }),
+    }) ?? ["__disabled_audit_list__"],
     queryFn: () => fetchAudit(params),
     refetchInterval: 30_000,
+    enabled: !!keys,
   });
 }

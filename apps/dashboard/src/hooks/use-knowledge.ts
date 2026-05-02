@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface KnowledgeDocument {
   documentId: string;
@@ -19,14 +19,17 @@ async function fetchDocuments(agentId?: string): Promise<{ documents: KnowledgeD
 }
 
 export function useKnowledgeDocuments(agentId?: string) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.knowledge.documents(agentId),
+    queryKey: keys?.knowledge.documents(agentId) ?? ["__disabled_knowledge_documents__"],
     queryFn: () => fetchDocuments(agentId),
+    enabled: !!keys,
   });
 }
 
 export function useUploadKnowledge() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (data: { content: string; fileName: string; agentId?: string }) => {
       const res = await fetch("/api/dashboard/knowledge/upload", {
@@ -38,13 +41,14 @@ export function useUploadKnowledge() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.knowledge.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.knowledge.all() });
     },
   });
 }
 
 export function useDeleteDocument() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (documentId: string) => {
       const res = await fetch(`/api/dashboard/knowledge?documentId=${documentId}`, {
@@ -54,7 +58,7 @@ export function useDeleteDocument() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.knowledge.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.knowledge.all() });
     },
   });
 }

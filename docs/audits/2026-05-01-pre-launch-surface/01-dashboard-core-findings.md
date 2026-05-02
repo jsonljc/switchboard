@@ -293,7 +293,7 @@ Add `/console`, `/escalations`, `/conversations` to both `AUTH_PAGE_PREFIXES` an
 - **Dimension:** I
 - **Severity:** High
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #345)
 - **Discovered-at:** 957356d44f1c28c642cc525261d00d834ba6b54e
 - **Effort:** M
 
@@ -370,7 +370,7 @@ Either gate render on `status === "authenticated"` (return a skeleton/null while
 - **Dimension:** I
 - **Severity:** Medium
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #345)
 - **Discovered-at:** 957356d44f1c28c642cc525261d00d834ba6b54e
 - **Effort:** S
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "../lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export function useGovernanceStatus() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.governance.status("current"),
+    queryKey: keys?.governance.status("current") ?? ["__disabled_governance_status__"],
     queryFn: async () => {
       const res = await fetch("/api/dashboard/governance/status");
       if (!res.ok) throw new Error("Failed to fetch governance status");
@@ -17,11 +18,13 @@ export function useGovernanceStatus() {
         haltReason: string | null;
       }>;
     },
+    enabled: !!keys,
   });
 }
 
 export function useEmergencyHalt() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (reason?: string) => {
       const res = await fetch("/api/dashboard/governance/halt", {
@@ -33,13 +36,14 @@ export function useEmergencyHalt() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.governance.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.governance.all() });
     },
   });
 }
 
 export function useResume() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/dashboard/governance/resume", {
@@ -54,14 +58,15 @@ export function useResume() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.governance.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.governance.all() });
     },
   });
 }
 
 export function useReadiness(agentId = "alex") {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.readiness.check(agentId),
+    queryKey: keys?.readiness.check(agentId) ?? ["__disabled_readiness_check__"],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/agents/${agentId}/readiness`);
       if (!res.ok) throw new Error("Failed to fetch readiness");
@@ -76,5 +81,6 @@ export function useReadiness(agentId = "alex") {
         }>;
       }>;
     },
+    enabled: !!keys,
   });
 }

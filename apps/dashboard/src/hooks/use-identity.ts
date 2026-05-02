@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import type { IdentitySpec } from "@switchboard/schemas";
 
 async function fetchIdentity(): Promise<{ spec: IdentitySpec }> {
@@ -11,14 +11,17 @@ async function fetchIdentity(): Promise<{ spec: IdentitySpec }> {
 }
 
 export function useIdentity() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.identity.all,
+    queryKey: keys?.identity.all() ?? ["__disabled_identity__"],
     queryFn: fetchIdentity,
+    enabled: !!keys,
   });
 }
 
 export function useUpdateIdentity() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
 
   return useMutation({
     mutationFn: async (data: { id: string } & Partial<IdentitySpec>) => {
@@ -31,7 +34,7 @@ export function useUpdateIdentity() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.identity.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.identity.all() });
     },
   });
 }

@@ -1,7 +1,8 @@
 // apps/dashboard/src/app/me/page.tsx
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { useAgentRoster } from "@/hooks/use-agents";
@@ -10,11 +11,13 @@ import { AGENT_ICONS } from "@/components/team/agent-icons";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { STATUS_DOT, STATUS_LABEL } from "@/lib/agent-status";
+import { signOut } from "@/lib/sign-out";
 
 export default function MePage() {
   const { status } = useSession();
   const { data: rosterData, isLoading } = useAgentRoster();
   const { theme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
 
   if (status === "unauthenticated") redirect("/login");
 
@@ -83,7 +86,7 @@ export default function MePage() {
         </button>
 
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => signOut(queryClient)}
           className="w-full text-left px-4 py-3.5 rounded-lg text-[15px] text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
         >
           Sign out

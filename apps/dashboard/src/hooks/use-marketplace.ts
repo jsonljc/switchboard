@@ -8,13 +8,14 @@ import type {
   TrustScoreBreakdown,
   DraftFAQ,
 } from "@/lib/api-client";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 // ── Listings ──
 
 export function useListings(filters?: { status?: string; type?: string }) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.marketplace.listings(filters),
+    queryKey: keys?.marketplace.listings(filters) ?? ["__disabled_marketplace_listings__"],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters?.status) params.set("status", filters.status);
@@ -25,64 +26,75 @@ export function useListings(filters?: { status?: string; type?: string }) {
       const data = await res.json();
       return data.listings as MarketplaceListing[];
     },
+    enabled: !!keys,
   });
 }
 
 export function useListing(id: string) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.marketplace.listing(id),
+    queryKey: keys?.marketplace.listing(id) ?? ["__disabled_marketplace_listing__"],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/marketplace/listings/${id}`);
       if (!res.ok) throw new Error("Failed to fetch listing");
       const data = await res.json();
       return data.listing as MarketplaceListing;
     },
-    enabled: !!id,
+    enabled: !!id && !!keys,
   });
 }
 
 export function useTrustScore(id: string) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.marketplace.trust(id),
+    queryKey: keys?.marketplace.trust(id) ?? ["__disabled_marketplace_trust__"],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/marketplace/listings/${id}/trust`);
       if (!res.ok) throw new Error("Failed to fetch trust score");
       return (await res.json()) as TrustScoreBreakdown;
     },
-    enabled: !!id,
+    enabled: !!id && !!keys,
   });
 }
 
 export function useTrustProgression(listingId: string) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.marketplace.trustProgression(listingId),
+    queryKey: keys?.marketplace.trustProgression(listingId) ?? [
+      "__disabled_marketplace_trust_progression__",
+    ],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/marketplace/listings/${listingId}/trust/progression`);
       if (!res.ok) throw new Error("Failed to fetch trust progression");
       const data = await res.json();
       return data.progression as Array<{ timestamp: string; score: number }>;
     },
-    enabled: !!listingId,
+    enabled: !!listingId && !!keys,
   });
 }
 
 // ── Deployments ──
 
 export function useDeployments() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.marketplace.deployments(),
+    queryKey: keys?.marketplace.deployments() ?? ["__disabled_marketplace_deployments__"],
     queryFn: async () => {
       const res = await fetch("/api/dashboard/marketplace/deployments");
       if (!res.ok) throw new Error("Failed to fetch deployments");
       const data = await res.json();
       return data.deployments as MarketplaceDeployment[];
     },
+    enabled: !!keys,
   });
 }
 
 export function useDeployment(id: string | null) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: ["marketplace", "deployment", id],
+    queryKey: keys
+      ? [...keys.marketplace.all(), "deployment", id]
+      : ["__disabled_marketplace_deployment__", id],
     queryFn: async () => {
       const res = await fetch("/api/dashboard/marketplace/deployments");
       if (!res.ok) throw new Error("Failed to fetch deployments");
@@ -91,12 +103,13 @@ export function useDeployment(id: string | null) {
       if (!deployment) throw new Error("Deployment not found");
       return deployment as MarketplaceDeployment;
     },
-    enabled: !!id,
+    enabled: !!id && !!keys,
   });
 }
 
 export function useDeployListing() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async ({
       listingId,
@@ -120,7 +133,9 @@ export function useDeployListing() {
       return data.deployment as MarketplaceDeployment;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.marketplace.deployments() });
+      if (keys) {
+        void queryClient.invalidateQueries({ queryKey: keys.marketplace.deployments() });
+      }
     },
   });
 }
@@ -128,8 +143,9 @@ export function useDeployListing() {
 // ── Tasks ──
 
 export function useTasks(filters?: { status?: string; deploymentId?: string }) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.tasks.list(filters),
+    queryKey: keys?.tasks.list(filters) ?? ["__disabled_tasks_list__"],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters?.status) params.set("status", filters.status);
@@ -141,11 +157,13 @@ export function useTasks(filters?: { status?: string; deploymentId?: string }) {
       return data.tasks as MarketplaceTask[];
     },
     refetchInterval: 60_000, // Poll every 60 seconds
+    enabled: !!keys,
   });
 }
 
 export function useReviewTask() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async ({
       taskId,
@@ -166,13 +184,14 @@ export function useReviewTask() {
       return data.task as MarketplaceTask;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      if (keys) void queryClient.invalidateQueries({ queryKey: keys.tasks.all() });
     },
   });
 }
 
 export function useSubmitTaskOutput() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async ({ taskId, output }: { taskId: string; output: Record<string, unknown> }) => {
       const res = await fetch(`/api/dashboard/marketplace/tasks/${taskId}/submit`, {
@@ -185,7 +204,7 @@ export function useSubmitTaskOutput() {
       return data.task as MarketplaceTask;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      if (keys) void queryClient.invalidateQueries({ queryKey: keys.tasks.all() });
     },
   });
 }
@@ -193,8 +212,9 @@ export function useSubmitTaskOutput() {
 // ── FAQ Drafts ──
 
 export function useDraftFAQs(deploymentId: string, orgId: string) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.marketplace.faqDrafts(deploymentId),
+    queryKey: keys?.marketplace.faqDrafts(deploymentId) ?? ["__disabled_marketplace_faq_drafts__"],
     queryFn: async () => {
       const res = await fetch(
         `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts?orgId=${orgId}`,
@@ -203,12 +223,13 @@ export function useDraftFAQs(deploymentId: string, orgId: string) {
       const data = await res.json();
       return data.data as DraftFAQ[];
     },
-    enabled: !!deploymentId,
+    enabled: !!deploymentId && !!keys,
   });
 }
 
 export function useApproveFAQ(deploymentId: string, orgId: string) {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (faqId: string) => {
       const res = await fetch(
@@ -218,15 +239,18 @@ export function useApproveFAQ(deploymentId: string, orgId: string) {
       if (!res.ok) throw new Error("Failed to approve FAQ");
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.marketplace.faqDrafts(deploymentId),
-      });
+      if (keys) {
+        void queryClient.invalidateQueries({
+          queryKey: keys.marketplace.faqDrafts(deploymentId),
+        });
+      }
     },
   });
 }
 
 export function useRejectFAQ(deploymentId: string, orgId: string) {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (faqId: string) => {
       const res = await fetch(
@@ -236,9 +260,11 @@ export function useRejectFAQ(deploymentId: string, orgId: string) {
       if (!res.ok) throw new Error("Failed to reject FAQ");
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.marketplace.faqDrafts(deploymentId),
-      });
+      if (keys) {
+        void queryClient.invalidateQueries({
+          queryKey: keys.marketplace.faqDrafts(deploymentId),
+        });
+      }
     },
   });
 }

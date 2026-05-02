@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import type { DashboardOverview } from "@switchboard/schemas";
 
 async function fetchOverview(): Promise<DashboardOverview> {
@@ -11,10 +11,12 @@ async function fetchOverview(): Promise<DashboardOverview> {
 }
 
 export function useDashboardOverview() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.dashboard.overview(),
+    queryKey: keys?.dashboard.overview() ?? ["__disabled_dashboard_overview__"],
     queryFn: fetchOverview,
     refetchInterval: 60_000,
     retry: 1,
+    enabled: !!keys,
   });
 }

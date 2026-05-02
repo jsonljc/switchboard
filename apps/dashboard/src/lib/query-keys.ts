@@ -1,133 +1,148 @@
-export const queryKeys = {
+/**
+ * Tenant-scoped React Query key factory.
+ *
+ * Every cache key is prefixed with the active orgId so that:
+ *   1. A signed-in user can never observe another org's cached data.
+ *   2. signOut → queryClient.clear() purges cleanly without leaking across
+ *      sessions (because keys for a different org never collide).
+ *
+ * Consumers use `useScopedQueryKeys()` (apps/dashboard/src/hooks/use-query-keys.ts),
+ * which returns `null` when the session has no organizationId and otherwise
+ * returns this factory bound to the current org.
+ */
+export const scopedKeys = (orgId: string) => ({
   identity: {
-    all: ["identity"] as const,
-    spec: (principalId: string) => ["identity", "spec", principalId] as const,
-    specById: (id: string) => ["identity", "spec-by-id", id] as const,
+    all: () => [orgId, "identity"] as const,
+    spec: (principalId: string) => [orgId, "identity", "spec", principalId] as const,
+    specById: (id: string) => [orgId, "identity", "spec-by-id", id] as const,
   },
   approvals: {
-    all: ["approvals"] as const,
-    pending: () => ["approvals", "pending"] as const,
-    detail: (id: string) => ["approvals", "detail", id] as const,
+    all: () => [orgId, "approvals"] as const,
+    pending: () => [orgId, "approvals", "pending"] as const,
+    detail: (id: string) => [orgId, "approvals", "detail", id] as const,
   },
   audit: {
-    all: ["audit"] as const,
-    list: (filters?: Record<string, string | undefined>) => ["audit", "list", filters] as const,
+    all: () => [orgId, "audit"] as const,
+    list: (filters?: Record<string, string | undefined>) =>
+      [orgId, "audit", "list", filters] as const,
   },
   policies: {
-    all: ["policies"] as const,
-    list: () => ["policies", "list"] as const,
+    all: () => [orgId, "policies"] as const,
+    list: () => [orgId, "policies", "list"] as const,
   },
   health: {
-    all: ["health"] as const,
-    deep: () => ["health", "deep"] as const,
+    all: () => [orgId, "health"] as const,
+    deep: () => [orgId, "health", "deep"] as const,
   },
   tokenUsage: {
-    all: ["tokenUsage"] as const,
-    summary: (period?: string) => ["tokenUsage", "summary", period] as const,
-    trend: (days?: number) => ["tokenUsage", "trend", days] as const,
+    all: () => [orgId, "tokenUsage"] as const,
+    summary: (period?: string) => [orgId, "tokenUsage", "summary", period] as const,
+    trend: (days?: number) => [orgId, "tokenUsage", "trend", days] as const,
   },
   connections: {
-    all: ["connections"] as const,
-    list: () => ["connections", "list"] as const,
+    all: () => [orgId, "connections"] as const,
+    list: () => [orgId, "connections", "list"] as const,
   },
   channels: {
-    all: ["channels"] as const,
-    list: () => ["channels", "list"] as const,
+    all: () => [orgId, "channels"] as const,
+    list: () => [orgId, "channels", "list"] as const,
   },
   orgConfig: {
-    all: ["orgConfig"] as const,
-    current: () => ["orgConfig", "current"] as const,
+    all: () => [orgId, "orgConfig"] as const,
+    current: () => [orgId, "orgConfig", "current"] as const,
   },
   competence: {
-    all: ["competence"] as const,
-    records: (principalId?: string) => ["competence", "records", principalId] as const,
-    policies: () => ["competence", "policies"] as const,
+    all: () => [orgId, "competence"] as const,
+    records: (principalId?: string) => [orgId, "competence", "records", principalId] as const,
+    policies: () => [orgId, "competence", "policies"] as const,
   },
   dlq: {
-    all: ["dlq"] as const,
-    list: (status?: string) => ["dlq", "list", status] as const,
-    stats: () => ["dlq", "stats"] as const,
+    all: () => [orgId, "dlq"] as const,
+    list: (status?: string) => [orgId, "dlq", "list", status] as const,
+    stats: () => [orgId, "dlq", "stats"] as const,
   },
   conversations: {
-    all: ["conversations"] as const,
+    all: () => [orgId, "conversations"] as const,
     list: (filters?: Record<string, string | undefined>) =>
-      ["conversations", "list", filters] as const,
-    detail: (id: string) => ["conversations", "detail", id] as const,
+      [orgId, "conversations", "list", filters] as const,
+    detail: (id: string) => [orgId, "conversations", "detail", id] as const,
   },
   agents: {
-    all: ["agents"] as const,
-    roster: () => ["agents", "roster"] as const,
-    state: () => ["agents", "state"] as const,
-    activity: () => ["agents", "activity"] as const,
+    all: () => [orgId, "agents"] as const,
+    roster: () => [orgId, "agents", "roster"] as const,
+    state: () => [orgId, "agents", "state"] as const,
+    activity: () => [orgId, "agents", "activity"] as const,
   },
   inbox: {
-    all: ["inbox"] as const,
-    list: () => ["inbox", "list"] as const,
-    count: () => ["inbox", "count"] as const,
+    all: () => [orgId, "inbox"] as const,
+    list: () => [orgId, "inbox", "list"] as const,
+    count: () => [orgId, "inbox", "count"] as const,
   },
   operatorConfig: {
-    all: ["operatorConfig"] as const,
-    current: () => ["operatorConfig", "current"] as const,
-    autonomy: () => ["operatorConfig", "autonomy"] as const,
+    all: () => [orgId, "operatorConfig"] as const,
+    current: () => [orgId, "operatorConfig", "current"] as const,
+    autonomy: () => [orgId, "operatorConfig", "autonomy"] as const,
   },
   knowledge: {
-    all: ["knowledge"] as const,
-    documents: (agentId?: string) => ["knowledge", "documents", agentId] as const,
+    all: () => [orgId, "knowledge"] as const,
+    documents: (agentId?: string) => [orgId, "knowledge", "documents", agentId] as const,
   },
   escalations: {
-    all: ["escalations"] as const,
+    all: () => [orgId, "escalations"] as const,
   },
   governance: {
-    all: ["governance"] as const,
-    status: (orgId: string) => ["governance", "status", orgId] as const,
+    all: () => [orgId, "governance"] as const,
+    status: (id: string) => [orgId, "governance", "status", id] as const,
   },
   readiness: {
-    all: ["readiness"] as const,
-    check: (agentId: string) => ["readiness", "check", agentId] as const,
+    all: () => [orgId, "readiness"] as const,
+    check: (agentId: string) => [orgId, "readiness", "check", agentId] as const,
   },
   marketplace: {
-    all: ["marketplace"] as const,
+    all: () => [orgId, "marketplace"] as const,
     listings: (filters?: Record<string, string | undefined>) =>
-      ["marketplace", "listings", filters] as const,
-    listing: (id: string) => ["marketplace", "listing", id] as const,
-    trust: (id: string) => ["marketplace", "trust", id] as const,
-    trustProgression: (id: string) => ["marketplace", "trust-progression", id] as const,
-    deployments: () => ["marketplace", "deployments"] as const,
-    faqDrafts: (deploymentId: string) => ["marketplace", "faq-drafts", deploymentId] as const,
-    traces: (deploymentId: string) => ["marketplace", "traces", deploymentId] as const,
-    trace: (traceId: string) => ["marketplace", "trace", traceId] as const,
+      [orgId, "marketplace", "listings", filters] as const,
+    listing: (id: string) => [orgId, "marketplace", "listing", id] as const,
+    trust: (id: string) => [orgId, "marketplace", "trust", id] as const,
+    trustProgression: (id: string) => [orgId, "marketplace", "trust-progression", id] as const,
+    deployments: () => [orgId, "marketplace", "deployments"] as const,
+    faqDrafts: (deploymentId: string) =>
+      [orgId, "marketplace", "faq-drafts", deploymentId] as const,
+    traces: (deploymentId: string) => [orgId, "marketplace", "traces", deploymentId] as const,
+    trace: (traceId: string) => [orgId, "marketplace", "trace", traceId] as const,
   },
   creativeJobs: {
-    all: ["creativeJobs"] as const,
-    list: (deploymentId: string) => ["creativeJobs", "list", deploymentId] as const,
-    detail: (id: string) => ["creativeJobs", "detail", id] as const,
-    estimate: (id: string) => ["creativeJobs", "estimate", id] as const,
+    all: () => [orgId, "creativeJobs"] as const,
+    list: (deploymentId: string) => [orgId, "creativeJobs", "list", deploymentId] as const,
+    detail: (id: string) => [orgId, "creativeJobs", "detail", id] as const,
+    estimate: (id: string) => [orgId, "creativeJobs", "estimate", id] as const,
   },
   adOptimizer: {
-    all: ["adOptimizer"] as const,
-    audit: (deploymentId: string) => ["adOptimizer", "audit", deploymentId] as const,
+    all: () => [orgId, "adOptimizer"] as const,
+    audit: (deploymentId: string) => [orgId, "adOptimizer", "audit", deploymentId] as const,
   },
   tasks: {
-    all: ["tasks"] as const,
-    list: (filters?: Record<string, string | undefined>) => ["tasks", "list", filters] as const,
+    all: () => [orgId, "tasks"] as const,
+    list: (filters?: Record<string, string | undefined>) =>
+      [orgId, "tasks", "list", filters] as const,
   },
   persona: {
-    all: ["persona"] as const,
-    mine: () => [...queryKeys.persona.all, "mine"] as const,
+    all: () => [orgId, "persona"] as const,
+    mine: () => [orgId, "persona", "mine"] as const,
   },
   playbook: {
-    all: ["playbook"] as const,
-    current: () => [...queryKeys.playbook.all, "current"] as const,
+    all: () => [orgId, "playbook"] as const,
+    current: () => [orgId, "playbook", "current"] as const,
   },
   scan: {
-    all: ["scan"] as const,
+    all: () => [orgId, "scan"] as const,
   },
   modules: {
-    all: ["modules"] as const,
-    status: () => [...queryKeys.modules.all, "status"] as const,
+    all: () => [orgId, "modules"] as const,
+    status: () => [orgId, "modules", "status"] as const,
   },
   dashboard: {
-    all: ["dashboard"] as const,
-    overview: () => ["dashboard", "overview"] as const,
+    all: () => [orgId, "dashboard"] as const,
+    overview: () => [orgId, "dashboard", "overview"] as const,
   },
-};
+});

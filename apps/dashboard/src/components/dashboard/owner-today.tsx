@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import { useFirstRun } from "@/hooks/use-first-run";
 import { useEntrancePlayed } from "@/hooks/use-entrance-played";
@@ -37,6 +37,7 @@ export function OwnerToday() {
   const { isFirstRun, dismissBanner } = useFirstRun();
   const { hasPlayed, markPlayed } = useEntrancePlayed();
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
   const { data: modules } = useModuleStatus();
@@ -95,8 +96,10 @@ export function OwnerToday() {
     },
     onSettled: () => {
       setRespondingId(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.dashboard.all() });
+        queryClient.invalidateQueries({ queryKey: keys.approvals.all() });
+      }
     },
   });
 
@@ -106,7 +109,7 @@ export function OwnerToday() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taskId, status: "completed" }),
     });
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+    if (keys) queryClient.invalidateQueries({ queryKey: keys.dashboard.all() });
   };
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface AuditReportSummary {
   totalSpend: number;
@@ -83,8 +83,9 @@ interface TaskRecord {
 }
 
 export function useAdOptimizerAudit(deploymentId: string | undefined) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.adOptimizer.audit(deploymentId ?? ""),
+    queryKey: keys?.adOptimizer.audit(deploymentId ?? "") ?? ["__disabled_ad_optimizer_audit__"],
     queryFn: async () => {
       const params = new URLSearchParams({
         deploymentId: deploymentId!,
@@ -118,7 +119,7 @@ export function useAdOptimizerAudit(deploymentId: string | undefined) {
         })),
       };
     },
-    enabled: !!deploymentId,
+    enabled: !!deploymentId && !!keys,
     refetchInterval: 60_000,
   });
 }

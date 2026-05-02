@@ -1,10 +1,11 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export function useConversationOverride() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async ({ threadId, override }: { threadId: string; override: boolean }) => {
       const res = await fetch(`/api/dashboard/conversations/${threadId}/override`, {
@@ -16,7 +17,7 @@ export function useConversationOverride() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.conversations.all() });
     },
   });
 }

@@ -2,11 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreativeJobSummary } from "@/lib/api-client";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export function useCreativeJobs(deploymentId: string) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.creativeJobs.list(deploymentId),
+    queryKey: keys?.creativeJobs.list(deploymentId) ?? ["__disabled_creative_jobs_list__"],
     queryFn: async () => {
       const res = await fetch(
         `/api/dashboard/marketplace/creative-jobs?deploymentId=${encodeURIComponent(deploymentId)}`,
@@ -15,7 +16,7 @@ export function useCreativeJobs(deploymentId: string) {
       const data = await res.json();
       return data.jobs as CreativeJobSummary[];
     },
-    enabled: !!deploymentId,
+    enabled: !!deploymentId && !!keys,
     refetchInterval: (query) => {
       const jobs = query.state.data;
       if (!jobs) return false;
@@ -26,8 +27,9 @@ export function useCreativeJobs(deploymentId: string) {
 }
 
 export function useCreativeJob(id: string, initialData?: CreativeJobSummary) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.creativeJobs.detail(id),
+    queryKey: keys?.creativeJobs.detail(id) ?? ["__disabled_creative_jobs_detail__"],
     initialData,
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/marketplace/creative-jobs/${id}`);
@@ -35,7 +37,7 @@ export function useCreativeJob(id: string, initialData?: CreativeJobSummary) {
       const data = await res.json();
       return data.job as CreativeJobSummary;
     },
-    enabled: !!id,
+    enabled: !!id && !!keys,
     refetchInterval: (query) => {
       const job = query.state.data;
       if (!job) return false;
@@ -46,6 +48,7 @@ export function useCreativeJob(id: string, initialData?: CreativeJobSummary) {
 
 export function useApproveStage() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async ({
       jobId,
@@ -66,14 +69,15 @@ export function useApproveStage() {
       return data as { job: CreativeJobSummary; action: string };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.creativeJobs.all });
+      if (keys) void queryClient.invalidateQueries({ queryKey: keys.creativeJobs.all() });
     },
   });
 }
 
 export function useCostEstimate(jobId: string, enabled: boolean) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.creativeJobs.estimate(jobId),
+    queryKey: keys?.creativeJobs.estimate(jobId) ?? ["__disabled_creative_jobs_estimate__"],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/marketplace/creative-jobs/${jobId}/estimate`);
       if (!res.ok) throw new Error("Failed to fetch cost estimate");
@@ -83,12 +87,13 @@ export function useCostEstimate(jobId: string, enabled: boolean) {
         pro: { cost: number; description: string };
       } | null;
     },
-    enabled: enabled && !!jobId,
+    enabled: enabled && !!jobId && !!keys,
   });
 }
 
 export function useSubmitBrief() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (body: {
       deploymentId: string;
@@ -112,7 +117,7 @@ export function useSubmitBrief() {
       return res.json();
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.creativeJobs.all });
+      if (keys) void queryClient.invalidateQueries({ queryKey: keys.creativeJobs.all() });
     },
   });
 }

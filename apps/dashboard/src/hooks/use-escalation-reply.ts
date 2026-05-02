@@ -1,5 +1,7 @@
+"use client";
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface EscalationReplyResult {
   ok: boolean;
@@ -42,6 +44,7 @@ export interface EscalationReplyResult {
  */
 export function useEscalationReply(escalationId: string) {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
 
   const reply = useMutation({
     mutationFn: async (message: string): Promise<EscalationReplyResult> => {
@@ -70,7 +73,7 @@ export function useEscalationReply(escalationId: string) {
       return { ok: true, escalation: body.escalation };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.escalations.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.escalations.all() });
     },
   });
 
