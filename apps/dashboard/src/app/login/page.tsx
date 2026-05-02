@@ -5,6 +5,7 @@ import { signIn, useSession, SessionProvider } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AgentMark } from "@/components/character/agent-mark";
+import { defaultCallback } from "./redirect-logic";
 
 const smtpConfigured = process.env.NEXT_PUBLIC_SMTP_CONFIGURED === "true";
 const googleConfigured = process.env.NEXT_PUBLIC_GOOGLE_AUTH_CONFIGURED === "true";
@@ -20,15 +21,15 @@ function LoginForm() {
   const isVerify = searchParams.get("verify") === "true";
   const isVerified = searchParams.get("verified") === "true";
   const verifyError = searchParams.get("error");
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const explicitCallback = searchParams.get("callbackUrl");
 
-  const { status } = useSession();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.push(callbackUrl);
-    }
-  }, [status, callbackUrl, router]);
+    if (status !== "authenticated") return;
+    const target = explicitCallback ?? defaultCallback(session);
+    router.push(target);
+  }, [status, session, explicitCallback, router]);
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,14 +46,14 @@ function LoginForm() {
       setError("Invalid email or password");
       setIsLoading(false);
     } else {
-      window.location.href = callbackUrl;
+      window.location.href = explicitCallback ?? "/";
     }
   };
 
   const handleMagicLinkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await signIn("email", { email, callbackUrl });
+    await signIn("email", { email, callbackUrl: explicitCallback ?? "/" });
     setIsLoading(false);
   };
 
@@ -187,7 +188,7 @@ function LoginForm() {
             <>
               <button
                 type="button"
-                onClick={() => signIn("google", { callbackUrl })}
+                onClick={() => signIn("google", { callbackUrl: explicitCallback ?? "/" })}
                 className="w-full flex items-center justify-center gap-3 transition-colors"
                 style={{
                   height: "48px",

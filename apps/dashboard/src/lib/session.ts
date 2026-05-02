@@ -9,6 +9,7 @@ export interface DashboardSession {
   };
   organizationId: string;
   principalId: string;
+  onboardingComplete: boolean;
   expires: string;
 }
 

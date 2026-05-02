@@ -261,7 +261,7 @@ Either add an agent-attribution field to the escalation/approval API response (O
 - **Dimension:** I
 - **Severity:** High
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #342)
 - **Discovered-at:** 957356d44f1c28c642cc525261d00d834ba6b54e
 - **Effort:** S
 
@@ -1026,7 +1026,7 @@ Pick a casing (sentence case matches the rest of the audited copy) and apply con
 - **Dimension:** B
 - **Severity:** Launch-blocker
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #342)
 - **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
 - **Effort:** M
 
@@ -1060,7 +1060,7 @@ Wire each queue-card primary action to the corresponding existing surface — es
 - **Dimension:** B
 - **Severity:** Launch-blocker
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #342)
 - **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
 - **Effort:** S
 
@@ -1090,7 +1090,7 @@ Either remove `/console` from `CHROME_HIDDEN_PATHS` so the bottom-tab nav is ava
 - **Dimension:** B
 - **Severity:** High
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Accepted (ship-with)
 - **Discovered-at:** 1ae14d88e75cf454696001939d73a266674933c7
 - **Effort:** M
 
@@ -1545,7 +1545,7 @@ Either (a) repair the fallback path so the fixture actually renders when error i
 - **Dimension:** B, H
 - **Severity:** High
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #342)
 - **Discovered-at:** fe17d3995a3d1e87400758e6c7b5a8a381a7e69f
 - **Effort:** S
 

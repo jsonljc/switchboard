@@ -111,6 +111,7 @@ export function mapEscalationCard(row: EscalationApiRow, now: Date): EscalationC
   return {
     kind: "escalation",
     id: row.id,
+    escalationId: row.id,
     agent: "alex",
     contactName,
     channel,
@@ -127,12 +128,15 @@ export type ApprovalApiRow = {
   summary: string;
   riskContext: string | null;
   riskCategory: string;
+  bindingHash: string;
   createdAt: string;
 };
 export function mapApprovalGateCard(row: ApprovalApiRow, now: Date): ApprovalGateCard {
   return {
     kind: "approval_gate",
     id: row.id,
+    approvalId: row.id,
+    bindingHash: row.bindingHash,
     agent: "mira",
     jobName: row.summary,
     timer: {

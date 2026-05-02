@@ -6,6 +6,7 @@ const DEV_DASHBOARD_SESSION = {
   },
   organizationId: "org_dev",
   principalId: "principal_dev",
+  onboardingComplete: true,
   expires: "2099-01-01T00:00:00.000Z",
 };
 

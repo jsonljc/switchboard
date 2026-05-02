@@ -3,16 +3,15 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RespondDialog } from "@/components/approvals/respond-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApprovals } from "@/hooks/use-approvals";
+import { useApprovalAction } from "@/hooks/use-approval-action";
 import { useAudit } from "@/hooks/use-audit";
 import { useTasks, useReviewTask } from "@/hooks/use-marketplace";
 import { TaskCard } from "@/components/tasks/task-card";
 import { CreativeTaskCard } from "@/components/tasks/creative-task-card";
 import { TaskReviewDialog } from "@/components/tasks/task-review-dialog";
-import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/format";
 import { CONSEQUENCE } from "@/lib/approval-constants";
@@ -91,12 +90,11 @@ function HistoryItem({
 }
 
 export default function DecidePage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const { data: approvalsData, isLoading } = useApprovals();
   const { data: historyData } = useAudit({ limit: 50 });
   const { data: allTaskData, isLoading: tasksLoading } = useTasks();
   const reviewTask = useReviewTask();
-  const queryClient = useQueryClient();
   const [tab, setTab] = useState<"pending" | "history" | "tasks">("pending");
   const { toast } = useToast();
 
@@ -112,49 +110,30 @@ export default function DecidePage() {
     approval: { id: string; summary: string; bindingHash: string; riskCategory: string };
   } | null>(null);
 
-  const respondMutation = useMutation({
-    mutationFn: async ({
-      approvalId,
-      action,
-      bindingHash,
-    }: {
-      approvalId: string;
-      action: string;
-      bindingHash: string;
-    }) => {
-      const res = await fetch("/api/dashboard/approvals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          approvalId,
-          action,
-          respondedBy: (session as { principalId?: string })?.principalId ?? "dashboard-user",
-          bindingHash,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to respond");
-      return res.json();
-    },
-    onSuccess: (_data, variables) => {
+  const approvalAction = useApprovalAction(dialog?.approval.id ?? "");
+
+  const handleConfirmRespond = async () => {
+    if (!dialog) return;
+    try {
+      if (dialog.action === "approve") {
+        await approvalAction.approve(dialog.approval.bindingHash);
+      } else {
+        await approvalAction.reject(dialog.approval.bindingHash);
+      }
       toast({
-        title: variables.action === "approve" ? "Approved" : "Declined",
+        title: dialog.action === "approve" ? "Approved" : "Declined",
         description:
-          variables.action === "approve"
-            ? "The action will proceed."
-            : "The action has been blocked.",
+          dialog.action === "approve" ? "The action will proceed." : "The action has been blocked.",
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all });
       setDialog(null);
-    },
-    onError: () => {
+    } catch {
       toast({
         title: "Something went wrong",
         description: "Try again or check your connection.",
         variant: "destructive",
       });
-    },
-  });
+    }
+  };
 
   if (status === "unauthenticated") redirect("/login");
 
@@ -336,14 +315,8 @@ export default function DecidePage() {
           onClose={() => setDialog(null)}
           action={dialog.action}
           approval={dialog.approval}
-          isLoading={respondMutation.isPending}
-          onConfirm={() =>
-            respondMutation.mutate({
-              approvalId: dialog.approval.id,
-              action: dialog.action,
-              bindingHash: dialog.approval.bindingHash,
-            })
-          }
+          isLoading={approvalAction.isPending}
+          onConfirm={handleConfirmRespond}
         />
       )}
 

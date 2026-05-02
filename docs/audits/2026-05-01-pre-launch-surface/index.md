@@ -30,6 +30,15 @@ Populated during Phase B as each surface's calibration ritual runs.
 
 Populated during triage if any. Per spec §10 step 5, certain Launch-blocker classes are hard-prohibited from ship-with — check that hard-prohibition list before adding any entry here.
 
+```
+Ship-with: DC-41
+Acknowledged-by: Jason
+Acknowledged-at: 2026-05-02
+Rationale: Halt button is hidden at launch (PR #342); wiring requires backend runtime gate + new endpoint + audit trail, out of PR-1 scope. Severity is High (not Launch-blocker), so the ship-with hard-prohibition list does not apply.
+Mitigation: None at v1; operators contact support to halt dispatch in an emergency. The op-strip "Live" pulse remains visible as a read-only status indicator.
+Re-evaluate: 2026-06-01
+```
+
 ## High backlog
 
 Populated during triage.

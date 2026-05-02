@@ -12,12 +12,8 @@ import {
   Info,
   FileText,
 } from "lucide-react";
-import {
-  useEscalations,
-  useReplyToEscalation,
-  useEscalationDetail,
-  useResolveEscalation,
-} from "@/hooks/use-escalations";
+import { useEscalations, useEscalationDetail, useResolveEscalation } from "@/hooks/use-escalations";
+import { useEscalationReply } from "@/hooks/use-escalation-reply";
 import { ConversationTranscript } from "@/components/marketplace/conversation-transcript";
 
 type FilterStatus = "pending" | "released" | "resolved";
@@ -85,9 +81,10 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
   const [expanded, setExpanded] = useState(false);
   const [reply, setReply] = useState("");
   const [sent, setSent] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
   const [showResolveForm, setShowResolveForm] = useState(false);
   const [resolutionNote, setResolutionNote] = useState("");
-  const replyMutation = useReplyToEscalation();
+  const { send: sendReply, isPending: replyPending } = useEscalationReply(escalation.id);
   const resolveMutation = useResolveEscalation();
   const { data: detailData } = useEscalationDetail(expanded ? escalation.id : null);
 
@@ -99,17 +96,27 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
       ? `${escalation.conversationSummary.slice(0, 120)}...`
       : escalation.conversationSummary;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!reply.trim()) return;
-    replyMutation.mutate(
-      { id: escalation.id, message: reply.trim() },
-      {
-        onSuccess: () => {
-          setReply("");
-          setSent(true);
-        },
-      },
-    );
+    setReplyError(null);
+    try {
+      const result = await sendReply(reply.trim());
+      if (result.ok) {
+        // Existing success path: clear reply input, show post-reply banner.
+        // Branched copy for 200 vs 502 lands in PR-2 Task 23 (DC-23); for
+        // PR-1 we preserve the current post-reply behavior.
+        setReply("");
+        setSent(true);
+      } else {
+        // 502 proactive-delivery failure: keep form open with text
+        // preserved so the operator can retry or take another action.
+        // Surface the error inline. The full branched-copy refactor lands
+        // in PR-2 Task 23 — this is a minimal placeholder.
+        setReplyError(result.error ?? "Couldn't deliver reply right now.");
+      }
+    } catch (err) {
+      setReplyError(err instanceof Error ? err.message : "Failed to send reply.");
+    }
   };
 
   const handleResolve = () => {
@@ -233,16 +240,24 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                  disabled={!reply.trim() || replyMutation.isPending}
+                  disabled={!reply.trim() || replyPending}
                   onClick={handleSend}
                 >
-                  {replyMutation.isPending ? (
+                  {replyPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
                 </button>
               </div>
+
+              {/* Inline reply error (502 proactive-delivery failure or true error).
+                  Branded copy lands in PR-2 Task 23 (DC-23). */}
+              {replyError && (
+                <p className="text-xs text-red-600" role="alert">
+                  {replyError}
+                </p>
+              )}
 
               {/* Resolution form toggle */}
               {!showResolveForm && (

@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect, useParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RespondDialog } from "@/components/approvals/respond-dialog";
+import { useApprovalAction } from "@/hooks/use-approval-action";
 import { queryKeys } from "@/lib/query-keys";
 import { formatDate, formatCountdown } from "@/lib/utils";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
@@ -33,10 +34,9 @@ interface ApprovalDetailData {
 }
 
 export default function DecideDetailPage() {
-  const { data: session, status: authStatus } = useSession();
+  const { status: authStatus } = useSession();
   const params = useParams();
   const id = params.id as string;
-  const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.approvals.detail(id),
@@ -52,27 +52,21 @@ export default function DecideDetailPage() {
     action: "approve" | "reject";
   } | null>(null);
 
-  const respondMutation = useMutation({
-    mutationFn: async ({ action, bindingHash }: { action: string; bindingHash: string }) => {
-      const res = await fetch("/api/dashboard/approvals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          approvalId: id,
-          action,
-          respondedBy: (session as { principalId?: string })?.principalId ?? "dashboard-user",
-          bindingHash,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to respond");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all });
+  const approvalAction = useApprovalAction(id);
+
+  const handleConfirmRespond = async () => {
+    if (!dialog || !data) return;
+    try {
+      if (dialog.action === "approve") {
+        await approvalAction.approve(data.request.bindingHash);
+      } else {
+        await approvalAction.reject(data.request.bindingHash);
+      }
       setDialog(null);
-    },
-  });
+    } catch {
+      // Error state surfaced via approvalAction.error; dialog stays open so the user can retry.
+    }
+  };
 
   if (authStatus === "unauthenticated") redirect("/login");
 
@@ -237,13 +231,8 @@ export default function DecideDetailPage() {
             bindingHash: request.bindingHash,
             riskCategory: request.riskCategory,
           }}
-          isLoading={respondMutation.isPending}
-          onConfirm={() =>
-            respondMutation.mutate({
-              action: dialog.action,
-              bindingHash: request.bindingHash,
-            })
-          }
+          isLoading={approvalAction.isPending}
+          onConfirm={handleConfirmRespond}
         />
       )}
     </div>

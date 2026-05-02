@@ -1,6 +1,10 @@
 "use client";
 
 import "./console.css";
+import Link from "next/link";
+import { useState } from "react";
+import { ApprovalSlideOver } from "./slide-overs/approval-slide-over";
+import { EscalationSlideOver } from "./slide-overs/escalation-slide-over";
 import type {
   ApprovalGateCard,
   ConsoleData,
@@ -26,7 +30,7 @@ function RichTextSpan({ value }: { value: RichText }) {
   );
 }
 
-function EscalationCardView({ card }: { card: EscalationCard }) {
+function EscalationCardView({ card, onPrimary }: { card: EscalationCard; onPrimary: () => void }) {
   return (
     <article className="qcard escalation">
       <div>
@@ -45,7 +49,7 @@ function EscalationCardView({ card }: { card: EscalationCard }) {
         <p className="esc-issue">
           <RichTextSpan value={card.issue} />
         </p>
-        <button className="esc-reply" type="button">
+        <button className="esc-reply" type="button" onClick={onPrimary}>
           Reply inline <span className="caret">▾</span>
         </button>
         <div className="qactions">
@@ -103,7 +107,13 @@ function RecommendationCardView({ card }: { card: RecommendationCard }) {
   );
 }
 
-function ApprovalGateCardView({ card }: { card: ApprovalGateCard }) {
+function ApprovalGateCardView({
+  card,
+  onPrimary,
+}: {
+  card: ApprovalGateCard;
+  onPrimary: () => void;
+}) {
   return (
     <article className="qcard approval-gate">
       <div>
@@ -126,7 +136,7 @@ function ApprovalGateCardView({ card }: { card: ApprovalGateCard }) {
           <span className="countdown">{card.countdown}</span>
         </div>
         <div className="qactions">
-          <button className="btn btn-primary-graphite" type="button">
+          <button className="btn btn-primary-graphite" type="button" onClick={onPrimary}>
             {card.primary.label}
           </button>
         </div>
@@ -140,14 +150,22 @@ function ApprovalGateCardView({ card }: { card: ApprovalGateCard }) {
   );
 }
 
-function QueueCardView({ card }: { card: QueueCard }) {
+function QueueCardView({
+  card,
+  onApprovalPrimary,
+  onEscalationPrimary,
+}: {
+  card: QueueCard;
+  onApprovalPrimary: (card: ApprovalGateCard) => void;
+  onEscalationPrimary: (card: EscalationCard) => void;
+}) {
   switch (card.kind) {
     case "escalation":
-      return <EscalationCardView card={card} />;
+      return <EscalationCardView card={card} onPrimary={() => onEscalationPrimary(card)} />;
     case "recommendation":
       return <RecommendationCardView card={card} />;
     case "approval_gate":
-      return <ApprovalGateCardView card={card} />;
+      return <ApprovalGateCardView card={card} onPrimary={() => onApprovalPrimary(card)} />;
   }
 }
 
@@ -157,6 +175,11 @@ function capitalize(s: string) {
 
 export function ConsoleView({ data }: { data: ConsoleData }) {
   const { opStrip, numbers, queueLabel, queue, agents, novaPanel, activity } = data;
+  const [slideOver, setSlideOver] = useState<
+    | { kind: "approval"; approvalId: string; bindingHash: string }
+    | { kind: "escalation"; escalationId: string }
+    | null
+  >(null);
 
   return (
     <div data-v6-console>
@@ -175,9 +198,6 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
               <span className="pulse" aria-hidden="true" />
               {opStrip.dispatch === "live" ? "Live" : "Halted"}
             </span>
-            <button className="op-halt" type="button">
-              Halt
-            </button>
           </div>
         </div>
       </header>
@@ -202,12 +222,30 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
         {/* ZONE 2 — Queue */}
         <section aria-label="Queue">
           <div className="queue-head">
-            <span className="label">Queue</span>
+            <Link className="label" href="/escalations">
+              Queue
+            </Link>
             <span className="count">{queueLabel.count}</span>
           </div>
           <div className="queue">
             {queue.map((card) => (
-              <QueueCardView key={card.id} card={card} />
+              <QueueCardView
+                key={card.id}
+                card={card}
+                onApprovalPrimary={(c) =>
+                  setSlideOver({
+                    kind: "approval",
+                    approvalId: c.approvalId,
+                    bindingHash: c.bindingHash,
+                  })
+                }
+                onEscalationPrimary={(c) =>
+                  setSlideOver({
+                    kind: "escalation",
+                    escalationId: c.escalationId,
+                  })
+                }
+              />
             ))}
           </div>
         </section>
@@ -233,7 +271,13 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
                   <RichTextSpan value={a.subStat} />
                   {a.pendingDot && <span className="pending-dot" aria-hidden="true" />}
                 </span>
-                <span className="a-view">{a.viewLink.label}</span>
+                <Link
+                  className="a-view"
+                  href={a.viewLink.href}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {a.viewLink.label}
+                </Link>
               </button>
             ))}
           </div>
@@ -330,13 +374,36 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
                     {row.cta.label}
                   </a>
                 ) : (
-                  <span className="act-arrow">→</span>
+                  <Link className="act-arrow" href="/conversations">
+                    →
+                  </Link>
                 )}
               </div>
             ))}
           </div>
         </section>
       </main>
+
+      {slideOver?.kind === "approval" && (
+        <ApprovalSlideOver
+          approvalId={slideOver.approvalId}
+          bindingHash={slideOver.bindingHash}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSlideOver(null);
+          }}
+        />
+      )}
+
+      {slideOver?.kind === "escalation" && (
+        <EscalationSlideOver
+          escalationId={slideOver.escalationId}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSlideOver(null);
+          }}
+        />
+      )}
     </div>
   );
 }

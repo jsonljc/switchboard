@@ -10,6 +10,7 @@ declare module "next-auth" {
     };
     organizationId: string;
     principalId: string;
+    onboardingComplete: boolean;
   }
 
   interface User {
@@ -23,5 +24,6 @@ declare module "next-auth/jwt" {
     id?: string;
     organizationId?: string;
     principalId?: string;
+    onboardingComplete?: boolean;
   }
 }
