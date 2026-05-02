@@ -3,27 +3,44 @@
 import "./console.css";
 import { useState } from "react";
 import { OpStrip } from "./zones/op-strip";
-import { NumbersStrip } from "./zones/numbers-strip";
 import { QueueZone } from "./zones/queue-zone";
 import { AgentStrip } from "./zones/agent-strip";
 import { NovaPanel } from "./zones/nova-panel";
 import { ActivityTrail } from "./zones/activity-trail";
 import { ApprovalSlideOver } from "./slide-overs/approval-slide-over";
 import { EscalationSlideOver } from "./slide-overs/escalation-slide-over";
+import { WelcomeBanner } from "./welcome-banner";
+import { HelpOverlay } from "./help-overlay";
+import { ToastShelf } from "./toast-shelf";
+import { ToastProvider } from "./use-toast";
+import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 
 type SlideOverState =
   | { kind: "approval"; approvalId: string; bindingHash: string }
   | { kind: "escalation"; escalationId: string }
   | null;
 
-export function ConsoleView() {
+function ConsoleViewInner() {
   const [slideOver, setSlideOver] = useState<SlideOverState>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  const haltViaShortcut = () => {
+    // Delegate to OpStrip's halt button so halt state and toast logic stay in one place.
+    const btn = document.querySelector<HTMLButtonElement>(".op-halt");
+    btn?.click();
+  };
+
+  useKeyboardShortcuts({
+    help: () => setHelpOpen((v) => !v),
+    halt: haltViaShortcut,
+    escape: () => setHelpOpen(false),
+  });
 
   return (
     <div data-v6-console>
-      <OpStrip />
+      <OpStrip onHelpOpen={() => setHelpOpen(true)} />
       <main className="console-main">
-        <NumbersStrip />
+        <WelcomeBanner />
         <QueueZone onOpenSlideOver={setSlideOver} />
         <AgentStrip />
         <NovaPanel />
@@ -50,6 +67,17 @@ export function ConsoleView() {
           }}
         />
       )}
+
+      {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
+      <ToastShelf />
     </div>
+  );
+}
+
+export function ConsoleView() {
+  return (
+    <ToastProvider>
+      <ConsoleViewInner />
+    </ToastProvider>
   );
 }
