@@ -41,7 +41,9 @@ This spec does not just unblock today's friction; it is sized to prevent recurre
 | B1 | Manual `pnpm worktree:init` script | `scripts/worktree-init.sh`, root `package.json` |
 | B1' | `predev` env check — discoverable hint | `scripts/check-env.sh`, root `package.json` |
 | B3 | API fail-fast on **any** missing required env var | `apps/api/src/env.ts` (new), `apps/api/src/server.ts` |
-| C2 | `proxyError` forwards `message` + logs body | `apps/dashboard/src/lib/proxy-error.ts` |
+| B4 | API bootstrap DB sanity check (`SELECT 1`) | `apps/api/src/app.ts` |
+| C2a | API: include error message + stack in 5xx body when `NODE_ENV !== "production"` | `apps/api/src/app.ts` (`setErrorHandler`) |
+| C2b | Dashboard: `proxyError` forwards upstream `error` + logs full body | `apps/dashboard/src/lib/proxy-error.ts` |
 
 No new shared packages. No schema changes. No migration. Dashboard and API changes are independent — neither requires the other to ship first.
 
@@ -90,16 +92,71 @@ Called as the **first line** of `apps/api/src/server.ts` bootstrap, before any P
 
 Initial set: `DATABASE_URL`, `NEXTAUTH_SECRET`. Implementation plan can audit the codebase and expand the list before the PR opens (out of scope for this spec to enumerate them definitively).
 
-### C2 — `proxyError` enrichment
+### B4 — API bootstrap DB sanity check
 
-`apps/dashboard/src/lib/proxy-error.ts` currently forwards `body.error` only. Fastify's default envelope is `{statusCode, error, message}`; `message` carries the specific cause.
+In `apps/api/src/app.ts`, immediately after `bootstrapStorage` returns a non-null `prismaClient`, run a connectivity probe:
 
-New behavior:
+```ts
+if (prismaClient) {
+  try {
+    await Promise.race([
+      prismaClient.$queryRaw`SELECT 1`,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("DB sanity check timed out after 3s")), 3000),
+      ),
+    ]);
+  } catch (err) {
+    console.error(
+      "[api] DATABASE_URL is set but the database is not reachable.\n" +
+      `      ${err instanceof Error ? err.message : String(err)}\n` +
+      "      Is Postgres running? Run `pnpm worktree:init` to verify and apply migrations.",
+    );
+    process.exit(1);
+  }
+}
+```
 
-1. **Body forwarding.** Return shape becomes `{ error: body.message ?? body.error ?? "Unknown error", statusCode }`. The two-arg signature `proxyError(body, status)` is preserved; existing call sites are unchanged. When both `message` and `error` are present, `message` wins (it's the specific one; `error` is the HTTP class label).
-2. **Server-side log.** Before returning, `console.error("[proxyError]", { status: statusCode, body })`. Includes any extra fields Fastify or our routes attached. No PII concern beyond what's already in API logs — body is already in transit between dashboard server and API server.
+Catches the failure mode B3 cannot: env var present, DB unreachable. Validated against today's friction — without this check, the API would have silently bound :3000 with `prismaClient = null` (B3 wouldn't fire because env was set; only the DB connection was wrong).
 
-Banner copy upstream is unchanged because banners read the `error` field, which now carries the real cause.
+### C2 — Error visibility (two-sided)
+
+The original C2 ("forward `body.message` in `proxyError`") **cannot work alone** because of a finding made during spec validation: `apps/api/src/app.ts:160-172` overrides Fastify's default error handler and explicitly scrubs `error.message` for any 5xx response, replacing it with the literal string `"Internal server error"`. The wire body the dashboard receives is `{error: "Internal server error", statusCode: 500}` — there is no `message` field to forward. C2 must touch both sides.
+
+#### C2a — API: include error details for 5xx in non-production
+
+In `apps/api/src/app.ts`, the `setErrorHandler`:
+
+```ts
+app.setErrorHandler((error, _request, reply) => {
+  const statusCode = error.statusCode ?? 500;
+  const isProd = process.env.NODE_ENV === "production";
+  const message =
+    statusCode >= 500
+      ? isProd
+        ? "Internal server error"
+        : (error.message ?? "Internal server error")
+      : error.message;
+
+  if (statusCode >= 500) app.log.error(error);
+
+  const body: { error: string; statusCode: number; stack?: string } = { error: message, statusCode };
+  if (statusCode >= 500 && !isProd && error.stack) body.stack = error.stack;
+  return reply.code(statusCode).send(body);
+});
+```
+
+Production keeps today's scrubbing behavior (no leaking DB query strings, file paths, stack traces). Development surfaces the specific cause. The branch hinges on `NODE_ENV === "production"` — the same gate already used elsewhere in this file.
+
+#### C2b — Dashboard: forward upstream message + log full body
+
+`apps/dashboard/src/lib/proxy-error.ts`:
+
+1. **Body forwarding.** Return shape: `{ error: body.error ?? "Unknown error", statusCode }`. The dashboard now relies on the API's `error` field carrying the real cause (because C2a populates it in dev). The two-arg signature `proxyError(body, status)` is preserved; existing call sites are unchanged.
+2. **Server-side log.** Before returning, `console.error("[proxyError]", { status: statusCode, body })`. Includes any extra fields the API attached. No PII concern beyond what's already in API logs — body is already in transit between dashboard server and API server.
+
+Banner copy upstream is unchanged because banners read the `error` field, which now carries the real cause in development.
+
+C2a unblocks C2b: without C2a, C2b is a no-op because there's no useful message in the wire body to forward.
 
 ## Testing
 
@@ -113,22 +170,28 @@ Each layer gets a test that locks the persistence property — not just "the cod
 - **B3 — unit + integration coverage:**
   - **Unit:** `apps/api/src/__tests__/env.test.ts` — `assertRequiredEnv` exits 1 with each required var unset; passes silently with all set.
   - **Integration / smoke:** `apps/api/src/__tests__/bootstrap-smoke.test.ts` — spawn the actual `apps/api` entry point as a child process with `DATABASE_URL` unset; assert non-zero exit + stderr contains `worktree:init`. This one is the persistence guard: it fails the build if anyone reorders bootstrap so the check is bypassed.
-- **C2 — `apps/dashboard/src/lib/__tests__/proxy-error.test.ts`.** Six cases:
-  - Forwards `body.message` as `error` when present.
-  - Falls back to `body.error` when `message` absent.
-  - Falls back to `"Unknown error"` when both absent.
+- **B4 — `apps/api/src/__tests__/db-sanity.test.ts`.** Spawn bootstrap with `DATABASE_URL` pointing at a closed port (`postgresql://nobody@127.0.0.1:1/x`); assert exit code 1 + stderr contains `worktree:init`.
+- **C2a — `apps/api/src/__tests__/error-handler.test.ts`.** Three cases:
+  - In `NODE_ENV=development`, a route that throws `new Error("synthetic-cause")` produces a 500 body with `error === "synthetic-cause"` and includes a `stack` field.
+  - In `NODE_ENV=production`, the same route produces `error === "Internal server error"` and no `stack` field.
+  - 4xx errors keep `error.message` in both environments (no scrubbing for client errors).
+- **C2b — `apps/dashboard/src/lib/__tests__/proxy-error.test.ts`.** Five cases:
+  - Forwards `body.error` when present.
+  - Falls back to `"Unknown error"` when absent.
   - `console.error` called with full body (spy).
   - Returns the supplied `statusCode`.
-  - **Regression case:** for a Fastify-shaped body `{statusCode: 500, error: "Internal Server Error", message: "OrganizationConfig.upsert failed"}`, the returned JSON `error` field equals `"OrganizationConfig.upsert failed"` (the user-visible value the banner reads). Locks the contract that the message-forwarding cannot be silently reverted.
+  - **Regression case:** for a body `{error: "synthetic-cause", statusCode: 500}` (the shape C2a produces in dev), the returned JSON `error` field equals `"synthetic-cause"`. Locks the C2a → C2b contract that pass-through cannot be silently reverted.
 
 ## Rollout
 
-Single PR titled `chore(dx): worktree bootstrap + dashboard error visibility`, four commits for clean bisect:
+Single PR titled `chore(dx): worktree bootstrap + dashboard error visibility`, six commits for clean bisect:
 
 1. `chore(dx): add scripts/worktree-init.sh + check-env.sh + pnpm worktree:init`
 2. `feat(api): fail fast on any missing required env var (REQUIRED_ENV)`
-3. `feat(dashboard): proxyError forwards Fastify message and logs full body`
-4. `docs(claude-md): worktree doctrine — run pnpm worktree:init after add`
+3. `feat(api): bootstrap DB sanity check — exit 1 if Postgres unreachable`
+4. `feat(api): include error message + stack in 5xx body when NODE_ENV !== production`
+5. `feat(dashboard): proxyError forwards upstream error and logs full body`
+6. `docs(claude-md): worktree doctrine — run pnpm worktree:init after add`
 
 Branch `dx/worktree-bootstrap-and-error-visibility` from origin/main, opened from a fresh worktree — dogfooding the very script this PR ships.
 
