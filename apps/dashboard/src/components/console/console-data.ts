@@ -38,10 +38,6 @@ export type NumbersCell = {
   placeholder?: boolean;
 };
 
-export type NumbersStrip = {
-  cells: NumbersCell[];
-};
-
 export type EscalationCard = {
   kind: "escalation";
   id: string;
