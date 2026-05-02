@@ -38,4 +38,37 @@ describe("HelpOverlay", () => {
     await user.click(screen.getByRole("heading", { name: /how switchboard works/i }));
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("focuses the close button when opened", () => {
+    render(<HelpOverlay onClose={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
+  });
+
+  it("restores focus to the previously-focused element on unmount", () => {
+    const trigger = document.createElement("button");
+    trigger.textContent = "trigger";
+    document.body.appendChild(trigger);
+    trigger.focus();
+    expect(trigger).toHaveFocus();
+
+    const { unmount } = render(<HelpOverlay onClose={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
+
+    unmount();
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
+  it("traps Tab inside the dialog (Tab from last element wraps to first)", async () => {
+    const user = userEvent.setup();
+    render(<HelpOverlay onClose={vi.fn()} />);
+    const closeBtn = screen.getByRole("button", { name: /close/i });
+    expect(closeBtn).toHaveFocus();
+    // Only one focusable element exists in the card (the close button), so
+    // Tab from it should wrap back to itself.
+    await user.tab();
+    expect(closeBtn).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(closeBtn).toHaveFocus();
+  });
 });
