@@ -47,6 +47,8 @@ export type NumbersStrip = {
 export type EscalationCard = {
   kind: "escalation";
   id: string;
+  /** Backend escalation id, used by `<EscalationSlideOver>` to drive useEscalationReply. */
+  escalationId: string;
   agent: AgentKey;
   contactName: string;
   channel: string;
@@ -201,6 +203,7 @@ export const consoleFixture: ConsoleData = {
     {
       kind: "escalation",
       id: "esc-sarah",
+      escalationId: "esc-sarah",
       agent: "alex",
       contactName: "Sarah",
       channel: "WhatsApp",

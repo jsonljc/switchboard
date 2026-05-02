@@ -3,6 +3,7 @@
 import "./console.css";
 import { useState } from "react";
 import { ApprovalSlideOver } from "./slide-overs/approval-slide-over";
+import { EscalationSlideOver } from "./slide-overs/escalation-slide-over";
 import type {
   ApprovalGateCard,
   ConsoleData,
@@ -28,7 +29,7 @@ function RichTextSpan({ value }: { value: RichText }) {
   );
 }
 
-function EscalationCardView({ card }: { card: EscalationCard }) {
+function EscalationCardView({ card, onPrimary }: { card: EscalationCard; onPrimary: () => void }) {
   return (
     <article className="qcard escalation">
       <div>
@@ -47,7 +48,7 @@ function EscalationCardView({ card }: { card: EscalationCard }) {
         <p className="esc-issue">
           <RichTextSpan value={card.issue} />
         </p>
-        <button className="esc-reply" type="button">
+        <button className="esc-reply" type="button" onClick={onPrimary}>
           Reply inline <span className="caret">▾</span>
         </button>
         <div className="qactions">
@@ -151,13 +152,15 @@ function ApprovalGateCardView({
 function QueueCardView({
   card,
   onApprovalPrimary,
+  onEscalationPrimary,
 }: {
   card: QueueCard;
   onApprovalPrimary: (card: ApprovalGateCard) => void;
+  onEscalationPrimary: (card: EscalationCard) => void;
 }) {
   switch (card.kind) {
     case "escalation":
-      return <EscalationCardView card={card} />;
+      return <EscalationCardView card={card} onPrimary={() => onEscalationPrimary(card)} />;
     case "recommendation":
       return <RecommendationCardView card={card} />;
     case "approval_gate":
@@ -171,11 +174,11 @@ function capitalize(s: string) {
 
 export function ConsoleView({ data }: { data: ConsoleData }) {
   const { opStrip, numbers, queueLabel, queue, agents, novaPanel, activity } = data;
-  const [slideOver, setSlideOver] = useState<{
-    kind: "approval";
-    approvalId: string;
-    bindingHash: string;
-  } | null>(null);
+  const [slideOver, setSlideOver] = useState<
+    | { kind: "approval"; approvalId: string; bindingHash: string }
+    | { kind: "escalation"; escalationId: string }
+    | null
+  >(null);
 
   return (
     <div data-v6-console>
@@ -231,6 +234,12 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
                     kind: "approval",
                     approvalId: c.approvalId,
                     bindingHash: c.bindingHash,
+                  })
+                }
+                onEscalationPrimary={(c) =>
+                  setSlideOver({
+                    kind: "escalation",
+                    escalationId: c.escalationId,
                   })
                 }
               />
@@ -368,6 +377,16 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
         <ApprovalSlideOver
           approvalId={slideOver.approvalId}
           bindingHash={slideOver.bindingHash}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSlideOver(null);
+          }}
+        />
+      )}
+
+      {slideOver?.kind === "escalation" && (
+        <EscalationSlideOver
+          escalationId={slideOver.escalationId}
           open
           onOpenChange={(open) => {
             if (!open) setSlideOver(null);

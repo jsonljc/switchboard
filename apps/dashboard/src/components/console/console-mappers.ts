@@ -111,6 +111,7 @@ export function mapEscalationCard(row: EscalationApiRow, now: Date): EscalationC
   return {
     kind: "escalation",
     id: row.id,
+    escalationId: row.id,
     agent: "alex",
     contactName,
     channel,
