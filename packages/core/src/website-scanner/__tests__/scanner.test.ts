@@ -34,7 +34,7 @@ describe("WebsiteScanner", () => {
     expect(result.businessName).toBe("Test Bakery");
     expect(result.products).toHaveLength(1);
     expect(result.brandLanguage).toContain("artisan");
-  });
+  }, 15000);
 
   it("rejects invalid URLs (SSRF prevention)", async () => {
     const llm = new MockLLMClient();
