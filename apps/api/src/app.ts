@@ -7,7 +7,6 @@
    stores at once. */
 import Fastify from "fastify";
 import crypto from "node:crypto";
-import type { FastifyError } from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
@@ -26,6 +25,7 @@ import {
 } from "@switchboard/core/platform";
 import type { CartridgeManifestForRegistration } from "@switchboard/core/platform";
 import { initTelemetry } from "./telemetry/otel-init.js";
+import { installErrorHandler } from "./bootstrap/error-handler.js";
 import { initSentry, wireSentryErrorHandler } from "./bootstrap/sentry.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -156,20 +156,9 @@ export async function buildServer() {
   // OpenAPI documentation + optional Swagger UI
   await registerSwagger(app);
 
-  // Global error handler — consistent error format, no stack leaks in production
-  app.setErrorHandler((error: FastifyError, _request, reply) => {
-    const statusCode = error.statusCode ?? 500;
-    const message = statusCode >= 500 ? "Internal server error" : error.message;
-
-    if (statusCode >= 500) {
-      app.log.error(error);
-    }
-
-    return reply.code(statusCode).send({
-      error: message,
-      statusCode,
-    });
-  });
+  // Global error handler — consistent error format. In production, 5xx messages
+  // are scrubbed; in development, the original message + stack pass through.
+  installErrorHandler(app);
 
   // Wire Sentry error capture (wraps the error handler above)
   wireSentryErrorHandler(app);
@@ -196,7 +185,32 @@ export async function buildServer() {
   const { storage, ledger, policyCache, governanceProfileStore, prismaClient, redis } =
     await bootstrapStorage(app.log);
 
+  if (process.env["DATABASE_URL"] && !prismaClient) {
+    console.error(
+      "[api] DATABASE_URL is set but the database is not reachable.\n" +
+        "      Could not establish a connection during storage bootstrap.\n" +
+        "      Is Postgres running? Run `pnpm worktree:init` to verify and apply migrations.",
+    );
+    process.exit(1);
+  }
+
   if (prismaClient) {
+    try {
+      await Promise.race([
+        prismaClient.$queryRaw`SELECT 1`,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("DB sanity check timed out after 3s")), 3000),
+        ),
+      ]);
+    } catch (err) {
+      console.error(
+        "[api] DATABASE_URL is set but the database is not reachable.\n" +
+          `      ${err instanceof Error ? err.message : String(err)}\n` +
+          "      Is Postgres running? Run `pnpm worktree:init` to verify and apply migrations.",
+      );
+      process.exit(1);
+    }
+
     await ensureSystemIdentity(prismaClient);
   }
 

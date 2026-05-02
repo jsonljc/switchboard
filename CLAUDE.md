@@ -20,6 +20,7 @@ Before architecture work, audits, or implementation planning:
 
 - **Specs and plans land on `main` via focused PRs**, not on feature branches. A `docs/superpowers/specs/*` or `docs/superpowers/plans/*` change should be its own small PR to `main`. Implementation branches **consume** specs that already live on `main` — they do not accumulate planning docs for unrelated workstreams.
 - **One branch per worktree.** Never check out a long-lived branch in two worktrees.
+- **Worktrees have a setup step.** After `git worktree add`, run `pnpm worktree:init` from the new worktree root. The script copies `.env`, kills stale dev-port listeners, and runs `pnpm db:migrate` if Postgres is reachable. See `scripts/worktree-init.sh`.
 - **Worktrees have a teardown step.** When the underlying branch merges or is deleted, remove the worktree the same day: `git worktree remove <path> && git worktree prune`.
 - **Before every commit, verify branch context.** Run `git branch --show-current` and `git status --short` to confirm the active branch matches the work, especially in agent sessions where the active branch may not match assumptions.
 - A pre-commit hook (`scripts/check-branch-relevance.sh`) warns when a docs-only commit references a different feature than the active branch's slug. The hook is non-blocking: warnings are signals, not gates.

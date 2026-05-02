@@ -5,6 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "predev": "bash scripts/check-env.sh",
     "lint": "turbo lint",
     "test": "turbo test",
     "test:unit": "turbo test:unit",
@@ -20,6 +21,7 @@
     "prepare": "husky || true",
     "arch:check": "npx tsx scripts/arch-check.ts",
     "preflight": "bash scripts/preflight.sh",
+    "worktree:init": "bash scripts/worktree-init.sh",
     "audit:validate": "npx tsx scripts/audit-validate-findings.ts",
     "audit:lighthouse": "bash scripts/audit-run-lighthouse.sh",
     "audit:axe": "bash scripts/audit-run-axe.sh",

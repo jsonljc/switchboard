@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { proxyError } from "../proxy-error";
 
 describe("proxyError", () => {
@@ -35,5 +35,47 @@ describe("proxyError", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body).toEqual({ error: "Request failed", statusCode: 400 });
+  });
+
+  it("writes the full upstream body to console.error for 5xx responses", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    proxyError(
+      { error: "OrganizationConfig.upsert failed", statusCode: 500, stack: "Error: …\n  at …" },
+      500,
+    );
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[proxyError]",
+      expect.objectContaining({
+        statusCode: 500,
+        body: expect.objectContaining({
+          error: "OrganizationConfig.upsert failed",
+          stack: expect.any(String),
+        }),
+      }),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("does not log to console.error for 4xx responses", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    proxyError({ error: "Bad input" }, 400);
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("regression: forwards a C2a-shaped dev-mode upstream error verbatim", async () => {
+    // C2a (apps/api/src/bootstrap/error-handler.ts) sends this exact shape
+    // for 5xx in NODE_ENV=development. Lock the contract: proxyError must
+    // pass the `error` field through unchanged so the dashboard banner reads it.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = proxyError(
+      { error: "OrganizationConfig.upsert failed", statusCode: 500, stack: "Error: …" },
+      500,
+    );
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toEqual({ error: "OrganizationConfig.upsert failed", statusCode: 500 });
+    errorSpy.mockRestore();
   });
 });
