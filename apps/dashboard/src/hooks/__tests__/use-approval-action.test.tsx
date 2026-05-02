@@ -5,7 +5,10 @@ import type { ReactNode } from "react";
 import { useApprovalAction } from "../use-approval-action";
 
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { principalId: "p-1" }, status: "authenticated" }),
+  useSession: () => ({
+    data: { principalId: "p-1", organizationId: "org-1" },
+    status: "authenticated",
+  }),
 }));
 
 const mockFetch = vi.fn();

@@ -3,6 +3,10 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { organizationId: "org-1" }, status: "authenticated" }),
+}));
+
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 

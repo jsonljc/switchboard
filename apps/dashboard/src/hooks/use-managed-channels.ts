@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface ManagedChannel {
   id: string;
@@ -22,14 +22,17 @@ async function fetchManagedChannels(): Promise<{ channels: ManagedChannel[] }> {
 }
 
 export function useManagedChannels() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.channels.list(),
+    queryKey: keys?.channels.list() ?? ["__disabled_channels_list__"],
     queryFn: fetchManagedChannels,
+    enabled: !!keys,
   });
 }
 
 export function useProvision() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (body: {
       channels: Array<{
@@ -56,14 +59,17 @@ export function useProvision() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orgConfig.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.channels.all });
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.orgConfig.all() });
+        queryClient.invalidateQueries({ queryKey: keys.channels.all() });
+      }
     },
   });
 }
 
 export function useDeleteChannel() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (channelId: string) => {
       const res = await fetch(`/api/dashboard/organizations/channels/${channelId}`, {
@@ -76,8 +82,10 @@ export function useDeleteChannel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.channels.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orgConfig.all });
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.channels.all() });
+        queryClient.invalidateQueries({ queryKey: keys.orgConfig.all() });
+      }
     },
   });
 }

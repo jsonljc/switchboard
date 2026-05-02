@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface OrgConfig {
   id: string;
@@ -22,16 +22,18 @@ async function fetchOrgConfig(): Promise<{ config: OrgConfig }> {
 }
 
 export function useOrgConfig(enabled = true) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.orgConfig.current(),
+    queryKey: keys?.orgConfig.current() ?? ["__disabled_org_config__"],
     queryFn: fetchOrgConfig,
     retry: false,
-    enabled,
+    enabled: enabled && !!keys,
   });
 }
 
 export function useUpdateOrgConfig() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (body: Partial<OrgConfig>) => {
       const res = await fetch("/api/dashboard/organizations", {
@@ -46,7 +48,7 @@ export function useUpdateOrgConfig() {
       return res.json() as Promise<{ config: OrgConfig }>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orgConfig.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.orgConfig.all() });
     },
   });
 }

@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useEscalationReply } from "../use-escalation-reply";
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { organizationId: "org-1" }, status: "authenticated" }),
+}));
+
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 

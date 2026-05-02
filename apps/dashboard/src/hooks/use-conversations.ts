@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface ConversationListItem {
   id: string;
@@ -55,18 +55,23 @@ async function fetchConversationDetail(id: string): Promise<ConversationDetail> 
 }
 
 export function useConversations(filters?: { status?: string }) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.conversations.list({ status: filters?.status }),
+    queryKey: keys?.conversations.list({ status: filters?.status }) ?? [
+      "__disabled_conversations_list__",
+    ],
     queryFn: () => fetchConversations(filters),
     refetchInterval: 30_000,
+    enabled: !!keys,
   });
 }
 
 export function useConversationDetail(id: string | null) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.conversations.detail(id ?? ""),
+    queryKey: keys?.conversations.detail(id ?? "") ?? ["__disabled_conversations_detail__"],
     queryFn: () => fetchConversationDetail(id!),
-    enabled: !!id,
+    enabled: !!id && !!keys,
     refetchInterval: 15_000,
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
 import { translateEvent, getEventIcon } from "@/components/activity/event-translator";
 
@@ -69,9 +69,11 @@ async function fetchAgentActivity(days: number): Promise<AgentActivityData> {
 }
 
 export function useAgentActivity(days = 1) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: [...queryKeys.agents.activity(), days],
+    queryKey: keys ? [...keys.agents.activity(), days] : ["__disabled_agents_activity__", days],
     queryFn: () => fetchAgentActivity(days),
     refetchInterval: 30_000,
+    enabled: !!keys,
   });
 }

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RespondDialog } from "@/components/approvals/respond-dialog";
 import { useApprovalAction } from "@/hooks/use-approval-action";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { formatDate, formatCountdown } from "@/lib/utils";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import Link from "next/link";
@@ -37,14 +37,16 @@ export default function DecideDetailPage() {
   const { status: authStatus } = useSession();
   const params = useParams();
   const id = params.id as string;
+  const keys = useScopedQueryKeys();
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: queryKeys.approvals.detail(id),
+    queryKey: keys?.approvals.detail(id) ?? ["__disabled_approvals_detail__"],
     queryFn: async (): Promise<ApprovalDetailData> => {
       const res = await fetch(`/api/dashboard/approvals?id=${id}`);
       if (!res.ok) throw new Error("Failed to fetch approval");
       return res.json();
     },
+    enabled: !!keys,
   });
 
   const [dialog, setDialog] = useState<{

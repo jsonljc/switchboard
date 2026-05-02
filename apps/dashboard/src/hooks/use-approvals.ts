@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface PendingApproval {
   id: string;
@@ -21,11 +21,13 @@ async function fetchPendingApprovals(): Promise<{ approvals: PendingApproval[] }
 }
 
 export function useApprovals() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.approvals.pending(),
+    queryKey: keys?.approvals.pending() ?? ["__disabled_approvals_pending__"],
     queryFn: fetchPendingApprovals,
     // 60s: frequent enough to surface new approvals promptly without hammering the API
     refetchInterval: 60_000,
+    enabled: !!keys,
   });
 }
 

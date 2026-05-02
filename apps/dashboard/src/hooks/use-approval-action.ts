@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface ApprovalActionPayload {
   note?: string;
@@ -30,6 +30,7 @@ export interface ApprovalActionPayload {
 export function useApprovalAction(approvalId: string) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
+  const keys = useScopedQueryKeys();
 
   const respond = useMutation({
     mutationFn: async (
@@ -57,9 +58,11 @@ export function useApprovalAction(approvalId: string) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.pending() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all });
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.approvals.pending() });
+        queryClient.invalidateQueries({ queryKey: keys.approvals.all() });
+        queryClient.invalidateQueries({ queryKey: keys.audit.all() });
+      }
     },
   });
 

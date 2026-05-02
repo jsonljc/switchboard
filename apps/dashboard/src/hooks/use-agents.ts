@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
 
 async function fetchRoster(): Promise<{ roster: AgentRosterEntry[] }> {
@@ -17,14 +17,17 @@ async function fetchState(): Promise<{ states: AgentStateEntry[] }> {
 }
 
 export function useAgentRoster() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.agents.roster(),
+    queryKey: keys?.agents.roster() ?? ["__disabled_agents_roster__"],
     queryFn: fetchRoster,
+    enabled: !!keys,
   });
 }
 
 export function useUpdateAgentRoster() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async ({
       id,
@@ -48,22 +51,25 @@ export function useUpdateAgentRoster() {
       return res.json() as Promise<{ agent: AgentRosterEntry }>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.agents.all() });
     },
   });
 }
 
 export function useAgentState() {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: queryKeys.agents.state(),
+    queryKey: keys?.agents.state() ?? ["__disabled_agents_state__"],
     queryFn: fetchState,
     // 60s: agent state is informational on Mission Control; 30s was unnecessarily aggressive
     refetchInterval: 60_000,
+    enabled: !!keys,
   });
 }
 
 export function useInitializeRoster() {
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
   return useMutation({
     mutationFn: async (
       body?: {
@@ -86,7 +92,7 @@ export function useInitializeRoster() {
       }>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents.all });
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.agents.all() });
     },
   });
 }
