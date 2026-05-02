@@ -88,7 +88,6 @@ describe("OpStrip", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(wrap(<OpStrip onHelpOpen={vi.fn()} />));
     await user.click(screen.getByRole("button", { name: "Halt" }));
-    expect(screen.getByText("Halted")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
     expect(window.localStorage.getItem("sb_halt_state")).toBe("1");
     expect(screen.getByText(/all agents halted/i)).toBeInTheDocument();
@@ -99,7 +98,7 @@ describe("OpStrip", () => {
     await mockOrgConfig();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(wrap(<OpStrip onHelpOpen={vi.fn()} />));
-    expect(screen.getByText("Halted")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Resume" }));
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(window.localStorage.getItem("sb_halt_state")).toBe("0");
@@ -110,7 +109,7 @@ describe("OpStrip", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(wrap(<OpStrip onHelpOpen={vi.fn()} />));
     await user.click(screen.getByRole("button", { name: "Halt" }));
-    expect(screen.getByText("Halted")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /undo/i }));
     expect(screen.getByText("Live")).toBeInTheDocument();
   });

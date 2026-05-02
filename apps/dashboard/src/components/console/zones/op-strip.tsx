@@ -60,7 +60,7 @@ export function OpStrip({ onHelpOpen }: { onHelpOpen: () => void }) {
     const wasHalted = halted;
     toggleHalt();
     showToast({
-      title: wasHalted ? "Resumed" : "Halt",
+      title: wasHalted ? "Resumed" : "Halted",
       detail: wasHalted ? "All agents resumed." : "all agents halted — actions queued",
       undoable: true,
       onUndo: () => setHalted(wasHalted),
