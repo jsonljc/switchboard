@@ -35,7 +35,7 @@
     "fastify-plugin": "^5.1.0",
     "fastify-raw-body": "^5.0.0",
     "googleapis": "^171.4.0",
-    "inngest": "^4.2.0",
+    "inngest": "^4.2.5",
     "ioredis": "^5.10.1",
     "jose": "^6.2.2",
     "pino": "^9.0.0",

@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@switchboard/schemas": "workspace:*",
-    "inngest": "^4.2.0",
+    "inngest": "^4.2.5",
     "zod": "^3.23.0"
   },
   "devDependencies": {
