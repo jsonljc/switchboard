@@ -68,6 +68,28 @@ describe("QueueZone", () => {
     expect(screen.getByText(/no queue items right now/i)).toBeInTheDocument();
   });
 
+  it("renders queue heading as a link to /escalations when cards exist", async () => {
+    const now = new Date();
+    await mockHooks({
+      escalations: {
+        data: {
+          escalations: [
+            {
+              id: "esc-1",
+              leadSnapshot: { name: "Sarah", channel: "WhatsApp" },
+              reason: "Asking about a discount",
+              createdAt: new Date(now.getTime() - 4 * 60_000).toISOString(),
+            },
+          ],
+        },
+      },
+      approvals: { data: { approvals: [] } },
+    });
+    render(<QueueZone onOpenSlideOver={vi.fn()} />, { wrapper });
+    const link = screen.getByRole("link", { name: /queue/i });
+    expect(link).toHaveAttribute("href", "/escalations");
+  });
+
   it("renders cards when both hooks return data and clicking a primary calls onOpenSlideOver", async () => {
     const onOpenSlideOver = vi.fn();
     const now = new Date();
