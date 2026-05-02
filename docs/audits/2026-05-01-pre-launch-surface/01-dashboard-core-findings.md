@@ -293,7 +293,7 @@ Add `/console`, `/escalations`, `/conversations` to both `AUTH_PAGE_PREFIXES` an
 - **Dimension:** I
 - **Severity:** High
 - **Affects:** all users
-- **Status:** Fixed (PR #345)
+- **Status:** Fixed (PR #346)
 - **Discovered-at:** 957356d44f1c28c642cc525261d00d834ba6b54e
 - **Effort:** M
 
@@ -336,6 +336,9 @@ This finding is **High** rather than Launch-blocker because the leak path requir
 
 **Fix:**
 Two complementary changes. (1) Make every tenant-scoped query key carry a session-derived tenant prefix — e.g. read `session.organizationId` from `useSession()` and prepend it: `["dashboard", "overview", organizationId]`. Centralize this so individual hooks can't forget. (2) In `QueryProvider`, subscribe to `useSession()` and call `queryClient.clear()` (or invalidate by predicate) whenever `session?.user?.id` changes from a non-null value to a different non-null value or to null. This makes sign-out / re-auth defensive even if a future change replaces the full-page nav with a soft route push. Together these turn cache-scoping from "relies on full-page nav" to "scoped by construction."
+
+**Follow-up:**
+PR #345 missed 5 inline `useQuery` call sites that escaped the `useScopedQueryKeys()` refactor (`use-billing.ts`, `use-roi.ts`, `manual-revenue-form.tsx` invalidation, `dlq-viewer.tsx`, `event-history.tsx`, and `modules/[module]/setup/page.tsx`). PR #0 (this one) closed the remaining vectors and added a CI guard test (`apps/dashboard/src/__tests__/no-bare-query-keys.test.ts`) that fails if any tenant-private `queryKey` is bare. Final state: every tenant-private queryKey is scoped via `useScopedQueryKeys()`.
 
 ---
 

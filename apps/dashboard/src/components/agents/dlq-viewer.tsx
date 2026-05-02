@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface FailedMessage {
   id: string;
@@ -18,14 +19,16 @@ interface FailedMessage {
 export function DlqViewer() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["dlq", "messages"],
+    queryKey: keys?.dlq.list("pending") ?? ["__disabled_dlq_list__"],
     queryFn: async () => {
       const res = await fetch("/api/dashboard/dlq?status=pending&limit=20");
       if (!res.ok) throw new Error("Failed to fetch DLQ");
       return res.json() as Promise<{ messages: FailedMessage[] }>;
     },
+    enabled: !!keys,
   });
 
   const retryMutation = useMutation({
@@ -35,7 +38,9 @@ export function DlqViewer() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dlq"] });
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.dlq.all() });
+      }
       toast({ title: "Retry queued" });
     },
   });
@@ -47,7 +52,9 @@ export function DlqViewer() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dlq"] });
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.dlq.all() });
+      }
       toast({ title: "Message resolved" });
     },
   });

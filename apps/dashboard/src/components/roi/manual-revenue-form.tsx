@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface ManualRevenueFormProps {
   onSuccess?: () => void;
@@ -14,6 +15,7 @@ export function ManualRevenueForm({ onSuccess }: ManualRevenueFormProps) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
 
   const mutation = useMutation({
     mutationFn: async (body: {
@@ -34,7 +36,9 @@ export function ManualRevenueForm({ onSuccess }: ManualRevenueFormProps) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["roi"] });
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.roi.all() });
+      }
       setContactName("");
       setService("");
       setAmount("");
