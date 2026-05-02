@@ -1,6 +1,8 @@
 "use client";
 
 import "./console.css";
+import { useState } from "react";
+import { ApprovalSlideOver } from "./slide-overs/approval-slide-over";
 import type {
   ApprovalGateCard,
   ConsoleData,
@@ -103,7 +105,13 @@ function RecommendationCardView({ card }: { card: RecommendationCard }) {
   );
 }
 
-function ApprovalGateCardView({ card }: { card: ApprovalGateCard }) {
+function ApprovalGateCardView({
+  card,
+  onPrimary,
+}: {
+  card: ApprovalGateCard;
+  onPrimary: () => void;
+}) {
   return (
     <article className="qcard approval-gate">
       <div>
@@ -126,7 +134,7 @@ function ApprovalGateCardView({ card }: { card: ApprovalGateCard }) {
           <span className="countdown">{card.countdown}</span>
         </div>
         <div className="qactions">
-          <button className="btn btn-primary-graphite" type="button">
+          <button className="btn btn-primary-graphite" type="button" onClick={onPrimary}>
             {card.primary.label}
           </button>
         </div>
@@ -140,14 +148,20 @@ function ApprovalGateCardView({ card }: { card: ApprovalGateCard }) {
   );
 }
 
-function QueueCardView({ card }: { card: QueueCard }) {
+function QueueCardView({
+  card,
+  onApprovalPrimary,
+}: {
+  card: QueueCard;
+  onApprovalPrimary: (card: ApprovalGateCard) => void;
+}) {
   switch (card.kind) {
     case "escalation":
       return <EscalationCardView card={card} />;
     case "recommendation":
       return <RecommendationCardView card={card} />;
     case "approval_gate":
-      return <ApprovalGateCardView card={card} />;
+      return <ApprovalGateCardView card={card} onPrimary={() => onApprovalPrimary(card)} />;
   }
 }
 
@@ -157,6 +171,11 @@ function capitalize(s: string) {
 
 export function ConsoleView({ data }: { data: ConsoleData }) {
   const { opStrip, numbers, queueLabel, queue, agents, novaPanel, activity } = data;
+  const [slideOver, setSlideOver] = useState<{
+    kind: "approval";
+    approvalId: string;
+    bindingHash: string;
+  } | null>(null);
 
   return (
     <div data-v6-console>
@@ -204,7 +223,17 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
           </div>
           <div className="queue">
             {queue.map((card) => (
-              <QueueCardView key={card.id} card={card} />
+              <QueueCardView
+                key={card.id}
+                card={card}
+                onApprovalPrimary={(c) =>
+                  setSlideOver({
+                    kind: "approval",
+                    approvalId: c.approvalId,
+                    bindingHash: c.bindingHash,
+                  })
+                }
+              />
             ))}
           </div>
         </section>
@@ -334,6 +363,17 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
           </div>
         </section>
       </main>
+
+      {slideOver?.kind === "approval" && (
+        <ApprovalSlideOver
+          approvalId={slideOver.approvalId}
+          bindingHash={slideOver.bindingHash}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSlideOver(null);
+          }}
+        />
+      )}
     </div>
   );
 }

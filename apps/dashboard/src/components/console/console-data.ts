@@ -75,6 +75,10 @@ export type RecommendationCard = {
 export type ApprovalGateCard = {
   kind: "approval_gate";
   id: string;
+  /** Backend approval id, used by `<ApprovalSlideOver>` to drive useApprovalAction. */
+  approvalId: string;
+  /** Binding hash from the source approval — required by the API to approve/reject. */
+  bindingHash: string;
   agent: AgentKey;
   jobName: string;
   /** "Hooks ready · 2h ago". */
@@ -228,6 +232,8 @@ export const consoleFixture: ConsoleData = {
     {
       kind: "approval_gate",
       id: "gate-campaign-01",
+      approvalId: "gate-campaign-01",
+      bindingHash: "fixture-binding-hash",
       agent: "mira",
       jobName: "Campaign 01 — Dental UGC Series",
       timer: { stageLabel: "Hooks ready", ageDisplay: "2h ago" },

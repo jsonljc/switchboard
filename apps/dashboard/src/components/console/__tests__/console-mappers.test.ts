@@ -114,6 +114,7 @@ describe("mapApprovalGateCard", () => {
       summary: "Campaign 01 — Dental UGC Series",
       riskContext: "Hooks ready",
       riskCategory: "creative",
+      bindingHash: "hash-apr-1",
       createdAt: "2026-04-30T08:42:00",
     };
     const now = new Date("2026-04-30T10:42:00");
@@ -125,6 +126,8 @@ describe("mapApprovalGateCard", () => {
     expect(card.agent).toBe("mira");
     expect(card.stageProgress).toBe("—");
     expect(card.countdown).toBe("—");
+    expect(card.approvalId).toBe("apr-1");
+    expect(card.bindingHash).toBe("hash-apr-1");
   });
 });
 
@@ -148,6 +151,7 @@ describe("mapQueue", () => {
           summary: "Campaign 1",
           riskContext: "Hooks ready",
           riskCategory: "creative",
+          bindingHash: "h-a1",
           createdAt: "2026-04-30T09:00:00",
         },
       ],
@@ -167,6 +171,7 @@ describe("mapQueue", () => {
           summary: "x",
           riskContext: null,
           riskCategory: "low",
+          bindingHash: "h-a1",
           createdAt: "2026-04-30T10:00:00",
         },
         {
@@ -174,6 +179,7 @@ describe("mapQueue", () => {
           summary: "y",
           riskContext: "Hooks ready",
           riskCategory: "creative",
+          bindingHash: "h-a2",
           createdAt: "2026-04-30T10:00:00",
         },
       ],
