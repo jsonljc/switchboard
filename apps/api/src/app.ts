@@ -196,7 +196,32 @@ export async function buildServer() {
   const { storage, ledger, policyCache, governanceProfileStore, prismaClient, redis } =
     await bootstrapStorage(app.log);
 
+  if (process.env["DATABASE_URL"] && !prismaClient) {
+    console.error(
+      "[api] DATABASE_URL is set but the database is not reachable.\n" +
+        "      Could not establish a connection during storage bootstrap.\n" +
+        "      Is Postgres running? Run `pnpm worktree:init` to verify and apply migrations.",
+    );
+    process.exit(1);
+  }
+
   if (prismaClient) {
+    try {
+      await Promise.race([
+        prismaClient.$queryRaw`SELECT 1`,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("DB sanity check timed out after 3s")), 3000),
+        ),
+      ]);
+    } catch (err) {
+      console.error(
+        "[api] DATABASE_URL is set but the database is not reachable.\n" +
+          `      ${err instanceof Error ? err.message : String(err)}\n` +
+          "      Is Postgres running? Run `pnpm worktree:init` to verify and apply migrations.",
+      );
+      process.exit(1);
+    }
+
     await ensureSystemIdentity(prismaClient);
   }
 
