@@ -1,4 +1,7 @@
+import { assertRequiredEnv } from "./env.js";
 import { buildServer } from "./app.js";
+
+assertRequiredEnv();
 
 async function main() {
   const server = await buildServer();
