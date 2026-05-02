@@ -181,20 +181,20 @@ describe("toggleHaltWithToast", () => {
     expect(toggleHalt).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "HALTED",
+        title: "Halted",
         detail: "all agents halted — actions queued",
         undoable: true,
       }),
     );
   });
 
-  it("toggles state and fires RESUMED toast when previously halted", () => {
+  it("toggles state and fires Resumed toast when previously halted", () => {
     const toggleHalt = vi.fn();
     const setHalted = vi.fn();
     const showToast = vi.fn();
     toggleHaltWithToast({ halted: true, toggleHalt, setHalted, showToast });
     expect(showToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "RESUMED", detail: "agents resumed" }),
+      expect.objectContaining({ title: "Resumed", detail: "All agents resumed." }),
     );
   });
 
@@ -305,8 +305,8 @@ export function toggleHaltWithToast(deps: {
   const wasHalted = halted;
   toggleHalt();
   showToast({
-    title: wasHalted ? "RESUMED" : "HALTED",
-    detail: wasHalted ? "agents resumed" : "all agents halted — actions queued",
+    title: wasHalted ? "Resumed" : "Halted",
+    detail: wasHalted ? "All agents resumed." : "all agents halted — actions queued",
     undoable: true,
     onUndo: () => setHalted(wasHalted),
   });
