@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 const STORAGE_KEY = "sb_halt_state";
 
@@ -35,15 +35,19 @@ const HaltContext = createContext<HaltContextValue | null>(null);
 export function HaltProvider({ children }: { children: ReactNode }) {
   const [halted, setHaltedState] = useState<boolean>(() => readLocal());
 
-  useEffect(() => {
-    writeLocal(halted);
-  }, [halted]);
-
   const value = useMemo<HaltContextValue>(
     () => ({
       halted,
-      setHalted: (next: boolean) => setHaltedState(next),
-      toggleHalt: () => setHaltedState((v) => !v),
+      setHalted: (next: boolean) => {
+        writeLocal(next);
+        setHaltedState(next);
+      },
+      toggleHalt: () =>
+        setHaltedState((v) => {
+          const next = !v;
+          writeLocal(next);
+          return next;
+        }),
     }),
     [halted],
   );

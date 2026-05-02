@@ -36,6 +36,7 @@ describe("HaltProvider + useHalt", () => {
     const { result } = renderHook(() => useHalt(), { wrapper });
     act(() => result.current.setHalted(true));
     expect(result.current.halted).toBe(true);
+    expect(window.localStorage.getItem("sb_halt_state")).toBe("1");
   });
 
   it("two consumers share state across rapid toggles (Phase 1 race regression)", () => {
