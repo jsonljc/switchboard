@@ -3,7 +3,6 @@ import {
   mapActivity,
   mapAgents,
   mapApprovalGateCard,
-  mapConsoleData,
   mapEscalationCard,
   mapNumbersStrip,
   mapOpStrip,
@@ -249,30 +248,5 @@ describe("mapActivity", () => {
     const result = mapActivity(entries);
     expect(result.rows).toHaveLength(9);
     expect(result.moreToday).toBe(5);
-  });
-});
-
-describe("mapConsoleData", () => {
-  it("composes all sections into a ConsoleData shape", () => {
-    const result = mapConsoleData({
-      orgName: "Aurora Dental",
-      now: new Date("2026-04-30T10:42:00"),
-      dispatch: "live",
-      leadsToday: 7,
-      leadsYesterday: 5,
-      bookingsToday: [{ startsAt: "2026-04-30T11:00:00", contactName: "Sarah" }],
-      escalations: [],
-      approvals: [],
-      modules: { alex: true, nova: true, mira: true },
-      auditEntries: [],
-    });
-    expect(result.opStrip.orgName).toBe("Aurora Dental");
-    expect(result.numbers.cells).toHaveLength(5);
-    expect(result.queue).toEqual([]);
-    expect(result.queueLabel.count).toBe("0 pending");
-    expect(result.agents).toHaveLength(3);
-    expect(result.activity.rows).toEqual([]);
-    // Nova panel stays fixture-shaped in option B (visual-only until C)
-    expect(result.novaPanel.rows.length).toBeGreaterThan(0);
   });
 });

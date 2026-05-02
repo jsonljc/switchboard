@@ -3,13 +3,11 @@ import type {
   AgentKey,
   AgentStripEntry,
   ApprovalGateCard,
-  ConsoleData,
   EscalationCard,
   NumbersStrip,
   OpStrip,
   QueueCard,
 } from "./console-data";
-import { consoleFixture } from "./console-data";
 
 // ── Op strip ──────────────────────────────────────────────────────────────
 export function mapOpStrip(orgName: string, now: Date, dispatch: "live" | "halted"): OpStrip {
@@ -236,36 +234,6 @@ export function mapActivity(entries: AuditEntry[]): {
     message: [e.action.replace(/^[^.]+\./, "").replace(/[._]/g, " ")],
   }));
   return { moreToday, rows };
-}
-
-// ── Top-level composer ────────────────────────────────────────────────────
-export type MapConsoleInput = {
-  orgName: string;
-  now: Date;
-  dispatch: "live" | "halted";
-  leadsToday: number;
-  leadsYesterday: number;
-  bookingsToday: Array<{ startsAt: string; contactName: string }>;
-  escalations: EscalationApiRow[];
-  approvals: ApprovalApiRow[];
-  modules: ModuleEnablementMap;
-  auditEntries: AuditEntry[];
-};
-export function mapConsoleData(input: MapConsoleInput): ConsoleData {
-  const queue = mapQueue(input.escalations, input.approvals, input.now);
-  return {
-    opStrip: mapOpStrip(input.orgName, input.now, input.dispatch),
-    numbers: mapNumbersStrip({
-      leadsToday: input.leadsToday,
-      leadsYesterday: input.leadsYesterday,
-      bookingsToday: input.bookingsToday,
-    }),
-    queueLabel: { count: `${queue.length} pending` },
-    queue,
-    agents: mapAgents(input.modules),
-    novaPanel: consoleFixture.novaPanel, // option C replaces this with real ad-set aggregation
-    activity: mapActivity(input.auditEntries),
-  };
 }
 
 // Re-export AgentKey so consumers can import from one place

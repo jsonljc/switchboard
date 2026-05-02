@@ -37,7 +37,7 @@ _Populated during the calibration ritual at session closeout._
 - **Dimension:** H, C
 - **Severity:** Launch-blocker
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #343)
 - **Discovered-at:** 02fcaa4c3951b2c215b9fca7c5aad04f703f5ff9
 - **Effort:** L
 
@@ -65,7 +65,7 @@ Either gate the Nova panel behind an explicit "no data yet" empty state until Op
 - **Dimension:** H, C
 - **Severity:** High
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #343)
 - **Discovered-at:** 02fcaa4c3951b2c215b9fca7c5aad04f703f5ff9
 - **Effort:** S
 
@@ -89,7 +89,7 @@ Replace the literal with a user-facing copy choice (e.g. blank, em-dash, or "—
 - **Dimension:** H
 - **Severity:** Medium
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #343)
 - **Discovered-at:** 02fcaa4c3951b2c215b9fca7c5aad04f703f5ff9
 - **Effort:** M
 
@@ -113,7 +113,7 @@ Either (a) extend `DashboardOverviewSchema` with the three fields per the Option
 - **Dimension:** H, C
 - **Severity:** Medium
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #343)
 - **Discovered-at:** 02fcaa4c3951b2c215b9fca7c5aad04f703f5ff9
 - **Effort:** S
 
@@ -188,7 +188,7 @@ Either compute `countdown` from `approval.expiresAt` (which is already in the re
 - **Dimension:** H
 - **Severity:** Medium
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #343)
 - **Discovered-at:** 02fcaa4c3951b2c215b9fca7c5aad04f703f5ff9
 - **Effort:** S
 
@@ -626,7 +626,7 @@ Re-style the toggle to use design tokens (e.g. `bg-foreground text-background` o
 - **Dimension:** C, H
 - **Severity:** Launch-blocker
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #343)
 - **Discovered-at:** d8a38023cb209d7c9d5e244c7675db8b15fb21ec
 - **Effort:** S
 
@@ -1514,7 +1514,7 @@ Add `aria-pressed={filter === status}` to each filter button (toggle pattern), o
 - **Dimension:** D, H
 - **Severity:** Launch-blocker
 - **Affects:** all users
-- **Status:** Open
+- **Status:** Fixed (PR #343)
 - **Discovered-at:** fe17d3995a3d1e87400758e6c7b5a8a381a7e69f
 - **Effort:** M
 

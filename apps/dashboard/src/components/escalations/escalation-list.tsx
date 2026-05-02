@@ -26,6 +26,13 @@ interface Escalation {
   slaDeadlineAt?: string;
   leadName?: string;
   leadChannel?: string;
+  // Nested lead snapshot from upstream (apps/api `/api/escalations/:id`).
+  // The post-reply banner reads from this shape per DC-23 so the success
+  // copy can address the customer by name and reference the real channel
+  // (e.g. "Reply sent to Sarah via WhatsApp"). The flat leadName /
+  // leadChannel fields above remain for the existing metadata row;
+  // unifying them is DC-05's scope, not this PR's.
+  leadSnapshot?: { name?: string; channel?: string } | null;
   resolutionNote?: string | null;
   resolvedAt?: string | null;
   sessionId?: string;
@@ -96,23 +103,30 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
       ? `${escalation.conversationSummary.slice(0, 120)}...`
       : escalation.conversationSummary;
 
+  // DC-23: branched post-reply banner. The previous "saved, will be
+  // included next time" copy was factually false — the upstream API only
+  // returns 200 after `agentNotifier.sendProactive()` succeeds. Now:
+  //   - 200 → channel-aware success banner ("Reply sent to {name} via {channel}").
+  //   - 502 → channel-aware failure banner; reply text preserved so the
+  //     operator can retry without re-typing.
+  const leadName = escalation.leadSnapshot?.name ?? "the customer";
+  const channelName = escalation.leadSnapshot?.channel ?? "their channel";
+
   const handleSend = async () => {
     if (!reply.trim()) return;
     setReplyError(null);
     try {
       const result = await sendReply(reply.trim());
       if (result.ok) {
-        // Existing success path: clear reply input, show post-reply banner.
-        // Branched copy for 200 vs 502 lands in PR-2 Task 23 (DC-23); for
-        // PR-1 we preserve the current post-reply behavior.
         setReply("");
         setSent(true);
       } else {
         // 502 proactive-delivery failure: keep form open with text
         // preserved so the operator can retry or take another action.
-        // Surface the error inline. The full branched-copy refactor lands
-        // in PR-2 Task 23 — this is a minimal placeholder.
-        setReplyError(result.error ?? "Couldn't deliver reply right now.");
+        // Banner copy mirrors the success channel-aware form so the
+        // operator immediately knows which transport failed.
+        const upstreamMessage = result.error ?? "channel delivery failed.";
+        setReplyError(`Couldn't deliver to ${channelName} right now — ${upstreamMessage}`);
       }
     } catch (err) {
       setReplyError(err instanceof Error ? err.message : "Failed to send reply.");
@@ -212,13 +226,18 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
             </div>
           )}
 
-          {/* Info banner after successful reply */}
+          {/* Truthful success banner (DC-23). Reached only when the upstream
+              API returned 200, which guarantees `agentNotifier.sendProactive`
+              succeeded. The previous "saved, will be included next time" copy
+              was factually incorrect and has been removed. */}
           {sent && !isResolved && (
-            <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+            <div
+              className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800"
+              role="status"
+            >
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Your reply has been saved. It will be included in the conversation when the customer
-                sends their next message. Direct message delivery is coming in a future update.
+                Reply sent to {leadName} via {channelName}.
               </p>
             </div>
           )}

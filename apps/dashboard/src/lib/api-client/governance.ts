@@ -205,6 +205,41 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     );
   }
 
+  /**
+   * Raw passthrough variant of replyToEscalation.
+   *
+   * The base `request()` helper throws on any non-ok status, which collapses
+   * the upstream API's two distinct success-shapes (200 ok + 502 saved-but-
+   * delivery-failed) into a single thrown error. The dashboard proxy at
+   * `/api/dashboard/escalations/:id/reply` needs to preserve the 502 body
+   * verbatim so the `useEscalationReply` hook can branch UI between truthful
+   * success and channel-delivery-failure copy (DC-23).
+   *
+   * Returns `{ status, body }` for any HTTP response. Only network/transport
+   * errors (or response.json() failures) escape as thrown. Auth/server
+   * errors arrive here as a non-200 status with an error-shaped body and
+   * the proxy can decide how to surface them.
+   *
+   * Sibling to `replyToEscalation`; the throw-on-non-ok variant remains for
+   * other callers that already depend on its semantics.
+   */
+  async replyToEscalationRaw(
+    id: string,
+    message: string,
+  ): Promise<{ status: number; body: unknown }> {
+    const url = `${this.baseUrl}/api/escalations/${id}/reply`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({ message }),
+    });
+    const body: unknown = await res.json().catch(() => ({}));
+    return { status: res.status, body };
+  }
+
   async resolveEscalation(id: string, resolutionNote?: string) {
     return this.request<{ escalation: unknown }>(`/api/escalations/${id}/resolve`, {
       method: "POST",
