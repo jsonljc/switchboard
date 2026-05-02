@@ -20,24 +20,6 @@ export type OpStrip = {
   dispatch: "live" | "halted";
 };
 
-/**
- * Five-cell at-a-glance strip between the operating strip and queue.
- * Per 2026 SMB-dashboard research: 3-5 KPIs, owners scan in F-pattern,
- * each cell shows a value + a delta/context line.
- */
-export type NumbersCell = {
-  /** Mono uppercase label, e.g. "REVENUE TODAY". */
-  label: string;
-  /** Headline value, large General Sans, e.g. "$1,240". */
-  value: string;
-  /** Sub-line: delta or context. */
-  delta: RichText;
-  /** Optional tonal cue for the delta line. */
-  tone?: "good" | "coral" | "neutral";
-  /** When true, render value as muted "—" placeholder; data not yet wired. */
-  placeholder?: boolean;
-};
-
 export type EscalationCard = {
   kind: "escalation";
   id: string;

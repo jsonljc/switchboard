@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "sb_welcome_dismissed";
 const FLASH_DURATION_MS = 1000;
@@ -23,7 +23,11 @@ function readInitial(): boolean {
 }
 
 export function useWelcomeBanner() {
-  const [dismissed, setDismissed] = useState<boolean>(readInitial);
+  const [dismissed, setDismissed] = useState<boolean>(false);
+
+  useEffect(() => {
+    setDismissed(readInitial());
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -35,6 +39,16 @@ export function useWelcomeBanner() {
     }
   }, [dismissed]);
 
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current !== null) {
+        clearTimeout(flashTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const dismiss = useCallback(() => setDismissed(true), []);
 
   const tour = useCallback((stop: TourStop) => {
@@ -43,7 +57,13 @@ export function useWelcomeBanner() {
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.classList.add("is-flashing");
-    setTimeout(() => el.classList.remove("is-flashing"), FLASH_DURATION_MS);
+    if (flashTimeoutRef.current !== null) {
+      clearTimeout(flashTimeoutRef.current);
+    }
+    flashTimeoutRef.current = setTimeout(() => {
+      el.classList.remove("is-flashing");
+      flashTimeoutRef.current = null;
+    }, FLASH_DURATION_MS);
   }, []);
 
   return { dismissed, dismiss, tour };
