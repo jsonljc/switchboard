@@ -1,6 +1,7 @@
 "use client";
 
 import "./console.css";
+import Link from "next/link";
 import { useState } from "react";
 import { ApprovalSlideOver } from "./slide-overs/approval-slide-over";
 import { EscalationSlideOver } from "./slide-overs/escalation-slide-over";
@@ -221,7 +222,9 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
         {/* ZONE 2 — Queue */}
         <section aria-label="Queue">
           <div className="queue-head">
-            <span className="label">Queue</span>
+            <Link className="label" href="/escalations">
+              Queue
+            </Link>
             <span className="count">{queueLabel.count}</span>
           </div>
           <div className="queue">
@@ -268,7 +271,13 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
                   <RichTextSpan value={a.subStat} />
                   {a.pendingDot && <span className="pending-dot" aria-hidden="true" />}
                 </span>
-                <span className="a-view">{a.viewLink.label}</span>
+                <Link
+                  className="a-view"
+                  href={a.viewLink.href}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {a.viewLink.label}
+                </Link>
               </button>
             ))}
           </div>
@@ -365,7 +374,9 @@ export function ConsoleView({ data }: { data: ConsoleData }) {
                     {row.cta.label}
                   </a>
                 ) : (
-                  <span className="act-arrow">→</span>
+                  <Link className="act-arrow" href="/conversations">
+                    →
+                  </Link>
                 )}
               </div>
             ))}
