@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { AppShell } from "../app-shell.js";
+import { AppShell, CHROME_HIDDEN_PATHS } from "../app-shell.js";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
@@ -44,5 +44,17 @@ describe("AppShell", () => {
       </AppShell>,
     );
     expect(screen.queryByTestId("staff-shell")).toBeNull();
+  });
+});
+
+describe("app-shell CHROME_HIDDEN_PATHS", () => {
+  it("does not include /console (operator's home at v1; needs OwnerTabs)", () => {
+    expect(CHROME_HIDDEN_PATHS).not.toContain("/console");
+  });
+
+  it("still hides chrome for /login, /onboarding, /setup", () => {
+    expect(CHROME_HIDDEN_PATHS).toContain("/login");
+    expect(CHROME_HIDDEN_PATHS).toContain("/onboarding");
+    expect(CHROME_HIDDEN_PATHS).toContain("/setup");
   });
 });
