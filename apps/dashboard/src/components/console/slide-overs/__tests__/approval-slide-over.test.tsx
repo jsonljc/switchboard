@@ -71,4 +71,23 @@ describe("ApprovalSlideOver", () => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
+
+  it("surfaces error inline and keeps slide-over open when approve fails", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "approval rejected by policy" }),
+    });
+    const onOpenChange = vi.fn();
+    render(
+      <ApprovalSlideOver approvalId="a-1" bindingHash="hash-1" open onOpenChange={onOpenChange} />,
+      { wrapper },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/approval rejected by policy/i);
+    });
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
 });
