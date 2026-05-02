@@ -140,13 +140,3 @@ export type ActivityRow = {
   message: RichText;
   cta?: { label: string; href: string };
 };
-
-export type ConsoleData = {
-  opStrip: OpStrip;
-  numbers: NumbersStrip;
-  queueLabel: { count: string };
-  queue: QueueCard[];
-  agents: AgentStripEntry[];
-  novaPanel: NovaPanel;
-  activity: { moreToday: number; rows: ActivityRow[] };
-};
