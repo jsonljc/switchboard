@@ -37,25 +37,6 @@ export function useEscalationCount() {
   return Array.isArray(escalations) ? escalations.length : 0;
 }
 
-export function useReplyToEscalation() {
-  const queryClient = useQueryClient();
-  const keys = useScopedQueryKeys();
-  return useMutation({
-    mutationFn: async ({ id, message }: { id: string; message: string }) => {
-      const res = await fetch(`/api/dashboard/escalations/${id}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      if (!res.ok) throw new Error("Failed to reply");
-      return res.json();
-    },
-    onSuccess: () => {
-      if (keys) queryClient.invalidateQueries({ queryKey: keys.escalations.all() });
-    },
-  });
-}
-
 export function useResolveEscalation() {
   const queryClient = useQueryClient();
   const keys = useScopedQueryKeys();
