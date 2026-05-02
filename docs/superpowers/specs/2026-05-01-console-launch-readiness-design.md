@@ -40,7 +40,7 @@ The product cannot ship `/console` as the operator home until these are closed.
 **PR-2: /console doesn't lie.** (DC-58 + DC-04 + DC-01 + DC-23)
 
 - Replace whole-page fixture-fallback with per-zone graceful degradation. Each zone (numbers, queue, agents, activity, Nova panel) handles its own loading/error/empty independently.
-- Gate Nova panel rendering on `useDeployment("ad-optimizer")`. When absent, render an inline empty/onboarding state ("No ad-optimizer deployed yet — connect one in Settings"), not the demo fixture.
+- Gate Nova panel rendering on the existing `useModuleStatus()` hook, mirroring the pattern at `apps/dashboard/src/components/console/use-console-data.ts:80-86` (`moduleEnabled("ad-optimizer")` checks `state === "live"`). When ad-optimizer is not live for this org, render an inline empty/onboarding state ("No ad-optimizer deployed yet — connect one in Settings"), not the demo fixture. (Note: `useDeployment(id)` exists in `use-marketplace.ts:83` but takes a deployment id not a module slug — wrong primitive here. `useDeployments()` plus a filter could also work but `useModuleStatus()` is the established pattern.)
 - Remove `consoleFixture` from runtime use; keep it as a Storybook/test-only artifact (or delete entirely).
 - Replace `/escalations` post-reply banner with delivery-state-branched copy: 200 success → "Reply sent to {customer name} via {channel}." 502 proactive failure → "Couldn't deliver to {channel} right now — message saved; the customer will see it on their next message" (or whatever the actual fallback semantics are).
 
@@ -163,7 +163,7 @@ useEffect(() => {
 
 Explicit `callbackUrl` from `searchParams` still wins (preserves "deep link to a specific route" flows like password reset → /settings/account). The session-aware default fires only when no explicit target was provided.
 
-`session.onboardingComplete` is added to the NextAuth session shape (in `apps/dashboard/src/auth.ts` JWT and session callbacks) by reading the `Organization.onboardingComplete` boolean — or, if no such field exists, derive from a concrete heuristic: "the org has ≥1 active connected channel AND ≥1 configured agent." Verify the schema during PR-1 implementation; if neither field nor heuristic source exists, the open question in §12 escalates to a small schema PR before PR-1.
+`session.onboardingComplete` is added to the NextAuth session shape (in `apps/dashboard/src/lib/auth.ts` JWT and session callbacks) by reading the `Organization.onboardingComplete` boolean — or, if no such field exists, derive from a concrete heuristic: "the org has ≥1 active connected channel AND ≥1 configured agent." Verify the schema during PR-1 implementation; if neither field nor heuristic source exists, the open question in §12 escalates to a small schema PR before PR-1.
 
 The `signIn` flow in the same file (lines 38-48, 55, 190) is updated identically: the `callbackUrl` parameter passed to `signIn()` becomes either the explicit search-param value or a placeholder (`"/__post_auth_redirect"`) that the post-auth `useEffect` resolves once the session shape is available.
 
@@ -259,15 +259,19 @@ Files (anticipated; verify during implementation):
 - New: `apps/dashboard/src/components/console/slide-overs/approval-slide-over.tsx`
 - New: `apps/dashboard/src/components/console/slide-overs/escalation-slide-over.tsx`
 - New: `apps/dashboard/src/components/console/slide-overs/recommendation-slide-over.tsx`
-- New: `apps/dashboard/src/hooks/use-approval-action.ts` (extracted from existing /decide logic)
-- New: `apps/dashboard/src/hooks/use-escalation-reply.ts` (extracted from existing /escalations logic)
+- New: `apps/dashboard/src/hooks/use-approval-action.ts` (extracts the inline `respondMutation` at `apps/dashboard/src/app/(auth)/decide/page.tsx:115` and the same call site in `decide/[id]/page.tsx`. Wraps `respondToApproval` from the api-client. Both /decide pages and the new slide-over consume identical logic.)
+- New: `apps/dashboard/src/hooks/use-escalation-reply.ts` (extracts the inline reply submit logic in `apps/dashboard/src/components/escalations/escalation-list.tsx`. Wraps the POST to `/api/dashboard/escalations/[id]/respond`. Both `/escalations` page and the new slide-over consume identical logic.)
+- Modify: `apps/dashboard/src/app/(auth)/decide/page.tsx` and `decide/[id]/page.tsx` (replace inline `respondMutation` with `useApprovalAction(id)`; preserve the existing `<RespondDialog>` UI surface)
+- Modify: `apps/dashboard/src/components/approvals/respond-dialog.tsx` (update to consume `useApprovalAction` if it currently receives mutation as a prop)
+- Modify: `apps/dashboard/src/components/escalations/escalation-list.tsx` (replace inline reply submit with `useEscalationReply(id)`)
 - New: `apps/dashboard/src/hooks/use-recommendation-action.ts` (placeholder for now — recommendations don't render in PR-1, future PR wires real recommendations)
 - Modify: `apps/dashboard/src/components/console/console-view.tsx` (queue cards get `onClick`; slide-over state hooks)
-- Modify: `apps/dashboard/src/components/layout/owner-shell.tsx` or wherever `CHROME_HIDDEN_PATHS` lives (remove `/console`)
-- Modify: `apps/dashboard/src/components/console/console.css` (single-rule override for OwnerTabs visual reconciliation, if needed)
-- Modify: `apps/dashboard/src/middleware.ts` (add `/console`, `/escalations`, `/conversations` to AUTH_PAGE_PREFIXES + matcher per DC-10 finding)
-- Modify: `apps/dashboard/src/app/login/page.tsx` (redirect logic per §4.4)
-- Modify: `apps/dashboard/src/auth.ts` (add `onboardingComplete` to JWT/session if not present)
+- Modify: `apps/dashboard/src/components/layout/app-shell.tsx:14` (`CHROME_HIDDEN_PATHS` array — remove `"/console"`)
+- Modify: `apps/dashboard/src/components/console/console.css` (single-rule override for OwnerTabs visual reconciliation, if needed — the warm-clay `[data-v6-console]` palette will need to coexist with the global nav chrome)
+- Modify: `apps/dashboard/src/middleware.ts` (add `/console`, `/escalations`, `/conversations` to `AUTH_PAGE_PREFIXES` and the `matcher` per audit finding DC-10)
+- Modify: `apps/dashboard/src/app/login/page.tsx:23,29,48` (redirect logic per §4.4 — replace the precomputed `callbackUrl` with session-aware logic in the post-auth `useEffect`)
+- Modify: `apps/dashboard/src/lib/auth.ts:182-235` (extend `jwt` callback to read `Organization.onboardingComplete` from Prisma and set `token.onboardingComplete`; extend `session` callback to set `session.onboardingComplete` from token)
+- Modify: `apps/dashboard/src/types/next-auth.d.ts` (add `onboardingComplete: boolean` to the `Session` interface and `onboardingComplete?: boolean` to the `JWT` interface)
 
 **PR-2 — /console doesn't lie** (`feat/console-pr2-truth-and-degradation`)
 
@@ -280,12 +284,12 @@ Files (anticipated):
 - Modify: `apps/dashboard/src/components/console/zones/nova-panel.tsx` (extract; gate on `useDeployment`)
 - Modify: `apps/dashboard/src/components/console/zones/activity-trail.tsx` (extract)
 - New: `apps/dashboard/src/components/console/zones/zone-error.tsx`, `zone-skeleton.tsx`, `zone-empty.tsx` (shared)
-- New: `apps/dashboard/src/hooks/use-deployment.ts` (or extend existing module-status hook)
+- (Use existing `apps/dashboard/src/hooks/use-module-status.ts`; no new hook needed.)
 - Delete: `apps/dashboard/src/components/console/use-console-data.ts` (no replacement; logic moved into zones)
 - Delete: `apps/dashboard/src/app/(auth)/console/page.tsx` whole-page error banner block (lines 16-22)
 - Modify: `apps/dashboard/src/components/console/console-data.ts` (`consoleFixture` removed from runtime use; either deleted or moved to `__fixtures__/`)
-- Modify: `apps/dashboard/src/components/escalations/escalation-list.tsx` (post-reply banner branches on 200 vs 502)
-- Modify: `apps/api/src/routes/escalations.ts` (verify response body shape on 502 carries enough info for the branched copy; extend if not)
+- Modify: `apps/dashboard/src/components/escalations/escalation-list.tsx` (post-reply banner branches on 200 vs 502; reads `response.error` + `response.replySent` from the existing API shape)
+- (No API change needed: `apps/api/src/routes/escalations.ts:266-275` already returns `{ escalation, replySent: false, error: "Reply saved but channel delivery failed. Retry or contact customer directly.", statusCode: 502 }` on the failure path and `{ escalation, replySent: true }` on success. The existing shape is sufficient for the branched copy.)
 
 **PR-3 — Auth integrity** (`feat/console-pr3-auth-integrity`)
 
@@ -373,9 +377,16 @@ If any of PR-1, PR-2, PR-3 ships and produces a regression discovered post-merge
 
 ## 12. Open questions
 
-- **`session.onboardingComplete` shape.** Does this field exist on the NextAuth session today, or do we derive it (e.g., from `Organization.hasConnectedChannel`)? Verify during PR-1 implementation; if neither, scope a small schema addition into PR-1.
-- **`useDeployment("ad-optimizer")` shape.** Does the existing module-status hook return enough granularity, or do we need a new hook? Verify during PR-2 implementation.
-- **/escalations API 502 response body.** What does the API return on proactive-delivery failure today? PR-2's branched-copy depends on the response carrying enough info to render the right message. Verify in `apps/api/src/routes/escalations.ts` during PR-2 implementation; extend the response if needed.
-- **Recommendation cards.** PR-1 creates a `useRecommendationAction` hook stub but recommendations don't render in /console today (no aggregated `nova.drafts` feed yet). Confirm recommendations are out of scope for v1 launch, or scope them into PR-1 alongside a thin endpoint. Default assumption: out of scope; the queue's three card kinds at launch are escalation, approval-gate, and (rare) recommendation rendered without action wiring (showing as informational).
+### Resolved during spec self-review (verified against current main)
+
+- **`Organization.onboardingComplete` field exists** at `packages/db/prisma/schema.prisma:414` (`Boolean @default(false)`). Not currently plumbed through NextAuth's JWT/session callbacks (`apps/dashboard/src/lib/auth.ts:182-235` reads `organizationId` and `principalId` only). PR-1 plumbs it: extend the JWT callback to read `Organization.onboardingComplete` from Prisma when the token is initialized, set on token; extend the session callback to copy from token to session; declare on `Session` interface in `apps/dashboard/src/types/next-auth.d.ts`.
+- **Ad-optimizer-deployed gate.** Use the existing `useModuleStatus()` hook (the same primitive `use-console-data.ts:80-86` already uses for `moduleEnabled("ad-optimizer")`). No new hook needed.
+- **/escalations 502 response body.** The API at `apps/api/src/routes/escalations.ts:266-275` already returns `{ escalation, replySent: false, error: "<reason>", statusCode: 502 }` on failure and `{ escalation, replySent: true }` on success. PR-2's branched copy reads `replySent` and `error` directly. No API change needed.
+
+### Still open (implementation-time)
+
+- **Recommendation cards.** PR-1 creates a `useRecommendationAction` hook stub but recommendations don't render in /console today — `mapQueue` filters approvals to `riskCategory === "creative"` only and a code comment notes recommendations are not exposed by the backend in option B; option C wires them. Default assumption: recommendation slide-overs are out of scope for v1 launch; the queue's two real card kinds at launch are escalation and approval-gate. If the team wants recommendation cards live for launch, scope a thin backend feed alongside PR-1.
+- **`/decide/[id]` integration with the new approval slide-over hook.** The existing `respondMutation` at `apps/dashboard/src/app/(auth)/decide/page.tsx:115` is consumed by `<RespondDialog>`. PR-1's extraction must preserve `<RespondDialog>`'s props/contract or update the dialog to consume `useApprovalAction(id)` directly. Read the dialog's signature during PR-1 implementation; the cleaner direction is the dialog consuming the hook (single source of truth).
+- **OwnerTabs visual reconciliation on /console.** The warm-clay `[data-v6-console]` palette + General Sans typography may clash with `OwnerTabs`'s globals.css styling when re-shown on /console. PR-1 includes a single CSS override; if visual review at PR-1 finds it irreconcilable, this becomes a vote to accelerate DC-14's design-system fold-in pre-launch instead of post-30. Calibrate at PR-1 visual review.
 
 These are implementation-time questions, not design-time. They don't block the spec; they get answered during the writing-plans phase or in PR-1 / PR-2 implementation.
