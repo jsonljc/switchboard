@@ -78,6 +78,10 @@ export function useHalt(): HaltContextValue {
 
 `readLocal` / `writeLocal` keep the existing SSR guards and `sb_halt_state` localStorage key. The provider wraps `<ConsoleView>` (alongside the existing `<ToastProvider>` from Phase 1). Both `OpStrip` and `ConsoleView`'s keyboard handler call `useHalt()`; neither holds its own state copy. The `document.querySelector(".op-halt")?.click()` shim in `ConsoleView` is removed — the keyboard handler calls `toggleHalt()` directly and fires its own undoable toast via `useToast()`.
 
+**HaltProvider stays state-only.** It must not import or call `useToast()`. Side effects (firing toasts, calling future backend pause endpoints) live at the call site (OpStrip click handler, keyboard handler), not inside the provider. This keeps the provider testable in isolation and avoids forcing every future Halt consumer to also be inside `<ToastProvider>`.
+
+**Toast call sites share one helper.** Two surfaces fire the Halt toast — the OpStrip click handler and the keyboard `H` handler. To keep their copy + undo behavior in lockstep (any drift would feel buggy: clicking and pressing-H would say different things), Phase 2 ships a tiny `toggleHaltWithToast({ halted, toggleHalt, setHalted, showToast })` helper in `halt-context.tsx` (alongside the provider). Both call sites use it. The helper is a pure function — it takes the values from `useHalt()` + `useToast()` at the call site and runs the toggle + toast — so it is trivial to unit-test and does not couple the provider to the toast system.
+
 The Phase 1 race is structurally impossible after this change. Tests verify both consumers reflect the same state across multiple toggles.
 
 ### Queue interaction — inline reveal, fade-out resolve
@@ -118,7 +122,9 @@ New behavior: clicking `Reply inline ▾` toggles a local `expanded: boolean`. W
 }
 ```
 
-`<TranscriptPanel>` calls `useEscalationDetail(escalationId)` (the same hook `/escalations` uses). It renders the last N messages from `data.conversationHistory` as alternating `lead` / `agent` / `owner` rows with timestamps, and a footer link `Open full conversation →` to `/conversations/${escalationId}`. While loading: a small skeleton (3 muted rows). On error: a minimal "Couldn't load transcript — open full conversation" fallback link. **N = 5** (most recent 5 messages, oldest-to-newest).
+`<TranscriptPanel>` calls `useEscalationDetail(escalationId)` (the same hook `/escalations` uses). It renders the last N messages from `data.conversationHistory` as alternating `lead` / `agent` / `owner` rows with timestamps. While loading: a small skeleton (3 muted rows). On error: a minimal "Couldn't load transcript" fallback message. **N = 5** (most recent 5 messages, oldest-to-newest).
+
+The transcript panel does **not** include an "Open full conversation →" link. The existing slide-over had one pointing to `/conversations/${escalationId}`, but `apps/dashboard/src/app/(auth)/conversations/` has only `page.tsx` (a list view) — there is no dynamic `[id]` route, so that link was already broken in Phase 1. The 5-message inline transcript surfaces enough context to make a reply decision; full-thread navigation is a Phase 3 concern (or its own follow-up if needed).
 
 `<ReplyForm>` is a self-contained form:
 
@@ -128,9 +134,9 @@ New behavior: clicking `Reply inline ▾` toggles a local `expanded: boolean`. W
 - On 502: preserves the textarea, sets `error = "Couldn't deliver to {channelName} right now — {upstream message}"` (matches `/escalations` copy verbatim).
 - On thrown error: preserves the textarea, sets `error = err.message`.
 
-The card's `.qactions` row (primary / secondary / self-handle buttons) stays where it is, **below** the expanded panel. The primary button still calls the same `useEscalationReply.send(...)` — but now via a default-message path (the existing primary action label e.g. "Send templated reply") fires the same mutation without expanding the form. If the operator wants to write a custom reply, they expand the panel first. The two paths converge on the same `onSent` resolve animation.
+The card's `.qactions` row (primary / secondary / self-handle buttons) stays where it is, **below** the expanded panel. The primary button label is `"Reply"` (per `console-mappers.ts:36`) and there is **no default templated message body** on the card. The primary button therefore acts as an *expand-and-focus* affordance — clicking it expands the panel (same as `Reply inline ▾`) and focuses the textarea — and **does not** fire `useEscalationReply.send()` directly. The actual send only happens via the inline `<ReplyForm>` Send button after the operator types the message body. This preserves the original "operator must type a reply" semantics from the slide-over; Phase 2 is a refactor, not a behavior change.
 
-If `card.primary.label` semantics change in future (i.e. the primary becomes "Mark resolved" instead of "Send reply"), this design extends naturally — the inline panel handles reply, the button handles direct resolution, both fade the card on success.
+If a future mapper introduces an `escalation.primary.kind === "templated_reply"` shape with a payload body, this design extends naturally — the primary button can short-circuit the textarea and send directly; both paths converge on the same `onSent` resolve animation. That is out of scope for Phase 2.
 
 #### Recommendation card — visual-only inline
 
@@ -141,6 +147,8 @@ Recommendations have no backend wiring today. Phase 2 keeps them visual-only:
 - The toast is **not undoable** (no real action to roll back), and the card disappears from the local `resolvingIds` set after the fade — but **does not** invalidate the query, since the underlying recommendation list isn't backed by a mutating API yet. The card reappears on next refetch.
 
 This matches the "visual-only with toast" pattern Phase 1 established for Halt and is the most honest representation of unimplemented backend functionality. When the recommendation backend lands, swap the no-op handlers for real mutations and add invalidation.
+
+**Document the visual-only nature in code, not just here.** A future reviewer reading `recommendation-card.tsx` cold should not mistake the no-op handlers for a bug. Phase 2 adds an explicit comment above the handler block: `// Visual-only until recommendation backend lands — see docs/superpowers/specs/2026-05-03-console-frame-phase-2-design.md`. The comment is the load-bearing kind — without it, "no API call here" reads as missing logic.
 
 #### Approval gate card — inline approve / reject
 

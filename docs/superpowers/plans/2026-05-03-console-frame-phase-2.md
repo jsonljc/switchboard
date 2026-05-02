@@ -171,7 +171,50 @@ describe("HaltProvider + useHalt", () => {
     expect(() => renderHook(() => useHalt())).toThrow(/useHalt must be used inside <HaltProvider>/);
   });
 });
+
+describe("toggleHaltWithToast", () => {
+  it("toggles state and fires HALTED toast when previously live", () => {
+    const toggleHalt = vi.fn();
+    const setHalted = vi.fn();
+    const showToast = vi.fn();
+    toggleHaltWithToast({ halted: false, toggleHalt, setHalted, showToast });
+    expect(toggleHalt).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "HALTED",
+        detail: "all agents halted — actions queued",
+        undoable: true,
+      }),
+    );
+  });
+
+  it("toggles state and fires RESUMED toast when previously halted", () => {
+    const toggleHalt = vi.fn();
+    const setHalted = vi.fn();
+    const showToast = vi.fn();
+    toggleHaltWithToast({ halted: true, toggleHalt, setHalted, showToast });
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "RESUMED", detail: "agents resumed" }),
+    );
+  });
+
+  it("undo restores the prior state", () => {
+    const setHalted = vi.fn();
+    const showToast = vi.fn();
+    toggleHaltWithToast({
+      halted: false,
+      toggleHalt: vi.fn(),
+      setHalted,
+      showToast,
+    });
+    const { onUndo } = showToast.mock.calls[0][0];
+    onUndo?.();
+    expect(setHalted).toHaveBeenCalledWith(false);
+  });
+});
 ```
+
+Add the import line at the top of the test file: `import { HaltProvider, useHalt, toggleHaltWithToast } from "../halt-context";`
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -215,6 +258,8 @@ type HaltContextValue = {
 
 const HaltContext = createContext<HaltContextValue | null>(null);
 
+// State-only provider. Do NOT call useToast() or any side-effect hook here —
+// toast firing lives at the call sites (OpStrip click, keyboard handler).
 export function HaltProvider({ children }: { children: ReactNode }) {
   const [halted, setHaltedState] = useState<boolean>(() => readLocal());
 
@@ -239,12 +284,39 @@ export function useHalt(): HaltContextValue {
   if (!ctx) throw new Error("useHalt must be used inside <HaltProvider>");
   return ctx;
 }
+
+type ShowToast = (t: {
+  title: string;
+  detail: string;
+  undoable: boolean;
+  onUndo?: () => void;
+}) => void;
+
+// Shared toggle-with-toast helper. Both the OpStrip click handler and the
+// keyboard `H` handler call this so their copy + undo behavior stays in lockstep.
+// Pure function — pass in the values from useHalt() + useToast() at the call site.
+export function toggleHaltWithToast(deps: {
+  halted: boolean;
+  toggleHalt: () => void;
+  setHalted: (next: boolean) => void;
+  showToast: ShowToast;
+}): void {
+  const { halted, toggleHalt, setHalted, showToast } = deps;
+  const wasHalted = halted;
+  toggleHalt();
+  showToast({
+    title: wasHalted ? "RESUMED" : "HALTED",
+    detail: wasHalted ? "agents resumed" : "all agents halted — actions queued",
+    undoable: true,
+    onUndo: () => setHalted(wasHalted),
+  });
+}
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @switchboard/dashboard test -- halt-context.test`
-Expected: PASS — all 6 tests green.
+Expected: PASS — all 9 tests green (6 provider/hook + 3 helper).
 
 - [ ] **Step 5: Commit**
 
@@ -328,16 +400,24 @@ import { useHaltState } from "../use-halt-state";
 with:
 
 ```tsx
-import { useHalt } from "../halt-context";
+import { toggleHaltWithToast, useHalt } from "../halt-context";
 ```
 
-And replace any `const { halted, toggleHalt } = useHaltState();` with:
+Replace any `const { halted, toggleHalt } = useHaltState();` with:
 
 ```tsx
-const { halted, toggleHalt } = useHalt();
+const { halted, setHalted, toggleHalt } = useHalt();
 ```
 
-(If Phase 1 wires the toast inside OpStrip's halt click handler, leave that wiring intact — only swap the state hook.)
+If Phase 1 wires an inline toast block in OpStrip's Halt click handler (anything resembling `const wasHalted = halted; toggleHalt(); showToast({...})`), replace that block with a single call to the shared helper:
+
+```tsx
+const { showToast } = useToast();
+// onClick handler:
+onClick={() => toggleHaltWithToast({ halted, toggleHalt, setHalted, showToast })}
+```
+
+Both the OpStrip click handler and the Task 3 keyboard handler will end up calling the same helper, guaranteeing copy + undo parity.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -541,26 +621,22 @@ export function ConsoleView() {
 }
 ```
 
-The literal H-handler block, replacing whatever Phase 1 wired:
+The literal H-handler block, replacing whatever Phase 1 wired (uses the shared `toggleHaltWithToast` helper from `halt-context.tsx`):
 
 ```tsx
+import { HaltProvider, toggleHaltWithToast, useHalt } from "./halt-context";
+// ... inside ConsoleViewBody:
+const { halted, setHalted, toggleHalt } = useHalt();
+const { showToast } = useToast();
+
 useKeyboardShortcuts({
   help: () => setHelpOpen((v) => !v),
-  halt: () => {
-    const wasHalted = halted;
-    toggleHalt();
-    showToast({
-      title: wasHalted ? "RESUMED" : "HALTED",
-      detail: wasHalted ? "agents resumed" : "all agents halted — actions queued",
-      undoable: true,
-      onUndo: () => setHalted(wasHalted),
-    });
-  },
+  halt: () => toggleHaltWithToast({ halted, toggleHalt, setHalted, showToast }),
   escape: () => setHelpOpen(false),
 });
 ```
 
-Search the file for `document.querySelector` and `.op-halt` — both must be absent.
+The OpStrip click handler uses the same helper (Task 2 wires it). Search the file for `document.querySelector` and `.op-halt` — both must be absent.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -775,7 +851,7 @@ describe("TranscriptPanel", () => {
     expect(container.querySelector(".transcript-error")).not.toBeNull();
   });
 
-  it('includes a "Open full conversation" link to /conversations/:id', async () => {
+  it("does NOT render an Open full conversation link (no /conversations/[id] route exists)", async () => {
     const mod = await import("@/hooks/use-escalations");
     vi.mocked(mod.useEscalationDetail).mockReturnValue({
       data: { conversationHistory: [{ role: "lead", text: "hi", timestamp: "t" }] },
@@ -783,8 +859,7 @@ describe("TranscriptPanel", () => {
       error: null,
     } as never);
     const { container } = wrap(<TranscriptPanel escalationId="e1" />);
-    const link = container.querySelector<HTMLAnchorElement>("a[href='/conversations/e1']");
-    expect(link?.textContent).toMatch(/Open full conversation/);
+    expect(container.querySelector("a[href^='/conversations/']")).toBeNull();
   });
 });
 ```
@@ -801,13 +876,16 @@ Create `apps/dashboard/src/components/console/queue-cards/transcript-panel.tsx`:
 ```tsx
 "use client";
 
-import Link from "next/link";
 import { useEscalationDetail } from "@/hooks/use-escalations";
 
 const VISIBLE_COUNT = 5;
 
 type Message = { role: string; text: string; timestamp: string };
 
+// No "Open full conversation →" link — apps/dashboard/src/app/(auth)/conversations/
+// has only page.tsx (a list view), no [id] dynamic route. The 5-message inline
+// transcript surfaces enough context to make a reply decision; full-thread
+// navigation can be revisited in Phase 3 if a per-conversation route is added.
 export function TranscriptPanel({ escalationId }: { escalationId: string }) {
   const { data, isLoading, error } = useEscalationDetail(escalationId);
 
@@ -822,24 +900,14 @@ export function TranscriptPanel({ escalationId }: { escalationId: string }) {
   }
 
   if (error) {
-    return (
-      <div className="transcript-error">
-        Couldn&apos;t load transcript —{" "}
-        <Link href={`/conversations/${escalationId}`}>open full conversation →</Link>
-      </div>
-    );
+    return <div className="transcript-error">Couldn&apos;t load transcript.</div>;
   }
 
   const history =
     (data as { conversationHistory?: Message[] } | undefined)?.conversationHistory ?? [];
 
   if (history.length === 0) {
-    return (
-      <div className="transcript-empty">
-        No messages yet —{" "}
-        <Link href={`/conversations/${escalationId}`}>open full conversation →</Link>
-      </div>
-    );
+    return <div className="transcript-empty">No messages yet.</div>;
   }
 
   const visible = history.slice(-VISIBLE_COUNT);
@@ -863,9 +931,6 @@ export function TranscriptPanel({ escalationId }: { escalationId: string }) {
           </div>
         );
       })}
-      <Link className="transcript-open-full" href={`/conversations/${escalationId}`}>
-        Open full conversation →
-      </Link>
     </div>
   );
 }
@@ -1164,7 +1229,7 @@ describe("EscalationCardView", () => {
     expect(container.querySelector(".esc-reply")?.classList.contains("is-open")).toBe(true);
   });
 
-  it("primary button calls send + onResolve on success", async () => {
+  it("primary [Reply] button expands the panel and does NOT auto-send", async () => {
     const escMod = await import("@/hooks/use-escalations");
     vi.mocked(escMod.useEscalationDetail).mockReturnValue({
       data: undefined,
@@ -1172,15 +1237,17 @@ describe("EscalationCardView", () => {
       error: null,
     } as never);
     const replyMod = await import("@/hooks/use-escalation-reply");
-    const send = vi.fn().mockResolvedValue({ ok: true, escalation: { id: "e1" } });
+    const send = vi.fn();
     vi.mocked(replyMod.useEscalationReply).mockReturnValue({ send, isPending: false } as never);
     const onResolve = vi.fn();
     const { container } = wrap(
       <EscalationCardView card={card} resolving={false} onResolve={onResolve} />,
     );
+    expect(container.querySelector(".reply-form")).toBeNull();
     fireEvent.click(container.querySelector<HTMLButtonElement>(".btn-primary-coral")!);
-    await waitFor(() => expect(onResolve).toHaveBeenCalled());
-    expect(send).toHaveBeenCalled();
+    expect(container.querySelector(".reply-form")).not.toBeNull();
+    expect(send).not.toHaveBeenCalled();
+    expect(onResolve).not.toHaveBeenCalled();
   });
 
   it("renders id=q-${card.id} on the card root", async () => {
@@ -1235,9 +1302,7 @@ Create `apps/dashboard/src/components/console/queue-cards/escalation-card.tsx`:
 
 import { useState } from "react";
 import type { EscalationCard } from "../console-data";
-import { useEscalationReply } from "@/hooks/use-escalation-reply";
-import { capitalize } from "./rich-text";
-import { RichTextSpan } from "./rich-text";
+import { capitalize, RichTextSpan } from "./rich-text";
 import { TranscriptPanel } from "./transcript-panel";
 import { ReplyForm } from "./reply-form";
 
@@ -1249,17 +1314,12 @@ interface Props {
 
 export function EscalationCardView({ card, resolving, onResolve }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const { send, isPending } = useEscalationReply(card.escalationId);
 
-  const handlePrimary = async () => {
-    try {
-      const result = await send(card.primary.label);
-      if (result.ok) onResolve();
-    } catch {
-      // primary path uses the canned label; full error UI is in <ReplyForm>.
-      // Keep the card in place so the operator can expand and retry.
-    }
-  };
+  // Primary label is "Reply" (per console-mappers.ts) — there is no default
+  // templated message. Both the caret toggle and the primary button just
+  // expand the panel; the actual send happens via <ReplyForm>'s Send button
+  // after the operator types a message.
+  const expand = () => setExpanded(true);
 
   return (
     <article id={`q-${card.id}`} className={`qcard escalation${resolving ? " is-resolving" : ""}`}>
@@ -1298,12 +1358,7 @@ export function EscalationCardView({ card, resolving, onResolve }: Props) {
           </div>
         )}
         <div className="qactions">
-          <button
-            className="btn btn-primary-coral"
-            type="button"
-            disabled={isPending}
-            onClick={handlePrimary}
-          >
+          <button className="btn btn-primary-coral" type="button" onClick={expand}>
             {card.primary.label}
           </button>
           <button className="btn btn-ghost" type="button">
@@ -1442,6 +1497,9 @@ interface Props {
 export function RecommendationCardView({ card, resolving, onResolve }: Props) {
   const { showToast } = useToast();
 
+  // Visual-only until recommendation backend lands —
+  // see docs/superpowers/specs/2026-05-03-console-frame-phase-2-design.md
+  // (no API mutation; card reappears on next refetch).
   const fire = (label: string, detail: string) => {
     showToast({ title: label.toUpperCase(), detail, undoable: false });
     onResolve();
@@ -2278,17 +2336,6 @@ Open `apps/dashboard/src/components/console/console.css` and append at the end o
   font-size: 0.85rem;
   color: var(--c-text-3);
 }
-[data-v6-console] .transcript-open-full {
-  align-self: flex-start;
-  font-family: var(--c-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--c-text-2);
-  border-bottom: 1px dashed var(--c-hair);
-  padding: 0 0 0.2rem 0;
-}
-
 /* ---------- Phase 2 — inline reply form ---------- */
 [data-v6-console] .reply-form {
   display: flex;
