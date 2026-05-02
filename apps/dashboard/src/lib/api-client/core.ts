@@ -1,7 +1,7 @@
 export class SwitchboardClientCore {
   constructor(
-    private baseUrl: string,
-    private apiKey: string,
+    protected baseUrl: string,
+    protected apiKey: string,
   ) {}
 
   protected async request<T>(path: string, init?: RequestInit): Promise<T> {
