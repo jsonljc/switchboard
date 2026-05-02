@@ -6,11 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { MODULE_IDS, MODULE_LABELS, SLUG_TO_MODULE } from "@/lib/module-types";
 import type { ModuleId } from "@/lib/module-types";
 import { ModuleSetupWizard } from "@/components/modules/module-setup-wizard";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export default function ModuleSetupPage() {
   const params = useParams<{ module: string }>();
   const searchParams = useSearchParams();
   const moduleSlug = params.module;
+  const keys = useScopedQueryKeys();
 
   if (!MODULE_IDS.includes(moduleSlug as ModuleId)) {
     notFound();
@@ -21,14 +23,16 @@ export default function ModuleSetupPage() {
   const deploymentIdFromCallback = searchParams.get("deploymentId") ?? undefined;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["deployment-for-module", moduleId],
+    queryKey: keys?.marketplace.deploymentForModule(moduleId) ?? [
+      "__disabled_deployment_for_module__",
+    ],
     queryFn: async () => {
       const res = await fetch("/api/dashboard/marketplace/deployments");
       if (!res.ok) return { deployments: [] };
       const json = await res.json();
       return json as { deployments: Array<{ id: string; listingId: string }> };
     },
-    enabled: !deploymentIdFromCallback,
+    enabled: !!keys && !deploymentIdFromCallback,
   });
 
   const matchingDeployments = (data?.deployments ?? []).filter((d) => {

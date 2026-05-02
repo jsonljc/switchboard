@@ -106,6 +106,8 @@ export const scopedKeys = (orgId: string) => ({
     trust: (id: string) => [orgId, "marketplace", "trust", id] as const,
     trustProgression: (id: string) => [orgId, "marketplace", "trust-progression", id] as const,
     deployments: () => [orgId, "marketplace", "deployments"] as const,
+    deploymentForModule: (moduleId: string) =>
+      [orgId, "marketplace", "deployment-for-module", moduleId] as const,
     faqDrafts: (deploymentId: string) =>
       [orgId, "marketplace", "faq-drafts", deploymentId] as const,
     traces: (deploymentId: string) => [orgId, "marketplace", "traces", deploymentId] as const,
@@ -144,5 +146,14 @@ export const scopedKeys = (orgId: string) => ({
   dashboard: {
     all: () => [orgId, "dashboard"] as const,
     overview: () => [orgId, "dashboard", "overview"] as const,
+  },
+  billing: {
+    all: () => [orgId, "billing"] as const,
+    status: () => [orgId, "billing", "status"] as const,
+  },
+  roi: {
+    all: () => [orgId, "roi"] as const,
+    summary: (filters?: Record<string, string | undefined>) =>
+      [orgId, "roi", "summary", filters] as const,
   },
 });

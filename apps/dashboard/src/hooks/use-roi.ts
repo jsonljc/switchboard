@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface DateRange {
   from: string;
@@ -37,9 +38,13 @@ export function useRoiSummary(
   dateRange: DateRange,
   breakdown: "campaign" | "channel" | "agent" = "campaign",
 ) {
+  const keys = useScopedQueryKeys();
   return useQuery({
-    queryKey: ["roi", "summary", dateRange.from, dateRange.to, breakdown],
+    queryKey: keys?.roi.summary({ from: dateRange.from, to: dateRange.to, breakdown }) ?? [
+      "__disabled_roi_summary__",
+    ],
     queryFn: () => fetchRoiSummary(dateRange, breakdown),
     staleTime: 5 * 60 * 1000,
+    enabled: !!keys,
   });
 }

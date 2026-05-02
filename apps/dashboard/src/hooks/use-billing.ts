@@ -1,14 +1,19 @@
+"use client";
+
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import type { BillingStatus, CheckoutResult, PortalResult } from "@/lib/api-client";
 
 export function useBillingStatus() {
+  const keys = useScopedQueryKeys();
   return useQuery<BillingStatus>({
-    queryKey: ["billing", "status"],
+    queryKey: keys?.billing.status() ?? ["__disabled_billing_status__"],
     queryFn: async () => {
       const res = await fetch("/api/dashboard/billing/status");
       if (!res.ok) throw new Error("Failed to fetch billing status");
       return res.json() as Promise<BillingStatus>;
     },
+    enabled: !!keys,
   });
 }
 

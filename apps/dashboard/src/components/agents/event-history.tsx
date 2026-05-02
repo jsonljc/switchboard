@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 interface AuditEvent {
   eventType: string;
@@ -8,14 +9,16 @@ interface AuditEvent {
   summary: string;
 }
 
-export function EventHistory({ organizationId }: { organizationId: string }) {
+export function EventHistory() {
+  const keys = useScopedQueryKeys();
   const { data, isLoading } = useQuery({
-    queryKey: ["audit", organizationId],
+    queryKey: keys?.audit.list({ limit: "20" }) ?? ["__disabled_audit_list__"],
     queryFn: async () => {
       const res = await fetch("/api/dashboard/audit?limit=20");
       if (!res.ok) throw new Error("Failed to fetch events");
       return res.json() as Promise<{ entries: AuditEvent[] }>;
     },
+    enabled: !!keys,
   });
 
   if (isLoading) return <p className="text-[13px] text-muted-foreground">Loading events...</p>;
