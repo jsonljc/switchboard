@@ -12,7 +12,7 @@ export function ToastShelf() {
   };
 
   return (
-    <div className="toast-shelf">
+    <div className="toast-shelf" role="status" aria-live="polite">
       <div className="toast">
         <span>
           <b>{toast.title}</b> · {toast.detail}

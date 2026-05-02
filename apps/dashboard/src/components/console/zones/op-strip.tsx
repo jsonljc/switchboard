@@ -80,7 +80,7 @@ export function OpStrip({ onHelpOpen }: { onHelpOpen: () => void }) {
           </span>
         </div>
         <div className="op-right">
-          <span className={`op-live${halted ? " halted" : ""}`}>
+          <span className={`op-live${halted ? " halted" : ""}`} role="status">
             <span className="pulse" aria-hidden="true" />
             {halted ? "Halted" : "Live"}
           </span>
@@ -95,6 +95,7 @@ export function OpStrip({ onHelpOpen }: { onHelpOpen: () => void }) {
           <button
             type="button"
             className={`op-halt${halted ? " is-halted" : ""}`}
+            aria-pressed={halted}
             onClick={handleHaltClick}
             title={halted ? "Resume autonomous agents" : "Pause all autonomous agent actions"}
           >

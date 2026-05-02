@@ -2,10 +2,16 @@
 
 export function HelpOverlay({ onClose }: { onClose: () => void }) {
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="help-card" onClick={(e) => e.stopPropagation()}>
+    <div className="overlay" role="presentation" onClick={onClose}>
+      <div
+        className="help-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-overlay-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="head-row">
-          <h2>How Switchboard works</h2>
+          <h2 id="help-overlay-title">How Switchboard works</h2>
           <button type="button" className="close" onClick={onClose}>
             Close ✕
           </button>
