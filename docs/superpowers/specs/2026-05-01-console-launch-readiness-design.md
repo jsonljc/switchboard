@@ -68,11 +68,12 @@ The product cannot ship `/console` as the operator home until these are closed.
 
 ### 4.1 Slide-over pattern (PR-1)
 
-A single shared `Sheet` component (Radix-based; existing `@radix-ui/react-dialog` is already a dependency) renders the slide-over surface. Three content variants ride on top:
+A single shared `Sheet` component (Radix-based; existing `@radix-ui/react-dialog` is already a dependency) renders the slide-over surface. Two content variants ride on top at launch:
 
 - `<ApprovalSlideOver approvalId={id} />` — renders approve/reject/skip controls + summary; shared `useApprovalAction(approvalId)` hook drives the mutation. "Open full detail →" deep-links to `/decide/[id]`.
 - `<EscalationSlideOver escalationId={id} />` — renders conversation transcript (truncated to last N turns) + reply textarea + Send. Shared `useEscalationReply(escalationId)` hook drives the mutation. "Open full conversation →" deep-links to `/conversations/[escalationId]` (or matched conversation id).
-- `<RecommendationSlideOver recommendationId={id} />` — renders recommendation summary + approve/edit/dismiss. Shared `useRecommendationAction(recommendationId)` hook drives the mutation.
+
+Recommendation cards are not implemented (no runtime emitter today; see §12). When the Option-C recommendation feed lands, a third `<RecommendationSlideOver>` follows the same pattern — but PR-1 ships nothing recommendation-shaped (no stub component, no stub hook). Queue cards of `kind: "recommendation"` continue to render their existing read-only view; their action buttons (already inert per DC-39) stay inert until the data feed exists.
 
 The slide-over component itself does NOT own approve/reject/reply state — it consumes the shared hooks that the existing `/decide/[id]` and `/escalations` pages also consume. Mutation logic lives in `apps/dashboard/src/hooks/`. Both surfaces (slide-over and full page) render their own UI on top of identical mutation hooks. This prevents the two-flows divergence trap.
 
@@ -258,19 +259,19 @@ PR-1 → PR-2 → PR-3, each merged to `main` before the next branches. Each PR 
 Files (anticipated; verify during implementation):
 - New: `apps/dashboard/src/components/console/slide-overs/approval-slide-over.tsx`
 - New: `apps/dashboard/src/components/console/slide-overs/escalation-slide-over.tsx`
-- New: `apps/dashboard/src/components/console/slide-overs/recommendation-slide-over.tsx`
+- (No `recommendation-slide-over.tsx` — see note below; deferred until recommendation cards are emitted.)
 - New: `apps/dashboard/src/hooks/use-approval-action.ts` (extracts the inline `respondMutation` at `apps/dashboard/src/app/(auth)/decide/page.tsx:115` and the same call site in `decide/[id]/page.tsx`. Wraps `respondToApproval` from the api-client. Both /decide pages and the new slide-over consume identical logic.)
 - New: `apps/dashboard/src/hooks/use-escalation-reply.ts` (extracts the inline reply submit logic in `apps/dashboard/src/components/escalations/escalation-list.tsx`. Wraps the POST to `/api/dashboard/escalations/[id]/respond`. Both `/escalations` page and the new slide-over consume identical logic.)
 - Modify: `apps/dashboard/src/app/(auth)/decide/page.tsx` and `decide/[id]/page.tsx` (replace inline `respondMutation` with `useApprovalAction(id)`; preserve the existing `<RespondDialog>` UI surface)
 - Modify: `apps/dashboard/src/components/approvals/respond-dialog.tsx` (update to consume `useApprovalAction` if it currently receives mutation as a prop)
 - Modify: `apps/dashboard/src/components/escalations/escalation-list.tsx` (replace inline reply submit with `useEscalationReply(id)`)
-- New: `apps/dashboard/src/hooks/use-recommendation-action.ts` (placeholder for now — recommendations don't render in PR-1, future PR wires real recommendations)
+- (No `use-recommendation-action.ts` — recommendation cards are not emitted by the backend in Option B; do not implement the recommendation slide-over or its action hook unless recommendation cards exist at runtime. Adding a stub now creates fake surface area. Defer to a future PR alongside the Option-C recommendation feed.)
 - Modify: `apps/dashboard/src/components/console/console-view.tsx` (queue cards get `onClick`; slide-over state hooks)
 - Modify: `apps/dashboard/src/components/layout/app-shell.tsx:14` (`CHROME_HIDDEN_PATHS` array — remove `"/console"`)
 - Modify: `apps/dashboard/src/components/console/console.css` (single-rule override for OwnerTabs visual reconciliation, if needed — the warm-clay `[data-v6-console]` palette will need to coexist with the global nav chrome)
 - Modify: `apps/dashboard/src/middleware.ts` (add `/console`, `/escalations`, `/conversations` to `AUTH_PAGE_PREFIXES` and the `matcher` per audit finding DC-10)
 - Modify: `apps/dashboard/src/app/login/page.tsx:23,29,48` (redirect logic per §4.4 — replace the precomputed `callbackUrl` with session-aware logic in the post-auth `useEffect`)
-- Modify: `apps/dashboard/src/lib/auth.ts:182-235` (extend `jwt` callback to read `Organization.onboardingComplete` from Prisma and set `token.onboardingComplete`; extend `session` callback to set `session.onboardingComplete` from token)
+- Modify: `apps/dashboard/src/lib/auth.ts:182-235` (extend `jwt` callback to read `Organization.onboardingComplete` from Prisma and set `token.onboardingComplete`; extend `session` callback to set `session.onboardingComplete` from token). **Caching guidance:** read `onboardingComplete` from Prisma only on initial sign-in (when `user` is present in the JWT callback — the same branch that already initializes `organizationId`/`principalId`), not on every token refresh. Today's `jwt` callback DOES re-query `dashboardUser.emailVerified` on every refresh because the verification banner needs to disappear immediately after a user verifies; do NOT add `onboardingComplete` to that path. The trade-off: if `Organization.onboardingComplete` flips from `false` → `true` mid-session (a user finishes onboarding without re-authenticating), the session's `onboardingComplete` stays stale until the next token refresh on a NextAuth-session-update event or the user re-signs-in. Acceptable: onboarding completion is a once-per-org transition; the user is interacting with the wizard at the moment of flip and can reload after the wizard's own success state. PR-1 surfaces this as a `update()` call on `useSession()` from the wizard's success handler if needed (one-line addition); the writing-plans phase scopes whether that's part of PR-1 or a wizard-side follow-up.
 - Modify: `apps/dashboard/src/types/next-auth.d.ts` (add `onboardingComplete: boolean` to the `Session` interface and `onboardingComplete?: boolean` to the `JWT` interface)
 
 **PR-2 — /console doesn't lie** (`feat/console-pr2-truth-and-degradation`)
