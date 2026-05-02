@@ -40,4 +40,37 @@ describe("dashboard middleware auth", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost/login");
   });
+
+  it("redirects unauthenticated /console to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/console"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /escalations to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/escalations"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /conversations to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/conversations"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
 });
