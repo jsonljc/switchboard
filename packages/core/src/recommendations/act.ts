@@ -6,6 +6,13 @@ import type {
   RecommendationStatus,
 } from "./types.js";
 
+export class RecommendationStaleStatusError extends Error {
+  constructor(public readonly row: import("./types.js").Recommendation) {
+    super("recommendation status changed under us");
+    this.name = "RecommendationStaleStatusError";
+  }
+}
+
 export interface ActOnRecommendationInput {
   recommendationId: string;
   orgId: string;
@@ -56,14 +63,21 @@ export async function actOnRecommendation(
 
   // Lazy expiry.
   if (row.status === "pending" && row.expiresAt && row.expiresAt < new Date()) {
-    const expired: Recommendation = await store.applyAct({
-      id: row.id,
-      actor: input.actor,
-      fromStatus: "pending",
-      toStatus: "expired",
-      note: undefined,
-    });
-    return { status: "expired", row: expired };
+    try {
+      const expired: Recommendation = await store.applyAct({
+        id: row.id,
+        actor: input.actor,
+        fromStatus: "pending",
+        toStatus: "expired",
+        note: undefined,
+      });
+      return { status: "expired", row: expired };
+    } catch (err) {
+      if (err instanceof RecommendationStaleStatusError) {
+        return { status: "expired", row: err.row };
+      }
+      throw err;
+    }
   }
 
   // Terminal-state guard.
@@ -76,13 +90,19 @@ export async function actOnRecommendation(
     return { status: "undo_window_closed", row };
   }
 
-  const updated: Recommendation = await store.applyAct({
-    id: row.id,
-    actor: input.actor,
-    fromStatus: row.status,
-    toStatus: nextStatus(input.action),
-    note: input.note,
-  });
-
-  return { status: "ok", row: updated };
+  try {
+    const updated: Recommendation = await store.applyAct({
+      id: row.id,
+      actor: input.actor,
+      fromStatus: row.status,
+      toStatus: nextStatus(input.action),
+      note: input.note,
+    });
+    return { status: "ok", row: updated };
+  } catch (err) {
+    if (err instanceof RecommendationStaleStatusError) {
+      return { status: "already_terminal", row: err.row };
+    }
+    throw err;
+  }
 }

@@ -130,6 +130,31 @@ describe("PrismaRecommendationStore", () => {
     expect(audits[0]?.entryHash).not.toBe("v1-no-chain");
   });
 
+  it("applyAct rejects stale fromStatus and reads back current row", async () => {
+    const store = new PrismaRecommendationStore(prisma);
+    const { row } = await store.insert(
+      baseInsert({ surface: "queue", undoableUntil: null, idempotencyKey: "race-key-1" }),
+    );
+    // Simulate another writer transitioning the row first
+    await store.applyAct({
+      id: row.id,
+      actor: { principalId: "user-A", type: "operator" },
+      fromStatus: "pending",
+      toStatus: "acted",
+      note: undefined,
+    });
+    // Now a "stale" act with fromStatus: "pending" should throw RecommendationStaleStatusError
+    await expect(
+      store.applyAct({
+        id: row.id,
+        actor: { principalId: "user-B", type: "operator" },
+        fromStatus: "pending",
+        toStatus: "dismissed",
+        note: undefined,
+      }),
+    ).rejects.toThrow(/stale|status changed/i);
+  });
+
   it("two acts on different rows produce different entryHashes", async () => {
     const store = new PrismaRecommendationStore(prisma);
     const a = await store.insert(

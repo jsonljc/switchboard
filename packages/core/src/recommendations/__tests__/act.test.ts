@@ -165,6 +165,23 @@ describe("actOnRecommendation — shadow surface", () => {
   });
 });
 
+describe("actOnRecommendation — race conditions", () => {
+  it("applyAct race: second concurrent caller sees already_terminal", async () => {
+    const store = await seedQueue();
+    const id = store.rows[0]!.id;
+    // simulate first writer winning the race by mutating the row directly
+    store.rows[0]!.status = "acted";
+    // second writer attempts the same action
+    const result = await actOnRecommendation(store, {
+      recommendationId: id,
+      orgId: "org-1",
+      actor: { principalId: "user-B", type: "operator" },
+      action: "dismiss",
+    });
+    expect(result.status).toBe("already_terminal");
+  });
+});
+
 describe("actOnRecommendation — boundary checks", () => {
   it("404 (returns null-ish) for missing id", async () => {
     const store = createInMemoryRecommendationStore();

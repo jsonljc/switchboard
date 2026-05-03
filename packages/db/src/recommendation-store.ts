@@ -8,6 +8,7 @@ import type {
   RecommendationStore,
   RecommendationSurface,
 } from "@switchboard/core";
+import { RecommendationStaleStatusError } from "@switchboard/core";
 
 const RECOMMENDATION_INTENT_PREFIX = "recommendation.";
 
@@ -166,15 +167,25 @@ export class PrismaRecommendationStore implements RecommendationStore {
         ...(params.__recommendation ?? {}),
         note: args.note ?? null,
       };
-      const updated = await tx.pendingActionRecord.update({
-        where: { id: args.id },
-        data: {
-          status: args.toStatus,
-          resolvedAt: new Date(),
-          resolvedBy: args.actor.principalId,
-          parameters: { ...params, __recommendation: updatedMeta } as object,
-        },
-      });
+      let updated;
+      try {
+        updated = await tx.pendingActionRecord.update({
+          where: { id: args.id, status: args.fromStatus },
+          data: {
+            status: args.toStatus,
+            resolvedAt: new Date(),
+            resolvedBy: args.actor.principalId,
+            parameters: { ...params, __recommendation: updatedMeta } as object,
+          },
+        });
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && (err as { code?: string }).code === "P2025") {
+          const reread = await tx.pendingActionRecord.findUnique({ where: { id: args.id } });
+          if (reread) throw new RecommendationStaleStatusError(rowToRecommendation(reread));
+          throw new Error(`Recommendation not found: ${args.id}`);
+        }
+        throw err;
+      }
       await tx.auditEntry.create({
         data: {
           eventType: "recommendation.act",

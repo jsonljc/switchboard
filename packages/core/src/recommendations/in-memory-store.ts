@@ -1,3 +1,4 @@
+import { RecommendationStaleStatusError } from "./act.js";
 import type { RecommendationStore } from "./interfaces.js";
 import type { PersistRecommendationInput, Recommendation } from "./types.js";
 
@@ -58,9 +59,10 @@ export function createInMemoryRecommendationStore(): RecommendationStore & {
       filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       return typeof limit === "number" ? filtered.slice(0, limit) : filtered;
     },
-    async applyAct({ id, actor, toStatus, note }) {
+    async applyAct({ id, actor, fromStatus, toStatus, note }) {
       const row = rows.find((r) => r.id === id);
       if (!row) throw new Error("not found");
+      if (row.status !== fromStatus) throw new RecommendationStaleStatusError(row);
       row.status = toStatus;
       row.actedBy = actor.principalId;
       row.actedAt = new Date();
