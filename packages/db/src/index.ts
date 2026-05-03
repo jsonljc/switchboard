@@ -119,3 +119,4 @@ export type { CreatePcdIdentitySnapshotInput } from "./stores/prisma-pcd-identit
 export { PrismaRecommendationStore } from "./recommendation-store.js";
 export { createInMemoryOrgAgentEnablementStore } from "./stores/in-memory-org-agent-enablement-store.js";
 export { PrismaOrgAgentEnablementStore } from "./stores/prisma-org-agent-enablement-store.js";
+export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
