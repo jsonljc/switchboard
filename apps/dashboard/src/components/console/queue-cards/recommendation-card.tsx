@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import type { RecommendationCard } from "../console-data";
-import { useToast } from "../use-toast";
+import { useRecommendationAction } from "@/hooks/use-recommendation-action";
 import { capitalize, RichTextSpan } from "./rich-text";
 
 interface Props {
@@ -11,16 +12,17 @@ interface Props {
 }
 
 export function RecommendationCardView({ card, resolving, onResolve }: Props) {
-  const { showToast } = useToast();
+  const action = useRecommendationAction(card.id);
+  const [error, setError] = useState<string | null>(null);
 
-  // Visual-only until recommendation backend lands —
-  // see docs/superpowers/specs/2026-05-03-console-frame-phase-2-design.md
-  // (no API mutation; card reappears on next refetch).
-  // Title uses the label as-is (title-case from the mapper) to match the
-  // Halt toast convention (`Halted` / `Resumed`) and avoid a stylistic clash.
-  const fire = (label: string, detail: string) => {
-    showToast({ title: label, detail, undoable: false });
-    onResolve();
+  const fire = async (kind: "primary" | "secondary" | "dismiss") => {
+    setError(null);
+    try {
+      await action[kind]();
+      onResolve();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action failed");
+    }
   };
 
   return (
@@ -48,25 +50,29 @@ export function RecommendationCardView({ card, resolving, onResolve }: Props) {
             </li>
           ))}
         </ul>
+        {error && <div className="qerror">{error}</div>}
         <div className="qactions">
           <button
             className="btn btn-primary-graphite"
             type="button"
-            onClick={() => fire(card.primary.label, card.action)}
+            disabled={action.isPending}
+            onClick={() => fire("primary")}
           >
             {card.primary.label}
           </button>
           <button
             className="btn btn-ghost"
             type="button"
-            onClick={() => fire(card.secondary.label, card.action)}
+            disabled={action.isPending}
+            onClick={() => fire("secondary")}
           >
             {card.secondary.label}
           </button>
           <button
             className="btn btn-text"
             type="button"
-            onClick={() => fire(card.dismiss.label, card.action)}
+            disabled={action.isPending}
+            onClick={() => fire("dismiss")}
           >
             {card.dismiss.label}
           </button>
