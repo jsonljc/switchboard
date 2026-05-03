@@ -1,0 +1,63 @@
+import { z } from "zod";
+
+export const RecommendationSurfaceSchema = z.enum(["queue", "shadow_action", "dropped"]);
+export type RecommendationSurface = z.infer<typeof RecommendationSurfaceSchema>;
+
+export const RecommendationStatusSchema = z.enum([
+  "pending",
+  "acted",
+  "dismissed",
+  "confirmed",
+  "dismissed_by_undo",
+  "expired",
+]);
+export type RecommendationStatus = z.infer<typeof RecommendationStatusSchema>;
+
+export const RecommendationActionSchema = z.enum([
+  "primary",
+  "secondary",
+  "dismiss",
+  "confirm",
+  "undo",
+]);
+export type RecommendationAction = z.infer<typeof RecommendationActionSchema>;
+
+export const AgentKeySchema = z.enum(["nova", "alex", "mira"]);
+export type AgentKey = z.infer<typeof AgentKeySchema>;
+
+export const RecommendationPresentationSchema = z.object({
+  primaryLabel: z.string().min(1),
+  secondaryLabel: z.string().min(1),
+  dismissLabel: z.string().min(1),
+  dataLines: z.array(z.unknown()),
+});
+export type RecommendationPresentation = z.infer<typeof RecommendationPresentationSchema>;
+
+export const RecommendationInputSchema = z.object({
+  orgId: z.string().min(1),
+  agentKey: AgentKeySchema,
+  intent: z.string().regex(/^recommendation\./, "intent must start with 'recommendation.'"),
+  action: z.string().min(1),
+  humanSummary: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  dollarsAtRisk: z.number().min(0),
+  riskLevel: z.enum(["low", "medium", "high"]),
+  parameters: z.record(z.unknown()),
+  presentation: RecommendationPresentationSchema,
+  targetEntities: z.record(z.unknown()).optional(),
+  expiresAt: z.date().optional(),
+  sourceWorkflow: z.string().optional(),
+});
+export type RecommendationInput = z.infer<typeof RecommendationInputSchema>;
+
+export const ActOnRecommendationInputSchema = z.object({
+  recommendationId: z.string().min(1),
+  orgId: z.string().min(1),
+  actor: z.object({
+    principalId: z.string().min(1),
+    type: z.literal("operator"),
+  }),
+  action: RecommendationActionSchema,
+  note: z.string().optional(),
+});
+export type ActOnRecommendationInput = z.infer<typeof ActOnRecommendationInputSchema>;

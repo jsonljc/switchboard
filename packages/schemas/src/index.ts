@@ -118,3 +118,6 @@ export * from "./approval-lifecycle.js";
 
 // PCD Identity Registry
 export * from "./pcd-identity.js";
+
+// Recommendations (surface, status, action enums + canonical input shape)
+export * from "./recommendations.js";
