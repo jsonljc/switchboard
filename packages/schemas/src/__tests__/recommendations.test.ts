@@ -5,6 +5,7 @@ import {
   RecommendationStatusSchema,
   RecommendationInputSchema,
   RecommendationPresentationSchema,
+  ActOnRecommendationInputSchema,
 } from "../recommendations.js";
 
 describe("RecommendationSurfaceSchema", () => {
@@ -31,6 +32,10 @@ describe("RecommendationStatusSchema", () => {
       expect(RecommendationStatusSchema.parse(s)).toBe(s);
     }
   });
+  it("rejects unknown status values", () => {
+    expect(() => RecommendationStatusSchema.parse("archived")).toThrow();
+    expect(() => RecommendationStatusSchema.parse("PENDING")).toThrow();
+  });
 });
 
 describe("RecommendationActionSchema", () => {
@@ -38,6 +43,10 @@ describe("RecommendationActionSchema", () => {
     for (const a of ["primary", "secondary", "dismiss", "confirm", "undo"]) {
       expect(RecommendationActionSchema.parse(a)).toBe(a);
     }
+  });
+  it("rejects unknown action values", () => {
+    expect(() => RecommendationActionSchema.parse("approve")).toThrow();
+    expect(() => RecommendationActionSchema.parse("PRIMARY")).toThrow();
   });
 });
 
@@ -110,5 +119,63 @@ describe("RecommendationInputSchema", () => {
         presentation: { primaryLabel: "x", secondaryLabel: "x", dismissLabel: "x", dataLines: [] },
       }),
     ).toThrow();
+  });
+  it("rejects negative confidence", () => {
+    expect(() =>
+      RecommendationInputSchema.parse({
+        orgId: "o",
+        agentKey: "nova",
+        intent: "recommendation.x",
+        action: "pause",
+        humanSummary: "x",
+        confidence: -0.1,
+        dollarsAtRisk: 0,
+        riskLevel: "low",
+        parameters: {},
+        presentation: { primaryLabel: "x", secondaryLabel: "x", dismissLabel: "x", dataLines: [] },
+      }),
+    ).toThrow();
+  });
+});
+
+describe("ActOnRecommendationInputSchema", () => {
+  it("accepts a minimal valid input", () => {
+    const ok = ActOnRecommendationInputSchema.parse({
+      recommendationId: "rec-1",
+      orgId: "org-1",
+      actor: { principalId: "user-1", type: "operator" },
+      action: "primary",
+    });
+    expect(ok.action).toBe("primary");
+  });
+  it("rejects non-operator actor type", () => {
+    expect(() =>
+      ActOnRecommendationInputSchema.parse({
+        recommendationId: "rec-1",
+        orgId: "org-1",
+        actor: { principalId: "user-1", type: "system" },
+        action: "primary",
+      }),
+    ).toThrow();
+  });
+  it("rejects unknown action", () => {
+    expect(() =>
+      ActOnRecommendationInputSchema.parse({
+        recommendationId: "rec-1",
+        orgId: "org-1",
+        actor: { principalId: "user-1", type: "operator" },
+        action: "approve",
+      }),
+    ).toThrow();
+  });
+  it("accepts optional note", () => {
+    const ok = ActOnRecommendationInputSchema.parse({
+      recommendationId: "rec-1",
+      orgId: "org-1",
+      actor: { principalId: "user-1", type: "operator" },
+      action: "dismiss",
+      note: "stale data",
+    });
+    expect(ok.note).toBe("stale data");
   });
 });

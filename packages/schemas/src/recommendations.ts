@@ -37,6 +37,12 @@ export const RecommendationInputSchema = z.object({
   orgId: z.string().min(1),
   agentKey: AgentKeySchema,
   intent: z.string().regex(/^recommendation\./, "intent must start with 'recommendation.'"),
+  // Domain-specific action identifier (e.g. "pause", "reduce_budget", "approve_lead").
+  // Intentionally free-form — different emitters (ad-optimizer, creative-pipeline, etc.)
+  // own their own action vocabularies. The router (packages/core/src/recommendations/router.ts)
+  // decides which actions are reversible/auto-actionable. Constraining this to a single
+  // enum here would couple recommendations to a single emitter and defeat the v1.5/v2
+  // expansion path documented in the spec's "Operator UX Principles" section.
   action: z.string().min(1),
   humanSummary: z.string().min(1),
   confidence: z.number().min(0).max(1),
