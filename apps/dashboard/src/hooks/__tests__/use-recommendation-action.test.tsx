@@ -11,6 +11,8 @@ vi.mock("next-auth/react", () => ({
 const fetchMock = vi.fn();
 global.fetch = fetchMock as never;
 
+type ActionKey = "primary" | "secondary" | "dismiss" | "confirm" | "undo";
+
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -31,7 +33,8 @@ describe("useRecommendationAction", () => {
       });
       const { result } = renderHook(() => useRecommendationAction("r-1"), { wrapper });
       await act(async () => {
-        await result.current[action as keyof typeof result.current]?.call(result.current);
+        const fn = result.current[action as ActionKey];
+        await fn();
       });
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/dashboard/recommendations",
