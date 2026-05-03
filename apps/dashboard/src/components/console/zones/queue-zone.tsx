@@ -5,9 +5,15 @@ import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApprovals } from "@/hooks/use-approvals";
 import { useEscalations } from "@/hooks/use-escalations";
+import { useRecommendations } from "@/hooks/use-recommendations";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { QueueCardView } from "../queue-cards";
-import { mapQueue, type ApprovalApiRow, type EscalationApiRow } from "../console-mappers";
+import {
+  mapQueue,
+  type ApprovalApiRow,
+  type EscalationApiRow,
+  type RecommendationApiRow,
+} from "../console-mappers";
 import { ZoneEmpty, ZoneError, ZoneSkeleton } from "./zone-states";
 
 const RESOLVE_DURATION_MS = 320;
@@ -15,6 +21,7 @@ const RESOLVE_DURATION_MS = 320;
 export function QueueZone() {
   const escalations = useEscalations();
   const approvals = useApprovals();
+  const recommendations = useRecommendations();
   const queryClient = useQueryClient();
   const keys = useScopedQueryKeys();
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(() => new Set());
@@ -30,6 +37,7 @@ export function QueueZone() {
         if (keys) {
           queryClient.invalidateQueries({ queryKey: keys.escalations.all() });
           queryClient.invalidateQueries({ queryKey: keys.approvals.pending() });
+          queryClient.invalidateQueries({ queryKey: keys.recommendations.all() });
         }
         setResolvingIds((prev) => {
           const next = new Set(prev);
@@ -61,8 +69,11 @@ export function QueueZone() {
     (escalations.data as { escalations?: EscalationApiRow[] } | undefined)?.escalations ?? [];
   const approvalRows: ApprovalApiRow[] =
     (approvals.data as { approvals?: ApprovalApiRow[] } | undefined)?.approvals ?? [];
+  const recommendationRows: RecommendationApiRow[] =
+    (recommendations.data as { recommendations?: RecommendationApiRow[] } | undefined)
+      ?.recommendations ?? [];
 
-  const cards = mapQueue(escalationRows, approvalRows, new Date());
+  const cards = mapQueue(escalationRows, approvalRows, recommendationRows, new Date());
 
   if (cards.length === 0) {
     return <ZoneEmpty message="No queue items right now." />;
