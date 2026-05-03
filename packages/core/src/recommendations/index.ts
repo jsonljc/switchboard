@@ -16,3 +16,4 @@ export type { RecommendationStore } from "./interfaces.js";
 export { emitRecommendation } from "./emit.js";
 export { actOnRecommendation } from "./act.js";
 export type { ActOnRecommendationInput } from "./act.js";
+export { createInMemoryRecommendationStore } from "./in-memory-store.js";

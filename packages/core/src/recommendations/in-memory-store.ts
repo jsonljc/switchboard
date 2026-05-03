@@ -1,7 +1,7 @@
-import type { RecommendationStore } from "../interfaces.js";
-import type { PersistRecommendationInput, Recommendation } from "../types.js";
+import type { RecommendationStore } from "./interfaces.js";
+import type { PersistRecommendationInput, Recommendation } from "./types.js";
 
-export function createInMemoryStore(): RecommendationStore & {
+export function createInMemoryRecommendationStore(): RecommendationStore & {
   rows: Recommendation[];
   byKey: Map<string, Recommendation>;
 } {
@@ -45,10 +45,18 @@ export function createInMemoryStore(): RecommendationStore & {
     async getById(id) {
       return rows.find((r) => r.id === id) ?? null;
     },
-    async listBySurface({ orgId, surface, status }) {
-      return rows.filter(
-        (r) => r.orgId === orgId && r.surface === surface && (status ? r.status === status : true),
+    async listBySurface({ orgId, surface, status, sinceMs, limit }) {
+      const cutoff = sinceMs ? new Date(Date.now() - sinceMs) : null;
+      const filtered = rows.filter(
+        (r) =>
+          r.orgId === orgId &&
+          r.surface === surface &&
+          (status ? r.status === status : true) &&
+          (cutoff ? r.createdAt >= cutoff : true),
       );
+      // Order by createdAt desc to match the interface contract.
+      filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return typeof limit === "number" ? filtered.slice(0, limit) : filtered;
     },
     async applyAct({ id, actor, toStatus, note }) {
       const row = rows.find((r) => r.id === id);

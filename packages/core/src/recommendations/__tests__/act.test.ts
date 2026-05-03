@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { actOnRecommendation } from "../act.js";
-import { createInMemoryStore } from "./in-memory-store.js";
+import { createInMemoryRecommendationStore } from "../in-memory-store.js";
 import { emitRecommendation } from "../emit.js";
 
-const seedQueue = async (store = createInMemoryStore()) => {
+const seedQueue = async (store = createInMemoryRecommendationStore()) => {
   await emitRecommendation(store, {
     orgId: "org-1",
     agentKey: "nova",
@@ -24,7 +24,7 @@ const seedQueue = async (store = createInMemoryStore()) => {
   return store;
 };
 
-const seedShadow = async (store = createInMemoryStore()) => {
+const seedShadow = async (store = createInMemoryRecommendationStore()) => {
   await emitRecommendation(store, {
     orgId: "org-1",
     agentKey: "nova",
@@ -167,7 +167,7 @@ describe("actOnRecommendation — shadow surface", () => {
 
 describe("actOnRecommendation — boundary checks", () => {
   it("404 (returns null-ish) for missing id", async () => {
-    const store = createInMemoryStore();
+    const store = createInMemoryRecommendationStore();
     await expect(
       actOnRecommendation(store, {
         recommendationId: "nope",
