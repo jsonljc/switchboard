@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-03
 **Slice:** A — naming reconciliation + agent registry + **2-source decision feed** (Recommendations + Handoffs)
-**Status:** Brainstorm complete + codebase reconciliation pass applied (2026-05-03); awaiting user review before writing-plans.
+**Status:** Approved 2026-05-03 — proceeding to writing-plans. Direction: build the agent roster and a 2-source owner Decision Feed now; promote `EscalationRecord` to a first-class operator-facing decision in a future slice when it becomes a real backend object.
 **Roadmap:** `docs/superpowers/specs/2026-05-03-agent-first-redesign-roadmap.md`
 **Launch vertical:** med spa / beauty clinic / dental aesthetic.
 
