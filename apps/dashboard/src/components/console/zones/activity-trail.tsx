@@ -26,7 +26,7 @@ function formatHHMM(timestamp: string): string {
 function agentForEntry(entry: AuditEntryResponse): string {
   const key = (entry.actorId ?? entry.eventType ?? "").toLowerCase();
   if (key.includes("alex")) return "alex";
-  if (key.includes("nova")) return "nova";
+  if (key.includes("riley")) return "riley";
   if (key.includes("mira")) return "mira";
   return "system";
 }

@@ -7,7 +7,8 @@
  * per-zone shapes the view components consume.
  */
 
-export type AgentKey = "alex" | "nova" | "mira" | "system";
+import type { AgentKey as CanonicalAgentKey } from "@switchboard/schemas";
+export type AgentKey = CanonicalAgentKey | "system";
 
 /** Inline text with optional <b> spans, used in queue + activity rows. */
 export type RichSegment = string | { bold: string } | { coral: string };

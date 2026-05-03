@@ -91,7 +91,7 @@ export function mapQueue(
 // ── Recommendations ───────────────────────────────────────────────────────
 export type RecommendationApiRow = {
   id: string;
-  agentKey: "nova" | "alex" | "mira";
+  agentKey: AgentKey;
   humanSummary: string;
   confidence: number;
   parameters: {

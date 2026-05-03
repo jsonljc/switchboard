@@ -12,7 +12,10 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/components/character/agent-mark", () => ({
   AgentMark: () => <div data-testid="agent-mark" />,
-  SLUG_TO_AGENT: {} as Record<string, string>,
+}));
+
+vi.mock("@switchboard/schemas", () => ({
+  isAgentKey: (_s: string) => false,
 }));
 
 beforeEach(() => {

@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getListingBySlug } from "@/lib/demo-data";
-import { AgentMark, SLUG_TO_AGENT } from "@/components/character/agent-mark";
+import { AgentMark } from "@/components/character/agent-mark";
+import { isAgentKey, type AgentKey } from "@switchboard/schemas";
 import { AGENT_CONTENT, FALLBACK_CONTENT } from "./agent-content";
 import { LandingChrome } from "@/components/landing/landing-chrome";
 
@@ -41,7 +42,7 @@ export default async function AgentProfilePage({ params }: PageProps) {
   if (!listing) notFound();
 
   const content = AGENT_CONTENT[slug] ?? FALLBACK_CONTENT;
-  const agentId = SLUG_TO_AGENT[slug] ?? "alex";
+  const agentId: AgentKey = isAgentKey(slug) ? slug : "alex";
   const tier = trustTierLabel(listing.priceTier);
 
   return (

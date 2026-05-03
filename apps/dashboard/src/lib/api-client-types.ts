@@ -1,3 +1,5 @@
+import type { AgentKey } from "@switchboard/schemas";
+
 export interface AgentRosterEntry {
   id: string;
   organizationId: string;
@@ -88,7 +90,7 @@ export interface SimulateResult {
 export type RecommendationApiRow = {
   id: string;
   orgId: string;
-  agentKey: "nova" | "alex" | "mira";
+  agentKey: AgentKey;
   intent: string;
   action: string;
   humanSummary: string;

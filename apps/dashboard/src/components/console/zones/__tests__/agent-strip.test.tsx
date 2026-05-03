@@ -78,7 +78,7 @@ describe("AgentStrip", () => {
     });
     render(<AgentStrip />, { wrapper });
     expect(screen.getByText("Alex")).toBeInTheDocument();
-    expect(screen.getByText("Nova")).toBeInTheDocument();
+    expect(screen.getByText("Riley")).toBeInTheDocument();
     expect(screen.getByText("Mira")).toBeInTheDocument();
     // DC-02 jargon must not survive
     expect(screen.queryByText(/pending option c/i)).not.toBeInTheDocument();

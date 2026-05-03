@@ -14,7 +14,7 @@ global.fetch = fetchMock as never;
 const baseCard: RecommendationCard = {
   kind: "recommendation",
   id: "r-1",
-  agent: "nova",
+  agent: "alex",
   action: "Pause Whitening Ad Set B",
   timer: { label: "Immediate", confidence: "0.90" },
   dataLines: [],

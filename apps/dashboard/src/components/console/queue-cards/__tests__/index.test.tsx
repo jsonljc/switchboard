@@ -40,7 +40,7 @@ const escalation: QueueCard = {
 const recommendation: QueueCard = {
   kind: "recommendation",
   id: "card-r1",
-  agent: "nova",
+  agent: "alex",
   action: "do thing",
   timer: { label: "Immediate", confidence: "0.9" },
   dataLines: [["x"]],
