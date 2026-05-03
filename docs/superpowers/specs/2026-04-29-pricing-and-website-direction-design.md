@@ -17,7 +17,7 @@ Per-agent base pricing with bundle discounts and a 14-day pilot. The "Solo / Duo
 | Component                         | Base                   | Included                                     | Overage                                     |
 | --------------------------------- | ---------------------- | -------------------------------------------- | ------------------------------------------- |
 | **Alex** (lead replies)           | $199/mo                | 1,500 conversations                          | $0.15 / conversation                        |
-| **Nova** (ad optimizer)           | $149/mo                | $5,000 managed ad spend + 200 operator chats | 0.75% of incremental spend / $0.20 per chat |
+| **Riley** (ad optimizer)          | $149/mo                | $5,000 managed ad spend + 200 operator chats | 0.75% of incremental spend / $0.20 per chat |
 | **Mira** (creative pipeline)      | $249/mo                | 500 credits                                  | $0.50 / credit                              |
 | **Bundle: any 2 agents**          | −15% off combined base | —                                            | —                                           |
 | **Bundle: all 3 agents ("Team")** | −25% off combined base | —                                            | —                                           |
@@ -41,7 +41,7 @@ The "credit" unit is the only honest meter for creative generation because per-g
 
 - **Each meter matches the COGS shape of its agent.**
   - Alex: high conversation volume, moderate per-message LLM cost → soft caps with conversation-level overage.
-  - Nova: heuristic-driven analysis (no LLM in the analytical path — verified in `packages/ad-optimizer/src/recommendation-engine.ts`); LLM is only the conversational layer. Overage is value-based (% of managed spend), not cost-based.
+  - Riley: heuristic-driven analysis (no LLM in the analytical path — verified in `packages/ad-optimizer/src/recommendation-engine.ts`); LLM is only the conversational layer. Overage is value-based (% of managed spend), not cost-based.
   - Mira: low volume, highly variable per-generation cost → credits are the only honest unit; hard cap with "buy more" prompt is mandatory to prevent runaway COGS.
 - **Per-agent pricing matches per-agent positioning.** The landing page sells three named hires; the pricing card mirrors that exactly.
 - **Bundle discounts preserve the upsell path** without forcing customers into pre-defined tiers that mis-price their actual agent mix.
@@ -60,9 +60,9 @@ These ship with the pricing change, not after.
 
 ### Bundle math examples (for the landing page footer copy and FAQ)
 
-- **Alex + Nova (2-agent bundle):** $199 + $149 = $348 → −15% = **$295.80/mo**
+- **Alex + Riley (2-agent bundle):** $199 + $149 = $348 → −15% = **$295.80/mo**
 - **Alex + Mira (2-agent bundle):** $199 + $249 = $448 → −15% = **$380.80/mo**
-- **Nova + Mira (2-agent bundle):** $149 + $249 = $398 → −15% = **$338.30/mo**
+- **Riley + Mira (2-agent bundle):** $149 + $249 = $398 → −15% = **$338.30/mo**
 - **All three ("Team"):** $199 + $149 + $249 = $597 → −25% = **$447.75/mo**
 
 ### Things explicitly out of scope for this spec
@@ -84,7 +84,7 @@ The new positioning is per-agent. Each agent is a named, distinct hire with one 
 
 1. **It matches the per-agent pricing model exactly** — the page and the bill tell the same story.
 2. **It's harder to copy.** Competitors sell "AI assistants" and "AI agents" generically. Switchboard sells named characters with distinct jobs and personalities.
-3. **It carries the existing "operator-led" governance frame.** Alex/Nova/Mira are individually approval-first, individually auditable, individually controllable. The desk metaphor reinforces, doesn't replace, the existing Doctrine.
+3. **It carries the existing "operator-led" governance frame.** Alex/Riley/Mira are individually approval-first, individually auditable, individually controllable. The desk metaphor reinforces, doesn't replace, the existing Doctrine.
 4. **The "they share what they learn" beat creates a synergy story** that justifies the bundle without forcing it. Buyers can rationally hire one agent and rationally upgrade to two or three.
 
 ---
@@ -100,7 +100,7 @@ Synergy beat (~80 words + diagram, "they share what they learn")
   ↓
 Alex story (text left, phone-frame conversation right)
   ↓
-Nova story (full-bleed dashboard fragment, text floating right)
+Riley story (full-bleed dashboard fragment, text floating right)
   ↓
 Mira story (storyboard reel left, text right) — conditional, see §4.5
   ↓
@@ -129,12 +129,12 @@ Unchanged from current implementation. Links: _How it works · Pricing · Sign i
 
 - **Headline (rotates with toggle):**
   - Alex (default): _"Alex replies in twelve seconds."_
-  - Nova: _"Nova catches what you miss."_
+  - Riley: _"Riley catches what you miss."_
   - Mira: _"Mira ships what you can't."_
 - **Subline (constant, does not rotate):**
   > "Hire one. Or hire the desk — they share what they learn."
-- **Agent toggle:** three small character marks below the subline, labeled `Alex · Nova · Mira`. Click swaps headline + character mark + primary CTA in place. Toggle is the page's single most important interaction — it teaches the per-agent product structure by demonstration.
-- **Primary CTA (rotates):** _"See Alex work →"_ / _"See Nova work →"_ / _"See Mira work →"_ — scrolls to the matching agent's story section.
+- **Agent toggle:** three small character marks below the subline, labeled `Alex · Riley · Mira`. Click swaps headline + character mark + primary CTA in place. Toggle is the page's single most important interaction — it teaches the per-agent product structure by demonstration.
+- **Primary CTA (rotates):** _"See Alex work →"_ / _"See Riley work →"_ / _"See Mira work →"_ — scrolls to the matching agent's story section.
 - **Secondary CTA (constant):** _"Or meet the desk →"_ — scrolls to the synergy section or pricing.
 - **Proof line (constant):** _"Setup in minutes. Approval-first. Stays in your control."_
 
@@ -155,10 +155,10 @@ A short section immediately after the hero, before the three agent stories. Its 
 - **Layout:** centered, narrow column (`content-width`, ~42rem max).
 - **Headline:** _"They're better together."_
 - **Body (~80 words):**
-  > Alex sees a lead asking about a product Nova is currently advertising — and tells Nova which audience converted. Nova spots a saturated ad set — and tells Mira which angle to retire. Mira ships a new variant — and Alex knows how to talk about it. The desk shares one memory.
+  > Alex sees a lead asking about a product Riley is currently advertising — and tells Riley which audience converted. Riley spots a saturated ad set — and tells Mira which angle to retire. Mira ships a new variant — and Alex knows how to talk about it. The desk shares one memory.
 - **Diagram:** three character marks connected by faint lines. Each line is labeled with what flows between them:
-  - Alex → Nova: _"converting audiences"_
-  - Nova → Mira: _"angles to retire"_
+  - Alex → Riley: _"converting audiences"_
+  - Riley → Mira: _"angles to retire"_
   - Mira → Alex: _"how to pitch new creative"_
 - Diagram is static SVG, not interactive. Restrained — the three marks are smaller than in the hero, the lines are thin and warm-gray.
 
@@ -176,24 +176,24 @@ A short section immediately after the hero, before the three agent stories. Its 
   - Handoff path you control
 - **Section CTA:** _"See Alex →"_ — links to a deeper Alex page (or, if not yet built, the pricing card).
 
-### 4.5 Nova story section
+### 4.5 Riley story section
 
-- **Section label:** `a 02 / · nova · ad optimization`
+- **Section label:** `a 02 / · riley · ad optimization`
 - **Layout:** full-bleed horizontal section (page-width, breaks the content-width column). Dashboard fragment dominates ~70% of the section width, text floats to the right or overlays a quiet area.
-- **Headline:** _"Bad ad sets don't pause themselves. Nova noticed before you did."_
+- **Headline:** _"Bad ad sets don't pause themselves. Riley noticed before you did."_
 - **Body (~3 sentences):** "Period-over-period diagnosis on Meta. Drafts the shifts. Never auto-publishes. You review. You publish. Or you don't."
 - **Dashboard fragment:**
   - Realistic anonymized Meta campaign table.
-  - 4–5 rows. One row visually marked (red highlight or strikethrough) — the paused ad set Nova flagged.
+  - 4–5 rows. One row visually marked (red highlight or strikethrough) — the paused ad set Riley flagged.
   - Period-over-period delta columns (CPA Δ, CTR Δ, ROAS Δ) with up/down arrows in warm/cool tones.
-  - Margin annotation from Nova ("Period-over-period CPA up 38% vs. 7-day baseline. Recommend pause.").
+  - Margin annotation from Riley ("Period-over-period CPA up 38% vs. 7-day baseline. Recommend pause.").
   - **Credibility rule:** plausible campaign names (e.g., "Whitening — CTWA," "Cleaning retarget"), realistic numbers (CPA $25–80, ROAS 1.5–3.5x). No `Lorem` or `$$$` placeholders. If real-looking data cannot be sourced from a sandboxed account, the implementation plan must call this out as a blocker.
 - **Bullets (below body, optional — match Alex's rhythm):**
   - Period-over-period diagnosis
   - Drafts. Never auto-publishes
   - Connects to Meta Ads via OAuth
   - Works inside your spending limits
-- **Section CTA:** _"See Nova →"_
+- **Section CTA:** _"See Riley →"_
 
 ### 4.6 Mira story section
 
@@ -249,11 +249,11 @@ Unchanged from current implementation. The accordion (Approval-first / Audited /
 - **Subline:** _"Each agent does one thing exceptionally. Bundle when you're ready — they share what they learn."_
 - **Three agent cards in a row** (stack on mobile):
 
-  | Card | Price headline | Sub-line                            | Bullets                                                                                            | CTA                   |
-  | ---- | -------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------- |
-  | Alex | **$199**/mo    | "Replies to leads in seconds"       | 1,500 conversations · WhatsApp + Telegram + Web · Approval-first · Books to your calendar          | _"Start with Alex →"_ |
-  | Nova | **$149**/mo    | "Catches bad ad sets before you do" | $5,000 managed ad spend · Period-over-period diagnosis · Never auto-publishes · Meta Ads connected | _"Start with Nova →"_ |
-  | Mira | **$249**/mo    | "Ships creative while you're busy"  | 500 credits · Image, video, storyboard · Stops at any stage · You stay director                    | _"Start with Mira →"_ |
+  | Card  | Price headline | Sub-line                            | Bullets                                                                                            | CTA                    |
+  | ----- | -------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------- |
+  | Alex  | **$199**/mo    | "Replies to leads in seconds"       | 1,500 conversations · WhatsApp + Telegram + Web · Approval-first · Books to your calendar          | _"Start with Alex →"_  |
+  | Riley | **$149**/mo    | "Catches bad ad sets before you do" | $5,000 managed ad spend · Period-over-period diagnosis · Never auto-publishes · Meta Ads connected | _"Start with Riley →"_ |
+  | Mira  | **$249**/mo    | "Ships creative while you're busy"  | 500 credits · Image, video, storyboard · Stops at any stage · You stay director                    | _"Start with Mira →"_  |
 
 - Each card: agent character mark at top, name + price + sub-line + 4 bullets + CTA.
 - Card styling: white background, 1px warm-gray border, subtle shadow, no gradient. Default agent (Alex) gets a faint amber border to suggest "start here," but no "Most popular" badge.
@@ -299,7 +299,7 @@ Unchanged from current implementation.
 - `AgentToggle` — three-mark selector with labels, controlled by parent state, persists selection to `localStorage`. Used in hero and closer.
 - `RotatingHero` — wraps `AgentToggle`; renders headline + character mark + primary CTA based on selected agent.
 - `SynergyBeat` — short section component with the three-mark diagram and labeled lines.
-- `NovaDashboardFragment` — anonymized Meta campaign table mockup with annotation.
+- `RileyDashboardFragment` — anonymized Meta campaign table mockup with annotation.
 - `MiraStoryboardReel` — horizontally scrolling reel of 5–6 creative-artifact cards. Has a `fallback` prop that renders the static three-frame strip when real artifacts aren't available.
 - `AgentPricingCard` — single card; the pricing section composes three of these.
 
@@ -316,7 +316,7 @@ Unchanged from current implementation.
 - The current single-card pricing component.
 - The "Wake up to booked calls" closer.
 
-The three story sections (Alex/Nova/Mira) replace the current three-section storytelling block but reuse the section-label and typography primitives.
+The three story sections (Alex/Riley/Mira) replace the current three-section storytelling block but reuse the section-label and typography primitives.
 
 ---
 
@@ -338,7 +338,7 @@ This spec covers the public marketing landing page and the pricing model. **Out 
 
 - Billing system implementation (Stripe, dunning, proration).
 - In-product cap enforcement and "buy more" prompts.
-- Per-agent deep pages (`/agents/alex`, `/agents/nova`, `/agents/mira`) — the section CTAs link to these, but their content is its own spec.
+- Per-agent deep pages (`/agents/alex`, `/agents/riley`, `/agents/mira`) — the section CTAs link to these, but their content is its own spec.
 - Onboarding flow changes for per-agent purchase paths.
 - COGS instrumentation and dashboards.
 
@@ -355,7 +355,7 @@ Until those three ship, the marketing page can be built and merged behind a feat
 ## 9. Open Questions for Implementation Plan
 
 1. Does `InteractiveConversationDemo` from the 2026-04-20 spec exist in code, or does the Alex story need a static phone mockup as v1?
-2. Are real Meta campaign artifacts available (anonymized) for Nova's dashboard fragment, or does the implementation plan need to include a "build a credible mock dataset" task?
+2. Are real Meta campaign artifacts available (anonymized) for Riley's dashboard fragment, or does the implementation plan need to include a "build a credible mock dataset" task?
 3. Has the creative pipeline shipped enough real artifacts to populate Mira's storyboard reel, or does the section ship in fallback (three-frame static strip) form?
 4. Does the existing `localStorage` identity key (`switchboard.identity.v1`) conflict with the new `switchboard.landing.agent.v1` key? Both are read on landing-page mount.
 5. What's the routing target for the per-agent CTAs (_"See Alex →"_) — agent detail pages, pricing card focus, or pilot signup?
