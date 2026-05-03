@@ -252,3 +252,6 @@ export {
 // using buildLeadIntakeWorkflow(new LeadIntakeHandler({ store })). The wrapper itself
 // lives here; concrete store + registration belong at the composition root, not in core.
 export { buildLeadIntakeWorkflow } from "./intents/lead-intake-workflow.js";
+
+// Recommendations (router, types, store interface)
+export * from "./recommendations/index.js";

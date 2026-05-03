@@ -1,5 +1,11 @@
 import type { AuditEntry, Policy } from "@switchboard/schemas";
-import type { PendingApproval, ApprovalDetail, SimulateResult } from "../api-client-types";
+import type {
+  PendingApproval,
+  ApprovalDetail,
+  SimulateResult,
+  RecommendationApiRow,
+  RecommendationActAction,
+} from "../api-client-types";
 import { SwitchboardClientCore } from "./core";
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
@@ -245,5 +251,43 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
       method: "POST",
       body: JSON.stringify({ resolutionNote }),
     });
+  }
+
+  // Recommendations
+  async listRecommendations(opts: {
+    surface: "queue" | "shadow_action";
+    status?: string;
+    since?: string;
+  }): Promise<{ recommendations: RecommendationApiRow[] }> {
+    const params = new URLSearchParams({ surface: opts.surface });
+    if (opts.status) params.set("status", opts.status);
+    if (opts.since) params.set("since", opts.since);
+    return this.request<{ recommendations: RecommendationApiRow[] }>(
+      `/api/recommendations?${params.toString()}`,
+    );
+  }
+
+  /**
+   * Bypasses request<T>() because that helper throws on non-2xx without
+   * surfacing the status code. The dashboard proxy needs the raw 409 to
+   * propagate so the frontend hook can swallow already-terminal as success.
+   */
+  async actOnRecommendation(
+    id: string,
+    body: { action: RecommendationActAction; note?: string },
+  ): Promise<{ status: number; body: unknown }> {
+    // Validate id is a UUID — defends against SSRF / path traversal via caller-controlled URL segment.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      throw new Error(`Invalid recommendation id: ${id}`);
+    }
+    const res = await fetch(`${this.baseUrl}/api/recommendations/${encodeURIComponent(id)}/act`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, body: await res.json().catch(() => ({})) };
   }
 }

@@ -478,6 +478,14 @@ export async function buildServer() {
   }
   app.decorate("lifecycleService", lifecycleService);
 
+  // Recommendations store — Prisma in production, undefined when no DB (dev w/o DB).
+  // The /api/recommendations route 503s when this is missing.
+  if (prismaClient) {
+    const { PrismaRecommendationStore } = await import("@switchboard/db");
+    const recommendationStore = new PrismaRecommendationStore(prismaClient);
+    app.decorate("recommendationStore", recommendationStore);
+  }
+
   const { resolveAuthoritativeDeployment } =
     await import("./bootstrap/platform-deployment-resolver.js");
 

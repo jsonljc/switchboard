@@ -10,6 +10,7 @@ vi.mock("@/hooks/use-escalations");
 vi.mock("@/hooks/use-approvals");
 vi.mock("@/hooks/use-escalation-reply");
 vi.mock("@/hooks/use-approval-action");
+vi.mock("@/hooks/use-recommendations");
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { organizationId: "org-1" }, status: "authenticated" }),
 }));
@@ -35,9 +36,28 @@ const escRow = {
   createdAt: new Date().toISOString(),
 };
 
+const recRow = {
+  id: "r-1",
+  agentKey: "nova" as const,
+  humanSummary: "Pause it",
+  confidence: 0.6,
+  parameters: {
+    presentation: {
+      primaryLabel: "Pause",
+      secondaryLabel: "Reduce",
+      dismissLabel: "Dismiss",
+      dataLines: [],
+    },
+  },
+  surface: "queue",
+  status: "pending",
+  createdAt: new Date().toISOString(),
+};
+
 async function mockQueueHooks(opts: {
   escalations?: { data?: unknown; isLoading?: boolean; error?: Error | null; refetch?: () => void };
   approvals?: { data?: unknown; isLoading?: boolean; error?: Error | null; refetch?: () => void };
+  recommendations?: { data?: unknown; isLoading?: boolean; error?: Error | null };
 }) {
   const escMod = await import("@/hooks/use-escalations");
   vi.mocked(escMod.useEscalations).mockReturnValue({
@@ -57,6 +77,12 @@ async function mockQueueHooks(opts: {
     isLoading: opts.approvals?.isLoading ?? false,
     error: opts.approvals?.error ?? null,
     refetch: opts.approvals?.refetch ?? vi.fn(),
+  } as never);
+  const recMod = await import("@/hooks/use-recommendations");
+  vi.mocked(recMod.useRecommendations).mockReturnValue({
+    data: opts.recommendations?.data ?? { recommendations: [] },
+    isLoading: opts.recommendations?.isLoading ?? false,
+    error: opts.recommendations?.error ?? null,
   } as never);
   const replyMod = await import("@/hooks/use-escalation-reply");
   vi.mocked(replyMod.useEscalationReply).mockReturnValue({
@@ -206,5 +232,21 @@ describe("QueueZone", () => {
       vi.advanceTimersByTime(320);
     });
     expect(invalidateSpy).toHaveBeenCalled();
+  });
+
+  it("renders recommendation cards from useRecommendations", async () => {
+    await mockQueueHooks({
+      escalations: { data: { escalations: [] } },
+      approvals: { data: { approvals: [] } },
+      recommendations: { data: { recommendations: [recRow] } },
+    });
+    render(<QueueZone />, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={makeClient()}>
+          <ToastProvider>{children}</ToastProvider>
+        </QueryClientProvider>
+      ),
+    });
+    expect(screen.getByText(/pause it/i)).toBeInTheDocument();
   });
 });

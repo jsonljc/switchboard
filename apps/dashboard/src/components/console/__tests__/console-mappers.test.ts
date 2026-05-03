@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { mapApprovalGateCard, mapEscalationCard, mapQueue } from "../console-mappers";
+import {
+  mapApprovalGateCard,
+  mapEscalationCard,
+  mapQueue,
+  mapRecommendationCard,
+  type RecommendationApiRow,
+} from "../console-mappers.js";
 
 describe("mapEscalationCard", () => {
   it("maps a pending escalation row to an EscalationCard", () => {
@@ -86,6 +92,7 @@ describe("mapQueue", () => {
           createdAt: "2026-04-30T09:00:00",
         },
       ],
+      [],
       now,
     );
     expect(queue).toHaveLength(2);
@@ -114,6 +121,7 @@ describe("mapQueue", () => {
           createdAt: "2026-04-30T10:00:00",
         },
       ],
+      [],
       now,
     );
     expect(queue).toHaveLength(1);
@@ -121,6 +129,73 @@ describe("mapQueue", () => {
   });
 
   it("returns [] when both inputs empty", () => {
-    expect(mapQueue([], [], now)).toEqual([]);
+    expect(mapQueue([], [], [], now)).toEqual([]);
+  });
+});
+
+const baseRec: RecommendationApiRow = {
+  id: "r-1",
+  agentKey: "nova",
+  humanSummary: "Pause Whitening Ad Set B",
+  confidence: 0.9,
+  parameters: {
+    __recommendation: {
+      action: "pause",
+      presentation: {
+        primaryLabel: "Pause",
+        secondaryLabel: "Reduce 50%",
+        dismissLabel: "Dismiss",
+        dataLines: [["text"]],
+      },
+    },
+  },
+  surface: "queue",
+  status: "pending",
+  createdAt: new Date().toISOString(),
+};
+
+describe("mapRecommendationCard", () => {
+  it("maps presentation fields to view-model", () => {
+    const card = mapRecommendationCard(baseRec, new Date());
+    expect(card.kind).toBe("recommendation");
+    expect(card.id).toBe("r-1");
+    expect(card.agent).toBe("nova");
+    expect(card.action).toBe("Pause Whitening Ad Set B");
+    expect(card.primary.label).toBe("Pause");
+    expect(card.secondary.label).toBe("Reduce 50%");
+    expect(card.dismiss.label).toBe("Dismiss");
+    expect(card.dataLines).toEqual([["text"]]);
+  });
+
+  it("formats confidence as a 2-decimal string", () => {
+    const card = mapRecommendationCard({ ...baseRec, confidence: 0.876 }, new Date());
+    expect(card.timer.confidence).toBe("0.88");
+  });
+
+  it("labels confidence by tier", () => {
+    expect(mapRecommendationCard({ ...baseRec, confidence: 0.95 }, new Date()).timer.label).toBe(
+      "Immediate",
+    );
+    expect(mapRecommendationCard({ ...baseRec, confidence: 0.8 }, new Date()).timer.label).toBe(
+      "High confidence",
+    );
+    expect(mapRecommendationCard({ ...baseRec, confidence: 0.6 }, new Date()).timer.label).toBe(
+      "Suggested",
+    );
+  });
+
+  it("falls back to default labels when presentation is missing", () => {
+    const card = mapRecommendationCard({ ...baseRec, parameters: {} }, new Date());
+    expect(card.primary.label).toBe("Confirm");
+    expect(card.secondary.label).toBe("Adjust");
+    expect(card.dismiss.label).toBe("Dismiss");
+    expect(card.dataLines).toEqual([]);
+  });
+});
+
+describe("mapQueue includes recommendations", () => {
+  it("appends recommendation cards to the queue", () => {
+    const cards = mapQueue([], [], [baseRec], new Date());
+    expect(cards.some((c) => c.kind === "recommendation" && c.id === "r-1")).toBe(true);
   });
 });

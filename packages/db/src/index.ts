@@ -116,3 +116,4 @@ export { PrismaConsentRecordStore } from "./stores/prisma-consent-record-store.j
 export type { CreateConsentRecordInput } from "./stores/prisma-consent-record-store.js";
 export { PrismaPcdIdentitySnapshotStore } from "./stores/prisma-pcd-identity-snapshot-store.js";
 export type { CreatePcdIdentitySnapshotInput } from "./stores/prisma-pcd-identity-snapshot-store.js";
+export { PrismaRecommendationStore } from "./recommendation-store.js";

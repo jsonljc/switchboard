@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { actionsRoutes } from "../routes/actions.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
+import { recommendationsRoutes } from "../routes/recommendations.js";
 import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
@@ -53,6 +54,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(actionsRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
+  await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });

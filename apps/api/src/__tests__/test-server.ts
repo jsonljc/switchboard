@@ -6,6 +6,7 @@ import { approvalsRoutes } from "../routes/approvals.js";
 import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
+import { recommendationsRoutes } from "../routes/recommendations.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
   createInMemoryStorage,
@@ -16,6 +17,7 @@ import {
   InMemoryGovernanceProfileStore,
   evaluate,
   resolveIdentity,
+  createInMemoryRecommendationStore,
 } from "@switchboard/core";
 import type { StorageContext, PolicyCache } from "@switchboard/core";
 import type { ApprovalRoutingConfig } from "@switchboard/core/approval";
@@ -77,6 +79,7 @@ declare module "fastify" {
     policyCache: PolicyCache;
     platformIngress: PlatformIngress;
     platformLifecycle: PlatformLifecycle;
+    recommendationStore?: import("@switchboard/core").RecommendationStore;
   }
 }
 
@@ -243,6 +246,10 @@ export async function buildTestServer(): Promise<TestContext> {
   app.decorate("auditLedger", ledger);
   app.decorate("policyCache", policyCache);
 
+  // In-memory recommendation store — tests interact with this via app.recommendationStore.
+  const recommendationStore = createInMemoryRecommendationStore();
+  app.decorate("recommendationStore", recommendationStore);
+
   // --- PlatformIngress wiring ---
   const intentRegistry = new IntentRegistry();
   const cartridgeManifests: CartridgeManifestForRegistration[] = [];
@@ -319,6 +326,7 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });
+  await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
 
   return { app, cartridge, storage };
 }

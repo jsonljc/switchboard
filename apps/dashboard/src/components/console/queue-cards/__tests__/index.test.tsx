@@ -6,6 +6,10 @@ import { QueueCardView } from "../index";
 import type { QueueCard } from "../../console-data";
 import { ToastProvider } from "../../use-toast";
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { organizationId: "org-1", principalId: "user-1" } }),
+}));
+
 vi.mock("@/hooks/use-escalations");
 vi.mock("@/hooks/use-escalation-reply");
 vi.mock("@/hooks/use-approval-action");

@@ -13,7 +13,7 @@ import {
 export const OutputTypeSchema = z.enum(["insight", "watch", "recommendation"]);
 export type OutputTypeSchema = z.infer<typeof OutputTypeSchema>;
 
-export const RecommendationActionSchema = z.enum([
+export const AdRecommendationActionSchema = z.enum([
   "scale",
   "pause",
   "refresh_creative",
@@ -28,7 +28,7 @@ export const RecommendationActionSchema = z.enum([
   "switch_optimization_event",
   "harden_capi_attribution",
 ]);
-export type RecommendationActionSchema = z.infer<typeof RecommendationActionSchema>;
+export type AdRecommendationActionSchema = z.infer<typeof AdRecommendationActionSchema>;
 
 export const UrgencySchema = z.enum(["immediate", "this_week", "next_cycle"]);
 export type UrgencySchema = z.infer<typeof UrgencySchema>;
@@ -166,7 +166,7 @@ export type WatchOutputSchema = z.infer<typeof WatchOutputSchema>;
 
 export const RecommendationOutputSchema = z.object({
   type: z.literal("recommendation"),
-  action: RecommendationActionSchema,
+  action: AdRecommendationActionSchema,
   campaignId: z.string(),
   campaignName: z.string(),
   confidence: z.number().min(0).max(1),

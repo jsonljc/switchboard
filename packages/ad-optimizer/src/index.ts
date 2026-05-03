@@ -55,3 +55,10 @@ export type {
   SourceFunnel,
   CrmFunnelDataWithSources,
 } from "./crm-data-provider/real-provider.js";
+export { runRecommendationSink } from "./recommendation-sink.js";
+export type {
+  RunRecommendationSinkArgs,
+  RunRecommendationSinkResult,
+  RecommendationEmitter,
+  EmitOutcome,
+} from "./recommendation-sink.js";

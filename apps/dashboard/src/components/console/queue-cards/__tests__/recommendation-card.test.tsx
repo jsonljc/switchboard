@@ -1,63 +1,109 @@
-import { fireEvent, render } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
-import { ToastProvider } from "../../use-toast";
-import { ToastShelf } from "../../toast-shelf";
-import { RecommendationCardView } from "../recommendation-card";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RecommendationCardView } from "../recommendation-card.js";
 import type { RecommendationCard } from "../../console-data";
 
-const card: RecommendationCard = {
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { organizationId: "org-1", principalId: "user-1" } }),
+}));
+
+const fetchMock = vi.fn();
+global.fetch = fetchMock as never;
+
+const baseCard: RecommendationCard = {
   kind: "recommendation",
-  id: "card-r1",
+  id: "r-1",
   agent: "nova",
   action: "Pause Whitening Ad Set B",
-  timer: { label: "Immediate", confidence: "0.87" },
-  dataLines: [["spend $42 last 24h"]],
+  timer: { label: "Immediate", confidence: "0.90" },
+  dataLines: [],
   primary: { label: "Pause" },
   secondary: { label: "Reduce 50%" },
   dismiss: { label: "Dismiss" },
 };
 
-function wrap(ui: React.ReactElement) {
+function renderCard(overrides: Partial<{ resolving: boolean; onResolve: () => void }> = {}) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
-    <ToastProvider>
-      {ui}
-      <ToastShelf />
-    </ToastProvider>,
+    <QueryClientProvider client={qc}>
+      <RecommendationCardView
+        card={baseCard}
+        resolving={overrides.resolving ?? false}
+        onResolve={overrides.onResolve ?? vi.fn()}
+      />
+    </QueryClientProvider>,
   );
 }
 
-describe("RecommendationCardView", () => {
-  it("primary fires non-undoable toast and onResolve", () => {
+beforeEach(() => fetchMock.mockReset());
+
+describe("RecommendationCardView (backend-wired)", () => {
+  it("primary click calls API and onResolve on success", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ recommendation: {} }),
+    });
     const onResolve = vi.fn();
-    wrap(<RecommendationCardView card={card} resolving={false} onResolve={onResolve} />);
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".btn-primary-graphite")!);
-    expect(onResolve).toHaveBeenCalled();
-    const toast = document.querySelector(".toast");
-    expect(toast).not.toBeNull();
-    expect(toast!.querySelector(".undo")).toBeNull();
+    renderCard({ onResolve });
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await waitFor(() => expect(onResolve).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/dashboard/recommendations",
+      expect.objectContaining({ body: expect.stringContaining('"action":"primary"') }),
+    );
   });
 
-  it("secondary fires non-undoable toast and onResolve", () => {
+  it("secondary click calls API and onResolve on success", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ recommendation: {} }),
+    });
     const onResolve = vi.fn();
-    wrap(<RecommendationCardView card={card} resolving={false} onResolve={onResolve} />);
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".btn-ghost")!);
-    expect(onResolve).toHaveBeenCalled();
+    renderCard({ onResolve });
+    fireEvent.click(screen.getByRole("button", { name: "Reduce 50%" }));
+    await waitFor(() => expect(onResolve).toHaveBeenCalledOnce());
   });
 
-  it("dismiss fires non-undoable toast and onResolve", () => {
+  it("dismiss click calls API and onResolve on success", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ recommendation: {} }),
+    });
     const onResolve = vi.fn();
-    wrap(<RecommendationCardView card={card} resolving={false} onResolve={onResolve} />);
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".btn-text")!);
-    expect(onResolve).toHaveBeenCalled();
+    renderCard({ onResolve });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(onResolve).toHaveBeenCalledOnce());
   });
 
-  it("renders id=q-${card.id}", () => {
-    wrap(<RecommendationCardView card={card} resolving={false} onResolve={vi.fn()} />);
-    expect(document.querySelector("#q-card-r1")).not.toBeNull();
+  it("409 silently calls onResolve (already-resolved)", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ error: "already_terminal" }),
+    });
+    const onResolve = vi.fn();
+    renderCard({ onResolve });
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await waitFor(() => expect(onResolve).toHaveBeenCalledOnce());
+    expect(screen.queryByText(/error/i)).toBeNull();
   });
 
-  it("applies is-resolving class when resolving=true", () => {
-    wrap(<RecommendationCardView card={card} resolving={true} onResolve={vi.fn()} />);
-    expect(document.querySelector(".qcard")?.classList.contains("is-resolving")).toBe(true);
+  it("non-409 error shows .qerror row and does NOT call onResolve", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ error: "boom" }),
+    });
+    const onResolve = vi.fn();
+    renderCard({ onResolve });
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
+    expect(onResolve).not.toHaveBeenCalled();
   });
 });
