@@ -26,6 +26,7 @@ import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
 import { diagnose } from "./metric-diagnostician.js";
 import { generateRecommendations } from "./recommendation-engine.js";
+import { runRecommendationSink, type RecommendationEmitter } from "./recommendation-sink.js";
 import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
@@ -67,6 +68,17 @@ export interface AuditDependencies {
     day90: MetricSnapshot;
     weekly: MetricSnapshot[];
   } | null>;
+  /**
+   * Optional. When provided, the audit-runner emits each generated
+   * RecommendationOutput through the v1 recommendations pipeline (queue /
+   * shadow_action / dropped) by calling this caller-injected emitter. When
+   * absent, the runner is a pure analyzer — back-compatible with all current
+   * callers. The emitter is injected (not a `RecommendationStore`) because
+   * ad-optimizer is Layer 2 and cannot import `emitRecommendation` from core
+   * (Layer 3). Wire-up lives in apps/api or apps/inngest, where both core and
+   * the store are accessible.
+   */
+  recommendationEmitter?: RecommendationEmitter;
 }
 
 // ── Helpers ──
@@ -146,6 +158,7 @@ export class AuditRunner {
   private readonly learningGuardV2: LearningPhaseGuardV2;
   private readonly getAdSetInsightsFn?: AuditDependencies["getAdSetInsights"];
   private readonly getTrendDataFn?: AuditDependencies["getTrendData"];
+  private readonly recommendationEmitter?: RecommendationEmitter;
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -156,6 +169,7 @@ export class AuditRunner {
     this.learningGuardV2 = new LearningPhaseGuardV2();
     this.getAdSetInsightsFn = deps.getAdSetInsights;
     this.getTrendDataFn = deps.getTrendData;
+    this.recommendationEmitter = deps.recommendationEmitter;
   }
 
   async run(params: {
@@ -400,7 +414,26 @@ export class AuditRunner {
       sourceComparison = compareSources({ bySource, spendBySource });
     }
 
-    // Step 9: Assemble report
+    // Step 9: Emit recommendations to the v1 pipeline (queue / shadow / dropped).
+    // Graceful degradation: skipped when no emitter is wired so existing
+    // analysis-only callers keep working.
+    if (this.recommendationEmitter) {
+      const auditRunId = `audit:${this.config.accountId}:${dateRange.since}:${dateRange.until}`;
+      const sinkResult = await runRecommendationSink({
+        orgId: this.config.orgId,
+        auditRunId,
+        recommendations,
+        emit: this.recommendationEmitter,
+      });
+      // v1: log the rollup. v1.5 will write a first-class activity-trail event
+      // (deferred — AgentEvent requires deploymentId not yet in AuditConfig).
+      console.warn(
+        `[ad-optimizer] Nova reviewed ${recommendations.length} candidates -> ` +
+          `queue=${sinkResult.routedQueue} shadow=${sinkResult.routedShadow} dropped=${sinkResult.dropped}`,
+      );
+    }
+
+    // Step 10: Assemble report
     const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
     const totalLeads = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
     const totalRevenue = currentInsights.reduce((sum, i) => sum + i.revenue, 0);
