@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { OpStrip } from "../op-strip";
 import { ToastProvider } from "../../use-toast";
 import { ToastShelf } from "../../toast-shelf";
+import { HaltProvider } from "../../halt-context";
 
 vi.mock("@/hooks/use-org-config");
 
@@ -14,8 +15,10 @@ function wrap(ui: ReactNode) {
   return (
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        {ui}
-        <ToastShelf />
+        <HaltProvider>
+          {ui}
+          <ToastShelf />
+        </HaltProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

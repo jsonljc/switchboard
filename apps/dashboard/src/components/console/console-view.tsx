@@ -7,32 +7,22 @@ import { QueueZone } from "./zones/queue-zone";
 import { AgentStrip } from "./zones/agent-strip";
 import { NovaPanel } from "./zones/nova-panel";
 import { ActivityTrail } from "./zones/activity-trail";
-import { ApprovalSlideOver } from "./slide-overs/approval-slide-over";
-import { EscalationSlideOver } from "./slide-overs/escalation-slide-over";
 import { WelcomeBanner } from "./welcome-banner";
 import { HelpOverlay } from "./help-overlay";
 import { ToastShelf } from "./toast-shelf";
-import { ToastProvider } from "./use-toast";
+import { ToastProvider, useToast } from "./use-toast";
+import { HaltProvider, toggleHaltWithToast, useHalt } from "./halt-context";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 
-type SlideOverState =
-  | { kind: "approval"; approvalId: string; bindingHash: string }
-  | { kind: "escalation"; escalationId: string }
-  | null;
-
 function ConsoleViewInner() {
-  const [slideOver, setSlideOver] = useState<SlideOverState>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  const haltViaShortcut = () => {
-    // Delegate to OpStrip's halt button so halt state and toast logic stay in one place.
-    const btn = document.querySelector<HTMLButtonElement>(".op-halt");
-    btn?.click();
-  };
+  const { halted, setHalted, toggleHalt } = useHalt();
+  const { showToast } = useToast();
 
   useKeyboardShortcuts({
     help: () => setHelpOpen((v) => !v),
-    halt: haltViaShortcut,
+    halt: () => toggleHaltWithToast({ halted, setHalted, toggleHalt, showToast }),
     escape: () => setHelpOpen(false),
   });
 
@@ -41,33 +31,11 @@ function ConsoleViewInner() {
       <OpStrip onHelpOpen={() => setHelpOpen(true)} />
       <main className="console-main">
         <WelcomeBanner />
-        <QueueZone onOpenSlideOver={setSlideOver} />
+        <QueueZone />
         <AgentStrip />
         <NovaPanel />
         <ActivityTrail />
       </main>
-
-      {slideOver?.kind === "approval" && (
-        <ApprovalSlideOver
-          approvalId={slideOver.approvalId}
-          bindingHash={slideOver.bindingHash}
-          open
-          onOpenChange={(open) => {
-            if (!open) setSlideOver(null);
-          }}
-        />
-      )}
-
-      {slideOver?.kind === "escalation" && (
-        <EscalationSlideOver
-          escalationId={slideOver.escalationId}
-          open
-          onOpenChange={(open) => {
-            if (!open) setSlideOver(null);
-          }}
-        />
-      )}
-
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
       <ToastShelf />
     </div>
@@ -77,7 +45,9 @@ function ConsoleViewInner() {
 export function ConsoleView() {
   return (
     <ToastProvider>
-      <ConsoleViewInner />
+      <HaltProvider>
+        <ConsoleViewInner />
+      </HaltProvider>
     </ToastProvider>
   );
 }

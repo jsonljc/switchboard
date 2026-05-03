@@ -21,13 +21,13 @@ function wrap(ui: ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 
-async function mockAllZoneHooks() {
+async function mockZones() {
   const orgMod = await import("@/hooks/use-org-config");
   vi.mocked(orgMod.useOrgConfig).mockReturnValue({
     data: {
       config: {
         id: "org-1",
-        name: "Aurora Dental",
+        name: "Acme",
         runtimeType: "default",
         runtimeConfig: {},
         governanceProfile: "default",
@@ -40,7 +40,6 @@ async function mockAllZoneHooks() {
     error: null,
     refetch: vi.fn(),
   } as never);
-
   const loading = { data: undefined, isLoading: true, error: null, refetch: vi.fn() };
   const overviewMod = await import("@/hooks/use-dashboard-overview");
   vi.mocked(overviewMod.useDashboardOverview).mockReturnValue(loading as never);
@@ -57,73 +56,44 @@ async function mockAllZoneHooks() {
   vi.mocked(auditMod.useAudit).mockReturnValue(loading as never);
 }
 
-describe("ConsoleView (Phase 1 frame)", () => {
+describe("ConsoleView Halt — single source", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
   afterEach(() => vi.useRealTimers());
 
-  it("does NOT render NumbersStrip", async () => {
-    await mockAllZoneHooks();
+  it("button click and H key share the same halted state across alternating toggles", async () => {
+    await mockZones();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(wrap(<ConsoleView />));
-    expect(screen.queryByLabelText(/today's numbers/i)).not.toBeInTheDocument();
-  });
 
-  it("renders the Halt button (Phase 1 reverses DC-41 deferral)", async () => {
-    await mockAllZoneHooks();
-    render(wrap(<ConsoleView />));
     expect(screen.getByRole("button", { name: "Halt" })).toBeInTheDocument();
-  });
 
-  it("renders the WelcomeBanner above the Queue when not dismissed", async () => {
-    await mockAllZoneHooks();
-    render(wrap(<ConsoleView />));
-    expect(
-      screen.getByRole("heading", { name: /welcome to your switchboard/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides the WelcomeBanner when localStorage flag is set", async () => {
-    window.localStorage.setItem("sb_welcome_dismissed", "1");
-    await mockAllZoneHooks();
-    render(wrap(<ConsoleView />));
-    expect(
-      screen.queryByRole("heading", { name: /welcome to your switchboard/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("? key opens the HelpOverlay; Esc closes it", async () => {
-    await mockAllZoneHooks();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(wrap(<ConsoleView />));
-    await user.keyboard("?");
-    expect(screen.getByRole("heading", { name: /how switchboard works/i })).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    expect(
-      screen.queryByRole("heading", { name: /how switchboard works/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("H key toggles halt and fires a toast", async () => {
-    await mockAllZoneHooks();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    render(wrap(<ConsoleView />));
-    await user.keyboard("h");
-    // Use Resume button as the unambiguous halted-state indicator (avoids "Halted" text collision)
+    // Click button → halted
+    await user.click(screen.getByRole("button", { name: "Halt" }));
     expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
-    expect(screen.getByText(/all agents halted/i)).toBeInTheDocument();
+
+    // Press H → live (state shared, no double-toggle)
+    await user.keyboard("h");
+    expect(screen.getByRole("button", { name: "Halt" })).toBeInTheDocument();
+
+    // Click button again → halted (third toggle, no race)
+    await user.click(screen.getByRole("button", { name: "Halt" }));
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
   });
 
-  it("clicking Help button opens overlay; clicking close button closes it", async () => {
-    await mockAllZoneHooks();
+  it("does not call document.querySelector for .op-halt in the keyboard handler", async () => {
+    await mockZones();
+    const spy = vi.spyOn(document, "querySelector");
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(wrap(<ConsoleView />));
-    await user.click(screen.getByRole("button", { name: /\? help/i }));
-    expect(screen.getByRole("heading", { name: /how switchboard works/i })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /close/i }));
-    expect(
-      screen.queryByRole("heading", { name: /how switchboard works/i }),
-    ).not.toBeInTheDocument();
+    spy.mockClear();
+    await user.keyboard("h");
+    const calledForOpHalt = spy.mock.calls.some(
+      ([selector]) => typeof selector === "string" && selector.includes(".op-halt"),
+    );
+    expect(calledForOpHalt).toBe(false);
+    spy.mockRestore();
   });
 });

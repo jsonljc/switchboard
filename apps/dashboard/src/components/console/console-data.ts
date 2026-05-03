@@ -23,7 +23,7 @@ export type OpStrip = {
 export type EscalationCard = {
   kind: "escalation";
   id: string;
-  /** Backend escalation id, used by `<EscalationSlideOver>` to drive useEscalationReply. */
+  /** Backend escalation id, used by `<EscalationCardView>` to drive useEscalationDetail + useEscalationReply. */
   escalationId: string;
   agent: AgentKey;
   contactName: string;
@@ -53,7 +53,7 @@ export type RecommendationCard = {
 export type ApprovalGateCard = {
   kind: "approval_gate";
   id: string;
-  /** Backend approval id, used by `<ApprovalSlideOver>` to drive useApprovalAction. */
+  /** Backend approval id, used by `<ApprovalGateCardView>` to drive useApprovalAction. */
   approvalId: string;
   /** Binding hash from the source approval — required by the API to approve/reject. */
   bindingHash: string;

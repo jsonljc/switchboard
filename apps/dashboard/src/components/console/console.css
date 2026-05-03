@@ -1140,3 +1140,141 @@
   from { opacity: 0; transform: translate(-50%, 8px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ---------- Phase 2 — fade-out resolve ---------- */
+[data-v6-console] .qcard {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    max-height 320ms ease,
+    margin 320ms ease,
+    padding 320ms ease;
+  overflow: hidden;
+}
+[data-v6-console] .qcard.is-resolving {
+  opacity: 0;
+  transform: translateY(-4px);
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-v6-console] .qcard,
+  [data-v6-console] .qcard.is-resolving {
+    transition: none;
+  }
+}
+
+/* ---------- Phase 2 — escalation inline panel ---------- */
+[data-v6-console] .esc-reply.is-open .caret {
+  transform: rotate(180deg);
+}
+[data-v6-console] .esc-panel {
+  border-top: 1px dashed var(--c-hair);
+  padding: 0.85rem 0;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* ---------- Phase 2 — transcript rows ---------- */
+[data-v6-console] .transcript-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+[data-v6-console] .transcript-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 4px;
+  background: var(--c-hair-soft);
+  max-width: 80%;
+}
+[data-v6-console] .transcript-row.role-lead {
+  align-self: flex-start;
+}
+[data-v6-console] .transcript-row.role-agent,
+[data-v6-console] .transcript-row.role-owner {
+  align-self: flex-end;
+}
+[data-v6-console] .transcript-row.role-owner {
+  background: var(--c-coral-soft);
+}
+[data-v6-console] .transcript-meta {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+[data-v6-console] .transcript-role {
+  font-family: var(--c-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-text-3);
+}
+[data-v6-console] .transcript-time {
+  font-family: var(--c-mono);
+  font-size: 10px;
+  color: var(--c-text-4);
+}
+[data-v6-console] .transcript-text {
+  font-size: 0.875rem;
+  color: var(--c-text-2);
+  line-height: 1.5;
+}
+[data-v6-console] .transcript-skeleton {
+  height: 1.5rem;
+  background: linear-gradient(90deg, var(--c-hair), var(--c-hair-soft), var(--c-hair));
+  background-size: 200% 100%;
+  animation: console-pulse 1.4s ease-in-out infinite;
+  max-width: 60%;
+}
+[data-v6-console] .transcript-empty,
+[data-v6-console] .transcript-error,
+[data-v6-console] .transcript-loading {
+  font-size: 0.85rem;
+  color: var(--c-text-3);
+}
+
+/* ---------- Phase 2 — inline reply form ---------- */
+[data-v6-console] .reply-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+[data-v6-console] .reply-form-text {
+  width: 100%;
+  border: 1px solid var(--c-hair);
+  background: var(--c-bg);
+  padding: 0.55rem 0.65rem;
+  font-family: var(--c-sans);
+  font-size: 0.9rem;
+  color: var(--c-text);
+  border-radius: 2px;
+  resize: vertical;
+}
+[data-v6-console] .reply-form-text:focus {
+  outline: 1px solid var(--c-text-3);
+  outline-offset: 1px;
+}
+[data-v6-console] .reply-form-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+[data-v6-console] .reply-error {
+  font-size: 0.85rem;
+  color: var(--c-coral);
+}
+
+/* ---------- Phase 2 — approval inline error ---------- */
+[data-v6-console] .qerror {
+  font-size: 0.85rem;
+  color: var(--c-coral);
+  margin-bottom: 0.6rem;
+}
