@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentKeySchema } from "./agents.js";
 
 export const RecommendationSurfaceSchema = z.enum(["queue", "shadow_action", "dropped"]);
 export type RecommendationSurface = z.infer<typeof RecommendationSurfaceSchema>;
@@ -22,8 +23,7 @@ export const RecommendationActionSchema = z.enum([
 ]);
 export type RecommendationAction = z.infer<typeof RecommendationActionSchema>;
 
-export const AgentKeySchema = z.enum(["nova", "alex", "mira"]);
-export type AgentKey = z.infer<typeof AgentKeySchema>;
+export { AgentKeySchema, type AgentKey } from "./agents.js";
 
 export const RecommendationPresentationSchema = z.object({
   primaryLabel: z.string().min(1),

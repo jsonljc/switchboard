@@ -135,7 +135,7 @@ describe("mapQueue", () => {
 
 const baseRec: RecommendationApiRow = {
   id: "r-1",
-  agentKey: "nova",
+  agentKey: "alex",
   humanSummary: "Pause Whitening Ad Set B",
   confidence: 0.9,
   parameters: {
@@ -159,7 +159,7 @@ describe("mapRecommendationCard", () => {
     const card = mapRecommendationCard(baseRec, new Date());
     expect(card.kind).toBe("recommendation");
     expect(card.id).toBe("r-1");
-    expect(card.agent).toBe("nova");
+    expect(card.agent).toBe("alex");
     expect(card.action).toBe("Pause Whitening Ad Set B");
     expect(card.primary.label).toBe("Pause");
     expect(card.secondary.label).toBe("Reduce 50%");

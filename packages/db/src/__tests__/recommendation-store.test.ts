@@ -24,7 +24,7 @@ const baseInsert = (
   overrides: Partial<PersistRecommendationInput> = {},
 ): PersistRecommendationInput => ({
   orgId: "org-1",
-  agentKey: "nova",
+  agentKey: "alex",
   intent: "recommendation.ad_set_pause",
   action: "pause",
   humanSummary: "Pause it",
@@ -55,7 +55,7 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
   return {
     id: FIXED_UUID,
     organizationId: "org-1",
-    sourceAgent: "nova",
+    sourceAgent: "alex",
     intent: "recommendation.ad_set_pause",
     humanSummary: "Pause it",
     confidence: 0.9,

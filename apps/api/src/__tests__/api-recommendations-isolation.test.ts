@@ -21,7 +21,7 @@ describe("Recommendations API — multi-org isolation", () => {
   it("requests as default cannot list rows belonging to org-b", async () => {
     await emitRecommendation(app.recommendationStore!, {
       orgId: "org-b",
-      agentKey: "nova",
+      agentKey: "alex",
       intent: "recommendation.ad_set_pause",
       action: "pause",
       humanSummary: "leakage canary",
@@ -52,7 +52,7 @@ describe("Recommendations API — multi-org isolation", () => {
   it("requests as default cannot act on org-b row (404 hides existence)", async () => {
     const seeded = await emitRecommendation(app.recommendationStore!, {
       orgId: "org-b",
-      agentKey: "nova",
+      agentKey: "alex",
       intent: "recommendation.ad_set_pause",
       action: "pause",
       humanSummary: "x",

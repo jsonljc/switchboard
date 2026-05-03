@@ -38,7 +38,7 @@ const escRow = {
 
 const recRow = {
   id: "r-1",
-  agentKey: "nova" as const,
+  agentKey: "alex" as const,
   humanSummary: "Pause it",
   confidence: 0.6,
   parameters: {

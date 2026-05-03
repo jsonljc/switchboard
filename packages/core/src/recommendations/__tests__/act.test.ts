@@ -6,7 +6,7 @@ import { emitRecommendation } from "../emit.js";
 const seedQueue = async (store = createInMemoryRecommendationStore()) => {
   await emitRecommendation(store, {
     orgId: "org-1",
-    agentKey: "nova",
+    agentKey: "alex",
     intent: "recommendation.kill",
     action: "kill",
     humanSummary: "Kill it",
@@ -27,7 +27,7 @@ const seedQueue = async (store = createInMemoryRecommendationStore()) => {
 const seedShadow = async (store = createInMemoryRecommendationStore()) => {
   await emitRecommendation(store, {
     orgId: "org-1",
-    agentKey: "nova",
+    agentKey: "alex",
     intent: "recommendation.ad_set_pause",
     action: "pause",
     humanSummary: "Pause it",
