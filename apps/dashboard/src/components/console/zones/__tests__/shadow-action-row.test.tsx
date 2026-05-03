@@ -42,12 +42,12 @@ describe("ShadowActionList", () => {
           recommendations: [
             {
               id: "s-1",
-              humanSummary: "Nova flagged for auto-pause — confirm or undo: Whitening Ad Set B",
+              humanSummary: "Riley flagged for auto-pause — confirm or undo: Whitening Ad Set B",
               undoableUntil: new Date(Date.now() + 3600_000).toISOString(),
             },
             {
               id: "s-2",
-              humanSummary: "Nova flagged for auto-reduce: Recovery Set",
+              humanSummary: "Riley flagged for auto-reduce: Recovery Set",
               undoableUntil: new Date(Date.now() + 3600_000).toISOString(),
             },
           ],

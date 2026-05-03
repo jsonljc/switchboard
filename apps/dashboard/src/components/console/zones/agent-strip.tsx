@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useAgentRoster, useAgentState } from "@/hooks/use-agents";
 import { useModuleStatus } from "@/hooks/use-module-status";
 import { ZoneError, ZoneSkeleton } from "./zone-states";
+import type { AgentKey } from "@switchboard/schemas";
 
 type AgentEntry = {
-  key: "alex" | "nova" | "mira";
+  key: AgentKey;
   name: string;
   active: boolean;
   viewLink: { label: string; href: string };
@@ -18,7 +19,7 @@ const AGENTS: ReadonlyArray<{
   moduleId: "lead-to-booking" | "ad-optimizer" | "creative";
 }> = [
   { key: "alex", name: "Alex", moduleId: "lead-to-booking" },
-  { key: "nova", name: "Nova", moduleId: "ad-optimizer" },
+  { key: "riley", name: "Riley", moduleId: "ad-optimizer" },
   { key: "mira", name: "Mira", moduleId: "creative" },
 ];
 
@@ -49,11 +50,15 @@ export function AgentStrip() {
 
   const enabledMap = {
     alex: moduleEnabled("lead-to-booking"),
-    nova: moduleEnabled("ad-optimizer"),
+    riley: moduleEnabled("ad-optimizer"),
     mira: moduleEnabled("creative"),
   };
-  // Match prior fixture default: Nova active when ad-optimizer live, else first live agent.
-  const activeKey: AgentEntry["key"] = enabledMap.nova ? "nova" : enabledMap.alex ? "alex" : "mira";
+  // Match prior fixture default: Riley active when ad-optimizer live, else first live agent.
+  const activeKey: AgentEntry["key"] = enabledMap.riley
+    ? "riley"
+    : enabledMap.alex
+      ? "alex"
+      : "mira";
 
   // Per-agent today-stats are Option-C territory; render a muted em-dash here
   // (DC-02: replaces the literal "pending option C" jargon at the render site).

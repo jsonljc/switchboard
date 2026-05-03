@@ -18,7 +18,7 @@ async function seedRecommendation(app: FastifyInstance, args: SeedArgs) {
   const suffix = args.targetSuffix ?? `${args.orgId}-${args.surface}-${++seedCounter}`;
   const result = await emitRecommendation(app.recommendationStore!, {
     orgId: args.orgId,
-    agentKey: "nova",
+    agentKey: "alex",
     intent: "recommendation.ad_set_pause",
     action: "pause",
     humanSummary: `Test rec for ${args.orgId}`,

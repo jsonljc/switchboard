@@ -43,6 +43,8 @@ describe("runRecommendationSink", () => {
     });
     expect(result.routedQueue + result.routedShadow + result.dropped).toBe(2);
     expect(emit).toHaveBeenCalledTimes(2);
+    const firstCallArg = (emit as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(firstCallArg.agentKey).toBe("riley");
   });
 
   it("returns dropped count when low-confidence inputs route to dropped", async () => {

@@ -174,7 +174,7 @@ export async function runRecommendationSink(
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
     const result = await args.emit({
       orgId: args.orgId,
-      agentKey: "nova",
+      agentKey: "riley",
       intent: `recommendation.${rec.action}`,
       action: rec.action,
       humanSummary: humanizeRecommendation(rec),

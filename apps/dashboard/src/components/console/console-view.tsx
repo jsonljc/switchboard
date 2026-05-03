@@ -5,7 +5,7 @@ import { useState } from "react";
 import { OpStrip } from "./zones/op-strip";
 import { QueueZone } from "./zones/queue-zone";
 import { AgentStrip } from "./zones/agent-strip";
-import { NovaPanel } from "./zones/nova-panel";
+import { RileyPanel } from "./zones/riley-panel";
 import { ActivityTrail } from "./zones/activity-trail";
 import { WelcomeBanner } from "./welcome-banner";
 import { HelpOverlay } from "./help-overlay";
@@ -33,7 +33,7 @@ function ConsoleViewInner() {
         <WelcomeBanner />
         <QueueZone />
         <AgentStrip />
-        <NovaPanel />
+        <RileyPanel />
         <ActivityTrail />
       </main>
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}

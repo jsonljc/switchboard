@@ -71,7 +71,7 @@ describe("RecommendationInputSchema", () => {
   it("accepts a minimal valid input", () => {
     const ok = RecommendationInputSchema.parse({
       orgId: "org-1",
-      agentKey: "nova",
+      agentKey: "alex",
       intent: "recommendation.ad_set_pause",
       action: "pause",
       humanSummary: "Pause Whitening Ad Set B",
@@ -92,7 +92,7 @@ describe("RecommendationInputSchema", () => {
     expect(() =>
       RecommendationInputSchema.parse({
         orgId: "o",
-        agentKey: "nova",
+        agentKey: "alex",
         intent: "recommendation.x",
         action: "pause",
         humanSummary: "x",
@@ -124,7 +124,7 @@ describe("RecommendationInputSchema", () => {
     expect(() =>
       RecommendationInputSchema.parse({
         orgId: "o",
-        agentKey: "nova",
+        agentKey: "alex",
         intent: "recommendation.x",
         action: "pause",
         humanSummary: "x",

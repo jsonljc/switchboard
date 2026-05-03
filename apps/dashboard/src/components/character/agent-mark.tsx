@@ -1,19 +1,8 @@
 import { cn } from "@/lib/utils";
+import { type AgentKey, getAgent } from "@switchboard/schemas";
 
-export type AgentId = "alex" | "riley" | "jordan";
+export type AgentId = AgentKey;
 export type AgentMarkSize = "xs" | "sm" | "md" | "lg" | "xl";
-
-export const SLUG_TO_AGENT: Record<string, AgentId> = {
-  "speed-to-lead": "alex",
-  "sales-closer": "riley",
-  "nurture-specialist": "jordan",
-};
-
-export const AGENT_DISPLAY_NAMES: Record<AgentId, string> = {
-  alex: "Alex",
-  riley: "Riley",
-  jordan: "Jordan",
-};
 
 const SIZE_PX: Record<AgentMarkSize, number> = {
   xs: 24,
@@ -30,17 +19,18 @@ interface AgentMarkProps {
   monochrome?: boolean;
 }
 
-// ── Alex — Lead Qualifier ──
+// Display name lookup helper for any caller that previously read AGENT_DISPLAY_NAMES.
+export function agentDisplayName(key: AgentKey): string {
+  return getAgent(key).displayName;
+}
+
+// ── Alex — Lead-to-Speed ──
 // Visual: alert, scanning. Motif: signal / radar lines.
-// Form: angular trapezoid body (wider at shoulders), head slightly left of center.
 function AlexMark() {
   return (
     <>
-      {/* Head */}
       <circle cx="28" cy="18" r="10" fill="currentColor" />
-      {/* Body — angular trapezoid, wider at top, alert stance */}
       <path d="M 17 31 L 40 31 L 37 57 L 20 57 Z" fill="currentColor" />
-      {/* Signal rays — 3 lines radiating upper-right, suggesting scan/detection */}
       <line
         x1="40"
         y1="13"
@@ -75,17 +65,13 @@ function AlexMark() {
   );
 }
 
-// ── Riley — Sales Follow-Up ──
+// ── Riley — Ad Optimizer ──
 // Visual: grounded, forward-moving. Motif: arrow / momentum.
-// Form: balanced rectangular body, centered. Right-pointing chevron.
 function RileyMark() {
   return (
     <>
-      {/* Head */}
       <circle cx="32" cy="18" r="10" fill="currentColor" />
-      {/* Body — balanced rectangle, slight rounding */}
       <rect x="22" y="31" width="20" height="26" rx="2" fill="currentColor" />
-      {/* Arrow — right-pointing chevron, right of body, suggesting momentum */}
       <polyline
         points="46,46 54,51 46,56"
         fill="none"
@@ -99,15 +85,14 @@ function RileyMark() {
   );
 }
 
-// ── Jordan — Nurture Specialist ──
-// Visual: calm, open, patient. Motif: wave / loop / return.
-// Form: wider body with soft curved sides, wave integrated into bottom edge.
-function JordanMark() {
+// ── Mira — Creative ──
+// Visual: open, generative. Motif: orbit / loop.
+// NOTE: Slice A keeps the existing wave-loop SVG body (was Jordan's). Slice B1
+// will swap in the proper portrait per the agent-home brief §9 portrait spec.
+function MiraMark() {
   return (
     <>
-      {/* Head — slightly larger, more open presence */}
       <circle cx="32" cy="17" r="11" fill="currentColor" />
-      {/* Body — wider, curved sides, wave bottom suggesting loop/return */}
       <path
         d="M 18 31 C 14 39 15 51 20 56 Q 26 60 32 57 Q 38 60 44 56 C 49 51 50 39 46 31 Z"
         fill="currentColor"
@@ -118,7 +103,7 @@ function JordanMark() {
 
 export function AgentMark({ agent, size = "md", className, monochrome = false }: AgentMarkProps) {
   const px = SIZE_PX[size];
-  const Mark = agent === "alex" ? AlexMark : agent === "riley" ? RileyMark : JordanMark;
+  const Mark = agent === "alex" ? AlexMark : agent === "riley" ? RileyMark : MiraMark;
 
   return (
     <svg

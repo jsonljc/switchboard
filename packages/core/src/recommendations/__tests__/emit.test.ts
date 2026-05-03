@@ -5,7 +5,7 @@ import type { RecommendationInput } from "../types.js";
 
 const baseInput = (overrides: Partial<RecommendationInput> = {}): RecommendationInput => ({
   orgId: "org-1",
-  agentKey: "nova",
+  agentKey: "alex",
   intent: "recommendation.ad_set_pause",
   action: "pause",
   humanSummary: "Pause Whitening Ad Set B",

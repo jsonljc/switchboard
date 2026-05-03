@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { AgentMark, SLUG_TO_AGENT } from "@/components/character/agent-mark";
+import { AgentMark } from "@/components/character/agent-mark";
 import type { AgentId } from "@/components/character/agent-mark";
+import { isAgentKey } from "@switchboard/schemas";
 
 interface AgentMarketplaceCardProps {
   name: string;
@@ -26,7 +27,7 @@ export function AgentMarketplaceCard({
   autonomyLevel,
   className,
 }: AgentMarketplaceCardProps) {
-  const agent: AgentId = SLUG_TO_AGENT[slug] ?? "alex";
+  const agent: AgentId = isAgentKey(slug) ? slug : "alex";
 
   return (
     <div

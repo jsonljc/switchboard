@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { NovaPanel } from "../nova-panel";
+import { RileyPanel } from "../riley-panel";
 
 vi.mock("@/hooks/use-module-status");
 
@@ -11,7 +11,7 @@ const wrapper = ({ children }: { children: ReactNode }) => {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 };
 
-describe("NovaPanel", () => {
+describe("RileyPanel", () => {
   it("renders empty state when ad-optimizer is not live", async () => {
     const mod = await import("@/hooks/use-module-status");
     vi.mocked(mod.useModuleStatus).mockReturnValue({
@@ -20,7 +20,7 @@ describe("NovaPanel", () => {
       error: null,
       refetch: vi.fn(),
     } as never);
-    render(<NovaPanel />, { wrapper });
+    render(<RileyPanel />, { wrapper });
     expect(screen.getByText(/no ad-optimizer deployed/i)).toBeInTheDocument();
   });
 
@@ -32,7 +32,7 @@ describe("NovaPanel", () => {
       error: null,
       refetch: vi.fn(),
     } as never);
-    render(<NovaPanel />, { wrapper });
+    render(<RileyPanel />, { wrapper });
     expect(screen.getByText(/no ad-optimizer deployed/i)).toBeInTheDocument();
   });
 
@@ -44,7 +44,7 @@ describe("NovaPanel", () => {
       error: null,
       refetch: vi.fn(),
     } as never);
-    render(<NovaPanel />, { wrapper });
+    render(<RileyPanel />, { wrapper });
     expect(screen.queryByText(/no ad-optimizer deployed/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Ad actions/i)).toBeInTheDocument();
   });
