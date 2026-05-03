@@ -1,17 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { AgentKey } from "@switchboard/schemas";
-import type {
-  EnablementStatus,
-  OrgAgentEnablementRow,
-  OrgAgentEnablementStore,
-} from "@switchboard/core";
-
-interface Mutable extends OrgAgentEnablementRow {}
+import type { OrgAgentEnablementRow, OrgAgentEnablementStore } from "@switchboard/core";
 
 export function createInMemoryOrgAgentEnablementStore(): OrgAgentEnablementStore {
-  const rows: Mutable[] = [];
+  const rows: OrgAgentEnablementRow[] = [];
 
-  function find(orgId: string, agentKey: AgentKey): Mutable | undefined {
+  function find(orgId: string, agentKey: AgentKey): OrgAgentEnablementRow | undefined {
     return rows.find((r) => r.orgId === orgId && r.agentKey === agentKey);
   }
 
@@ -27,11 +21,11 @@ export function createInMemoryOrgAgentEnablementStore(): OrgAgentEnablementStore
         return { ...existing };
       }
       const now = new Date();
-      const row: Mutable = {
+      const row: OrgAgentEnablementRow = {
         id: randomUUID(),
         orgId,
         agentKey,
-        status: "enabled" as EnablementStatus,
+        status: "enabled",
         enabledAt: now,
         updatedAt: now,
       };

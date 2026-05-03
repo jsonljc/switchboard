@@ -22,6 +22,8 @@ describe("InMemoryOrgAgentEnablementStore", () => {
     const b = await store.enable("org-1", "alex");
     expect(b.id).toBe(a.id);
     expect((await store.list("org-1")).length).toBe(1);
+    expect(b.enabledAt.getTime()).toBe(a.enabledAt.getTime());
+    expect(b.updatedAt.getTime()).toBeGreaterThanOrEqual(a.updatedAt.getTime());
   });
 
   it("list scopes by orgId", async () => {
@@ -35,10 +37,12 @@ describe("InMemoryOrgAgentEnablementStore", () => {
 
   it("setStatus updates an existing row", async () => {
     const store = createInMemoryOrgAgentEnablementStore();
-    await store.enable("org-1", "mira");
+    const initial = await store.enable("org-1", "mira");
+    const preUpdateAt = initial.updatedAt.getTime();
     await store.setStatus("org-1", "mira", "disabled");
     const rows = await store.list("org-1");
     expect(rows[0]!.status).toBe("disabled");
+    expect(rows[0]!.updatedAt.getTime()).toBeGreaterThanOrEqual(preUpdateAt);
   });
 
   it("setStatus is a no-op if no row exists", async () => {
