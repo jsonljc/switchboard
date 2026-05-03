@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useOrgConfig } from "@/hooks/use-org-config";
-import { useHaltState } from "../use-halt-state";
+import { useHalt, toggleHaltWithToast } from "../halt-context";
 import { useToast } from "../use-toast";
 import { ZoneSkeleton, ZoneError } from "./zone-states";
 
@@ -47,7 +47,7 @@ function useNow(intervalMs: number): Date {
 
 export function OpStrip({ onHelpOpen }: { onHelpOpen: () => void }) {
   const { data, isLoading, error, refetch } = useOrgConfig();
-  const { halted, toggleHalt, setHalted } = useHaltState();
+  const { halted, toggleHalt, setHalted } = useHalt();
   const { showToast } = useToast();
   const now = useNow(CLOCK_TICK_MS);
 
@@ -56,16 +56,7 @@ export function OpStrip({ onHelpOpen }: { onHelpOpen: () => void }) {
 
   const orgName = data?.config?.name ?? "Switchboard";
 
-  const handleHaltClick = () => {
-    const wasHalted = halted;
-    toggleHalt();
-    showToast({
-      title: wasHalted ? "Resumed" : "Halted",
-      detail: wasHalted ? "All agents resumed." : "all agents halted — actions queued",
-      undoable: true,
-      onUndo: () => setHalted(wasHalted),
-    });
-  };
+  const handleHaltClick = () => toggleHaltWithToast({ halted, toggleHalt, setHalted, showToast });
 
   return (
     <header className="opstrip">
