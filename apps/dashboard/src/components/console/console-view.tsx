@@ -13,7 +13,8 @@ import { WelcomeBanner } from "./welcome-banner";
 import { HelpOverlay } from "./help-overlay";
 import { ToastShelf } from "./toast-shelf";
 import { ToastProvider } from "./use-toast";
-import { HaltProvider } from "./halt-context";
+import { HaltProvider, toggleHaltWithToast, useHalt } from "./halt-context";
+import { useToast } from "./use-toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 
 type SlideOverState =
@@ -25,15 +26,12 @@ function ConsoleViewInner() {
   const [slideOver, setSlideOver] = useState<SlideOverState>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  const haltViaShortcut = () => {
-    // Delegate to OpStrip's halt button so halt state and toast logic stay in one place.
-    const btn = document.querySelector<HTMLButtonElement>(".op-halt");
-    btn?.click();
-  };
+  const { halted, setHalted, toggleHalt } = useHalt();
+  const { showToast } = useToast();
 
   useKeyboardShortcuts({
     help: () => setHelpOpen((v) => !v),
-    halt: haltViaShortcut,
+    halt: () => toggleHaltWithToast({ halted, setHalted, toggleHalt, showToast }),
     escape: () => setHelpOpen(false),
   });
 
