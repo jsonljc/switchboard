@@ -1330,6 +1330,8 @@ model PendingActionRecord {
   sourceAgent          String
   sourceWorkflow       String?
   organizationId       String
+  surface              String    @default("queue")  // queue | shadow_action — recommendations only
+  undoableUntil        DateTime?                    // recommendations.shadow_action only
   createdAt            DateTime  @default(now())
   expiresAt            DateTime?
   resolvedAt           DateTime?
@@ -1338,6 +1340,8 @@ model PendingActionRecord {
   workflow WorkflowExecution? @relation(fields: [workflowId], references: [id])
 
   @@index([organizationId, status])
+  @@index([organizationId, surface, status])
+  @@index([organizationId, undoableUntil])
   @@index([workflowId])
   @@index([sourceAgent])
 }
