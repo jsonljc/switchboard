@@ -45,7 +45,7 @@ Slice A ships the two-source feed and **defers escalation promotion** to a later
 | 4   | Slug map                         | **A**: kill the existing `SLUG_TO_AGENT` map. URLs are `/[key]` directly (`/alex`, `/riley`, `/mira`). The `slug` field on the registry is kept for forward-compat.                                                                                |
 | 5   | Decision-feed adapter shape      | **A**: read-time projection. Adapter generates `humanSummary` + `presentation` for handoffs (which don't store them). Recommendations pass through. No schema migrations on `Handoff`. (Escalation adapter deferred — see §1 reconciliation note.) |
 | 6   | Urgency scoring                  | **A**: per-kind scorers each producing 0–100; merge-sort by score desc, tiebreak by `createdAt` asc.                                                                                                                                               |
-| 7   | `useAgentFirstNav` flag scope    | **A**: org-level (`Organization.useAgentFirstNav: Boolean`). May move to user-level later.                                                                                                                                                         |
+| 7   | `useAgentFirstNav` flag scope    | **A**: org-level (`OrganizationConfig.useAgentFirstNav: Boolean` — codebase has no separate `Organization` model). May move to user-level later.                                                                                                   |
 
 ---
 
