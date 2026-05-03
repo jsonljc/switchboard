@@ -13,6 +13,7 @@ import { WelcomeBanner } from "./welcome-banner";
 import { HelpOverlay } from "./help-overlay";
 import { ToastShelf } from "./toast-shelf";
 import { ToastProvider } from "./use-toast";
+import { HaltProvider } from "./halt-context";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 
 type SlideOverState =
@@ -77,7 +78,9 @@ function ConsoleViewInner() {
 export function ConsoleView() {
   return (
     <ToastProvider>
-      <ConsoleViewInner />
+      <HaltProvider>
+        <ConsoleViewInner />
+      </HaltProvider>
     </ToastProvider>
   );
 }
