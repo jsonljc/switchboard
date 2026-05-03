@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@switchboard/schemas": "workspace:*",
-    "zod": "^3.23.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25",
