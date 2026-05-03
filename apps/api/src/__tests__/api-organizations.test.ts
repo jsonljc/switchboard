@@ -32,6 +32,9 @@ describe("Organizations API — Config", () => {
     agentDeployment: {
       upsert: vi.fn(),
     },
+    orgAgentEnablement: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
   };
 
   beforeEach(async () => {

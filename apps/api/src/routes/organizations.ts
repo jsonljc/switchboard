@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
-import { encryptCredentials, decryptCredentials } from "@switchboard/db";
+import { encryptCredentials, decryptCredentials, seedOrgDayOneAgents } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
@@ -66,6 +66,10 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           onboardingComplete: false,
           managedChannels: [],
           provisioningStatus: "pending",
+          // Slice A PR 2: brand-new orgs land on the agent-first nav. The
+          // `update` branch stays a no-op — existing orgs keep their current
+          // value until a future Phase D5 backfill explicitly migrates them.
+          useAgentFirstNav: true,
         },
         update: {},
       });
@@ -75,6 +79,11 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
       // channel is provisioned. Idempotent; the provision route also calls
       // this as a safety net for pre-existing orgs.
       await ensureAlexListingForOrg(orgId, app.prisma);
+
+      // Slice A PR 2: seed day-one agent enablement (alex, riley) so the
+      // agent home pages have data on first load. Idempotent — re-runs are a
+      // no-op via the helper's `update: {}` upsert.
+      await seedOrgDayOneAgents(app.prisma, orgId);
 
       return reply.send({ config });
     },
