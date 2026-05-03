@@ -1,23 +1,45 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApprovals } from "@/hooks/use-approvals";
 import { useEscalations } from "@/hooks/use-escalations";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { QueueCardView } from "../queue-cards";
 import { mapQueue, type ApprovalApiRow, type EscalationApiRow } from "../console-mappers";
 import { ZoneEmpty, ZoneError, ZoneSkeleton } from "./zone-states";
 
-interface QueueZoneProps {
-  onOpenSlideOver: (
-    sel:
-      | { kind: "approval"; approvalId: string; bindingHash: string }
-      | { kind: "escalation"; escalationId: string },
-  ) => void;
-}
+const RESOLVE_DURATION_MS = 320;
 
-export function QueueZone({ onOpenSlideOver }: QueueZoneProps) {
+export function QueueZone() {
   const escalations = useEscalations();
   const approvals = useApprovals();
+  const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
+  const [resolvingIds, setResolvingIds] = useState<Set<string>>(() => new Set());
+
+  const beginResolve = useCallback(
+    (cardId: string) => {
+      setResolvingIds((prev) => {
+        const next = new Set(prev);
+        next.add(cardId);
+        return next;
+      });
+      setTimeout(() => {
+        if (keys) {
+          queryClient.invalidateQueries({ queryKey: keys.escalations.all() });
+          queryClient.invalidateQueries({ queryKey: keys.approvals.pending() });
+        }
+        setResolvingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(cardId);
+          return next;
+        });
+      }, RESOLVE_DURATION_MS);
+    },
+    [queryClient, keys],
+  );
 
   if (escalations.isLoading || approvals.isLoading) {
     return <ZoneSkeleton label="Loading queue" />;
@@ -59,19 +81,8 @@ export function QueueZone({ onOpenSlideOver }: QueueZoneProps) {
           <QueueCardView
             key={card.id}
             card={card}
-            onApprovalPrimary={(c) =>
-              onOpenSlideOver({
-                kind: "approval",
-                approvalId: c.approvalId,
-                bindingHash: c.bindingHash,
-              })
-            }
-            onEscalationPrimary={(c) =>
-              onOpenSlideOver({
-                kind: "escalation",
-                escalationId: c.escalationId,
-              })
-            }
+            resolving={resolvingIds.has(card.id)}
+            onResolve={() => beginResolve(card.id)}
           />
         ))}
       </div>

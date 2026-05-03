@@ -12,6 +12,9 @@ vi.mock("@/hooks/use-approvals");
 vi.mock("@/hooks/use-agents");
 vi.mock("@/hooks/use-module-status");
 vi.mock("@/hooks/use-audit");
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { organizationId: "org-1" }, status: "authenticated" }),
+}));
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

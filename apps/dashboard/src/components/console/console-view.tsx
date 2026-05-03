@@ -40,7 +40,7 @@ function ConsoleViewInner() {
       <OpStrip onHelpOpen={() => setHelpOpen(true)} />
       <main className="console-main">
         <WelcomeBanner />
-        <QueueZone onOpenSlideOver={setSlideOver} />
+        <QueueZone />
         <AgentStrip />
         <NovaPanel />
         <ActivityTrail />
