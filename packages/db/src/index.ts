@@ -118,3 +118,4 @@ export { PrismaPcdIdentitySnapshotStore } from "./stores/prisma-pcd-identity-sna
 export type { CreatePcdIdentitySnapshotInput } from "./stores/prisma-pcd-identity-snapshot-store.js";
 export { PrismaRecommendationStore } from "./recommendation-store.js";
 export { createInMemoryOrgAgentEnablementStore } from "./stores/in-memory-org-agent-enablement-store.js";
+export { PrismaOrgAgentEnablementStore } from "./stores/prisma-org-agent-enablement-store.js";
