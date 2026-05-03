@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { AgentKey } from "../console-data";
 import { useAudit, type AuditEntryResponse } from "@/hooks/use-audit";
 import { ZoneEmpty, ZoneError, ZoneSkeleton } from "./zone-states";
 
@@ -23,7 +24,7 @@ function formatHHMM(timestamp: string): string {
   });
 }
 
-function agentForEntry(entry: AuditEntryResponse): string {
+function agentForEntry(entry: AuditEntryResponse): AgentKey {
   const key = (entry.actorId ?? entry.eventType ?? "").toLowerCase();
   if (key.includes("alex")) return "alex";
   if (key.includes("riley")) return "riley";

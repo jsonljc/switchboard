@@ -74,7 +74,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
         </div>
         <p>
           Three agents work on your behalf around the clock. <b>Alex</b> handles inbound
-          conversations, <b>Nova</b> manages ad spend, and <b>Mira</b> develops creative. They act
+          conversations, <b>Riley</b> manages ad spend, and <b>Mira</b> develops creative. They act
           on their own — and stop to ask only when judgment is needed.
         </p>
         <p>
@@ -86,7 +86,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
           <kbd>?</kbd>
           <span>Open this help</span>
           <kbd>1 / 2 / 3</kbd>
-          <span>Open Alex / Nova / Mira panel</span>
+          <span>Open Alex / Riley / Mira panel</span>
           <kbd>H</kbd>
           <span>Halt or resume all agents</span>
           <kbd>Esc</kbd>

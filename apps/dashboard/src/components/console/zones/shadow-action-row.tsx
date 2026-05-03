@@ -15,7 +15,7 @@ export function ShadowActionList() {
   if (rows.length === 0) return null;
   return (
     <section aria-label="Auto-actions" className="shadow-actions">
-      <div className="label">Nova flagged — confirm or undo</div>
+      <div className="label">Riley flagged — confirm or undo</div>
       {rows.map((row) => (
         <ShadowActionRow
           key={row.id}

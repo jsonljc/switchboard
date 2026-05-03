@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useModuleStatus } from "@/hooks/use-module-status";
 import { ZoneSkeleton, ZoneError, ZoneEmpty } from "./zone-states";
 
-export function NovaPanel() {
+export function RileyPanel() {
   const modules = useModuleStatus();
 
   if (modules.isLoading) return <ZoneSkeleton label="Loading ad actions" />;
@@ -33,9 +33,9 @@ export function NovaPanel() {
   // For PR-2, render the headline + a placeholder line — honest about the data
   // state, not the Aurora Dental fixture.
   return (
-    <section className="nova-panel" aria-label="Nova ad actions">
+    <section className="riley-panel" aria-label="Riley ad actions">
       <header>
-        <h2>Nova · Ad actions</h2>
+        <h2>Riley · Ad actions</h2>
       </header>
       <p className="muted">Ad-set rows render here once the aggregation is wired (Option C).</p>
     </section>

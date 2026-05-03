@@ -95,8 +95,8 @@ export type AdSetRow = {
   pausePending?: boolean;
 };
 
-export type NovaPanel = {
-  /** "Nova · Ad actions" — title comes from agent label. */
+export type RileyPanel = {
+  /** "Riley · Ad actions" — title comes from agent label. */
   spendDisplay: string;
   draftsPending: number;
   rows: AdSetRow[];
