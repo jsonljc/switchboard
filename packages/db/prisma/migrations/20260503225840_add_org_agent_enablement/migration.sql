@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- AlterTable
 ALTER TABLE "OrganizationConfig" ADD COLUMN     "useAgentFirstNav" BOOLEAN NOT NULL DEFAULT false;
 
