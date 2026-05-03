@@ -14,4 +14,5 @@ export type {
 } from "./types.js";
 export type { RecommendationStore } from "./interfaces.js";
 export { emitRecommendation } from "./emit.js";
-// act export appended by Task 6
+export { actOnRecommendation } from "./act.js";
+export type { ActOnRecommendationInput } from "./act.js";
