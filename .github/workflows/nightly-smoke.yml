@@ -1,0 +1,91 @@
+name: Nightly Smoke
+
+# Lightweight nightly health check on `main`:
+#   - typecheck
+#   - test (run mode, no watch)
+#   - prisma schema drift
+#
+# Failure-only signal. Success runs are intentionally quiet.
+# Heavier checks (full reset, coverage, e2e) can be added later once
+# this signal is calibrated and trusted.
+
+on:
+  schedule:
+    # 09:00 UTC daily (~02:00 PT / 05:00 ET).
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: switchboard
+          POSTGRES_PASSWORD: switchboard
+          POSTGRES_DB: switchboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U switchboard"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://switchboard:switchboard@localhost:5432/switchboard
+      # No literal fallbacks: nightly runs from the repo itself, so secrets
+      # are always available. If a secret is missing, the job should fail
+      # loudly rather than substitute a test fixture and stay green.
+      CREDENTIALS_ENCRYPTION_KEY: ${{ secrets.CI_CREDENTIALS_ENCRYPTION_KEY }}
+      NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        # Frozen on purpose: lockfile drift is a thing the nightly should
+        # surface, not silently rewrite.
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @switchboard/db exec prisma generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (run mode)
+        run: pnpm test -- --run
+
+      - name: Prisma schema drift
+        run: pnpm db:check-drift
+
+      # Failure-only notification. Configure NIGHTLY_SMOKE_WEBHOOK as a repo
+      # secret pointing at the Hermes gateway / builder channel. If unset,
+      # the step is a no-op and the failed job still surfaces in Actions.
+      - name: Notify on failure
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.NIGHTLY_SMOKE_WEBHOOK }}
+        run: |
+          if [[ -z "${WEBHOOK:-}" ]]; then
+            echo "NIGHTLY_SMOKE_WEBHOOK not set — skipping notification."
+            exit 0
+          fi
+          payload=$(printf '{"text":"Switchboard nightly smoke FAILED on main — %s"}' "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
+          curl -fsS -X POST -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK" || true
