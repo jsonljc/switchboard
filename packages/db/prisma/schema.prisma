@@ -428,12 +428,28 @@ model OrganizationConfig {
   /// an active Stripe subscription. Intended for internal beta, comped pilots,
   /// or manually approved exceptions.
   entitlementOverride  Boolean         @default(false)
+  useAgentFirstNav     Boolean         @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   escalationConfig     Json? // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
   users                DashboardUser[]
+}
+
+// ── Agent-First Redesign: per-org agent enablement ──
+// Slice A — see docs/superpowers/specs/2026-05-03-agent-roster-and-decision-feed-design.md
+// agentKey is intentionally String (not enum) — validated by AgentKeySchema at write time.
+model OrgAgentEnablement {
+  id        String   @id @default(uuid())
+  orgId     String
+  agentKey  String   // "alex" | "riley" | "mira"
+  status    String   @default("enabled") // enabled | coming_soon | disabled
+  enabledAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, agentKey])
+  @@index([orgId])
 }
 
 // ── Webhook Idempotency ──
