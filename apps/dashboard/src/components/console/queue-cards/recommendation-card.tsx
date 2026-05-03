@@ -16,8 +16,10 @@ export function RecommendationCardView({ card, resolving, onResolve }: Props) {
   // Visual-only until recommendation backend lands —
   // see docs/superpowers/specs/2026-05-03-console-frame-phase-2-design.md
   // (no API mutation; card reappears on next refetch).
+  // Title uses the label as-is (title-case from the mapper) to match the
+  // Halt toast convention (`Halted` / `Resumed`) and avoid a stylistic clash.
   const fire = (label: string, detail: string) => {
-    showToast({ title: label.toUpperCase(), detail, undoable: false });
+    showToast({ title: label, detail, undoable: false });
     onResolve();
   };
 

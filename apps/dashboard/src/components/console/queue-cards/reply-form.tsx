@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEscalationReply } from "@/hooks/use-escalation-reply";
 
 interface ReplyFormProps {
@@ -13,6 +13,14 @@ export function ReplyForm({ escalationId, channelName, onSent }: ReplyFormProps)
   const { send, isPending } = useEscalationReply(escalationId);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Spec: clicking "Reply inline ▾" or the primary [Reply] button is an
+  // expand-and-focus affordance. ReplyForm only mounts when the panel is
+  // expanded, so focusing on mount matches that contract.
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   const handleSend = async () => {
     if (!text.trim()) return;
@@ -34,6 +42,7 @@ export function ReplyForm({ escalationId, channelName, onSent }: ReplyFormProps)
   return (
     <div className="reply-form">
       <textarea
+        ref={textareaRef}
         aria-label="Reply"
         className="reply-form-text"
         rows={3}
