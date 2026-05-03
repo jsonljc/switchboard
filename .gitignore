@@ -28,3 +28,7 @@ PLAN-V1.md
 
 # Obsidian editor state (workspace layout, view state, etc.)
 .obsidian/
+
+# Session-handoff notes — ephemeral, regenerated each session
+.audit/_session-handoff.md
+.audit/_*.md
