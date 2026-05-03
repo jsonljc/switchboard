@@ -1,4 +1,11 @@
-import type { AgentKey, ApprovalGateCard, EscalationCard, QueueCard } from "./console-data";
+import type {
+  AgentKey,
+  ApprovalGateCard,
+  EscalationCard,
+  QueueCard,
+  RecommendationCard,
+  RichText,
+} from "./console-data";
 
 function formatAge(createdAt: string, now: Date): string {
   const ms = now.getTime() - new Date(createdAt).getTime();
@@ -70,14 +77,67 @@ export function mapApprovalGateCard(row: ApprovalApiRow, now: Date): ApprovalGat
 export function mapQueue(
   escalations: EscalationApiRow[],
   approvals: ApprovalApiRow[],
+  recommendations: RecommendationApiRow[],
   now: Date,
 ): QueueCard[] {
   const escCards = escalations.map((e) => mapEscalationCard(e, now));
   const gateCards = approvals
     .filter((a) => a.riskCategory === "creative")
     .map((a) => mapApprovalGateCard(a, now));
-  // Recommendation cards are not exposed by the backend in option B; option C wires them.
-  return [...escCards, ...gateCards];
+  const recCards = recommendations.map((r) => mapRecommendationCard(r, now));
+  return [...escCards, ...gateCards, ...recCards];
+}
+
+// ── Recommendations ───────────────────────────────────────────────────────
+export type RecommendationApiRow = {
+  id: string;
+  agentKey: "nova" | "alex" | "mira";
+  humanSummary: string;
+  confidence: number;
+  parameters: {
+    __recommendation?: {
+      action?: string;
+      note?: string | null;
+      presentation?: {
+        primaryLabel: string;
+        secondaryLabel: string;
+        dismissLabel: string;
+        dataLines: unknown[];
+      };
+    };
+    [key: string]: unknown;
+  };
+  surface: "queue" | "shadow_action";
+  status: string;
+  createdAt: string;
+};
+
+function confidenceToLabel(c: number): string {
+  if (c >= 0.9) return "Immediate";
+  if (c >= 0.75) return "High confidence";
+  return "Suggested";
+}
+
+const FALLBACK_PRESENTATION = {
+  primaryLabel: "Confirm",
+  secondaryLabel: "Adjust",
+  dismissLabel: "Dismiss",
+  dataLines: [] as unknown[],
+};
+
+export function mapRecommendationCard(row: RecommendationApiRow, _now: Date): RecommendationCard {
+  const p = row.parameters?.__recommendation?.presentation ?? FALLBACK_PRESENTATION;
+  return {
+    kind: "recommendation",
+    id: row.id,
+    agent: row.agentKey,
+    action: row.humanSummary,
+    timer: { label: confidenceToLabel(row.confidence), confidence: row.confidence.toFixed(2) },
+    dataLines: p.dataLines as RichText[],
+    primary: { label: p.primaryLabel },
+    secondary: { label: p.secondaryLabel },
+    dismiss: { label: p.dismissLabel },
+  };
 }
 
 // Re-export AgentKey so consumers can import from one place
