@@ -50,25 +50,24 @@ If anything fails, fix the baseline before any task starts. Tasks assume green-b
 | 1 | Add `surface` + `undoableUntil` columns + indexes to `PendingActionRecord` | opus | — |
 | 2 | Recommendation Zod schemas + shared types in `packages/schemas/` | sonnet | 1 |
 | 3 | `routeRecommendation()` pure function + tests | sonnet | 2 |
-| 4 | Core types, interfaces, barrel | haiku | 2 |
-| 5 | `emitRecommendation()` + tests | sonnet | 3, 4 |
-| 6 | `actOnRecommendation()` + tests | sonnet | 4 |
+| 4 | Core types, interfaces, barrel (typecheck-clean) | haiku | 2 |
+| 5 | `emitRecommendation()` + tests + barrel append | sonnet | 3, 4 |
+| 6 | `actOnRecommendation()` + tests + barrel append | sonnet | 4 |
 | 7 | `PrismaRecommendationStore` + integration tests | sonnet | 5, 6 |
-| 8 | `apps/api/src/routes/recommendations.ts` + tests + isolation test | opus | 7 |
-| 9 | Wire store + routes in `apps/api/src/app.ts` | sonnet | 8 |
-| 10 | Dashboard SDK types + query keys + governance.ts methods | haiku | 8 |
-| 11 | Dashboard proxy route with 409 propagation | sonnet | 10 |
-| 12 | `useRecommendations()` hook + test | haiku | 10 |
-| 13 | `useShadowActions()` hook + test | haiku | 10 |
-| 14 | `useRecommendationAction()` hook + test (with 409 swallow) | sonnet | 10 |
-| 15 | `mapRecommendationCard` + widen `mapQueue` + tests | sonnet | 12 |
-| 16 | `recommendation-card.tsx` handler swap + tests | sonnet | 14 |
-| 17 | `queue-zone.tsx` 2-line additive + tests | sonnet | 12, 15 |
-| 18 | `<ShadowActionRow>` + `<ShadowActionList>` + CSS + tests | sonnet | 13, 14 |
-| 19 | ad-optimizer audit-runner sink + AgentEvent rollup + tests | opus | 5 |
-| 20 | Seed script `scripts/seed-recommendation.ts` | haiku | 7 |
-| 21 | DOCTRINE.md Legacy Bridge Registry entry | haiku | 6 |
-| 22 | Phase 3 dry-run merge verification | sonnet | 17, 18 |
+| 8 | API routes + wiring in `app.ts` + route tests + isolation tests | opus | 7 |
+| 9 | Dashboard SDK types + query keys + governance.ts methods | haiku | 8 |
+| 10 | Dashboard proxy route with 409 propagation | sonnet | 9 |
+| 11 | `useRecommendations()` hook + test | haiku | 9 |
+| 12 | `useShadowActions()` hook + test | haiku | 9 |
+| 13 | `useRecommendationAction()` hook + test (with 409 swallow) | sonnet | 9 |
+| 14 | `mapRecommendationCard` + widen `mapQueue` + tests | sonnet | 11 |
+| 15 | `recommendation-card.tsx` handler swap + tests | sonnet | 13 |
+| 16 | `queue-zone.tsx` 2-line additive + tests | sonnet | 11, 14 |
+| 17 | `<ShadowActionRow>` + `<ShadowActionList>` + CSS + tests | sonnet | 12, 13 |
+| 18 | ad-optimizer audit-runner sink + AgentEvent rollup + tests | opus | 5 |
+| 19 | Seed script `scripts/seed-recommendation.ts` | haiku | 7 |
+| 20 | DOCTRINE.md Legacy Bridge Registry entry | haiku | 6 |
+| 21 | Phase 3 dry-run merge verification | sonnet | 16, 17 |
 
 ---
 
@@ -511,13 +510,15 @@ live in one file marked as the v1.5 mode-lookup seam."
 
 ---
 
-## Task 4: Core types, interfaces, barrel `[haiku]`
+## Task 4: Core types, interfaces, barrel (typecheck-clean) `[haiku]`
 
 **Files:**
 - Create: `packages/core/src/recommendations/types.ts`
 - Create: `packages/core/src/recommendations/interfaces.ts`
 - Create: `packages/core/src/recommendations/index.ts`
 - Modify: `packages/core/src/index.ts` (append export)
+
+This task ends green: typecheck passes after the commit. Tasks 5 and 6 each append their own export to the barrel as part of their TDD cycle.
 
 - [ ] **Step 1: Create the types file**
 
@@ -529,6 +530,7 @@ import type {
   RecommendationSurface,
   RecommendationAction,
   RecommendationInput,
+  RecommendationPresentation,
   AgentKey,
 } from "@switchboard/schemas";
 
@@ -537,9 +539,15 @@ export type {
   RecommendationSurface,
   RecommendationAction,
   RecommendationInput,
+  RecommendationPresentation,
   AgentKey,
 };
 
+/**
+ * Read shape returned by the store. PendingActionRecord has no `updatedAt`
+ * column, so v1 omits it from the canonical Recommendation type. If a future
+ * migration adds one, surface it here as `updatedAt: Date`.
+ */
 export interface Recommendation {
   id: string;
   orgId: string;
@@ -562,7 +570,29 @@ export interface Recommendation {
   createdAt: Date;
   expiresAt: Date | null;
   undoableUntil: Date | null;
-  updatedAt: Date;
+}
+
+/**
+ * Persistence write shape. Different from RecommendationInput — emit() has
+ * already moved `presentation` into `parameters`, and the routing/expiry
+ * fields have been computed. `presentation` is NOT a separate field here.
+ */
+export interface PersistRecommendationInput {
+  orgId: string;
+  agentKey: AgentKey;
+  intent: string;
+  action: string;
+  humanSummary: string;
+  confidence: number;
+  dollarsAtRisk: number;
+  riskLevel: "low" | "medium" | "high";
+  parameters: Record<string, unknown>; // already contains presentation under __recommendation
+  targetEntities: Record<string, unknown> | undefined;
+  sourceWorkflow: string | undefined;
+  surface: Exclude<RecommendationSurface, "dropped">;
+  idempotencyKey: string;
+  undoableUntil: Date | null;
+  expiresAt: Date;
 }
 
 export type EmitResult =
@@ -581,11 +611,16 @@ export type ActResult =
 Create `packages/core/src/recommendations/interfaces.ts`:
 
 ```ts
-import type { Recommendation, RecommendationInput, RecommendationStatus, RecommendationSurface } from "./types.js";
+import type {
+  PersistRecommendationInput,
+  Recommendation,
+  RecommendationStatus,
+  RecommendationSurface,
+} from "./types.js";
 
 export interface RecommendationStore {
   /** Insert with idempotency. Returns existing row on idempotency-key collision. */
-  insert(input: RecommendationInput & { surface: Exclude<RecommendationSurface, "dropped">; idempotencyKey: string; undoableUntil: Date | null; expiresAt: Date }): Promise<{ row: Recommendation; idempotent: boolean }>;
+  insert(input: PersistRecommendationInput): Promise<{ row: Recommendation; idempotent: boolean }>;
 
   /** Loads a row by id (no org guard — caller asserts). */
   getById(id: string): Promise<Recommendation | null>;
@@ -610,29 +645,28 @@ export interface RecommendationStore {
 }
 ```
 
-- [ ] **Step 3: Create the barrel**
+- [ ] **Step 3: Create the typecheck-clean barrel**
 
-Create `packages/core/src/recommendations/index.ts`:
+Create `packages/core/src/recommendations/index.ts`. **Only export what exists.** Tasks 5 and 6 will each append their own line to this file.
 
 ```ts
 export { routeRecommendation } from "./router.js";
 export type { RouteInput } from "./router.js";
 export type {
   Recommendation,
+  PersistRecommendationInput,
   RecommendationStatus,
   RecommendationSurface,
   RecommendationAction,
   RecommendationInput,
+  RecommendationPresentation,
   AgentKey,
   EmitResult,
   ActResult,
 } from "./types.js";
 export type { RecommendationStore } from "./interfaces.js";
-export { emitRecommendation } from "./emit.js";
-export { actOnRecommendation } from "./act.js";
+// emit and act exports appended by Tasks 5 and 6
 ```
-
-(The `emit.js` and `act.js` files don't exist yet — Tasks 5 and 6. The barrel will fail to typecheck until those tasks land. That's acceptable because Task 4 is a pure-files step with no test gate; we verify in Task 5.)
 
 - [ ] **Step 4: Append to core's main barrel**
 
@@ -642,14 +676,23 @@ Edit `packages/core/src/index.ts`. Find the existing exports and append at the b
 export * from "./recommendations/index.js";
 ```
 
-- [ ] **Step 5: Commit (without typecheck — Tasks 5/6 close the loop)**
+- [ ] **Step 5: Verify typecheck is clean and commit**
+
+```bash
+pnpm --filter @switchboard/core typecheck
+```
+
+Expected: PASS — no broken imports, the barrel only re-exports symbols that exist.
 
 ```bash
 git add packages/core/src/recommendations/types.ts packages/core/src/recommendations/interfaces.ts packages/core/src/recommendations/index.ts packages/core/src/index.ts
-git commit -m "feat(core): recommendation types, interfaces, barrel
+git commit -m "feat(core): recommendation types, interfaces, typecheck-clean barrel
 
-Types and interface live in core; persistence implementation lands in
-db (Task 7). Barrel re-exports router (Task 3) and emit/act (Tasks 5/6)."
+Types separate emitter input (RecommendationInput, with presentation
+field) from persistence input (PersistRecommendationInput, where
+presentation is already merged into parameters). Recommendation read
+type omits updatedAt because PendingActionRecord has no such column.
+Barrel exports only what exists — emit/act are appended in Tasks 5/6."
 ```
 
 ---
@@ -667,7 +710,7 @@ Create the in-memory store fixture `packages/core/src/recommendations/__tests__/
 
 ```ts
 import type { RecommendationStore } from "../interfaces.js";
-import type { Recommendation } from "../types.js";
+import type { PersistRecommendationInput, Recommendation } from "../types.js";
 
 export function createInMemoryStore(): RecommendationStore & { rows: Recommendation[]; byKey: Map<string, Recommendation> } {
   const rows: Recommendation[] = [];
@@ -676,7 +719,7 @@ export function createInMemoryStore(): RecommendationStore & { rows: Recommendat
   return {
     rows,
     byKey,
-    async insert(input) {
+    async insert(input: PersistRecommendationInput) {
       const existing = byKey.get(input.idempotencyKey);
       if (existing) return { row: existing, idempotent: true };
       const now = new Date();
@@ -702,7 +745,6 @@ export function createInMemoryStore(): RecommendationStore & { rows: Recommendat
         createdAt: now,
         expiresAt: input.expiresAt,
         undoableUntil: input.undoableUntil,
-        updatedAt: now,
       };
       rows.push(row);
       byKey.set(input.idempotencyKey, row);
@@ -723,7 +765,6 @@ export function createInMemoryStore(): RecommendationStore & { rows: Recommendat
       row.actedBy = actor.principalId;
       row.actedAt = new Date();
       row.note = note ?? null;
-      row.updatedAt = new Date();
       return row;
     },
   };
@@ -765,7 +806,10 @@ describe("emitRecommendation", () => {
     expect(result.surface).toBe("shadow_action");
     expect(store.rows).toHaveLength(1);
     expect(store.rows[0]?.surface).toBe("shadow_action");
-    expect(store.rows[0]?.parameters).toMatchObject({ foo: "bar", presentation: expect.any(Object) });
+    expect(store.rows[0]?.parameters).toMatchObject({
+      foo: "bar",
+      __recommendation: { action: "pause", presentation: expect.any(Object) },
+    });
   });
 
   it("sets undoableUntil on shadow rows (createdAt + 24h)", async () => {
@@ -883,12 +927,30 @@ export async function emitRecommendation(
   const expiresAt = validated.expiresAt ?? new Date(now.getTime() + ONE_DAY_MS);
   const undoableUntil = surface === "shadow_action" ? new Date(now.getTime() + ONE_DAY_MS) : null;
 
-  // Move presentation into parameters JSON.
-  const parameters = { ...validated.parameters, presentation: validated.presentation };
+  // Strip `presentation` from the spread — it lives inside parameters.__recommendation.
+  // Stash `action` alongside it so the read-back can reconstruct the domain action
+  // without adding a column.
+  const { presentation, parameters: rawParameters, ...rest } = validated;
+  const parameters: Record<string, unknown> = {
+    ...rawParameters,
+    __recommendation: {
+      action: validated.action,
+      presentation,
+    },
+  };
 
   const { row, idempotent } = await store.insert({
-    ...validated,
+    orgId: rest.orgId,
+    agentKey: rest.agentKey,
+    intent: rest.intent,
+    action: rest.action,
+    humanSummary: rest.humanSummary,
+    confidence: rest.confidence,
+    dollarsAtRisk: rest.dollarsAtRisk,
+    riskLevel: rest.riskLevel,
     parameters,
+    targetEntities: rest.targetEntities,
+    sourceWorkflow: rest.sourceWorkflow,
     surface,
     idempotencyKey,
     undoableUntil,
@@ -907,15 +969,34 @@ pnpm --filter @switchboard/core test emit
 
 Expected: PASS, 8 tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Append emit to the recommendations barrel**
+
+Edit `packages/core/src/recommendations/index.ts`. Replace the placeholder comment line `// emit and act exports appended by Tasks 5 and 6` with:
+
+```ts
+export { emitRecommendation } from "./emit.js";
+// act export appended by Task 6
+```
+
+Verify the barrel still typechecks:
 
 ```bash
-git add packages/core/src/recommendations/emit.ts packages/core/src/recommendations/__tests__/
+pnpm --filter @switchboard/core typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/core/src/recommendations/emit.ts packages/core/src/recommendations/__tests__/ packages/core/src/recommendations/index.ts
 git commit -m "feat(core): emitRecommendation — validate, route, persist with idempotency
 
 Routes via routeRecommendation; shadow rows get undoableUntil = +24h;
 default expiresAt = +24h. Idempotency key is sha256(org+intent+targets+day)
-so re-running an audit on the same day for the same target reuses the row."
+so re-running an audit on the same day for the same target reuses the row.
+Presentation + action stashed under parameters.__recommendation namespace
+to avoid collision with future emitter parameters."
 ```
 
 ---
@@ -1182,15 +1263,31 @@ export async function actOnRecommendation(
 
 ```bash
 pnpm --filter @switchboard/core test act
+```
+
+Expected: PASS, 12 tests.
+
+- [ ] **Step 5: Append act to the recommendations barrel**
+
+Edit `packages/core/src/recommendations/index.ts`. Replace the placeholder comment line `// act export appended by Task 6` with:
+
+```ts
+export { actOnRecommendation } from "./act.js";
+export type { ActOnRecommendationInput } from "./act.js";
+```
+
+Verify typecheck:
+
+```bash
 pnpm --filter @switchboard/core typecheck
 ```
 
-Expected: PASS, 12 tests; typecheck clean (now that emit + act exist, the barrel resolves).
+Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add packages/core/src/recommendations/act.ts packages/core/src/recommendations/__tests__/act.test.ts
+git add packages/core/src/recommendations/act.ts packages/core/src/recommendations/__tests__/act.test.ts packages/core/src/recommendations/index.ts
 git commit -m "feat(core): actOnRecommendation — surface-action validity, lazy expiry, undo guard
 
 Queue accepts primary|secondary|dismiss; shadow accepts confirm|undo;
@@ -1216,6 +1313,7 @@ Create `packages/db/src/__tests__/recommendation-store.test.ts`:
 import { describe, expect, it, beforeEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { PrismaRecommendationStore } from "../recommendation-store.js";
+import type { PersistRecommendationInput } from "@switchboard/core";
 
 const prisma = new PrismaClient();
 
@@ -1224,45 +1322,48 @@ async function clean() {
   await prisma.pendingActionRecord.deleteMany({ where: { intent: { startsWith: "recommendation." } } });
 }
 
+const baseInsert = (overrides: Partial<PersistRecommendationInput> = {}): PersistRecommendationInput => ({
+  orgId: "org-1",
+  agentKey: "nova",
+  intent: "recommendation.ad_set_pause",
+  action: "pause",
+  humanSummary: "Pause it",
+  confidence: 0.9,
+  dollarsAtRisk: 10,
+  riskLevel: "low",
+  parameters: {
+    __recommendation: {
+      action: "pause",
+      presentation: { primaryLabel: "Pause", secondaryLabel: "Reduce 50%", dismissLabel: "Dismiss", dataLines: [] },
+    },
+  },
+  targetEntities: undefined,
+  sourceWorkflow: undefined,
+  surface: "shadow_action",
+  idempotencyKey: "test-key-1",
+  undoableUntil: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  ...overrides,
+});
+
 describe("PrismaRecommendationStore", () => {
   beforeEach(clean);
 
-  it("inserts and reads a row", async () => {
+  it("inserts and reads a row, reconstructing action from parameters.__recommendation", async () => {
     const store = new PrismaRecommendationStore(prisma);
-    const inserted = await store.insert({
-      orgId: "org-1", agentKey: "nova",
-      intent: "recommendation.ad_set_pause", action: "pause",
-      humanSummary: "Pause it", confidence: 0.9, dollarsAtRisk: 10,
-      riskLevel: "low",
-      parameters: { presentation: { primaryLabel: "Pause", secondaryLabel: "Reduce 50%", dismissLabel: "Dismiss", dataLines: [] } },
-      surface: "shadow_action",
-      idempotencyKey: "test-key-1",
-      undoableUntil: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      presentation: { primaryLabel: "Pause", secondaryLabel: "Reduce 50%", dismissLabel: "Dismiss", dataLines: [] },
-    });
+    const inserted = await store.insert(baseInsert());
     expect(inserted.idempotent).toBe(false);
     expect(inserted.row.surface).toBe("shadow_action");
+    expect(inserted.row.action).toBe("pause");
     const fetched = await store.getById(inserted.row.id);
     expect(fetched?.id).toBe(inserted.row.id);
+    expect(fetched?.action).toBe("pause");
   });
 
   it("idempotency key collision returns existing row", async () => {
     const store = new PrismaRecommendationStore(prisma);
-    const baseArgs = {
-      orgId: "org-1", agentKey: "nova" as const,
-      intent: "recommendation.ad_set_pause", action: "pause",
-      humanSummary: "Pause it", confidence: 0.9, dollarsAtRisk: 10,
-      riskLevel: "low" as const,
-      parameters: {},
-      surface: "shadow_action" as const,
-      idempotencyKey: "test-key-2",
-      undoableUntil: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      presentation: { primaryLabel: "x", secondaryLabel: "x", dismissLabel: "x", dataLines: [] },
-    };
-    const first = await store.insert(baseArgs);
-    const second = await store.insert({ ...baseArgs, humanSummary: "different" });
+    const first = await store.insert(baseInsert({ idempotencyKey: "test-key-2" }));
+    const second = await store.insert(baseInsert({ idempotencyKey: "test-key-2", humanSummary: "different" }));
     expect(second.idempotent).toBe(true);
     expect(second.row.id).toBe(first.row.id);
     expect(second.row.humanSummary).toBe("Pause it"); // first write wins
@@ -1284,35 +1385,21 @@ describe("PrismaRecommendationStore", () => {
       },
     });
     const store = new PrismaRecommendationStore(prisma);
-    await store.insert({
-      orgId: "org-1", agentKey: "nova",
-      intent: "recommendation.ad_set_pause", action: "pause",
-      humanSummary: "rec row", confidence: 0.9, dollarsAtRisk: 10, riskLevel: "low",
-      parameters: {},
-      surface: "queue",
-      idempotencyKey: "rec-key-3",
-      undoableUntil: null,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      presentation: { primaryLabel: "x", secondaryLabel: "x", dismissLabel: "x", dataLines: [] },
-    });
+    await store.insert(baseInsert({
+      surface: "queue", undoableUntil: null,
+      idempotencyKey: "rec-key-3", humanSummary: "rec row",
+    }));
     const rows = await store.listBySurface({ orgId: "org-1", surface: "queue" });
     expect(rows.every((r) => r.intent.startsWith("recommendation."))).toBe(true);
     expect(rows.some((r) => r.humanSummary === "rec row")).toBe(true);
     expect(rows.some((r) => r.humanSummary === "workflow row")).toBe(false);
   });
 
-  it("applyAct updates row and writes AuditEntry atomically", async () => {
+  it("applyAct updates row and writes AuditEntry atomically with a unique entryHash", async () => {
     const store = new PrismaRecommendationStore(prisma);
-    const { row } = await store.insert({
-      orgId: "org-1", agentKey: "nova",
-      intent: "recommendation.ad_set_pause", action: "pause",
-      humanSummary: "x", confidence: 0.9, dollarsAtRisk: 100, riskLevel: "low",
-      parameters: {}, surface: "queue",
-      idempotencyKey: "rec-key-4",
-      undoableUntil: null,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      presentation: { primaryLabel: "x", secondaryLabel: "x", dismissLabel: "x", dataLines: [] },
-    });
+    const { row } = await store.insert(baseInsert({
+      surface: "queue", undoableUntil: null, idempotencyKey: "rec-key-4",
+    }));
     const updated = await store.applyAct({
       id: row.id,
       actor: { principalId: "user-1", type: "operator" },
@@ -1320,9 +1407,23 @@ describe("PrismaRecommendationStore", () => {
     });
     expect(updated.status).toBe("acted");
     expect(updated.actedBy).toBe("user-1");
+    expect(updated.note).toBe("noted");
     const audits = await prisma.auditEntry.findMany({ where: { entityId: row.id, eventType: "recommendation.act" } });
     expect(audits).toHaveLength(1);
-    expect(audits[0]?.summary).toBe("x");
+    expect(audits[0]?.summary).toBe("Pause it");
+    expect(audits[0]?.entryHash).toMatch(/^[0-9a-f]{64}$/); // proper sha256
+    expect(audits[0]?.entryHash).not.toBe("v1-no-chain");
+  });
+
+  it("two acts on different rows produce different entryHashes", async () => {
+    const store = new PrismaRecommendationStore(prisma);
+    const a = await store.insert(baseInsert({ surface: "queue", undoableUntil: null, idempotencyKey: "rec-key-5a" }));
+    const b = await store.insert(baseInsert({ surface: "queue", undoableUntil: null, idempotencyKey: "rec-key-5b" }));
+    await store.applyAct({ id: a.row.id, actor: { principalId: "u", type: "operator" }, fromStatus: "pending", toStatus: "acted", note: undefined });
+    await store.applyAct({ id: b.row.id, actor: { principalId: "u", type: "operator" }, fromStatus: "pending", toStatus: "dismissed", note: undefined });
+    const audits = await prisma.auditEntry.findMany({ where: { eventType: "recommendation.act" }, orderBy: { createdAt: "asc" } });
+    expect(audits).toHaveLength(2);
+    expect(audits[0]?.entryHash).not.toBe(audits[1]?.entryHash);
   });
 });
 ```
@@ -1340,16 +1441,27 @@ Expected: FAIL — `../recommendation-store.js` does not exist.
 Create `packages/db/src/recommendation-store.ts`:
 
 ```ts
+import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type {
+  AgentKey,
+  PersistRecommendationInput,
   Recommendation,
   RecommendationStatus,
   RecommendationStore,
   RecommendationSurface,
-  AgentKey,
 } from "@switchboard/core";
 
 const RECOMMENDATION_INTENT_PREFIX = "recommendation.";
+
+interface RecommendationParams {
+  __recommendation?: {
+    action?: string;
+    note?: string | null;
+    presentation?: unknown;
+  };
+  [key: string]: unknown;
+}
 
 function rowToRecommendation(row: {
   id: string;
@@ -1371,14 +1483,14 @@ function rowToRecommendation(row: {
   expiresAt: Date | null;
   undoableUntil: Date | null;
 }): Recommendation {
-  const params = (row.parameters ?? {}) as Record<string, unknown>;
-  const action = (params["__action"] as string) ?? "";
+  const params = (row.parameters ?? {}) as RecommendationParams;
+  const meta = params.__recommendation ?? {};
   return {
     id: row.id,
     orgId: row.organizationId,
     agentKey: row.sourceAgent as AgentKey,
     intent: row.intent,
-    action,
+    action: meta.action ?? "",
     humanSummary: row.humanSummary,
     confidence: row.confidence,
     dollarsAtRisk: row.dollarsAtRisk,
@@ -1391,22 +1503,29 @@ function rowToRecommendation(row: {
     sourceWorkflow: row.sourceWorkflow,
     actedBy: row.resolvedBy,
     actedAt: row.resolvedAt,
-    note: (params["__note"] as string | undefined) ?? null,
+    note: meta.note ?? null,
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     undoableUntil: row.undoableUntil,
-    updatedAt: row.createdAt,
   };
+}
+
+function buildEntryHash(args: {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  principalId: string;
+  ts: number;
+}): string {
+  return createHash("sha256")
+    .update([args.id, args.fromStatus, args.toStatus, args.principalId, args.ts, randomUUID()].join(":"))
+    .digest("hex");
 }
 
 export class PrismaRecommendationStore implements RecommendationStore {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async insert(input: Parameters<RecommendationStore["insert"]>[0]) {
-    // Stash `action` inside parameters so we can reconstruct the domain action without
-    // a new column. The presentation block lives in parameters.presentation.
-    const parameters = { ...input.parameters, __action: input.action };
-
+  async insert(input: PersistRecommendationInput) {
     try {
       const row = await this.prisma.pendingActionRecord.create({
         data: {
@@ -1414,7 +1533,7 @@ export class PrismaRecommendationStore implements RecommendationStore {
           status: "pending",
           intent: input.intent,
           targetEntities: (input.targetEntities ?? {}) as object,
-          parameters: parameters as object,
+          parameters: input.parameters as object,
           humanSummary: input.humanSummary,
           confidence: input.confidence,
           riskLevel: input.riskLevel,
@@ -1481,14 +1600,18 @@ export class PrismaRecommendationStore implements RecommendationStore {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.pendingActionRecord.findUnique({ where: { id: args.id } });
       if (!existing) throw new Error(`Recommendation not found: ${args.id}`);
-      const params = (existing.parameters ?? {}) as Record<string, unknown>;
+      const params = (existing.parameters ?? {}) as RecommendationParams;
+      const updatedMeta = {
+        ...(params.__recommendation ?? {}),
+        note: args.note ?? null,
+      };
       const updated = await tx.pendingActionRecord.update({
         where: { id: args.id },
         data: {
           status: args.toStatus,
           resolvedAt: new Date(),
           resolvedBy: args.actor.principalId,
-          parameters: { ...params, __note: args.note ?? null } as object,
+          parameters: { ...params, __recommendation: updatedMeta } as object,
         },
       });
       await tx.auditEntry.create({
@@ -1502,7 +1625,16 @@ export class PrismaRecommendationStore implements RecommendationStore {
           summary: existing.humanSummary,
           snapshot: { from: args.fromStatus, to: args.toStatus, note: args.note ?? null } as object,
           evidencePointers: [] as object,
-          entryHash: "v1-no-chain", // recommendation acts don't participate in the audit chain v1
+          // Recommendation acts do not participate in the audit chain (no previousEntryHash
+          // linkage). entryHash is a per-row sha256 over identifying fields plus a uuid to
+          // guarantee uniqueness even for back-to-back acts on the same row.
+          entryHash: buildEntryHash({
+            id: args.id,
+            fromStatus: args.fromStatus,
+            toStatus: args.toStatus,
+            principalId: args.actor.principalId,
+            ts: Date.now(),
+          }),
           organizationId: existing.organizationId,
         },
       });
@@ -1527,7 +1659,7 @@ pnpm --filter @switchboard/db build
 pnpm --filter @switchboard/db test recommendation-store
 ```
 
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 - [ ] **Step 6: Commit**
 
@@ -1537,18 +1669,26 @@ git commit -m "feat(db): PrismaRecommendationStore over PendingActionRecord
 
 intent prefix discriminator keeps recommendation rows disjoint from
 workflow rows. applyAct wraps the row update + AuditEntry insert in a
-single transaction. action/note stashed inside parameters JSON to keep
-the table narrow."
+single transaction. action/note/presentation namespaced under
+parameters.__recommendation to avoid collision with future emitter
+parameters. AuditEntry.entryHash is a per-row sha256 + uuid (not a
+chain hash) — recommendation acts do not participate in the audit
+chain in v1."
 ```
 
 ---
 
-## Task 8: `apps/api/src/routes/recommendations.ts` + tests + isolation test `[opus]`
+## Task 8: API routes + wiring in `app.ts` + route tests + isolation tests `[opus]`
 
 **Files:**
 - Create: `apps/api/src/routes/recommendations.ts`
+- Create: `apps/api/src/types/recommendations-fastify.d.ts`
+- Create: `apps/api/src/__tests__/helpers/seed-recommendation.ts`
 - Create: `apps/api/src/__tests__/routes/recommendations.test.ts`
 - Create: `apps/api/src/__tests__/routes/recommendations-isolation.test.ts`
+- Modify: `apps/api/src/app.ts` (instantiate store, decorate, register route)
+
+This task lands the route, the wiring in `app.ts`, and the test suite as one atomic green-on-commit unit. The tests cannot pass unless the wiring is in place, so they ship together. Implementation order inside the task: write tests → write wiring + route → run tests green → commit.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1729,7 +1869,7 @@ describe("recommendation route — multi-org isolation", () => {
 });
 ```
 
-Also create the seed helper `apps/api/src/__tests__/helpers/seed-recommendation.ts`:
+Also create the seed helper `apps/api/src/__tests__/helpers/seed-recommendation.ts`. Use a per-call counter to keep target ids deterministic — randomness in test fixtures makes flake harder to debug and undermines the idempotency-key test:
 
 ```ts
 import type { FastifyInstance } from "fastify";
@@ -1739,19 +1879,24 @@ interface SeedArgs {
   orgId: string;
   surface: "queue" | "shadow_action";
   ageHours?: number;
+  /** Optional unique suffix when a single test seeds many rows; default uses the call counter. */
+  targetSuffix?: string;
 }
+
+let seedCounter = 0;
 
 export async function seedRecommendation(app: FastifyInstance, args: SeedArgs) {
   const confidence = args.surface === "shadow_action" ? 0.95 : 0.6;
   const dollarsAtRisk = args.surface === "shadow_action" ? 10 : 100;
-  const result = await emitRecommendation(app.recommendationStore, {
+  const suffix = args.targetSuffix ?? `${args.orgId}-${args.surface}-${++seedCounter}`;
+  const result = await emitRecommendation(app.recommendationStore!, {
     orgId: args.orgId, agentKey: "nova",
     intent: "recommendation.ad_set_pause", action: "pause",
     humanSummary: `Test rec for ${args.orgId}`,
     confidence, dollarsAtRisk, riskLevel: "low",
     parameters: {},
     presentation: { primaryLabel: "Pause", secondaryLabel: "Reduce 50%", dismissLabel: "Dismiss", dataLines: [] },
-    targetEntities: { campaignId: `c-${Math.random()}` },
+    targetEntities: { campaignId: `c-${suffix}` },
   });
   if (result.surface === "dropped") throw new Error("seed must not drop");
 
@@ -1766,7 +1911,7 @@ export async function seedRecommendation(app: FastifyInstance, args: SeedArgs) {
 }
 ```
 
-(If `apps/api/src/__tests__/helpers/build-test-app.ts` does not yet expose `recommendationStore` on the FastifyInstance, this requires the Task 9 wiring to land first — Task 8 and Task 9 are tightly coupled. If you must run tests before Task 9, the helper can construct `new PrismaRecommendationStore(prisma)` inline.)
+The seed helper relies on `app.recommendationStore` being decorated — this is set up in Step 3 below as part of the same task.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -1826,7 +1971,6 @@ function rowToApiShape(row: Awaited<ReturnType<NonNullable<import("fastify").Fas
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt?.toISOString() ?? null,
     undoableUntil: row.undoableUntil?.toISOString() ?? null,
-    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -1925,7 +2069,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 };
 ```
 
-Also extend the FastifyInstance type — create or modify `apps/api/src/types/fastify.d.ts` (check if it exists; if not, use the existing types/decorations location):
+Also extend the FastifyInstance type. Create `apps/api/src/types/recommendations-fastify.d.ts`:
 
 ```ts
 import type { RecommendationStore } from "@switchboard/core";
@@ -1937,93 +2081,66 @@ declare module "fastify" {
 }
 ```
 
-- [ ] **Step 4: Run tests (after Task 9 wires the store) — for now, build only**
+(If a central `apps/api/src/types/fastify.d.ts` already exists, add the augmentation there instead — match the existing convention.)
 
-```bash
-pnpm --filter @switchboard/api build
-```
-
-Expected: typecheck passes (route compiles even though store isn't wired yet).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add apps/api/src/routes/recommendations.ts apps/api/src/__tests__/routes/recommendations.test.ts apps/api/src/__tests__/routes/recommendations-isolation.test.ts apps/api/src/__tests__/helpers/seed-recommendation.ts apps/api/src/types/
-git commit -m "feat(api): /api/recommendations routes (list + act)
-
-GET ?surface=queue|shadow_action with optional &since=24h.
-POST :id/act accepts primary|secondary|dismiss|confirm|undo with
-surface-action validity. 409 on terminal/expired/undo-window-closed
-includes the current row in the body so the frontend can converge."
-```
-
----
-
-## Task 9: Wire store + routes in `apps/api/src/app.ts` `[sonnet]`
-
-**Files:**
-- Modify: `apps/api/src/app.ts` (instantiate store, decorate, register route)
-
-- [ ] **Step 1: Locate the wiring patterns**
+- [ ] **Step 3: Wire the store + register the route in `app.ts`**
 
 Read these line ranges in `apps/api/src/app.ts` to understand the existing pattern:
-- Around line 240-490: where stores are instantiated (`new PrismaApprovalStore`, `new PrismaConversationStateStore`, etc.)
-- The route-registration block (search for `await app.register(approvalsRoutes` or similar)
+- Around line 240–490: where stores are instantiated (`new PrismaApprovalStore`, `new PrismaConversationStateStore`, etc.)
+- The route-registration block (search for `await app.register(approvalsRoutes`).
 
-- [ ] **Step 2: Add store import**
-
-At the top of `apps/api/src/app.ts`, find the existing block of `@switchboard/db` imports and add:
+At the top of `apps/api/src/app.ts`, find the existing block of `@switchboard/db` imports and append:
 
 ```ts
 import { PrismaRecommendationStore } from "@switchboard/db";
 ```
 
-Find the existing route imports and add:
+Find the existing route imports and append:
 
 ```ts
 import { recommendationsRoutes } from "./routes/recommendations.js";
 ```
 
-- [ ] **Step 3: Instantiate the store and decorate the app**
-
-In the section where other Prisma stores are instantiated (after `const prismaWorkTraceStore = ...`), add:
+In the section where other Prisma stores are instantiated (after `const prismaWorkTraceStore = ...` is a good anchor), add:
 
 ```ts
 const recommendationStore = new PrismaRecommendationStore(prismaClient);
 app.decorate("recommendationStore", recommendationStore);
 ```
 
-- [ ] **Step 4: Register the route**
-
-In the section where other routes register (alongside `await app.register(approvalsRoutes, { prefix: "/api/approvals" })` or equivalent), add:
+In the section where other routes register (alongside `await app.register(approvalsRoutes, { prefix: "/api/approvals" })`), add:
 
 ```ts
 await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
 ```
 
-(Match the prefix format the surrounding routes use.)
+Match the prefix format the surrounding routes use.
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 4: Run the full test suite (route + wiring all in place)**
 
 ```bash
 pnpm --filter @switchboard/api build
 pnpm --filter @switchboard/api test recommendations
 ```
 
-Expected: PASS — all 12 route tests + 2 isolation tests.
+Expected: PASS — all route tests + the 2 isolation tests.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/api/src/app.ts
-git commit -m "feat(api): wire PrismaRecommendationStore + recommendationsRoutes
+git add apps/api/src/routes/recommendations.ts apps/api/src/__tests__/routes/recommendations.test.ts apps/api/src/__tests__/routes/recommendations-isolation.test.ts apps/api/src/__tests__/helpers/seed-recommendation.ts apps/api/src/types/ apps/api/src/app.ts
+git commit -m "feat(api): /api/recommendations routes + app.ts wiring
 
-Closes the loop on Task 8 — the route + store + tests now run end-to-end."
+GET ?surface=queue|shadow_action with optional &since=24h.
+POST :id/act accepts primary|secondary|dismiss|confirm|undo with
+surface-action validity. 409 on terminal/expired/undo-window-closed
+includes the current row in the body so the frontend can converge.
+Route + store wiring + tests ship in one atomic green commit."
 ```
 
 ---
 
-## Task 10: Dashboard SDK types + query keys + governance.ts methods `[haiku]`
+## Task 9: Dashboard SDK types + query keys + governance.ts methods `[haiku]`
 
 **Files:**
 - Modify: `apps/dashboard/src/lib/api-client-types.ts`
@@ -2048,11 +2165,15 @@ export type RecommendationApiRow = {
   surface: "queue" | "shadow_action";
   status: "pending" | "acted" | "dismissed" | "confirmed" | "dismissed_by_undo" | "expired";
   parameters: {
-    presentation?: {
-      primaryLabel: string;
-      secondaryLabel: string;
-      dismissLabel: string;
-      dataLines: unknown[];
+    __recommendation?: {
+      action?: string;
+      note?: string | null;
+      presentation?: {
+        primaryLabel: string;
+        secondaryLabel: string;
+        dismissLabel: string;
+        dataLines: unknown[];
+      };
     };
     [key: string]: unknown;
   };
@@ -2065,7 +2186,6 @@ export type RecommendationApiRow = {
   createdAt: string;
   expiresAt: string | null;
   undoableUntil: string | null;
-  updatedAt: string;
 };
 
 export type RecommendationActAction = "primary" | "secondary" | "dismiss" | "confirm" | "undo";
@@ -2150,7 +2270,7 @@ hooks can swallow them as success."
 
 ---
 
-## Task 11: Dashboard proxy route with 409 propagation `[sonnet]`
+## Task 10: Dashboard proxy route with 409 propagation `[sonnet]`
 
 **Files:**
 - Create: `apps/dashboard/src/app/api/dashboard/recommendations/route.ts`
@@ -2298,7 +2418,7 @@ success."
 
 ---
 
-## Task 12: `useRecommendations()` hook + test `[haiku]`
+## Task 11: `useRecommendations()` hook + test `[haiku]`
 
 **Files:**
 - Create: `apps/dashboard/src/hooks/use-recommendations.ts`
@@ -2404,7 +2524,7 @@ Mirrors useApprovals — scoped key, 60s refetch, disabled when no session."
 
 ---
 
-## Task 13: `useShadowActions()` hook + test `[haiku]`
+## Task 12: `useShadowActions()` hook + test `[haiku]`
 
 **Files:**
 - Create: `apps/dashboard/src/hooks/use-shadow-actions.ts`
@@ -2500,7 +2620,7 @@ git commit -m "feat(dashboard): useShadowActions hook for the trail surface
 
 ---
 
-## Task 14: `useRecommendationAction()` hook + test (with 409 swallow) `[sonnet]`
+## Task 13: `useRecommendationAction()` hook + test (with 409 swallow) `[sonnet]`
 
 **Files:**
 - Create: `apps/dashboard/src/hooks/use-recommendation-action.ts`
@@ -2662,7 +2782,7 @@ animation already played and re-fetching will reflect reality."
 
 ---
 
-## Task 15: `mapRecommendationCard` + widen `mapQueue` + tests `[sonnet]`
+## Task 14: `mapRecommendationCard` + widen `mapQueue` + tests `[sonnet]`
 
 **Files:**
 - Modify: `apps/dashboard/src/components/console/console-mappers.ts`
@@ -2686,11 +2806,14 @@ const baseRec: RecommendationApiRow = {
   humanSummary: "Pause Whitening Ad Set B",
   confidence: 0.9,
   parameters: {
-    presentation: {
-      primaryLabel: "Pause",
-      secondaryLabel: "Reduce 50%",
-      dismissLabel: "Dismiss",
-      dataLines: [["text"]],
+    __recommendation: {
+      action: "pause",
+      presentation: {
+        primaryLabel: "Pause",
+        secondaryLabel: "Reduce 50%",
+        dismissLabel: "Dismiss",
+        dataLines: [["text"]],
+      },
     },
   },
   surface: "queue",
@@ -2770,11 +2893,15 @@ export type RecommendationApiRow = {
   humanSummary: string;
   confidence: number;
   parameters: {
-    presentation?: {
-      primaryLabel: string;
-      secondaryLabel: string;
-      dismissLabel: string;
-      dataLines: unknown[];
+    __recommendation?: {
+      action?: string;
+      note?: string | null;
+      presentation?: {
+        primaryLabel: string;
+        secondaryLabel: string;
+        dismissLabel: string;
+        dataLines: unknown[];
+      };
     };
     [key: string]: unknown;
   };
@@ -2797,7 +2924,7 @@ const FALLBACK_PRESENTATION = {
 };
 
 export function mapRecommendationCard(row: RecommendationApiRow, _now: Date): RecommendationCard {
-  const p = row.parameters?.presentation ?? FALLBACK_PRESENTATION;
+  const p = row.parameters?.__recommendation?.presentation ?? FALLBACK_PRESENTATION;
   return {
     kind: "recommendation",
     id: row.id,
@@ -2853,7 +2980,7 @@ emitter could ship a row without presentation block."
 
 ---
 
-## Task 16: `recommendation-card.tsx` handler swap + tests `[sonnet]`
+## Task 15: `recommendation-card.tsx` handler swap + tests `[sonnet]`
 
 **Files:**
 - Modify: `apps/dashboard/src/components/console/queue-cards/recommendation-card.tsx`
@@ -3074,7 +3201,7 @@ calls onResolve; non-409 errors render in a .qerror row."
 
 ---
 
-## Task 17: `queue-zone.tsx` 2-line additive + tests `[sonnet]`
+## Task 16: `queue-zone.tsx` 2-line additive + tests `[sonnet]`
 
 **Files:**
 - Modify: `apps/dashboard/src/components/console/zones/queue-zone.tsx`
@@ -3163,7 +3290,7 @@ initiative — see spec section 'Frontend wiring'."
 
 ---
 
-## Task 18: `<ShadowActionRow>` + `<ShadowActionList>` + CSS + tests `[sonnet]`
+## Task 17: `<ShadowActionRow>` + `<ShadowActionList>` + CSS + tests `[sonnet]`
 
 **Files:**
 - Create: `apps/dashboard/src/components/console/zones/shadow-action-row.tsx`
@@ -3298,7 +3425,7 @@ export function ShadowActionList() {
   if (rows.length === 0) return null;
   return (
     <section aria-label="Auto-actions" className="shadow-actions">
-      <div className="label">Nova handled — confirm or undo</div>
+      <div className="label">Nova flagged — confirm or undo</div>
       {rows.map((row) => (
         <ShadowActionRow
           key={row.id}
@@ -3429,7 +3556,7 @@ co-located so the merge surface is zero."
 
 ---
 
-## Task 19: ad-optimizer audit-runner sink + AgentEvent rollup + tests `[opus]`
+## Task 18: ad-optimizer audit-runner sink + AgentEvent rollup + tests `[opus]`
 
 **Files:**
 - Create: `packages/ad-optimizer/src/recommendation-sink.ts`
@@ -3729,7 +3856,7 @@ records the count of dropped (sub-threshold) recs per audit run."
 
 ---
 
-## Task 20: Seed script `scripts/seed-recommendation.ts` `[haiku]`
+## Task 19: Seed script `scripts/seed-recommendation.ts` `[haiku]`
 
 **Files:**
 - Create: `scripts/seed-recommendation.ts`
@@ -3850,7 +3977,7 @@ Three canned recs (nova/alex/mira) so /console renders without an audit."
 
 ---
 
-## Task 21: DOCTRINE.md Legacy Bridge Registry entry `[haiku]`
+## Task 20: DOCTRINE.md Legacy Bridge Registry entry `[haiku]`
 
 **Files:**
 - Modify: `docs/DOCTRINE.md`
@@ -3876,7 +4003,7 @@ PlatformIngress.submit()."
 
 ---
 
-## Task 22: Phase 3 dry-run merge verification `[sonnet]`
+## Task 21: Phase 3 dry-run merge verification `[sonnet]`
 
 **Files:** none (verification step)
 
@@ -3937,30 +4064,34 @@ This task does not commit. It exits with confidence that the implementation bran
 Performed during plan authoring. Findings:
 
 **1. Spec coverage:** Cross-checked each spec section against the task list:
-- Storage (PendingActionRecord migration + JSON shape) → Task 1, 7
-- Core surface (router/emit/act) → Tasks 3, 4, 5, 6
+- Storage (PendingActionRecord migration + JSON shape) → Tasks 1, 7
+- Schemas (Zod + shared types) → Task 2
+- Core surface (router/emit/act + barrel) → Tasks 3, 4, 5, 6
 - Persistence implementation → Task 7
-- API contract (GET + POST + 409 propagation) → Task 8
-- App wiring → Task 9
-- Dashboard SDK + query keys + types → Task 10
-- Dashboard proxy + 409 propagation → Task 11
-- useRecommendations / useShadowActions / useRecommendationAction hooks → Tasks 12, 13, 14
-- Mappers + queue widening → Task 15
-- recommendation-card.tsx surgical swap → Task 16
-- queue-zone.tsx 2-line additive → Task 17
-- ShadowActionList component → Task 18
-- ad-optimizer audit-runner sink → Task 19
-- Seed script → Task 20
-- DOCTRINE legacy-bridge registry → Task 21
-- Phase 3 cross-stream merge verification → Task 22
+- API contract + app wiring (route + tests in one atomic commit) → Task 8
+- Dashboard SDK + query keys + types → Task 9
+- Dashboard proxy + 409 propagation → Task 10
+- useRecommendations / useShadowActions / useRecommendationAction hooks → Tasks 11, 12, 13
+- Mappers + queue widening → Task 14
+- recommendation-card.tsx surgical swap → Task 15
+- queue-zone.tsx 2-line additive → Task 16
+- ShadowActionList component → Task 17
+- ad-optimizer audit-runner sink → Task 18
+- Seed script → Task 19
+- DOCTRINE legacy-bridge registry → Task 20
+- Phase 3 cross-stream merge verification → Task 21
 
 No spec section is uncovered.
 
 **2. Placeholder scan:** No "TBD", "TODO", "implement later", or "similar to Task N" references found. All code blocks contain runnable code.
 
-**3. Type consistency:** `RecommendationApiRow` defined in Task 10 matches the shape used in Task 15 (mapper). `RecommendationStore` interface defined in Task 4 matches the implementation in Task 7 and the consumer signatures in Tasks 5, 6, 8. `RecommendationAction` enum (5 values) matches across schemas (Task 2), core (Task 6), API (Task 8), SDK (Task 10), and hook (Task 14). Surface enum (3 values) is consistent. `Recommendation` type fields match between core (Task 4), store (Task 7), and API row (Task 10) — except `updatedAt` on the in-memory store is set to `new Date()` while the Prisma store reads `createdAt` for the field (no `updatedAt` column on `PendingActionRecord`). This is acceptable: the field is not load-bearing for v1 (no consumer reads it).
+**3. Type consistency:** `RecommendationApiRow` defined in Task 9 matches the shape used in Task 14 (mapper). `RecommendationStore` interface defined in Task 4 (with `PersistRecommendationInput` as the `insert()` arg) matches the implementation in Task 7 and the call signature in Task 5. `RecommendationAction` enum (5 values) matches across schemas (Task 2), core (Task 6), API (Task 8), SDK (Task 9), and hook (Task 13). Surface enum (3 values) is consistent. `Recommendation` type fields match between core (Task 4), store (Task 7), and API row (Task 9) — `updatedAt` is omitted everywhere (PendingActionRecord has no such column).
 
-**4. Frontend protection:** The plan touches only the spec-allowed files. The single `queue-zone.tsx` exemption is explicit in Task 17 and labeled as such. No task touches `agent-strip.tsx`, `nova-panel.tsx`, `console-view.tsx`, or `console.css`.
+**4. Frontend protection:** The plan touches only the spec-allowed files. The single `queue-zone.tsx` exemption is explicit in Task 16 and labeled as such. No task touches `agent-strip.tsx`, `nova-panel.tsx`, `console-view.tsx`, or `console.css`.
+
+**5. Typecheck-clean discipline:** Every task ends in a green commit. Task 4's barrel only re-exports symbols that exist; Tasks 5 and 6 each append their own export to the barrel as part of their TDD cycle.
+
+**6. Task atomicity:** Tests do not depend on later tasks. Task 8 ships the route + the `app.ts` wiring + the tests as a single commit so the test suite can pass on first run.
 
 ---
 
