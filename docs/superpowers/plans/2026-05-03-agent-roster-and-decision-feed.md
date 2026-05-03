@@ -525,13 +525,27 @@ pnpm typecheck && pnpm test
 
 Expected: all green.
 
-- [ ] **Step 2: Confirm no stale names remain**
+- [ ] **Step 2: Confirm no stale names remain in runtime code + active product docs**
 
 ```bash
-grep -rnE '"(nova|jordan|Nova|Jordan)"' packages/ apps/ docs/ 2>/dev/null | grep -v dist | grep -v node_modules
+# Runtime: source code, schemas, tests — must be empty.
+grep -rnE '"(nova|jordan|Nova|Jordan)"' \
+  packages/schemas/src packages/core/src packages/db/src \
+  apps/api/src apps/dashboard/src \
+  2>/dev/null | grep -v dist | grep -v node_modules
+
+# Active design specs + plans — should be empty (already updated in PR 1).
+grep -rnE '\b(Nova|Jordan)\b' docs/superpowers/specs docs/superpowers/plans 2>/dev/null
 ```
 
-Expected: empty (or only false positives in unrelated contexts — review each).
+Expected: both empty (or only false positives — review each).
+
+**Do NOT touch:**
+
+- `packages/db/prisma/migrations/` — historical migration SQL is immutable; renaming text in a shipped migration would change its hash and break replay.
+- `docs/audit/`, `.audit/`, archived design docs (`docs/superpowers/specs/archive/`, etc.) — historical references to Nova/Jordan are correct context and should stay.
+- Comments in `packages/db/prisma/seed.ts` that explain the rename — only fixture _values_ that get persisted matter (`agentKey: "nova"` is wrong; a comment mentioning "renamed from Nova" is fine).
+- Generated artifacts: `.next/`, `dist/`, `*.tsbuildinfo`, `*.d.ts` shipped from build.
 
 - [ ] **Step 3: Push the branch + open PR 1**
 
@@ -1187,7 +1201,9 @@ grep -rn "prisma.organizationConfig.upsert\|prisma.organizationConfig.create" pa
 
 Note every match — Step 2 must update each.
 
-- [ ] **Step 2: For each match, add a `seedOrgDayOneAgents` call after the upsert + set `useAgentFirstNav: true` for new orgs**
+- [ ] **Step 2: For each match, add `seedOrgDayOneAgents` after the upsert + set `useAgentFirstNav: true` ONLY in the `create` branch**
+
+> **Critical safety rule.** `useAgentFirstNav: true` goes ONLY in `create`. It must NEVER appear in the `update` branch of any upsert, and you must NOT add it to a separate `prisma.organizationConfig.update(...)` call. Existing orgs (already-seen customers) keep `false` until Phase D5 explicitly migrates them. Flipping nav for a live customer mid-session is the kind of breakage we want to make impossible.
 
 For `packages/db/prisma/seed.ts` (around line 61), modify:
 
@@ -1197,9 +1213,9 @@ For `packages/db/prisma/seed.ts` (around line 61), modify:
     create: {
       id: "org_dev",
       name: "Dev Organization",
-+     useAgentFirstNav: true,
++     useAgentFirstNav: true,   // create-only — never in update
     },
-    update: {},
+    update: {},                  // intentionally empty / does NOT touch useAgentFirstNav
   });
 + await seedOrgDayOneAgents(prisma, "org_dev");
   console.log("Seeded organization config: org_dev");
@@ -1213,8 +1229,9 @@ import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
 
 For `apps/api/src/routes/organizations.ts`, find the `prisma.organizationConfig.upsert` call and:
 
-- In the `create` branch, add `useAgentFirstNav: true` (so newly created orgs get the new nav).
-- After the upsert resolves, if the operation was a `create` (not `update`), call `await seedOrgDayOneAgents(app.prisma, orgId)`. The simplest approach: always call `seedOrgDayOneAgents` after the upsert — the helper is idempotent so re-runs on existing orgs are safe.
+- In the `create` branch only, add `useAgentFirstNav: true` (so newly created orgs get the new nav).
+- The `update` branch must NOT mention `useAgentFirstNav`. If you add it there, every existing customer flips on their next config write — exactly the regression to prevent.
+- After the upsert resolves, call `await seedOrgDayOneAgents(app.prisma, orgId)`. The helper is idempotent so re-runs on existing orgs are safe (it only adds rows that don't exist; it never changes existing enablement).
 
 ```diff
 + import { seedOrgDayOneAgents } from "@switchboard/db";
@@ -1224,15 +1241,39 @@ For `apps/api/src/routes/organizations.ts`, find the `prisma.organizationConfig.
     create: {
       id: orgId,
       name: body.name,
-+     useAgentFirstNav: true,
++     useAgentFirstNav: true,         // create-only — never in update
       // …other create fields
     },
     update: {
-      // …existing update fields (do NOT overwrite useAgentFirstNav on update)
+      // …existing update fields
+      // INTENTIONALLY no useAgentFirstNav here — must not flip existing orgs.
     },
   });
 + await seedOrgDayOneAgents(app.prisma, orgId);
 ```
+
+**Verify the constraint with a test before committing.** Add to whichever existing test covers the org-creation/upsert path (or create `apps/api/src/__tests__/api-organizations-flag-safety.test.ts`):
+
+```ts
+it("does NOT change useAgentFirstNav on subsequent upserts (existing orgs are not flipped)", async () => {
+  // 1. Existing org in DB starts with the legacy default (false).
+  await ctx.app.prisma!.organizationConfig.create({
+    data: { id: "org-existing", name: "Existing Co", useAgentFirstNav: false },
+  });
+  // 2. Re-running an upsert for the same id (e.g. config update) must NOT flip the flag.
+  await ctx.app.inject({
+    method: "POST",
+    url: "/api/dashboard/organizations",
+    payload: { id: "org-existing", name: "Existing Co (renamed)" },
+  });
+  const after = await ctx.app.prisma!.organizationConfig.findUnique({
+    where: { id: "org-existing" },
+  });
+  expect(after?.useAgentFirstNav).toBe(false);
+});
+```
+
+(If the route shape doesn't accept that payload, adapt — the assertion is the contract, not the request shape.)
 
 - [ ] **Step 3: Typecheck + run the seed test path**
 
@@ -3342,6 +3383,14 @@ git commit -m "feat(dashboard): mapToDecisionCard view-model bridge for B2 cards
 ---
 
 ### Task 4.4: Create the action dispatcher
+
+> **⚠ Handoff primary action requires a composer in B2 — do NOT render a one-click button.**
+>
+> The handoff primary action (`"Take this one"`) maps to `POST /api/escalations/:id/reply`, which **requires a non-empty `message` body** (the operator's reply to the contact). If the dispatcher is called with no `payload.message`, it sends an empty string — which produces a broken reply visible to the customer.
+>
+> Slice A's dispatcher accepts the optional `message` payload to lock the contract. Slice B2's Decision Card UI **must** open an inline composer when the operator clicks "Take this one" on a handoff card and gather the reply text before calling the dispatcher. This is non-negotiable for the handoff kind.
+>
+> The dispatcher test in Step 1 below explicitly asserts the empty-string fallback fires — that's the _contract behavior_ (Slice A defines what happens; B2 prevents it from happening). Do not change that behavior in Slice A.
 
 **Files:**
 
