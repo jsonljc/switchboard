@@ -42,6 +42,11 @@ export async function POST(request: NextRequest) {
     if (!body.recommendationId) {
       return NextResponse.json({ error: "recommendationId required" }, { status: 400 });
     }
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.recommendationId)
+    ) {
+      return NextResponse.json({ error: "recommendationId must be a UUID" }, { status: 400 });
+    }
     if (!body.action) {
       return NextResponse.json({ error: "action required" }, { status: 400 });
     }

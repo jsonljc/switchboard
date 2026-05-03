@@ -28,19 +28,25 @@ describe("recommendations dashboard proxy", () => {
   });
 
   it("POST reshapes recommendationId and propagates 200", async () => {
-    const actOnRecommendation = vi
-      .fn()
-      .mockResolvedValue({ status: 200, body: { recommendation: { id: "r-1", status: "acted" } } });
+    const actOnRecommendation = vi.fn().mockResolvedValue({
+      status: 200,
+      body: { recommendation: { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", status: "acted" } },
+    });
     (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       actOnRecommendation,
     });
     const req = new Request("http://x/api/dashboard/recommendations", {
       method: "POST",
-      body: JSON.stringify({ recommendationId: "r-1", action: "primary" }),
+      body: JSON.stringify({
+        recommendationId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        action: "primary",
+      }),
     });
     const res = await POST(req as never);
     expect(res.status).toBe(200);
-    expect(actOnRecommendation).toHaveBeenCalledWith("r-1", { action: "primary" });
+    expect(actOnRecommendation).toHaveBeenCalledWith("a1b2c3d4-e5f6-7890-abcd-ef1234567890", {
+      action: "primary",
+    });
     const body = await res.json();
     expect(body.recommendation.status).toBe("acted");
   });
@@ -48,14 +54,20 @@ describe("recommendations dashboard proxy", () => {
   it("POST propagates 409 status from upstream", async () => {
     const actOnRecommendation = vi.fn().mockResolvedValue({
       status: 409,
-      body: { error: "already_terminal", recommendation: { id: "r-1", status: "acted" } },
+      body: {
+        error: "already_terminal",
+        recommendation: { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", status: "acted" },
+      },
     });
     (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       actOnRecommendation,
     });
     const req = new Request("http://x/api/dashboard/recommendations", {
       method: "POST",
-      body: JSON.stringify({ recommendationId: "r-1", action: "primary" }),
+      body: JSON.stringify({
+        recommendationId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        action: "primary",
+      }),
     });
     const res = await POST(req as never);
     expect(res.status).toBe(409);
@@ -70,7 +82,10 @@ describe("recommendations dashboard proxy", () => {
     });
     const req = new Request("http://x/api/dashboard/recommendations", {
       method: "POST",
-      body: JSON.stringify({ recommendationId: "r-1", action: "primary" }),
+      body: JSON.stringify({
+        recommendationId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        action: "primary",
+      }),
     });
     const res = await POST(req as never);
     expect(res.status).toBe(500);

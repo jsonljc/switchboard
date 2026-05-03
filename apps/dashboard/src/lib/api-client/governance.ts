@@ -276,7 +276,11 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     id: string,
     body: { action: RecommendationActAction; note?: string },
   ): Promise<{ status: number; body: unknown }> {
-    const res = await fetch(`${this.baseUrl}/api/recommendations/${id}/act`, {
+    // Validate id is a UUID — defends against SSRF / path traversal via caller-controlled URL segment.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      throw new Error(`Invalid recommendation id: ${id}`);
+    }
+    const res = await fetch(`${this.baseUrl}/api/recommendations/${encodeURIComponent(id)}/act`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
