@@ -1683,213 +1683,125 @@ chain in v1."
 **Files:**
 - Create: `apps/api/src/routes/recommendations.ts`
 - Create: `apps/api/src/types/recommendations-fastify.d.ts`
-- Create: `apps/api/src/__tests__/helpers/seed-recommendation.ts`
-- Create: `apps/api/src/__tests__/routes/recommendations.test.ts`
-- Create: `apps/api/src/__tests__/routes/recommendations-isolation.test.ts`
-- Modify: `apps/api/src/app.ts` (instantiate store, decorate, register route)
+- Create: `apps/api/src/__tests__/api-recommendations.test.ts`
+- Create: `apps/api/src/__tests__/api-recommendations-isolation.test.ts`
+- Modify: `apps/api/src/__tests__/test-server.ts` (register an in-memory recommendation store)
+- Modify: `apps/api/src/app.ts` (instantiate Prisma store, decorate, register route)
+- Modify: `packages/core/src/recommendations/__tests__/in-memory-store.ts` → split into a reusable test fixture exported from a test-utilities path that `test-server.ts` can import
 
-This task lands the route, the wiring in `app.ts`, and the test suite as one atomic green-on-commit unit. The tests cannot pass unless the wiring is in place, so they ship together. Implementation order inside the task: write tests → write wiring + route → run tests green → commit.
+This task lands the route, the test-server in-memory store, the prod-side `app.ts` wiring, and the test suite as one atomic green-on-commit unit. The tests cannot pass unless the wiring + in-memory store are in place, so they all ship together. Implementation order: extend test-server → write failing tests → write route + prod wiring → run tests green → commit.
 
-- [ ] **Step 1: Write the failing tests**
+**Codebase conventions confirmed before writing this task:**
+- API tests live FLAT under `apps/api/src/__tests__/api-X.test.ts` (mirror `api-approvals.test.ts` exactly). No `routes/` or `helpers/` subdirs.
+- The test helper is `buildTestServer()` from `./test-server.js`, returning `TestContext`. Tests destructure `{ app } = await buildTestServer()`.
+- The test server uses **in-memory storage everywhere** (`createInMemoryStorage()`, `InMemoryWorkTraceStore`). There is no Prisma in the test path. Routes read whatever store is decorated on the FastifyInstance — that is the seam this task uses.
 
-Create `apps/api/src/__tests__/routes/recommendations.test.ts`. The test file uses the standard test-app helper convention (mirror what `approvals.test.ts` uses in the same directory — read it first if unsure). The file:
+- [ ] **Step 1: Make the in-memory store reusable**
+
+The `createInMemoryStore()` fixture in Task 5 lives under `__tests__/`, which the api package can't import. Move it to a non-test location so it can be shared.
+
+Move (don't delete):
+- From: `packages/core/src/recommendations/__tests__/in-memory-store.ts`
+- To: `packages/core/src/recommendations/in-memory-store.ts`
+
+Update imports in the existing core tests (`emit.test.ts`, `act.test.ts`):
 
 ```ts
-import { describe, expect, it, beforeEach } from "vitest";
-import { buildTestApp } from "../helpers/build-test-app.js";
-import { seedRecommendation } from "../helpers/seed-recommendation.js";
-
-describe("GET /api/recommendations", () => {
-  it("lists queue-surface pending recommendations for the auth org", async () => {
-    const app = await buildTestApp({ orgId: "org-1" });
-    await seedRecommendation(app, { orgId: "org-1", surface: "queue" });
-    await seedRecommendation(app, { orgId: "org-1", surface: "shadow_action" });
-    const res = await app.inject({ method: "GET", url: "/api/recommendations?surface=queue" });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.recommendations).toHaveLength(1);
-    expect(body.recommendations[0].surface).toBe("queue");
-  });
-
-  it("lists shadow-surface with since-filter", async () => {
-    const app = await buildTestApp({ orgId: "org-1" });
-    await seedRecommendation(app, { orgId: "org-1", surface: "shadow_action", ageHours: 1 });
-    await seedRecommendation(app, { orgId: "org-1", surface: "shadow_action", ageHours: 48 });
-    const res = await app.inject({ method: "GET", url: "/api/recommendations?surface=shadow_action&since=24h" });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().recommendations).toHaveLength(1);
-  });
-
-  it("400 on missing surface", async () => {
-    const app = await buildTestApp({ orgId: "org-1" });
-    const res = await app.inject({ method: "GET", url: "/api/recommendations" });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it("400 on invalid surface value", async () => {
-    const app = await buildTestApp({ orgId: "org-1" });
-    const res = await app.inject({ method: "GET", url: "/api/recommendations?surface=nope" });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
-describe("POST /api/recommendations/:id/act", () => {
-  it("primary on queue card returns 200 and acted row", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "queue" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "primary" },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().recommendation.status).toBe("acted");
-  });
-
-  it("dismiss returns 200 and dismissed row", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "queue" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "dismiss" },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().recommendation.status).toBe("dismissed");
-  });
-
-  it("confirm on shadow card returns 200 and confirmed row", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "shadow_action" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "confirm" },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().recommendation.status).toBe("confirmed");
-  });
-
-  it("undo on shadow card returns 200 and dismissed_by_undo", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "shadow_action" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "undo" },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().recommendation.status).toBe("dismissed_by_undo");
-  });
-
-  it("400 on confirm against queue card", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "queue" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "confirm" },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it("400 on primary against shadow card", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "shadow_action" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "primary" },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it("409 on already-terminal second act", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "queue" });
-    await app.inject({ method: "POST", url: `/api/recommendations/${rec.id}/act`, payload: { action: "primary" } });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "dismiss" },
-    });
-    expect(res.statusCode).toBe(409);
-    expect(res.json().recommendation.status).toBe("acted");
-  });
-
-  it("404 on missing id", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/missing-id/act`,
-      payload: { action: "primary" },
-    });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it("400 on invalid action value", async () => {
-    const app = await buildTestApp({ orgId: "org-1", principalId: "user-1" });
-    const rec = await seedRecommendation(app, { orgId: "org-1", surface: "queue" });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "nope" },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-});
+import { createInMemoryStore } from "../in-memory-store.js";  // was "./in-memory-store.js"
 ```
 
-Create `apps/api/src/__tests__/routes/recommendations-isolation.test.ts`:
+Append the export to `packages/core/src/recommendations/index.ts`:
 
 ```ts
-import { describe, expect, it } from "vitest";
-import { buildTestApp } from "../helpers/build-test-app.js";
-import { seedRecommendation } from "../helpers/seed-recommendation.js";
-
-describe("recommendation route — multi-org isolation", () => {
-  it("org A cannot list org B recommendations", async () => {
-    const appA = await buildTestApp({ orgId: "org-a" });
-    await seedRecommendation(appA, { orgId: "org-b", surface: "queue" });
-    const res = await appA.inject({ method: "GET", url: "/api/recommendations?surface=queue" });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().recommendations).toHaveLength(0);
-  });
-
-  it("org A cannot act on org B recommendation (404 hides existence)", async () => {
-    const appA = await buildTestApp({ orgId: "org-a", principalId: "user-a" });
-    const rec = await seedRecommendation(appA, { orgId: "org-b", surface: "queue" });
-    const res = await appA.inject({
-      method: "POST",
-      url: `/api/recommendations/${rec.id}/act`,
-      payload: { action: "primary" },
-    });
-    expect([403, 404]).toContain(res.statusCode);
-  });
-});
+export { createInMemoryRecommendationStore } from "./in-memory-store.js";
 ```
 
-Also create the seed helper `apps/api/src/__tests__/helpers/seed-recommendation.ts`. Use a per-call counter to keep target ids deterministic — randomness in test fixtures makes flake harder to debug and undermines the idempotency-key test:
+Rename the function inside `in-memory-store.ts` so it has a clear name when imported from outside:
 
 ```ts
+export function createInMemoryRecommendationStore(): RecommendationStore & { rows: Recommendation[]; byKey: Map<string, Recommendation> } {
+  // (body unchanged from Task 5)
+}
+```
+
+Update Task 5/6 test imports to use the new name:
+
+```ts
+import { createInMemoryRecommendationStore } from "../in-memory-store.js";
+const store = createInMemoryRecommendationStore();
+```
+
+Verify:
+
+```bash
+pnpm --filter @switchboard/core build
+pnpm --filter @switchboard/core test
+```
+
+Expected: all core tests still pass.
+
+- [ ] **Step 2: Wire the in-memory store into `test-server.ts`**
+
+Edit `apps/api/src/__tests__/test-server.ts`:
+
+```ts
+import { createInMemoryRecommendationStore } from "@switchboard/core";
+```
+
+Inside `buildTestServer`, after the existing in-memory storage construction, instantiate and decorate:
+
+```ts
+const recommendationStore = createInMemoryRecommendationStore();
+app.decorate("recommendationStore", recommendationStore);
+```
+
+Add the same Fastify augmentation already used elsewhere in `test-server.ts` so TypeScript knows about the decoration:
+
+```ts
+declare module "fastify" {
+  interface FastifyInstance {
+    // (existing fields...)
+    recommendationStore: import("@switchboard/core").RecommendationStore;
+  }
+}
+```
+
+(Use the same augmentation block that's already there — append `recommendationStore` to it.)
+
+Register the route alongside the existing `app.register(approvalsRoutes, ...)`:
+
+```ts
+import { recommendationsRoutes } from "../routes/recommendations.js";
+// ...
+await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
+```
+
+(The route file itself is created in Step 4; the import will fail until Step 4 lands. That's fine within a single task.)
+
+- [ ] **Step 3: Write the failing tests**
+
+Create `apps/api/src/__tests__/api-recommendations.test.ts`. Mirror the structure of `api-approvals.test.ts` exactly. The seed helper is **inlined at the top of the file** — your codebase has no `__tests__/helpers/` directory and tests are flat. The in-memory store does not have a backdate hook, so the `ageHours` case mutates the row directly through `app.recommendationStore` rather than via Prisma:
+
+```ts
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { buildTestServer, type TestContext } from "./test-server.js";
 import { emitRecommendation } from "@switchboard/core";
+
+let seedCounter = 0;
 
 interface SeedArgs {
   orgId: string;
   surface: "queue" | "shadow_action";
   ageHours?: number;
-  /** Optional unique suffix when a single test seeds many rows; default uses the call counter. */
   targetSuffix?: string;
 }
 
-let seedCounter = 0;
-
-export async function seedRecommendation(app: FastifyInstance, args: SeedArgs) {
+async function seedRecommendation(app: FastifyInstance, args: SeedArgs) {
   const confidence = args.surface === "shadow_action" ? 0.95 : 0.6;
   const dollarsAtRisk = args.surface === "shadow_action" ? 10 : 100;
   const suffix = args.targetSuffix ?? `${args.orgId}-${args.surface}-${++seedCounter}`;
-  const result = await emitRecommendation(app.recommendationStore!, {
+  const result = await emitRecommendation(app.recommendationStore, {
     orgId: args.orgId, agentKey: "nova",
     intent: "recommendation.ad_set_pause", action: "pause",
     humanSummary: `Test rec for ${args.orgId}`,
@@ -1901,19 +1813,213 @@ export async function seedRecommendation(app: FastifyInstance, args: SeedArgs) {
   if (result.surface === "dropped") throw new Error("seed must not drop");
 
   if (args.ageHours) {
-    // Backdate createdAt for since-filter tests.
-    await app.prisma!.pendingActionRecord.update({
-      where: { id: result.id },
-      data: { createdAt: new Date(Date.now() - args.ageHours * 60 * 60 * 1000) },
-    });
+    // Backdate via the in-memory store's exposed rows for since-filter tests.
+    // Cast through the in-memory shape; PrismaRecommendationStore (prod) wouldn't expose this
+    // but the test server registers createInMemoryRecommendationStore.
+    const store = app.recommendationStore as unknown as { rows: Array<{ id: string; createdAt: Date }> };
+    const row = store.rows.find((r) => r.id === result.id);
+    if (row) row.createdAt = new Date(Date.now() - args.ageHours * 60 * 60 * 1000);
   }
   return { id: result.id, surface: result.surface };
 }
+
+describe("Recommendations API", () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    const ctx: TestContext = await buildTestServer();
+    app = ctx.app;
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  describe("GET /api/recommendations", () => {
+    it("lists queue-surface pending recommendations for the org", async () => {
+      await seedRecommendation(app, { orgId: "default", surface: "queue" });
+      await seedRecommendation(app, { orgId: "default", surface: "shadow_action" });
+      const res = await app.inject({ method: "GET", url: "/api/recommendations?surface=queue" });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.recommendations).toHaveLength(1);
+      expect(body.recommendations[0].surface).toBe("queue");
+    });
+
+    it("lists shadow-surface with since-filter", async () => {
+      await seedRecommendation(app, { orgId: "default", surface: "shadow_action", ageHours: 1 });
+      await seedRecommendation(app, { orgId: "default", surface: "shadow_action", ageHours: 48 });
+      const res = await app.inject({ method: "GET", url: "/api/recommendations?surface=shadow_action&since=24h" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().recommendations).toHaveLength(1);
+    });
+
+    it("400 on missing surface", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/recommendations" });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("400 on invalid surface value", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/recommendations?surface=nope" });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe("POST /api/recommendations/:id/act", () => {
+    it("primary on queue card returns 200 and acted row", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "queue" });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "primary" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().recommendation.status).toBe("acted");
+    });
+
+    it("dismiss returns 200 and dismissed row", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "queue" });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "dismiss" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().recommendation.status).toBe("dismissed");
+    });
+
+    it("confirm on shadow card returns 200 and confirmed row", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "shadow_action" });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "confirm" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().recommendation.status).toBe("confirmed");
+    });
+
+    it("undo on shadow card returns 200 and dismissed_by_undo", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "shadow_action" });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "undo" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().recommendation.status).toBe("dismissed_by_undo");
+    });
+
+    it("400 on confirm against queue card", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "queue" });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "confirm" },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("400 on primary against shadow card", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "shadow_action" });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "primary" },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("409 on already-terminal second act", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "queue" });
+      await app.inject({ method: "POST", url: `/api/recommendations/${rec.id}/act`, payload: { action: "primary" } });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "dismiss" },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().recommendation.status).toBe("acted");
+    });
+
+    it("404 on missing id", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/missing-id/act`,
+        payload: { action: "primary" },
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it("400 on invalid action value", async () => {
+      const rec = await seedRecommendation(app, { orgId: "default", surface: "queue" });
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/recommendations/${rec.id}/act`,
+        payload: { action: "nope" },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+});
 ```
 
-The seed helper relies on `app.recommendationStore` being decorated — this is set up in Step 3 below as part of the same task.
+Create `apps/api/src/__tests__/api-recommendations-isolation.test.ts`:
 
-- [ ] **Step 2: Run tests to verify they fail**
+```ts
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { buildTestServer, type TestContext } from "./test-server.js";
+import { emitRecommendation } from "@switchboard/core";
+
+describe("Recommendations API — multi-org isolation", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    const ctx: TestContext = await buildTestServer();
+    app = ctx.app;
+  });
+  afterEach(async () => {
+    await app.close();
+  });
+
+  // The test server runs requests as orgId "default" (per its auth disabled / seeded identity).
+  // Seed a row with a different orgId and assert it cannot leak.
+
+  it("requests as default cannot list rows belonging to org-b", async () => {
+    await emitRecommendation(app.recommendationStore, {
+      orgId: "org-b", agentKey: "nova",
+      intent: "recommendation.ad_set_pause", action: "pause",
+      humanSummary: "leakage canary", confidence: 0.6, dollarsAtRisk: 100, riskLevel: "low",
+      parameters: {},
+      presentation: { primaryLabel: "Pause", secondaryLabel: "Reduce 50%", dismissLabel: "Dismiss", dataLines: [] },
+      targetEntities: { campaignId: "iso-canary" },
+    });
+    const res = await app.inject({ method: "GET", url: "/api/recommendations?surface=queue" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().recommendations.find((r: { humanSummary: string }) => r.humanSummary === "leakage canary")).toBeUndefined();
+  });
+
+  it("requests as default cannot act on org-b row (404 hides existence)", async () => {
+    const seeded = await emitRecommendation(app.recommendationStore, {
+      orgId: "org-b", agentKey: "nova",
+      intent: "recommendation.ad_set_pause", action: "pause",
+      humanSummary: "x", confidence: 0.6, dollarsAtRisk: 100, riskLevel: "low",
+      parameters: {},
+      presentation: { primaryLabel: "Pause", secondaryLabel: "Reduce 50%", dismissLabel: "Dismiss", dataLines: [] },
+      targetEntities: { campaignId: "iso-canary-2" },
+    });
+    if (seeded.surface === "dropped") throw new Error("seed must not drop");
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/recommendations/${seeded.id}/act`,
+      payload: { action: "primary" },
+    });
+    expect([403, 404]).toContain(res.statusCode);
+  });
+});
+```
+
+- [ ] **Step 4: Run tests to verify they fail**
 
 ```bash
 pnpm --filter @switchboard/api test recommendations
@@ -1921,7 +2027,7 @@ pnpm --filter @switchboard/api test recommendations
 
 Expected: FAIL — route module doesn't exist.
 
-- [ ] **Step 3: Write the route**
+- [ ] **Step 5: Write the route**
 
 Create `apps/api/src/routes/recommendations.ts`:
 
@@ -2083,7 +2189,7 @@ declare module "fastify" {
 
 (If a central `apps/api/src/types/fastify.d.ts` already exists, add the augmentation there instead — match the existing convention.)
 
-- [ ] **Step 3: Wire the store + register the route in `app.ts`**
+- [ ] **Step 6: Wire the Prisma store + register the route in `app.ts` (production path)**
 
 Read these line ranges in `apps/api/src/app.ts` to understand the existing pattern:
 - Around line 240–490: where stores are instantiated (`new PrismaApprovalStore`, `new PrismaConversationStateStore`, etc.)
@@ -2116,26 +2222,29 @@ await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
 
 Match the prefix format the surrounding routes use.
 
-- [ ] **Step 4: Run the full test suite (route + wiring all in place)**
+- [ ] **Step 7: Run the full test suite (in-memory store + route + tests all in place)**
 
 ```bash
+pnpm --filter @switchboard/core build
 pnpm --filter @switchboard/api build
 pnpm --filter @switchboard/api test recommendations
 ```
 
 Expected: PASS — all route tests + the 2 isolation tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/api/src/routes/recommendations.ts apps/api/src/__tests__/routes/recommendations.test.ts apps/api/src/__tests__/routes/recommendations-isolation.test.ts apps/api/src/__tests__/helpers/seed-recommendation.ts apps/api/src/types/ apps/api/src/app.ts
-git commit -m "feat(api): /api/recommendations routes + app.ts wiring
+git add packages/core/src/recommendations/in-memory-store.ts packages/core/src/recommendations/__tests__/ packages/core/src/recommendations/index.ts apps/api/src/routes/recommendations.ts apps/api/src/__tests__/api-recommendations.test.ts apps/api/src/__tests__/api-recommendations-isolation.test.ts apps/api/src/__tests__/test-server.ts apps/api/src/types/ apps/api/src/app.ts
+git commit -m "feat(api): /api/recommendations routes + test-server in-memory store + app.ts wiring
 
-GET ?surface=queue|shadow_action with optional &since=24h.
-POST :id/act accepts primary|secondary|dismiss|confirm|undo with
-surface-action validity. 409 on terminal/expired/undo-window-closed
-includes the current row in the body so the frontend can converge.
-Route + store wiring + tests ship in one atomic green commit."
+In-memory recommendation store moved out of __tests__/ so test-server
+can register it. Route reads app.recommendationStore — Prisma in prod,
+in-memory in tests. GET ?surface=queue|shadow_action with optional
+&since=24h. POST :id/act accepts primary|secondary|dismiss|confirm|undo
+with surface-action validity. 409 on terminal/expired/undo-window-closed
+includes the current row in the body. Route + store wiring + tests ship
+in one atomic green commit."
 ```
 
 ---
@@ -2207,7 +2316,17 @@ Place it alphabetically — between `readiness` and `roi` if present, or near `e
 
 - [ ] **Step 3: Add SDK methods**
 
-Edit `apps/dashboard/src/lib/api-client/governance.ts`. Find the existing `respondToApproval` method (around line 15) and add two new methods inside the same class/object:
+Edit `apps/dashboard/src/lib/api-client/governance.ts`. The class is `SwitchboardGovernanceClient extends SwitchboardClientCore` and uses `this.request<T>(path, init)` for normal calls — but `request<T>` throws on any non-2xx and does not expose the status code. Recommendation **list** can use `request<T>` (it never returns 409). Recommendation **act** needs to surface 409 to the proxy layer, so it bypasses `request()` and uses the inherited `protected baseUrl` + `protected apiKey` directly.
+
+Add the import at the top of `governance.ts`:
+
+```ts
+import type { RecommendationApiRow, RecommendationActAction } from "../api-client-types";
+```
+
+(Match the existing import style — no `.js` suffix, double quotes, alphabetized with neighbors.)
+
+Add two new methods inside the existing `SwitchboardGovernanceClient` class (alongside `respondToApproval`):
 
 ```ts
 async listRecommendations(opts: {
@@ -2218,35 +2337,33 @@ async listRecommendations(opts: {
   const params = new URLSearchParams({ surface: opts.surface });
   if (opts.status) params.set("status", opts.status);
   if (opts.since) params.set("since", opts.since);
-  const res = await this.fetch(`/api/recommendations?${params.toString()}`);
-  if (!res.ok) throw new Error(`listRecommendations failed (HTTP ${res.status})`);
-  return res.json() as Promise<{ recommendations: RecommendationApiRow[] }>;
-},
+  return this.request<{ recommendations: RecommendationApiRow[] }>(
+    `/api/recommendations?${params.toString()}`,
+  );
+}
 
-async actOnRecommendation(id: string, body: { action: RecommendationActAction; note?: string }): Promise<{ recommendation: RecommendationApiRow } | { silent: true; status: number; body: unknown }> {
-  const res = await this.fetch(`/api/recommendations/${id}/act`, {
+/**
+ * Bypasses request<T>() because that helper throws on non-2xx without
+ * surfacing the status code. The dashboard proxy needs the raw 409 to
+ * propagate so the frontend hook can swallow already-terminal as success.
+ */
+async actOnRecommendation(
+  id: string,
+  body: { action: RecommendationActAction; note?: string },
+): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`${this.baseUrl}/api/recommendations/${id}/act`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${this.apiKey}`,
+    },
     body: JSON.stringify(body),
   });
-  if (res.status === 409) {
-    return { silent: true, status: 409, body: await res.json().catch(() => ({})) };
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`actOnRecommendation failed (HTTP ${res.status}): ${text}`);
-  }
-  return res.json() as Promise<{ recommendation: RecommendationApiRow }>;
-},
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
 ```
 
-Add the import at the top of `governance.ts`:
-
-```ts
-import type { RecommendationApiRow, RecommendationActAction } from "../api-client-types.js";
-```
-
-(Style: match how the file already imports from `api-client-types`.)
+If `baseUrl` / `apiKey` are `private` in `SwitchboardClientCore` (read core.ts to check), promote them to `protected`. They are referenced by `request<T>` already, so making them `protected` is the smallest possible scope change that lets a subclass talk to the upstream directly.
 
 - [ ] **Step 4: Verify the build**
 
@@ -2304,8 +2421,8 @@ describe("recommendations dashboard proxy", () => {
     expect(listRecommendations).toHaveBeenCalledWith({ surface: "queue", status: "pending", since: undefined });
   });
 
-  it("POST forwards reshapes recommendationId and propagates 200", async () => {
-    const actOnRecommendation = vi.fn().mockResolvedValue({ recommendation: { id: "r-1", status: "acted" } });
+  it("POST reshapes recommendationId and propagates 200", async () => {
+    const actOnRecommendation = vi.fn().mockResolvedValue({ status: 200, body: { recommendation: { id: "r-1", status: "acted" } } });
     (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ actOnRecommendation });
     const req = new Request("http://x/api/dashboard/recommendations", {
       method: "POST",
@@ -2314,10 +2431,12 @@ describe("recommendations dashboard proxy", () => {
     const res = await POST(req as never);
     expect(res.status).toBe(200);
     expect(actOnRecommendation).toHaveBeenCalledWith("r-1", { action: "primary" });
+    const body = await res.json();
+    expect(body.recommendation.status).toBe("acted");
   });
 
-  it("POST propagates 409 status when SDK returns silent", async () => {
-    const actOnRecommendation = vi.fn().mockResolvedValue({ silent: true, status: 409, body: { error: "already_terminal", recommendation: { id: "r-1", status: "acted" } } });
+  it("POST propagates 409 status from upstream", async () => {
+    const actOnRecommendation = vi.fn().mockResolvedValue({ status: 409, body: { error: "already_terminal", recommendation: { id: "r-1", status: "acted" } } });
     (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ actOnRecommendation });
     const req = new Request("http://x/api/dashboard/recommendations", {
       method: "POST",
@@ -2327,6 +2446,17 @@ describe("recommendations dashboard proxy", () => {
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.error).toBe("already_terminal");
+  });
+
+  it("POST propagates 5xx from upstream", async () => {
+    const actOnRecommendation = vi.fn().mockResolvedValue({ status: 500, body: { error: "boom" } });
+    (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ actOnRecommendation });
+    const req = new Request("http://x/api/dashboard/recommendations", {
+      method: "POST",
+      body: JSON.stringify({ recommendationId: "r-1", action: "primary" }),
+    });
+    const res = await POST(req as never);
+    expect(res.status).toBe(500);
   });
 });
 ```
@@ -2386,10 +2516,9 @@ export async function POST(request: NextRequest) {
       action: body.action as never,
       ...(body.note ? { note: body.note } : {}),
     });
-    if ("silent" in result && result.silent) {
-      return NextResponse.json(result.body, { status: result.status });
-    }
-    return NextResponse.json(result);
+    // actOnRecommendation always returns {status, body} — forward both verbatim
+    // so 409 (already-terminal) reaches the hook layer where it is treated as success.
+    return NextResponse.json(result.body, { status: result.status });
   } catch (err: unknown) {
     return errorResponse(err);
   }
@@ -3556,7 +3685,7 @@ co-located so the merge surface is zero."
 
 ---
 
-## Task 18: ad-optimizer audit-runner sink + AgentEvent rollup + tests `[opus]`
+## Task 18: ad-optimizer audit-runner sink + tests `[opus]`
 
 **Files:**
 - Create: `packages/ad-optimizer/src/recommendation-sink.ts`
@@ -3565,6 +3694,13 @@ co-located so the merge surface is zero."
 - Modify: `packages/ad-optimizer/src/index.ts` (export sink + types)
 
 The sink lives in its own file so audit-runner.ts stays close to its existing line count and so the sink can be unit-tested without a full audit run.
+
+**v1 deliberately does NOT write an AgentEvent rollup row.** The reasons:
+- `AgentEvent` requires `deploymentId` (not in `AuditConfig` today — `AuditConfig` carries `orgId` only).
+- `AgentEvent.payload` is `Json` with no `summary`/`metadata` columns; the spec's "Nova reviewed N candidates" copy doesn't fit cleanly without a custom payload schema and a dedicated reader.
+- No `AgentEventStore` interface exists in core; introducing one for a single rollup is more abstraction than the rollup is worth in v1.
+
+The sink instead returns counts. The caller (audit-runner) logs them via `console.warn` — visible in API logs, sufficient for v1 calibration. v1.5 (when the org-level mode dropdown lands) is the right time to revisit "Nova reviewed N candidates" as a first-class activity-trail event, alongside the deployment-id wiring it would require.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3590,45 +3726,39 @@ const baseRec = (overrides: Partial<RecommendationOutput> = {}): RecommendationO
 
 describe("runRecommendationSink", () => {
   it("emits one Recommendation per output via the store", async () => {
-    const emitted: unknown[] = [];
     const recommendationStore = { insert: vi.fn().mockResolvedValue({ row: { id: "x" }, idempotent: false }) } as never;
-    const agentEventStore = { record: vi.fn() };
     const recs = [baseRec(), baseRec({ campaignId: "c-2", action: "reduce_budget" })];
     const result = await runRecommendationSink({
       orgId: "org-1", auditRunId: "audit-1", recommendations: recs,
-      recommendationStore, agentEventStore: agentEventStore as never,
+      recommendationStore,
     });
     expect(result.routedQueue + result.routedShadow + result.dropped).toBe(2);
     expect(recommendationStore.insert).toHaveBeenCalledTimes(2);
   });
 
-  it("writes one AgentEvent rollup when dropped > 0", async () => {
+  it("returns dropped count when low-confidence inputs route to dropped", async () => {
     const recommendationStore = { insert: vi.fn().mockResolvedValue({ row: { id: "x" }, idempotent: false }) } as never;
-    const agentEventStore = { record: vi.fn() };
     const recs = [
       baseRec({ confidence: 0.3 }),  // dropped
       baseRec({ confidence: 0.9 }),  // queue or shadow
     ];
     const result = await runRecommendationSink({
       orgId: "org-1", auditRunId: "audit-2", recommendations: recs,
-      recommendationStore, agentEventStore: agentEventStore as never,
+      recommendationStore,
     });
     expect(result.dropped).toBeGreaterThan(0);
-    expect(agentEventStore.record).toHaveBeenCalledTimes(1);
-    expect(agentEventStore.record.mock.calls[0]?.[0]).toMatchObject({
-      orgId: "org-1",
-      eventType: "recommendation.batch_summary",
-    });
+    // Dropped recs do NOT call store.insert (router short-circuits in emit).
+    // The single non-dropped rec accounts for the only insert call.
+    expect(recommendationStore.insert).toHaveBeenCalledTimes(1);
   });
 
-  it("does NOT write rollup when dropped === 0", async () => {
+  it("returns dropped: 0 when all inputs route to a real surface", async () => {
     const recommendationStore = { insert: vi.fn().mockResolvedValue({ row: { id: "x" }, idempotent: false }) } as never;
-    const agentEventStore = { record: vi.fn() };
-    await runRecommendationSink({
+    const result = await runRecommendationSink({
       orgId: "org-1", auditRunId: "audit-3", recommendations: [baseRec({ confidence: 0.9 })],
-      recommendationStore, agentEventStore: agentEventStore as never,
+      recommendationStore,
     });
-    expect(agentEventStore.record).not.toHaveBeenCalled();
+    expect(result.dropped).toBe(0);
   });
 
   it("humanizeRecommendation covers all 7 action kinds with no fallback", async () => {
@@ -3639,12 +3769,11 @@ describe("runRecommendationSink", () => {
         return Promise.resolve({ row: { id: "x" }, idempotent: false });
       }),
     } as never;
-    const agentEventStore = { record: vi.fn() };
     const actions: RecommendationOutput["action"][] = ["pause", "reduce_budget", "add_creative", "consolidate", "kill", "expand_targeting", "shift_budget"];
     await runRecommendationSink({
       orgId: "org-1", auditRunId: "audit-4",
       recommendations: actions.map((a) => baseRec({ action: a, confidence: 0.6 })),
-      recommendationStore, agentEventStore: agentEventStore as never,
+      recommendationStore,
     });
     expect(summaries).toHaveLength(7);
     summaries.forEach((s) => expect(s.length).toBeGreaterThan(5));
@@ -3668,22 +3797,17 @@ Create `packages/ad-optimizer/src/recommendation-sink.ts`:
 import { emitRecommendation, type RecommendationStore } from "@switchboard/core";
 import type { RecommendationOutput } from "./recommendation-engine.js";
 
-export interface AgentEventStore {
-  record(args: {
-    orgId: string;
-    agentKey: string;
-    eventType: string;
-    summary: string;
-    metadata: Record<string, unknown>;
-  }): Promise<void>;
-}
-
 export interface RunRecommendationSinkArgs {
   orgId: string;
   auditRunId: string;
   recommendations: RecommendationOutput[];
   recommendationStore: RecommendationStore;
-  agentEventStore: AgentEventStore;
+}
+
+export interface RunRecommendationSinkResult {
+  routedQueue: number;
+  routedShadow: number;
+  dropped: number;
 }
 
 const URGENCY_TO_RISK: Record<string, "low" | "medium" | "high"> = {
@@ -3697,8 +3821,6 @@ const URGENCY_TO_EXPIRY_HOURS: Record<string, number> = {
   medium: 24,
   low: 168, // 7d
 };
-
-const REVERSIBLE = new Set(["pause", "reduce_budget"]);
 
 function humanizeRecommendation(rec: RecommendationOutput): string {
   const name = rec.campaignName;
@@ -3748,7 +3870,9 @@ function estimateRisk(rec: RecommendationOutput): number {
   return parseFloat(m[1]!.replace(/,/g, ""));
 }
 
-export async function runRecommendationSink(args: RunRecommendationSinkArgs): Promise<{ routedQueue: number; routedShadow: number; dropped: number }> {
+export async function runRecommendationSink(
+  args: RunRecommendationSinkArgs,
+): Promise<RunRecommendationSinkResult> {
   let routedQueue = 0;
   let routedShadow = 0;
   let dropped = 0;
@@ -3775,26 +3899,16 @@ export async function runRecommendationSink(args: RunRecommendationSinkArgs): Pr
     else routedQueue++;
   }
 
-  if (dropped > 0) {
-    await args.agentEventStore.record({
-      orgId: args.orgId,
-      agentKey: "nova",
-      eventType: "recommendation.batch_summary",
-      summary: `Nova reviewed ${args.recommendations.length} candidates. ${routedQueue} flagged for review, ${routedShadow} auto-actioned, ${dropped} below confidence threshold.`,
-      metadata: { auditRunId: args.auditRunId, routedQueue, routedShadow, dropped },
-    });
-  }
-
   return { routedQueue, routedShadow, dropped };
 }
 ```
 
 - [ ] **Step 4: Wire the sink into audit-runner**
 
-Edit `packages/ad-optimizer/src/audit-runner.ts`. At the top, add the import:
+Edit `packages/ad-optimizer/src/audit-runner.ts`. At the top, add the imports:
 
 ```ts
-import { runRecommendationSink, type AgentEventStore } from "./recommendation-sink.js";
+import { runRecommendationSink } from "./recommendation-sink.js";
 import type { RecommendationStore } from "@switchboard/core";
 ```
 
@@ -3804,25 +3918,29 @@ Add to `AuditDependencies` (interface, near the top of the file):
 export interface AuditDependencies {
   // ... existing fields ...
   recommendationStore?: RecommendationStore;
-  agentEventStore?: AgentEventStore;
 }
 ```
 
 Find the section near line 425 where `recommendations` is built. After that array is finalized but before the function returns (look for the existing `return { ... recommendations, ... }`), add:
 
 ```ts
-if (this.deps.recommendationStore && this.deps.agentEventStore) {
-  await runRecommendationSink({
-    orgId,
+if (this.deps.recommendationStore) {
+  const sinkResult = await runRecommendationSink({
+    orgId: this.config.orgId,
     auditRunId,
     recommendations,
     recommendationStore: this.deps.recommendationStore,
-    agentEventStore: this.deps.agentEventStore,
   });
+  // v1: log the rollup. v1.5 will write a first-class activity-trail event
+  // (deferred — AgentEvent requires deploymentId not yet in AuditConfig).
+  console.warn(
+    `[ad-optimizer] Nova reviewed ${recommendations.length} candidates → ` +
+      `queue=${sinkResult.routedQueue} shadow=${sinkResult.routedShadow} dropped=${sinkResult.dropped}`,
+  );
 }
 ```
 
-The graceful degradation (the `if` guard) is intentional — current callers may not have wired the new deps yet, and we should not fail audits because the sink is missing.
+The graceful degradation (the `if` guard) is intentional — current callers may not have wired the new dep yet, and we should not fail audits because the sink is missing.
 
 - [ ] **Step 5: Append exports**
 
@@ -3830,7 +3948,7 @@ Edit `packages/ad-optimizer/src/index.ts` and add at the bottom:
 
 ```ts
 export { runRecommendationSink } from "./recommendation-sink.js";
-export type { AgentEventStore, RunRecommendationSinkArgs } from "./recommendation-sink.js";
+export type { RunRecommendationSinkArgs, RunRecommendationSinkResult } from "./recommendation-sink.js";
 ```
 
 - [ ] **Step 6: Run tests**
@@ -3841,7 +3959,7 @@ pnpm --filter @switchboard/ad-optimizer test recommendation-sink
 pnpm --filter @switchboard/ad-optimizer typecheck
 ```
 
-Expected: PASS, 4 tests; typecheck clean (audit-runner still typechecks because the new deps are optional).
+Expected: PASS, 4 tests; typecheck clean (audit-runner still typechecks because the new dep is optional).
 
 - [ ] **Step 7: Commit**
 
@@ -3849,9 +3967,11 @@ Expected: PASS, 4 tests; typecheck clean (audit-runner still typechecks because 
 git add packages/ad-optimizer/src/recommendation-sink.ts packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts packages/ad-optimizer/src/audit-runner.ts packages/ad-optimizer/src/index.ts
 git commit -m "feat(ad-optimizer): emit recommendations to the new core sink
 
-audit-runner now writes each RecommendationOutput through emitRecommendation
-when recommendationStore + agentEventStore deps are wired. AgentEvent rollup
-records the count of dropped (sub-threshold) recs per audit run."
+audit-runner writes each RecommendationOutput through emitRecommendation
+when recommendationStore is wired. Sink returns count rollup; audit-runner
+logs it via console.warn. v1 deliberately does NOT write an AgentEvent —
+that requires deploymentId (not in AuditConfig today) and a payload
+schema. Defer to v1.5 alongside the org-level mode dropdown."
 ```
 
 ---
