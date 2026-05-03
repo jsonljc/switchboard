@@ -98,6 +98,11 @@ export const scopedKeys = (orgId: string) => ({
     all: () => [orgId, "readiness"] as const,
     check: (agentId: string) => [orgId, "readiness", "check", agentId] as const,
   },
+  recommendations: {
+    all: () => [orgId, "recommendations"] as const,
+    queue: () => [orgId, "recommendations", "queue"] as const,
+    shadow: () => [orgId, "recommendations", "shadow"] as const,
+  },
   marketplace: {
     all: () => [orgId, "marketplace"] as const,
     listings: (filters?: Record<string, string | undefined>) =>

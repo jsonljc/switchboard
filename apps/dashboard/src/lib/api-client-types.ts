@@ -84,3 +84,41 @@ export interface SimulateResult {
   approvalRequired: string;
   explanation: string;
 }
+
+export type RecommendationApiRow = {
+  id: string;
+  orgId: string;
+  agentKey: "nova" | "alex" | "mira";
+  intent: string;
+  action: string;
+  humanSummary: string;
+  confidence: number;
+  dollarsAtRisk: number;
+  riskLevel: "low" | "medium" | "high";
+  surface: "queue" | "shadow_action";
+  status: "pending" | "acted" | "dismissed" | "confirmed" | "dismissed_by_undo" | "expired";
+  parameters: {
+    __recommendation?: {
+      action?: string;
+      note?: string | null;
+      presentation?: {
+        primaryLabel: string;
+        secondaryLabel: string;
+        dismissLabel: string;
+        dataLines: unknown[];
+      };
+    };
+    [key: string]: unknown;
+  };
+  targetEntities: Record<string, unknown> | null;
+  sourceAgent: string;
+  sourceWorkflow: string | null;
+  actedBy: string | null;
+  actedAt: string | null;
+  note: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  undoableUntil: string | null;
+};
+
+export type RecommendationActAction = "primary" | "secondary" | "dismiss" | "confirm" | "undo";
