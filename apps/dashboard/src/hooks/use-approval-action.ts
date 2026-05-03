@@ -12,9 +12,9 @@ export interface ApprovalActionPayload {
  * Used by:
  *   - /decide list page <RespondDialog>
  *   - /decide/[id] detail page
- *   - /console <ApprovalSlideOver>
+ *   - /console <ApprovalGateCardView> (inline approve/reject)
  *
- * Both surfaces approve/reject through this single hook so they cannot
+ * All surfaces approve/reject through this single hook so they cannot
  * diverge on payload shape, cache invalidation, or error handling.
  *
  * Wraps the existing POST /api/dashboard/approvals contract:
