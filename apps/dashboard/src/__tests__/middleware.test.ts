@@ -73,4 +73,15 @@ describe("dashboard middleware auth", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost/login");
   });
+
+  it("redirects unauthenticated /reports to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/reports"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
 });

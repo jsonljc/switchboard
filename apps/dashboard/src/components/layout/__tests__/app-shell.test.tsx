@@ -57,4 +57,8 @@ describe("app-shell CHROME_HIDDEN_PATHS", () => {
     expect(CHROME_HIDDEN_PATHS).toContain("/onboarding");
     expect(CHROME_HIDDEN_PATHS).toContain("/setup");
   });
+
+  it("hides chrome for /reports (Mercury register supplies its own header)", () => {
+    expect(CHROME_HIDDEN_PATHS).toContain("/reports");
+  });
 });

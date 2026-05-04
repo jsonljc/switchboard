@@ -11,7 +11,7 @@ const DevPanel =
     ? () => null
     : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
 
-export const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup"];
+export const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup", "/reports"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
