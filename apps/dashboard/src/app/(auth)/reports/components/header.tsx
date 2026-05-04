@@ -1,33 +1,30 @@
-"use client";
-
-import { useState } from "react";
 import styles from "../reports.module.css";
 
 /**
  * Mercury-register header — visual port of the agent-home header.
- * Static for now; nav links and Halt are local-state placeholders
- * pending the agent-home migration that will wire them up.
+ * Placeholder header — agent-home migration will wire these to live nav.
+ *
+ * Renders nav/action affordances as inert <span> elements (matching the
+ * design bundle's anchor-with-no-target semantics minus the navigation)
+ * so screen readers don't announce them as buttons that fire no action.
  */
 export function ReportsHeader() {
-  const [halted, setHalted] = useState(false);
   const inboxCount = 3;
 
   return (
     <header className={styles.appHeader}>
       <div className={styles.appHeaderRow}>
         <div className={styles.brandCluster}>
-          <button type="button" className={styles.brandMark} aria-label="Switchboard home">
+          <span className={styles.brandMark} aria-label="Switchboard home">
             <span className={styles.brandDot} />
             Switchboard
-          </button>
+          </span>
           <nav className={styles.brandNav} aria-label="agents">
-            <button type="button">Alex</button>
-            <button type="button" className={styles.isActive}>
-              Riley
-            </button>
-            <button type="button" className={styles.navAdd} aria-label="Add an agent">
+            <span>Alex</span>
+            <span className={styles.isActive}>Riley</span>
+            <span className={styles.navAdd} aria-label="Add an agent">
               +
-            </button>
+            </span>
           </nav>
         </div>
         <div className={styles.headerActions}>
@@ -35,11 +32,7 @@ export function ReportsHeader() {
             <span className={styles.pulse} />
             Live
           </span>
-          <button
-            type="button"
-            className={styles.folioLink}
-            aria-label={`Inbox, ${inboxCount} items`}
-          >
+          <span className={styles.folioLink} aria-label={`Inbox, ${inboxCount} items`}>
             {inboxCount > 0 && <span className={styles.pip} />}
             <span>Inbox</span>
             {inboxCount > 0 && (
@@ -48,15 +41,8 @@ export function ReportsHeader() {
                 <span className={styles.num}>{inboxCount}</span>
               </>
             )}
-          </button>
-          <button
-            type="button"
-            className={`${styles.folioLink} ${halted ? styles.isHalt : ""}`}
-            aria-pressed={halted}
-            onClick={() => setHalted((h) => !h)}
-          >
-            {halted ? "Halted" : "Halt"}
-          </button>
+          </span>
+          <span className={styles.folioLink}>Halt</span>
           <span className={styles.meChip}>M</span>
         </div>
       </div>
