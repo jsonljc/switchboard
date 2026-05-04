@@ -20,7 +20,7 @@ describe("per-agent decisions dashboard proxy", () => {
     (requireDashboardSession as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Unauthorized"),
     );
-    const res = await GET(makeReq(), { params: Promise.resolve({ key: "alex" }) });
+    const res = await GET(makeReq(), { params: Promise.resolve({ agentId: "alex" }) });
     expect(res.status).toBe(401);
   });
 
@@ -34,7 +34,7 @@ describe("per-agent decisions dashboard proxy", () => {
       undefined,
     );
 
-    const res = await GET(makeReq(), { params: Promise.resolve({ key: "alex" }) });
+    const res = await GET(makeReq(), { params: Promise.resolve({ agentId: "alex" }) });
     expect(res.status).toBe(200);
     expect(listDecisions).toHaveBeenCalledWith("alex");
     const body = await res.json();
@@ -52,7 +52,7 @@ describe("per-agent decisions dashboard proxy", () => {
       undefined,
     );
 
-    await GET(makeReq(), { params: Promise.resolve({ key: "riley" }) });
+    await GET(makeReq(), { params: Promise.resolve({ agentId: "riley" }) });
     expect(getApiClient).toHaveBeenCalled();
     expect(requireDashboardSession).toHaveBeenCalled();
   });

@@ -10,15 +10,19 @@ function errorResponse(err: unknown) {
 }
 
 /**
- * Dashboard proxy for `GET /api/agents/:key/decisions` — per-agent Decision Feed.
- * The `key` param is an `AgentKey` (alex|riley|mira); validation lives upstream.
+ * Dashboard proxy for `GET /api/agents/:agentId/decisions` — per-agent Decision Feed.
+ *
+ * Param name is `agentId` to match the sibling `[agentId]/readiness/route.ts`
+ * route — Next.js rejects different dynamic-segment slugs at the same path
+ * level. The semantic value is an `AgentKey` (alex|riley|mira); the
+ * upstream `apps/api/src/routes/decisions.ts` handler validates it.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ key: string }> }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ agentId: string }> }) {
   try {
     await requireDashboardSession();
     const client = await getApiClient();
-    const { key } = await params;
-    const data = await client.listDecisions(key);
+    const { agentId } = await params;
+    const data = await client.listDecisions(agentId);
     return NextResponse.json(data);
   } catch (err: unknown) {
     return errorResponse(err);
