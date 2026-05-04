@@ -27,7 +27,7 @@ export function NeedsYouBlock({ agentKey }: { agentKey: AgentKey }) {
   const decisions = data?.decisions ?? [];
 
   return (
-    <section className="section page" data-block="needs-you">
+    <section className="section page" data-block="needs-you" data-testid="block-needs-you">
       <div className="folio">
         <span className="folio-l">Needs you</span>
         <span className="folio-r">

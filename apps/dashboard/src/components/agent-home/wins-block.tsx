@@ -7,7 +7,7 @@ import { FixtureFolioBadge } from "./fixture-folio-badge";
 export function WinsBlock({ vm, agentKey }: { vm: WinsViewModel; agentKey: AgentKey }) {
   const agentName = AGENT_REGISTRY[agentKey].displayName;
   return (
-    <section className="section page-wide" data-block="wins">
+    <section className="section page-wide" data-block="wins" data-testid="block-wins">
       <div className="folio">
         <span className="folio-l">Recent wins</span>
         <span className="folio-r">

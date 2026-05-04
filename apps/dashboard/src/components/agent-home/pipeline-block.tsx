@@ -40,7 +40,7 @@ export function PipelineBlock({ vm }: { vm: PipelineViewModel }) {
   const setupResolved = resolveAgentHomeLink(vm.setupLink);
 
   return (
-    <section className="section page-wide" data-block="pipeline">
+    <section className="section page-wide" data-block="pipeline" data-testid="block-pipeline">
       <div className="folio">
         <span className="folio-l">Pipeline</span>
         <span className="folio-r">

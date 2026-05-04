@@ -13,7 +13,7 @@ function Portrait({ agentKey }: { agentKey: AgentKey }) {
 
 export function GreetingBlock({ vm, agentKey }: { vm: GreetingViewModel; agentKey: AgentKey }) {
   return (
-    <section className="section page" data-block="greeting">
+    <section className="section page" data-block="greeting" data-testid="block-greeting">
       <div className="folio">
         <span className="folio-l">Today</span>
         <span className="folio-r">

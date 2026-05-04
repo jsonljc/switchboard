@@ -45,7 +45,7 @@ export function MetricsBlock({
   agentKey: AgentKey;
 }) {
   return (
-    <section className="section page-wide" data-block="metrics">
+    <section className="section page-wide" data-block="metrics" data-testid="block-metrics">
       <div className="folio">
         <span className="folio-l">This week</span>
         <span className="folio-r">
