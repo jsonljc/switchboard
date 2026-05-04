@@ -180,9 +180,13 @@
        Default keeps first paint correct before JS runs. */
     --ambient-cream: hsl(40 25% 94%);
 
-    /* Editorial layout aliases used by the agent home shell + blocks. */
+    /* Editorial layout aliases used by the agent home shell + blocks.
+       The base --accent token elsewhere in this file uses the shadcn
+       "raw HSL components" convention (`hsl(var(--accent))`), so editorial
+       surfaces declare their own brand orange directly. */
     --hair: var(--hairline);
     --hair-soft: hsl(40 15% 90%);
+    --editorial-accent: hsl(20 90% 55%);
     --col: 640px;
     --col-wide: 1080px;
     --gap-section: 144px;
@@ -595,7 +599,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: var(--accent, hsl(20 90% 55%));
+    background: var(--editorial-accent);
     display: inline-block;
   }
   .folio-link.is-halt {
@@ -710,7 +714,7 @@
     text-wrap: pretty;
   }
   .greeting-prose .accent {
-    color: var(--accent, hsl(20 90% 55%));
+    color: var(--editorial-accent);
     font-style: normal;
   }
   .portrait {
@@ -840,7 +844,7 @@
     flex: 1;
   }
   .win-prose .accent {
-    color: var(--accent, hsl(20 90% 55%));
+    color: var(--editorial-accent);
     font-style: normal;
   }
   .win-foot {
@@ -881,7 +885,7 @@
     color: var(--ink);
   }
   .hero-num .accent {
-    color: var(--accent, hsl(20 90% 55%));
+    color: var(--editorial-accent);
     font-style: normal;
   }
   .hero-num .light {
@@ -1091,7 +1095,7 @@
     align-self: flex-start;
   }
   .tile[data-stage="hot"] .tile-stage {
-    color: var(--accent, hsl(20 90% 55%));
+    color: var(--editorial-accent);
   }
   .tile[data-stage="warm"] .tile-stage {
     color: hsl(35 40% 45%);
@@ -1126,7 +1130,7 @@
     height: 2px;
   }
   .tile[data-stage="hot"] .tile-bar {
-    background: var(--accent, hsl(20 90% 55%));
+    background: var(--editorial-accent);
   }
   .tile[data-stage="warm"] .tile-bar {
     background: hsl(35 40% 55%);

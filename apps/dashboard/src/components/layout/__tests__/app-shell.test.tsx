@@ -2,8 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { AppShell, CHROME_HIDDEN_PATHS } from "../app-shell.js";
 
+const pathnameRef = { current: "/dashboard" };
+
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/dashboard",
+  usePathname: () => pathnameRef.current,
   useRouter: () => ({ replace: vi.fn() }),
 }));
 
@@ -60,5 +62,52 @@ describe("app-shell CHROME_HIDDEN_PATHS", () => {
 
   it("hides chrome for /reports (Mercury register supplies its own header)", () => {
     expect(CHROME_HIDDEN_PATHS).toContain("/reports");
+  });
+});
+
+describe("AppShell editorial passthrough", () => {
+  it("does not mount OwnerShell on /alex (editorial shell owns chrome)", () => {
+    pathnameRef.current = "/alex";
+    render(
+      <AppShell>
+        <span>editorial-content</span>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId("owner-shell")).toBeNull();
+    expect(screen.getByText("editorial-content")).toBeDefined();
+    pathnameRef.current = "/dashboard";
+  });
+
+  it("does not mount OwnerShell on /riley", () => {
+    pathnameRef.current = "/riley";
+    render(
+      <AppShell>
+        <span>editorial-content</span>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId("owner-shell")).toBeNull();
+    pathnameRef.current = "/dashboard";
+  });
+
+  it("does not mount OwnerShell on / (Owner Home placeholder)", () => {
+    pathnameRef.current = "/";
+    render(
+      <AppShell>
+        <span>editorial-content</span>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId("owner-shell")).toBeNull();
+    pathnameRef.current = "/dashboard";
+  });
+
+  it("does not wrap editorial routes in <main> (the editorial shell does)", () => {
+    pathnameRef.current = "/alex";
+    const { container } = render(
+      <AppShell>
+        <span>editorial-content</span>
+      </AppShell>,
+    );
+    expect(container.querySelector("main")).toBeNull();
+    pathnameRef.current = "/dashboard";
   });
 });
