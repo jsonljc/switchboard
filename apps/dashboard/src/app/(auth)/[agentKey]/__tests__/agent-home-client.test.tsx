@@ -10,6 +10,14 @@ vi.mock("@/hooks/use-decision-feed", () => ({
   useInboxCount: () => 0,
 }));
 
+vi.mock("@/hooks/use-query-keys", () => ({
+  useScopedQueryKeys: () => null,
+}));
+
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: () => {} }),
+}));
+
 import { AgentHomeClient } from "../agent-home-client";
 
 describe("AgentHomeClient", () => {
