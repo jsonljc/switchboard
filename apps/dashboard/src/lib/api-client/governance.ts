@@ -267,6 +267,27 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     );
   }
 
+  // Decisions (cross-kind feed: recommendations + handoffs)
+  /**
+   * Reads the Decision Feed (Slice A PR 3 endpoint). Pass an `agentKey` to
+   * scope to one agent; omit for the cross-agent inbox feed.
+   *
+   * Returns the wire shape unchanged — `createdAt` and `meta.slaDeadlineAt` /
+   * `meta.undoableUntil` are ISO strings (the API serializes Date → string).
+   */
+  async listDecisions(agentKey?: string): Promise<{
+    decisions: unknown[];
+    counts: { total: number; approval: number; handoff: number };
+  }> {
+    const path = agentKey
+      ? `/api/agents/${encodeURIComponent(agentKey)}/decisions`
+      : `/api/decisions`;
+    return this.request<{
+      decisions: unknown[];
+      counts: { total: number; approval: number; handoff: number };
+    }>(path);
+  }
+
   /**
    * Bypasses request<T>() because that helper throws on non-2xx without
    * surfacing the status code. The dashboard proxy needs the raw 409 to
