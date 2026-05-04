@@ -24,21 +24,20 @@ const spaceMono = Space_Mono({
   display: "swap",
 });
 
-// Editorial / Mercury register fonts (used by /reports and the agent
-// home redesign). Track A may add the same wiring; merge resolution is
-// trivial — keep one copy.
+// Editorial register fonts — used by Alex Home / Decision Card / Reports.
+// /reports consumes these via Mercury aliases declared in globals.css.
 const sourceSerif = Source_Serif_4({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["300", "400", "500", "600"],
   style: ["normal", "italic"],
-  variable: "--font-serif-mercury",
+  variable: "--font-serif",
   display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
-  variable: "--font-mono-mercury",
+  variable: "--font-mono-editorial",
   display: "swap",
 });
 
