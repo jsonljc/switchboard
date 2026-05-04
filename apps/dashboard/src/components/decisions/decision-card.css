@@ -1,0 +1,232 @@
+/* =========================================================
+   Decision Card — editorial register.
+   Translated from alex-home.css (decision, dc-folio, dc-prose,
+   dc-actions, dc-buttons, dc-meta, pill, why-link, thread-link,
+   dc-resolved-line, dc-undo). Tokens declared in globals.css
+   under "Editorial register — Alex Home / Decision Card / Reports".
+   ========================================================= */
+
+.decision {
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 24px;
+  background: transparent;
+  transition:
+    border-color 0.25s ease,
+    opacity 0.35s ease,
+    transform 0.35s ease,
+    max-height 0.5s ease,
+    padding 0.35s ease,
+    margin 0.35s ease;
+  position: relative;
+  overflow: hidden;
+}
+.decision:hover {
+  border-color: hsl(20 10% 12% / 0.22);
+}
+.decision.is-resolved {
+  padding: 18px 24px;
+}
+
+.dc-folio {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+}
+.dc-folio .num {
+  color: var(--ink-2);
+}
+
+.dc-prose {
+  font-family: var(--serif);
+  font-size: 24px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin: 22px 0 24px;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.dc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dc-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dc-meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.why-link {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--ink-3);
+  border: none;
+  background: transparent;
+  border-bottom: 1px solid var(--hairline);
+  padding: 0 0 1px;
+  cursor: help;
+  position: relative;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+.why-link:hover,
+.why-link:focus {
+  color: var(--ink);
+  border-color: var(--ink-3);
+  outline: none;
+}
+
+.why-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  background: var(--ink);
+  color: var(--cream);
+  font-family: var(--serif);
+  font-size: 14px;
+  line-height: 1.45;
+  padding: 14px 16px;
+  border-radius: 6px;
+  width: 280px;
+  z-index: 20;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  text-wrap: pretty;
+}
+.why-tip::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  background: var(--ink);
+  transform: rotate(45deg);
+}
+.why-link:hover .why-tip,
+.why-link:focus .why-tip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.thread-link {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.thread-link:hover {
+  color: var(--ink);
+}
+.thread-link .arr {
+  font-family: var(--serif);
+  font-size: 14px;
+}
+
+.dc-resolved-line {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  text-wrap: pretty;
+}
+.dc-undo {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-style: normal;
+}
+.dc-undo .timer {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.dc-undo button {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+/* ============= pill buttons ============= */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 999px;
+  letter-spacing: -0.005em;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pill-solid {
+  background: var(--ink);
+  color: var(--cream);
+  border: 1px solid var(--ink);
+}
+.pill-solid:hover {
+  background: hsl(20 10% 4%);
+  border-color: hsl(20 10% 4%);
+}
+.pill-outline {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+.pill-outline:hover {
+  background: hsl(20 10% 12% / 0.06);
+}
+@media (max-width: 768px) {
+  .pill {
+    height: 44px;
+    padding: 0 22px;
+    font-size: 14px;
+  }
+}
