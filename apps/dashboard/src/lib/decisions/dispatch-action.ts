@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { AgentKey } from "@switchboard/schemas";
 import type { DecisionKind } from "./types.js";
+import { scopedKeys } from "../query-keys.js";
 
 /**
  * Slice B2 will define richer types for action payloads. Slice A locks only
@@ -79,8 +80,9 @@ export async function dispatchDecisionAction(
 
   if (context) {
     const { queryClient, orgId, agentKey } = context;
-    void queryClient.invalidateQueries({ queryKey: [orgId, "decisions", "feed", agentKey] });
-    void queryClient.invalidateQueries({ queryKey: [orgId, "greeting", "feed", agentKey] });
-    void queryClient.invalidateQueries({ queryKey: [orgId, "wins", "feed", agentKey] });
+    const keys = scopedKeys(orgId);
+    void queryClient.invalidateQueries({ queryKey: keys.decisions.feed(agentKey) });
+    void queryClient.invalidateQueries({ queryKey: keys.greeting.feed(agentKey) });
+    void queryClient.invalidateQueries({ queryKey: keys.wins.byAgent(agentKey) });
   }
 }

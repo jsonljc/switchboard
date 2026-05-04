@@ -12,6 +12,7 @@ vi.mock("@/hooks/use-decision-feed", () => ({
 
 vi.mock("@/hooks/use-query-keys", () => ({
   useScopedQueryKeys: () => null,
+  useTenantContext: () => null,
 }));
 
 vi.mock("@tanstack/react-query", () => ({

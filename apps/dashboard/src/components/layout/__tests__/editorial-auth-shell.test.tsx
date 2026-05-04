@@ -18,6 +18,9 @@ vi.mock("../halt-button-client", () => ({
 vi.mock("../ambient-cream", () => ({
   AmbientCream: () => null,
 }));
+vi.mock("../tweaks-panel-mount", () => ({
+  TweaksPanelMount: () => null,
+}));
 
 describe("EditorialAuthShellInner", () => {
   it("renders Home + only enabled agents in brand-nav", () => {

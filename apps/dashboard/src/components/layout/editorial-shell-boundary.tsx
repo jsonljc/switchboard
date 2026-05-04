@@ -20,11 +20,18 @@ export class EditorialShellBoundary extends Component<{ children: ReactNode }, S
   render() {
     if (this.state.hasError) {
       return (
-        <header className="app-header">
-          <div className="app-header-row">
-            <span>Switchboard — temporarily unavailable</span>
-          </div>
-        </header>
+        <>
+          <header className="app-header">
+            <div className="app-header-row">
+              <span>Switchboard — temporarily unavailable</span>
+            </div>
+          </header>
+          <main>
+            <p className="empty-state">
+              <em>Reload the page to try again.</em>
+            </p>
+          </main>
+        </>
       );
     }
     return this.props.children;

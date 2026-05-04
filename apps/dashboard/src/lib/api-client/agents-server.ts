@@ -18,7 +18,8 @@ export async function fetchEnabledAgentsServer(): Promise<readonly AgentKey[]> {
       .filter((a) => a.status === "enabled")
       .map((a) => a.key)
       .filter((k): k is AgentKey => (AGENT_KEYS as readonly string[]).includes(k));
-  } catch {
+  } catch (err) {
+    console.warn("[fetchEnabledAgentsServer] falling back to ['alex']:", err);
     return ["alex"];
   }
 }
