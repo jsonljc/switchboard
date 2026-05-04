@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, DM_Sans, Space_Mono } from "next/font/google";
+import { Inter, DM_Sans, Space_Mono, Source_Serif_4, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 import Script from "next/script";
@@ -24,6 +24,24 @@ const spaceMono = Space_Mono({
   display: "swap",
 });
 
+// Editorial / Mercury register fonts (used by /reports and the agent
+// home redesign). Track A may add the same wiring; merge resolution is
+// trivial — keep one copy.
+const sourceSerif = Source_Serif_4({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-serif-mercury",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono-mercury",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Switchboard",
   description: "Your AI team runs the business. Stay in control, without the clutter.",
@@ -37,7 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable}`}
+      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <body className={inter.className}>
