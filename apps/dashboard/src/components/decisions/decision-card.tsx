@@ -60,12 +60,12 @@ export function DecisionCard({
         </div>
         <div className="dc-meta">
           {why && (
-            <button type="button" className="why-link" aria-label="Why this decision">
+            <span className="why-link" tabIndex={0} aria-label="Why this decision">
               Why?
               <span className="why-tip" role="tooltip">
                 {why}
               </span>
-            </button>
+            </span>
           )}
           {threadHref && (
             <a href={threadHref} className="thread-link">

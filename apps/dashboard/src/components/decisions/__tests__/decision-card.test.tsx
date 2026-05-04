@@ -64,14 +64,20 @@ describe("DecisionCard", () => {
     expect(screen.queryByRole("link", { name: /View thread/i })).not.toBeInTheDocument();
   });
 
-  it("renders a Why button when `why` prop is provided", () => {
+  it("renders Why? as a focusable span (not a button) per design bundle when `why` is provided", () => {
     render(<DecisionCard {...makeProps({ why: "Maya opened the pricing page three times." })} />);
-    expect(screen.getByRole("button", { name: /Why this decision/i })).toBeInTheDocument();
+    // The element is a hover/focus tooltip trigger — not actionable. Querying by
+    // aria-label keeps the assertion robust without claiming button role.
+    const trigger = screen.getByLabelText("Why this decision");
+    expect(trigger.tagName.toLowerCase()).toBe("span");
+    expect(trigger).toHaveAttribute("tabIndex", "0");
     expect(screen.getByText("Maya opened the pricing page three times.")).toBeInTheDocument();
+    // Confirm it is not exposed as a button to assistive tech.
+    expect(screen.queryByRole("button", { name: /Why this decision/i })).not.toBeInTheDocument();
   });
 
-  it("omits the Why button when `why` is absent", () => {
+  it("omits the Why? affordance when `why` is absent", () => {
     render(<DecisionCard {...makeProps()} />);
-    expect(screen.queryByRole("button", { name: /Why this decision/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Why this decision")).not.toBeInTheDocument();
   });
 });
