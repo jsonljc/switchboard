@@ -7,6 +7,7 @@ import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
+import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
   createInMemoryStorage,
@@ -19,6 +20,7 @@ import {
   resolveIdentity,
   createInMemoryRecommendationStore,
 } from "@switchboard/core";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 import type { StorageContext, PolicyCache } from "@switchboard/core";
 import type { ApprovalRoutingConfig } from "@switchboard/core/approval";
 import {
@@ -80,6 +82,7 @@ declare module "fastify" {
     platformIngress: PlatformIngress;
     platformLifecycle: PlatformLifecycle;
     recommendationStore?: import("@switchboard/core").RecommendationStore;
+    orgAgentEnablementStore?: import("@switchboard/core").OrgAgentEnablementStore;
   }
 }
 
@@ -250,6 +253,10 @@ export async function buildTestServer(): Promise<TestContext> {
   const recommendationStore = createInMemoryRecommendationStore();
   app.decorate("recommendationStore", recommendationStore);
 
+  // In-memory org-agent-enablement store — tests interact via app.orgAgentEnablementStore.
+  const orgAgentEnablementStore = createInMemoryOrgAgentEnablementStore();
+  app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
+
   // --- PlatformIngress wiring ---
   const intentRegistry = new IntentRegistry();
   const cartridgeManifests: CartridgeManifestForRegistration[] = [];
@@ -327,6 +334,7 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
+  await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
 
   return { app, cartridge, storage };
 }

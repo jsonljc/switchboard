@@ -32,6 +32,9 @@ describe("Organizations API — Config", () => {
     agentDeployment: {
       upsert: vi.fn(),
     },
+    orgAgentEnablement: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
   };
 
   beforeEach(async () => {
@@ -220,6 +223,47 @@ describe("Organizations API — Config", () => {
           },
         });
       }
+    });
+
+    it("Slice A PR 2: lazy-create branch sets useAgentFirstNav=true and round-trips it in the response", async () => {
+      // Frontend contract: clients (e.g. useAgentFirstNav hook) read this flag
+      // off the org config payload to decide which nav to render. Pin both
+      // halves: (1) the create branch ships the flag to Prisma; (2) whatever
+      // Prisma returns is surfaced verbatim on `body.config`.
+      const config = {
+        id: "org_test",
+        name: "",
+        runtimeType: "http",
+        runtimeConfig: {},
+        governanceProfile: "guarded",
+        onboardingComplete: false,
+        managedChannels: [],
+        provisioningStatus: "pending",
+        useAgentFirstNav: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockPrisma.organizationConfig.upsert.mockResolvedValue(config);
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/organizations/org_test/config",
+      });
+
+      expect(res.statusCode).toBe(200);
+      // (1) Create-branch contract: brand-new orgs land on agent-first nav.
+      expect(mockPrisma.organizationConfig.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ useAgentFirstNav: true }),
+          update: {},
+        }),
+      );
+      // (2) Response-shape contract: the field surfaces on body.config as a
+      // boolean (the route uses `reply.send({ config })` with the full Prisma
+      // row, so any new column is automatically exposed; this test pins it).
+      const body = res.json();
+      expect(typeof body.config.useAgentFirstNav).toBe("boolean");
+      expect(body.config.useAgentFirstNav).toBe(true);
     });
 
     it("returns 403 when unauthenticated", async () => {

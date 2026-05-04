@@ -4,6 +4,7 @@ import { createCipheriv, createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { seedMarketplace, seedDemoData } from "./seed-marketplace.js";
 import { seedKnowledge } from "./seed-knowledge.js";
+import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
 
 const prisma = new PrismaClient();
 
@@ -68,9 +69,17 @@ async function main() {
       governanceProfile: "guarded",
       onboardingComplete: true,
       provisioningStatus: "active",
+      // Slice A PR 2: brand-new orgs land on the agent-first nav. The `update`
+      // branch above stays empty — existing orgs keep their current value
+      // until a future Phase D5 backfill explicitly migrates them.
+      useAgentFirstNav: true,
     },
   });
   console.log("Seeded organization config: org_dev");
+
+  // Slice A PR 2: seed day-one agent enablement for the dev org. Idempotent.
+  await seedOrgDayOneAgents(prisma, "org_dev");
+  console.log("Seeded day-one agent enablement for org_dev");
 
   // ── 4. Default identity spec ──
   const defaultSpec = await prisma.identitySpec.upsert({

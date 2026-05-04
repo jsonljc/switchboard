@@ -255,3 +255,6 @@ export { buildLeadIntakeWorkflow } from "./intents/lead-intake-workflow.js";
 
 // Recommendations (router, types, store interface)
 export * from "./recommendations/index.js";
+
+// Agents (org-level agent enablement store interface)
+export * from "./agents/index.js";

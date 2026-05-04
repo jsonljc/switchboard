@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from "crypto";
 import type { PrismaClient } from "@prisma/client";
+import { seedOrgDayOneAgents } from "@switchboard/db";
 import { encryptApiKey } from "./crypto";
 
 interface ProvisionDashboardUserInput {
@@ -29,6 +30,10 @@ export async function provisionDashboardUser(
         governanceProfile: "guarded",
         onboardingComplete: false,
         provisioningStatus: "pending",
+        // Slice A PR 2: brand-new orgs land on the agent-first nav. This is a
+        // fresh `create()` (not an upsert) — there is no `update` branch to
+        // worry about. Existing orgs are not affected by this code path.
+        useAgentFirstNav: true,
       },
     });
 
@@ -85,6 +90,12 @@ export async function provisionDashboardUser(
       },
     });
   });
+
+  // Slice A PR 2: seed day-one agent enablement (alex, riley) for the new
+  // org. Run AFTER the transaction commits — the helper takes a PrismaClient
+  // (not a transaction client) and is idempotent, so post-commit seeding is
+  // safe and avoids transaction-client typing complications.
+  await seedOrgDayOneAgents(prisma, orgId);
 
   return dashboardUser;
 }

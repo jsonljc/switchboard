@@ -486,6 +486,14 @@ export async function buildServer() {
     app.decorate("recommendationStore", recommendationStore);
   }
 
+  // OrgAgentEnablement store — Prisma in production, undefined when no DB.
+  // The /api/dashboard/agents route 503s when this is missing.
+  if (prismaClient) {
+    const { PrismaOrgAgentEnablementStore } = await import("@switchboard/db");
+    const orgAgentEnablementStore = new PrismaOrgAgentEnablementStore(prismaClient);
+    app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
+  }
+
   const { resolveAuthoritativeDeployment } =
     await import("./bootstrap/platform-deployment-resolver.js");
 
