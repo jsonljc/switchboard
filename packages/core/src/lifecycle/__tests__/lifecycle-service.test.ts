@@ -75,6 +75,15 @@ class InMemoryContactStore implements ContactStore {
   async list(_orgId: string): Promise<Contact[]> {
     return Array.from(this.contacts.values());
   }
+
+  async listByIds(_orgId: string, ids: string[]): Promise<Map<string, Contact>> {
+    const result = new Map<string, Contact>();
+    for (const id of ids) {
+      const c = this.contacts.get(id);
+      if (c) result.set(id, c);
+    }
+    return result;
+  }
 }
 
 class InMemoryOpportunityStore implements OpportunityStore {

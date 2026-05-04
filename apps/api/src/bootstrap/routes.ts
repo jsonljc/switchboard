@@ -8,6 +8,7 @@ import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
+import { decisionsRoutes } from "../routes/decisions.js";
 import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
@@ -57,6 +58,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
+  // decisionsRoutes registers two paths under /api/dashboard:
+  //   GET /agents/:key/decisions  — per-agent feed
+  //   GET /decisions              — cross-agent inbox
+  await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });

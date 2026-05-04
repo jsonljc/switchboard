@@ -8,6 +8,7 @@ import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
+import { decisionsRoutes } from "../routes/decisions.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
   createInMemoryStorage,
@@ -21,7 +22,16 @@ import {
   createInMemoryRecommendationStore,
 } from "@switchboard/core";
 import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
-import type { StorageContext, PolicyCache } from "@switchboard/core";
+import type {
+  StorageContext,
+  PolicyCache,
+  ContactStore,
+  HandoffStore,
+  HandoffPackage,
+  HandoffStatus,
+  ConversationThreadStore,
+} from "@switchboard/core";
+import type { Contact, ConversationThread } from "@switchboard/schemas";
 import type { ApprovalRoutingConfig } from "@switchboard/core/approval";
 import {
   IntentRegistry,
@@ -83,6 +93,148 @@ declare module "fastify" {
     platformLifecycle: PlatformLifecycle;
     recommendationStore?: import("@switchboard/core").RecommendationStore;
     orgAgentEnablementStore?: import("@switchboard/core").OrgAgentEnablementStore;
+    contactStore?: ContactStore;
+    handoffStore?: HandoffStore;
+    threadStore?: ConversationThreadStore;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Minimal in-memory stubs for the decision feed.
+// Tests that need to seed contacts/threads/handoffs can do so via
+// `app.contactStore.create(...)` etc. — only the methods used by routes/tests
+// are implemented here.
+// ---------------------------------------------------------------------------
+
+class TestContactStore implements ContactStore {
+  private rows = new Map<string, Contact>();
+
+  async create(input: import("@switchboard/core").CreateContactInput): Promise<Contact> {
+    const id = `contact-${this.rows.size + 1}`;
+    const now = new Date();
+    const contact: Contact = {
+      id,
+      organizationId: input.organizationId,
+      name: input.name ?? null,
+      phone: input.phone ?? null,
+      email: input.email ?? null,
+      primaryChannel: input.primaryChannel,
+      firstTouchChannel: input.firstTouchChannel ?? null,
+      stage: "new",
+      source: input.source ?? null,
+      attribution: (input.attribution as Contact["attribution"]) ?? null,
+      roles: input.roles ?? ["lead"],
+      firstContactAt: now,
+      lastActivityAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows.set(id, contact);
+    return contact;
+  }
+
+  async findById(_orgId: string, id: string): Promise<Contact | null> {
+    return this.rows.get(id) ?? null;
+  }
+
+  async findByPhone(_orgId: string, phone: string): Promise<Contact | null> {
+    for (const c of this.rows.values()) if (c.phone === phone) return c;
+    return null;
+  }
+
+  async updateStage(
+    _orgId: string,
+    id: string,
+    stage: import("@switchboard/schemas").ContactStage,
+  ): Promise<Contact> {
+    const c = this.rows.get(id);
+    if (!c) throw new Error(`Contact not found: ${id}`);
+    const updated = { ...c, stage, updatedAt: new Date() };
+    this.rows.set(id, updated);
+    return updated;
+  }
+
+  async updateLastActivity(_orgId: string, id: string): Promise<void> {
+    const c = this.rows.get(id);
+    if (!c) return;
+    this.rows.set(id, { ...c, lastActivityAt: new Date(), updatedAt: new Date() });
+  }
+
+  async list(orgId: string): Promise<Contact[]> {
+    return Array.from(this.rows.values()).filter((c) => c.organizationId === orgId);
+  }
+
+  async listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>> {
+    const out = new Map<string, Contact>();
+    for (const id of ids) {
+      const c = this.rows.get(id);
+      if (c && c.organizationId === orgId) out.set(id, c);
+    }
+    return out;
+  }
+}
+
+class TestHandoffStore implements HandoffStore {
+  private rows = new Map<string, HandoffPackage>();
+
+  async save(pkg: HandoffPackage): Promise<void> {
+    this.rows.set(pkg.id, pkg);
+  }
+
+  async getById(id: string): Promise<HandoffPackage | null> {
+    return this.rows.get(id) ?? null;
+  }
+
+  async getBySessionId(sessionId: string): Promise<HandoffPackage | null> {
+    for (const r of this.rows.values()) if (r.sessionId === sessionId) return r;
+    return null;
+  }
+
+  async updateStatus(id: string, status: HandoffStatus, acknowledgedAt?: Date): Promise<void> {
+    const r = this.rows.get(id);
+    if (!r) return;
+    this.rows.set(id, { ...r, status, ...(acknowledgedAt ? { acknowledgedAt } : {}) });
+  }
+
+  async listPending(organizationId: string): Promise<HandoffPackage[]> {
+    return Array.from(this.rows.values()).filter(
+      (r) =>
+        r.organizationId === organizationId &&
+        (r.status === "pending" || r.status === "assigned" || r.status === "active"),
+    );
+  }
+}
+
+class TestThreadStore implements ConversationThreadStore {
+  private rows = new Map<string, ConversationThread>();
+  private keyOf = (orgId: string, contactId: string) => `${orgId}::${contactId}`;
+
+  async getByContact(
+    contactId: string,
+    organizationId: string,
+  ): Promise<ConversationThread | null> {
+    return this.rows.get(this.keyOf(organizationId, contactId)) ?? null;
+  }
+
+  async create(thread: ConversationThread): Promise<void> {
+    this.rows.set(this.keyOf(thread.organizationId, thread.contactId), thread);
+  }
+
+  async update(): Promise<void> {
+    // No-op for the routes that exercise this store today; tests that need it
+    // can seed directly via create().
+  }
+
+  async listByContactIds(
+    orgId: string,
+    contactIds: string[],
+  ): Promise<Map<string, ConversationThread>> {
+    const out = new Map<string, ConversationThread>();
+    for (const id of contactIds) {
+      const t = this.rows.get(this.keyOf(orgId, id));
+      if (t) out.set(id, t);
+    }
+    return out;
   }
 }
 
@@ -257,6 +409,11 @@ export async function buildTestServer(): Promise<TestContext> {
   const orgAgentEnablementStore = createInMemoryOrgAgentEnablementStore();
   app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
 
+  // In-memory stores for the decision feed — tests can seed via app.handoffStore.save() etc.
+  app.decorate("contactStore", new TestContactStore());
+  app.decorate("handoffStore", new TestHandoffStore());
+  app.decorate("threadStore", new TestThreadStore());
+
   // --- PlatformIngress wiring ---
   const intentRegistry = new IntentRegistry();
   const cartridgeManifests: CartridgeManifestForRegistration[] = [];
@@ -335,6 +492,7 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(identityRoutes, { prefix: "/api/identity" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
+  await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
 
   return { app, cartridge, storage };
 }

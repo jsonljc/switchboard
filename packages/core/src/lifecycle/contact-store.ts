@@ -26,4 +26,5 @@ export interface ContactStore {
   updateStage(orgId: string, id: string, stage: ContactStage): Promise<Contact>;
   updateLastActivity(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
+  listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
 }
