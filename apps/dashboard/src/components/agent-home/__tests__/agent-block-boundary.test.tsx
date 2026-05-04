@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AgentBlockBoundary } from "../agent-block-boundary";
 
-function Boom() {
+function Boom(): never {
   throw new Error("kaboom");
 }
 
