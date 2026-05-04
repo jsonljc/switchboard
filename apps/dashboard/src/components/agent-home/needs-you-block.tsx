@@ -1,13 +1,17 @@
 "use client";
 
 import type { AgentKey } from "@switchboard/schemas";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
 import { dispatchDecisionAction } from "@/lib/decisions/dispatch-action";
 
 export function NeedsYouBlock({ agentKey }: { agentKey: AgentKey }) {
   const { data, isLoading, isError } = useDecisionFeed(agentKey);
+  const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
 
   if (isLoading) return null;
   if (isError) {
@@ -44,8 +48,24 @@ export function NeedsYouBlock({ agentKey }: { agentKey: AgentKey }) {
             <DecisionCard
               key={d.id}
               {...mapToDecisionCard(d, i)}
-              onPrimary={() => dispatchDecisionAction(d.sourceRef, "primary")}
-              onSecondary={() => dispatchDecisionAction(d.sourceRef, "secondary")}
+              onPrimary={() => {
+                if (!keys) return;
+                const orgId = keys.decisions.feed(agentKey)[0] as string;
+                void dispatchDecisionAction(d.sourceRef, "primary", undefined, {
+                  queryClient,
+                  orgId,
+                  agentKey,
+                });
+              }}
+              onSecondary={() => {
+                if (!keys) return;
+                const orgId = keys.decisions.feed(agentKey)[0] as string;
+                void dispatchDecisionAction(d.sourceRef, "secondary", undefined, {
+                  queryClient,
+                  orgId,
+                  agentKey,
+                });
+              }}
             />
           ))}
         </div>
