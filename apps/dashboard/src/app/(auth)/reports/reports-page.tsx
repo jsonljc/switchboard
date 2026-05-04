@@ -48,6 +48,11 @@ export function ReportsPage() {
       <section className={`${styles.section} ${styles.page}`}>
         <CostVsValue cost={fx.cost} narrative={fx.costNarrative} />
         <ReportFooter activeWindow={activeWindow} cost={fx.cost} />
+      </section>
+
+      {/* Page-level colophon — sits below all sections so future spacing
+          edits to cost-vs-value can't drag it along. */}
+      <section className={`${styles.section} ${styles.page}`}>
         <Disclosure />
       </section>
     </div>
