@@ -29,11 +29,14 @@ describe("DecisionCard", () => {
     expect(screen.getByText("Should I send Maya the membership comparison?")).toBeInTheDocument();
   });
 
-  it("renders the three pill buttons with the correct labels", () => {
+  it("renders only two pill buttons (primary + secondary) — dismiss is not in the design", () => {
     render(<DecisionCard {...makeProps()} />);
     expect(screen.getByRole("button", { name: "Yes, send it" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Not yet" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+    // Dismiss action lives in the dispatcher contract; the design bundle
+    // renders only 2 pills. Slice B2 will surface dismiss as a non-pill
+    // affordance (icon menu / swipe / etc.).
+    expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
   });
 
   it("fires onPrimary when the primary button is clicked", () => {
@@ -48,13 +51,6 @@ describe("DecisionCard", () => {
     render(<DecisionCard {...makeProps({ onSecondary })} />);
     fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
     expect(onSecondary).toHaveBeenCalledTimes(1);
-  });
-
-  it("fires onDismiss when the dismiss button is clicked", () => {
-    const onDismiss = vi.fn();
-    render(<DecisionCard {...makeProps({ onDismiss })} />);
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it("renders threadHref as an anchor when present", () => {

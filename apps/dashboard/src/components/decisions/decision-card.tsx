@@ -13,6 +13,13 @@ export interface DecisionCardComponentProps extends DecisionCardProps {
   why?: string;
   onPrimary?: () => void;
   onSecondary?: () => void;
+  /**
+   * Dismiss handler. The dispatcher contract still supports a `dismiss`
+   * action (see `dispatchDecisionAction`), but the design bundle only
+   * renders 2 pills — Slice B2 will surface dismiss as a non-pill
+   * affordance (icon menu, swipe, etc.) once designed. Kept on the
+   * prop type so the public contract doesn't break for callers.
+   */
   onDismiss?: () => void;
 }
 
@@ -30,12 +37,10 @@ export function DecisionCard({
   serifSentence,
   primaryLabel,
   secondaryLabel,
-  dismissLabel,
   threadHref,
   why,
   onPrimary,
   onSecondary,
-  onDismiss,
 }: DecisionCardComponentProps) {
   return (
     <article className="decision">
@@ -51,9 +56,6 @@ export function DecisionCard({
           </button>
           <button type="button" className="pill pill-outline" onClick={onSecondary}>
             {secondaryLabel}
-          </button>
-          <button type="button" className="pill pill-ghost" onClick={onDismiss}>
-            {dismissLabel}
           </button>
         </div>
         <div className="dc-meta">
