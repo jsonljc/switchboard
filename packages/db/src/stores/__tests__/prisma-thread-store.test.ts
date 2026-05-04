@@ -7,6 +7,7 @@ function makeMockPrisma() {
   return {
     conversationThread: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
     },
@@ -233,6 +234,35 @@ describe("PrismaConversationThreadStore", () => {
       await store.update("thread-1", { stage: "won" });
       const call = prisma.conversationThread.update.mock.calls[0]![0]!;
       expect(Object.keys(call.data)).toEqual(["stage"]);
+    });
+  });
+
+  describe("listByContactIds", () => {
+    it("returns a Map keyed by contactId", async () => {
+      prisma.conversationThread.findMany.mockResolvedValue([
+        makeThread({ id: "t1", contactId: "c1", assignedAgent: "alex" }),
+      ]);
+
+      const result = await store.listByContactIds("org-1", ["c1"]);
+
+      expect(result.get("c1")?.assignedAgent).toBe("alex");
+    });
+
+    it("returns empty Map for empty input (no DB call)", async () => {
+      const result = await store.listByContactIds("org-1", []);
+
+      expect(result.size).toBe(0);
+      expect(prisma.conversationThread.findMany).not.toHaveBeenCalled();
+    });
+
+    it("filters by orgId for tenant isolation", async () => {
+      prisma.conversationThread.findMany.mockResolvedValue([]);
+
+      await store.listByContactIds("org-1", ["c1"]);
+
+      expect(prisma.conversationThread.findMany).toHaveBeenCalledWith({
+        where: { organizationId: "org-1", contactId: { in: ["c1"] } },
+      });
     });
   });
 });

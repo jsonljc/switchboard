@@ -30,4 +30,7 @@ export interface ConversationThreadStore {
       messageCount?: number;
     },
   ): Promise<void>;
+
+  /** Batch load threads by contactId. Returns a Map keyed by contactId. */
+  listByContactIds(orgId: string, contactIds: string[]): Promise<Map<string, ConversationThread>>;
 }

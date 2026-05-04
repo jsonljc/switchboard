@@ -47,6 +47,40 @@ interface ConversationThread {
   updatedAt: Date;
 }
 
+interface ConversationThreadRow {
+  id: string;
+  contactId: string;
+  organizationId: string;
+  stage: string;
+  threadStatus: string;
+  assignedAgent: string;
+  agentContext: unknown;
+  currentSummary: string;
+  followUpSchedule: unknown;
+  lastOutcomeAt: Date | null;
+  messageCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function mapRow(row: ConversationThreadRow): ConversationThread {
+  return {
+    id: row.id,
+    contactId: row.contactId,
+    organizationId: row.organizationId,
+    stage: row.stage as ThreadStage,
+    threadStatus: row.threadStatus as ThreadStatus,
+    assignedAgent: row.assignedAgent,
+    agentContext: row.agentContext as AgentContextData,
+    currentSummary: row.currentSummary,
+    followUpSchedule: row.followUpSchedule as FollowUpSchedule,
+    lastOutcomeAt: row.lastOutcomeAt,
+    messageCount: row.messageCount,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export class PrismaConversationThreadStore {
   constructor(private prisma: PrismaClient) {}
 
@@ -59,22 +93,18 @@ export class PrismaConversationThreadStore {
     });
 
     if (!row) return null;
+    return mapRow(row);
+  }
 
-    return {
-      id: row.id,
-      contactId: row.contactId,
-      organizationId: row.organizationId,
-      stage: row.stage as ThreadStage,
-      threadStatus: row.threadStatus as ThreadStatus,
-      assignedAgent: row.assignedAgent,
-      agentContext: row.agentContext as unknown as AgentContextData,
-      currentSummary: row.currentSummary,
-      followUpSchedule: row.followUpSchedule as unknown as FollowUpSchedule,
-      lastOutcomeAt: row.lastOutcomeAt,
-      messageCount: row.messageCount,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+  async listByContactIds(
+    orgId: string,
+    contactIds: string[],
+  ): Promise<Map<string, ConversationThread>> {
+    if (contactIds.length === 0) return new Map();
+    const rows = await this.prisma.conversationThread.findMany({
+      where: { organizationId: orgId, contactId: { in: contactIds } },
+    });
+    return new Map(rows.map((r) => [r.contactId, mapRow(r)]));
   }
 
   async create(thread: ConversationThread): Promise<void> {
