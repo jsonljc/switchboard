@@ -6,6 +6,7 @@ import { EditorialShellBoundary } from "./editorial-shell-boundary";
 import { AmbientCream } from "./ambient-cream";
 import { InboxLinkClient } from "./inbox-link-client";
 import { HaltButtonClient } from "./halt-button-client";
+import { HaltProvider } from "./halt-provider-client";
 
 export async function EditorialAuthShell({ children }: { children: ReactNode }) {
   const enabledAgents = await fetchEnabledAgentsServer();
@@ -24,7 +25,7 @@ export function EditorialAuthShellInner({
   children: ReactNode;
 }) {
   return (
-    <>
+    <HaltProvider>
       <AmbientCream />
       <header className="app-header">
         <div className="app-header-row">
@@ -57,6 +58,6 @@ export function EditorialAuthShellInner({
         </div>
       </header>
       <main>{children}</main>
-    </>
+    </HaltProvider>
   );
 }
