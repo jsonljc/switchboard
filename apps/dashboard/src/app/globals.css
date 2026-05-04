@@ -90,10 +90,12 @@
 
     /* ─── Mercury / editorial register tokens ─── */
     /* Used by /reports and the agent-home redesign. Namespaced
-       (--mercury-*) to avoid clobbering the existing dashboard
-       palette. Track A (feat/decision-feed-frontend) may add the
-       same tokens — duplicate definition is intentional and
-       resolves trivially on merge. */
+       (--mercury-*) to keep this PR mergeable on its own without
+       depending on track A. Track A's editorial tokens
+       (--cream, --ink, --ink-2/3/4, --hairline, --serif, --mono)
+       will live alongside these once PR #363 merges; reports.module.css
+       aliases mercury → editorial at .reportsPage so consumers don't
+       care which lands first. */
     --mercury-cream: hsl(40 25% 94%);
     --mercury-ink: hsl(20 10% 12%);
     --mercury-ink-2: hsl(20 8% 28%);
