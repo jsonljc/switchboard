@@ -1,8 +1,9 @@
 /* =========================================================
-   Decision Card — editorial register
-   Translated from alex-home.css (.decision/.dc-*/.pill*/.why-*/.thread-link).
-   Uses tokens declared in app/globals.css under
-   "Editorial register — Alex Home / Decision Card / Reports".
+   Decision Card — editorial register.
+   Translated from alex-home.css (decision, dc-folio, dc-prose,
+   dc-actions, dc-buttons, dc-meta, pill, why-link, thread-link,
+   dc-resolved-line, dc-undo). Tokens declared in globals.css
+   under "Editorial register — Alex Home / Decision Card / Reports".
    ========================================================= */
 
 .decision {
