@@ -494,6 +494,16 @@ export async function buildServer() {
     app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
   }
 
+  // Decision feed deps — Prisma stores merged by /api/dashboard/[agents/:key/]decisions.
+  // Skipped when no DB; the route returns 500 ("dependencies not wired").
+  if (prismaClient) {
+    const { PrismaContactStore, PrismaHandoffStore, PrismaConversationThreadStore } =
+      await import("@switchboard/db");
+    app.decorate("contactStore", new PrismaContactStore(prismaClient));
+    app.decorate("handoffStore", new PrismaHandoffStore(prismaClient));
+    app.decorate("threadStore", new PrismaConversationThreadStore(prismaClient));
+  }
+
   const { resolveAuthoritativeDeployment } =
     await import("./bootstrap/platform-deployment-resolver.js");
 

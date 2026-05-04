@@ -330,4 +330,36 @@ describe("PrismaContactStore", () => {
       });
     });
   });
+
+  describe("listByIds", () => {
+    it("returns a Map keyed by contact id", async () => {
+      prisma.contact.findMany.mockResolvedValue([
+        makeContact({ id: "c1", name: "Maya" }),
+        makeContact({ id: "c2", name: "Jordan" }),
+      ]);
+
+      const result = await store.listByIds("org-1", ["c1", "c2"]);
+
+      expect(result.size).toBe(2);
+      expect(result.get("c1")?.name).toBe("Maya");
+      expect(result.get("c2")?.name).toBe("Jordan");
+    });
+
+    it("returns an empty Map for empty input (no DB call)", async () => {
+      const result = await store.listByIds("org-1", []);
+
+      expect(result.size).toBe(0);
+      expect(prisma.contact.findMany).not.toHaveBeenCalled();
+    });
+
+    it("filters by orgId for tenant isolation", async () => {
+      prisma.contact.findMany.mockResolvedValue([]);
+
+      await store.listByIds("org-1", ["c1"]);
+
+      expect(prisma.contact.findMany).toHaveBeenCalledWith({
+        where: { organizationId: "org-1", id: { in: ["c1"] } },
+      });
+    });
+  });
 });

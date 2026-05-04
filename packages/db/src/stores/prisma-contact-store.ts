@@ -32,6 +32,7 @@ interface ContactStore {
   updateStage(orgId: string, id: string, stage: ContactStage): Promise<Contact>;
   updateLastActivity(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
+  listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +127,14 @@ export class PrismaContactStore implements ContactStore {
         updatedAt: new Date(),
       },
     });
+  }
+
+  async listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.contact.findMany({
+      where: { organizationId: orgId, id: { in: ids } },
+    });
+    return new Map(rows.map((r) => [r.id, mapRowToContact(r)]));
   }
 
   async list(orgId: string, filters?: ContactFilters): Promise<Contact[]> {
