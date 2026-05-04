@@ -8,15 +8,17 @@ beforeEach(() => {
 });
 
 describe("dispatchDecisionAction", () => {
-  it("approval primary calls POST /api/recommendations/:id/act with action='primary'", async () => {
+  it("approval primary calls POST /api/dashboard/recommendations with recommendationId in body", async () => {
     await dispatchDecisionAction({ kind: "approval", sourceId: "rec-1" }, "primary");
     expect(fetch).toHaveBeenCalledWith(
-      "/api/recommendations/rec-1/act",
+      "/api/dashboard/recommendations",
       expect.objectContaining({
         method: "POST",
         body: expect.stringContaining('"action":"primary"'),
       }),
     );
+    const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]!.body);
+    expect(body.recommendationId).toBe("rec-1");
   });
 
   it("approval includes optional note in payload", async () => {
@@ -27,12 +29,12 @@ describe("dispatchDecisionAction", () => {
     expect(body.note).toBe("n");
   });
 
-  it("handoff primary calls /api/escalations/:id/reply (NOT /api/handoffs/*)", async () => {
+  it("handoff primary calls /api/dashboard/escalations/:id/reply (NOT /api/handoffs/*)", async () => {
     await dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "primary", {
       message: "Got it.",
     });
     expect(fetch).toHaveBeenCalledWith(
-      "/api/escalations/h-1/reply",
+      "/api/dashboard/escalations/h-1/reply",
       expect.objectContaining({
         method: "POST",
         body: expect.stringContaining('"message":"Got it."'),
@@ -40,17 +42,17 @@ describe("dispatchDecisionAction", () => {
     );
   });
 
-  it("handoff secondary/dismiss call /api/escalations/:id/resolve", async () => {
+  it("handoff secondary/dismiss call /api/dashboard/escalations/:id/resolve", async () => {
     await dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "secondary", {
       resolutionNote: "snooze",
     });
     expect(fetch).toHaveBeenCalledWith(
-      "/api/escalations/h-1/resolve",
+      "/api/dashboard/escalations/h-1/resolve",
       expect.objectContaining({ method: "POST" }),
     );
     await dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "dismiss");
     expect(fetch).toHaveBeenLastCalledWith(
-      "/api/escalations/h-1/resolve",
+      "/api/dashboard/escalations/h-1/resolve",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -59,5 +61,26 @@ describe("dispatchDecisionAction", () => {
     await dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "primary");
     const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]!.body);
     expect(body.message).toBe("");
+  });
+
+  it("throws if approval response is not ok", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof fetch;
+    await expect(
+      dispatchDecisionAction({ kind: "approval", sourceId: "rec-1" }, "primary"),
+    ).rejects.toThrow(/Recommendation action failed/);
+  });
+
+  it("throws if handoff reply response is not ok", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof fetch;
+    await expect(
+      dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "primary"),
+    ).rejects.toThrow(/Handoff reply failed/);
+  });
+
+  it("throws if handoff resolve response is not ok", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof fetch;
+    await expect(
+      dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "secondary"),
+    ).rejects.toThrow(/Handoff resolve failed/);
   });
 });
