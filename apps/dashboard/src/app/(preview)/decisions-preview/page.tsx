@@ -1,5 +1,6 @@
 "use client";
 
+import { notFound } from "next/navigation";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
 import type { Decision } from "@/lib/decisions/types";
@@ -82,6 +83,11 @@ const fixtures: Array<{ decision: Decision; why: string }> = [
 ];
 
 export default function DecisionsPreviewPage() {
+  // Hide the preview route in production. Lightest-touch fix — the route
+  // returns 404 in prod, fully accessible in dev. Delete this whole route
+  // once the agent home page lands.
+  if (process.env.NODE_ENV === "production") notFound();
+
   return (
     <main
       style={{
