@@ -86,7 +86,8 @@ export interface ReportData {
 export const goodFixture: ReportData = {
   label: "THIS MONTH",
   period: "APR 1 — APR 30",
-  dateFolio: "MAY 1 — APRIL 30",
+  // dateFolio will be replaced by computed range in the live wiring PR.
+  dateFolio: "APR 1 — APR 30",
   pullquote: {
     pre: "Your team earned you ",
     value: "$14,700",
