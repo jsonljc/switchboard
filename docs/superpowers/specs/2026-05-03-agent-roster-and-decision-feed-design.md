@@ -490,10 +490,15 @@ Wire response — `Decision.createdAt` and `meta.slaDeadlineAt` / `meta.undoable
 
 **Cross-tenant isolation test** required (`apps/api/src/__tests__/api-decisions-isolation.test.ts`), mirroring `api-recommendations-isolation.test.ts`.
 
-**No new act endpoint in Slice A.** Each kind already has its own act route — the frontend dispatches by `decision.sourceRef.kind`. A unified `POST /api/decisions/:id/act` would invent a new contract before B2 reveals what shape it should take — defer. The actual existing routes:
+**No new act endpoint in Slice A.** Each kind already has its own act route — the frontend dispatches by `decision.sourceRef.kind`. A unified `POST /api/decisions/:id/act` would invent a new contract before B2 reveals what shape it should take — defer.
 
-- **Approval** (recommendation): `POST /api/recommendations/:id/act` (body: `{ action: "primary" | "secondary" | "dismiss" | "confirm" | "undo" }`).
-- **Handoff**: there is no `/api/handoffs/*` route. Handoff actions are at `POST /api/escalations/:id/reply` (body: `{ message }`) and `POST /api/escalations/:id/resolve` (body: `{ resolutionNote? }`). The route is named "escalations" for legacy reasons but operates on `Handoff` rows (verified at `apps/api/src/routes/escalations.ts:42`, `:170`, `:280`, `:305`).
+> **Dashboard proxy convention.** All browser → backend calls in the dashboard route through `/api/dashboard/*` Next.js proxies; never call API server URLs (`/api/...`) directly from the browser. The dashboard runs on `:3002`; the API server runs on `:3000`. Direct fetches from the browser to `/api/...` 404. The proxies enforce session and forward to the upstream API with the session-derived API key.
+
+The actual existing routes (and the dashboard proxies that front them):
+
+- **Approval** (recommendation): upstream `POST /api/recommendations/:id/act` (body: `{ action: "primary" | "secondary" | "dismiss" | "confirm" | "undo" }`). Browser calls the existing collection-style proxy `POST /api/dashboard/recommendations` with `{ recommendationId, action, note? }` in the body — same proxy used by `useRecommendationAction`.
+- **Handoff**: there is no `/api/handoffs/*` route. Handoff actions are at upstream `POST /api/escalations/:id/reply` (body: `{ message }`) and `POST /api/escalations/:id/resolve` (body: `{ resolutionNote? }`). The route is named "escalations" for legacy reasons but operates on `Handoff` rows (verified at `apps/api/src/routes/escalations.ts:42`, `:170`, `:280`, `:305`). Browser calls `POST /api/dashboard/escalations/:id/reply` and `POST /api/dashboard/escalations/:id/resolve` (proxies already exist; used by `useEscalationReply`).
+- **Decision read endpoints**: `GET /api/decisions` and `GET /api/agents/:key/decisions` upstream; browser calls `GET /api/dashboard/decisions` and `GET /api/dashboard/agents/:key/decisions` (PR 4 added these proxies along with `SwitchboardClient.listDecisions(agentKey?)`).
 
 ---
 
@@ -608,7 +613,7 @@ export function mapToDecisionCard(decision: Decision, index: number): DecisionCa
 }
 ```
 
-**`apps/dashboard/src/lib/decisions/dispatch-action.ts`** — locks the action-dispatch contract for Slice B2 to call:
+**`apps/dashboard/src/lib/decisions/dispatch-action.ts`** — locks the action-dispatch contract for Slice B2 to call. All URLs go through the dashboard proxy fleet (`/api/dashboard/*`), per the convention above:
 
 ```ts
 // Slice B2 will define richer types for action payloads (e.g. { message } for reply).
@@ -619,36 +624,48 @@ export async function dispatchDecisionAction(
   payload?: { message?: string; resolutionNote?: string; note?: string },
 ): Promise<void> {
   switch (source.kind) {
-    case "approval":
-      // POST /api/recommendations/:id/act — body: { action: "primary"|"secondary"|"dismiss"|"confirm"|"undo", note? }
-      await fetch(`/api/recommendations/${source.sourceId}/act`, {
+    case "approval": {
+      // Upstream: POST /api/recommendations/:id/act
+      // Browser → dashboard proxy: POST /api/dashboard/recommendations (collection-style with
+      // recommendationId in body) — reuses the proxy already used by useRecommendationAction.
+      const res = await fetch(`/api/dashboard/recommendations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, note: payload?.note }),
+        body: JSON.stringify({
+          recommendationId: source.sourceId,
+          action,
+          ...(payload?.note !== undefined ? { note: payload.note } : {}),
+        }),
       });
+      if (!res.ok) throw new Error(`Recommendation action failed (HTTP ${res.status})`);
       return;
-    case "handoff":
+    }
+    case "handoff": {
       // /api/handoffs/* does NOT exist. Handoff acts go through /api/escalations/:id/{reply|resolve}
-      // (legacy naming — the route operates on Handoff rows; see §1 reconciliation note + §9).
+      // upstream (legacy naming — the route operates on Handoff rows; see §1 reconciliation note + §9).
+      // Browser → dashboard proxies: /api/dashboard/escalations/:id/{reply|resolve} (proxies already exist).
       // Action mapping for Slice B2's "Take this one" / "Snooze" / "Mark resolved" pills:
-      //   primary    → POST /reply      (body: { message })  — operator takes over with a reply
-      //   secondary  → POST /resolve    (body: { resolutionNote? }) with snooze semantics
-      //   dismiss    → POST /resolve    (body: { resolutionNote? }) with mark-resolved semantics
+      //   primary    → /reply    (body: { message })  — operator takes over with a reply
+      //   secondary  → /resolve  (body: { resolutionNote? }) with snooze semantics
+      //   dismiss    → /resolve  (body: { resolutionNote? }) with mark-resolved semantics
       // The reply payload requires a message body; if absent, B2 must surface an inline composer.
       if (action === "primary") {
-        await fetch(`/api/escalations/${source.sourceId}/reply`, {
+        const res = await fetch(`/api/dashboard/escalations/${source.sourceId}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: payload?.message ?? "" }),
         });
+        if (!res.ok) throw new Error(`Handoff reply failed (HTTP ${res.status})`);
       } else {
-        await fetch(`/api/escalations/${source.sourceId}/resolve`, {
+        const res = await fetch(`/api/dashboard/escalations/${source.sourceId}/resolve`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ resolutionNote: payload?.resolutionNote }),
         });
+        if (!res.ok) throw new Error(`Handoff resolve failed (HTTP ${res.status})`);
       }
       return;
+    }
   }
 }
 ```
