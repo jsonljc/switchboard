@@ -321,8 +321,8 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     counts: { total: number; approval: number; handoff: number };
   }> {
     const path = agentKey
-      ? `/api/agents/${encodeURIComponent(agentKey)}/decisions`
-      : `/api/decisions`;
+      ? `/api/dashboard/agents/${encodeURIComponent(agentKey)}/decisions`
+      : `/api/dashboard/decisions`;
     return this.request<{
       decisions: unknown[];
       counts: { total: number; approval: number; handoff: number };
