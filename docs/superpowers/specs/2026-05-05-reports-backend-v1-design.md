@@ -56,12 +56,12 @@ This spec wires roadmap items #11–#15 (per `2026-05-03-agent-first-redesign-ro
 | 1 | Per-agent revenue attribution  | First-touch via `Opportunity` → first `ConversionRecord`. No schema migration. Riley = revenue from leads whose first touchpoint was an ad (`sourceAdId` or `sourceCampaignId` present); Alex = revenue from leads whose first touchpoint was a managed channel (`sourceChannel` present, no ad source); manual-entry revenue (no `ConversionRecord`) buckets to Alex by default. Documented in `core/reports/attribution-rule.ts`. Phase D may add `LifecycleRevenueEvent.agentDeploymentId` for last-touch view; the first-touch rule remains the v1 source of truth. |
 | 2 | Funnel landing-visits source   | Net-new first-party web analytics pixel + ingestion. `ConversionRecord.type='visit'` convention (no schema change). Pixel JS served from `GET /api/pixel.js`, ingested at `POST /api/pixel/visit`. Cookieless session derivation: daily-rotating hash of `(IP/24, user-agent, orgId)`. IP truncated to `/24` before storage. Bot UA filter at ingestion. |
 | 2b | 6th funnel stage (Customers) | New row added to the locked funnel: **Customers** = count of `Opportunity` rows with `closedAt NOT NULL AND lostReason IS NULL` whose `closedAt` falls in the period. Sits between Bookings and the implicit revenue total. No schema change. Surfaces conversion, not just bookings — directly answers "how many leads turned into paying customers this period?" Locked CSS adjustment in PR-R3. |
-| 3 | Funnel narrative source        | Latest period-relevant ad-optimizer `Recommendation` (intents in `{creative_fatigue, ctr_drop, conversion_drop}`) formatted as `"Riley · {date} — {humanSummary}"`. Static fallback when none exists.                                                                                  |
+| 3 | Funnel narrative source        | Latest in-period `Recommendation` row for `agentKey='riley'` (any intent — verified against codebase: ad-optimizer recommendations don't use the specific intent strings I'd previously claimed; they carry `humanSummary` prose like "Fatigued creatives reducing engagement"). Formatted as `"Riley · {date} — {humanSummary}"`. Static fallback when none exists.                                                                                  |
 | 4 | Aggregation strategy           | On-demand SQL aggregation per request, backed by 1h `ReportCache` (`(orgId, window) → ReportData JSON`). No background cron. "Refresh" button on page busts cache for the active org/window.                                                                                          |
 | 5 | PDF export                     | Playwright server-side render of `/reports?print=1`. Short-lived signed JWT scopes `(orgId, window)` to prevent direct-URL leakage. Per-request Playwright launch (no pool in v1). Cached alongside `ReportData` for 1h. Filename `switchboard-report-{orgSlug}-{window}.pdf`.                                                                                                                                                                                |
-| 6 | Cost-vs-value comparison math  | Hard-coded US SMB constants in core (`SDR_MONTHLY_USD = 5000`, `AGENCY_MONTHLY_USD = 3000`). Footnote on page: "Based on US SMB hiring averages." `paid` = Stripe period invoice prorated to window; `alt` = `(SDR_MONTHLY_USD + AGENCY_MONTHLY_USD)` prorated; `saving = alt - paid`.       |
+| 6 | Cost-vs-value comparison math  | Hard-coded US SMB constants in core (`SDR_MONTHLY_USD = 5000`, `AGENCY_MONTHLY_USD = 3000`). Footnote on page: "Based on US SMB hiring averages." `paid` is computed *without* live Stripe API calls (verified: `core/billing` only exposes `evaluateEntitlement` today; no Stripe invoice access). Instead: a local `priceToMonthlyUSD(stripePriceId)` mapping in core converts `OrganizationConfig.stripePriceId` to a flat monthly $ amount, prorated by window-day-count. `alt` = `(SDR_MONTHLY_USD + AGENCY_MONTHLY_USD)` prorated; `saving = alt - paid`. Mapping table is co-located with the Stripe price list we control. Live invoice queries are a Phase D upgrade if precision matters. |
 | 7 | Production cutover             | Single `NEXT_PUBLIC_REPORTS_LIVE` env flag. Defaults `false` in production through PR-R1..R5. Final PR-R6 flips the flag, deletes `fixtures.ts`, removes the flag.                                                                                                                                                                                                                                                                                            |
-| 8 | Managed-vs-unmanaged grain     | Channel-level (not campaign-level). Riley-managed ads = campaigns under an `AdAccount` connected to Switchboard with active dispatcher; Unmanaged = the org's other campaigns from the same Meta connection (or campaigns from a tag-marked unmanaged account). Alex-managed conversations = `ConversationThread` first-responder is Alex's deployment; Operator = first-responder is human. |
+| 8 | Managed-vs-unmanaged grain     | Channel-level (not campaign-level). Riley-managed ads = campaigns under a Meta `Connection` row (verified: `Connection.serviceId='meta'` with `status='connected'` is the canonical handle; no separate `AdAccount` model exists in Prisma) where ad-optimizer's dispatcher is active; Unmanaged = the org's other campaigns from the same Meta account that aren't being dispatched-against. Alex-managed conversations = `ConversationThread.assignedAgent` matches the org's Alex deployment `slug` (resolved via `AgentDeployment.listingId → AgentListing.slug`); Operator-managed = `assignedAgent` is empty or matches a non-AI value. |
 | 9 | Cohort-missing fallback        | Pre-Switchboard baseline: at onboarding completion, an Inngest job pulls 90 days of pre-Switchboard ad account history from Meta and writes to a new `PreSwitchboardBaseline` row per `(orgId, dimension)`. At report time: when an unmanaged in-period cohort is missing, render baseline-vs-managed; when neither exists (brand-new org, no baseline yet), hide the section and render "Comparison unlocks after 30 days."                              |
 | 10 | Pull-quote register           | New LLM call in `core/reports/pull-quote-generator.ts`. Output conforms to the agent-voice idioms used by `Recommendation.humanSummary` (existing precedent for agent-voice prose), but no shared generator utility exists today — this is greenfield. System prompt tuned for operator-deep-dive register (concise brief, not warm renewal narrative). Cached per `(orgId, window)` for 1h alongside `ReportData`. |
 
@@ -140,9 +140,10 @@ On onboarding completion (existing OnboardingComplete event)
 
 ### 4.5 Layer compliance
 
-- `packages/core/src/reports/*` — pure projection logic, reads via `db` stores, no HTTP/Inngest imports
-- `packages/core` does not import `ad-optimizer` directly. Meta insights are read via `db` (already cached there by ad-optimizer's existing inngest functions).
-- `apps/api/src/routes/*` — thin handlers: parse query, call core, handle cache, return JSON
+- `packages/core/src/reports/*` — pure projection logic. Reads via `db` stores (injected); reads Meta insights via a `CampaignInsightsProvider` (interface from `@switchboard/schemas`, injected). No HTTP/Inngest imports inside core.
+- `packages/core` does not import `ad-optimizer` directly. The `CampaignInsightsProvider` interface lives in `@switchboard/schemas` (verified: already exported there); the implementation `MetaCampaignInsightsProvider` lives in `ad-optimizer`. Wiring is done at the API route layer (`apps/api`) which is allowed to import both core and ad-optimizer.
+- **Important note on Meta insights**: there is **no local `AdInsight` cache table** in Prisma today (verified). The provider hits the live Meta API on each call. Acceptability for v1 rests on the 1h `ReportCache` — Meta is hit at most ~3 times per (org × day) per-window cold. A persisted insight cache is a Phase D optimization if Meta rate-limits or outages become disruptive.
+- `apps/api/src/routes/*` — thin handlers: parse query, construct dependencies (db stores + insights provider), call core, handle cache, return JSON
 - `apps/dashboard/src/app/(auth)/reports/*` — pure renderers; no business logic
 
 ---
@@ -205,14 +206,15 @@ model OrganizationConfig {
 
 ### 5.4 Existing schema reuse
 
-- `LifecycleRevenueEvent` — revenue facts, joined to `Opportunity` for first-touch attribution
-- `Opportunity` — joined to first `ConversionRecord` for attribution rule
-- `ConversionRecord` — funnel facts (lead/visit/click events)
-- `Booking` — funnel "Bookings" stage
-- `OrganizationConfig.stripeCustomerId/stripeSubscriptionId/currentPeriodEnd` — period invoice data for `paid` cost
-- `ConversationThread` — first-responder bucket for managed-vs-unmanaged comparison
-- `Recommendation` (recommendations v1) — funnel narrative source
-- `AgentDeployment` — Riley/Alex identity for first-responder check
+- `LifecycleRevenueEvent` — revenue facts. Has `sourceCampaignId`/`sourceAdId`. **No `agentDeploymentId`** (Phase D). Existing store helpers `sumByOrg(orgId, dateRange)` and `sumByCampaign(orgId, dateRange)` are leveraged directly.
+- `Opportunity` — has `closedAt`/`lostReason`/`revenueTotal`. Joined to `ConversionRecord` via `contactId` (no direct FK) for first-touch attribution. Used by the new Customers funnel stage (`closedAt NOT NULL AND lostReason IS NULL`).
+- `ConversionRecord` — funnel facts. Existing values (`lead`, `qualified`, etc.); v1 adds `visit` as a string convention.
+- `Booking` — funnel "Bookings" stage. `status` valid values today are `pending_confirmation`/`confirmed`/`cancelled`/`failed`. **No `attended`/`completed`/`no_show` writers exist** — Phase D for the attendance funnel stage.
+- `OrganizationConfig.stripePriceId` — input to local `priceToMonthlyUSD()` mapping for `paid` cost. **No live Stripe API call**; mapping is co-located with the price list we control.
+- `ConversationThread.assignedAgent` (free-form string) — managed-vs-unmanaged identity for the comparison. Resolved against `AgentDeployment` via `listingId → AgentListing.slug`.
+- `Recommendation` (recommendations v1, table `PendingActionRecord` per existing schema) — funnel narrative source. Filtered to `agentKey='riley'` in-period.
+- `AgentDeployment` — Alex/Riley identity. Lookup path: `AgentDeployment.listingId → AgentListing.slug`. Slug is the canonical agent key.
+- `Connection` (`serviceId='meta'`, `status='connected'`) — the org's connected Meta account; the `CampaignInsightsProvider` is parameterised by `accountId` derived from `Connection.externalAccountId`.
 
 ---
 
@@ -419,15 +421,16 @@ Six PRs, each independently mergeable:
 
 ### PR-R4 — Campaign rollup + Managed-vs-Unmanaged comparison
 
-- `core/reports/campaign-rollup.ts` + tests (Meta insights × ConversionRecord × LifecycleRevenueEvent)
-- `core/reports/managed-comparison-rollup.ts` + tests (channel-level cohort + baseline fallback)
+- `core/reports/campaign-rollup.ts` + tests (Meta insights × ConversionRecord × LifecycleRevenueEvent). Takes a `CampaignInsightsProvider` dependency; period rollup constructs and passes it.
+- `core/reports/managed-comparison-rollup.ts` + tests (channel-level cohort + baseline fallback). Reads `ConversationThread.assignedAgent` and resolves the org's Alex deployment slug.
 - `core/reports/baseline-capture.ts` + tests (called by inngest)
 - `core/reports/baseline-store.ts`
-- Inngest function `capturePreSwitchboardBaseline` triggered on onboarding completion event
+- **Add `inngest.send({ name: "org/onboarding.completed", data: { organizationId } })` to all 5 sites in `apps/api/src/routes/agents.ts` that flip `onboardingComplete: true`** (verified: there are 5 such call sites today; no event is emitted from any of them).
+- Inngest function `capturePreSwitchboardBaseline` listens for `org/onboarding.completed` and runs the 90-day Meta backfill.
 - `<ManagedComparison>` component + tests, mounted between Funnel and Campaigns
 - `period-rollup.ts` updated to populate `campaigns` and `managedComparison`
 
-**Acceptance:** in staging, campaigns render real Meta data with ROAS column; comparison section renders with in-period cohort or baseline fallback or hidden empty-state copy.
+**Acceptance:** in staging, campaigns render real Meta data with ROAS column; comparison section renders with in-period cohort or baseline fallback or hidden empty-state copy. Existing orgs (created before PR-R4) need a one-shot `tsx packages/core/scripts/backfill-baseline-for-existing-orgs.ts` to seed baselines (since they completed onboarding before the event existed).
 
 ### PR-R5 — Pull-quote LLM generator + cache integration
 
@@ -553,7 +556,7 @@ System-wide acceptance for v1:
 | Risk                                                                                  | Mitigation                                                                                                                                                                                                                                                                                          |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | First-touch attribution disagrees with operator's mental model                        | Doc the rule in `attribution-rule.ts` JSDoc and in the page's footer disclosure ("Attribution by first-touch — ad-driven if first event was an ad click; chat-driven otherwise"). Phase D may surface a last-touch alternative.                                                                     |
-| Meta API outage during rollup                                                         | Funnel and campaign rollups read Meta data from the local `db` cache populated by ad-optimizer's existing inngest functions, not directly from Meta. If the local cache is stale, the rollup proceeds with stale ad data and renders with what's available.                                          |
+| Meta API outage during rollup                                                         | **Updated**: there is no local Meta-insights cache today (verified). The rollup calls `CampaignInsightsProvider` live; on Meta API error the rollup catches the error, sets `funnel.[Impressions/Clicks].n = null` (rendering as "—"), and adds a non-blocking warning banner to the page. The 1h `ReportCache` keeps successful rollups available even if Meta is down for an hour. Phase D may add a persisted insight cache if outages prove disruptive. |
 | Playwright Chromium binary inflates Docker image size and cold-start                  | Acceptable trade-off for design parity. Per-request launch (no pool) keeps memory floor low. Future Phase D may introduce a Playwright pool if PDF generation latency becomes a customer complaint.                                                                                                  |
 | LLM pull-quote produces awkward or inaccurate prose                                   | (a) System prompt validated against fixture data shapes during PR-R5 review. (b) Output validated against `PullQuoteCopy`. (c) Template fallback on any validation failure. (d) Cached 1h so rare bad outputs don't reload-spam.                                                                       |
 | Per-IP rate limits on pixel ingestion break corporate-NAT customers (many users behind one IP) | The 60/min per-IP-per-org limit is generous for a corporate site (~1 page view/sec). If a customer hits it, we can raise the per-IP limit on their org via an `OrganizationConfig` override field (deferred to Phase D unless complained-about).                                                  |
