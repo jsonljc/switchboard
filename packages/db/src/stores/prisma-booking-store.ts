@@ -108,4 +108,19 @@ export class PrismaBookingStore {
       contact: { name: r.attendeeName },
     }));
   }
+
+  async countExcludingStatuses(input: {
+    orgId: string;
+    excludeStatuses: readonly string[];
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    return this.prisma.booking.count({
+      where: {
+        organizationId: input.orgId,
+        status: { notIn: [...input.excludeStatuses] },
+        createdAt: { gte: input.from, lt: input.to },
+      },
+    });
+  }
 }

@@ -165,6 +165,69 @@ export class PrismaRevenueStore implements RevenueStore {
         count: r._count.id,
       }));
   }
+
+  async revenueWithFirstTouch(input: { orgId: string; from: Date; to: Date }): Promise<
+    Array<{
+      amount: number;
+      firstTouchSourceAdId: string | null;
+      firstTouchSourceCampaignId: string | null;
+      firstTouchSourceChannel: string | null;
+    }>
+  > {
+    const events = await this.prisma.lifecycleRevenueEvent.findMany({
+      where: {
+        organizationId: input.orgId,
+        status: "confirmed",
+        recordedAt: { gte: input.from, lt: input.to },
+      },
+      select: {
+        amount: true,
+        contactId: true,
+      },
+    });
+
+    if (events.length === 0) return [];
+
+    const contactIds = [...new Set(events.map((e) => e.contactId))];
+
+    const firstTouches = await this.prisma.conversionRecord.findMany({
+      where: {
+        contactId: { in: contactIds },
+        organizationId: input.orgId,
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        contactId: true,
+        sourceAdId: true,
+        sourceCampaignId: true,
+        sourceChannel: true,
+      },
+    });
+
+    const firstByContact = new Map<
+      string,
+      { sourceAdId: string | null; sourceCampaignId: string | null; sourceChannel: string | null }
+    >();
+    for (const cr of firstTouches) {
+      if (!firstByContact.has(cr.contactId)) {
+        firstByContact.set(cr.contactId, {
+          sourceAdId: cr.sourceAdId,
+          sourceCampaignId: cr.sourceCampaignId,
+          sourceChannel: cr.sourceChannel,
+        });
+      }
+    }
+
+    return events.map((e) => {
+      const ft = firstByContact.get(e.contactId);
+      return {
+        amount: e.amount,
+        firstTouchSourceAdId: ft?.sourceAdId ?? null,
+        firstTouchSourceCampaignId: ft?.sourceCampaignId ?? null,
+        firstTouchSourceChannel: ft?.sourceChannel ?? null,
+      };
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -187,6 +187,16 @@ export class PrismaOpportunityStore implements OpportunityStore {
       totalValue: r._sum.estimatedValue ?? 0,
     }));
   }
+
+  async countClosedWon(input: { orgId: string; from: Date; to: Date }): Promise<number> {
+    return this.prisma.opportunity.count({
+      where: {
+        organizationId: input.orgId,
+        closedAt: { not: null, gte: input.from, lt: input.to },
+        lostReason: null,
+      },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
