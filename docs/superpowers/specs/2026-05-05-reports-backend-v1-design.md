@@ -10,9 +10,11 @@
 
 ## 1. Goal
 
-Wire roadmap items #11–#15 (per `2026-05-03-agent-first-redesign-roadmap.md` §3) plus a new managed-vs-unmanaged comparison block, so the static `/reports` surface that already shipped on `main` (PR #364) renders live data for `(orgId, window)` where `window ∈ { THIS_WEEK, THIS_MONTH, THIS_QUARTER }`.
+`/reports` is the surface that connects **Meta performance to post-lead business outcomes**. Meta Ads Manager and Google Analytics stop at the lead. Switchboard tracks what happens *after* — visits → leads → bookings → customers → revenue, joined back to the campaigns that drove them. That full chain, computable per period, is the renewal-checkpoint argument: an SMB owner can see exactly how each ad dollar moved through their funnel into actual revenue, not just clicks.
 
-The owner-facing renewal narrative ("did I make money? is the AI doing things?") lives on the per-agent home pages (Slice B). `/reports` is the **operator deep-dive** surface for the same period — Mercury typography, hairline tables, full funnel, full campaign rollup, ROAS column, per-agent attribution split, downloadable PDF for forwarding to clients/agencies/accountants.
+This is the operator deep-dive surface — Mercury typography, hairline tables, full chain rollup, per-campaign ROAS, per-agent attribution split, downloadable PDF for forwarding to clients/agencies/accountants. The owner-facing renewal narrative ("did I make money? is the AI doing things?") lives on the per-agent home pages (Slice B); `/reports` is where the same operator goes when the home pages aren't enough.
+
+This spec wires roadmap items #11–#15 (per `2026-05-03-agent-first-redesign-roadmap.md` §3) plus a new managed-vs-unmanaged comparison block and a 6th funnel stage (Customers), so the static `/reports` surface that already shipped on `main` (PR #364) renders live data for `(orgId, window)` where `window ∈ { THIS_WEEK, THIS_MONTH, THIS_QUARTER }`.
 
 ---
 
@@ -20,11 +22,28 @@ The owner-facing renewal narrative ("did I make money? is the AI doing things?")
 
 **In scope (v1):**
 - Live read path for the existing 6 sections (Pull-quote, Attribution, Funnel, Campaigns, Cost-vs-Value) plus a new section (Managed-vs-Unmanaged Comparison)
+- **6-stage funnel** — Impressions → Clicks → Visits → Leads → Bookings → **Customers** (a new 6th stage; v1 surfaces conversion, not just bookings)
 - First-party web analytics ingestion (pixel + endpoint + storage), required for the funnel's "Landing visits" stage
 - Pre-Switchboard baseline capture (one-time backfill at onboarding) for the comparison fallback
 - Server-side PDF export
 - Production gate via `NEXT_PUBLIC_REPORTS_LIVE` env flag, mirrors Slice B PR-S6 cutover doctrine
 - One-hour read-through cache (`ReportCache`) keyed by `(orgId, window)` with manual refresh button
+
+**Post-lead outcomes coverage (v1):**
+
+| Stage | Source | Notes |
+| --- | --- | --- |
+| Visits | `ConversionRecord type='visit'` (PR-R2 pixel) | First-party, cookieless |
+| Leads | `ConversionRecord type='lead'` | Already populated by ad-optimizer + chat |
+| Bookings | `Booking` (status NOT IN `cancelled`/`failed`) | Existing data |
+| **Customers** | `Opportunity` (`closedAt NOT NULL AND lostReason IS NULL`) | New 6th funnel stage |
+| Revenue | `LifecycleRevenueEvent` (existing `sumByOrg` / `sumByCampaign` queries) | Aggregate per period |
+| Per-campaign ROAS (point-in-time) | `LifecycleRevenueEvent.sourceCampaignId × Meta insights spend` | Already in Campaigns section |
+
+**Phase D additions (out of scope here, called out for product alignment):**
+- **Attended / no-show**: requires schema work — `Booking.status` today only tracks creation lifecycle (`pending_confirmation` → `confirmed`, with `cancelled`/`failed`). No writer in the codebase emits `attended`, `completed`, or `no_show`. Adding this stage requires either (a) extending `Booking.status` valid values + a writer (operator UI button or calendar-completion polling) or (b) a new lifecycle event type. Once captured, it slots between Bookings and Customers as a 7th funnel row.
+- **Repeat spend / LTV** as a distinct surface — schema supports it (multiple `LifecycleRevenueEvent` per `opportunityId`), v1 doesn't surface it.
+- **ROAS-over-time chart** — current Campaigns section shows per-campaign ROAS for the active period only. A time-series sparkline of org-level ROAS by week needs new UI.
 
 **Out of scope (deferred):** see §15.
 
@@ -36,6 +55,7 @@ The owner-facing renewal narrative ("did I make money? is the AI doing things?")
 | - | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1 | Per-agent revenue attribution  | First-touch via `Opportunity` → first `ConversionRecord`. No schema migration. Riley = revenue from leads whose first touchpoint was an ad (`sourceAdId` or `sourceCampaignId` present); Alex = revenue from leads whose first touchpoint was a managed channel (`sourceChannel` present, no ad source); manual-entry revenue (no `ConversionRecord`) buckets to Alex by default. Documented in `core/reports/attribution-rule.ts`. Phase D may add `LifecycleRevenueEvent.agentDeploymentId` for last-touch view; the first-touch rule remains the v1 source of truth. |
 | 2 | Funnel landing-visits source   | Net-new first-party web analytics pixel + ingestion. `ConversionRecord.type='visit'` convention (no schema change). Pixel JS served from `GET /api/pixel.js`, ingested at `POST /api/pixel/visit`. Cookieless session derivation: daily-rotating hash of `(IP/24, user-agent, orgId)`. IP truncated to `/24` before storage. Bot UA filter at ingestion. |
+| 2b | 6th funnel stage (Customers) | New row added to the locked funnel: **Customers** = count of `Opportunity` rows with `closedAt NOT NULL AND lostReason IS NULL` whose `closedAt` falls in the period. Sits between Bookings and the implicit revenue total. No schema change. Surfaces conversion, not just bookings — directly answers "how many leads turned into paying customers this period?" Locked CSS adjustment in PR-R3. |
 | 3 | Funnel narrative source        | Latest period-relevant ad-optimizer `Recommendation` (intents in `{creative_fatigue, ctr_drop, conversion_drop}`) formatted as `"Riley · {date} — {humanSummary}"`. Static fallback when none exists.                                                                                  |
 | 4 | Aggregation strategy           | On-demand SQL aggregation per request, backed by 1h `ReportCache` (`(orgId, window) → ReportData JSON`). No background cron. "Refresh" button on page busts cache for the active org/window.                                                                                          |
 | 5 | PDF export                     | Playwright server-side render of `/reports?print=1`. Short-lived signed JWT scopes `(orgId, window)` to prevent direct-URL leakage. Per-request Playwright launch (no pool in v1). Cached alongside `ReportData` for 1h. Filename `switchboard-report-{orgSlug}-{window}.pdf`.                                                                                                                                                                                |
@@ -383,10 +403,11 @@ Six PRs, each independently mergeable:
 
 **Acceptance:** customer pastes snippet, page views land as `ConversionRecord type='visit'`. Settings page shows snippet with org token. Bot UAs and missing tokens silently 204.
 
-### PR-R3 — Period rollup (attribution + funnel + cost-vs-value live)
+### PR-R3 — Period rollup (attribution + 6-stage funnel + cost-vs-value live)
 
 - `core/reports/attribution-rule.ts` + tests
-- `core/reports/funnel-rollup.ts` + tests (queries Meta insights via db, ConversionRecord, Booking)
+- `core/reports/funnel-rollup.ts` + tests — **6 stages live**: Impressions + Clicks (Meta insights via db), Visits (`ConversionRecord type='visit'`), Leads (`ConversionRecord type='lead'`), Bookings (`Booking` excluding `cancelled`/`failed`), **Customers** (`Opportunity.closedAt NOT NULL AND lostReason IS NULL` falling in period)
+- Funnel component CSS adjustment for 6 rows (the live response carries a 6-row funnel; fixtures stay at 5 rows until PR-R6 cutover deletes them)
 - `core/reports/cost-vs-value-rule.ts` + tests (Stripe period invoice + constants)
 - `core/reports/period-rollup.ts` orchestrator + tests
 - `core/reports/report-cache-store.ts` + 1h cache wiring
@@ -394,7 +415,7 @@ Six PRs, each independently mergeable:
 - Hook `useReportData` gains its live branch (consumes the new endpoint when `NEXT_PUBLIC_REPORTS_LIVE === 'true'`); flag remains `false` in prod, so production still renders fixtures
 - Campaigns + ManagedComparison fields populated from fixtures by the live endpoint at this PR (server-side stub in the period rollup); flipped to live computation in PR-R4
 
-**Acceptance:** in staging with flag on, attribution/funnel/cost sections render real data; campaigns/managed-comparison remain fixture. Cache TTL respected.
+**Acceptance:** in staging with flag on, attribution/funnel(6 stages including Customers)/cost sections render real data; campaigns/managed-comparison remain fixture. Cache TTL respected.
 
 ### PR-R4 — Campaign rollup + Managed-vs-Unmanaged comparison
 
@@ -519,8 +540,8 @@ System-wide acceptance for v1:
 3. Refresh button busts cache and produces a fresh render.
 4. PDF download produces a pixel-faithful copy of the live page.
 5. Brand-new org with no data shows: empty pull-quote ("Quiet first week — your team is just getting started"), zeroed attribution, zeroed funnel, empty campaigns table, comparison hidden with "unlocks after 30 days" copy.
-6. Org with website tracking installed shows the "Landing visits" funnel row populated.
-7. Org without website tracking shows the funnel with "Landing visits" hidden (gracefully — 4-row funnel).
+6. Org with website tracking installed shows the "Landing visits" funnel row populated; org without it shows that row gracefully hidden (5-row funnel instead of 6).
+7. Funnel renders the **Customers** row from `Opportunity` close events; orgs with no closed-won opportunities in-period show "0" with no error.
 8. Pull-quote prose stable across reloads within the 1h cache window.
 9. Comparison section hides when neither in-period cohort nor baseline data exists.
 10. Pixel ingestion silently filters bots, truncates IPs, and respects rate limits (verified by integration tests).
@@ -549,6 +570,9 @@ System-wide acceptance for v1:
 | Item                                                                              | Why deferred                                                              | Owner / phase                  |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------ |
 | `LifecycleRevenueEvent.agentDeploymentId` schema migration                        | First-touch heuristic is correct for v1; last-touch is a different model not needed yet | Phase D                       |
+| **Attended / no-show stage in funnel**                                            | `Booking.status` valid values today are `pending_confirmation`/`confirmed`/`cancelled`/`failed` only — no `attended` or `no_show` writes exist anywhere in the codebase. Adding this stage requires extending the status set + a writer (operator button or calendar-completion polling). | Phase D — small schema + UI work |
+| **Repeat spend / LTV surface**                                                    | Schema supports it (multiple `LifecycleRevenueEvent` per `opportunityId`/`contactId`), v1 funnel surfaces total revenue but not per-customer LTV. | Phase D                       |
+| **ROAS-over-time chart (org-level time-series)**                                  | Campaigns section already shows per-campaign ROAS for the period. A weekly time-series sparkline of org-level ROAS is a new UI element, not a data gap. | Phase D                       |
 | Industry benchmark fallback for cohort-missing comparison                         | Requires benchmark data source; pre-Switchboard baseline is sufficient for v1 | Phase D                       |
 | Per-region cost-vs-value constants (SG, UK, etc.)                                 | US is the primary cohort; constants documented as US-averaged              | Phase D when non-US orgs ship |
 | Per-org configurable cost-vs-value math                                           | Invites renewal-time arguments; constants are more defensible              | Phase E                       |
