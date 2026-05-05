@@ -187,4 +187,7 @@ export const scopedKeys = (orgId: string) => ({
     summary: (filters?: Record<string, string | undefined>) =>
       [orgId, "roi", "summary", filters] as const,
   },
+  reports: {
+    byWindow: (window: string) => [orgId, "reports", window] as const,
+  },
 });
