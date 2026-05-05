@@ -121,4 +121,5 @@ export { PrismaReportCacheStore } from "./stores/prisma-report-cache-store.js";
 export { PrismaBaselineStore } from "./stores/prisma-baseline-store.js";
 export { createInMemoryOrgAgentEnablementStore } from "./stores/in-memory-org-agent-enablement-store.js";
 export { PrismaOrgAgentEnablementStore } from "./stores/prisma-org-agent-enablement-store.js";
+export { PrismaGreetingSignalStore } from "./stores/prisma-greeting-signal-store.js";
 export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
