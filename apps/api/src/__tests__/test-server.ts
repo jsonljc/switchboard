@@ -96,6 +96,9 @@ declare module "fastify" {
     contactStore?: ContactStore;
     handoffStore?: HandoffStore;
     threadStore?: ConversationThreadStore;
+    reportCacheStore?: import("@switchboard/core/reports").ReportCacheStore;
+    reportStores?: import("@switchboard/core/reports").ReportStores;
+    reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
   }
 }
 
@@ -414,6 +417,41 @@ export async function buildTestServer(): Promise<TestContext> {
   app.decorate("handoffStore", new TestHandoffStore());
   app.decorate("threadStore", new TestThreadStore());
 
+  const { createInMemoryReportCacheStore } = await import("@switchboard/core/reports");
+
+  app.decorate("reportCacheStore", createInMemoryReportCacheStore());
+  app.decorate("reportStores", {
+    revenue: {
+      sumByOrg: async () => ({ totalAmount: 5000, count: 3 }),
+      revenueWithFirstTouch: async () => [
+        {
+          amount: 5000,
+          firstTouchSourceAdId: "ad-1",
+          firstTouchSourceCampaignId: "c-1",
+          firstTouchSourceChannel: null,
+        },
+      ],
+    },
+    bookings: { countExcludingStatuses: async () => 10 },
+    opportunities: { countClosedWon: async () => 3 },
+    conversions: {
+      countByType: async () => 50,
+      leadsBySource: async () => [
+        { sourceAdId: "ad-1", sourceCampaignId: "c-1", sourceChannel: null },
+      ],
+    },
+    recommendations: { latestByAgent: async () => null },
+    orgConfig: { getStripePriceId: async () => null },
+  });
+  app.decorate("reportInsightsProvider", {
+    getAggregateMetrics: async () => ({
+      impressions: 1000,
+      clicks: 200,
+      landingPageViews: 150,
+      spend: 500,
+    }),
+  });
+
   // --- PlatformIngress wiring ---
   const intentRegistry = new IntentRegistry();
   const cartridgeManifests: CartridgeManifestForRegistration[] = [];
@@ -493,6 +531,9 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
+
+  const { dashboardReportsRoutes } = await import("../routes/dashboard-reports.js");
+  await app.register(dashboardReportsRoutes);
 
   return { app, cartridge, storage };
 }

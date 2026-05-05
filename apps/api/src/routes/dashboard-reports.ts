@@ -69,6 +69,24 @@ async function computeReport(
 }
 
 export const dashboardReportsRoutes: FastifyPluginAsync = async (app) => {
+  // Dev/test mode (authDisabled): allow `x-org-id` header to set the org scope so
+  // the same handler can serve multi-tenant tests without an auth middleware.
+  // In production (authDisabled === false) the auth middleware sets organizationIdFromAuth
+  // from API_KEY_METADATA — this hook does not run in that path because authDisabled is false.
+  app.addHook("preHandler", async (request) => {
+    if (app.authDisabled === true) {
+      const headerVal = request.headers["x-org-id"];
+      if (typeof headerVal === "string" && headerVal.trim()) {
+        request.organizationIdFromAuth = headerVal.trim();
+      } else if (!request.organizationIdFromAuth) {
+        request.organizationIdFromAuth = "default";
+      }
+      if (!request.principalIdFromAuth) {
+        request.principalIdFromAuth = "default";
+      }
+    }
+  });
+
   app.get("/api/dashboard/reports", async (request, reply) => {
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
