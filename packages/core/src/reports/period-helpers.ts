@@ -60,7 +60,6 @@ export function windowToRange(window: ReportWindow, now: Date): PeriodRange {
 }
 
 export function priorPeriodRange(current: PeriodRange): PeriodRange {
-  const span = current.end.getTime() - current.start.getTime();
   if (current.window === "THIS MONTH") {
     const start = new Date(
       Date.UTC(current.start.getUTCFullYear(), current.start.getUTCMonth() - 1, 1),
@@ -75,6 +74,7 @@ export function priorPeriodRange(current: PeriodRange): PeriodRange {
     const end = new Date(current.start);
     return { start, end, window: null };
   }
+  const span = current.end.getTime() - current.start.getTime();
   const end = new Date(current.start);
   const start = new Date(end.getTime() - span);
   return { start, end, window: null };

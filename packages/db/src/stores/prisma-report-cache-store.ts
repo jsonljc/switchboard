@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma as PrismaTypes, PrismaClient } from "@prisma/client";
 import type { ReportCacheRow, ReportCacheStore } from "@switchboard/core/reports";
 import type { ReportDataV1 } from "@switchboard/schemas";
 
@@ -25,14 +25,14 @@ export function createPrismaReportCacheStore(prisma: Prisma): ReportCacheStore {
           organizationId_window: { organizationId: row.organizationId, window: row.window },
         },
         update: {
-          payload: row.payload as never,
+          payload: row.payload as unknown as PrismaTypes.InputJsonValue,
           computedAt: row.computedAt,
           expiresAt: row.expiresAt,
         },
         create: {
           organizationId: row.organizationId,
           window: row.window,
-          payload: row.payload as never,
+          payload: row.payload as unknown as PrismaTypes.InputJsonValue,
           computedAt: row.computedAt,
           expiresAt: row.expiresAt,
         },

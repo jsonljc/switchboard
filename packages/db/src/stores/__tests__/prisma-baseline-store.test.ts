@@ -29,7 +29,7 @@ describe("PrismaBaselineStore", () => {
     });
   });
 
-  it("insertMany upserts each row by composite key", async () => {
+  it("insertMany upserts each row by composite unique key", async () => {
     const prisma = {
       preSwitchboardBaseline: {
         findMany: vi.fn(),
@@ -37,26 +37,39 @@ describe("PrismaBaselineStore", () => {
       },
     } as unknown as Parameters<typeof createPrismaBaselineStore>[0];
     const store = createPrismaBaselineStore(prisma);
+    const periodStart = new Date("2026-01-01T00:00:00Z");
+    const periodEnd = new Date("2026-04-01T00:00:00Z");
     await store.insertMany([
       {
         organizationId: "org-a",
         dimension: "ads",
         metric: "spend",
         value: 100,
-        periodStart: new Date("2026-01-01T00:00:00Z"),
-        periodEnd: new Date("2026-04-01T00:00:00Z"),
-        capturedAt: new Date("2026-04-15T00:00:00Z"),
-      },
-      {
-        organizationId: "org-a",
-        dimension: "ads",
-        metric: "leads",
-        value: 50,
-        periodStart: new Date("2026-01-01T00:00:00Z"),
-        periodEnd: new Date("2026-04-01T00:00:00Z"),
+        periodStart,
+        periodEnd,
         capturedAt: new Date("2026-04-15T00:00:00Z"),
       },
     ]);
-    expect(prisma.preSwitchboardBaseline.upsert).toHaveBeenCalledTimes(2);
+    expect(prisma.preSwitchboardBaseline.upsert).toHaveBeenCalledWith({
+      where: {
+        organizationId_dimension_metric_periodStart_periodEnd: {
+          organizationId: "org-a",
+          dimension: "ads",
+          metric: "spend",
+          periodStart,
+          periodEnd,
+        },
+      },
+      update: { value: 100, capturedAt: expect.any(Date) },
+      create: {
+        organizationId: "org-a",
+        dimension: "ads",
+        metric: "spend",
+        value: 100,
+        periodStart,
+        periodEnd,
+        capturedAt: expect.any(Date),
+      },
+    });
   });
 });

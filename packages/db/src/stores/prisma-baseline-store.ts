@@ -24,29 +24,16 @@ export function createPrismaBaselineStore(prisma: Prisma): BaselineStore {
       for (const row of incoming) {
         await prisma.preSwitchboardBaseline.upsert({
           where: {
-            id:
-              row.organizationId +
-              "::" +
-              row.dimension +
-              "::" +
-              row.metric +
-              "::" +
-              row.periodStart.toISOString() +
-              "::" +
-              row.periodEnd.toISOString(),
+            organizationId_dimension_metric_periodStart_periodEnd: {
+              organizationId: row.organizationId,
+              dimension: row.dimension,
+              metric: row.metric,
+              periodStart: row.periodStart,
+              periodEnd: row.periodEnd,
+            },
           },
           update: { value: row.value, capturedAt: row.capturedAt },
           create: {
-            id:
-              row.organizationId +
-              "::" +
-              row.dimension +
-              "::" +
-              row.metric +
-              "::" +
-              row.periodStart.toISOString() +
-              "::" +
-              row.periodEnd.toISOString(),
             organizationId: row.organizationId,
             dimension: row.dimension,
             metric: row.metric,

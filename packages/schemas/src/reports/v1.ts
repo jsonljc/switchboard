@@ -1,3 +1,18 @@
+/**
+ * /reports backend v1 — locked view-model.
+ *
+ * Single source of truth for the shape of ReportDataV1, consumed by the
+ * dashboard /reports page and produced by core's period-rollup.
+ *
+ * v1 invariants:
+ *   - 3 windows: THIS WEEK, THIS MONTH, THIS QUARTER (spaces, not
+ *     underscores — preserved for back-compat with the static page).
+ *   - Funnel has 5 stages; "Landing visits" may be hidden client-side
+ *     when no pixel data exists, but the row stays in the array.
+ *   - managedComparison is null when neither in-period cohort nor
+ *     baseline data exists.
+ */
+
 export type ReportWindow = "THIS WEEK" | "THIS MONTH" | "THIS QUARTER";
 
 export const REPORT_WINDOWS: readonly ReportWindow[] = [

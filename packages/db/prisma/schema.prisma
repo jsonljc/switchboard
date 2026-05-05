@@ -1962,5 +1962,6 @@ model PreSwitchboardBaseline {
   periodEnd      DateTime
   capturedAt     DateTime @default(now())
 
+  @@unique([organizationId, dimension, metric, periodStart, periodEnd])
   @@index([organizationId, dimension, metric])
 }

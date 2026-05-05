@@ -10,6 +10,8 @@ export interface UseReportData {
   refresh: () => Promise<void>;
 }
 
+const _isLive = process.env.NEXT_PUBLIC_REPORTS_LIVE === "true";
+
 export function useReportData(window: ReportWindow): UseReportData {
   const [, forceRefresh] = useState(0);
 
@@ -17,6 +19,7 @@ export function useReportData(window: ReportWindow): UseReportData {
     forceRefresh((n) => n + 1);
   }, []);
 
+  // PR-R3 will replace the _isLive branch with a React Query call.
   return {
     data: FIXTURES_BY_WINDOW[window],
     isLoading: false,
