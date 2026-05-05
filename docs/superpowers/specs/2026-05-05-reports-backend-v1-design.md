@@ -10,7 +10,7 @@
 
 ## 1. Goal
 
-`/reports` is the surface that connects **Meta performance to post-lead business outcomes**. Meta Ads Manager and Google Analytics stop at the lead. Switchboard tracks what happens *after* — visits → leads → bookings → customers → revenue, joined back to the campaigns that drove them. That full chain, computable per period, is the renewal-checkpoint argument: an SMB owner can see exactly how each ad dollar moved through their funnel into actual revenue, not just clicks.
+`/reports` is the surface that connects **Meta performance to post-lead business outcomes**. Meta Ads Manager and Google Analytics stop at the lead. Switchboard tracks what happens _after_ — visits → leads → bookings → customers → revenue, joined back to the campaigns that drove them. That full chain, computable per period, is the renewal-checkpoint argument: an SMB owner can see exactly how each ad dollar moved through their funnel into actual revenue, not just clicks.
 
 This is the operator deep-dive surface — Mercury typography, hairline tables, full chain rollup, per-campaign ROAS, per-agent attribution split, downloadable PDF for forwarding to clients/agencies/accountants. The owner-facing renewal narrative ("did I make money? is the AI doing things?") lives on the per-agent home pages (Slice B); `/reports` is where the same operator goes when the home pages aren't enough.
 
@@ -21,6 +21,7 @@ This spec wires roadmap items #11–#15 (per `2026-05-03-agent-first-redesign-ro
 ## 2. Scope
 
 **In scope (v1):**
+
 - Live read path for the existing 6 sections (Pull-quote, Attribution, Funnel, Campaigns, Cost-vs-Value) plus a new section (Managed-vs-Unmanaged Comparison)
 - **6-stage funnel** — Impressions → Clicks → Visits → Leads → Bookings → **Customers** (a new 6th stage; v1 surfaces conversion, not just bookings)
 - First-party web analytics ingestion (pixel + endpoint + storage), required for the funnel's "Landing visits" stage
@@ -31,16 +32,17 @@ This spec wires roadmap items #11–#15 (per `2026-05-03-agent-first-redesign-ro
 
 **Post-lead outcomes coverage (v1):**
 
-| Stage | Source | Notes |
-| --- | --- | --- |
-| Visits | `ConversionRecord type='visit'` (PR-R2 pixel) | First-party, cookieless |
-| Leads | `ConversionRecord type='lead'` | Already populated by ad-optimizer + chat |
-| Bookings | `Booking` (status NOT IN `cancelled`/`failed`) | Existing data |
-| **Customers** | `Opportunity` (`closedAt NOT NULL AND lostReason IS NULL`) | New 6th funnel stage |
-| Revenue | `LifecycleRevenueEvent` (existing `sumByOrg` / `sumByCampaign` queries) | Aggregate per period |
-| Per-campaign ROAS (point-in-time) | `LifecycleRevenueEvent.sourceCampaignId × Meta insights spend` | Already in Campaigns section |
+| Stage                             | Source                                                                      | Notes                                                 |
+| --------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Visits (Landing Page Views)       | Meta insights API `landing_page_view` action via `CampaignInsightsProvider` | Ad-driven only; first-party pixel deferred to Phase D |
+| Leads                             | `ConversionRecord type='lead'`                                              | Already populated by ad-optimizer + chat              |
+| Bookings                          | `Booking` (status NOT IN `cancelled`/`failed`)                              | Existing data                                         |
+| **Customers**                     | `Opportunity` (`closedAt NOT NULL AND lostReason IS NULL`)                  | New 6th funnel stage                                  |
+| Revenue                           | `LifecycleRevenueEvent` (existing `sumByOrg` / `sumByCampaign` queries)     | Aggregate per period                                  |
+| Per-campaign ROAS (point-in-time) | `LifecycleRevenueEvent.sourceCampaignId × Meta insights spend`              | Already in Campaigns section                          |
 
 **Phase D additions (out of scope here, called out for product alignment):**
+
 - **Attended / no-show**: requires schema work — `Booking.status` today only tracks creation lifecycle (`pending_confirmation` → `confirmed`, with `cancelled`/`failed`). No writer in the codebase emits `attended`, `completed`, or `no_show`. Adding this stage requires either (a) extending `Booking.status` valid values + a writer (operator UI button or calendar-completion polling) or (b) a new lifecycle event type. Once captured, it slots between Bookings and Customers as a 7th funnel row.
 - **Repeat spend / LTV** as a distinct surface — schema supports it (multiple `LifecycleRevenueEvent` per `opportunityId`), v1 doesn't surface it.
 - **ROAS-over-time chart** — current Campaigns section shows per-campaign ROAS for the active period only. A time-series sparkline of org-level ROAS by week needs new UI.
@@ -51,19 +53,19 @@ This spec wires roadmap items #11–#15 (per `2026-05-03-agent-first-redesign-ro
 
 ## 3. Decisions Table
 
-| # | Question                       | Decision                                                                                                                                                                                                                                                                              |
-| - | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 | Per-agent revenue attribution  | First-touch via `Opportunity` → first `ConversionRecord`. No schema migration. Riley = revenue from leads whose first touchpoint was an ad (`sourceAdId` or `sourceCampaignId` present); Alex = revenue from leads whose first touchpoint was a managed channel (`sourceChannel` present, no ad source); manual-entry revenue (no `ConversionRecord`) buckets to Alex by default. Documented in `core/reports/attribution-rule.ts`. Phase D may add `LifecycleRevenueEvent.agentDeploymentId` for last-touch view; the first-touch rule remains the v1 source of truth. |
-| 2 | Funnel landing-visits source   | Net-new first-party web analytics pixel + ingestion. `ConversionRecord.type='visit'` convention (no schema change). Pixel JS served from `GET /api/pixel.js`, ingested at `POST /api/pixel/visit`. Cookieless session derivation: daily-rotating hash of `(IP/24, user-agent, orgId)`. IP truncated to `/24` before storage. Bot UA filter at ingestion. |
-| 2b | 6th funnel stage (Customers) | New row added to the locked funnel: **Customers** = count of `Opportunity` rows with `closedAt NOT NULL AND lostReason IS NULL` whose `closedAt` falls in the period. Sits between Bookings and the implicit revenue total. No schema change. Surfaces conversion, not just bookings — directly answers "how many leads turned into paying customers this period?" Locked CSS adjustment in PR-R3. |
-| 3 | Funnel narrative source        | Latest in-period `Recommendation` row for `agentKey='riley'` (any intent — verified against codebase: ad-optimizer recommendations don't use the specific intent strings I'd previously claimed; they carry `humanSummary` prose like "Fatigued creatives reducing engagement"). Formatted as `"Riley · {date} — {humanSummary}"`. Static fallback when none exists.                                                                                  |
-| 4 | Aggregation strategy           | On-demand SQL aggregation per request, backed by 1h `ReportCache` (`(orgId, window) → ReportData JSON`). No background cron. "Refresh" button on page busts cache for the active org/window.                                                                                          |
-| 5 | PDF export                     | Playwright server-side render of `/reports?print=1`. Short-lived signed JWT scopes `(orgId, window)` to prevent direct-URL leakage. Per-request Playwright launch (no pool in v1). Cached alongside `ReportData` for 1h. Filename `switchboard-report-{orgSlug}-{window}.pdf`.                                                                                                                                                                                |
-| 6 | Cost-vs-value comparison math  | Hard-coded US SMB constants in core (`SDR_MONTHLY_USD = 5000`, `AGENCY_MONTHLY_USD = 3000`). Footnote on page: "Based on US SMB hiring averages." `paid` is computed *without* live Stripe API calls (verified: `core/billing` only exposes `evaluateEntitlement` today; no Stripe invoice access). Instead: a local `priceToMonthlyUSD(stripePriceId)` mapping in core converts `OrganizationConfig.stripePriceId` to a flat monthly $ amount, prorated by window-day-count. `alt` = `(SDR_MONTHLY_USD + AGENCY_MONTHLY_USD)` prorated; `saving = alt - paid`. Mapping table is co-located with the Stripe price list we control. Live invoice queries are a Phase D upgrade if precision matters. |
-| 7 | Production cutover             | Single `NEXT_PUBLIC_REPORTS_LIVE` env flag. Defaults `false` in production through PR-R1..R5. Final PR-R6 flips the flag, deletes `fixtures.ts`, removes the flag.                                                                                                                                                                                                                                                                                            |
-| 8 | Managed-vs-unmanaged grain     | Channel-level (not campaign-level). Riley-managed ads = campaigns under a Meta `Connection` row (verified: `Connection.serviceId='meta'` with `status='connected'` is the canonical handle; no separate `AdAccount` model exists in Prisma) where ad-optimizer's dispatcher is active; Unmanaged = the org's other campaigns from the same Meta account that aren't being dispatched-against. Alex-managed conversations = `ConversationThread.assignedAgent` matches the org's Alex deployment `slug` (resolved via `AgentDeployment.listingId → AgentListing.slug`); Operator-managed = `assignedAgent` is empty or matches a non-AI value. |
-| 9 | Cohort-missing fallback        | Pre-Switchboard baseline: at onboarding completion, an Inngest job pulls 90 days of pre-Switchboard ad account history from Meta and writes to a new `PreSwitchboardBaseline` row per `(orgId, dimension)`. At report time: when an unmanaged in-period cohort is missing, render baseline-vs-managed; when neither exists (brand-new org, no baseline yet), hide the section and render "Comparison unlocks after 30 days."                              |
-| 10 | Pull-quote register           | New LLM call in `core/reports/pull-quote-generator.ts`. Output conforms to the agent-voice idioms used by `Recommendation.humanSummary` (existing precedent for agent-voice prose), but no shared generator utility exists today — this is greenfield. System prompt tuned for operator-deep-dive register (concise brief, not warm renewal narrative). Cached per `(orgId, window)` for 1h alongside `ReportData`. |
+| #   | Question                      | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Per-agent revenue attribution | First-touch via `Opportunity` → first `ConversionRecord`. No schema migration. Riley = revenue from leads whose first touchpoint was an ad (`sourceAdId` or `sourceCampaignId` present); Alex = revenue from leads whose first touchpoint was a managed channel (`sourceChannel` present, no ad source); manual-entry revenue (no `ConversionRecord`) buckets to Alex by default. Documented in `core/reports/attribution-rule.ts`. Phase D may add `LifecycleRevenueEvent.agentDeploymentId` for last-touch view; the first-touch rule remains the v1 source of truth.                                                                                                                             |
+| 2   | Funnel landing-visits source  | **v1:** Meta insights API `landing_page_view` action metric via `CampaignInsightsProvider` (covers ad-driven traffic; pulled alongside impressions and clicks — zero extra infrastructure). **Phase D:** First-party pixel for organic/direct traffic visibility (`ConversionRecord.type='visit'`, cookieless session derivation, bot filter, rate limiting).                                                                                                                                                                                                                                                                                                                                       |
+| 2b  | 6th funnel stage (Customers)  | New row added to the locked funnel: **Customers** = count of `Opportunity` rows with `closedAt NOT NULL AND lostReason IS NULL` whose `closedAt` falls in the period. Sits between Bookings and the implicit revenue total. No schema change. Surfaces conversion, not just bookings — directly answers "how many leads turned into paying customers this period?" Locked CSS adjustment in PR-R3.                                                                                                                                                                                                                                                                                                  |
+| 3   | Funnel narrative source       | Latest in-period `Recommendation` row for `agentKey='riley'` (any intent — verified against codebase: ad-optimizer recommendations don't use the specific intent strings I'd previously claimed; they carry `humanSummary` prose like "Fatigued creatives reducing engagement"). Formatted as `"Riley · {date} — {humanSummary}"`. Static fallback when none exists.                                                                                                                                                                                                                                                                                                                                |
+| 4   | Aggregation strategy          | On-demand SQL aggregation per request, backed by 1h `ReportCache` (`(orgId, window) → ReportData JSON`). No background cron. "Refresh" button on page busts cache for the active org/window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 5   | PDF export                    | Playwright server-side render of `/reports?print=1`. Short-lived signed JWT scopes `(orgId, window)` to prevent direct-URL leakage. Per-request Playwright launch (no pool in v1). Cached alongside `ReportData` for 1h. Filename `switchboard-report-{orgSlug}-{window}.pdf`.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 6   | Cost-vs-value comparison math | Hard-coded US SMB constants in core (`SDR_MONTHLY_USD = 5000`, `AGENCY_MONTHLY_USD = 3000`). Footnote on page: "Based on US SMB hiring averages." `paid` is computed _without_ live Stripe API calls (verified: `core/billing` only exposes `evaluateEntitlement` today; no Stripe invoice access). Instead: a local `priceToMonthlyUSD(stripePriceId)` mapping in core converts `OrganizationConfig.stripePriceId` to a flat monthly $ amount, prorated by window-day-count. `alt` = `(SDR_MONTHLY_USD + AGENCY_MONTHLY_USD)` prorated; `saving = alt - paid`. Mapping table is co-located with the Stripe price list we control. Live invoice queries are a Phase D upgrade if precision matters. |
+| 7   | Production cutover            | Single `NEXT_PUBLIC_REPORTS_LIVE` env flag. Defaults `false` in production through PR-R1..R5. Final PR-R6 flips the flag, deletes `fixtures.ts`, removes the flag.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 8   | Managed-vs-unmanaged grain    | Channel-level (not campaign-level). Riley-managed ads = campaigns under a Meta `Connection` row (verified: `Connection.serviceId='meta'` with `status='connected'` is the canonical handle; no separate `AdAccount` model exists in Prisma) where ad-optimizer's dispatcher is active; Unmanaged = the org's other campaigns from the same Meta account that aren't being dispatched-against. Alex-managed conversations = `ConversationThread.assignedAgent` matches the org's Alex deployment `slug` (resolved via `AgentDeployment.listingId → AgentListing.slug`); Operator-managed = `assignedAgent` is empty or matches a non-AI value.                                                       |
+| 9   | Cohort-missing fallback       | Pre-Switchboard baseline: at onboarding completion, an Inngest job pulls 90 days of pre-Switchboard ad account history from Meta and writes to a new `PreSwitchboardBaseline` row per `(orgId, dimension)`. At report time: when an unmanaged in-period cohort is missing, render baseline-vs-managed; when neither exists (brand-new org, no baseline yet), hide the section and render "Comparison unlocks after 30 days."                                                                                                                                                                                                                                                                        |
+| 10  | Pull-quote register           | New LLM call in `core/reports/pull-quote-generator.ts`. Output conforms to the agent-voice idioms used by `Recommendation.humanSummary` (existing precedent for agent-voice prose), but no shared generator utility exists today — this is greenfield. System prompt tuned for operator-deep-dive register (concise brief, not warm renewal narrative). Cached per `(orgId, window)` for 1h alongside `ReportData`.                                                                                                                                                                                                                                                                                 |
 
 ---
 
@@ -202,7 +204,7 @@ model OrganizationConfig {
 
 ### 5.3 String-convention extensions (no migration)
 
-- `ConversionRecord.type='visit'` — new value in the existing free-form string field. Visit events MUST carry `sourceChannel='website'` and SHOULD carry `metadata.path`, `metadata.referrer`, `metadata.sessionId`.
+- ~~`ConversionRecord.type='visit'`~~ — **Deferred to Phase D** (first-party pixel cut from v1). Landing page views in v1 come from Meta insights API, not ConversionRecord.
 
 ### 5.4 Existing schema reuse
 
@@ -238,33 +240,47 @@ interface ReportDataV1 {
   campaigns: CampaignRow[];
   cost: CostBreakdown;
   costNarrative: string;
-  managedComparison: ManagedComparisonData | null;  // NEW; null when neither cohort nor baseline exists
+  managedComparison: ManagedComparisonData | null; // NEW; null when neither cohort nor baseline exists
 }
 
 interface ManagedComparisonData {
-  ads: ManagedComparisonPair | null;            // null if no ad data at all
-  conversations: ManagedComparisonPair | null;  // null if no chat data at all
+  ads: ManagedComparisonPair | null; // null if no ad data at all
+  conversations: ManagedComparisonPair | null; // null if no chat data at all
   source: "in-period-cohort" | "pre-switchboard-baseline";
-  emptyMessage?: string;                         // "Comparison unlocks after 30 days"
+  emptyMessage?: string; // "Comparison unlocks after 30 days"
 }
 
 interface ManagedComparisonPair {
-  managed: { spend: number; revenue?: number; roas?: number; replies?: number; conversionRate?: number; replyMinutesP50?: number };
-  unmanaged: { spend: number; revenue?: number; roas?: number; replies?: number; conversionRate?: number; replyMinutesP50?: number };
-  delta: Delta;  // computed primary delta (e.g., ROAS delta for ads, conversion-rate delta for conversations)
+  managed: {
+    spend: number;
+    revenue?: number;
+    roas?: number;
+    replies?: number;
+    conversionRate?: number;
+    replyMinutesP50?: number;
+  };
+  unmanaged: {
+    spend: number;
+    revenue?: number;
+    roas?: number;
+    replies?: number;
+    conversionRate?: number;
+    replyMinutesP50?: number;
+  };
+  delta: Delta; // computed primary delta (e.g., ROAS delta for ads, conversion-rate delta for conversations)
 }
 ```
 
 ### 6.2 API endpoints
 
-| Method | Path                                            | Auth                  | Returns / Effect                        |
-| ------ | ----------------------------------------------- | --------------------- | --------------------------------------- |
-| GET    | `/api/dashboard/reports?window=…`               | Dashboard session     | `ReportDataV1` JSON                     |
-| POST   | `/api/dashboard/reports/refresh?window=…`       | Dashboard session     | Bust cache; returns fresh `ReportDataV1` |
-| POST   | `/api/dashboard/reports/pdf-token?window=…`     | Dashboard session     | `{ token, expiresAt }` (5-min JWT)      |
-| GET    | `/api/dashboard/reports/pdf?window=…&token=…`   | Signed JWT (5 min)    | `application/pdf` stream                 |
-| GET    | `/api/pixel.js`                                 | Public                | `application/javascript` (cached at edge, no orgId baked in — token via `data-org` attribute) |
-| POST   | `/api/pixel/visit`                              | Public + org-token    | `204 No Content`                         |
+| Method | Path                                          | Auth               | Returns / Effect                                                                              |
+| ------ | --------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------- |
+| GET    | `/api/dashboard/reports?window=…`             | Dashboard session  | `ReportDataV1` JSON                                                                           |
+| POST   | `/api/dashboard/reports/refresh?window=…`     | Dashboard session  | Bust cache; returns fresh `ReportDataV1`                                                      |
+| POST   | `/api/dashboard/reports/pdf-token?window=…`   | Dashboard session  | `{ token, expiresAt }` (5-min JWT)                                                            |
+| GET    | `/api/dashboard/reports/pdf?window=…&token=…` | Signed JWT (5 min) | `application/pdf` stream                                                                      |
+| GET    | `/api/pixel.js`                               | Public             | `application/javascript` (cached at edge, no orgId baked in — token via `data-org` attribute) |
+| POST   | `/api/pixel/visit`                            | Public + org-token | `204 No Content`                                                                              |
 
 ### 6.3 Hook contract (stable from PR-R1)
 
@@ -317,7 +333,8 @@ reports/
 ```ts
 export const SDR_MONTHLY_USD = 5000;
 export const AGENCY_MONTHLY_USD = 3000;
-export const COST_VS_VALUE_FOOTNOTE = "Based on US SMB hiring averages — junior SDR ~$5,000/mo, ad agency retainer ~$3,000/mo.";
+export const COST_VS_VALUE_FOOTNOTE =
+  "Based on US SMB hiring averages — junior SDR ~$5,000/mo, ad agency retainer ~$3,000/mo.";
 ```
 
 ### 7.2 API (`apps/api/src/routes/`)
@@ -360,9 +377,7 @@ Renders:
 
 ```html
 <!-- Switchboard tracking -->
-<script src="https://api.switchboard.app/pixel.js"
-        data-org="{websiteTrackingToken}"
-        async></script>
+<script src="https://api.switchboard.app/pixel.js" data-org="{websiteTrackingToken}" async></script>
 ```
 
 ---
@@ -396,19 +411,16 @@ Six PRs, each independently mergeable:
 
 **Acceptance:** schema migrates clean, types flow from schemas to dashboard, no behavior change on `/reports`.
 
-### PR-R2 — Pixel ingestion + Settings panel
+### ~~PR-R2 — Pixel ingestion + Settings panel~~ (DEFERRED to Phase D)
 
-- `apps/api/src/routes/pixel.ts` with `GET /pixel.js` and `POST /pixel/visit`
-- Cookieless sessionId derivation, IP truncation, bot UA filter, per-IP rate limit
-- `apps/dashboard/src/app/(auth)/settings/website-tracking/page.tsx`
-- `core/reports/types.ts` introduces `VisitConversionMetadata` shape for `metadata` field
-
-**Acceptance:** customer pastes snippet, page views land as `ConversionRecord type='visit'`. Settings page shows snippet with org token. Bot UAs and missing tokens silently 204.
+> **Cut 2026-05-05.** Meta's insights API already provides landing page views per campaign — sufficient for the Visits funnel row in v1. The first-party pixel (cookieless session derivation, bot filter, rate limiting, settings page, JS snippet) adds significant complexity for marginal value when 100% of users are Meta ad buyers running click-to-WhatsApp or website-landing ads. Revisit when a customer requests organic traffic visibility.
+>
+> Deferred artifacts: `apps/api/src/routes/pixel.ts`, `apps/dashboard/src/app/(auth)/settings/website-tracking/page.tsx`, `VisitConversionMetadata`, `ConversionRecord type='visit'` convention, `OrganizationConfig.websiteTrackingToken` (column exists from PR-R1 migration but unused in v1).
 
 ### PR-R3 — Period rollup (attribution + 6-stage funnel + cost-vs-value live)
 
 - `core/reports/attribution-rule.ts` + tests
-- `core/reports/funnel-rollup.ts` + tests — **6 stages live**: Impressions + Clicks (Meta insights via db), Visits (`ConversionRecord type='visit'`), Leads (`ConversionRecord type='lead'`), Bookings (`Booking` excluding `cancelled`/`failed`), **Customers** (`Opportunity.closedAt NOT NULL AND lostReason IS NULL` falling in period)
+- `core/reports/funnel-rollup.ts` + tests — **6 stages live**: Impressions + Clicks + Landing Page Views (all from Meta insights API via `CampaignInsightsProvider`), Leads (`ConversionRecord type='lead'`), Bookings (`Booking` excluding `cancelled`/`failed`), **Customers** (`Opportunity.closedAt NOT NULL AND lostReason IS NULL` falling in period)
 - Funnel component CSS adjustment for 6 rows (the live response carries a 6-row funnel; fixtures stay at 5 rows until PR-R6 cutover deletes them)
 - `core/reports/cost-vs-value-rule.ts` + tests (Stripe period invoice + constants)
 - `core/reports/period-rollup.ts` orchestrator + tests
@@ -458,6 +470,7 @@ Six PRs, each independently mergeable:
 ## 10. Testing Strategy
 
 ### 10.1 Core rollups
+
 - Unit tests with mocked Prisma store (existing `prisma-workflow-store.test.ts` mock pattern per project memory)
 - `attribution-rule.test.ts` is table-driven with 4 cases plus edge cases (multiple opportunities for one contact, zero-revenue opportunity, manual revenue with no contact link)
 - `funnel-rollup.test.ts` covers: full data, missing landing-visits (no pixel), zero leads, zero impressions, prior-period zero (delta should render "vs prior" when computable, "no prior data" otherwise)
@@ -466,20 +479,24 @@ Six PRs, each independently mergeable:
 - `cost-vs-value-rule.test.ts` covers: monthly subscription, annual prorated to month, no Stripe data (entitlement override path)
 
 ### 10.2 API
+
 - Flat tests under `apps/api/src/__tests__/api-reports.test.ts` and `api-pixel.test.ts` per project memory
 - `buildTestServer` with mocked Prisma stores (no real Postgres in CI)
 - Pixel: token validation, IP truncation, bot UA filter, rate limit, silent 204 on all error paths
 - Reports: cache hit/miss paths, refresh path, PDF token path, JWT signature/expiry validation
 
 ### 10.3 Dashboard
+
 - React-query test wrapper for `useReportData` (existing pattern from Slice B)
 - `<ManagedComparison>` component test for both cohort and baseline rendering paths
 - Snapshot test for the print-mode page
 
 ### 10.4 E2E (Playwright)
+
 - One test per PR-R6: load `/reports` with `NEXT_PUBLIC_REPORTS_LIVE=true` against test fixtures, verify all sections render, verify PDF download produces a non-empty PDF binary
 
 ### 10.5 Coverage
+
 - Core stays at 65/65/70/65; reports projection code carries its own coverage.
 - Dashboard global 55/50/52/55 holds. New components + hook tests carry the new dashboard code coverage.
 
@@ -488,6 +505,7 @@ Six PRs, each independently mergeable:
 ## 11. Security
 
 ### 11.1 Pixel ingestion
+
 - Org token is **public** (rendered in the customer's HTML). Token grants only one privilege: write `ConversionRecord type='visit'` for that org. Compromise impact: a third party can write fake visit events for one org. Mitigations:
   - Per-IP per-orgId rate limit (60/min)
   - Per-orgId system-wide rate limit (600/min)
@@ -498,20 +516,24 @@ Six PRs, each independently mergeable:
 - No PII captured: no full IP, no cookies, no email addresses, no form input.
 
 ### 11.2 PDF token
+
 - Short-lived signed JWT (5 min, HS256) issued by `POST /api/dashboard/reports/pdf-token` with payload `{ orgId, window, exp }`
 - Direct `GET /api/dashboard/reports/pdf?token=…` validates signature, expiry, and that the JWT's `orgId` matches the active session's `orgId` (defense in depth even if a token leaks)
 - Playwright fetches `/reports?print=1` with a service-internal mint of the dashboard session token, scoped to the same `orgId`
 
 ### 11.3 ReportCache / PdfCache
+
 - All reads org-scoped; cache key includes `orgId`. Cross-org access is impossible by construction.
 - `payload` and `pdfBytes` are not encrypted at rest in v1. Risk profile: rollup data is reproducible and contains no secrets; PDF contains the same data rendered. Acceptable.
 
 ### 11.4 LLM pull-quote generator
+
 - Input limited to numeric rollup data and ad-optimizer recommendation human-summaries (already operator-visible)
 - No customer PII or secrets reach the LLM
 - Output validated against `PullQuoteCopy` shape; on validation failure, fall back to template
 
 ### 11.5 CSP
+
 - The customer's marketing site loads `pixel.js` from `https://api.switchboard.app` — this is the customer's CSP concern, not ours, but the docs in Settings include the recommended `script-src` addition.
 - The dashboard `/reports?print=1` mode does not change CSP. (Per project memory `feedback_dashboard_csp.md`, dashboard CSP already allows `'unsafe-eval'` and `ws:` in dev.)
 
@@ -519,16 +541,17 @@ Six PRs, each independently mergeable:
 
 ## 12. Performance & Rate Limits
 
-| Endpoint                                        | Per-org limit                  | Per-IP limit                | Notes                                                                |
-| ----------------------------------------------- | ------------------------------ | --------------------------- | -------------------------------------------------------------------- |
-| `GET /api/dashboard/reports`                    | 30 / min                       | n/a (session-bound)         | Cache hits <50ms; cold rollup ~1–3s                                  |
-| `POST /api/dashboard/reports/refresh`           | 10 / min                       | n/a                         | Operator-initiated, short cooldown                                   |
-| `GET /api/dashboard/reports/pdf`                | 5 / min                        | n/a                         | Playwright is heavy (~3–5s per render); cached for 1h alongside data |
-| `POST /api/pixel/visit`                         | 600 / min (system-side)        | 60 / min (per-IP per-org)   | Silent 204 on all rejections                                         |
-| `GET /api/pixel.js`                             | unlimited (CDN-cached)         | n/a                         | 1KB JS, edge-cached for 1h                                           |
-| Pull-quote LLM call (internal, not an endpoint) | At most 24 / day per org/window | n/a                         | 1h cache means natural rate ~3–8/day per org                         |
+| Endpoint                                        | Per-org limit                   | Per-IP limit              | Notes                                                                |
+| ----------------------------------------------- | ------------------------------- | ------------------------- | -------------------------------------------------------------------- |
+| `GET /api/dashboard/reports`                    | 30 / min                        | n/a (session-bound)       | Cache hits <50ms; cold rollup ~1–3s                                  |
+| `POST /api/dashboard/reports/refresh`           | 10 / min                        | n/a                       | Operator-initiated, short cooldown                                   |
+| `GET /api/dashboard/reports/pdf`                | 5 / min                         | n/a                       | Playwright is heavy (~3–5s per render); cached for 1h alongside data |
+| `POST /api/pixel/visit`                         | 600 / min (system-side)         | 60 / min (per-IP per-org) | Silent 204 on all rejections                                         |
+| `GET /api/pixel.js`                             | unlimited (CDN-cached)          | n/a                       | 1KB JS, edge-cached for 1h                                           |
+| Pull-quote LLM call (internal, not an endpoint) | At most 24 / day per org/window | n/a                       | 1h cache means natural rate ~3–8/day per org                         |
 
 Cold-start budget for the read path:
+
 - Cache miss: rollup runs, ~5 SQL queries (period range + prior period × {revenue, conversions, bookings, ad insights, recommendations}), ~1–2s
 - LLM pull-quote: ~1–2s
 - Total worst case: ~3s; cache hit: ~50ms
@@ -538,6 +561,7 @@ Cold-start budget for the read path:
 ## 13. Acceptance Criteria
 
 System-wide acceptance for v1:
+
 1. With `NEXT_PUBLIC_REPORTS_LIVE=true` and a populated test org, `/reports` renders correctly across all three windows with no fixture data.
 2. Refreshing the page within 1h produces an instant render (cache hit).
 3. Refresh button busts cache and produces a fresh render.
@@ -553,40 +577,40 @@ System-wide acceptance for v1:
 
 ## 14. Risks & Mitigations
 
-| Risk                                                                                  | Mitigation                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| First-touch attribution disagrees with operator's mental model                        | Doc the rule in `attribution-rule.ts` JSDoc and in the page's footer disclosure ("Attribution by first-touch — ad-driven if first event was an ad click; chat-driven otherwise"). Phase D may surface a last-touch alternative.                                                                     |
-| Meta API outage during rollup                                                         | **Updated**: there is no local Meta-insights cache today (verified). The rollup calls `CampaignInsightsProvider` live; on Meta API error the rollup catches the error, sets `funnel.[Impressions/Clicks].n = null` (rendering as "—"), and adds a non-blocking warning banner to the page. The 1h `ReportCache` keeps successful rollups available even if Meta is down for an hour. Phase D may add a persisted insight cache if outages prove disruptive. |
-| Playwright Chromium binary inflates Docker image size and cold-start                  | Acceptable trade-off for design parity. Per-request launch (no pool) keeps memory floor low. Future Phase D may introduce a Playwright pool if PDF generation latency becomes a customer complaint.                                                                                                  |
-| LLM pull-quote produces awkward or inaccurate prose                                   | (a) System prompt validated against fixture data shapes during PR-R5 review. (b) Output validated against `PullQuoteCopy`. (c) Template fallback on any validation failure. (d) Cached 1h so rare bad outputs don't reload-spam.                                                                       |
-| Per-IP rate limits on pixel ingestion break corporate-NAT customers (many users behind one IP) | The 60/min per-IP-per-org limit is generous for a corporate site (~1 page view/sec). If a customer hits it, we can raise the per-IP limit on their org via an `OrganizationConfig` override field (deferred to Phase D unless complained-about).                                                  |
-| Pre-Switchboard baseline pulls 90 days of Meta history but org's Meta data is sparse  | If baseline data is below a minimum threshold (e.g., < $50 spend or < 5 leads in the 90-day window), mark the baseline `null` and use in-period cohort path instead. If both are null, hide the section.                                                                                            |
-| Cohort-based comparison creates a perverse incentive (orgs unmanage channels to make Switchboard look good) | Document the cohort definition in the page footer. Phase D can add a "comparison includes channels you've explicitly tagged as unmanaged" disclosure. Not load-bearing at v1 scale.                                                                                                              |
-| ReportCache row growth                                                                | Bounded: at most 3 rows per org. `expiresAt` index supports a periodic cleanup job (deferred — Postgres handles low row count fine).                                                                                                                                                                |
-| PDF cache row growth (Bytes column)                                                   | At most 3 PDFs per org (~500KB each = 1.5MB/org max). Acceptable for v1. Cleanup job for expired PDFs is a Phase D backlog item.                                                                                                                                                                       |
-| `OrganizationConfig.websiteTrackingToken` backfill misses orgs                        | PR-R1 backfill iterates all rows; idempotent. Token generation deterministic-from-orgId would reduce backfill complexity but increases enumeration risk; random 256-bit token is safer.                                                                                                              |
+| Risk                                                                                                        | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First-touch attribution disagrees with operator's mental model                                              | Doc the rule in `attribution-rule.ts` JSDoc and in the page's footer disclosure ("Attribution by first-touch — ad-driven if first event was an ad click; chat-driven otherwise"). Phase D may surface a last-touch alternative.                                                                                                                                                                                                                             |
+| Meta API outage during rollup                                                                               | **Updated**: there is no local Meta-insights cache today (verified). The rollup calls `CampaignInsightsProvider` live; on Meta API error the rollup catches the error, sets `funnel.[Impressions/Clicks].n = null` (rendering as "—"), and adds a non-blocking warning banner to the page. The 1h `ReportCache` keeps successful rollups available even if Meta is down for an hour. Phase D may add a persisted insight cache if outages prove disruptive. |
+| Playwright Chromium binary inflates Docker image size and cold-start                                        | Acceptable trade-off for design parity. Per-request launch (no pool) keeps memory floor low. Future Phase D may introduce a Playwright pool if PDF generation latency becomes a customer complaint.                                                                                                                                                                                                                                                         |
+| LLM pull-quote produces awkward or inaccurate prose                                                         | (a) System prompt validated against fixture data shapes during PR-R5 review. (b) Output validated against `PullQuoteCopy`. (c) Template fallback on any validation failure. (d) Cached 1h so rare bad outputs don't reload-spam.                                                                                                                                                                                                                            |
+| Per-IP rate limits on pixel ingestion break corporate-NAT customers (many users behind one IP)              | The 60/min per-IP-per-org limit is generous for a corporate site (~1 page view/sec). If a customer hits it, we can raise the per-IP limit on their org via an `OrganizationConfig` override field (deferred to Phase D unless complained-about).                                                                                                                                                                                                            |
+| Pre-Switchboard baseline pulls 90 days of Meta history but org's Meta data is sparse                        | If baseline data is below a minimum threshold (e.g., < $50 spend or < 5 leads in the 90-day window), mark the baseline `null` and use in-period cohort path instead. If both are null, hide the section.                                                                                                                                                                                                                                                    |
+| Cohort-based comparison creates a perverse incentive (orgs unmanage channels to make Switchboard look good) | Document the cohort definition in the page footer. Phase D can add a "comparison includes channels you've explicitly tagged as unmanaged" disclosure. Not load-bearing at v1 scale.                                                                                                                                                                                                                                                                         |
+| ReportCache row growth                                                                                      | Bounded: at most 3 rows per org. `expiresAt` index supports a periodic cleanup job (deferred — Postgres handles low row count fine).                                                                                                                                                                                                                                                                                                                        |
+| PDF cache row growth (Bytes column)                                                                         | At most 3 PDFs per org (~500KB each = 1.5MB/org max). Acceptable for v1. Cleanup job for expired PDFs is a Phase D backlog item.                                                                                                                                                                                                                                                                                                                            |
+| `OrganizationConfig.websiteTrackingToken` backfill misses orgs                                              | PR-R1 backfill iterates all rows; idempotent. Token generation deterministic-from-orgId would reduce backfill complexity but increases enumeration risk; random 256-bit token is safer.                                                                                                                                                                                                                                                                     |
 
 ---
 
 ## 15. Out of Scope (Deferred)
 
-| Item                                                                              | Why deferred                                                              | Owner / phase                  |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------ |
-| `LifecycleRevenueEvent.agentDeploymentId` schema migration                        | First-touch heuristic is correct for v1; last-touch is a different model not needed yet | Phase D                       |
-| **Attended / no-show stage in funnel**                                            | `Booking.status` valid values today are `pending_confirmation`/`confirmed`/`cancelled`/`failed` only — no `attended` or `no_show` writes exist anywhere in the codebase. Adding this stage requires extending the status set + a writer (operator button or calendar-completion polling). | Phase D — small schema + UI work |
-| **Repeat spend / LTV surface**                                                    | Schema supports it (multiple `LifecycleRevenueEvent` per `opportunityId`/`contactId`), v1 funnel surfaces total revenue but not per-customer LTV. | Phase D                       |
-| **ROAS-over-time chart (org-level time-series)**                                  | Campaigns section already shows per-campaign ROAS for the period. A weekly time-series sparkline of org-level ROAS is a new UI element, not a data gap. | Phase D                       |
-| Industry benchmark fallback for cohort-missing comparison                         | Requires benchmark data source; pre-Switchboard baseline is sufficient for v1 | Phase D                       |
-| Per-region cost-vs-value constants (SG, UK, etc.)                                 | US is the primary cohort; constants documented as US-averaged              | Phase D when non-US orgs ship |
-| Per-org configurable cost-vs-value math                                           | Invites renewal-time arguments; constants are more defensible              | Phase E                       |
-| Multi-currency display                                                            | All v1 orgs are USD or near-USD; SGD bookings are displayed in USD with a note | Phase D                       |
-| Custom date ranges                                                                | Three windows cover the renewal-checkpoint use case                       | Phase D                       |
-| Email-the-report (scheduled monthly send)                                         | "Downloadable PDF + dashboard URL" is sufficient                          | Phase D                       |
-| Real-time updates (sub-1h freshness)                                              | Operator deep-dive surface; 1h cache is acceptable                        | Phase E                       |
-| Drill-down per campaign with time-series chart                                    | `/reports` already deep-dive enough; deeper drill links to Meta Ads Manager | Phase E                       |
-| Comparison vs other Switchboard customers / cohorts                               | Privacy-fraught; not a customer ask                                       | Never                         |
-| Playwright pool for PDF                                                           | Per-request launch is fine at v1 scale                                    | Phase D if latency complained-about |
-| ReportCache / PdfCache row cleanup job                                            | Row count is bounded                                                      | Phase D                       |
-| Per-org rate-limit overrides for pixel ingestion (corporate-NAT)                  | Deferred unless customers complain                                        | Phase D                       |
-| Last-touch attribution second view (in addition to first-touch)                   | One model is enough for v1                                                | Phase D                       |
-| Dead-code cleanup for `FixtureFolioBadge` after cutover                           | Component becomes dormant in PR-R6; cleanup follows Slice B's pattern    | Optional follow-up            |
+| Item                                                             | Why deferred                                                                                                                                                                                                                                                                              | Owner / phase                       |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `LifecycleRevenueEvent.agentDeploymentId` schema migration       | First-touch heuristic is correct for v1; last-touch is a different model not needed yet                                                                                                                                                                                                   | Phase D                             |
+| **Attended / no-show stage in funnel**                           | `Booking.status` valid values today are `pending_confirmation`/`confirmed`/`cancelled`/`failed` only — no `attended` or `no_show` writes exist anywhere in the codebase. Adding this stage requires extending the status set + a writer (operator button or calendar-completion polling). | Phase D — small schema + UI work    |
+| **Repeat spend / LTV surface**                                   | Schema supports it (multiple `LifecycleRevenueEvent` per `opportunityId`/`contactId`), v1 funnel surfaces total revenue but not per-customer LTV.                                                                                                                                         | Phase D                             |
+| **ROAS-over-time chart (org-level time-series)**                 | Campaigns section already shows per-campaign ROAS for the period. A weekly time-series sparkline of org-level ROAS is a new UI element, not a data gap.                                                                                                                                   | Phase D                             |
+| Industry benchmark fallback for cohort-missing comparison        | Requires benchmark data source; pre-Switchboard baseline is sufficient for v1                                                                                                                                                                                                             | Phase D                             |
+| Per-region cost-vs-value constants (SG, UK, etc.)                | US is the primary cohort; constants documented as US-averaged                                                                                                                                                                                                                             | Phase D when non-US orgs ship       |
+| Per-org configurable cost-vs-value math                          | Invites renewal-time arguments; constants are more defensible                                                                                                                                                                                                                             | Phase E                             |
+| Multi-currency display                                           | All v1 orgs are USD or near-USD; SGD bookings are displayed in USD with a note                                                                                                                                                                                                            | Phase D                             |
+| Custom date ranges                                               | Three windows cover the renewal-checkpoint use case                                                                                                                                                                                                                                       | Phase D                             |
+| Email-the-report (scheduled monthly send)                        | "Downloadable PDF + dashboard URL" is sufficient                                                                                                                                                                                                                                          | Phase D                             |
+| Real-time updates (sub-1h freshness)                             | Operator deep-dive surface; 1h cache is acceptable                                                                                                                                                                                                                                        | Phase E                             |
+| Drill-down per campaign with time-series chart                   | `/reports` already deep-dive enough; deeper drill links to Meta Ads Manager                                                                                                                                                                                                               | Phase E                             |
+| Comparison vs other Switchboard customers / cohorts              | Privacy-fraught; not a customer ask                                                                                                                                                                                                                                                       | Never                               |
+| Playwright pool for PDF                                          | Per-request launch is fine at v1 scale                                                                                                                                                                                                                                                    | Phase D if latency complained-about |
+| ReportCache / PdfCache row cleanup job                           | Row count is bounded                                                                                                                                                                                                                                                                      | Phase D                             |
+| Per-org rate-limit overrides for pixel ingestion (corporate-NAT) | Deferred unless customers complain                                                                                                                                                                                                                                                        | Phase D                             |
+| Last-touch attribution second view (in addition to first-touch)  | One model is enough for v1                                                                                                                                                                                                                                                                | Phase D                             |
+| Dead-code cleanup for `FixtureFolioBadge` after cutover          | Component becomes dormant in PR-R6; cleanup follows Slice B's pattern                                                                                                                                                                                                                     | Optional follow-up                  |
