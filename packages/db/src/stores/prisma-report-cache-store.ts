@@ -1,45 +1,52 @@
-import type { Prisma as PrismaTypes, PrismaClient } from "@prisma/client";
-import type { ReportCacheRow, ReportCacheStore } from "@switchboard/core/reports";
+import type { PrismaDbClient } from "../prisma-db.js";
+import type { ReportCacheStore, ReportCacheRow } from "@switchboard/core/reports";
 import type { ReportDataV1 } from "@switchboard/schemas";
 
-type Prisma = Pick<PrismaClient, "reportCache">;
+export class PrismaReportCacheStore implements ReportCacheStore {
+  constructor(private prisma: PrismaDbClient) {}
 
-export function createPrismaReportCacheStore(prisma: Prisma): ReportCacheStore {
-  return {
-    async findByKey(organizationId: string, window: string) {
-      const row = await prisma.reportCache.findUnique({
-        where: { organizationId_window: { organizationId, window } },
-      });
-      if (!row) return null;
-      return {
-        organizationId: row.organizationId,
-        window: row.window,
-        payload: row.payload as unknown as ReportDataV1,
-        computedAt: row.computedAt,
-        expiresAt: row.expiresAt,
-      } satisfies ReportCacheRow;
-    },
-    async upsert(row: ReportCacheRow) {
-      await prisma.reportCache.upsert({
-        where: {
-          organizationId_window: { organizationId: row.organizationId, window: row.window },
-        },
-        update: {
-          payload: row.payload as unknown as PrismaTypes.InputJsonValue,
-          computedAt: row.computedAt,
-          expiresAt: row.expiresAt,
-        },
-        create: {
+  async findByKey(orgId: string, window: string): Promise<ReportCacheRow | null> {
+    const row = await this.prisma.reportCache.findUnique({
+      where: {
+        organizationId_window: { organizationId: orgId, window },
+      },
+    });
+    if (!row) return null;
+    return {
+      organizationId: row.organizationId,
+      window: row.window,
+      payload: row.payload as unknown as ReportDataV1,
+      computedAt: row.computedAt,
+      expiresAt: row.expiresAt,
+    };
+  }
+
+  async upsert(row: ReportCacheRow): Promise<void> {
+    await this.prisma.reportCache.upsert({
+      where: {
+        organizationId_window: {
           organizationId: row.organizationId,
           window: row.window,
-          payload: row.payload as unknown as PrismaTypes.InputJsonValue,
-          computedAt: row.computedAt,
-          expiresAt: row.expiresAt,
         },
-      });
-    },
-    async invalidate(organizationId: string, window: string) {
-      await prisma.reportCache.deleteMany({ where: { organizationId, window } });
-    },
-  };
+      },
+      create: {
+        organizationId: row.organizationId,
+        window: row.window,
+        payload: row.payload as object,
+        computedAt: row.computedAt,
+        expiresAt: row.expiresAt,
+      },
+      update: {
+        payload: row.payload as object,
+        computedAt: row.computedAt,
+        expiresAt: row.expiresAt,
+      },
+    });
+  }
+
+  async invalidate(orgId: string, window: string): Promise<void> {
+    await this.prisma.reportCache.deleteMany({
+      where: { organizationId: orgId, window },
+    });
+  }
 }

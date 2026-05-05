@@ -32,6 +32,7 @@ export { buildConversionEvent } from "./crm-event-emitter.js";
 export type { BuildConversionEventParams } from "./crm-event-emitter.js";
 export { MetaCAPIDispatcher } from "./meta-capi-dispatcher.js";
 export { MetaCampaignInsightsProvider } from "./meta-campaign-insights-provider.js";
+export { MetaReportInsightsProvider } from "./meta-report-insights-provider.js";
 export { LearningPhaseGuardV2 } from "./learning-phase-guard.js";
 export { detectFunnelShape, getFunnelStageTemplate } from "./funnel-detector.js";
 export { detectTrends, projectBreach, classifyTrendTier } from "./trend-engine.js";
