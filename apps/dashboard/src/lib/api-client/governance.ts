@@ -329,6 +329,12 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     }>(path);
   }
 
+  async getGreeting(agentKey: string): Promise<{ data: unknown }> {
+    return this.request<{ data: unknown }>(
+      `/api/dashboard/agents/${encodeURIComponent(agentKey)}/greeting`,
+    );
+  }
+
   /**
    * Bypasses request<T>() because that helper throws on non-2xx without
    * surfacing the status code. The dashboard proxy needs the raw 409 to
