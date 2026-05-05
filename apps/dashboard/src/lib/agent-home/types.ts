@@ -48,7 +48,7 @@ export interface AgentBlockResponse<T> {
 }
 
 // ─── B1 Greeting ──────────────────────────────────────────────
-export type GreetingVariant = "named-lead" | "quiet" | "busy";
+export type GreetingVariant = "welcome" | "named-lead" | "quiet" | "busy";
 
 export interface GreetingViewModel {
   variant: GreetingVariant;
