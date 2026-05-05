@@ -1,20 +1,37 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import type { AgentKey } from "@switchboard/schemas";
-import type { AgentBlockQuery, GreetingViewModel } from "@/lib/agent-home/types";
-import { getFixtureGreeting } from "@/app/(auth)/[agentKey]/_fixtures";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import type {
+  AgentBlockQuery,
+  AgentBlockResponse,
+  GreetingViewModel,
+} from "@/lib/agent-home/types";
 
-/**
- * PR-S1 fixture form. PR-S2 swaps the implementation to a React Query
- * call against /api/dashboard/agents/[agentId]/greeting; the public
- * AgentBlockQuery<GreetingViewModel> shape is preserved across the swap
- * so callers (page + block components) do not change.
- */
+async function fetchGreeting(agentKey: AgentKey): Promise<GreetingViewModel> {
+  const url = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/greeting`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to load greeting: ${res.status}`);
+  }
+  const body: AgentBlockResponse<GreetingViewModel> = await res.json();
+  return body.data;
+}
+
 export function useAgentGreeting(agentKey: AgentKey): AgentBlockQuery<GreetingViewModel> {
+  const keys = useScopedQueryKeys();
+  const query = useQuery({
+    queryKey: keys?.greeting.feed(agentKey) ?? ["__disabled_greeting__"],
+    queryFn: () => fetchGreeting(agentKey),
+    refetchInterval: 60_000,
+    enabled: !!keys,
+  });
+
   return {
-    data: getFixtureGreeting(agentKey),
-    isLoading: false,
-    isError: false,
-    error: null,
+    data: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
   };
 }
