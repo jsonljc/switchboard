@@ -1,7 +1,7 @@
 "use client";
 
-import { FIXTURES_BY_WINDOW } from "./fixtures";
 import { useReportWindow } from "./hooks/use-report-window";
+import { useReportData } from "./hooks/use-report-data";
 import { ReportsHeader } from "./components/header";
 import { TitleControls } from "./components/title-controls";
 import { PullQuote } from "./components/pull-quote";
@@ -15,7 +15,9 @@ import styles from "./reports.module.css";
 
 export function ReportsPage() {
   const { window: activeWindow, setWindow } = useReportWindow();
-  const fx = FIXTURES_BY_WINDOW[activeWindow];
+  const { data: fx } = useReportData(activeWindow);
+
+  if (!fx) return null;
 
   return (
     <div className={styles.reportsPage}>

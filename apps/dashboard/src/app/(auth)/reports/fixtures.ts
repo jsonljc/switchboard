@@ -7,86 +7,43 @@
  *   THIS MONTH   → goodFixture (default)
  *   THIS QUARTER → problemFixture
  *
- * NOTE: Numbers are illustrative. Live attribution wiring lands
- * in a follow-up PR (attribution rollup + ad-optimizer aggregates
- * + revenue).
+ * Types are imported from @switchboard/schemas; this file only owns the
+ * sample data. Live attribution wiring lands in PR-R3 (period rollup).
+ *
+ * NOTE: `managedComparison` is null in fixtures; PR-R4 wires the live
+ * comparison data.
  */
 
-export type ReportWindow = "THIS WEEK" | "THIS MONTH" | "THIS QUARTER";
+import {
+  type ReportDataV1,
+  type ReportWindow,
+  REPORT_WINDOWS,
+  DEFAULT_REPORT_WINDOW,
+} from "@switchboard/schemas";
 
-export type DeltaKind = "pos" | "flat" | "neg";
+export type { ReportDataV1 as ReportData, ReportWindow } from "@switchboard/schemas";
+export type {
+  Delta,
+  DeltaKind,
+  PullQuoteCopy,
+  AttributionCell,
+  AttributionData,
+  FunnelRowData,
+  FunnelNarrative,
+  CampaignStage,
+  CampaignRow,
+  CostBreakdown,
+  ManagedComparisonData,
+  ManagedComparisonPair,
+  ManagedComparisonMetrics,
+  ManagedComparisonSource,
+} from "@switchboard/schemas";
 
-export interface Delta {
-  kind: DeltaKind;
-  text: string;
-}
+export { REPORT_WINDOWS, DEFAULT_REPORT_WINDOW };
 
-export interface PullQuoteCopy {
-  pre: string;
-  value: string;
-  mid: string;
-  cost: string;
-  post: string;
-}
-
-export interface AttributionCell {
-  value: number;
-  caption: string;
-}
-
-export interface AttributionData {
-  total: number;
-  delta: Delta;
-  riley: AttributionCell;
-  alex: AttributionCell;
-}
-
-export interface FunnelRowData {
-  stage: string;
-  n: number;
-  label: string;
-  delta: Delta | null;
-}
-
-export interface FunnelNarrative {
-  marker: string;
-  text: string;
-}
-
-export type CampaignStage = "hot" | "warm" | "cool";
-
-export interface CampaignRow {
-  name: string;
-  stage: CampaignStage;
-  spend: number;
-  leads: number;
-  revenue: number;
-  roas: number;
-}
-
-export interface CostBreakdown {
-  paid: number;
-  alt: number;
-  saving: number;
-}
-
-export interface ReportData {
-  label: ReportWindow;
-  period: string;
-  dateFolio: string;
-  pullquote: PullQuoteCopy;
-  attribution: AttributionData;
-  funnel: FunnelRowData[];
-  funnelNarrative: FunnelNarrative;
-  campaigns: CampaignRow[];
-  cost: CostBreakdown;
-  costNarrative: string;
-}
-
-export const goodFixture: ReportData = {
+export const goodFixture: ReportDataV1 = {
   label: "THIS MONTH",
   period: "APR 1 — APR 30",
-  // dateFolio will be replaced by computed range in the live wiring PR.
   dateFolio: "APR 1 — APR 30",
   pullquote: {
     pre: "Your team earned you ",
@@ -108,25 +65,10 @@ export const goodFixture: ReportData = {
       label: "342k",
       delta: { kind: "pos", text: "↑ 8% vs March" },
     },
-    {
-      stage: "Clicks",
-      n: 4200,
-      label: "4,200",
-      delta: { kind: "pos", text: "↑ 3% vs March" },
-    },
+    { stage: "Clicks", n: 4200, label: "4,200", delta: { kind: "pos", text: "↑ 3% vs March" } },
     { stage: "Landing visits", n: 3890, label: "3,890", delta: null },
-    {
-      stage: "Leads",
-      n: 247,
-      label: "247",
-      delta: { kind: "pos", text: "↑ 14% vs March" },
-    },
-    {
-      stage: "Bookings",
-      n: 47,
-      label: "47",
-      delta: { kind: "pos", text: "↑ 9% vs March" },
-    },
+    { stage: "Leads", n: 247, label: "247", delta: { kind: "pos", text: "↑ 14% vs March" } },
+    { stage: "Bookings", n: 47, label: "47", delta: { kind: "pos", text: "↑ 9% vs March" } },
   ],
   funnelNarrative: {
     marker: "Riley · Apr 22",
@@ -142,9 +84,10 @@ export const goodFixture: ReportData = {
   cost: { paid: 447.75, alt: 8000, saving: 7552 },
   costNarrative:
     "You'd pay this much for a junior SDR (~$5,000/mo all-in) plus a small ad agency retainer (~$3,000/mo). Your team replaces both.",
+  managedComparison: null,
 };
 
-export const quietFixture: ReportData = {
+export const quietFixture: ReportDataV1 = {
   label: "THIS WEEK",
   period: "APR 27 — MAY 3",
   dateFolio: "APR 27 — MAY 3",
@@ -180,9 +123,10 @@ export const quietFixture: ReportData = {
   cost: { paid: 103.2, alt: 1846, saving: 1742 },
   costNarrative:
     "A quiet week is a fair test — even at low volume your team's base cost is a fraction of what an SDR plus retainer would run pro-rated.",
+  managedComparison: null,
 };
 
-export const problemFixture: ReportData = {
+export const problemFixture: ReportDataV1 = {
   label: "THIS QUARTER",
   period: "FEB 1 — APR 30",
   dateFolio: "FEB 1 — APRIL 30",
@@ -206,25 +150,10 @@ export const problemFixture: ReportData = {
       label: "1.02m",
       delta: { kind: "pos", text: "↑ 4% vs Q1" },
     },
-    {
-      stage: "Clicks",
-      n: 11800,
-      label: "11.8k",
-      delta: { kind: "neg", text: "↓ 9% vs Q1" },
-    },
+    { stage: "Clicks", n: 11800, label: "11.8k", delta: { kind: "neg", text: "↓ 9% vs Q1" } },
     { stage: "Landing visits", n: 10940, label: "10.9k", delta: null },
-    {
-      stage: "Leads",
-      n: 612,
-      label: "612",
-      delta: { kind: "neg", text: "↓ 12% vs Q1" },
-    },
-    {
-      stage: "Bookings",
-      n: 118,
-      label: "118",
-      delta: { kind: "neg", text: "↓ 8% vs Q1" },
-    },
+    { stage: "Leads", n: 612, label: "612", delta: { kind: "neg", text: "↓ 12% vs Q1" } },
+    { stage: "Bookings", n: 118, label: "118", delta: { kind: "neg", text: "↓ 8% vs Q1" } },
   ],
   funnelNarrative: {
     marker: "Riley · Mar 14",
@@ -241,14 +170,11 @@ export const problemFixture: ReportData = {
   cost: { paid: 1343.25, alt: 24000, saving: 22657 },
   costNarrative:
     "Even in a soft quarter, you'd pay roughly $24,000 for an SDR plus retainer over three months. Your team came in at one-eighteenth the price.",
+  managedComparison: null,
 };
 
-export const FIXTURES_BY_WINDOW: Record<ReportWindow, ReportData> = {
+export const FIXTURES_BY_WINDOW: Record<ReportWindow, ReportDataV1> = {
   "THIS WEEK": quietFixture,
   "THIS MONTH": goodFixture,
   "THIS QUARTER": problemFixture,
 };
-
-export const REPORT_WINDOWS: ReportWindow[] = ["THIS WEEK", "THIS MONTH", "THIS QUARTER"];
-
-export const DEFAULT_REPORT_WINDOW: ReportWindow = "THIS MONTH";

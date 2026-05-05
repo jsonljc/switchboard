@@ -122,3 +122,6 @@ export * from "./pcd-identity.js";
 
 // Recommendations (surface, status, action enums + canonical input shape)
 export * from "./recommendations.js";
+
+// Reports v1 view-model (operator deep-dive surface)
+export * from "./reports/v1.js";
