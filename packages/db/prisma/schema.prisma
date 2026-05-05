@@ -432,6 +432,9 @@ model OrganizationConfig {
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   escalationConfig     Json? // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }
+  /// Per-org public token rendered into the customer's website tracking
+  /// snippet. Random 256-bit hex (64 chars). Rotation supported via Settings.
+  websiteTrackingToken String?         @unique
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
   users                DashboardUser[]
@@ -1919,4 +1922,45 @@ model PcdIdentitySnapshot {
   @@index([productIdentityId])
   @@index([creatorIdentityId])
   @@index([selectedProvider])
+}
+
+// ---------------------------------------------------------------------------
+// Reports v1 — projection cache + PDF cache + pre-Switchboard baseline
+// ---------------------------------------------------------------------------
+
+model ReportCache {
+  id             String   @id @default(uuid())
+  organizationId String
+  window         String   // "THIS_WEEK" | "THIS_MONTH" | "THIS_QUARTER"
+  payload        Json     // serialized ReportDataV1
+  computedAt     DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([organizationId, window])
+  @@index([expiresAt])
+}
+
+model PdfCache {
+  id             String   @id @default(uuid())
+  organizationId String
+  window         String
+  pdfBytes       Bytes
+  computedAt     DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([organizationId, window])
+  @@index([expiresAt])
+}
+
+model PreSwitchboardBaseline {
+  id             String   @id @default(uuid())
+  organizationId String
+  dimension      String   // "ads" | "conversations"
+  metric         String   // "spend" | "leads" | "revenue" | "roas" | "reply_minutes" | "lead_conversion_rate"
+  value          Float
+  periodStart    DateTime
+  periodEnd      DateTime
+  capturedAt     DateTime @default(now())
+
+  @@index([organizationId, dimension, metric])
 }
