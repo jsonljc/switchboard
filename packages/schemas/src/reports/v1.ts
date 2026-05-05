@@ -7,7 +7,7 @@
  * v1 invariants:
  *   - 3 windows: THIS WEEK, THIS MONTH, THIS QUARTER (spaces, not
  *     underscores — preserved for back-compat with the static page).
- *   - Funnel has 5 stages; "Landing visits" may be hidden client-side
+ *   - Funnel has 6 stages; "Landing visits" may be hidden client-side
  *     when no pixel data exists, but the row stays in the array.
  *   - managedComparison is null when neither in-period cohort nor
  *     baseline data exists.
@@ -115,4 +115,19 @@ export interface ReportDataV1 {
   cost: CostBreakdown;
   costNarrative: string;
   managedComparison: ManagedComparisonData | null;
+}
+
+// ---------------------------------------------------------------------------
+// Report insights provider — injected into core from ad-optimizer via apps/api
+// ---------------------------------------------------------------------------
+
+export interface ReportInsightsMetrics {
+  impressions: number;
+  clicks: number;
+  landingPageViews: number;
+  spend: number;
+}
+
+export interface ReportInsightsProvider {
+  getAggregateMetrics(dateRange: { since: string; until: string }): Promise<ReportInsightsMetrics>;
 }
