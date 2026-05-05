@@ -12,6 +12,7 @@ import { decisionsRoutes } from "../routes/decisions.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
+import { greetingRoutes } from "../routes/greeting.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
   createInMemoryStorage,
@@ -23,6 +24,7 @@ import {
   evaluate,
   resolveIdentity,
   createInMemoryRecommendationStore,
+  agentHome,
 } from "@switchboard/core";
 import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 import type {
@@ -102,6 +104,7 @@ declare module "fastify" {
     reportCacheStore?: import("@switchboard/core/reports").ReportCacheStore;
     reportStores?: import("@switchboard/core/reports").ReportStores;
     reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
+    greetingSignalStore?: import("@switchboard/core").agentHome.GreetingSignalStore;
   }
 }
 
@@ -488,6 +491,9 @@ export async function buildTestServer(): Promise<TestContext> {
     orgConfig: { getStripePriceId: async () => null },
   });
 
+  // In-memory greeting signal store — tests can seed via app.greetingSignalStore.setSignal()
+  app.decorate("greetingSignalStore", new agentHome.InMemoryGreetingSignalStore());
+
   // --- PlatformIngress wiring ---
   const intentRegistry = new IntentRegistry();
   const cartridgeManifests: CartridgeManifestForRegistration[] = [];
@@ -570,6 +576,7 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(winsRoute, { prefix: "/api/dashboard" });
   await app.register(pipelineRoute, { prefix: "/api/dashboard" });
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
+  await app.register(greetingRoutes, { prefix: "/api/dashboard" });
 
   const { dashboardReportsRoutes } = await import("../routes/dashboard-reports.js");
   await app.register(dashboardReportsRoutes);
