@@ -101,6 +101,10 @@
     "./billing": {
       "types": "./dist/billing/index.d.ts",
       "import": "./dist/billing/index.js"
+    },
+    "./reports": {
+      "types": "./dist/reports/index.d.ts",
+      "import": "./dist/reports/index.js"
     }
   },
   "scripts": {
