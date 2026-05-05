@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { scopedKeys } from "../query-keys";
 
 describe("scopedKeys", () => {
@@ -69,5 +69,27 @@ describe("scopedKeys", () => {
     expect(a.approvals.pending()).not.toEqual(b.approvals.pending());
     expect(a.identity.all()).toEqual(["org-a", "identity"]);
     expect(b.identity.all()).toEqual(["org-b", "identity"]);
+  });
+});
+
+describe("scopedKeys agent-home factories", () => {
+  const keys = scopedKeys("org-1");
+
+  it("greeting.feed uses agentKey in key", () => {
+    expect(keys.greeting.feed("alex")).toEqual(["org-1", "greeting", "feed", "alex"]);
+  });
+
+  it("wins.feed includes window in key for prefix invalidation", () => {
+    expect(keys.wins.feed("alex", "today")).toEqual(["org-1", "wins", "feed", "alex", "today"]);
+    expect(keys.wins.byAgent("alex")).toEqual(["org-1", "wins", "feed", "alex"]);
+  });
+
+  it("metrics.feed includes window in key for prefix invalidation", () => {
+    expect(keys.metrics.feed("alex", "week")).toEqual(["org-1", "metrics", "feed", "alex", "week"]);
+    expect(keys.metrics.byAgent("alex")).toEqual(["org-1", "metrics", "feed", "alex"]);
+  });
+
+  it("pipeline.feed has no window in key", () => {
+    expect(keys.pipeline.feed("alex")).toEqual(["org-1", "pipeline", "feed", "alex"]);
   });
 });

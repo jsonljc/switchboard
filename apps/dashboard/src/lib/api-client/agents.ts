@@ -141,6 +141,21 @@ export class SwitchboardAgentsClient extends SwitchboardMarketplaceClient {
     return this.request<{ roster: AgentRosterEntry[] }>("/api/agents/roster");
   }
 
+  async getEnabledAgents() {
+    return this.request<{
+      agents: {
+        key: string;
+        slug: string;
+        role: string;
+        displayName: string;
+        accent: string;
+        launchTier: string;
+        status: "enabled" | "coming_soon";
+        enabledAt: string | null;
+      }[];
+    }>("/api/dashboard/agents");
+  }
+
   async updateAgentRoster(
     id: string,
     body: {

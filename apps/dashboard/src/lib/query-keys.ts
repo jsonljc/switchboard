@@ -156,6 +156,28 @@ export const scopedKeys = (orgId: string) => ({
     all: () => [orgId, "decisions"] as const,
     feed: (agentKey: string | null) => [orgId, "decisions", "feed", agentKey ?? "all"] as const,
   },
+  greeting: {
+    all: () => [orgId, "greeting"] as const,
+    feed: (agentKey: string) => [orgId, "greeting", "feed", agentKey] as const,
+  },
+  wins: {
+    all: () => [orgId, "wins"] as const,
+    feed: (agentKey: string, window: "today" | "week" | "month") =>
+      [orgId, "wins", "feed", agentKey, window] as const,
+    /** Use for prefix invalidation across all windows. */
+    byAgent: (agentKey: string) => [orgId, "wins", "feed", agentKey] as const,
+  },
+  metrics: {
+    all: () => [orgId, "metrics"] as const,
+    feed: (agentKey: string, window: "today" | "week" | "month") =>
+      [orgId, "metrics", "feed", agentKey, window] as const,
+    /** Use for prefix invalidation across all windows. */
+    byAgent: (agentKey: string) => [orgId, "metrics", "feed", agentKey] as const,
+  },
+  pipeline: {
+    all: () => [orgId, "pipeline"] as const,
+    feed: (agentKey: string) => [orgId, "pipeline", "feed", agentKey] as const,
+  },
   billing: {
     all: () => [orgId, "billing"] as const,
     status: () => [orgId, "billing", "status"] as const,

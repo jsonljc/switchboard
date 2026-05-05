@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { DispatchContext } from "../dispatch-action.js";
 import { dispatchDecisionAction } from "../dispatch-action.js";
 
 beforeEach(() => {
@@ -82,5 +83,28 @@ describe("dispatchDecisionAction", () => {
     await expect(
       dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "secondary"),
     ).rejects.toThrow(/Handoff resolve failed/);
+  });
+});
+
+describe("dispatchDecisionAction — slice B invalidation", () => {
+  it("invalidates greeting + wins after a successful approval primary action", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const invalidateQueries = vi.fn();
+    const fakeQc = { invalidateQueries } as unknown as DispatchContext["queryClient"];
+
+    await dispatchDecisionAction({ kind: "approval", sourceId: "rec-1" }, "primary", undefined, {
+      queryClient: fakeQc,
+      orgId: "org-1",
+      agentKey: "alex",
+    });
+
+    const calls = invalidateQueries.mock.calls.map((c) => c[0]);
+    expect(calls).toContainEqual({ queryKey: ["org-1", "decisions", "feed", "alex"] });
+    expect(calls).toContainEqual({ queryKey: ["org-1", "greeting", "feed", "alex"] });
+    expect(calls).toContainEqual({ queryKey: ["org-1", "wins", "feed", "alex"] });
+
+    vi.unstubAllGlobals();
   });
 });

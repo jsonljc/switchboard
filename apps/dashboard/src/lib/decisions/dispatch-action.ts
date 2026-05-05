@@ -1,4 +1,7 @@
+import type { QueryClient } from "@tanstack/react-query";
+import type { AgentKey } from "@switchboard/schemas";
 import type { DecisionKind } from "./types.js";
+import { scopedKeys } from "../query-keys.js";
 
 /**
  * Slice B2 will define richer types for action payloads. Slice A locks only
@@ -18,10 +21,18 @@ import type { DecisionKind } from "./types.js";
  *   is observable from tests.
  * - Handoff secondary/dismiss: `POST /api/dashboard/escalations/:id/resolve`.
  */
+
+export interface DispatchContext {
+  queryClient: Pick<QueryClient, "invalidateQueries">;
+  orgId: string;
+  agentKey: AgentKey;
+}
+
 export async function dispatchDecisionAction(
   source: { kind: DecisionKind; sourceId: string },
   action: "primary" | "secondary" | "dismiss",
   payload?: { message?: string; resolutionNote?: string; note?: string },
+  context?: DispatchContext,
 ): Promise<void> {
   switch (source.kind) {
     case "approval": {
@@ -37,7 +48,7 @@ export async function dispatchDecisionAction(
       if (!res.ok) {
         throw new Error(`Recommendation action failed (HTTP ${res.status})`);
       }
-      return;
+      break;
     }
 
     case "handoff": {
@@ -63,7 +74,15 @@ export async function dispatchDecisionAction(
           throw new Error(`Handoff resolve failed (HTTP ${res.status})`);
         }
       }
-      return;
+      break;
     }
+  }
+
+  if (context) {
+    const { queryClient, orgId, agentKey } = context;
+    const keys = scopedKeys(orgId);
+    void queryClient.invalidateQueries({ queryKey: keys.decisions.feed(agentKey) });
+    void queryClient.invalidateQueries({ queryKey: keys.greeting.feed(agentKey) });
+    void queryClient.invalidateQueries({ queryKey: keys.wins.byAgent(agentKey) });
   }
 }
