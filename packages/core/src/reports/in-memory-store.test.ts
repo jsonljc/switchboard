@@ -164,6 +164,6 @@ describe("createInMemoryBaselineStore", () => {
     await store.insertMany([{ ...row, value: 200, capturedAt: new Date("2026-04-16T00:00:00Z") }]);
     const found = await store.listByDimension("org-a", "ads");
     expect(found).toHaveLength(1);
-    expect(found[0].value).toBe(200);
+    expect(found[0]?.value).toBe(200);
   });
 });
