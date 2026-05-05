@@ -548,6 +548,13 @@ export async function buildServer() {
     app.decorate("baselineStore", new PrismaBaselineStore(prismaClient));
   }
 
+  // Greeting signal store — Prisma in production, undefined when no DB.
+  // The /api/dashboard/agents/:agentKey/greeting route 500s when this is missing.
+  if (prismaClient) {
+    const { PrismaGreetingSignalStore } = await import("@switchboard/db");
+    app.decorate("greetingSignalStore", new PrismaGreetingSignalStore(prismaClient));
+  }
+
   // Decision feed deps — Prisma stores merged by /api/dashboard/[agents/:key/]decisions.
   // Skipped when no DB; the route returns 500 ("dependencies not wired").
   if (prismaClient) {

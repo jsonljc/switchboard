@@ -10,12 +10,12 @@ function errorResponse(err: unknown) {
 }
 
 /**
- * Dashboard proxy for `GET /api/agents/:agentId/greeting` — agent greeting signal.
+ * Dashboard proxy for `GET /api/dashboard/agents/:agentKey/greeting`.
  *
- * Param name is `agentId` to match the sibling `[agentId]/readiness/route.ts`
- * route — Next.js rejects different dynamic-segment slugs at the same path
- * level. The semantic value is an `AgentKey` (alex|riley|mira); the
- * upstream `apps/api/src/routes/agents.ts` handler validates it.
+ * Param name is `agentId` to match the sibling `[agentId]/decisions/route.ts`
+ * and `[agentId]/readiness/route.ts` routes — Next.js rejects different
+ * dynamic-segment slugs at the same path level. The semantic value is an
+ * `AgentKey` (alex|riley); the upstream Fastify handler validates it.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ agentId: string }> }) {
   try {

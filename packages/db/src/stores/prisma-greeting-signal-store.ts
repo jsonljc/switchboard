@@ -21,6 +21,7 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
           organizationId: orgId,
           sourceAgent: agentKey,
           status: "pending",
+          surface: "queue",
         },
       }),
 
@@ -30,6 +31,7 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
           organizationId: orgId,
           sourceAgent: agentKey,
           status: "pending",
+          surface: "queue",
         },
         orderBy: { createdAt: "asc" },
         select: { createdAt: true },
@@ -69,6 +71,7 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
         organizationId: orgId,
         sourceAgent: agentKey,
         status: "pending",
+        surface: "queue",
       },
       orderBy: { createdAt: "asc" },
       select: { humanSummary: true, createdAt: true },
@@ -77,6 +80,8 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
     if (!oldestRecord) return null;
 
     const name = extractName(oldestRecord.humanSummary);
+    if (!name) return null;
+
     const ageHours = (Date.now() - oldestRecord.createdAt.getTime()) / (1000 * 60 * 60);
     const ageLabel = formatAgeLabel(ageHours);
 
@@ -88,40 +93,55 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
 // Name Extraction Heuristic
 // ──────────────────────────────────────────────────────────────────────────
 
-function extractName(humanSummary: string): string {
-  // Try to find quoted text first
+const SKIP_WORDS = new Set([
+  "Pause",
+  "Resume",
+  "Stop",
+  "Start",
+  "Create",
+  "Update",
+  "Delete",
+  "Review",
+  "Approve",
+  "Reject",
+  "Send",
+  "Cancel",
+  "Adjust",
+  "Book",
+  "New",
+  "The",
+  "This",
+  "That",
+  "A",
+  "An",
+  "For",
+  "With",
+  "From",
+  "And",
+  "But",
+  "Or",
+  "No",
+  "Not",
+  "All",
+  "Set",
+  "Get",
+  "Is",
+  "Are",
+]);
+
+function extractName(humanSummary: string): string | null {
   const quotedMatch = humanSummary.match(/"([^"]+)"/);
   if (quotedMatch && quotedMatch[1]) return quotedMatch[1];
 
-  // Try to find a capitalized word that's not a common action verb
-  const actionVerbs = new Set([
-    "Pause",
-    "Resume",
-    "Stop",
-    "Start",
-    "Create",
-    "Update",
-    "Delete",
-    "Review",
-    "Approve",
-    "Reject",
-  ]);
-
   const words = humanSummary.split(/\s+/);
   for (const word of words) {
-    const firstChar = word[0];
-    if (
-      word.length > 0 &&
-      firstChar !== undefined &&
-      firstChar === firstChar.toUpperCase() &&
-      !actionVerbs.has(word)
-    ) {
-      return word;
+    const clean = word.replace(/[^a-zA-Z]/g, "");
+    if (clean.length >= 2 && /^[A-Z]/.test(clean) && !SKIP_WORDS.has(clean)) {
+      return clean;
     }
   }
 
-  // Fallback: first 20 chars
-  return humanSummary.slice(0, 20);
+  return null;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
