@@ -1,6 +1,19 @@
 // Agent Home projection and types
 export type { AgentHomeKey } from "./agent-key.js";
 export {
+  computeVariant,
+  buildSegments,
+  projectGreeting,
+  InMemoryGreetingSignalStore,
+  type GreetingVariant,
+  type GreetingSignal,
+  type TopItemMeta,
+  type GreetingProjection,
+  type GreetingSignalStore,
+  type ProjectGreetingInput,
+  type GreetingAgentConfig,
+} from "./greeting.js";
+export {
   projectWins,
   type WinSource,
   type WinStatus,
