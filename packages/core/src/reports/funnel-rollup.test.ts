@@ -105,12 +105,12 @@ describe("computeFunnel", () => {
 
     const result = await computeFunnel(makeCtx(), stores, provider);
 
-    expect(result.funnel[0].n).toBe(5000);
-    expect(result.funnel[1].n).toBe(1000);
-    expect(result.funnel[2].n).toBe(800);
-    expect(result.funnel[3].n).toBe(100);
-    expect(result.funnel[4].n).toBe(25);
-    expect(result.funnel[5].n).toBe(5);
+    expect(result.funnel[0]?.n).toBe(5000);
+    expect(result.funnel[1]?.n).toBe(1000);
+    expect(result.funnel[2]?.n).toBe(800);
+    expect(result.funnel[3]?.n).toBe(100);
+    expect(result.funnel[4]?.n).toBe(25);
+    expect(result.funnel[5]?.n).toBe(5);
   });
 
   it("renders top 3 rows as zero with null delta when provider is null", async () => {
@@ -125,12 +125,12 @@ describe("computeFunnel", () => {
 
     const result = await computeFunnel(makeCtx(), stores, null);
 
-    expect(result.funnel[0].n).toBe(0);
-    expect(result.funnel[0].delta).toBeNull();
-    expect(result.funnel[1].n).toBe(0);
-    expect(result.funnel[2].n).toBe(0);
-    expect(result.funnel[3].n).toBe(50);
-    expect(result.funnel[3].delta).not.toBeNull();
+    expect(result.funnel[0]?.n).toBe(0);
+    expect(result.funnel[0]?.delta).toBeNull();
+    expect(result.funnel[1]?.n).toBe(0);
+    expect(result.funnel[2]?.n).toBe(0);
+    expect(result.funnel[3]?.n).toBe(50);
+    expect(result.funnel[3]?.delta).not.toBeNull();
   });
 
   it("returns null delta when prior is zero", async () => {
@@ -142,7 +142,7 @@ describe("computeFunnel", () => {
 
     const result = await computeFunnel(makeCtx(), stores, provider);
 
-    expect(result.funnel[0].delta).toBeNull();
+    expect(result.funnel[0]?.delta).toBeNull();
   });
 
   it("uses Riley narrative from recommendations when available", async () => {
