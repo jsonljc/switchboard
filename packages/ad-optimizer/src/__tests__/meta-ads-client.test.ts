@@ -430,4 +430,54 @@ describe("MetaAdsClient", () => {
       });
     });
   });
+
+  describe("getAdCampaignId", () => {
+    it("returns campaign_id from Graph API", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ campaign_id: "camp_123" }),
+      });
+
+      const result = await client.getAdCampaignId("ad_456");
+
+      expect(result).toBe("camp_123");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(callUrl).toContain("/ad_456?fields=campaign_id");
+    });
+
+    it("caches result on second call", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ campaign_id: "camp_123" }),
+      });
+
+      // Advance past rate limit for clarity
+      vi.advanceTimersByTime(61000);
+
+      const result1 = await client.getAdCampaignId("ad_456");
+      const result2 = await client.getAdCampaignId("ad_456");
+
+      expect(result1).toBe("camp_123");
+      expect(result2).toBe("camp_123");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns null on API error", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: { message: "Ad not found" } }),
+      });
+
+      // Advance past rate limit
+      vi.advanceTimersByTime(61000);
+
+      const result = await client.getAdCampaignId("ad_nonexistent");
+
+      expect(result).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
 });
