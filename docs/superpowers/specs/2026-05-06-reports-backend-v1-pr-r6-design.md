@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-06
 **Branch:** `feat/reports-backend-v1-r6` (from `main`)
-**Depends on:** PR-R3 (#370, merged). Independent of PR-R4 (#371, in review) — fixes upstream data paths, not rollup output.
+**Depends on:** PR-R3 (#370, merged), PR-R4 (#371, merged). Lands on top of both — fixes upstream data paths that R4's campaign rollup and managed comparison depend on.
 
 ---
 
@@ -226,12 +226,24 @@ The `clicks`/`cpc`/`ctr` fields were deprecated in Meta API v2.4/v2.5. Their rep
 | `cpc`             | `cpc`          | `costPerInlineLinkClick` | `cost_per_inline_link_click` |
 | `ctr`             | `ctr`          | `inlineLinkClickCtr`     | `inline_link_click_ctr`      |
 
-### 6.3 Expected metric impact
+### 6.3 Impact on `cpl` and `clickToLeadRate`
+
+R4 added `cpl: number | null` and `clickToLeadRate: number | null` to `CampaignRow`. After R6's rename, the formulas in `campaign-rollup.ts` become:
+
+```ts
+cpl = leads > 0 ? spend / leads : null; // unchanged — uses leads, not clicks
+clickToLeadRate = inlineLinkClicks > 0 ? leads / inlineLinkClicks : null; // now uses link clicks
+```
+
+`clickToLeadRate` is the key metric that improves — it now measures leads per link click (people who clicked through to WhatsApp/landing page), not leads per all-click (including likes, comments, profile clicks). This makes the rate higher and more meaningful.
+
+### 6.4 Expected metric impact
 
 After the rename, numbers change because `inline_link_clicks < clicks`:
 
 - **CPC goes UP** — same spend / fewer clicks = higher cost per meaningful click
 - **CTR goes DOWN** — fewer clicks / same impressions = lower rate
+- **clickToLeadRate goes UP** — same leads / fewer (meaningful) clicks = higher conversion rate
 - This is correct and more honest for reporting
 
 ### 6.4 Changes by file
@@ -344,6 +356,7 @@ Commits are independent — can be reviewed/reverted individually.
 - All existing ad-optimizer tests pass with renamed fields
 - All existing core/reports tests pass with renamed fields
 - `pnpm typecheck` passes (verifies no missed rename across the codebase)
+- **Stale-reference sweep:** After all renames, run `rg "\.clicks|clicks:|\"clicks\"|\.ctr|ctr:|\"ctr\"|\.cpc|cpc:|\"cpc\"" packages apps` and manually classify each hit as either intentionally unchanged (e.g. `AccountSummarySchema.totalClicks`, `clickToLeadRate`) or a missed migration. This is the final gate before committing Fix 4.
 
 ---
 
