@@ -27,3 +27,6 @@ export {
   COST_VS_VALUE_FOOTNOTE,
 } from "./cost-vs-value-rule.js";
 export { createPeriodRollup, type ReportDependencies } from "./period-rollup.js";
+export { computeCampaignRollup } from "./campaign-rollup.js";
+export { computeManagedComparison } from "./managed-comparison-rollup.js";
+export { captureAdsBaseline } from "./baseline-capture.js";

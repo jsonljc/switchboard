@@ -30,6 +30,7 @@ function makeProvider(
       const isCurrent = dateRange.since === "2026-04-01";
       return isCurrent ? current : prior;
     },
+    getCampaignMetrics: async () => [],
   };
 }
 

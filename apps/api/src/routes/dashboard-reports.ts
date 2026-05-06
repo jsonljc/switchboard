@@ -4,11 +4,15 @@ import {
   createPeriodRollup,
   windowToRange,
   priorPeriodRange,
+  createInMemoryBaselineStore,
   type ReportDependencies,
   type ReportStores,
   type ReportCacheStore,
+  type BaselineStore,
 } from "@switchboard/core/reports";
 import type { ReportInsightsProvider, ReportWindow } from "@switchboard/schemas";
+import { MetaReportInsightsProvider, MetaAdsClient } from "@switchboard/ad-optimizer";
+import { decryptCredentials } from "@switchboard/db";
 
 const VALID_WINDOWS = new Set<string>(["THIS WEEK", "THIS MONTH", "THIS QUARTER"]);
 const CACHE_TTL_MS = 60 * 60 * 1000;
@@ -18,6 +22,31 @@ const PLAN_MONTHLY_USD: Record<string, number> = {
   Pro: 499,
   Scale: 799,
 };
+
+async function resolveInsightsProvider(
+  app: { prisma: import("@switchboard/db").PrismaClient | null },
+  orgId: string,
+): Promise<ReportInsightsProvider | null> {
+  if (!app.prisma) return null;
+  const conn = await app.prisma.connection.findFirst({
+    where: { organizationId: orgId, serviceId: "meta", status: "connected" },
+    select: { externalAccountId: true, credentials: true },
+  });
+  if (!conn?.externalAccountId || !conn.credentials) return null;
+  try {
+    const credentialsStr =
+      typeof conn.credentials === "string" ? conn.credentials : JSON.stringify(conn.credentials);
+    const creds = decryptCredentials(credentialsStr);
+    const adsClient = new MetaAdsClient({
+      accountId: conn.externalAccountId,
+      accessToken: String(creds.accessToken ?? ""),
+    });
+    return new MetaReportInsightsProvider(adsClient);
+  } catch {
+    // Invalid/expired credentials — fall back to null provider
+    return null;
+  }
+}
 
 function resolvePlanName(priceId: string | null | undefined): string | null {
   if (!priceId) return null;
@@ -39,6 +68,7 @@ async function computeReport(
   reportCacheStore: ReportCacheStore,
   stores: ReportStores,
   insightsProvider: ReportInsightsProvider | null,
+  baselineStore: BaselineStore,
 ) {
   const now = new Date();
   const current = windowToRange(window, now);
@@ -51,6 +81,7 @@ async function computeReport(
     stores,
     insightsProvider,
     reportCache: reportCacheStore,
+    baselineStore,
     planMonthlyUSD,
   };
 
@@ -108,12 +139,17 @@ export const dashboardReportsRoutes: FastifyPluginAsync = async (app) => {
       return cached.payload;
     }
 
+    const insightsProvider = await resolveInsightsProvider(app, orgId);
+
+    const baselineStore = app.baselineStore ?? createInMemoryBaselineStore();
+
     const payload = await computeReport(
       orgId,
       reportWindow,
       app.reportCacheStore,
       app.reportStores,
-      app.reportInsightsProvider ?? null,
+      insightsProvider,
+      baselineStore,
     );
 
     return payload;
@@ -137,12 +173,17 @@ export const dashboardReportsRoutes: FastifyPluginAsync = async (app) => {
 
     await app.reportCacheStore.invalidate(orgId, reportWindow);
 
+    const insightsProvider = await resolveInsightsProvider(app, orgId);
+
+    const baselineStore = app.baselineStore ?? createInMemoryBaselineStore();
+
     const payload = await computeReport(
       orgId,
       reportWindow,
       app.reportCacheStore,
       app.reportStores,
-      app.reportInsightsProvider ?? null,
+      insightsProvider,
+      baselineStore,
     );
 
     return payload;

@@ -48,7 +48,21 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
         { stage: "Bookings", n: 1, label: "1", delta: null },
       ],
       funnelNarrative: { marker: "Riley · Apr 22", text: "All clear." },
-      campaigns: [{ name: "Test", stage: "warm", spend: 100, leads: 3, revenue: 1000, roas: 10 }],
+      campaigns: [
+        {
+          name: "Test",
+          spend: 100,
+          impressions: 7000,
+          clicks: 90,
+          cpc: 1.11,
+          ctr: 1.29,
+          leads: 3,
+          revenue: 1000,
+          cpl: 33.33,
+          clickToLeadRate: 0.033,
+          roas: 10,
+        },
+      ],
       cost: { paid: 100, alt: 8000, saving: 7900 },
       costNarrative: "vs. SDR + agency",
       managedComparison: null,
@@ -84,16 +98,24 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
     expect(d.kind).toBe("flat");
   });
 
-  it("CampaignRow.stage is hot|warm|cool", () => {
+  it("CampaignRow has efficiency metrics (cpc, ctr, cpl, clickToLeadRate)", () => {
     const c: CampaignRow = {
       name: "x",
-      stage: "cool",
-      spend: 0,
-      leads: 0,
+      spend: 100,
+      impressions: 7000,
+      clicks: 90,
+      cpc: 1.11,
+      ctr: 1.29,
+      leads: 3,
       revenue: 0,
+      cpl: 33.33,
+      clickToLeadRate: 0.033,
       roas: 0,
     };
-    expect(c.stage).toBe("cool");
+    expect(c.cpc).toBe(1.11);
+    expect(c.ctr).toBe(1.29);
+    expect(c.cpl).toBe(33.33);
+    expect(c.clickToLeadRate).toBe(0.033);
   });
 
   it("AttributionData.delta accepts all three kinds", () => {

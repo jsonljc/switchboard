@@ -1,4 +1,8 @@
-import type { ReportInsightsProvider, ReportInsightsMetrics } from "@switchboard/schemas";
+import type {
+  ReportInsightsProvider,
+  ReportInsightsMetrics,
+  ReportCampaignInsight,
+} from "@switchboard/schemas";
 import type { AdsClientInterface } from "./audit-runner.js";
 
 interface MetaAction {
@@ -36,5 +40,26 @@ export class MetaReportInsightsProvider implements ReportInsightsProvider {
     }
 
     return { impressions, clicks, landingPageViews, spend };
+  }
+
+  async getCampaignMetrics(dateRange: {
+    since: string;
+    until: string;
+  }): Promise<ReportCampaignInsight[]> {
+    const rows = await this.adsClient.getCampaignInsights({
+      dateRange,
+      fields: ["impressions", "clicks", "spend", "conversions", "cpc", "ctr"],
+    });
+
+    return rows.map((row) => ({
+      campaignId: row.campaignId,
+      campaignName: row.campaignName,
+      spend: Number(row.spend ?? 0),
+      impressions: Number(row.impressions ?? 0),
+      clicks: Number(row.clicks ?? 0),
+      cpc: Number(row.cpc ?? 0),
+      ctr: Number(row.ctr ?? 0),
+      conversions: Number(row.conversions ?? 0),
+    }));
   }
 }

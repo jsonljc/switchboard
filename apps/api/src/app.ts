@@ -75,7 +75,7 @@ declare module "fastify" {
     simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null;
     reportCacheStore?: import("@switchboard/core/reports").ReportCacheStore;
     reportStores?: import("@switchboard/core/reports").ReportStores;
-    reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
+    baselineStore?: import("@switchboard/core/reports").BaselineStore;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -506,6 +506,7 @@ export async function buildServer() {
       PrismaOpportunityStore,
       PrismaConversionRecordStore,
       PrismaRecommendationStore: PrismaRecStore,
+      PrismaConversationThreadStore,
     } = await import("@switchboard/db");
 
     app.decorate("reportCacheStore", new PrismaReportCacheStore(prismaClient));
@@ -516,6 +517,16 @@ export async function buildServer() {
       opportunities: new PrismaOpportunityStore(prismaClient),
       conversions: new PrismaConversionRecordStore(prismaClient),
       recommendations: new PrismaRecStore(prismaClient),
+      conversations: new PrismaConversationThreadStore(prismaClient),
+      deployment: {
+        getAlexSlug: async (orgId: string) => {
+          const dep = await prismaClient.agentDeployment.findFirst({
+            where: { organizationId: orgId },
+            include: { listing: { select: { slug: true } } },
+          });
+          return dep?.listing?.slug ?? null;
+        },
+      },
       orgConfig: {
         getStripePriceId: async (orgId: string) => {
           const config = await prismaClient.organizationConfig.findUnique({
@@ -527,9 +538,10 @@ export async function buildServer() {
       },
     };
     app.decorate("reportStores", reportStores);
-  }
 
-  app.decorate("reportInsightsProvider", null);
+    const { PrismaBaselineStore } = await import("@switchboard/db");
+    app.decorate("baselineStore", new PrismaBaselineStore(prismaClient));
+  }
 
   // Decision feed deps — Prisma stores merged by /api/dashboard/[agents/:key/]decisions.
   // Skipped when no DB; the route returns 500 ("dependencies not wired").

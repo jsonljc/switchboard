@@ -729,24 +729,6 @@
   text-align: right;
   font-weight: 500;
 }
-.stageSquare {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 12px;
-  vertical-align: middle;
-  position: relative;
-  top: -1px;
-}
-.stageSquare.isHot {
-  background: var(--accent);
-}
-.stageSquare.isWarm {
-  background: hsl(35 40% 55%);
-}
-.stageSquare.isCool {
-  background: hsl(20 6% 60%);
-}
 .campaigns tfoot td {
   padding: 14px 12px 0 0;
   border-top: 1px solid var(--hair);

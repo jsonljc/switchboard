@@ -62,15 +62,29 @@ export interface FunnelNarrative {
   text: string;
 }
 
-export type CampaignStage = "hot" | "warm" | "cool";
-
 export interface CampaignRow {
   name: string;
-  stage: CampaignStage;
   spend: number;
+  impressions: number;
+  clicks: number;
+  cpc: number;
+  ctr: number;
   leads: number;
   revenue: number;
+  cpl: number | null;
+  clickToLeadRate: number | null;
   roas: number;
+}
+
+export interface ReportCampaignInsight {
+  campaignId: string;
+  campaignName: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  cpc: number;
+  ctr: number;
+  conversions: number;
 }
 
 export interface CostBreakdown {
@@ -130,4 +144,5 @@ export interface ReportInsightsMetrics {
 
 export interface ReportInsightsProvider {
   getAggregateMetrics(dateRange: { since: string; until: string }): Promise<ReportInsightsMetrics>;
+  getCampaignMetrics(dateRange: { since: string; until: string }): Promise<ReportCampaignInsight[]>;
 }
