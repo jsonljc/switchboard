@@ -21,7 +21,7 @@ Replace the `STUB_PULLQUOTE` constant in `period-rollup.ts` with a real LLM-gene
 - New `pullQuoteGenerator` field on `ReportDependencies`; `period-rollup.ts` calls it and swaps the result into the `pullquote: PullQuoteCopy` field of the rollup payload.
 - New Anthropic-backed `LLMClient` constructor (`createAnthropicReportLLMClient(apiKey)`) co-located with the generator, returning a one-method object that wraps `@anthropic-ai/sdk` (already a dep of `@switchboard/core`). No reuse of the conversational `agent-runtime/anthropic-adapter.ts` — that adapter is shaped for chat history and isn't a fit.
 - API wiring update in `apps/api/src/routes/dashboard-reports.ts` to construct the LLM client from `ANTHROPIC_API_KEY` and pass it through `ReportDependencies`. When the env var is absent, `llm` is `null` and the generator silently returns the deterministic template (no warn — this is the expected unconfigured state). LLM errors and validation failures, by contrast, do warn — see §3 row 5.
-- Tests: 6 cases for `pull-quote-generator.test.ts`; updated `period-rollup.test.ts` asserting the generator is invoked with the right facts and its output lands in `pullquote`.
+- Tests: 7 cases for `pull-quote-generator.test.ts` (incl. content-guard) plus an SDK prefill round-trip guard; updated `period-rollup.test.ts` asserting the generator is invoked with the right facts and its output lands in `pullquote`.
 
 **Out of scope (deferred or covered elsewhere)**
 
