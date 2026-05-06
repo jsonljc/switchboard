@@ -3,14 +3,14 @@ import type { OpportunityStage, StageHandlerConfig, ThreadStatus } from "@switch
 export type StageHandlerMap = Record<OpportunityStage, StageHandlerConfig>;
 
 export const DEFAULT_STAGE_HANDLER_MAP: StageHandlerMap = {
-  interested: { preferredAgent: "employee-a", fallbackType: "fallback_handoff" },
-  qualified: { preferredAgent: "employee-b", fallbackType: "fallback_handoff" },
-  quoted: { preferredAgent: "employee-b", fallbackType: "fallback_handoff" },
-  booked: { preferredAgent: "system", fallbackType: "none" },
-  showed: { preferredAgent: "employee-d", fallbackType: "fallback_handoff" },
-  won: { preferredAgent: "employee-d", fallbackType: "fallback_handoff" },
-  lost: { preferredAgent: "employee-e", fallbackType: "fallback_handoff" },
-  nurturing: { preferredAgent: "employee-e", fallbackType: "fallback_handoff" },
+  interested: { preferredAgent: "alex", fallbackType: "fallback_handoff" },
+  qualified: { preferredAgent: "alex", fallbackType: "fallback_handoff" },
+  quoted: { preferredAgent: "alex", fallbackType: "fallback_handoff" },
+  booked: { preferredAgent: "alex", fallbackType: "none" },
+  showed: { preferredAgent: "alex", fallbackType: "fallback_handoff" },
+  won: { preferredAgent: "alex", fallbackType: "fallback_handoff" },
+  lost: { preferredAgent: "alex", fallbackType: "fallback_handoff" },
+  nurturing: { preferredAgent: "alex", fallbackType: "fallback_handoff" },
 };
 
 interface AgentRegistryLike {
