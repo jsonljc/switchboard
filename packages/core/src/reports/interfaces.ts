@@ -76,6 +76,12 @@ export interface ReportStores {
         firstTouchSourceChannel: string | null;
       }>
     >;
+
+    revenueByCampaign(input: {
+      orgId: string;
+      from: Date;
+      to: Date;
+    }): Promise<Array<{ sourceCampaignId: string; totalAmount: number }>>;
   };
 
   bookings: {
@@ -114,6 +120,25 @@ export interface ReportStores {
 
   orgConfig: {
     getStripePriceId(orgId: string): Promise<string | null>;
+  };
+
+  conversations: {
+    threadCountsByAgent(input: {
+      orgId: string;
+      from: Date;
+      to: Date;
+    }): Promise<Array<{ assignedAgent: string; count: number }>>;
+  };
+
+  deployment: {
+    getAlexSlug(orgId: string): Promise<string | null>;
+  };
+
+  connection: {
+    findMetaConnection(orgId: string): Promise<{
+      externalAccountId: string;
+      credentials: string;
+    } | null>;
   };
 }
 
