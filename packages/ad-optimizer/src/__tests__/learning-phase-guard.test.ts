@@ -150,7 +150,7 @@ function makeAdSetInput(overrides: Partial<AdSetLearningInput> = {}): AdSetLearn
     conversions: 20,
     cpa: 25,
     roas: 3.0,
-    ctr: 2.5,
+    inlineLinkClickCtr: 2.5,
     ...overrides,
   };
 }
@@ -187,7 +187,7 @@ describe("LearningPhaseGuardV2", () => {
       expect(status.metricsSnapshot).toEqual({
         cpa: 25,
         roas: 3.0,
-        ctr: 2.5,
+        inlineLinkClickCtr: 2.5,
         spend: 500,
         conversions: 20,
       });

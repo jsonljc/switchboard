@@ -7,6 +7,7 @@ export function buildMetaLeadRecordInquiryWorkflow(_prisma: unknown): WorkflowHa
         leadId: string;
         organizationId: string;
         adId: string | null;
+        campaignId: string | null;
       };
 
       const { PrismaOutboxStore } = await import("@switchboard/db");
@@ -18,6 +19,7 @@ export function buildMetaLeadRecordInquiryWorkflow(_prisma: unknown): WorkflowHa
         organizationId: input.organizationId,
         value: 0,
         sourceAdId: input.adId,
+        sourceCampaignId: input.campaignId,
         occurredAt: new Date().toISOString(),
         source: "meta-webhook",
         metadata: {},

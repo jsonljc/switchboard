@@ -18,7 +18,7 @@ describe("diagnose", () => {
   it("detects creative_fatigue: CPM stable + CTR down significant + frequency=4.0", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 10, 10, "stable", false),
-      makeDelta("ctr", 1.0, 2.0, "down", true),
+      makeDelta("inlineLinkClickCtr", 1.0, 2.0, "down", true),
       makeDelta("frequency", 4.0, 2.0, "up", true),
     ];
 
@@ -32,7 +32,7 @@ describe("diagnose", () => {
 
   it("detects landing_page_drop: CTR stable + CPL up significant", () => {
     const deltas: MetricDelta[] = [
-      makeDelta("ctr", 2.5, 2.5, "stable", false),
+      makeDelta("inlineLinkClickCtr", 2.5, 2.5, "stable", false),
       makeDelta("cpl", 15, 10, "up", true),
     ];
 
@@ -47,7 +47,7 @@ describe("diagnose", () => {
   it("detects audience_saturation: frequency=4.0 + CTR down significant", () => {
     const deltas: MetricDelta[] = [
       makeDelta("frequency", 4.0, 2.0, "up", true),
-      makeDelta("ctr", 1.0, 2.5, "down", true),
+      makeDelta("inlineLinkClickCtr", 1.0, 2.5, "down", true),
     ];
 
     const result = diagnose(deltas);
@@ -61,7 +61,7 @@ describe("diagnose", () => {
   it("returns empty array when no patterns match (all stable)", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 10, 10, "stable", false),
-      makeDelta("ctr", 2.5, 2.5, "stable", false),
+      makeDelta("inlineLinkClickCtr", 2.5, 2.5, "stable", false),
       makeDelta("cpl", 5, 5, "stable", false),
       makeDelta("cpa", 20, 20, "stable", false),
       makeDelta("frequency", 1.5, 1.5, "stable", false),
@@ -75,7 +75,7 @@ describe("diagnose", () => {
   it("detects competition_increase: CPM up significant + CTR stable", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 12, 10, "up", true),
-      makeDelta("ctr", 2.5, 2.5, "stable", false),
+      makeDelta("inlineLinkClickCtr", 2.5, 2.5, "stable", false),
     ];
 
     const result = diagnose(deltas);
@@ -102,7 +102,7 @@ describe("diagnose", () => {
 
   it("detects audience_offer_mismatch: CTR up + CPA up significant", () => {
     const deltas: MetricDelta[] = [
-      makeDelta("ctr", 3.0, 2.5, "up", true),
+      makeDelta("inlineLinkClickCtr", 3.0, 2.5, "up", true),
       makeDelta("cpa", 30, 20, "up", true),
     ];
 
@@ -117,9 +117,9 @@ describe("diagnose", () => {
   it("detects account_level_issue when 3+ metrics are significantly degrading", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 12, 10, "up", true), // cost up = degrading
-      makeDelta("cpc", 1.5, 1.0, "up", true), // cost up = degrading
+      makeDelta("costPerInlineLinkClick", 1.5, 1.0, "up", true), // cost up = degrading
       makeDelta("cpl", 15, 10, "up", true), // cost up = degrading
-      makeDelta("ctr", 2.5, 2.5, "stable", false),
+      makeDelta("inlineLinkClickCtr", 2.5, 2.5, "stable", false),
     ];
 
     const result = diagnose(deltas);
@@ -133,8 +133,8 @@ describe("diagnose", () => {
   it("does not detect account_level_issue when only 2 metrics degrade", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 12, 10, "up", true), // cost up = degrading
-      makeDelta("cpc", 1.5, 1.0, "up", true), // cost up = degrading
-      makeDelta("ctr", 2.5, 2.5, "stable", false),
+      makeDelta("costPerInlineLinkClick", 1.5, 1.0, "up", true), // cost up = degrading
+      makeDelta("inlineLinkClickCtr", 2.5, 2.5, "stable", false),
     ];
 
     const result = diagnose(deltas);
@@ -146,7 +146,7 @@ describe("diagnose", () => {
   it("detects creative_fatigue without fixed frequency threshold — uses trend direction", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 10, 10, "stable", false),
-      makeDelta("ctr", 1.0, 2.0, "down", true),
+      makeDelta("inlineLinkClickCtr", 1.0, 2.0, "down", true),
       makeDelta("cpa", 30, 20, "up", true),
       makeDelta("frequency", 2.8, 2.0, "up", true),
     ];
@@ -184,7 +184,7 @@ describe("diagnose", () => {
   it("does not require frequency > 3.5 for creative_fatigue", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 10, 10, "stable", false),
-      makeDelta("ctr", 1.0, 2.0, "down", true),
+      makeDelta("inlineLinkClickCtr", 1.0, 2.0, "down", true),
       makeDelta("cpa", 30, 20, "up", true),
       makeDelta("frequency", 2.5, 1.8, "up", true),
     ];

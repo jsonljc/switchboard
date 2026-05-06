@@ -7,7 +7,7 @@ describe("ConversationThread helpers", () => {
     expect(thread.contactId).toBe("c-1");
     expect(thread.organizationId).toBe("org-1");
     expect(thread.stage).toBe("new");
-    expect(thread.assignedAgent).toBe("employee-a");
+    expect(thread.assignedAgent).toBe("alex");
     expect(thread.messageCount).toBe(0);
     expect(thread.currentSummary).toBe("");
     expect(thread.agentContext.objectionsEncountered).toEqual([]);

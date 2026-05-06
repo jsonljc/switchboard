@@ -11,8 +11,8 @@ export interface Diagnosis {
 
 // ── Constants ──
 
-const COST_METRICS = new Set(["cpm", "cpc", "cpl", "cpa"]);
-const PERFORMANCE_METRICS = new Set(["ctr", "roas"]);
+const COST_METRICS = new Set(["cpm", "costPerInlineLinkClick", "cpl", "cpa"]);
+const PERFORMANCE_METRICS = new Set(["inlineLinkClickCtr", "roas"]);
 
 // ── Helpers ──
 
@@ -38,7 +38,7 @@ const RULES: Rule[] = [
     description: "Creative fatigue — high frequency with declining engagement",
     confidence: "high",
     match: (map) => {
-      const ctr = map.get("ctr");
+      const ctr = map.get("inlineLinkClickCtr");
       const freq = map.get("frequency");
       const cpa = map.get("cpa");
       const cpm = map.get("cpm");
@@ -56,7 +56,7 @@ const RULES: Rule[] = [
     confidence: "medium",
     match: (map) => {
       const cpm = map.get("cpm");
-      const ctr = map.get("ctr");
+      const ctr = map.get("inlineLinkClickCtr");
       const cpmUpSignificant = cpm !== undefined && cpm.direction === "up" && cpm.significant;
       const ctrStableOrMissing = ctr === undefined || ctr.direction === "stable";
       return cpmUpSignificant && ctrStableOrMissing;
@@ -68,7 +68,7 @@ const RULES: Rule[] = [
     confidence: "high",
     match: (map) => {
       const cpl = map.get("cpl");
-      const ctr = map.get("ctr");
+      const ctr = map.get("inlineLinkClickCtr");
       const cplUpSignificant = cpl !== undefined && cpl.direction === "up" && cpl.significant;
       const ctrNotSignificant = ctr === undefined || !ctr.significant;
       return cplUpSignificant && ctrNotSignificant;
@@ -92,7 +92,7 @@ const RULES: Rule[] = [
     confidence: "high",
     match: (map) => {
       const freq = map.get("frequency");
-      const ctr = map.get("ctr");
+      const ctr = map.get("inlineLinkClickCtr");
       const freqRising = freq !== undefined && freq.direction === "up" && freq.significant;
       const ctrDownSignificant = ctr !== undefined && ctr.direction === "down" && ctr.significant;
       return freqRising && ctrDownSignificant;
@@ -103,7 +103,7 @@ const RULES: Rule[] = [
     description: "Strong clicks but low conversions",
     confidence: "high",
     match: (map) => {
-      const ctr = map.get("ctr");
+      const ctr = map.get("inlineLinkClickCtr");
       const cpa = map.get("cpa");
       const ctrUpOrStable =
         ctr !== undefined && (ctr.direction === "up" || ctr.direction === "stable");

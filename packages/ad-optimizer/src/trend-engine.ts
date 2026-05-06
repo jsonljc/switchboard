@@ -4,7 +4,14 @@ import type {
   TrendTierSchema as TrendTier,
 } from "@switchboard/schemas";
 
-const METRIC_KEYS: (keyof MetricSnapshot)[] = ["cpm", "ctr", "cpc", "cpl", "cpa", "roas"];
+const METRIC_KEYS: (keyof MetricSnapshot)[] = [
+  "cpm",
+  "inlineLinkClickCtr",
+  "costPerInlineLinkClick",
+  "cpl",
+  "cpa",
+  "roas",
+];
 
 /**
  * Classify a trend tier based on how many consecutive weeks the metric

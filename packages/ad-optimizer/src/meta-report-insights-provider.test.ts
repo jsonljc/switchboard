@@ -21,9 +21,9 @@ describe("MetaReportInsightsProvider", () => {
           campaignName: "Spring-Buyers",
           spend: 620,
           impressions: 48000,
-          clicks: 580,
-          cpc: 1.07,
-          ctr: 1.21,
+          inlineLinkClicks: 580,
+          costPerInlineLinkClick: 1.07,
+          inlineLinkClickCtr: 1.21,
           conversions: 14,
         },
         {
@@ -31,9 +31,9 @@ describe("MetaReportInsightsProvider", () => {
           campaignName: "Retargeting",
           spend: 217,
           impressions: 15000,
-          clicks: 210,
-          cpc: 1.03,
-          ctr: 1.4,
+          inlineLinkClicks: 210,
+          costPerInlineLinkClick: 1.03,
+          inlineLinkClickCtr: 1.4,
           conversions: 9,
         },
       ]);
@@ -47,9 +47,9 @@ describe("MetaReportInsightsProvider", () => {
         campaignName: "Spring-Buyers",
         spend: 620,
         impressions: 48000,
-        clicks: 580,
-        cpc: 1.07,
-        ctr: 1.21,
+        inlineLinkClicks: 580,
+        costPerInlineLinkClick: 1.07,
+        inlineLinkClickCtr: 1.21,
         conversions: 14,
       });
     });
@@ -67,13 +67,13 @@ describe("MetaReportInsightsProvider", () => {
       const client = stubAdsClient([
         {
           impressions: 100,
-          clicks: 10,
+          inlineLinkClicks: 10,
           spend: 50,
           actions: [{ action_type: "landing_page_view", value: "8" }],
         },
         {
           impressions: 200,
-          clicks: 20,
+          inlineLinkClicks: 20,
           spend: 75,
           actions: [],
         },
@@ -84,7 +84,7 @@ describe("MetaReportInsightsProvider", () => {
 
       expect(result).toEqual({
         impressions: 300,
-        clicks: 30,
+        inlineLinkClicks: 30,
         landingPageViews: 8,
         spend: 125,
       });

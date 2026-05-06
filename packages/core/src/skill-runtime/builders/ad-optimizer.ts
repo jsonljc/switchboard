@@ -5,14 +5,14 @@ const INSIGHT_FIELDS = [
   "campaign_name",
   "status",
   "impressions",
-  "clicks",
+  "inline_link_clicks",
   "spend",
   "conversions",
   "revenue",
   "frequency",
   "cpm",
-  "ctr",
-  "cpc",
+  "inline_link_click_ctr",
+  "cost_per_inline_link_click",
 ];
 
 export const AD_OPTIMIZER_CONTRACT: BatchContextContract = {

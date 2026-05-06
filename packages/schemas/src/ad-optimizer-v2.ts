@@ -6,8 +6,8 @@ import { FunnelShapeSchema, LearningPhaseStatusSchema } from "./ad-optimizer-sha
 
 export const MetricSnapshotSchema = z.object({
   cpm: z.number(),
-  ctr: z.number(),
-  cpc: z.number(),
+  inlineLinkClickCtr: z.number(),
+  costPerInlineLinkClick: z.number(),
   cpl: z.number(),
   cpa: z.number(),
   roas: z.number(),
@@ -101,9 +101,9 @@ export const CreativeEntrySchema = z.object({
   spend: z.number(),
   spendShare: z.number(),
   impressions: z.number(),
-  clicks: z.number(),
-  ctr: z.number(),
-  cpc: z.number(),
+  inlineLinkClicks: z.number(),
+  inlineLinkClickCtr: z.number(),
+  costPerInlineLinkClick: z.number(),
   cpa: z.number(),
   roas: z.number(),
   conversions: z.number(),

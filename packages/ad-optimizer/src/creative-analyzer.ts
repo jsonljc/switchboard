@@ -15,10 +15,10 @@ export interface RawAdData {
   videoId: string | null;
   spend: number;
   impressions: number;
-  clicks: number;
+  inlineLinkClicks: number;
   conversions: number;
-  ctr: number;
-  cpc: number;
+  inlineLinkClickCtr: number;
+  costPerInlineLinkClick: number;
   cpa: number;
   roas: number;
   videoViews: number | null;
@@ -54,11 +54,11 @@ export function deduplicateCreatives(rawAds: RawAdData[]): CreativeEntry[] {
   for (const [creativeKey, { keyType, ads }] of groups) {
     const spend = ads.reduce((s, a) => s + a.spend, 0);
     const impressions = ads.reduce((s, a) => s + a.impressions, 0);
-    const clicks = ads.reduce((s, a) => s + a.clicks, 0);
+    const inlineLinkClicks = ads.reduce((s, a) => s + a.inlineLinkClicks, 0);
     const conversions = ads.reduce((s, a) => s + a.conversions, 0);
 
-    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
-    const cpc = clicks > 0 ? spend / clicks : 0;
+    const inlineLinkClickCtr = impressions > 0 ? (inlineLinkClicks / impressions) * 100 : 0;
+    const costPerInlineLinkClick = inlineLinkClicks > 0 ? spend / inlineLinkClicks : 0;
     const cpa = conversions > 0 ? spend / conversions : 0;
 
     // Weighted average ROAS by spend
@@ -81,9 +81,9 @@ export function deduplicateCreatives(rawAds: RawAdData[]): CreativeEntry[] {
       spend,
       spendShare: totalSpend > 0 ? spend / totalSpend : 0,
       impressions,
-      clicks,
-      ctr,
-      cpc,
+      inlineLinkClicks,
+      inlineLinkClickCtr,
+      costPerInlineLinkClick,
       cpa,
       roas: weightedRoas,
       conversions,

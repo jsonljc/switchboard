@@ -22,8 +22,13 @@ function makeCtx(): RollupContext {
 }
 
 function makeProvider(
-  current: { impressions: number; clicks: number; landingPageViews: number; spend: number },
-  prior: { impressions: number; clicks: number; landingPageViews: number; spend: number },
+  current: {
+    impressions: number;
+    inlineLinkClicks: number;
+    landingPageViews: number;
+    spend: number;
+  },
+  prior: { impressions: number; inlineLinkClicks: number; landingPageViews: number; spend: number },
 ): ReportInsightsProvider {
   return {
     getAggregateMetrics: async (dateRange) => {
@@ -72,8 +77,8 @@ function makeStores(opts: {
 describe("computeFunnel", () => {
   it("returns 6 stages with correct labels", async () => {
     const provider = makeProvider(
-      { impressions: 1000, clicks: 200, landingPageViews: 150, spend: 500 },
-      { impressions: 800, clicks: 160, landingPageViews: 120, spend: 400 },
+      { impressions: 1000, inlineLinkClicks: 200, landingPageViews: 150, spend: 500 },
+      { impressions: 800, inlineLinkClicks: 160, landingPageViews: 120, spend: 400 },
     );
     const stores = makeStores({
       currentLeads: 50,
@@ -99,8 +104,8 @@ describe("computeFunnel", () => {
 
   it("computes correct counts from provider and stores", async () => {
     const provider = makeProvider(
-      { impressions: 5000, clicks: 1000, landingPageViews: 800, spend: 2000 },
-      { impressions: 0, clicks: 0, landingPageViews: 0, spend: 0 },
+      { impressions: 5000, inlineLinkClicks: 1000, landingPageViews: 800, spend: 2000 },
+      { impressions: 0, inlineLinkClicks: 0, landingPageViews: 0, spend: 0 },
     );
     const stores = makeStores({ currentLeads: 100, currentBookings: 25, currentCustomers: 5 });
 
@@ -136,8 +141,8 @@ describe("computeFunnel", () => {
 
   it("returns null delta when prior is zero", async () => {
     const provider = makeProvider(
-      { impressions: 1000, clicks: 200, landingPageViews: 150, spend: 500 },
-      { impressions: 0, clicks: 0, landingPageViews: 0, spend: 0 },
+      { impressions: 1000, inlineLinkClicks: 200, landingPageViews: 150, spend: 500 },
+      { impressions: 0, inlineLinkClicks: 0, landingPageViews: 0, spend: 0 },
     );
     const stores = makeStores({ currentLeads: 50, currentBookings: 10, currentCustomers: 3 });
 
@@ -148,8 +153,8 @@ describe("computeFunnel", () => {
 
   it("uses Riley narrative from recommendations when available", async () => {
     const provider = makeProvider(
-      { impressions: 1000, clicks: 200, landingPageViews: 150, spend: 500 },
-      { impressions: 800, clicks: 160, landingPageViews: 120, spend: 400 },
+      { impressions: 1000, inlineLinkClicks: 200, landingPageViews: 150, spend: 500 },
+      { impressions: 800, inlineLinkClicks: 160, landingPageViews: 120, spend: 400 },
     );
     const stores = makeStores({
       currentLeads: 50,
@@ -172,8 +177,8 @@ describe("computeFunnel", () => {
 
   it("falls back to static narrative when no recommendation exists", async () => {
     const provider = makeProvider(
-      { impressions: 1000, clicks: 200, landingPageViews: 150, spend: 500 },
-      { impressions: 800, clicks: 160, landingPageViews: 120, spend: 400 },
+      { impressions: 1000, inlineLinkClicks: 200, landingPageViews: 150, spend: 500 },
+      { impressions: 800, inlineLinkClicks: 160, landingPageViews: 120, spend: 400 },
     );
     const stores = makeStores({
       currentLeads: 50,

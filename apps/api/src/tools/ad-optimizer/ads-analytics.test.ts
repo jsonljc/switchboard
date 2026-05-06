@@ -29,7 +29,7 @@ describe("ads-analytics tool", () => {
     it("detects creative fatigue pattern", async () => {
       const deltas = [
         {
-          metric: "ctr",
+          metric: "inlineLinkClickCtr",
           current: 1.2,
           previous: 2.0,
           deltaPercent: -40,
@@ -63,7 +63,7 @@ describe("ads-analytics tool", () => {
     it("returns empty for healthy metrics", async () => {
       const deltas = [
         {
-          metric: "ctr",
+          metric: "inlineLinkClickCtr",
           current: 2.0,
           previous: 2.0,
           deltaPercent: 0,
@@ -87,8 +87,24 @@ describe("ads-analytics tool", () => {
 
   describe("compare-periods", () => {
     it("computes deltas for all 7 metrics", async () => {
-      const current = { cpm: 10, ctr: 2, cpc: 5, cpl: 50, cpa: 100, roas: 3, frequency: 2 };
-      const previous = { cpm: 8, ctr: 2.5, cpc: 4, cpl: 40, cpa: 80, roas: 3.5, frequency: 1.5 };
+      const current = {
+        cpm: 10,
+        inlineLinkClickCtr: 2,
+        costPerInlineLinkClick: 5,
+        cpl: 50,
+        cpa: 100,
+        roas: 3,
+        frequency: 2,
+      };
+      const previous = {
+        cpm: 8,
+        inlineLinkClickCtr: 2.5,
+        costPerInlineLinkClick: 4,
+        cpl: 40,
+        cpa: 80,
+        roas: 3.5,
+        frequency: 1.5,
+      };
       const result = await tool.operations["compare-periods"]!.execute({
         current,
         previous,
@@ -107,7 +123,7 @@ describe("ads-analytics tool", () => {
             campaignName: "C1",
             status: "ACTIVE",
             impressions: 10000,
-            clicks: 200,
+            inlineLinkClicks: 200,
             spend: 500,
             conversions: 5,
             revenue: 1000,
@@ -143,7 +159,7 @@ describe("ads-analytics tool", () => {
           leadToClosedRate: 0.03,
         },
         mediaBenchmarks: {
-          ctr: 2,
+          inlineLinkClickCtr: 2,
           landingPageViewRate: 0.8,
           clickToLeadRate: 0.05,
         },
@@ -196,7 +212,7 @@ describe("ads-analytics tool", () => {
             deltaPercent: 15,
           },
           {
-            metric: "ctr",
+            metric: "inlineLinkClickCtr",
             direction: "falling",
             consecutiveWeeks: 2,
             latestValue: 1.2,
@@ -223,7 +239,7 @@ describe("ads-analytics tool", () => {
             deltaPercent: 0,
           },
           {
-            metric: "ctr",
+            metric: "inlineLinkClickCtr",
             direction: "stable",
             consecutiveWeeks: 0,
             latestValue: 2.5,
@@ -248,9 +264,9 @@ describe("ads-analytics tool", () => {
             spend: 800,
             spendShare: 0.8,
             impressions: 10000,
-            clicks: 200,
-            ctr: 2.0,
-            cpc: 4.0,
+            inlineLinkClicks: 200,
+            inlineLinkClickCtr: 2.0,
+            costPerInlineLinkClick: 4.0,
             cpa: 50,
             roas: 3.0,
             conversions: 16,
@@ -266,9 +282,9 @@ describe("ads-analytics tool", () => {
             spend: 200,
             spendShare: 0.2,
             impressions: 5000,
-            clicks: 50,
-            ctr: 1.0,
-            cpc: 4.0,
+            inlineLinkClicks: 50,
+            inlineLinkClickCtr: 1.0,
+            costPerInlineLinkClick: 4.0,
             cpa: 200,
             roas: 1.0,
             conversions: 1,
@@ -298,9 +314,9 @@ describe("ads-analytics tool", () => {
             spend: 500,
             spendShare: 0.5,
             impressions: 5000,
-            clicks: 100,
-            ctr: 2.0,
-            cpc: 5.0,
+            inlineLinkClicks: 100,
+            inlineLinkClickCtr: 2.0,
+            costPerInlineLinkClick: 5.0,
             cpa: 50,
             roas: 3.0,
             conversions: 10,
@@ -316,9 +332,9 @@ describe("ads-analytics tool", () => {
             spend: 500,
             spendShare: 0.5,
             impressions: 5000,
-            clicks: 100,
-            ctr: 2.0,
-            cpc: 5.0,
+            inlineLinkClicks: 100,
+            inlineLinkClickCtr: 2.0,
+            costPerInlineLinkClick: 5.0,
             cpa: 50,
             roas: 3.0,
             conversions: 10,

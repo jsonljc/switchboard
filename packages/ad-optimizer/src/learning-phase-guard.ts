@@ -130,7 +130,7 @@ export class LearningPhaseGuardV2 {
       ? {
           cpa: input.cpa,
           roas: input.roas,
-          ctr: input.ctr,
+          inlineLinkClickCtr: input.inlineLinkClickCtr,
           spend: input.spend,
           conversions: input.conversions,
         }

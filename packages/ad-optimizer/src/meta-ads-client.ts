@@ -63,6 +63,7 @@ export class MetaAdsClient {
   private readonly accessToken: string;
   private readonly accountId: string;
   private lastCallAt: number = 0;
+  private readonly adCampaignCache = new Map<string, string>();
 
   constructor(config: MetaAdsClientConfig) {
     this.accessToken = config.accessToken;
@@ -180,6 +181,23 @@ export class MetaAdsClient {
     await this.post(`/${campaignId}`, { status });
   }
 
+  async getAdCampaignId(adId: string): Promise<string | null> {
+    const cached = this.adCampaignCache.get(adId);
+    if (cached !== undefined) return cached;
+
+    try {
+      const response = await this.get(`/${adId}?fields=campaign_id`);
+      const campaignId = response.campaign_id as string | undefined;
+      if (campaignId) {
+        this.adCampaignCache.set(adId, campaignId);
+        return campaignId;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   private async get(path: string): Promise<Record<string, unknown>> {
     await this.rateLimit();
     const url = `${API_BASE}${path}`;
@@ -242,14 +260,14 @@ export class MetaAdsClient {
       status: raw.status ?? "",
       effectiveStatus: raw.effective_status ?? "",
       impressions: parseInt(raw.impressions ?? "0", 10),
-      clicks: parseInt(raw.clicks ?? "0", 10),
+      inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
       spend: parseFloat(raw.spend ?? "0"),
       conversions: parseInt(raw.conversions ?? "0", 10),
       revenue: parseFloat(raw.revenue ?? "0"),
       frequency: parseFloat(raw.frequency ?? "0"),
       cpm: parseFloat(raw.cpm ?? "0"),
-      ctr: parseFloat(raw.ctr ?? "0"),
-      cpc: parseFloat(raw.cpc ?? "0"),
+      inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),
+      costPerInlineLinkClick: parseFloat(raw.cost_per_inline_link_click ?? "0"),
       dateStart: raw.date_start ?? "",
       dateStop: raw.date_stop ?? "",
     };
@@ -261,13 +279,13 @@ export class MetaAdsClient {
       adSetName: raw.adset_name ?? "",
       campaignId: raw.campaign_id ?? "",
       impressions: parseInt(raw.impressions ?? "0", 10),
-      clicks: parseInt(raw.clicks ?? "0", 10),
+      inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
       spend: parseFloat(raw.spend ?? "0"),
       conversions: parseInt(raw.conversions ?? "0", 10),
       frequency: parseFloat(raw.frequency ?? "0"),
       cpm: parseFloat(raw.cpm ?? "0"),
-      ctr: parseFloat(raw.ctr ?? "0"),
-      cpc: parseFloat(raw.cpc ?? "0"),
+      inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),
+      costPerInlineLinkClick: parseFloat(raw.cost_per_inline_link_click ?? "0"),
       dateStart: raw.date_start ?? "",
       dateStop: raw.date_stop ?? "",
     };

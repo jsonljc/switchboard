@@ -3,21 +3,21 @@ import { analyzeFunnel } from "../funnel-analyzer.js";
 import type { FunnelInput } from "../funnel-analyzer.js";
 import type { CampaignInsightSchema as CampaignInsight } from "@switchboard/schemas";
 
-function makeInsight(impressions: number, clicks: number): CampaignInsight {
+function makeInsight(impressions: number, inlineLinkClicks: number): CampaignInsight {
   return {
     campaignId: "c1",
     campaignName: "Test Campaign",
     status: "ACTIVE",
     effectiveStatus: "ACTIVE",
     impressions,
-    clicks,
+    inlineLinkClicks,
     spend: 100,
     conversions: 5,
     revenue: 500,
     frequency: 1.5,
     cpm: 10,
-    ctr: clicks / impressions,
-    cpc: 100 / clicks,
+    inlineLinkClickCtr: inlineLinkClicks / impressions,
+    costPerInlineLinkClick: 100 / inlineLinkClicks,
     dateStart: "2024-01-01",
     dateStop: "2024-01-31",
   };
@@ -56,7 +56,7 @@ describe("analyzeFunnel", () => {
         leadToClosedRate: 0.06,
       },
       mediaBenchmarks: {
-        ctr: 2.5,
+        inlineLinkClickCtr: 2.5,
         landingPageViewRate: 0.8,
         clickToLeadRate: 0.04,
       },
@@ -126,7 +126,7 @@ describe("analyzeFunnel", () => {
         leadToClosedRate: 0.06,
       },
       mediaBenchmarks: {
-        ctr: 2.5,
+        inlineLinkClickCtr: 2.5,
         landingPageViewRate: 0.8,
       },
     };

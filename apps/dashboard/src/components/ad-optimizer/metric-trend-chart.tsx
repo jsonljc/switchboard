@@ -25,8 +25,8 @@ interface MetricTrendChartProps {
 
 const METRIC_LABELS: Record<string, string> = {
   cpm: "CPM",
-  ctr: "CTR",
-  cpc: "CPC",
+  inlineLinkClickCtr: "CTR",
+  costPerInlineLinkClick: "CPC",
   cpl: "CPL",
   cpa: "CPA",
   roas: "ROAS",
@@ -35,8 +35,8 @@ const METRIC_LABELS: Record<string, string> = {
 
 const METRIC_FORMATS: Record<string, (v: number) => string> = {
   cpm: (v) => `$${v.toFixed(2)}`,
-  ctr: (v) => `${v.toFixed(1)}%`,
-  cpc: (v) => `$${v.toFixed(2)}`,
+  inlineLinkClickCtr: (v) => `${v.toFixed(1)}%`,
+  costPerInlineLinkClick: (v) => `$${v.toFixed(2)}`,
   cpl: (v) => `$${v.toFixed(0)}`,
   cpa: (v) => `$${v.toFixed(0)}`,
   roas: (v) => `${v.toFixed(1)}x`,
@@ -46,7 +46,7 @@ const METRIC_FORMATS: Record<string, (v: number) => string> = {
 function getDeltaColor(delta: MetricDelta): string {
   if (!delta.significant) return "text-muted-foreground";
   // For cost metrics, "up" is bad; for ROAS, "up" is good
-  const costMetrics = ["cpm", "cpc", "cpl", "cpa"];
+  const costMetrics = ["cpm", "costPerInlineLinkClick", "cpl", "cpa"];
   const isGood = costMetrics.includes(delta.metric)
     ? delta.direction === "down"
     : delta.direction === "up";

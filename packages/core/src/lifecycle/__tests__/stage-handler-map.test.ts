@@ -20,8 +20,8 @@ describe("DEFAULT_STAGE_HANDLER_MAP", () => {
     }
   });
 
-  it("booked has system handler and no fallback", () => {
-    expect(DEFAULT_STAGE_HANDLER_MAP.booked.preferredAgent).toBe("system");
+  it("booked has alex handler", () => {
+    expect(DEFAULT_STAGE_HANDLER_MAP.booked.preferredAgent).toBe("alex");
     expect(DEFAULT_STAGE_HANDLER_MAP.booked.fallbackType).toBe("none");
   });
 });
@@ -29,7 +29,7 @@ describe("DEFAULT_STAGE_HANDLER_MAP", () => {
 describe("agentForOpportunityStage", () => {
   const mockRegistry: { get(orgId: string, agentId: string): { status: string } | undefined } = {
     get: (_orgId: string, agentId: string) => {
-      if (agentId === "employee-a") return { status: "active" };
+      if (agentId === "alex") return { status: "active" };
       if (agentId === "employee-b") return { status: "paused" };
       return undefined;
     },
@@ -42,16 +42,18 @@ describe("agentForOpportunityStage", () => {
       mockRegistry,
       "org-1",
     );
-    expect(result).toEqual({ agentId: "employee-a" });
+    expect(result).toEqual({ agentId: "alex" });
   });
 
   it("returns fallback when preferred agent is paused", () => {
-    const result = agentForOpportunityStage(
-      "qualified",
-      DEFAULT_STAGE_HANDLER_MAP,
-      mockRegistry,
-      "org-1",
-    );
+    const customHandlerMap = {
+      ...DEFAULT_STAGE_HANDLER_MAP,
+      qualified: {
+        preferredAgent: "employee-b" as const,
+        fallbackType: "fallback_handoff" as const,
+      },
+    };
+    const result = agentForOpportunityStage("qualified", customHandlerMap, mockRegistry, "org-1");
     expect(result).toEqual({
       fallback: true,
       missingAgent: "employee-b",
@@ -60,12 +62,14 @@ describe("agentForOpportunityStage", () => {
   });
 
   it("returns fallback with not_configured when agent does not exist", () => {
-    const result = agentForOpportunityStage(
-      "nurturing",
-      DEFAULT_STAGE_HANDLER_MAP,
-      mockRegistry,
-      "org-1",
-    );
+    const customHandlerMap = {
+      ...DEFAULT_STAGE_HANDLER_MAP,
+      nurturing: {
+        preferredAgent: "employee-e" as const,
+        fallbackType: "fallback_handoff" as const,
+      },
+    };
+    const result = agentForOpportunityStage("nurturing", customHandlerMap, mockRegistry, "org-1");
     expect(result).toEqual({
       fallback: true,
       missingAgent: "employee-e",
@@ -73,14 +77,14 @@ describe("agentForOpportunityStage", () => {
     });
   });
 
-  it("returns system handler for booked stage", () => {
+  it("returns alex for booked stage", () => {
     const result = agentForOpportunityStage(
       "booked",
       DEFAULT_STAGE_HANDLER_MAP,
       mockRegistry,
       "org-1",
     );
-    expect(result).toEqual({ agentId: "system" });
+    expect(result).toEqual({ agentId: "alex" });
   });
 
   it("suppresses dispatch when threadStatus is waiting_on_customer", () => {

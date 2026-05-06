@@ -38,13 +38,13 @@ export async function computeCampaignRollup(
       name: c.campaignName,
       spend: c.spend,
       impressions: c.impressions,
-      clicks: c.clicks,
-      cpc: c.cpc,
-      ctr: c.ctr,
+      inlineLinkClicks: c.inlineLinkClicks,
+      costPerInlineLinkClick: c.costPerInlineLinkClick,
+      inlineLinkClickCtr: c.inlineLinkClickCtr,
       leads: c.conversions,
       revenue,
       cpl: c.conversions > 0 ? c.spend / c.conversions : null,
-      clickToLeadRate: c.clicks > 0 ? c.conversions / c.clicks : null,
+      clickToLeadRate: c.inlineLinkClicks > 0 ? c.conversions / c.inlineLinkClicks : null,
       roas: c.spend > 0 ? revenue / c.spend : 0,
     };
   });

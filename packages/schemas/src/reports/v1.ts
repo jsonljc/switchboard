@@ -66,9 +66,9 @@ export interface CampaignRow {
   name: string;
   spend: number;
   impressions: number;
-  clicks: number;
-  cpc: number;
-  ctr: number;
+  inlineLinkClicks: number;
+  costPerInlineLinkClick: number;
+  inlineLinkClickCtr: number;
   leads: number;
   revenue: number;
   cpl: number | null;
@@ -81,9 +81,9 @@ export interface ReportCampaignInsight {
   campaignName: string;
   spend: number;
   impressions: number;
-  clicks: number;
-  cpc: number;
-  ctr: number;
+  inlineLinkClicks: number;
+  costPerInlineLinkClick: number;
+  inlineLinkClickCtr: number;
   conversions: number;
 }
 
@@ -137,7 +137,7 @@ export interface ReportDataV1 {
 
 export interface ReportInsightsMetrics {
   impressions: number;
-  clicks: number;
+  inlineLinkClicks: number;
   landingPageViews: number;
   spend: number;
 }

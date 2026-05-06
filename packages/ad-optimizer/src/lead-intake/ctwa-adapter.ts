@@ -34,6 +34,7 @@ export interface IngressLike {
 export interface CtwaAdapterDeps {
   ingress: IngressLike;
   now: () => Date;
+  resolveCampaignId?: (adId: string) => Promise<string | null>;
 }
 
 /**
@@ -82,6 +83,22 @@ export class CtwaAdapter {
   ): Promise<void> {
     const intake = buildCtwaIntake(msg, { now: this.deps.now });
     if (!intake) return;
+
+    if (
+      intake.attribution.sourceAdId &&
+      msg.metadata["adSourceType"] === "ad" &&
+      this.deps.resolveCampaignId
+    ) {
+      try {
+        const campaignId = await this.deps.resolveCampaignId(intake.attribution.sourceAdId);
+        if (campaignId) {
+          intake.attribution.sourceCampaignId = campaignId;
+        }
+      } catch {
+        // Non-blocking — continue without sourceCampaignId
+      }
+    }
+
     await this.deps.ingress.submit({
       intent: "lead.intake",
       payload: intake,

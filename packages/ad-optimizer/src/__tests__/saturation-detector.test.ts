@@ -18,7 +18,7 @@ describe("detectSaturation", () => {
   it("detects audience saturation with frequency rising 3 weeks + CTR falling", () => {
     const trends: MetricTrendSchema[] = [
       makeTrend("frequency", "rising", 3),
-      makeTrend("ctr", "falling", 2),
+      makeTrend("inlineLinkClickCtr", "falling", 2),
     ];
 
     const signals = detectSaturation("adset-1", trends, null, null);
@@ -37,7 +37,7 @@ describe("detectSaturation", () => {
   it("returns no saturation when frequency is stable", () => {
     const trends: MetricTrendSchema[] = [
       makeTrend("frequency", "stable", 5),
-      makeTrend("ctr", "falling", 3),
+      makeTrend("inlineLinkClickCtr", "falling", 3),
     ];
 
     const signals = detectSaturation("adset-2", trends, null, null);
@@ -63,7 +63,7 @@ describe("detectSaturation", () => {
   it("includes audience reached ratio when provided", () => {
     const trends: MetricTrendSchema[] = [
       makeTrend("frequency", "rising", 2),
-      makeTrend("ctr", "falling", 1),
+      makeTrend("inlineLinkClickCtr", "falling", 1),
     ];
 
     const signals = detectSaturation("adset-4", trends, 0.85, null);
@@ -76,7 +76,7 @@ describe("detectSaturation", () => {
   it("returns empty array when no signals detected", () => {
     const trends: MetricTrendSchema[] = [
       makeTrend("frequency", "stable", 1),
-      makeTrend("ctr", "rising", 3),
+      makeTrend("inlineLinkClickCtr", "rising", 3),
     ];
 
     const signals = detectSaturation("adset-5", trends, null, null);
@@ -87,7 +87,7 @@ describe("detectSaturation", () => {
   it("returns both signals when audience saturation and campaign decay present", () => {
     const trends: MetricTrendSchema[] = [
       makeTrend("frequency", "rising", 4),
-      makeTrend("ctr", "falling", 2),
+      makeTrend("inlineLinkClickCtr", "falling", 2),
     ];
     const weeklyConversionRates = [0.1, 0.08, 0.06, 0.05, 0.03];
 

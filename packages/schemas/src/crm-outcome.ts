@@ -37,7 +37,7 @@ export interface FunnelBenchmarks {
 // ── Media Benchmarks ──
 
 export interface MediaBenchmarks {
-  ctr: number;
+  inlineLinkClickCtr: number;
   landingPageViewRate: number;
   clickToLeadRate?: number;
   cpl?: number;
@@ -97,7 +97,7 @@ export interface AdSetLearningInput {
   conversions: number;
   cpa: number;
   roas: number;
-  ctr: number;
+  inlineLinkClickCtr: number;
   destinationType?: string;
   hasFrequencyCap?: boolean;
 }
