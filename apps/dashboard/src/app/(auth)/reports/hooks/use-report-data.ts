@@ -30,9 +30,12 @@ export function useReportData(window: ReportWindow): UseReportData {
 
   const refresh = useCallback(async () => {
     if (!isLive || !keys) return;
-    await fetch(`/api/dashboard/reports/refresh?window=${encodeURIComponent(window)}`, {
+    const res = await fetch(`/api/dashboard/reports/refresh?window=${encodeURIComponent(window)}`, {
       method: "POST",
     });
+    if (!res.ok) {
+      console.warn(`Report refresh failed: ${res.status}`);
+    }
     await queryClient.invalidateQueries({
       queryKey: keys.reports.byWindow(window),
     });

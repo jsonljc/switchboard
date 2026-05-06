@@ -8,6 +8,9 @@ import type {
 import type { RollupContext } from "./types.js";
 import type { ReportStores } from "./interfaces.js";
 
+export const LPV_DISCLOSURE =
+  "Landing Page Views are from Meta ad events. First-party website tracking is planned for a future release.";
+
 function formatDateShort(d: Date): string {
   return d.toISOString().slice(0, 10);
 }

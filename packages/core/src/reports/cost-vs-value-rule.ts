@@ -4,6 +4,8 @@ import { formatCurrencyUSD } from "./period-helpers.js";
 
 export const SDR_MONTHLY_USD = 5000;
 export const AGENCY_MONTHLY_USD = 3000;
+export const COST_VS_VALUE_FOOTNOTE =
+  "Based on US SMB hiring averages — junior SDR ~$5,000/mo, ad agency retainer ~$3,000/mo.";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
