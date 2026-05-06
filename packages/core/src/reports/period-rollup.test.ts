@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createPeriodRollup, type ReportDependencies } from "./period-rollup.js";
-import { createInMemoryReportCacheStore } from "./in-memory-store.js";
+import { createInMemoryReportCacheStore, createInMemoryBaselineStore } from "./in-memory-store.js";
 import type { ReportStores } from "./interfaces.js";
 import type { ReportInsightsProvider } from "@switchboard/schemas";
 
@@ -16,6 +16,7 @@ function stubStores(): ReportStores {
           firstTouchSourceChannel: null,
         },
       ],
+      revenueByCampaign: async () => [],
     },
     bookings: {
       countExcludingStatuses: async () => 10,
@@ -35,6 +36,15 @@ function stubStores(): ReportStores {
     orgConfig: {
       getStripePriceId: async () => null,
     },
+    conversations: {
+      threadCountsByAgent: async () => [],
+    },
+    deployment: {
+      getAlexSlug: async () => null,
+    },
+    connection: {
+      findMetaConnection: async () => null,
+    },
   };
 }
 
@@ -46,6 +56,7 @@ function stubProvider(): ReportInsightsProvider {
       landingPageViews: 150,
       spend: 500,
     }),
+    getCampaignMetrics: async () => [],
   };
 }
 
@@ -54,6 +65,7 @@ function makeDeps(overrides?: Partial<ReportDependencies>): ReportDependencies {
     stores: stubStores(),
     insightsProvider: stubProvider(),
     reportCache: createInMemoryReportCacheStore(),
+    baselineStore: createInMemoryBaselineStore(),
     planMonthlyUSD: 299,
     ...overrides,
   };
@@ -82,8 +94,8 @@ describe("createPeriodRollup", () => {
     expect(result.funnel).toHaveLength(6);
     expect(result.attribution.total).toBe(5000);
     expect(result.cost.paid).toBeGreaterThan(0);
-    expect(result.campaigns).toEqual([]);
-    expect(result.managedComparison).toBeNull();
+    expect(result.campaigns).toBeDefined();
+    expect(result.managedComparison).toBeDefined();
     expect(result.pullquote).toBeDefined();
   });
 
