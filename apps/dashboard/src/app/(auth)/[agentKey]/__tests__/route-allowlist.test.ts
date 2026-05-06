@@ -28,8 +28,8 @@ describe("route allowlist — concrete top-level routes beat [agentKey]", () => 
     });
   }
 
-  it("Owner Home `/` has its own page.tsx and is not the dynamic segment", () => {
-    expect(existsSync(join(AUTH_ROOT, "page.tsx"))).toBe(true);
+  it("`/` is not claimed by `(auth)/page.tsx` (would collide with `(public)/page.tsx`)", () => {
+    expect(existsSync(join(AUTH_ROOT, "page.tsx"))).toBe(false);
   });
 
   it("[agentKey] dynamic segment exists", () => {
