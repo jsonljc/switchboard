@@ -177,3 +177,18 @@ export type PeriodRollup = (input: {
   prior: PeriodRange;
   computedAt: Date;
 }) => Promise<ReportDataV1>;
+
+// ---------------------------------------------------------------------------
+// LLM client surface (used by pull-quote-generator only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal interface for a one-shot LLM completion. Implemented in PR-R5 by
+ * `createAnthropicReportLLMClient` (Anthropic SDK wrapper). Tests pass mocks.
+ *
+ * The implementation is responsible for any prefill-handling: callers can
+ * assume the returned string is parseable JSON when the prompt asks for JSON.
+ */
+export interface LLMClient {
+  complete(systemPrompt: string, userPrompt: string): Promise<string>;
+}
