@@ -19,7 +19,7 @@ export const LearningPhaseStatusSchema = z.object({
     .object({
       cpa: z.number(),
       roas: z.number(),
-      ctr: z.number(),
+      inlineLinkClickCtr: z.number(),
       spend: z.number(),
       conversions: z.number(),
     })
@@ -28,7 +28,7 @@ export const LearningPhaseStatusSchema = z.object({
     .object({
       cpa: z.number(),
       roas: z.number(),
-      ctr: z.number(),
+      inlineLinkClickCtr: z.number(),
       spend: z.number(),
       conversions: z.number(),
     })

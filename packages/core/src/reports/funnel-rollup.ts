@@ -35,7 +35,7 @@ async function fetchMetrics(
   end: Date,
 ): Promise<ReportInsightsMetrics> {
   if (!provider) {
-    return { impressions: 0, clicks: 0, landingPageViews: 0, spend: 0 };
+    return { impressions: 0, inlineLinkClicks: 0, landingPageViews: 0, spend: 0 };
   }
   return provider.getAggregateMetrics({
     since: formatDateShort(start),
@@ -102,7 +102,12 @@ export async function computeFunnel(
       prior: priorMetrics.impressions,
       noProvider,
     },
-    { stage: "Clicks", current: currentMetrics.clicks, prior: priorMetrics.clicks, noProvider },
+    {
+      stage: "Clicks",
+      current: currentMetrics.inlineLinkClicks,
+      prior: priorMetrics.inlineLinkClicks,
+      noProvider,
+    },
     {
       stage: "Landing page views",
       current: currentMetrics.landingPageViews,

@@ -34,7 +34,7 @@ export async function captureAdsBaseline(
     for (const [metric, value] of [
       ["spend", metrics.spend],
       ["impressions", metrics.impressions],
-      ["clicks", metrics.clicks],
+      ["inlineLinkClicks", metrics.inlineLinkClicks],
     ] as const) {
       rows.push({
         organizationId: orgId,

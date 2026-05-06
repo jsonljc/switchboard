@@ -19,17 +19,17 @@ export class MetaReportInsightsProvider implements ReportInsightsProvider {
   }): Promise<ReportInsightsMetrics> {
     const rows = await this.adsClient.getCampaignInsights({
       dateRange,
-      fields: ["impressions", "clicks", "spend", "actions"],
+      fields: ["impressions", "inline_link_clicks", "spend", "actions"],
     });
 
     let impressions = 0;
-    let clicks = 0;
+    let inlineLinkClicks = 0;
     let landingPageViews = 0;
     let spend = 0;
 
     for (const row of rows) {
       impressions += Number(row.impressions ?? 0);
-      clicks += Number(row.clicks ?? 0);
+      inlineLinkClicks += Number(row.inlineLinkClicks ?? 0);
       spend += Number(row.spend ?? 0);
 
       const actions = (row as unknown as Record<string, unknown>).actions as
@@ -39,7 +39,7 @@ export class MetaReportInsightsProvider implements ReportInsightsProvider {
       landingPageViews += Number(lpv?.value ?? 0);
     }
 
-    return { impressions, clicks, landingPageViews, spend };
+    return { impressions, inlineLinkClicks, landingPageViews, spend };
   }
 
   async getCampaignMetrics(dateRange: {
@@ -48,7 +48,14 @@ export class MetaReportInsightsProvider implements ReportInsightsProvider {
   }): Promise<ReportCampaignInsight[]> {
     const rows = await this.adsClient.getCampaignInsights({
       dateRange,
-      fields: ["impressions", "clicks", "spend", "conversions", "cpc", "ctr"],
+      fields: [
+        "impressions",
+        "inline_link_clicks",
+        "spend",
+        "conversions",
+        "cost_per_inline_link_click",
+        "inline_link_click_ctr",
+      ],
     });
 
     return rows.map((row) => ({
@@ -56,9 +63,9 @@ export class MetaReportInsightsProvider implements ReportInsightsProvider {
       campaignName: row.campaignName,
       spend: Number(row.spend ?? 0),
       impressions: Number(row.impressions ?? 0),
-      clicks: Number(row.clicks ?? 0),
-      cpc: Number(row.cpc ?? 0),
-      ctr: Number(row.ctr ?? 0),
+      inlineLinkClicks: Number(row.inlineLinkClicks ?? 0),
+      costPerInlineLinkClick: Number(row.costPerInlineLinkClick ?? 0),
+      inlineLinkClickCtr: Number(row.inlineLinkClickCtr ?? 0),
       conversions: Number(row.conversions ?? 0),
     }));
   }

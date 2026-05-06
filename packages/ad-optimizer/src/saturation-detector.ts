@@ -14,7 +14,7 @@ export function detectSaturation(
 
   // Signal 1 — Audience saturation
   const frequencyTrend = trends.find((t) => t.metric === "frequency");
-  const ctrTrend = trends.find((t) => t.metric === "ctr");
+  const ctrTrend = trends.find((t) => t.metric === "inlineLinkClickCtr");
 
   if (
     frequencyTrend &&

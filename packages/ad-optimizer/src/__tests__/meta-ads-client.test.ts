@@ -35,14 +35,14 @@ describe("MetaAdsClient", () => {
                 status: "ACTIVE",
                 effective_status: "ACTIVE",
                 impressions: "50000",
-                clicks: "1200",
+                inline_link_clicks: "1200",
                 spend: "350.50",
                 conversions: "45",
                 revenue: "2250.00",
                 frequency: "2.5",
                 cpm: "7.01",
-                ctr: "2.40",
-                cpc: "0.29",
+                inline_link_click_ctr: "2.40",
+                cost_per_inline_link_click: "0.29",
                 date_start: "2024-01-01",
                 date_stop: "2024-01-31",
               },
@@ -52,7 +52,7 @@ describe("MetaAdsClient", () => {
 
       const result = await client.getCampaignInsights({
         dateRange: { since: "2024-01-01", until: "2024-01-31" },
-        fields: ["impressions", "clicks", "spend"],
+        fields: ["impressions", "inline_link_clicks", "spend"],
         breakdowns: ["age"],
       });
 
@@ -63,7 +63,7 @@ describe("MetaAdsClient", () => {
       expect(callUrl).toContain(
         "time_range=%7B%22since%22%3A%222024-01-01%22%2C%22until%22%3A%222024-01-31%22%7D",
       );
-      expect(callUrl).toContain("fields=impressions%2Cclicks%2Cspend");
+      expect(callUrl).toContain("fields=impressions%2Cinline_link_clicks%2Cspend");
       expect(callUrl).toContain("breakdowns=age");
 
       const callOpts = fetchSpy.mock.calls[0]?.[1] as RequestInit;
@@ -78,14 +78,14 @@ describe("MetaAdsClient", () => {
         status: "ACTIVE",
         effectiveStatus: "ACTIVE",
         impressions: 50000,
-        clicks: 1200,
+        inlineLinkClicks: 1200,
         spend: 350.5,
         conversions: 45,
         revenue: 2250.0,
         frequency: 2.5,
         cpm: 7.01,
-        ctr: 2.4,
-        cpc: 0.29,
+        inlineLinkClickCtr: 2.4,
+        costPerInlineLinkClick: 0.29,
         dateStart: "2024-01-01",
         dateStop: "2024-01-31",
       });
@@ -104,13 +104,13 @@ describe("MetaAdsClient", () => {
                 adset_name: "Lookalike US",
                 campaign_id: "camp_1",
                 impressions: "25000",
-                clicks: "600",
+                inline_link_clicks: "600",
                 spend: "175.25",
                 conversions: "22",
                 frequency: "1.8",
                 cpm: "7.01",
-                ctr: "2.40",
-                cpc: "0.29",
+                inline_link_click_ctr: "2.40",
+                cost_per_inline_link_click: "0.29",
                 date_start: "2024-01-01",
                 date_stop: "2024-01-31",
               },
@@ -123,7 +123,7 @@ describe("MetaAdsClient", () => {
 
       const result = await client.getAdSetInsights({
         dateRange: { since: "2024-01-01", until: "2024-01-31" },
-        fields: ["impressions", "clicks"],
+        fields: ["impressions", "inline_link_clicks"],
         campaignId: "camp_1",
       });
 
@@ -139,13 +139,13 @@ describe("MetaAdsClient", () => {
         adSetName: "Lookalike US",
         campaignId: "camp_1",
         impressions: 25000,
-        clicks: 600,
+        inlineLinkClicks: 600,
         spend: 175.25,
         conversions: 22,
         frequency: 1.8,
         cpm: 7.01,
-        ctr: 2.4,
-        cpc: 0.29,
+        inlineLinkClickCtr: 2.4,
+        costPerInlineLinkClick: 0.29,
         dateStart: "2024-01-01",
         dateStop: "2024-01-31",
       });

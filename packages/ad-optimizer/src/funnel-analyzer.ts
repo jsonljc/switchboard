@@ -26,9 +26,9 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
   const { insights, crmData, crmBenchmarks, mediaBenchmarks } = input;
 
   const totalImpressions = insights.reduce((sum, i) => sum + i.impressions, 0);
-  const totalClicks = insights.reduce((sum, i) => sum + i.clicks, 0);
+  const totalClicks = insights.reduce((sum, i) => sum + i.inlineLinkClicks, 0);
 
-  const ctrBenchmark = mediaBenchmarks.ctr / 100;
+  const ctrBenchmark = mediaBenchmarks.inlineLinkClickCtr / 100;
   const lpvRate = mediaBenchmarks.landingPageViewRate;
   const lpvCount = Math.round(totalClicks * lpvRate);
 

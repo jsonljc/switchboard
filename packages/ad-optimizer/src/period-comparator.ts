@@ -8,8 +8,8 @@ import type {
 
 export interface MetricSet {
   cpm: number;
-  ctr: number;
-  cpc: number;
+  inlineLinkClickCtr: number;
+  costPerInlineLinkClick: number;
   cpl: number;
   cpa: number;
   roas: number;
@@ -45,6 +45,14 @@ function computeDelta(metric: string, current: number, previous: number): Metric
 // ── Main export ──
 
 export function comparePeriods(current: MetricSet, previous: MetricSet): MetricDelta[] {
-  const metrics: (keyof MetricSet)[] = ["cpm", "ctr", "cpc", "cpl", "cpa", "roas", "frequency"];
+  const metrics: (keyof MetricSet)[] = [
+    "cpm",
+    "inlineLinkClickCtr",
+    "costPerInlineLinkClick",
+    "cpl",
+    "cpa",
+    "roas",
+    "frequency",
+  ];
   return metrics.map((key) => computeDelta(key, current[key], previous[key]));
 }

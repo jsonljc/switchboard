@@ -27,8 +27,8 @@ describe("classifyTrendTier", () => {
 function makeSnapshot(overrides: Partial<MetricSnapshotSchema> = {}): MetricSnapshotSchema {
   return {
     cpm: 10,
-    ctr: 2,
-    cpc: 1,
+    inlineLinkClickCtr: 2,
+    costPerInlineLinkClick: 1,
     cpl: 5,
     cpa: 20,
     roas: 3,
@@ -68,12 +68,12 @@ describe("detectTrends", () => {
 
   it("detects falling CTR over 2 weeks as alert", () => {
     const snapshots = [
-      makeSnapshot({ ctr: 5 }),
-      makeSnapshot({ ctr: 4 }),
-      makeSnapshot({ ctr: 3 }),
+      makeSnapshot({ inlineLinkClickCtr: 5 }),
+      makeSnapshot({ inlineLinkClickCtr: 4 }),
+      makeSnapshot({ inlineLinkClickCtr: 3 }),
     ];
     const trends = detectTrends(snapshots);
-    const ctrTrend = trends.find((t) => t.metric === "ctr");
+    const ctrTrend = trends.find((t) => t.metric === "inlineLinkClickCtr");
     expect(ctrTrend).toBeDefined();
     expect(ctrTrend!.direction).toBe("falling");
     expect(ctrTrend!.consecutiveWeeks).toBe(2);
@@ -85,7 +85,14 @@ describe("detectTrends", () => {
     const trends = detectTrends(snapshots);
     expect(trends).toHaveLength(6);
     const metrics = trends.map((t) => t.metric).sort();
-    expect(metrics).toEqual(["cpa", "cpc", "cpl", "cpm", "ctr", "roas"]);
+    expect(metrics).toEqual([
+      "costPerInlineLinkClick",
+      "cpa",
+      "cpl",
+      "cpm",
+      "inlineLinkClickCtr",
+      "roas",
+    ]);
   });
 });
 

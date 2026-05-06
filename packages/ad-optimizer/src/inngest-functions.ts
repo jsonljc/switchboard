@@ -75,7 +75,11 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         orgId: deployment.organizationId,
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
-        mediaBenchmarks: { ctr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 },
+        mediaBenchmarks: {
+          inlineLinkClickCtr: 2.0,
+          landingPageViewRate: 0.85,
+          clickToLeadRate: 0.05,
+        },
       };
       const runner = new AuditRunner({
         adsClient,

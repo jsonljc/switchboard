@@ -53,9 +53,9 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
           name: "Test",
           spend: 100,
           impressions: 7000,
-          clicks: 90,
-          cpc: 1.11,
-          ctr: 1.29,
+          inlineLinkClicks: 90,
+          costPerInlineLinkClick: 1.11,
+          inlineLinkClickCtr: 1.29,
           leads: 3,
           revenue: 1000,
           cpl: 33.33,
@@ -98,22 +98,22 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
     expect(d.kind).toBe("flat");
   });
 
-  it("CampaignRow has efficiency metrics (cpc, ctr, cpl, clickToLeadRate)", () => {
+  it("CampaignRow has efficiency metrics (costPerInlineLinkClick, inlineLinkClickCtr, cpl, clickToLeadRate)", () => {
     const c: CampaignRow = {
       name: "x",
       spend: 100,
       impressions: 7000,
-      clicks: 90,
-      cpc: 1.11,
-      ctr: 1.29,
+      inlineLinkClicks: 90,
+      costPerInlineLinkClick: 1.11,
+      inlineLinkClickCtr: 1.29,
       leads: 3,
       revenue: 0,
       cpl: 33.33,
       clickToLeadRate: 0.033,
       roas: 0,
     };
-    expect(c.cpc).toBe(1.11);
-    expect(c.ctr).toBe(1.29);
+    expect(c.costPerInlineLinkClick).toBe(1.11);
+    expect(c.inlineLinkClickCtr).toBe(1.29);
     expect(c.cpl).toBe(33.33);
     expect(c.clickToLeadRate).toBe(0.033);
   });

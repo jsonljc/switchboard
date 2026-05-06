@@ -5,8 +5,8 @@ import type { MetricSet } from "../period-comparator.js";
 
 const BASE: MetricSet = {
   cpm: 10,
-  ctr: 2.5,
-  cpc: 0.5,
+  inlineLinkClickCtr: 2.5,
+  costPerInlineLinkClick: 0.5,
   cpl: 5,
   cpa: 20,
   roas: 3,
@@ -31,7 +31,7 @@ describe("comparePeriods", () => {
   });
 
   it("flags deltas > 15% as significant — CPM 25% up, CTR 40% down", () => {
-    const current: MetricSet = { ...BASE, cpm: 12.5, ctr: 1.5 };
+    const current: MetricSet = { ...BASE, cpm: 12.5, inlineLinkClickCtr: 1.5 };
     const previous: MetricSet = { ...BASE };
 
     const deltas = comparePeriods(current, previous);
@@ -41,7 +41,7 @@ describe("comparePeriods", () => {
     expect(cpmDelta!.direction).toBe("up");
     expect(cpmDelta!.significant).toBe(true);
 
-    const ctrDelta = deltas.find((d) => d.metric === "ctr");
+    const ctrDelta = deltas.find((d) => d.metric === "inlineLinkClickCtr");
     expect(ctrDelta!.deltaPercent).toBeCloseTo(-40, 0);
     expect(ctrDelta!.direction).toBe("down");
     expect(ctrDelta!.significant).toBe(true);
@@ -58,8 +58,24 @@ describe("comparePeriods", () => {
   });
 
   it("handles zero previous values without division error", () => {
-    const previous: MetricSet = { cpm: 0, ctr: 0, cpc: 0, cpl: 0, cpa: 0, roas: 0, frequency: 0 };
-    const current: MetricSet = { cpm: 10, ctr: 0, cpc: 5, cpl: 3, cpa: 20, roas: 2, frequency: 0 };
+    const previous: MetricSet = {
+      cpm: 0,
+      inlineLinkClickCtr: 0,
+      costPerInlineLinkClick: 0,
+      cpl: 0,
+      cpa: 0,
+      roas: 0,
+      frequency: 0,
+    };
+    const current: MetricSet = {
+      cpm: 10,
+      inlineLinkClickCtr: 0,
+      costPerInlineLinkClick: 5,
+      cpl: 3,
+      cpa: 20,
+      roas: 2,
+      frequency: 0,
+    };
 
     const deltas = comparePeriods(current, previous);
 
@@ -70,7 +86,7 @@ describe("comparePeriods", () => {
     expect(cpmDelta!.significant).toBe(true);
 
     // Both zero → deltaPercent=0, direction="stable", significant=false
-    const ctrDelta = deltas.find((d) => d.metric === "ctr");
+    const ctrDelta = deltas.find((d) => d.metric === "inlineLinkClickCtr");
     expect(ctrDelta!.deltaPercent).toBe(0);
     expect(ctrDelta!.direction).toBe("stable");
     expect(ctrDelta!.significant).toBe(false);
@@ -83,7 +99,15 @@ describe("comparePeriods", () => {
 
   it("returns a delta for every metric in MetricSet", () => {
     const deltas = comparePeriods(BASE, BASE);
-    const keys: (keyof MetricSet)[] = ["cpm", "ctr", "cpc", "cpl", "cpa", "roas", "frequency"];
+    const keys: (keyof MetricSet)[] = [
+      "cpm",
+      "inlineLinkClickCtr",
+      "costPerInlineLinkClick",
+      "cpl",
+      "cpa",
+      "roas",
+      "frequency",
+    ];
     for (const key of keys) {
       expect(deltas.find((d) => d.metric === key)).toBeDefined();
     }

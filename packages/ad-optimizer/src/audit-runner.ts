@@ -88,14 +88,14 @@ const INSIGHT_FIELDS = [
   "campaign_name",
   "status",
   "impressions",
-  "clicks",
+  "inline_link_clicks",
   "spend",
   "conversions",
   "revenue",
   "frequency",
   "cpm",
-  "ctr",
-  "cpc",
+  "inline_link_click_ctr",
+  "cost_per_inline_link_click",
 ];
 
 function safeDivide(a: number, b: number): number {
@@ -103,11 +103,11 @@ function safeDivide(a: number, b: number): number {
 }
 
 function insightToMetrics(insight: CampaignInsight): MetricSet {
-  const { spend, impressions, clicks, conversions, revenue, frequency } = insight;
+  const { spend, impressions, inlineLinkClicks, conversions, revenue, frequency } = insight;
   return {
     cpm: safeDivide(spend, impressions) * 1000,
-    ctr: safeDivide(clicks, impressions) * 100,
-    cpc: safeDivide(spend, clicks),
+    inlineLinkClickCtr: safeDivide(inlineLinkClicks, impressions) * 100,
+    costPerInlineLinkClick: safeDivide(spend, inlineLinkClicks),
     cpl: safeDivide(spend, conversions),
     cpa: safeDivide(spend, conversions),
     roas: safeDivide(revenue, spend),
@@ -117,12 +117,20 @@ function insightToMetrics(insight: CampaignInsight): MetricSet {
 
 function aggregateMetrics(insights: CampaignInsight[]): MetricSet {
   if (insights.length === 0) {
-    return { cpm: 0, ctr: 0, cpc: 0, cpl: 0, cpa: 0, roas: 0, frequency: 0 };
+    return {
+      cpm: 0,
+      inlineLinkClickCtr: 0,
+      costPerInlineLinkClick: 0,
+      cpl: 0,
+      cpa: 0,
+      roas: 0,
+      frequency: 0,
+    };
   }
 
   let totalSpend = 0;
   let totalImpressions = 0;
-  let totalClicks = 0;
+  let totalInlineLinkClicks = 0;
   let totalConversions = 0;
   let totalRevenue = 0;
   let totalFrequency = 0;
@@ -130,7 +138,7 @@ function aggregateMetrics(insights: CampaignInsight[]): MetricSet {
   for (const insight of insights) {
     totalSpend += insight.spend;
     totalImpressions += insight.impressions;
-    totalClicks += insight.clicks;
+    totalInlineLinkClicks += insight.inlineLinkClicks;
     totalConversions += insight.conversions;
     totalRevenue += insight.revenue;
     totalFrequency += insight.frequency;
@@ -138,8 +146,8 @@ function aggregateMetrics(insights: CampaignInsight[]): MetricSet {
 
   return {
     cpm: safeDivide(totalSpend, totalImpressions) * 1000,
-    ctr: safeDivide(totalClicks, totalImpressions) * 100,
-    cpc: safeDivide(totalSpend, totalClicks),
+    inlineLinkClickCtr: safeDivide(totalInlineLinkClicks, totalImpressions) * 100,
+    costPerInlineLinkClick: safeDivide(totalSpend, totalInlineLinkClicks),
     cpl: safeDivide(totalSpend, totalConversions),
     cpa: safeDivide(totalSpend, totalConversions),
     roas: safeDivide(totalRevenue, totalSpend),
@@ -254,7 +262,15 @@ export class AuditRunner {
       const campaignCurrentMetrics = insightToMetrics(insight);
       const campaignPreviousMetrics = prevInsight
         ? insightToMetrics(prevInsight)
-        : { cpm: 0, ctr: 0, cpc: 0, cpl: 0, cpa: 0, roas: 0, frequency: 0 };
+        : {
+            cpm: 0,
+            inlineLinkClickCtr: 0,
+            costPerInlineLinkClick: 0,
+            cpl: 0,
+            cpa: 0,
+            roas: 0,
+            frequency: 0,
+          };
       const campaignDeltas = comparePeriods(campaignCurrentMetrics, campaignPreviousMetrics);
 
       // 5c: Diagnose

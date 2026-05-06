@@ -23,14 +23,14 @@ function makeCampaignInsight(overrides: Partial<CampaignInsight> = {}): Campaign
     status: "ACTIVE",
     effectiveStatus: "ACTIVE",
     impressions: 100_000,
-    clicks: 2_000,
+    inlineLinkClicks: 2_000,
     spend: 5_000,
     conversions: 50,
     revenue: 15_000,
     frequency: 2.5,
     cpm: 50,
-    ctr: 2.0,
-    cpc: 2.5,
+    inlineLinkClickCtr: 2.0,
+    costPerInlineLinkClick: 2.5,
     dateStart: "2026-03-01",
     dateStop: "2026-03-31",
     ...overrides,
@@ -84,7 +84,7 @@ function makeCrmBenchmarks(): FunnelBenchmarks {
 }
 
 function makeMediaBenchmarks(): MediaBenchmarks {
-  return { ctr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 };
+  return { inlineLinkClickCtr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 };
 }
 
 function makeLearningInput(): CampaignLearningInput {
@@ -113,13 +113,13 @@ function buildMockDeps(
     makeCampaignInsight({
       spend: 4_800,
       impressions: 95_000,
-      clicks: 1_900,
+      inlineLinkClicks: 1_900,
       conversions: 48,
       revenue: 14_400,
       frequency: 2.3,
       cpm: 50.5,
-      ctr: 2.0,
-      cpc: 2.53,
+      inlineLinkClickCtr: 2.0,
+      costPerInlineLinkClick: 2.53,
     }),
   ];
 
@@ -166,18 +166,67 @@ function buildMockDeps(
         conversions: 50,
         cpa: 100,
         roas: 3.0,
-        ctr: 2.0,
+        inlineLinkClickCtr: 2.0,
       },
     ]),
     getTrendData: vi.fn().mockResolvedValue({
-      day30: { cpm: 50, ctr: 2.0, cpc: 2.5, cpl: 100, cpa: 100, roas: 3.0 },
-      day60: { cpm: 48, ctr: 2.1, cpc: 2.4, cpl: 95, cpa: 95, roas: 3.1 },
-      day90: { cpm: 45, ctr: 2.2, cpc: 2.3, cpl: 90, cpa: 90, roas: 3.2 },
+      day30: {
+        cpm: 50,
+        inlineLinkClickCtr: 2.0,
+        costPerInlineLinkClick: 2.5,
+        cpl: 100,
+        cpa: 100,
+        roas: 3.0,
+      },
+      day60: {
+        cpm: 48,
+        inlineLinkClickCtr: 2.1,
+        costPerInlineLinkClick: 2.4,
+        cpl: 95,
+        cpa: 95,
+        roas: 3.1,
+      },
+      day90: {
+        cpm: 45,
+        inlineLinkClickCtr: 2.2,
+        costPerInlineLinkClick: 2.3,
+        cpl: 90,
+        cpa: 90,
+        roas: 3.2,
+      },
       weekly: [
-        { cpm: 48, ctr: 2.1, cpc: 2.4, cpl: 95, cpa: 95, roas: 3.1 },
-        { cpm: 49, ctr: 2.0, cpc: 2.5, cpl: 98, cpa: 98, roas: 3.0 },
-        { cpm: 50, ctr: 2.0, cpc: 2.5, cpl: 100, cpa: 100, roas: 3.0 },
-        { cpm: 51, ctr: 1.9, cpc: 2.6, cpl: 102, cpa: 102, roas: 2.9 },
+        {
+          cpm: 48,
+          inlineLinkClickCtr: 2.1,
+          costPerInlineLinkClick: 2.4,
+          cpl: 95,
+          cpa: 95,
+          roas: 3.1,
+        },
+        {
+          cpm: 49,
+          inlineLinkClickCtr: 2.0,
+          costPerInlineLinkClick: 2.5,
+          cpl: 98,
+          cpa: 98,
+          roas: 3.0,
+        },
+        {
+          cpm: 50,
+          inlineLinkClickCtr: 2.0,
+          costPerInlineLinkClick: 2.5,
+          cpl: 100,
+          cpa: 100,
+          roas: 3.0,
+        },
+        {
+          cpm: 51,
+          inlineLinkClickCtr: 1.9,
+          costPerInlineLinkClick: 2.6,
+          cpl: 102,
+          cpa: 102,
+          roas: 2.9,
+        },
       ],
     }),
   };
@@ -362,7 +411,7 @@ describe("AuditRunner", () => {
         conversions: 30,
         cpa: 100,
         roas: 3.0,
-        ctr: 2.0,
+        inlineLinkClickCtr: 2.0,
         destinationType: "WEBSITE",
       },
       {
@@ -375,7 +424,7 @@ describe("AuditRunner", () => {
         conversions: 20,
         cpa: 100,
         roas: 3.0,
-        ctr: 2.0,
+        inlineLinkClickCtr: 2.0,
         destinationType: "ON_AD",
       },
     ]);
@@ -405,7 +454,7 @@ describe("AuditRunner", () => {
         conversions: 20,
         cpa: 100,
         roas: 3.0,
-        ctr: 2.0,
+        inlineLinkClickCtr: 2.0,
       },
       {
         adSetId: "adset-2",
@@ -417,7 +466,7 @@ describe("AuditRunner", () => {
         conversions: 30,
         cpa: 100,
         roas: 3.0,
-        ctr: 2.0,
+        inlineLinkClickCtr: 2.0,
       },
       {
         adSetId: "adset-3",
@@ -429,7 +478,7 @@ describe("AuditRunner", () => {
         conversions: 50,
         cpa: 100,
         roas: 3.0,
-        ctr: 2.0,
+        inlineLinkClickCtr: 2.0,
       },
     ]);
 

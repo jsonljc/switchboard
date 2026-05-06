@@ -16,7 +16,7 @@ function stubProvider(spend = 1000): ReportInsightsProvider {
   return {
     getAggregateMetrics: async () => ({
       impressions: 50000,
-      clicks: 600,
+      inlineLinkClicks: 600,
       landingPageViews: 500,
       spend,
     }),
@@ -65,7 +65,7 @@ describe("computeManagedComparison", () => {
       {
         organizationId: "org-1",
         dimension: "ads",
-        metric: "clicks",
+        metric: "inlineLinkClicks",
         value: 500,
         periodStart: new Date("2026-01-01"),
         periodEnd: new Date("2026-02-01"),

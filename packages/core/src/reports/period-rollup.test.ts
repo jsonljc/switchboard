@@ -49,7 +49,7 @@ function stubProvider(): ReportInsightsProvider {
   return {
     getAggregateMetrics: async () => ({
       impressions: 1000,
-      clicks: 200,
+      inlineLinkClicks: 200,
       landingPageViews: 150,
       spend: 500,
     }),

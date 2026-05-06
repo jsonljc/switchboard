@@ -8,10 +8,10 @@ function makeRawAd(overrides: Partial<RawAdData> = {}): RawAdData {
     videoId: null,
     spend: 100,
     impressions: 10000,
-    clicks: 200,
+    inlineLinkClicks: 200,
     conversions: 10,
-    ctr: 2.0,
-    cpc: 0.5,
+    inlineLinkClickCtr: 2.0,
+    costPerInlineLinkClick: 0.5,
     cpa: 10,
     roas: 5,
     videoViews: null,
@@ -30,7 +30,7 @@ describe("deduplicateCreatives", () => {
         imageHash: "hash-a",
         spend: 100,
         impressions: 10000,
-        clicks: 200,
+        inlineLinkClicks: 200,
         conversions: 10,
       }),
       makeRawAd({
@@ -38,7 +38,7 @@ describe("deduplicateCreatives", () => {
         imageHash: "hash-a",
         spend: 50,
         impressions: 5000,
-        clicks: 100,
+        inlineLinkClicks: 100,
         conversions: 5,
       }),
     ];
@@ -52,12 +52,12 @@ describe("deduplicateCreatives", () => {
     expect(entry.adIds).toEqual(["ad-1", "ad-2"]);
     expect(entry.spend).toBe(150);
     expect(entry.impressions).toBe(15000);
-    expect(entry.clicks).toBe(300);
+    expect(entry.inlineLinkClicks).toBe(300);
     expect(entry.conversions).toBe(15);
-    // ctr = clicks/impressions*100 = 300/15000*100 = 2.0
-    expect(entry.ctr).toBeCloseTo(2.0);
-    // cpc = spend/clicks = 150/300 = 0.5
-    expect(entry.cpc).toBeCloseTo(0.5);
+    // inlineLinkClickCtr = inlineLinkClicks/impressions*100 = 300/15000*100 = 2.0
+    expect(entry.inlineLinkClickCtr).toBeCloseTo(2.0);
+    // costPerInlineLinkClick = spend/inlineLinkClicks = 150/300 = 0.5
+    expect(entry.costPerInlineLinkClick).toBeCloseTo(0.5);
     // cpa = spend/conversions = 150/15 = 10
     expect(entry.cpa).toBeCloseTo(10);
     // roas: weighted average by spend
@@ -75,7 +75,7 @@ describe("deduplicateCreatives", () => {
         videoId: "vid-1",
         spend: 200,
         impressions: 20000,
-        clicks: 400,
+        inlineLinkClicks: 400,
         conversions: 20,
         videoViews: 8000,
       }),
@@ -85,7 +85,7 @@ describe("deduplicateCreatives", () => {
         videoId: "vid-1",
         spend: 100,
         impressions: 10000,
-        clicks: 200,
+        inlineLinkClicks: 200,
         conversions: 10,
         videoViews: 3000,
       }),
@@ -124,7 +124,7 @@ describe("analyzeCreatives", () => {
         imageHash: "hash-a",
         spend: 750,
         impressions: 10000,
-        clicks: 200,
+        inlineLinkClicks: 200,
         conversions: 10,
       }),
       makeRawAd({
@@ -132,7 +132,7 @@ describe("analyzeCreatives", () => {
         imageHash: "hash-b",
         spend: 250,
         impressions: 10000,
-        clicks: 200,
+        inlineLinkClicks: 200,
         conversions: 10,
       }),
     ]);
@@ -155,7 +155,7 @@ describe("analyzeCreatives", () => {
         imageHash: "hash-a",
         spend: 150,
         impressions: 5000,
-        clicks: 100,
+        inlineLinkClicks: 100,
         conversions: 1,
       }),
       makeRawAd({
@@ -163,7 +163,7 @@ describe("analyzeCreatives", () => {
         imageHash: "hash-b",
         spend: 35,
         impressions: 5000,
-        clicks: 100,
+        inlineLinkClicks: 100,
         conversions: 1,
       }),
       makeRawAd({
@@ -171,7 +171,7 @@ describe("analyzeCreatives", () => {
         imageHash: "hash-c",
         spend: 35,
         impressions: 5000,
-        clicks: 100,
+        inlineLinkClicks: 100,
         conversions: 1,
       }),
     ]);
@@ -191,7 +191,7 @@ describe("analyzeCreatives", () => {
         imageHash: "hash-a",
         spend: 100,
         impressions: 10000,
-        clicks: 200,
+        inlineLinkClicks: 200,
         conversions: 10,
       }),
       makeRawAd({
@@ -199,7 +199,7 @@ describe("analyzeCreatives", () => {
         imageHash: "hash-b",
         spend: 100,
         impressions: 10000,
-        clicks: 200,
+        inlineLinkClicks: 200,
         conversions: 10,
       }),
     ]);
