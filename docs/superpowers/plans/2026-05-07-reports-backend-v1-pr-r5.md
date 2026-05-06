@@ -27,11 +27,11 @@
 
 **Modify:**
 
-- `packages/core/src/reports/interfaces.ts` — add `LLMClient` interface; add `pullQuoteGenerator` field to `ReportDependencies` (note: `ReportDependencies` lives in `period-rollup.ts`, not `interfaces.ts`)
-- `packages/core/src/reports/period-rollup.ts` — accept `pullQuoteGenerator` dep, call it after section rollups, replace `STUB_PULLQUOTE` constant
-- `packages/core/src/reports/period-rollup.test.ts` — add `pullQuoteGenerator` to `makeDeps()`; new test asserting generator invoked with right inputs and result lands in `payload.pullquote`
-- `packages/core/src/reports/index.ts` — export `createPullQuoteGenerator`, `createAnthropicReportLLMClient`, type `LLMClient`
-- `apps/api/src/routes/dashboard-reports.ts` — read `ANTHROPIC_API_KEY`, build `LLMClient` (or `null`), build `pullQuoteGenerator`, pass through `ReportDependencies`
+- `packages/core/src/reports/interfaces.ts` — add the new `LLMClient` interface only.
+- `packages/core/src/reports/period-rollup.ts` — add `pullQuoteGenerator: PullQuoteGenerator` to the `ReportDependencies` interface (which is exported from this file, not `interfaces.ts`); call the generator after section rollups; replace `STUB_PULLQUOTE` constant.
+- `packages/core/src/reports/period-rollup.test.ts` — add `pullQuoteGenerator` to `makeDeps()`; new test asserting generator invoked with right inputs and result lands in `payload.pullquote`.
+- `packages/core/src/reports/index.ts` — export `createPullQuoteGenerator`, `createAnthropicReportLLMClient`. (`LLMClient` is already re-exposed via `export * from "./interfaces.js"`.)
+- `apps/api/src/routes/dashboard-reports.ts` — read `ANTHROPIC_API_KEY`, build `LLMClient` (or `null`), build `pullQuoteGenerator`, pass through `ReportDependencies`.
 
 ---
 
@@ -357,6 +357,8 @@ Run: `pnpm --filter @switchboard/core test -- pull-quote-generator.test.ts`
 Expected: FAIL with `Cannot find module './pull-quote-generator.js'`.
 
 - [ ] **Step 3: Implement minimal `pull-quote-generator.ts`**
+
+> **Verified before plan was written:** `ReportWindow` is exported from `@switchboard/schemas` via `export * from "./reports/v1.js"` in `packages/schemas/src/index.ts`. If a future schemas refactor stops re-exporting it, fall back to a local alias derived from `RollupContext`: `type ReportWindow = NonNullable<RollupContext["current"]["window"]>;`.
 
 Create `packages/core/src/reports/pull-quote-generator.ts`:
 
@@ -877,7 +879,7 @@ describe("createAnthropicReportLLMClient", () => {
     }));
 
     const client = createAnthropicReportLLMClient("test-key", {
-      AnthropicCtor: FakeAnthropic as unknown as typeof import("@anthropic-ai/sdk").default,
+      AnthropicCtor: FakeAnthropic,
     });
     const out = await client.complete("system here", "user here");
 
@@ -916,18 +918,37 @@ Add the import at the top of `pull-quote-generator.ts` (with the other imports):
 import Anthropic from "@anthropic-ai/sdk";
 ```
 
-Append the constants and the factory at the bottom of `pull-quote-generator.ts`:
+Append the constants, the local constructor type, and the factory at the bottom of `pull-quote-generator.ts`:
 
 ```ts
 const REPORT_LLM_MODEL = "claude-haiku-4-5-20251001";
 const REPORT_LLM_MAX_TOKENS = 256;
 const REPORT_LLM_TEMPERATURE = 0.4;
 
+/**
+ * Narrow constructor type used by the test seam — captures only the surface this
+ * file actually consumes (the real SDK class is structurally compatible). Avoids
+ * a brittle `as unknown as typeof import("@anthropic-ai/sdk").default` cast at
+ * call sites and keeps the test fake's type checker happy.
+ */
+type AnthropicLikeCtor = new (args: { apiKey: string }) => {
+  messages: {
+    create(args: {
+      model: string;
+      max_tokens: number;
+      temperature: number;
+      system: string;
+      messages: Array<{ role: "user" | "assistant"; content: string }>;
+    }): Promise<{ content: Array<{ type: string; text: string }> }>;
+  };
+};
+
 export function createAnthropicReportLLMClient(
   apiKey: string,
-  options?: { AnthropicCtor?: typeof Anthropic },
+  options?: { AnthropicCtor?: AnthropicLikeCtor },
 ): LLMClient {
-  const Ctor = options?.AnthropicCtor ?? Anthropic;
+  const Ctor: AnthropicLikeCtor =
+    options?.AnthropicCtor ?? (Anthropic as unknown as AnthropicLikeCtor);
   const client = new Ctor({ apiKey });
   return {
     async complete(systemPrompt: string, userPrompt: string): Promise<string> {
@@ -950,7 +971,7 @@ export function createAnthropicReportLLMClient(
 }
 ```
 
-The optional `AnthropicCtor` parameter exists purely as a test seam. Production callers omit it and get the real SDK; the unit test in Step 1 passes a fake.
+The narrow `AnthropicLikeCtor` type is the test seam: it covers exactly the constructor shape and the one method we call (`messages.create` with the args we actually pass). Production callers omit `options` and get the real SDK (the single `as unknown as AnthropicLikeCtor` cast is local to this file, not at every call site). The unit test in Step 1 passes a `vi.fn().mockImplementation(...)` that satisfies `AnthropicLikeCtor` directly without any type assertion in the test.
 
 - [ ] **Step 4: Run test to verify it passes**
 
