@@ -13,12 +13,14 @@ Replace the `STUB_PULLQUOTE` constant in `period-rollup.ts` with a real LLM-gene
 
 ## 2. Scope
 
+**Note on `PullQuoteGenerator` shape:** the type is **already defined** in `packages/core/src/reports/interfaces.ts` from PR-R1, with the input shape `{ ctx, attribution, cost, funnelNarrative }` and output `ReportDataV1["pullquote"]` (i.e. `PullQuoteCopy`). PR-R5 implements that locked signature; we do not change it. The narrower `PullQuoteFacts` type below is **internal** to `pull-quote-generator.ts` — the generator builds it from the rich input and passes it to the prompt.
+
 **In scope**
 
-- New module `packages/core/src/reports/pull-quote-generator.ts` exposing `createPullQuoteGenerator(deps)` which returns `(facts) => Promise<PullQuoteCopy>`.
+- New module `packages/core/src/reports/pull-quote-generator.ts` implementing the locked `PullQuoteGenerator` signature. The factory `createPullQuoteGenerator(deps)` returns a function that derives `PullQuoteFacts` from the rich input and calls the LLM.
 - New prompt module `packages/core/src/reports/prompts/pull-quote-prompt.ts` (system prompt + `buildUserPrompt(facts)`).
 - New tiny `LLMClient` interface in `packages/core/src/reports/interfaces.ts` (one method: `complete(system, user) => Promise<string>`).
-- New `pullQuoteGenerator` field on `ReportDependencies`; `period-rollup.ts` calls it and swaps the result into the `pullquote: PullQuoteCopy` field of the rollup payload.
+- New `pullQuoteGenerator` field on `ReportDependencies`; `period-rollup.ts` calls it after the section rollups resolve and swaps the result into `payload.pullquote`.
 - New Anthropic-backed `LLMClient` constructor (`createAnthropicReportLLMClient(apiKey)`) co-located with the generator, returning a one-method object that wraps `@anthropic-ai/sdk` (already a dep of `@switchboard/core`). No reuse of the conversational `agent-runtime/anthropic-adapter.ts` — that adapter is shaped for chat history and isn't a fit.
 - API wiring update in `apps/api/src/routes/dashboard-reports.ts` to construct the LLM client from `ANTHROPIC_API_KEY` and pass it through `ReportDependencies`. When the env var is absent, `llm` is `null` and the generator silently returns the deterministic template (no warn — this is the expected unconfigured state). LLM errors and validation failures, by contrast, do warn — see §3 row 5.
 - Tests: 7 cases for `pull-quote-generator.test.ts` (incl. content-guard) plus an SDK prefill round-trip guard; updated `period-rollup.test.ts` asserting the generator is invoked with the right facts and its output lands in `pullquote`.
@@ -100,18 +102,31 @@ export interface LLMClient {
 
 One method, returns a raw string. The generator parses + validates. Keeps the interface trivially mockable.
 
-### 5.2 `PullQuoteFacts` and `PullQuoteGenerator`
+### 5.2 `PullQuoteFacts` (internal) and `PullQuoteGenerator` (already locked)
+
+`PullQuoteGenerator` is already defined in `interfaces.ts` from PR-R1:
 
 ```ts
-export interface PullQuoteFacts {
-  periodLabel: string; // e.g. "April 2026", "Last week"
-  revenueUsd: number; // e.g. 18432.5
-  costUsd: number; // e.g. 499
-  savingsUsd: number; // e.g. 7501 (alt cost - paid cost)
-}
-
-export type PullQuoteGenerator = (facts: PullQuoteFacts) => Promise<PullQuoteCopy>;
+export type PullQuoteGenerator = (input: {
+  ctx: RollupContext;
+  attribution: ReportDataV1["attribution"];
+  cost: ReportDataV1["cost"];
+  funnelNarrative: ReportDataV1["funnelNarrative"];
+}) => Promise<ReportDataV1["pullquote"]>;
 ```
+
+PR-R5 implements that signature. Internal to `pull-quote-generator.ts`:
+
+```ts
+interface PullQuoteFacts {
+  periodLabel: string; // e.g. "this month" — derived from ctx.current.window via windowToLabel(window)
+  revenueUsd: number; // attribution.total
+  costUsd: number; // cost.paid (Switchboard's monthly fee)
+  savingsUsd: number; // cost.saving (cost.alt - cost.paid)
+}
+```
+
+A small private helper `windowToLabel(window: ReportWindow): string` maps `"THIS WEEK" | "THIS MONTH" | "THIS QUARTER"` → `"this week" | "this month" | "this quarter"`. Avoids the awkward `formatDateFolio` output (`"APR 1 — APR 30"`) inside the pull-quote sentence. `funnelNarrative` from the rich input is intentionally unused — the three slots are too short to fit funnel deltas (decision row 3).
 
 ### 5.3 Generator factory
 
@@ -121,7 +136,8 @@ export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQ
 
 Internally:
 
-- Format `value = formatUsd(facts.revenueUsd)` and `cost = formatUsd(facts.costUsd)`.
+- Build `PullQuoteFacts` from `input`: `periodLabel = windowToLabel(input.ctx.current.window)` (private helper), `revenueUsd = input.attribution.total`, `costUsd = input.cost.paid`, `savingsUsd = input.cost.saving`.
+- Format `value = formatCurrencyUSD(facts.revenueUsd)` and `cost = formatCurrencyUSD(facts.costUsd)` using the existing `formatCurrencyUSD` from `period-helpers.ts`.
 - If `deps.llm == null` → return template **silently** (no warn — this is the expected unconfigured path).
 - Else call `deps.llm.complete(PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt(facts))`.
 - The string returned by `LLMClient.complete` is already prefixed with `{` — the Anthropic-backed implementation re-prepends the prefill (see §5.5), so the generator just calls `JSON.parse(text.trim())` and validates with the Zod schema (3 fields, all non-empty strings, each ≤ 80 chars).
@@ -133,8 +149,10 @@ Internally:
 
 ```ts
 function buildTemplate(facts: PullQuoteFacts, value: string, cost: string): PullQuoteCopy {
+  // facts.periodLabel is lowercase ("this month"); capitalize for sentence start.
+  const pre = facts.periodLabel.charAt(0).toUpperCase() + facts.periodLabel.slice(1);
   return {
-    pre: `In ${facts.periodLabel}, your team generated`,
+    pre: `${pre}, your team generated`,
     value,
     mid: "in revenue, with Switchboard costing",
     cost,
