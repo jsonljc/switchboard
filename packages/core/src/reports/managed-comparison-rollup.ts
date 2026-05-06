@@ -92,6 +92,5 @@ export async function computeManagedComparison(
     ads,
     conversations,
     source: ads ? "pre-switchboard-baseline" : "in-period-cohort",
-    emptyMessage: !ads && !conversations ? "Comparison unlocks after 30 days." : undefined,
   };
 }

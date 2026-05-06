@@ -527,22 +527,6 @@ export async function buildServer() {
           return dep?.listing?.slug ?? null;
         },
       },
-      connection: {
-        findMetaConnection: async (orgId: string) => {
-          const conn = await prismaClient.connection.findFirst({
-            where: { organizationId: orgId, serviceId: "meta", status: "connected" },
-            select: { externalAccountId: true, credentials: true },
-          });
-          if (!conn?.externalAccountId || !conn.credentials) return null;
-          return {
-            externalAccountId: conn.externalAccountId,
-            credentials:
-              typeof conn.credentials === "string"
-                ? conn.credentials
-                : JSON.stringify(conn.credentials),
-          };
-        },
-      },
       orgConfig: {
         getStripePriceId: async (orgId: string) => {
           const config = await prismaClient.organizationConfig.findUnique({

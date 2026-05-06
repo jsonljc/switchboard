@@ -133,13 +133,6 @@ export interface ReportStores {
   deployment: {
     getAlexSlug(orgId: string): Promise<string | null>;
   };
-
-  connection: {
-    findMetaConnection(orgId: string): Promise<{
-      externalAccountId: string;
-      credentials: string;
-    } | null>;
-  };
 }
 
 // ---------------------------------------------------------------------------

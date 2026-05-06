@@ -42,9 +42,6 @@ function stubStores(): ReportStores {
     deployment: {
       getAlexSlug: async () => null,
     },
-    connection: {
-      findMetaConnection: async () => null,
-    },
   };
 }
 

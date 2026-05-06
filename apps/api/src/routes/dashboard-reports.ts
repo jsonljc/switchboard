@@ -23,6 +23,31 @@ const PLAN_MONTHLY_USD: Record<string, number> = {
   Scale: 799,
 };
 
+async function resolveInsightsProvider(
+  app: { prisma: import("@switchboard/db").PrismaClient | null },
+  orgId: string,
+): Promise<ReportInsightsProvider | null> {
+  if (!app.prisma) return null;
+  const conn = await app.prisma.connection.findFirst({
+    where: { organizationId: orgId, serviceId: "meta", status: "connected" },
+    select: { externalAccountId: true, credentials: true },
+  });
+  if (!conn?.externalAccountId || !conn.credentials) return null;
+  try {
+    const credentialsStr =
+      typeof conn.credentials === "string" ? conn.credentials : JSON.stringify(conn.credentials);
+    const creds = decryptCredentials(credentialsStr);
+    const adsClient = new MetaAdsClient({
+      accountId: conn.externalAccountId,
+      accessToken: String(creds.accessToken ?? ""),
+    });
+    return new MetaReportInsightsProvider(adsClient);
+  } catch {
+    // Invalid/expired credentials — fall back to null provider
+    return null;
+  }
+}
+
 function resolvePlanName(priceId: string | null | undefined): string | null {
   if (!priceId) return null;
   const mapping: Record<string, string> = {};
@@ -114,22 +139,7 @@ export const dashboardReportsRoutes: FastifyPluginAsync = async (app) => {
       return cached.payload;
     }
 
-    let insightsProvider: ReportInsightsProvider | null = null;
-    if (app.reportStores) {
-      const metaConn = await app.reportStores.connection.findMetaConnection(orgId);
-      if (metaConn) {
-        try {
-          const creds = decryptCredentials(metaConn.credentials);
-          const adsClient = new MetaAdsClient({
-            accountId: metaConn.externalAccountId,
-            accessToken: String(creds.accessToken ?? ""),
-          });
-          insightsProvider = new MetaReportInsightsProvider(adsClient);
-        } catch {
-          // Invalid/expired credentials — fall back to null provider
-        }
-      }
-    }
+    const insightsProvider = await resolveInsightsProvider(app, orgId);
 
     const baselineStore = app.baselineStore ?? createInMemoryBaselineStore();
 
@@ -163,22 +173,7 @@ export const dashboardReportsRoutes: FastifyPluginAsync = async (app) => {
 
     await app.reportCacheStore.invalidate(orgId, reportWindow);
 
-    let insightsProvider: ReportInsightsProvider | null = null;
-    if (app.reportStores) {
-      const metaConn = await app.reportStores.connection.findMetaConnection(orgId);
-      if (metaConn) {
-        try {
-          const creds = decryptCredentials(metaConn.credentials);
-          const adsClient = new MetaAdsClient({
-            accountId: metaConn.externalAccountId,
-            accessToken: String(creds.accessToken ?? ""),
-          });
-          insightsProvider = new MetaReportInsightsProvider(adsClient);
-        } catch {
-          // Invalid/expired credentials — fall back to null provider
-        }
-      }
-    }
+    const insightsProvider = await resolveInsightsProvider(app, orgId);
 
     const baselineStore = app.baselineStore ?? createInMemoryBaselineStore();
 

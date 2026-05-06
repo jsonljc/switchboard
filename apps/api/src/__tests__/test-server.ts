@@ -444,7 +444,6 @@ export async function buildTestServer(): Promise<TestContext> {
     recommendations: { latestByAgent: async () => null },
     conversations: { threadCountsByAgent: async () => [] },
     deployment: { getAlexSlug: async () => null },
-    connection: { findMetaConnection: async () => null },
     orgConfig: { getStripePriceId: async () => null },
   });
 
