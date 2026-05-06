@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPrismaBaselineStore } from "../prisma-baseline-store.js";
+import { PrismaBaselineStore } from "../prisma-baseline-store.js";
+import type { PrismaDbClient } from "../../prisma-db.js";
 
 describe("PrismaBaselineStore", () => {
   it("listByDimension returns rows scoped to (orgId, dimension)", async () => {
@@ -17,26 +18,26 @@ describe("PrismaBaselineStore", () => {
     const prisma = {
       preSwitchboardBaseline: {
         findMany: vi.fn().mockResolvedValue(rows),
-        upsert: vi.fn(),
+        createMany: vi.fn(),
       },
-    } as unknown as Parameters<typeof createPrismaBaselineStore>[0];
-    const store = createPrismaBaselineStore(prisma);
+    } as unknown as PrismaDbClient;
+    const store = new PrismaBaselineStore(prisma);
     const found = await store.listByDimension("org-a", "ads");
     expect(found).toHaveLength(1);
     expect(prisma.preSwitchboardBaseline.findMany).toHaveBeenCalledWith({
       where: { organizationId: "org-a", dimension: "ads" },
-      orderBy: [{ metric: "asc" }, { periodStart: "asc" }],
+      orderBy: { periodStart: "asc" },
     });
   });
 
-  it("insertMany upserts each row by composite unique key", async () => {
+  it("insertMany uses createMany with skipDuplicates", async () => {
     const prisma = {
       preSwitchboardBaseline: {
         findMany: vi.fn(),
-        upsert: vi.fn().mockResolvedValue(null),
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
-    } as unknown as Parameters<typeof createPrismaBaselineStore>[0];
-    const store = createPrismaBaselineStore(prisma);
+    } as unknown as PrismaDbClient;
+    const store = new PrismaBaselineStore(prisma);
     const periodStart = new Date("2026-01-01T00:00:00Z");
     const periodEnd = new Date("2026-04-01T00:00:00Z");
     await store.insertMany([
@@ -50,26 +51,19 @@ describe("PrismaBaselineStore", () => {
         capturedAt: new Date("2026-04-15T00:00:00Z"),
       },
     ]);
-    expect(prisma.preSwitchboardBaseline.upsert).toHaveBeenCalledWith({
-      where: {
-        organizationId_dimension_metric_periodStart_periodEnd: {
+    expect(prisma.preSwitchboardBaseline.createMany).toHaveBeenCalledWith({
+      data: [
+        {
           organizationId: "org-a",
           dimension: "ads",
           metric: "spend",
+          value: 100,
           periodStart,
           periodEnd,
+          capturedAt: expect.any(Date),
         },
-      },
-      update: { value: 100, capturedAt: expect.any(Date) },
-      create: {
-        organizationId: "org-a",
-        dimension: "ads",
-        metric: "spend",
-        value: 100,
-        periodStart,
-        periodEnd,
-        capturedAt: expect.any(Date),
-      },
+      ],
+      skipDuplicates: true,
     });
   });
 });

@@ -42,6 +42,11 @@ interface RevenueStore {
   findByOpportunity(orgId: string, opportunityId: string): Promise<LifecycleRevenueEvent[]>;
   sumByOrg(orgId: string, dateRange?: DateRange): Promise<RevenueSummary>;
   sumByCampaign(orgId: string, dateRange?: DateRange): Promise<CampaignRevenueSummary[]>;
+  revenueByCampaign(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<Array<{ sourceCampaignId: string; totalAmount: number }>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +169,21 @@ export class PrismaRevenueStore implements RevenueStore {
         totalAmount: r._sum.amount ?? 0,
         count: r._count.id,
       }));
+  }
+
+  async revenueByCampaign(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<Array<{ sourceCampaignId: string; totalAmount: number }>> {
+    const results = await this.sumByCampaign(input.orgId, {
+      from: input.from,
+      to: input.to,
+    });
+    return results.map((r) => ({
+      sourceCampaignId: r.sourceCampaignId,
+      totalAmount: r.totalAmount,
+    }));
   }
 
   async revenueWithFirstTouch(input: { orgId: string; from: Date; to: Date }): Promise<

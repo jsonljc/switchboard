@@ -1,49 +1,38 @@
-import type { PrismaClient } from "@prisma/client";
-import type { BaselineRow, BaselineStore } from "@switchboard/core/reports";
+import type { PrismaDbClient } from "../prisma-db.js";
+import type { BaselineStore, BaselineRow, BaselineDimension } from "@switchboard/core/reports";
 
-type Prisma = Pick<PrismaClient, "preSwitchboardBaseline">;
+export class PrismaBaselineStore implements BaselineStore {
+  constructor(private prisma: PrismaDbClient) {}
 
-export function createPrismaBaselineStore(prisma: Prisma): BaselineStore {
-  return {
-    async listByDimension(organizationId: string, dimension: BaselineRow["dimension"]) {
-      const rows = await prisma.preSwitchboardBaseline.findMany({
-        where: { organizationId, dimension },
-        orderBy: [{ metric: "asc" }, { periodStart: "asc" }],
-      });
-      return rows.map((r) => ({
+  async listByDimension(orgId: string, dimension: BaselineDimension): Promise<BaselineRow[]> {
+    const rows = await this.prisma.preSwitchboardBaseline.findMany({
+      where: { organizationId: orgId, dimension },
+      orderBy: { periodStart: "asc" },
+    });
+    return rows.map((r) => ({
+      organizationId: r.organizationId,
+      dimension: r.dimension as BaselineDimension,
+      metric: r.metric,
+      value: r.value,
+      periodStart: r.periodStart,
+      periodEnd: r.periodEnd,
+      capturedAt: r.capturedAt,
+    }));
+  }
+
+  async insertMany(rows: ReadonlyArray<BaselineRow>): Promise<void> {
+    if (rows.length === 0) return;
+    await this.prisma.preSwitchboardBaseline.createMany({
+      data: rows.map((r) => ({
         organizationId: r.organizationId,
-        dimension: r.dimension as BaselineRow["dimension"],
+        dimension: r.dimension,
         metric: r.metric,
         value: r.value,
         periodStart: r.periodStart,
         periodEnd: r.periodEnd,
         capturedAt: r.capturedAt,
-      }));
-    },
-    async insertMany(incoming: BaselineRow[]) {
-      for (const row of incoming) {
-        await prisma.preSwitchboardBaseline.upsert({
-          where: {
-            organizationId_dimension_metric_periodStart_periodEnd: {
-              organizationId: row.organizationId,
-              dimension: row.dimension,
-              metric: row.metric,
-              periodStart: row.periodStart,
-              periodEnd: row.periodEnd,
-            },
-          },
-          update: { value: row.value, capturedAt: row.capturedAt },
-          create: {
-            organizationId: row.organizationId,
-            dimension: row.dimension,
-            metric: row.metric,
-            value: row.value,
-            periodStart: row.periodStart,
-            periodEnd: row.periodEnd,
-            capturedAt: row.capturedAt,
-          },
-        });
-      }
-    },
-  };
+      })),
+      skipDuplicates: true,
+    });
+  }
 }

@@ -155,4 +155,23 @@ export class PrismaConversationThreadStore {
       data,
     });
   }
+
+  async threadCountsByAgent(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<Array<{ assignedAgent: string; count: number }>> {
+    const results = await this.prisma.conversationThread.groupBy({
+      by: ["assignedAgent"],
+      where: {
+        organizationId: input.orgId,
+        createdAt: { gte: input.from, lt: input.to },
+      },
+      _count: { id: true },
+    });
+    return results.map((r) => ({
+      assignedAgent: r.assignedAgent,
+      count: r._count.id,
+    }));
+  }
 }
