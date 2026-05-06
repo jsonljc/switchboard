@@ -4,11 +4,15 @@ import {
   createPeriodRollup,
   windowToRange,
   priorPeriodRange,
+  createInMemoryBaselineStore,
   type ReportDependencies,
   type ReportStores,
   type ReportCacheStore,
+  type BaselineStore,
 } from "@switchboard/core/reports";
 import type { ReportInsightsProvider, ReportWindow } from "@switchboard/schemas";
+import { MetaReportInsightsProvider, MetaAdsClient } from "@switchboard/ad-optimizer";
+import { decryptCredentials } from "@switchboard/db";
 
 const VALID_WINDOWS = new Set<string>(["THIS WEEK", "THIS MONTH", "THIS QUARTER"]);
 const CACHE_TTL_MS = 60 * 60 * 1000;
@@ -39,6 +43,7 @@ async function computeReport(
   reportCacheStore: ReportCacheStore,
   stores: ReportStores,
   insightsProvider: ReportInsightsProvider | null,
+  baselineStore: BaselineStore,
 ) {
   const now = new Date();
   const current = windowToRange(window, now);
@@ -51,6 +56,7 @@ async function computeReport(
     stores,
     insightsProvider,
     reportCache: reportCacheStore,
+    baselineStore,
     planMonthlyUSD,
   };
 
@@ -108,12 +114,32 @@ export const dashboardReportsRoutes: FastifyPluginAsync = async (app) => {
       return cached.payload;
     }
 
+    let insightsProvider: ReportInsightsProvider | null = null;
+    if (app.reportStores) {
+      const metaConn = await app.reportStores.connection.findMetaConnection(orgId);
+      if (metaConn) {
+        try {
+          const creds = decryptCredentials(metaConn.credentials);
+          const adsClient = new MetaAdsClient({
+            accountId: metaConn.externalAccountId,
+            accessToken: String(creds.accessToken ?? ""),
+          });
+          insightsProvider = new MetaReportInsightsProvider(adsClient);
+        } catch {
+          // Invalid/expired credentials — fall back to null provider
+        }
+      }
+    }
+
+    const baselineStore = app.baselineStore ?? createInMemoryBaselineStore();
+
     const payload = await computeReport(
       orgId,
       reportWindow,
       app.reportCacheStore,
       app.reportStores,
-      app.reportInsightsProvider ?? null,
+      insightsProvider,
+      baselineStore,
     );
 
     return payload;
@@ -137,12 +163,32 @@ export const dashboardReportsRoutes: FastifyPluginAsync = async (app) => {
 
     await app.reportCacheStore.invalidate(orgId, reportWindow);
 
+    let insightsProvider: ReportInsightsProvider | null = null;
+    if (app.reportStores) {
+      const metaConn = await app.reportStores.connection.findMetaConnection(orgId);
+      if (metaConn) {
+        try {
+          const creds = decryptCredentials(metaConn.credentials);
+          const adsClient = new MetaAdsClient({
+            accountId: metaConn.externalAccountId,
+            accessToken: String(creds.accessToken ?? ""),
+          });
+          insightsProvider = new MetaReportInsightsProvider(adsClient);
+        } catch {
+          // Invalid/expired credentials — fall back to null provider
+        }
+      }
+    }
+
+    const baselineStore = app.baselineStore ?? createInMemoryBaselineStore();
+
     const payload = await computeReport(
       orgId,
       reportWindow,
       app.reportCacheStore,
       app.reportStores,
-      app.reportInsightsProvider ?? null,
+      insightsProvider,
+      baselineStore,
     );
 
     return payload;

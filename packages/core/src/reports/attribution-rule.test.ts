@@ -35,6 +35,7 @@ function makeStores(
         const isCurrentPeriod = from.getTime() === new Date("2026-04-01T00:00:00Z").getTime();
         return isCurrentPeriod ? currentRevenue : priorRevenue;
       },
+      revenueByCampaign: async () => [],
     },
     conversions: {
       countByType: async () => 0,

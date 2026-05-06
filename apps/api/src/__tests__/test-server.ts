@@ -431,6 +431,7 @@ export async function buildTestServer(): Promise<TestContext> {
           firstTouchSourceChannel: null,
         },
       ],
+      revenueByCampaign: async () => [],
     },
     bookings: { countExcludingStatuses: async () => 10 },
     opportunities: { countClosedWon: async () => 3 },
@@ -441,15 +442,10 @@ export async function buildTestServer(): Promise<TestContext> {
       ],
     },
     recommendations: { latestByAgent: async () => null },
+    conversations: { threadCountsByAgent: async () => [] },
+    deployment: { getAlexSlug: async () => null },
+    connection: { findMetaConnection: async () => null },
     orgConfig: { getStripePriceId: async () => null },
-  });
-  app.decorate("reportInsightsProvider", {
-    getAggregateMetrics: async () => ({
-      impressions: 1000,
-      clicks: 200,
-      landingPageViews: 150,
-      spend: 500,
-    }),
   });
 
   // --- PlatformIngress wiring ---
