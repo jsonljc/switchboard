@@ -11,7 +11,13 @@ const DevPanel =
     ? () => null
     : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
 
-export const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup", "/reports"];
+export const CHROME_HIDDEN_PATHS = [
+  "/login",
+  "/onboarding",
+  "/setup",
+  "/reports",
+  "/operator/reports",
+];
 
 /**
  * Routes that mount their own EditorialAuthShell. These bypass both OwnerShell
