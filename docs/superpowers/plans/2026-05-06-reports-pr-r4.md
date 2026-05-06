@@ -1467,7 +1467,7 @@ if (app.reportStores) {
       const creds = decryptCredentials(metaConn.credentials);
       const adsClient = new MetaAdsClient({
         accountId: metaConn.externalAccountId,
-        accessToken: creds.accessToken as string,
+        accessToken: String(creds.accessToken ?? ""),
       });
       insightsProvider = new MetaReportInsightsProvider(adsClient);
     } catch {
