@@ -57,13 +57,74 @@ export interface BaselineStore {
 }
 
 // ---------------------------------------------------------------------------
+// Thin read-only store contracts for report rollups.
+// Implemented by Prisma stores in packages/db; wired at the API route layer.
+// ---------------------------------------------------------------------------
+
+export interface ReportStores {
+  revenue: {
+    sumByOrg(
+      orgId: string,
+      dateRange: { from: Date; to: Date },
+    ): Promise<{ totalAmount: number; count: number }>;
+
+    revenueWithFirstTouch(input: { orgId: string; from: Date; to: Date }): Promise<
+      Array<{
+        amount: number;
+        firstTouchSourceAdId: string | null;
+        firstTouchSourceCampaignId: string | null;
+        firstTouchSourceChannel: string | null;
+      }>
+    >;
+  };
+
+  bookings: {
+    countExcludingStatuses(input: {
+      orgId: string;
+      excludeStatuses: readonly string[];
+      from: Date;
+      to: Date;
+    }): Promise<number>;
+  };
+
+  opportunities: {
+    countClosedWon(input: { orgId: string; from: Date; to: Date }): Promise<number>;
+  };
+
+  conversions: {
+    countByType(orgId: string, type: string, from: Date, to: Date): Promise<number>;
+
+    leadsBySource(input: { orgId: string; from: Date; to: Date }): Promise<
+      Array<{
+        sourceAdId: string | null;
+        sourceCampaignId: string | null;
+        sourceChannel: string | null;
+      }>
+    >;
+  };
+
+  recommendations: {
+    latestByAgent(input: {
+      orgId: string;
+      agentKey: string;
+      from: Date;
+      to: Date;
+    }): Promise<{ date: Date; humanSummary: string } | null>;
+  };
+
+  orgConfig: {
+    getStripePriceId(orgId: string): Promise<string | null>;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Rollup function signatures (locked; implementations land in PR-R3..R5)
 // ---------------------------------------------------------------------------
 
 /** Per-agent attribution split for the period (first-touch rule). Implemented in PR-R3. */
 export type AttributionRule = (ctx: RollupContext) => Promise<ReportDataV1["attribution"]>;
 
-/** 5-stage funnel rows + narrative. Implemented in PR-R3. */
+/** 6-stage funnel rows + narrative. Implemented in PR-R3. */
 export type FunnelRollup = (ctx: RollupContext) => Promise<{
   funnel: ReportDataV1["funnel"];
   funnelNarrative: ReportDataV1["funnelNarrative"];

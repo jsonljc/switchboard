@@ -18,3 +18,12 @@ export {
   createInMemoryPdfCacheStore,
   createInMemoryBaselineStore,
 } from "./in-memory-store.js";
+export { computeAttribution } from "./attribution-rule.js";
+export { computeFunnel, LPV_DISCLOSURE } from "./funnel-rollup.js";
+export {
+  computeCostVsValue,
+  SDR_MONTHLY_USD,
+  AGENCY_MONTHLY_USD,
+  COST_VS_VALUE_FOOTNOTE,
+} from "./cost-vs-value-rule.js";
+export { createPeriodRollup, type ReportDependencies } from "./period-rollup.js";

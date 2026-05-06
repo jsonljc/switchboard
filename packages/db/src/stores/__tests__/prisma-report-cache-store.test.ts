@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPrismaReportCacheStore } from "../prisma-report-cache-store.js";
+import { PrismaReportCacheStore } from "../prisma-report-cache-store.js";
 import type { ReportDataV1 } from "@switchboard/schemas";
+import type { PrismaDbClient } from "../../prisma-db.js";
 
 const sample: ReportDataV1 = {
   label: "THIS MONTH",
@@ -37,9 +38,9 @@ describe("PrismaReportCacheStore", () => {
         upsert: vi.fn(),
         deleteMany: vi.fn(),
       },
-    } as unknown as Parameters<typeof createPrismaReportCacheStore>[0];
+    } as unknown as PrismaDbClient;
 
-    const store = createPrismaReportCacheStore(prisma);
+    const store = new PrismaReportCacheStore(prisma);
     const found = await store.findByKey("org-a", "THIS MONTH");
     expect(found).toEqual({
       organizationId: "org-a",
@@ -60,8 +61,8 @@ describe("PrismaReportCacheStore", () => {
         upsert: vi.fn(),
         deleteMany: vi.fn(),
       },
-    } as unknown as Parameters<typeof createPrismaReportCacheStore>[0];
-    const store = createPrismaReportCacheStore(prisma);
+    } as unknown as PrismaDbClient;
+    const store = new PrismaReportCacheStore(prisma);
     expect(await store.findByKey("org-a", "THIS MONTH")).toBeNull();
   });
 
@@ -72,8 +73,8 @@ describe("PrismaReportCacheStore", () => {
         upsert: vi.fn().mockResolvedValue(null),
         deleteMany: vi.fn(),
       },
-    } as unknown as Parameters<typeof createPrismaReportCacheStore>[0];
-    const store = createPrismaReportCacheStore(prisma);
+    } as unknown as PrismaDbClient;
+    const store = new PrismaReportCacheStore(prisma);
     const computedAt = new Date();
     const expiresAt = new Date(computedAt.getTime() + 3600_000);
     await store.upsert({
@@ -85,7 +86,6 @@ describe("PrismaReportCacheStore", () => {
     });
     expect(prisma.reportCache.upsert).toHaveBeenCalledWith({
       where: { organizationId_window: { organizationId: "org-a", window: "THIS MONTH" } },
-      update: { payload: sample, computedAt, expiresAt },
       create: {
         organizationId: "org-a",
         window: "THIS MONTH",
@@ -93,6 +93,7 @@ describe("PrismaReportCacheStore", () => {
         computedAt,
         expiresAt,
       },
+      update: { payload: sample, computedAt, expiresAt },
     });
   });
 
@@ -103,8 +104,8 @@ describe("PrismaReportCacheStore", () => {
         upsert: vi.fn(),
         deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
-    } as unknown as Parameters<typeof createPrismaReportCacheStore>[0];
-    const store = createPrismaReportCacheStore(prisma);
+    } as unknown as PrismaDbClient;
+    const store = new PrismaReportCacheStore(prisma);
     await store.invalidate("org-a", "THIS MONTH");
     expect(prisma.reportCache.deleteMany).toHaveBeenCalledWith({
       where: { organizationId: "org-a", window: "THIS MONTH" },

@@ -73,6 +73,9 @@ declare module "fastify" {
     executionWorker: import("bullmq").Worker | null;
     simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null;
     simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null;
+    reportCacheStore?: import("@switchboard/core/reports").ReportCacheStore;
+    reportStores?: import("@switchboard/core/reports").ReportStores;
+    reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -493,6 +496,40 @@ export async function buildServer() {
     const orgAgentEnablementStore = new PrismaOrgAgentEnablementStore(prismaClient);
     app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
   }
+
+  // Report cache store + report projection stores for /api/dashboard/reports
+  if (prismaClient) {
+    const {
+      PrismaReportCacheStore,
+      PrismaRevenueStore,
+      PrismaBookingStore,
+      PrismaOpportunityStore,
+      PrismaConversionRecordStore,
+      PrismaRecommendationStore: PrismaRecStore,
+    } = await import("@switchboard/db");
+
+    app.decorate("reportCacheStore", new PrismaReportCacheStore(prismaClient));
+
+    const reportStores = {
+      revenue: new PrismaRevenueStore(prismaClient),
+      bookings: new PrismaBookingStore(prismaClient),
+      opportunities: new PrismaOpportunityStore(prismaClient),
+      conversions: new PrismaConversionRecordStore(prismaClient),
+      recommendations: new PrismaRecStore(prismaClient),
+      orgConfig: {
+        getStripePriceId: async (orgId: string) => {
+          const config = await prismaClient.organizationConfig.findUnique({
+            where: { id: orgId },
+            select: { stripePriceId: true },
+          });
+          return config?.stripePriceId ?? null;
+        },
+      },
+    };
+    app.decorate("reportStores", reportStores);
+  }
+
+  app.decorate("reportInsightsProvider", null);
 
   // Decision feed deps — Prisma stores merged by /api/dashboard/[agents/:key/]decisions.
   // Skipped when no DB; the route returns 500 ("dependencies not wired").

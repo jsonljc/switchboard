@@ -213,4 +213,24 @@ export class PrismaRecommendationStore implements RecommendationStore {
       return rowToRecommendation(updated);
     });
   }
+
+  async latestByAgent(input: {
+    orgId: string;
+    agentKey: string;
+    from: Date;
+    to: Date;
+  }): Promise<{ date: Date; humanSummary: string } | null> {
+    const row = await this.prisma.pendingActionRecord.findFirst({
+      where: {
+        organizationId: input.orgId,
+        sourceAgent: input.agentKey,
+        intent: { startsWith: "recommendation." },
+        createdAt: { gte: input.from, lt: input.to },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, humanSummary: true },
+    });
+    if (!row) return null;
+    return { date: row.createdAt, humanSummary: row.humanSummary };
+  }
 }

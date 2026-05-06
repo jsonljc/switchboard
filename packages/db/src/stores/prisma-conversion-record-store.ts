@@ -185,6 +185,27 @@ export class PrismaConversionRecordStore {
       completed: counts["completed"] ?? 0,
     };
   }
+
+  async leadsBySource(input: { orgId: string; from: Date; to: Date }): Promise<
+    Array<{
+      sourceAdId: string | null;
+      sourceCampaignId: string | null;
+      sourceChannel: string | null;
+    }>
+  > {
+    return this.prisma.conversionRecord.findMany({
+      where: {
+        organizationId: input.orgId,
+        type: "lead",
+        occurredAt: { gte: input.from, lt: input.to },
+      },
+      select: {
+        sourceAdId: true,
+        sourceCampaignId: true,
+        sourceChannel: true,
+      },
+    });
+  }
 }
 
 function emptyFunnel(dateRange: DateRange): FunnelCounts {
