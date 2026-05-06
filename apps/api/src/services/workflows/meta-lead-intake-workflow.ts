@@ -175,6 +175,7 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
             leadId: lead.leadId,
             organizationId: workUnit.organizationId,
             adId: lead.adId ?? null,
+            campaignId: campaignId ?? null,
           },
         });
         if (!inquiryResult.ok) {
