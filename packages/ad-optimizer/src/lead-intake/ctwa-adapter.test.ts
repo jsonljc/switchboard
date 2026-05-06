@@ -87,8 +87,11 @@ describe("CtwaAdapter", () => {
       makeMessage({ metadata: { ctwaClid: "ARxx_abc", sourceAdId: "ad_456", adSourceType: "ad" } }),
     );
     expect(resolveCampaignId).toHaveBeenCalledWith("ad_456");
-    const payload = submit.mock.calls[0][0].payload;
-    expect(payload.attribution.sourceCampaignId).toBe("campaign_123");
+    const payload = (submit.mock.calls[0]![0] as Record<string, unknown>).payload as Record<
+      string,
+      unknown
+    >;
+    expect((payload.attribution as Record<string, unknown>).sourceCampaignId).toBe("campaign_123");
   });
 
   it("skips campaign resolution when adSourceType is not 'ad'", async () => {
@@ -119,8 +122,11 @@ describe("CtwaAdapter", () => {
       makeMessage({ metadata: { ctwaClid: "ARxx_abc", sourceAdId: "ad_456", adSourceType: "ad" } }),
     );
     expect(submit).toHaveBeenCalled();
-    const payload = submit.mock.calls[0][0].payload;
-    expect(payload.attribution.sourceCampaignId).toBeUndefined();
+    const payload = (submit.mock.calls[0]![0] as Record<string, unknown>).payload as Record<
+      string,
+      unknown
+    >;
+    expect((payload.attribution as Record<string, unknown>).sourceCampaignId).toBeUndefined();
   });
 
   it("skips resolution when no resolveCampaignId dep is provided", async () => {
