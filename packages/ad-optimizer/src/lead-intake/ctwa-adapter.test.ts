@@ -74,4 +74,64 @@ describe("CtwaAdapter", () => {
     await adapter.ingest(makeMessage({ metadata: {} }));
     expect(submit).not.toHaveBeenCalled();
   });
+
+  it("resolves sourceCampaignId when adSourceType is 'ad' and resolver is provided", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true, result: {} } as unknown);
+    const resolveCampaignId = vi.fn().mockResolvedValue("campaign_123");
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+      resolveCampaignId,
+    });
+    await adapter.ingest(
+      makeMessage({ metadata: { ctwaClid: "ARxx_abc", sourceAdId: "ad_456", adSourceType: "ad" } }),
+    );
+    expect(resolveCampaignId).toHaveBeenCalledWith("ad_456");
+    const payload = submit.mock.calls[0][0].payload;
+    expect(payload.attribution.sourceCampaignId).toBe("campaign_123");
+  });
+
+  it("skips campaign resolution when adSourceType is not 'ad'", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true, result: {} } as unknown);
+    const resolveCampaignId = vi.fn();
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+      resolveCampaignId,
+    });
+    await adapter.ingest(
+      makeMessage({
+        metadata: { ctwaClid: "ARxx_abc", sourceAdId: "post_789", adSourceType: "post" },
+      }),
+    );
+    expect(resolveCampaignId).not.toHaveBeenCalled();
+  });
+
+  it("continues without sourceCampaignId when resolver throws", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true, result: {} } as unknown);
+    const resolveCampaignId = vi.fn().mockRejectedValue(new Error("API error"));
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+      resolveCampaignId,
+    });
+    await adapter.ingest(
+      makeMessage({ metadata: { ctwaClid: "ARxx_abc", sourceAdId: "ad_456", adSourceType: "ad" } }),
+    );
+    expect(submit).toHaveBeenCalled();
+    const payload = submit.mock.calls[0][0].payload;
+    expect(payload.attribution.sourceCampaignId).toBeUndefined();
+  });
+
+  it("skips resolution when no resolveCampaignId dep is provided", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true, result: {} } as unknown);
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+    });
+    await adapter.ingest(
+      makeMessage({ metadata: { ctwaClid: "ARxx_abc", sourceAdId: "ad_456", adSourceType: "ad" } }),
+    );
+    expect(submit).toHaveBeenCalled();
+  });
 });

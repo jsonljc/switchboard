@@ -63,6 +63,7 @@ export class MetaAdsClient {
   private readonly accessToken: string;
   private readonly accountId: string;
   private lastCallAt: number = 0;
+  private readonly adCampaignCache = new Map<string, string>();
 
   constructor(config: MetaAdsClientConfig) {
     this.accessToken = config.accessToken;
@@ -178,6 +179,23 @@ export class MetaAdsClient {
     }
 
     await this.post(`/${campaignId}`, { status });
+  }
+
+  async getAdCampaignId(adId: string): Promise<string | null> {
+    const cached = this.adCampaignCache.get(adId);
+    if (cached !== undefined) return cached;
+
+    try {
+      const response = await this.get(`/${adId}?fields=campaign_id`);
+      const campaignId = response.campaign_id as string | undefined;
+      if (campaignId) {
+        this.adCampaignCache.set(adId, campaignId);
+        return campaignId;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   private async get(path: string): Promise<Record<string, unknown>> {
