@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { AgentKey } from "@switchboard/schemas";
-import type { DecisionKind } from "./types.js";
-import { scopedKeys } from "../query-keys.js";
+import type { DecisionKind } from "./types";
+import { scopedKeys } from "../query-keys";
 
 /**
  * Slice B2 will define richer types for action payloads. Slice A locks only
