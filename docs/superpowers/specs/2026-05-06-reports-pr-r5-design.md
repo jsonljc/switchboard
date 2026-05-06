@@ -20,7 +20,7 @@ Replace the `STUB_PULLQUOTE` constant in `period-rollup.ts` with a real LLM-gene
 - New tiny `LLMClient` interface in `packages/core/src/reports/interfaces.ts` (one method: `complete(system, user) => Promise<string>`).
 - New `pullQuoteGenerator` field on `ReportDependencies`; `period-rollup.ts` calls it and swaps the result into the `pullquote: PullQuoteCopy` field of the rollup payload.
 - New Anthropic-backed `LLMClient` constructor (`createAnthropicReportLLMClient(apiKey)`) co-located with the generator, returning a one-method object that wraps `@anthropic-ai/sdk` (already a dep of `@switchboard/core`). No reuse of the conversational `agent-runtime/anthropic-adapter.ts` — that adapter is shaped for chat history and isn't a fit.
-- API wiring update in `apps/api/src/routes/dashboard-reports.ts` to construct the LLM client from `ANTHROPIC_API_KEY` and pass it through `ReportDependencies`. When the env var is absent, `llm` is `null` and the generator returns the deterministic template — same behavior as on LLM error.
+- API wiring update in `apps/api/src/routes/dashboard-reports.ts` to construct the LLM client from `ANTHROPIC_API_KEY` and pass it through `ReportDependencies`. When the env var is absent, `llm` is `null` and the generator silently returns the deterministic template (no warn — this is the expected unconfigured state). LLM errors and validation failures, by contrast, do warn — see §3 row 5.
 - Tests: 6 cases for `pull-quote-generator.test.ts`; updated `period-rollup.test.ts` asserting the generator is invoked with the right facts and its output lands in `pullquote`.
 
 **Out of scope (deferred or covered elsewhere)**
@@ -34,18 +34,19 @@ Replace the `STUB_PULLQUOTE` constant in `period-rollup.ts` with a real LLM-gene
 
 ## 3. Decisions
 
-| #   | Decision                        | Detail                                                                                                                                                                                                                                                                                                                                                                 |
-| --- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | LLM provider/model              | **Anthropic Haiku 4.5** (`claude-haiku-4-5-20251001`) via `@anthropic-ai/sdk` — already a `packages/core` dep. Haiku is sufficient for a five-slot templated sentence; reserves Sonnet for tasks where prose quality is load-bearing.                                                                                                                                  |
-| 2   | LLM output scope                | LLM writes **only `{ pre, mid, post }`** — the three short prose connectors. `value` and `cost` are formatted by the deterministic rollup (already done in `cost-vs-value-rule.ts`) and merged into `PullQuoteCopy` after validation. User-visible numbers can never drift from the deterministic computation.                                                         |
-| 3   | LLM input facts                 | Minimal: `{ periodLabel: string, revenueUsd: number, costUsd: number, savingsUsd: number }`. Prompt formats them into the user message. No funnel deltas, no campaign names, no attribution split — the three slots are too short to fit those, and a wider input surface adds hallucination risk without prose payoff.                                                |
-| 4   | Structured-output mechanism     | Plain JSON response + `JSON.parse` + Zod validation. Prefill `{` on the assistant turn to nudge Claude into JSON immediately. Anthropic SDK has no strict JSON mode, and tool-use is overkill for a 3-key schema.                                                                                                                                                      |
-| 5   | Failure handling                | One shot, no retry. On any of (LLM error, JSON parse failure, Zod validation failure, `llm === null`) → return the deterministic template. `console.warn` with the failure mode and `orgId` so failures are visible in logs.                                                                                                                                           |
-| 6   | DI shape                        | `createPullQuoteGenerator({ llm: LLMClient \| null }) => (facts) => Promise<PullQuoteCopy>`. Mirrors the `createPeriodRollup(deps)` factory pattern used everywhere else in `core/reports/`. `LLMClient` is a one-method interface (`complete(system, user) => Promise<string>`) so tests pass mocks; the Anthropic SDK never enters the rollup module's import graph. |
-| 7   | Caching                         | None new. `ReportCache` already covers it for 1h at the `ReportData` level. Pull-quote is one field of that cached payload; the LLM is invoked only on `ReportCache` miss, so reload-stability inside an hour is automatic.                                                                                                                                            |
-| 8   | Prompt + system-prompt location | `packages/core/src/reports/prompts/pull-quote-prompt.ts`. Exports `PULL_QUOTE_SYSTEM_PROMPT` (constant) and `buildUserPrompt(facts: PullQuoteFacts): string`. Co-located so prompt iteration is one file, not a search across the package.                                                                                                                             |
-| 9   | Voice register                  | Operator deep-dive register: concise, fact-led, third-person describing the team's period. Not the warm narrative voice used on agent-home. Anchored by examples in the system prompt. The slots stay structurally identical so prose can't reorganize the sentence.                                                                                                   |
-| 10  | Deterministic template          | Period-aware: `pre = "In ${periodLabel}, your team generated"` / `mid = "in revenue, with Switchboard costing"` / `post = "versus a traditional stack."`. Same five-slot shape; safe under any failure path.                                                                                                                                                           |
+| #   | Decision                        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | LLM provider/model              | **Anthropic Haiku 4.5** (`claude-haiku-4-5-20251001`) via `@anthropic-ai/sdk` — already a `packages/core` dep. Haiku is sufficient for a five-slot templated sentence; reserves Sonnet for tasks where prose quality is load-bearing.                                                                                                                                                                                                  |
+| 2   | LLM output scope                | LLM writes **only `{ pre, mid, post }`** — the three short prose connectors. `value` and `cost` are formatted by the deterministic rollup (already done in `cost-vs-value-rule.ts`) and merged into `PullQuoteCopy` after validation. User-visible numbers can never drift from the deterministic computation.                                                                                                                         |
+| 3   | LLM input facts                 | Minimal: `{ periodLabel: string, revenueUsd: number, costUsd: number, savingsUsd: number }`. Prompt formats them into the user message. No funnel deltas, no campaign names, no attribution split — the three slots are too short to fit those, and a wider input surface adds hallucination risk without prose payoff.                                                                                                                |
+| 4   | Structured-output mechanism     | Plain JSON response + `JSON.parse` + Zod validation. Prefill `{` on the assistant turn to nudge Claude into JSON immediately. Anthropic SDK has no strict JSON mode, and tool-use is overkill for a 3-key schema.                                                                                                                                                                                                                      |
+| 5   | Failure handling                | One shot, no retry. On any of (LLM error, JSON parse failure, Zod validation failure, **content-guard rejection** — see row 11) → return the deterministic template **with `console.warn`**. The `llm === null` path also returns the template **but does not warn** — that is the expected unconfigured state, not an error. Warn payload includes the failure mode and `facts.periodLabel`; no orgId (the generator never sees one). |
+| 6   | DI shape                        | `createPullQuoteGenerator({ llm: LLMClient \| null }) => (facts) => Promise<PullQuoteCopy>`. Mirrors the `createPeriodRollup(deps)` factory pattern used everywhere else in `core/reports/`. `LLMClient` is a one-method interface (`complete(system, user) => Promise<string>`) so tests pass mocks; the Anthropic SDK never enters the rollup module's import graph.                                                                 |
+| 7   | Caching                         | None new. `ReportCache` already covers it for 1h at the `ReportData` level. Pull-quote is one field of that cached payload; the LLM is invoked only on `ReportCache` miss, so reload-stability inside an hour is automatic.                                                                                                                                                                                                            |
+| 8   | Prompt + system-prompt location | `packages/core/src/reports/prompts/pull-quote-prompt.ts`. Exports `PULL_QUOTE_SYSTEM_PROMPT` (constant) and `buildUserPrompt(facts: PullQuoteFacts): string`. Co-located so prompt iteration is one file, not a search across the package.                                                                                                                                                                                             |
+| 9   | Voice register                  | Operator deep-dive register: concise, fact-led, third-person describing the team's period. Not the warm narrative voice used on agent-home. Anchored by examples in the system prompt. The slots stay structurally identical so prose can't reorganize the sentence.                                                                                                                                                                   |
+| 10  | Deterministic template          | Period-aware: `pre = "In ${periodLabel}, your team generated"` / `mid = "in revenue, with Switchboard costing"` / `post = "versus a traditional stack."`. Same five-slot shape; safe under any failure path.                                                                                                                                                                                                                           |
+| 11  | Content guard on LLM prose      | After Zod schema validation, reject any `pre`/`mid`/`post` that contains `$`, an ASCII digit `0-9`, or any of the metric tokens (case-insensitive): `roas`, `cpc`, `ctr`, `cac`, `cpa`, `roi`, `%`. Rationale: the LLM's job is to write English connectors around the deterministic numbers — it must not introduce its own claims, percentages, or metric names. Rejection falls back to the template (with `console.warn`).         |
 
 ## 4. Architecture
 
@@ -121,11 +122,12 @@ export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQ
 Internally:
 
 - Format `value = formatUsd(facts.revenueUsd)` and `cost = formatUsd(facts.costUsd)`.
-- If `deps.llm == null` → return template.
+- If `deps.llm == null` → return template **silently** (no warn — this is the expected unconfigured path).
 - Else call `deps.llm.complete(PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt(facts))`.
 - The string returned by `LLMClient.complete` is already prefixed with `{` — the Anthropic-backed implementation re-prepends the prefill (see §5.5), so the generator just calls `JSON.parse(text.trim())` and validates with the Zod schema (3 fields, all non-empty strings, each ≤ 80 chars).
+- **Content guard:** if any of the validated `pre`/`mid`/`post` strings matches `/[\$0-9%]|roas|cpc|ctr|cac|cpa|roi/i`, reject the response. The LLM must not introduce digits, currency symbols, percentages, or metric names — those belong only in the deterministic `value`/`cost` slots.
 - On success → return `{ pre: parsed.pre, value, mid: parsed.mid, cost, post: parsed.post }`.
-- On any failure → `console.warn` with the failure mode (excluding raw user data) and return template.
+- On any error / parse / schema / content-guard failure → `console.warn({ kind: "<failure-mode>", periodLabel: facts.periodLabel })` and return template. No orgId (the generator only sees `PullQuoteFacts`).
 
 ### 5.4 Deterministic template (private helper)
 
@@ -156,18 +158,21 @@ export function createAnthropicReportLLMClient(apiKey: string): LLMClient;
 
 ## 6. Test plan
 
-### 6.1 `pull-quote-generator.test.ts` — 6 cases
+### 6.1 `pull-quote-generator.test.ts` — 7 cases
 
 All use a hand-rolled mock `LLMClient`. No HTTP, no SDK.
 
 Mock `LLMClient.complete` returns the post-prefill string — i.e. it already includes the leading `{` (since §5.5 specifies the Anthropic-backed implementation re-prepends it). Generator-level tests therefore work with full JSON strings.
 
-1. **Happy path.** Mock returns `'{"pre": "In April 2026, the team closed", "mid": "in revenue, against a Switchboard fee of", "post": "saving roughly $7,500 vs a traditional stack."}'`. Assert returned `PullQuoteCopy` has those three prose fields and the expected formatted `value`/`cost` strings.
-2. **LLM throws.** Mock rejects. Assert template returned, with the exact period-aware prose, and `console.warn` called once with `"pull-quote-generator: llm error"` (or similar) and the period passed in. (No org-scoped data is passed to the generator — the rollup hands it pure `PullQuoteFacts`.)
-3. **Malformed JSON.** Mock returns `"not json at all"`. Assert template returned, warn called with `"pull-quote-generator: parse failure"`.
-4. **Valid JSON, missing fields.** Mock returns `'{"pre": "x"}'` (missing `mid`/`post`). Assert template returned, warn called with `"pull-quote-generator: schema validation failure"`.
-5. **Null client.** `createPullQuoteGenerator({ llm: null })`. Assert template returned without invoking any mock; no warn (this is the expected unconfigured path, not an error).
-6. **Template determinism.** Two calls with the same facts return identical `PullQuoteCopy` objects. (Cheap regression guard for accidental `Date.now()` or `Math.random()` creeping into the template.)
+The happy-path mock output deliberately contains no digits, no `$`, and no metric tokens, so it passes the content guard (row 11). The bad LLM example below — which mentions a number — is what the content guard exists to reject.
+
+1. **Happy path.** Mock returns `'{"pre": "In April, the team converted leads", "mid": "in revenue against a Switchboard fee of", "post": "well below traditional staffing costs."}'`. Assert returned `PullQuoteCopy` has those three prose fields and the expected formatted `value`/`cost` strings. Assert `console.warn` was not called.
+2. **LLM throws.** Mock rejects. Assert template returned, with the exact period-aware prose, and `console.warn` called once with `{ kind: "llm-error", periodLabel: <facts.periodLabel> }` (no orgId).
+3. **Malformed JSON.** Mock returns `"not json at all"`. Assert template returned, warn called once with `{ kind: "parse-failure", periodLabel }`.
+4. **Valid JSON, missing fields.** Mock returns `'{"pre": "x"}'`. Assert template returned, warn called once with `{ kind: "schema-failure", periodLabel }`.
+5. **Content guard rejects digits/currency/metrics.** Mock returns `'{"pre": "In April the team closed", "mid": "in revenue with ROAS up 23%", "post": "vs a traditional stack."}'`. Assert template returned, warn called once with `{ kind: "content-guard", periodLabel }`. Add sub-cases for each guard hit: `$`, ASCII digit, `%`, and one metric token (`roas`).
+6. **Null client.** `createPullQuoteGenerator({ llm: null })`. Assert template returned without invoking any mock; assert `console.warn` was **not** called.
+7. **Template determinism.** Two calls with the same facts return identical `PullQuoteCopy` objects. (Cheap regression guard for accidental `Date.now()` or `Math.random()` creeping into the template.)
 
 ### 6.2 `pull-quote-prompt.test.ts`
 
@@ -182,13 +187,23 @@ Mock `LLMClient.complete` returns the post-prefill string — i.e. it already in
 
 `apps/api/src/__tests__/api-reports.test.ts` already covers the `dashboard-reports.ts` route shape (mocked Prisma stores). The added wiring (env-var read, LLM client construction) is small enough to verify by typecheck + a manual staging smoke test against the acceptance criterion.
 
+### 6.5 Anthropic SDK prefill round-trip — implementation guard
+
+The §5.5 contract that `LLMClient.complete` returns a `{`-prefixed string assumes the SDK does **not** echo the assistant prefill in `response.content[0].text`. This is the documented Anthropic SDK behavior, but worth verifying once at implementation time so the prefill assumption can't silently break.
+
+- Add one Vitest case in `pull-quote-generator.test.ts` (or a sibling `anthropic-report-llm-client.test.ts` if it grows) that:
+  - constructs `createAnthropicReportLLMClient` with a stub `Anthropic`-shaped client (just `{ messages: { create: vi.fn().mockResolvedValue({ content: [{ type: "text", text: '"pre": "...", "mid": "...", "post": "..."}' }] }) } }`),
+  - calls `complete("system", "user")`,
+  - asserts the returned string starts with `{`.
+- This locks the contract: if a future SDK upgrade starts echoing the prefill, the test fails with a clear signal.
+
 ## 7. Acceptance
 
 In staging with `NEXT_PUBLIC_REPORTS_LIVE=true` and `ANTHROPIC_API_KEY` set:
 
 1. Loading `/reports` for an org produces a pull-quote whose `pre`, `mid`, `post` are LLM-generated (visibly different from the deterministic template's exact text).
 2. Reloading `/reports` within 1h returns the identical pull-quote (proves `ReportCache` hit and the LLM is not re-called).
-3. Temporarily setting `ANTHROPIC_API_KEY=""` in staging and clearing the cache row produces a pull-quote that exactly matches the deterministic template; `pnpm` API logs show one `console.warn` per render attempt referencing the missing client / fallback path. (Run-once verification — restore the key after.)
+3. Temporarily setting `ANTHROPIC_API_KEY=""` in staging and clearing the cache row produces a pull-quote that exactly matches the deterministic template, **silently** — API logs show no `console.warn` from `pull-quote-generator` for this case (missing key is the expected unconfigured path). To verify the warn path actually fires, separately mock an LLM error in unit tests (see §6.1 case 2). Restore the key after.
 
 ## 8. Risks & open notes
 
