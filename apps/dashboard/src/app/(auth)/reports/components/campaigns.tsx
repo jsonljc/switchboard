@@ -5,7 +5,7 @@ import type { CampaignRow } from "../fixtures";
 import { fmtMoney } from "./format";
 import styles from "../reports.module.css";
 
-type SortKey = "name" | "spend" | "leads" | "revenue" | "roas";
+type SortKey = "name" | "spend" | "leads" | "cpl" | "revenue" | "roas";
 type SortDir = "asc" | "desc";
 
 interface ColDef {
@@ -18,14 +18,13 @@ const COLS: ColDef[] = [
   { key: "name", label: "Campaign", numeric: false },
   { key: "spend", label: "Spend", numeric: true },
   { key: "leads", label: "Leads", numeric: true },
+  { key: "cpl", label: "CPL", numeric: true },
   { key: "revenue", label: "Revenue", numeric: true },
   { key: "roas", label: "ROAS", numeric: true },
 ];
 
-function stageClass(stage: CampaignRow["stage"]): string {
-  if (stage === "hot") return styles.isHot;
-  if (stage === "warm") return styles.isWarm;
-  return styles.isCool;
+function fmtCpl(val: number | null): string {
+  return val !== null ? fmtMoney(val) : "—";
 }
 
 interface CampaignsProps {
@@ -35,7 +34,7 @@ interface CampaignsProps {
 
 export function Campaigns({ data, period }: CampaignsProps) {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: "revenue",
+    key: "spend",
     dir: "desc",
   });
 
@@ -69,7 +68,11 @@ export function Campaigns({ data, period }: CampaignsProps) {
       sum.leads += r.leads;
       sum.revenue += r.revenue;
     }
-    return { ...sum, roas: sum.spend ? sum.revenue / sum.spend : 0 };
+    return {
+      ...sum,
+      cpl: sum.leads > 0 ? sum.spend / sum.leads : null,
+      roas: sum.spend ? sum.revenue / sum.spend : 0,
+    };
   }, [data]);
 
   return (
@@ -79,7 +82,6 @@ export function Campaigns({ data, period }: CampaignsProps) {
         <span className={styles.folioR}>{period}</span>
       </div>
 
-      {/* Desktop / tablet table */}
       <div className={styles.campaignsWrap}>
         <table className={styles.campaigns}>
           <thead>
@@ -109,15 +111,10 @@ export function Campaigns({ data, period }: CampaignsProps) {
           <tbody>
             {sorted.map((r) => (
               <tr key={r.name}>
-                <td>
-                  <span
-                    className={`${styles.stageSquare} ${stageClass(r.stage)}`}
-                    aria-hidden="true"
-                  />
-                  {r.name}
-                </td>
+                <td>{r.name}</td>
                 <td className={styles.isNumeric}>{fmtMoney(r.spend)}</td>
                 <td className={styles.isNumeric}>{r.leads.toLocaleString()}</td>
+                <td className={styles.isNumeric}>{fmtCpl(r.cpl)}</td>
                 <td className={styles.isNumeric}>{fmtMoney(r.revenue)}</td>
                 <td className={styles.isNumeric}>{r.roas.toFixed(1)}×</td>
               </tr>
@@ -128,6 +125,7 @@ export function Campaigns({ data, period }: CampaignsProps) {
               <td className={styles.label}>Total</td>
               <td className={styles.isNumeric}>{fmtMoney(totals.spend)}</td>
               <td className={styles.isNumeric}>{totals.leads.toLocaleString()}</td>
+              <td className={styles.isNumeric}>{fmtCpl(totals.cpl)}</td>
               <td className={styles.isNumeric}>{fmtMoney(totals.revenue)}</td>
               <td className={styles.isNumeric}>{totals.roas.toFixed(1)}×</td>
             </tr>
@@ -135,14 +133,10 @@ export function Campaigns({ data, period }: CampaignsProps) {
         </table>
       </div>
 
-      {/* Mobile cards */}
       <div className={styles.campaignsCards}>
         {sorted.map((r) => (
           <div key={r.name} className={styles.campaignCard}>
-            <div className={styles.ccName}>
-              <span className={`${styles.stageSquare} ${stageClass(r.stage)}`} aria-hidden="true" />
-              {r.name}
-            </div>
+            <div className={styles.ccName}>{r.name}</div>
             <div className={styles.ccGrid}>
               <div className={styles.ccRow}>
                 <span className={styles.lbl}>Spend</span>
@@ -151,6 +145,10 @@ export function Campaigns({ data, period }: CampaignsProps) {
               <div className={styles.ccRow}>
                 <span className={styles.lbl}>Leads</span>
                 <span className={styles.val}>{r.leads}</span>
+              </div>
+              <div className={styles.ccRow}>
+                <span className={styles.lbl}>CPL</span>
+                <span className={styles.val}>{fmtCpl(r.cpl)}</span>
               </div>
               <div className={styles.ccRow}>
                 <span className={styles.lbl}>Revenue</span>
