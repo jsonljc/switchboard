@@ -63,10 +63,18 @@ function buildTemplate(
   };
 }
 
-type FailureKind = "llm-error" | "parse-failure" | "schema-failure";
+type FailureKind = "llm-error" | "parse-failure" | "schema-failure" | "content-guard";
 
 function warnFallback(kind: FailureKind, periodLabel: string): void {
   console.warn({ kind, periodLabel });
+}
+
+const CONTENT_GUARD = /[$0-9%]|roas|cpc|ctr|cac|cpa|roi/i;
+
+function violatesContentGuard(slots: { pre: string; mid: string; post: string }): boolean {
+  return (
+    CONTENT_GUARD.test(slots.pre) || CONTENT_GUARD.test(slots.mid) || CONTENT_GUARD.test(slots.post)
+  );
 }
 
 export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQuoteGenerator {
@@ -99,6 +107,11 @@ export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQ
     const validated = LLMOutputSchema.safeParse(parsed);
     if (!validated.success) {
       warnFallback("schema-failure", facts.periodLabel);
+      return template;
+    }
+
+    if (violatesContentGuard(validated.data)) {
+      warnFallback("content-guard", facts.periodLabel);
       return template;
     }
 

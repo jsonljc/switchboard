@@ -211,3 +211,50 @@ describe("createPullQuoteGenerator — fallback paths", () => {
     expect(warnSpy.mock.calls[0]?.[0]).toMatchObject({ kind: "schema-failure" });
   });
 });
+
+describe("createPullQuoteGenerator — content guard", () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  const TRIGGERS: Array<{ name: string; mid: string }> = [
+    { name: "ascii digit", mid: "in revenue with ROAS up 23 points" },
+    { name: "dollar sign", mid: "in revenue, well above $0 baselines" },
+    { name: "percent sign", mid: "in revenue, with 5% gain quarter-over-quarter" },
+    { name: "metric token roas", mid: "in revenue with strong ROAS performance" },
+    { name: "metric token cpc", mid: "in revenue with healthy cpc levels" },
+    { name: "metric token roi", mid: "in revenue with above-average roi outcomes" },
+  ];
+
+  for (const { name, mid } of TRIGGERS) {
+    it(`rejects LLM output containing ${name} and falls back to template`, async () => {
+      const llm = makeMockLLM(
+        `{"pre": "This month the team closed", "mid": "${mid}", "post": "vs a traditional stack."}`,
+      );
+      const generator = createPullQuoteGenerator({ llm });
+
+      const result = await generator(makeInput());
+
+      expect(result.pre).toBe("This month, your team generated");
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0]?.[0]).toMatchObject({
+        kind: "content-guard",
+        periodLabel: "this month",
+      });
+    });
+  }
+
+  it("accepts clean prose (no digits, no currency, no metrics)", async () => {
+    const llm = makeMockLLM(
+      '{"pre": "This month the team turned conversations", "mid": "into revenue, against a Switchboard fee of", "post": "well below conventional staffing costs."}',
+    );
+    const generator = createPullQuoteGenerator({ llm });
+
+    const result = await generator(makeInput());
+
+    expect(result.pre).toBe("This month the team turned conversations");
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
