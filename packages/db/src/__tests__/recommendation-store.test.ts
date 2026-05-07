@@ -434,13 +434,14 @@ describe("PrismaRecommendationStore", () => {
       // unit tests added below.
 
       expect(count).toHaveBeenCalledWith({
-        where: {
+        where: expect.objectContaining({
           organizationId: "org-A",
           surface: "queue",
           status: "pending",
           sourceAgent: "riley",
           approvalRequired: { not: "auto" },
-        },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+        }),
       });
 
       expect(result.totalCount).toBe(2);
