@@ -20,12 +20,11 @@ export function computeWindowStart(window: WinTimeWindow, now: Date, timezone: s
   // Work in local calendar space to avoid UTC-midnight/DST confusion.
   const dow = parts.weekday; // 1=Mon..7=Sun
   const daysBack = dow === 7 ? 6 : dow - 1;
-  // Subtract daysBack days from the local (year, month, day) using a Date
-  // constructed at local noon (via UTC proxy) to avoid boundary ambiguity,
-  // then re-derive the local date components.
-  const localNoon = localMidnight(parts.year, parts.month, parts.day, timezone);
-  const mondayNoon = new Date(localNoon.getTime() - daysBack * 86_400_000);
-  const mondayParts = getDateParts(mondayNoon, timezone);
+  // Anchor in absolute time on the current local date; subtract whole days;
+  // re-derive local Y/M/D so the second localMidnight call resolves Monday's offset.
+  const localStartOfDay = localMidnight(parts.year, parts.month, parts.day, timezone);
+  const mondayInstant = new Date(localStartOfDay.getTime() - daysBack * 86_400_000);
+  const mondayParts = getDateParts(mondayInstant, timezone);
   return localMidnight(mondayParts.year, mondayParts.month, mondayParts.day, timezone);
 }
 
@@ -64,12 +63,12 @@ function getDateParts(d: Date, timezone: string): DateParts {
 
 /**
  * Returns the UTC instant corresponding to local midnight on (year, month, day)
- * in the given timezone. Iterative two-pass: convert UTC midnight as a starting
- * guess, then adjust by the offset.
+ * in the given timezone. Single pass suffices because no IANA timezone has
+ * back-to-back DST transitions within a calendar day.
  */
 function localMidnight(year: number, month: number, day: number, timezone: string): Date {
   const utcGuess = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
-  const offsetMs = utcGuess.getTime() - parseAsUTC(formatLocalIso(utcGuess, timezone));
+  const offsetMs = utcGuess.getTime() - Date.parse(formatLocalIso(utcGuess, timezone));
   return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) + offsetMs);
 }
 
@@ -86,8 +85,4 @@ function formatLocalIso(d: Date, timezone: string): string {
   });
   const parts = Object.fromEntries(fmt.formatToParts(d).map((p) => [p.type, p.value]));
   return `${parts["year"]}-${parts["month"]}-${parts["day"]}T${parts["hour"]}:${parts["minute"]}:${parts["second"]}Z`;
-}
-
-function parseAsUTC(iso: string): number {
-  return Date.parse(iso);
 }
