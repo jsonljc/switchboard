@@ -2,9 +2,12 @@ import type { FastifyPluginAsync } from "fastify";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import {
   createPeriodRollup,
+  createPullQuoteGenerator,
+  createAnthropicReportLLMClient,
   windowToRange,
   priorPeriodRange,
   createInMemoryBaselineStore,
+  type LLMClient,
   type ReportDependencies,
   type ReportStores,
   type ReportCacheStore,
@@ -77,12 +80,19 @@ async function computeReport(
   const stripePriceId = await stores.orgConfig.getStripePriceId(orgId);
   const planMonthlyUSD = resolvePlanMonthlyUSD(stripePriceId);
 
+  const anthropicApiKey = process.env["ANTHROPIC_API_KEY"];
+  const llmClient: LLMClient | null = anthropicApiKey
+    ? createAnthropicReportLLMClient(anthropicApiKey)
+    : null;
+  const pullQuoteGenerator = createPullQuoteGenerator({ llm: llmClient });
+
   const deps: ReportDependencies = {
     stores,
     insightsProvider,
     reportCache: reportCacheStore,
     baselineStore,
     planMonthlyUSD,
+    pullQuoteGenerator,
   };
 
   const rollup = createPeriodRollup(deps);
