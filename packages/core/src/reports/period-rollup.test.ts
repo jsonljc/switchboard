@@ -58,12 +58,20 @@ function stubProvider(): ReportInsightsProvider {
 }
 
 function makeDeps(overrides?: Partial<ReportDependencies>): ReportDependencies {
+  const defaultPullQuote: ReportDependencies["pullQuoteGenerator"] = async () => ({
+    pre: "Stub pre",
+    value: "$0",
+    mid: "stub mid",
+    cost: "$0",
+    post: "stub post.",
+  });
   return {
     stores: stubStores(),
     insightsProvider: stubProvider(),
     reportCache: createInMemoryReportCacheStore(),
     baselineStore: createInMemoryBaselineStore(),
     planMonthlyUSD: 299,
+    pullQuoteGenerator: defaultPullQuote,
     ...overrides,
   };
 }
@@ -137,5 +145,52 @@ describe("createPeriodRollup", () => {
 
     expect(result.funnel[0]?.n).toBe(0);
     expect(result.funnel[3]?.n).toBe(50);
+  });
+
+  it("invokes pullQuoteGenerator with ctx, attribution, cost, and funnelNarrative; result lands in payload.pullquote", async () => {
+    const captured: Array<unknown> = [];
+    const sentinel = {
+      pre: "sentinel pre",
+      value: "$5,000",
+      mid: "sentinel mid",
+      cost: "$299",
+      post: "sentinel post.",
+    };
+    const pullQuoteGenerator: ReportDependencies["pullQuoteGenerator"] = async (input) => {
+      captured.push(input);
+      return sentinel;
+    };
+
+    const rollup = createPeriodRollup(makeDeps({ pullQuoteGenerator }));
+
+    const result = await rollup({
+      orgId: "org-1",
+      current: {
+        start: new Date("2026-04-01T00:00:00Z"),
+        end: new Date("2026-05-01T00:00:00Z"),
+        window: "THIS MONTH",
+      },
+      prior: {
+        start: new Date("2026-03-01T00:00:00Z"),
+        end: new Date("2026-04-01T00:00:00Z"),
+        window: null,
+      },
+      computedAt: new Date("2026-04-15T00:00:00Z"),
+    });
+
+    expect(captured).toHaveLength(1);
+    const input = captured[0] as {
+      ctx: { orgId: string; current: { window: string } };
+      attribution: { total: number };
+      cost: { paid: number };
+      funnelNarrative: { text: string };
+    };
+    expect(input.ctx.orgId).toBe("org-1");
+    expect(input.ctx.current.window).toBe("THIS MONTH");
+    expect(input.attribution.total).toBe(5000);
+    expect(input.cost.paid).toBeGreaterThan(0);
+    expect(input.funnelNarrative).toBeDefined();
+
+    expect(result.pullquote).toEqual(sentinel);
   });
 });
