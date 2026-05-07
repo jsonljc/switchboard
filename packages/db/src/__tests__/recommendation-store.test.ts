@@ -378,6 +378,8 @@ describe("PrismaRecommendationStore", () => {
       expect(rows[0]!.id).toBe("r1");
       expect(rows[0]!.agentKey).toBe("alex");
       expect(rows[0]!.status).toBe("confirmed");
+      expect(rows[0]!.actedAt?.toISOString()).toBe("2026-05-07T06:55:00.000Z");
+      expect(rows[0]!.actedBy).toBe("user-1");
     });
   });
 });

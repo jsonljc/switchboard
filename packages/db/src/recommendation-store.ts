@@ -178,7 +178,7 @@ export class PrismaRecommendationStore implements RecommendationStore {
         intent: { startsWith: RECOMMENDATION_INTENT_PREFIX },
       },
       orderBy: { resolvedAt: "desc" },
-      take: Math.min(args.limit, 200),
+      take: Math.max(0, Math.min(args.limit, 200)),
     });
     return rows.map(rowToRecommendation);
   }
