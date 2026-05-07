@@ -1,0 +1,122 @@
+import { computeWindowStart, type WinTimeWindow } from "./window.js";
+import { formatTimeFolio } from "./time-folio.js";
+
+export type WinSource = "recommendation" | "booking" | "conversion";
+export type WinStatus = "acted" | "confirmed";
+
+export interface ProseSegment {
+  kind: "text" | "accent";
+  text: string;
+}
+
+export interface WinTerminalRecord {
+  id: string;
+  agentKey: "alex" | "riley";
+  status: WinStatus;
+  intent: string;
+  humanSummary: string;
+  occurredAt: Date;
+  undoableUntil: Date | null;
+  targetEntities: unknown;
+}
+
+export interface WinsSignalStore {
+  listResolvedForAgent(input: {
+    orgId: string;
+    agentKey: "alex" | "riley";
+    statuses: readonly WinStatus[];
+    resolvedSince: Date;
+    limit: number;
+  }): Promise<WinTerminalRecord[]>;
+}
+
+export interface WinViewModel {
+  id: string;
+  agentKey: "alex" | "riley";
+  source: WinSource;
+  occurredAt: string;
+  timeFolio: string;
+  proseSegments: readonly ProseSegment[];
+  undo: {
+    available: boolean;
+    until: string | null;
+    unavailableReason?: "expired" | "not-reversible" | "missing-permission";
+  };
+}
+
+export interface DataFreshness {
+  generatedAt: string;
+  window: WinTimeWindow;
+  dataSource: "live" | "fixture";
+  isPartial?: boolean;
+  unavailableSources?: readonly string[];
+}
+
+export interface WinsViewModel {
+  wins: readonly WinViewModel[];
+  hasMore: boolean;
+  freshness: DataFreshness;
+}
+
+export interface WinsAgentConfig {
+  agentKey: "alex" | "riley";
+  ackPhrase: string;
+}
+
+const AGENT_VOICE_CONFIGS: Record<"alex" | "riley", WinsAgentConfig> = {
+  alex: { agentKey: "alex", ackPhrase: "Sent." },
+  riley: { agentKey: "riley", ackPhrase: "Adjusted." },
+};
+
+export interface ProjectWinsInput {
+  orgId: string;
+  agentKey: "alex" | "riley";
+  window: WinTimeWindow;
+  now: Date;
+  timezone: string;
+  store: WinsSignalStore;
+}
+
+const VISIBLE_LIMIT = 5;
+
+export async function projectWins(input: ProjectWinsInput): Promise<WinsViewModel> {
+  const { orgId, agentKey, window, now, timezone, store } = input;
+  const resolvedSince = computeWindowStart(window, now, timezone);
+  const rows = await store.listResolvedForAgent({
+    orgId,
+    agentKey,
+    statuses: ["acted", "confirmed"],
+    resolvedSince,
+    limit: VISIBLE_LIMIT + 1,
+  });
+
+  const visible = rows.slice(0, VISIBLE_LIMIT);
+  const config = AGENT_VOICE_CONFIGS[agentKey];
+
+  return {
+    wins: visible.map((row) => buildWinViewModel(row, config, now, timezone)),
+    hasMore: rows.length > VISIBLE_LIMIT,
+    freshness: {
+      generatedAt: now.toISOString(),
+      window,
+      dataSource: "live",
+    },
+  };
+}
+
+function buildWinViewModel(
+  row: WinTerminalRecord,
+  _config: WinsAgentConfig,
+  now: Date,
+  timezone: string,
+): WinViewModel {
+  return {
+    id: row.id,
+    agentKey: row.agentKey,
+    source: "recommendation",
+    occurredAt: row.occurredAt.toISOString(),
+    timeFolio: formatTimeFolio(row.occurredAt, now, timezone),
+    proseSegments: [{ kind: "text", text: row.humanSummary }], // placeholder; Task 5 replaces
+    undo: { available: false, until: null, unavailableReason: "not-reversible" }, // Task 6 replaces
+  };
+}
