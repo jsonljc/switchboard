@@ -171,6 +171,8 @@ export class PrismaContactStore implements ContactStore {
       await tx.handoff.deleteMany({ where: { leadId: id } });
       await tx.interactionSummary.deleteMany({ where: { contactId: id } });
       await tx.booking.deleteMany({ where: { contactId: id } });
+      await tx.conversionRecord.deleteMany({ where: { contactId: id } });
+      await tx.pendingLeadRetry.deleteMany({ where: { leadId: id } });
 
       // phone-keyed children — only if we have a phone to match on
       if (phone) {

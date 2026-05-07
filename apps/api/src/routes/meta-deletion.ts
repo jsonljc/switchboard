@@ -30,6 +30,15 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
   app.post(
     "/",
     {
+      // Public endpoint (HMAC-verified, no API key) — must be rate-limited to
+      // prevent abuse of the HMAC verification path. Meta's deletion volume is
+      // tiny in practice; 10/min per IP is generous.
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         description:
           "Meta App Data Deletion callback. Verifies signed_request and deletes contact PII.",

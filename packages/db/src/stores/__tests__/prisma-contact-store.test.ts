@@ -322,6 +322,8 @@ describe("PrismaContactStore", () => {
         handoff: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         interactionSummary: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         booking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
       };
       // $transaction passes the same client to the callback so all deleteMany calls hit our mocks
       return Object.assign(px, {
@@ -375,6 +377,12 @@ describe("PrismaContactStore", () => {
         where: { contactId: "contact-1" },
       });
       expect(px.booking.deleteMany).toHaveBeenCalledWith({ where: { contactId: "contact-1" } });
+      expect(px.conversionRecord.deleteMany).toHaveBeenCalledWith({
+        where: { contactId: "contact-1" },
+      });
+      expect(px.pendingLeadRetry.deleteMany).toHaveBeenCalledWith({
+        where: { leadId: "contact-1" },
+      });
       expect(px.contact.delete).toHaveBeenCalledWith({ where: { id: "contact-1" } });
     });
 

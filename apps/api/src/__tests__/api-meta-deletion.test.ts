@@ -34,6 +34,8 @@ interface MockPrisma {
   handoff: { deleteMany: ReturnType<typeof vi.fn> };
   interactionSummary: { deleteMany: ReturnType<typeof vi.fn> };
   booking: { deleteMany: ReturnType<typeof vi.fn> };
+  conversionRecord: { deleteMany: ReturnType<typeof vi.fn> };
+  pendingLeadRetry: { deleteMany: ReturnType<typeof vi.fn> };
   dataDeletionRequest: {
     create: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
@@ -60,6 +62,8 @@ function makePrisma(): MockPrisma {
     handoff: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     interactionSummary: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     booking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     dataDeletionRequest: {
       create: vi.fn().mockImplementation(async ({ data }: { data: object }) => data),
       findUnique: vi.fn().mockResolvedValue(null),
