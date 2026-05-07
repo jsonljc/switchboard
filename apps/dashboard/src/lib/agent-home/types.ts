@@ -107,17 +107,19 @@ export interface SparkPoint {
 // what each cell means per-agent.
 export interface StatCell {
   label: string;
-  display: string; // pre-formatted: "47" / "26%" / "$0"
-  rawValue: number;
+  display: string;
+  rawValue: number | null;
   unit: "count" | "percent" | "currency";
+  unavailable?: boolean;
 }
 
 export interface MetricsViewModel {
   hero: HeroMetric;
   heroSubProseSegments: readonly ProseSegment[];
   spark: readonly SparkPoint[];
-  stats: readonly [StatCell, StatCell, StatCell]; // exactly 3
+  stats: readonly [StatCell, StatCell, StatCell];
   freshness: DataFreshness;
+  folioRange: string;
 }
 
 // ─── B5 Pipeline ──────────────────────────────────────────────
