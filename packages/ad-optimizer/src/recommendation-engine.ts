@@ -1,4 +1,4 @@
-// packages/core/src/ad-optimizer/recommendation-engine.ts
+// packages/ad-optimizer/src/recommendation-engine.ts
 import type { Diagnosis } from "./metric-diagnostician.js";
 import type { SourceComparisonRow } from "./analyzers/source-comparator.js";
 import type {
@@ -7,6 +7,7 @@ import type {
   UrgencySchema as Urgency,
   TargetBreachResult,
 } from "@switchboard/schemas";
+import type { SignalHealthReport, Breach } from "./signal-health-checker.js";
 
 // ── Re-export types ──
 
@@ -353,5 +354,93 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
     );
   }
 
+  return results;
+}
+
+// ── Signal Health Recommendations ──
+
+export interface SignalHealthRecommendationContext {
+  pixelId: string;
+  accountId: string;
+}
+
+interface BreachRemediation {
+  estimatedImpact: string;
+  steps: string[];
+}
+
+const BREACH_REMEDIATIONS: Record<Breach["signal"], BreachRemediation | null> = {
+  pixel_dead: {
+    estimatedImpact: "Pixel is dead — Meta cannot deliver or measure ads without signal",
+    steps: [
+      "Pixel is dead — check website installation",
+      "Verify the Pixel snippet is present on every page",
+      "Re-fire a test event from Events Manager",
+    ],
+  },
+  server_to_browser_low: {
+    estimatedImpact:
+      "Server-to-browser ratio is below target — Meta is missing CAPI signal for optimization",
+    steps: [
+      "Verify CAPI access token + pixel ID",
+      "Re-run a CAPI test event from Events Manager",
+      "Check that server events are being dispatched for every conversion",
+    ],
+  },
+  dedup_low: {
+    estimatedImpact:
+      "Browser and CAPI events are not deduplicating — Meta is double-counting conversions",
+    steps: [
+      "Ensure event_id matches between browser pixel and CAPI",
+      "Verify the same event_id is generated server-side and emitted in fbq()",
+      "Re-run a paired test event and confirm dedup in Events Manager",
+    ],
+  },
+  freshness_stale: {
+    estimatedImpact:
+      "CAPI server events are stale — Meta's optimizer cannot react to recent conversions",
+    steps: [
+      "Check CAPI dispatch latency",
+      "Verify webhook/queue health (no backlog or DLQ growth)",
+      "Re-run a test event and confirm it appears within 1 hour",
+    ],
+  },
+  da_check_failed: null,
+};
+
+function makeFixSignalHealthRec(
+  base: { campaignId: string; campaignName: string },
+  breach: Breach,
+  remediation: BreachRemediation,
+  pixelId: string,
+): RecommendationOutput {
+  const urgency: Urgency = breach.severity === "critical" ? "immediate" : "this_week";
+  const confidence = breach.severity === "critical" ? 0.9 : 0.75;
+  return makeRec(
+    base,
+    "fix_signal_health",
+    confidence,
+    urgency,
+    remediation.estimatedImpact,
+    remediation.steps,
+    "no impact",
+    { breach: breach.signal, pixelId },
+  );
+}
+
+export function generateSignalHealthRecommendations(
+  signalHealth: SignalHealthReport,
+  context: SignalHealthRecommendationContext,
+): RecommendationOutput[] {
+  const base = {
+    campaignId: `signal:${context.pixelId}`,
+    campaignName: `Account signal (pixel ${context.pixelId})`,
+  };
+  const results: RecommendationOutput[] = [];
+  for (const breach of signalHealth.breaches) {
+    const remediation = BREACH_REMEDIATIONS[breach.signal];
+    if (!remediation) continue;
+    results.push(makeFixSignalHealthRec(base, breach, remediation, context.pixelId));
+  }
   return results;
 }
