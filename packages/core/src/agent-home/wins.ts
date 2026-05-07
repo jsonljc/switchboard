@@ -124,8 +124,26 @@ function buildWinViewModel(
     occurredAt: row.occurredAt.toISOString(),
     timeFolio: formatTimeFolio(row.occurredAt, now, timezone),
     proseSegments: composeWinProse(row, config),
-    undo: { available: false, until: null, unavailableReason: "not-reversible" }, // Task 6 replaces
+    undo: computeUndo(row, now),
   };
+}
+
+function computeUndo(row: WinTerminalRecord, now: Date): WinViewModel["undo"] {
+  if (row.status === "acted") {
+    return { available: false, until: null, unavailableReason: "not-reversible" };
+  }
+  // confirmed
+  if (row.undoableUntil === null) {
+    return { available: false, until: null, unavailableReason: "not-reversible" };
+  }
+  if (row.undoableUntil.getTime() <= now.getTime()) {
+    return {
+      available: false,
+      until: row.undoableUntil.toISOString(),
+      unavailableReason: "expired",
+    };
+  }
+  return { available: true, until: row.undoableUntil.toISOString() };
 }
 
 function composeWinProse(row: WinTerminalRecord, config: WinsAgentConfig): readonly ProseSegment[] {
