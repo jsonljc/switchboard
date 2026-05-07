@@ -84,6 +84,32 @@ describe("dispatchDecisionAction", () => {
       dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "secondary"),
     ).rejects.toThrow(/Handoff resolve failed/);
   });
+
+  it("approval undo calls POST /api/dashboard/recommendations with action=undo", async () => {
+    await dispatchDecisionAction({ kind: "approval", sourceId: "rec-1" }, "undo");
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/dashboard/recommendations",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"action":"undo"'),
+      }),
+    );
+    const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]!.body);
+    expect(body.recommendationId).toBe("rec-1");
+  });
+
+  it("throws if approval undo response is not ok (409)", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 409 }) as unknown as typeof fetch;
+    await expect(
+      dispatchDecisionAction({ kind: "approval", sourceId: "rec-1" }, "undo"),
+    ).rejects.toThrow(/Recommendation action failed.*HTTP 409/);
+  });
+
+  it("throws if handoff receives undo action", async () => {
+    await expect(
+      dispatchDecisionAction({ kind: "handoff", sourceId: "h-1" }, "undo"),
+    ).rejects.toThrow(/Undo not supported for handoffs/);
+  });
 });
 
 describe("dispatchDecisionAction — slice B invalidation", () => {
