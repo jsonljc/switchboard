@@ -1,11 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { isValidPixelId } from "@/lib/validation/pixel";
 
 type Step = "connect-meta" | "select-account" | "set-targets" | "connect-capi" | "activate";
 
-const STEPS: Step[] = ["connect-meta", "select-account", "set-targets", "connect-capi", "activate"];
+// `set-targets` and `activate` are still stubs — they don't render in the
+// wizard flow today, so they're left out of STEPS so the progress bar
+// reflects the actual journey (3 segments, not 5). Add them back here when
+// they're built.
+const STEPS: Step[] = ["connect-meta", "select-account", "connect-capi"];
 
 interface AdAccount {
   accountId: string;
@@ -137,12 +142,6 @@ function ComingSoonStep({ step }: { step: Step }) {
   );
 }
 
-// Loose validation: Meta pixel ids are numeric strings, typically 15–16 digits.
-// Accept anything 5+ digits to leave room for legacy or test-account ids.
-function isValidPixelId(value: string): boolean {
-  return /^\d{5,}$/.test(value);
-}
-
 export function ConnectCapiStep({
   pixelId,
   loading,
@@ -203,6 +202,7 @@ export function ImproveSpendSetup({
   deploymentId,
 }: ImproveSpendSetupProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const connectedParam = searchParams.get("connected");
   const deploymentIdParam = searchParams.get("deploymentId") ?? deploymentId;
 
@@ -213,12 +213,28 @@ export function ImproveSpendSetup({
         ? (initialStep as Step)
         : "connect-meta";
 
-  const [currentStep, setCurrentStep] = useState<Step>(resolvedInitialStep);
+  const [currentStep, setCurrentStepState] = useState<Step>(resolvedInitialStep);
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pixelId, setPixelId] = useState("");
+
+  // Always clear the error when changing steps so a stale message from
+  // step N doesn't render under step N+1, and keep the URL in sync so a
+  // mid-wizard reload lands on the right step instead of dropping the
+  // operator back to select-account.
+  const setCurrentStep = useCallback(
+    (next: Step) => {
+      setCurrentStepState(next);
+      setError(null);
+      const qs = new URLSearchParams();
+      qs.set("step", next);
+      if (deploymentIdParam) qs.set("deploymentId", deploymentIdParam);
+      router.replace(`?${qs.toString()}`, { scroll: false });
+    },
+    [router, deploymentIdParam],
+  );
 
   const currentIndex = STEPS.indexOf(currentStep);
 
@@ -253,6 +269,7 @@ export function ImproveSpendSetup({
   }, [currentStep, fetchAccounts]);
 
   const handleSelectAccount = useCallback(async () => {
+    if (loading) return; // Race guard: ignore re-clicks while in flight.
     if (!selectedAccountId || !deploymentIdParam) return;
     const account = accounts.find((a) => a.accountId === selectedAccountId);
     if (!account) return;
@@ -275,20 +292,19 @@ export function ImproveSpendSetup({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to save account selection");
       }
-      // Skip the still-stubbed "set-targets" step and route the operator
-      // straight into pixel-id capture — that's the gating prerequisite for
-      // signal-health monitoring (Gap 2). set-targets and activate remain
-      // out of scope for this change.
-      setError(null);
+      // Pixel-id capture is the gating prerequisite for Gap 2 signal-health
+      // monitoring; advance straight there. set-targets and activate are
+      // still stubs (omitted from STEPS).
       setCurrentStep("connect-capi");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save account selection");
     } finally {
       setLoading(false);
     }
-  }, [selectedAccountId, deploymentIdParam, accounts]);
+  }, [loading, selectedAccountId, deploymentIdParam, accounts, setCurrentStep]);
 
   const handleSavePixelId = useCallback(async () => {
+    if (loading) return; // Race guard: ignore re-clicks while in flight.
     if (!deploymentIdParam) {
       setError("No deployment ID available. Please restart the setup.");
       return;
@@ -314,7 +330,7 @@ export function ImproveSpendSetup({
     } finally {
       setLoading(false);
     }
-  }, [pixelId, deploymentIdParam, onComplete]);
+  }, [loading, pixelId, deploymentIdParam, onComplete]);
 
   const handleConnectMeta = useCallback(() => {
     if (!deploymentIdParam) {

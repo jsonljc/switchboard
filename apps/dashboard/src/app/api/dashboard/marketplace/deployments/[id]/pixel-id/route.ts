@@ -2,18 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
 import { requireSession } from "@/lib/session";
 import { proxyError } from "@/lib/proxy-error";
-
-const PIXEL_ID_PATTERN = /^\d{5,}$/;
+import { isValidPixelId } from "@/lib/validation/pixel";
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireSession();
     const { id } = await params;
-    const body = await request.json();
-    const { pixelId } = body as { pixelId?: unknown };
-    if (typeof pixelId !== "string" || !PIXEL_ID_PATTERN.test(pixelId)) {
+    const body = (await request.json()) as Record<string, unknown>;
+    const pixelId = body.pixelId;
+    if (typeof pixelId !== "string" || !isValidPixelId(pixelId)) {
       return NextResponse.json(
-        { error: "pixelId must be a numeric string (5+ digits)" },
+        { error: "pixelId must be a 15–16 digit numeric string" },
         { status: 400 },
       );
     }

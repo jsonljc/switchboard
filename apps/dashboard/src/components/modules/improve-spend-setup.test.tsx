@@ -1,6 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { ConnectCapiStep } from "./improve-spend-setup";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+const searchParamsRef = { current: new URLSearchParams() };
+const routerReplaceMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => searchParamsRef.current,
+  useRouter: () => ({ replace: routerReplaceMock }),
+}));
+
+import { ConnectCapiStep, ImproveSpendSetup } from "./improve-spend-setup";
 
 describe("ConnectCapiStep", () => {
   function renderStep(overrides: Partial<React.ComponentProps<typeof ConnectCapiStep>> = {}) {
@@ -74,5 +83,128 @@ describe("ConnectCapiStep", () => {
     renderStep({ pixelId: "" });
     // The whole point: pixel id is mandatory for this agent. No bypass.
     expect(screen.queryByRole("button", { name: /skip|later|maybe/i })).toBeNull();
+  });
+});
+
+// ── Wizard-level integration tests ──
+//
+// The leaf-component tests above prove ConnectCapiStep renders + dispatches
+// the right callbacks. These tests prove the gating contract: the wizard
+// actually advances to connect-capi after select-account, won't call
+// onComplete until pixel id is saved, and routes the URL on transitions.
+
+describe("ImproveSpendSetup wizard", () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+  let onComplete: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    routerReplaceMock.mockClear();
+    onComplete = vi.fn();
+    fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    // Land the wizard on select-account directly — same shape as the
+    // OAuth callback round-trip URL.
+    searchParamsRef.current = new URLSearchParams({
+      step: "select-account",
+      connected: "true",
+      deploymentId: "dep-1",
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function jsonResponse(body: unknown, ok = true) {
+    return { ok, json: () => Promise.resolve(body) } as unknown as Response;
+  }
+
+  it("advances from select-account → connect-capi after the ad-account PUT succeeds", async () => {
+    fetchSpy
+      // initial GET /ad-account
+      .mockResolvedValueOnce(
+        jsonResponse({ accounts: [{ accountId: "123", name: "A", currency: "USD", status: 1 }] }),
+      )
+      // PUT /ad-account
+      .mockResolvedValueOnce(jsonResponse({}));
+
+    render(
+      <ImproveSpendSetup
+        initialStep="select-account"
+        onComplete={onComplete}
+        deploymentId="dep-1"
+      />,
+    );
+
+    // Wait for accounts to render, click the only one, then confirm.
+    const accountButton = await screen.findByRole("button", { name: /act_123/i });
+    fireEvent.click(accountButton);
+    fireEvent.click(screen.getByRole("button", { name: /confirm selection/i }));
+
+    // The wizard should advance to connect-capi (not call onComplete yet).
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /connect.*conversions api/i }),
+      ).toBeInTheDocument();
+    });
+    expect(onComplete).not.toHaveBeenCalled();
+    // URL should be replaced with the new step so a reload sticks.
+    expect(routerReplaceMock).toHaveBeenCalled();
+    const lastReplace = routerReplaceMock.mock.calls.at(-1)?.[0] as string;
+    expect(lastReplace).toContain("step=connect-capi");
+    expect(lastReplace).toContain("deploymentId=dep-1");
+  });
+
+  it("does not call onComplete until pixel id is saved", async () => {
+    // Start directly on connect-capi (skip the select-account leg).
+    searchParamsRef.current = new URLSearchParams({
+      step: "connect-capi",
+      deploymentId: "dep-1",
+    });
+    // Hide the implicit accounts fetch — connect-capi doesn't trigger it.
+    fetchSpy.mockResolvedValue(jsonResponse({}));
+
+    render(
+      <ImproveSpendSetup initialStep="connect-capi" onComplete={onComplete} deploymentId="dep-1" />,
+    );
+
+    const input = screen.getByLabelText(/pixel id/i);
+    fireEvent.change(input, { target: { value: "1234567890123456" } });
+    fireEvent.click(screen.getByRole("button", { name: /save and continue/i }));
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    // Verify the PUT hit the right endpoint with the right body.
+    const pixelPut = fetchSpy.mock.calls.find(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/pixel-id"),
+    );
+    expect(pixelPut).toBeDefined();
+    const init = pixelPut![1] as RequestInit;
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ pixelId: "1234567890123456" });
+  });
+
+  it("does not call onComplete when the pixel id PUT fails", async () => {
+    searchParamsRef.current = new URLSearchParams({
+      step: "connect-capi",
+      deploymentId: "dep-1",
+    });
+    fetchSpy.mockResolvedValue(jsonResponse({ error: "Bad pixel" }, false));
+
+    render(
+      <ImproveSpendSetup initialStep="connect-capi" onComplete={onComplete} deploymentId="dep-1" />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/pixel id/i), {
+      target: { value: "1234567890123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save and continue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/bad pixel/i)).toBeInTheDocument();
+    });
+    expect(onComplete).not.toHaveBeenCalled();
   });
 });
