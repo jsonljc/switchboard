@@ -106,6 +106,21 @@ class InMemoryContactStore implements ContactStore {
     }
     return result;
   }
+
+  async listForPipeline(args: {
+    orgId: string;
+    activitySince: Date;
+    limit: number;
+  }): Promise<{ rows: Contact[]; totalCount: number }> {
+    const all = Array.from(this.contacts.values()).filter(
+      (c) =>
+        c.organizationId === args.orgId &&
+        (c.stage === "active" || c.stage === "new") &&
+        c.lastActivityAt >= args.activitySince,
+    );
+    const sorted = all.sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
+    return { rows: sorted.slice(0, args.limit), totalCount: sorted.length };
+  }
 }
 
 class InMemoryOpportunityStore implements OpportunityStore {

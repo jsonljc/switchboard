@@ -37,4 +37,15 @@ export interface ContactStore {
   delete(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
   listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
+  /**
+   * Lists contacts for the agent-home pipeline block: active + new stages,
+   * with a `lastActivityAt >= activitySince` recency cutoff. Returns
+   * push-down totalCount alongside the limited rows so the UI's count badge
+   * stays truthful when more matches exist than fit in the tile cap.
+   */
+  listForPipeline(args: {
+    orgId: string;
+    activitySince: Date;
+    limit: number;
+  }): Promise<{ rows: Contact[]; totalCount: number }>;
 }

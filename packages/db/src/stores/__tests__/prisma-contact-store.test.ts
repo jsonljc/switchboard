@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { PrismaDbClient } from "../../prisma-db.js";
 import { PrismaContactStore } from "../prisma-contact-store.js";
 
 const now = new Date("2026-03-25T12:00:00Z");
@@ -570,6 +571,80 @@ describe("PrismaContactStore", () => {
       expect(prisma.contact.findMany).toHaveBeenCalledWith({
         where: { organizationId: "org-1", id: { in: ["c1"] } },
       });
+    });
+  });
+
+  describe("listForPipeline", () => {
+    it("returns recent active+new contacts ordered by lastActivityAt desc with totalCount", async () => {
+      const prisma = {
+        contact: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "c1",
+              organizationId: "org-A",
+              name: "Maya",
+              phone: "+6591234567",
+              email: null,
+              primaryChannel: "whatsapp",
+              firstTouchChannel: null,
+              stage: "active",
+              source: null,
+              attribution: null,
+              roles: ["lead"],
+              firstContactAt: new Date("2026-05-01T00:00:00Z"),
+              lastActivityAt: new Date("2026-05-07T08:00:00Z"),
+              createdAt: new Date("2026-05-01T00:00:00Z"),
+              updatedAt: new Date("2026-05-07T08:00:00Z"),
+            },
+          ]),
+          count: vi.fn().mockResolvedValue(3),
+        },
+      } as unknown as PrismaDbClient;
+
+      const store = new PrismaContactStore(prisma);
+      const result = await store.listForPipeline({
+        orgId: "org-A",
+        activitySince: new Date("2026-04-30T00:00:00Z"),
+        limit: 5,
+      });
+
+      expect(prisma.contact.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-A",
+          stage: { in: ["active", "new"] },
+          lastActivityAt: { gte: new Date("2026-04-30T00:00:00Z") },
+        },
+        orderBy: { lastActivityAt: "desc" },
+        take: 5,
+      });
+      expect(prisma.contact.count).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-A",
+          stage: { in: ["active", "new"] },
+          lastActivityAt: { gte: new Date("2026-04-30T00:00:00Z") },
+        },
+      });
+      expect(result.totalCount).toBe(3);
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.id).toBe("c1");
+      expect(result.rows[0]!.stage).toBe("active");
+    });
+
+    it("returns empty rows + totalCount=0 when filter matches nothing", async () => {
+      const prisma = {
+        contact: {
+          findMany: vi.fn().mockResolvedValue([]),
+          count: vi.fn().mockResolvedValue(0),
+        },
+      } as unknown as PrismaDbClient;
+      const store = new PrismaContactStore(prisma);
+      const result = await store.listForPipeline({
+        orgId: "org-A",
+        activitySince: new Date(),
+        limit: 5,
+      });
+      expect(result.rows).toEqual([]);
+      expect(result.totalCount).toBe(0);
     });
   });
 });

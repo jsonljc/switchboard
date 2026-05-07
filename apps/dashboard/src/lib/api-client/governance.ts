@@ -282,6 +282,18 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     return this.request<{ vm: unknown }>(path);
   }
 
+  // Pipeline (Slice B agent-home pipeline block)
+  /**
+   * Reads the Pipeline block for a given agent.
+   * Slice B endpoint: GET /api/dashboard/agents/:agentKey/pipeline
+   *
+   * Returns the wire shape unchanged — `vm` contains the pipeline view-model.
+   */
+  async listPipeline(agentKey: string): Promise<{ vm: unknown }> {
+    const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/pipeline`;
+    return this.request<{ vm: unknown }>(path);
+  }
+
   // Decisions (cross-kind feed: recommendations + handoffs)
   /**
    * Reads the Decision Feed (Slice A PR 3 endpoint). Pass an `agentKey` to

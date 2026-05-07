@@ -23,6 +23,27 @@ vi.mock("@/hooks/use-agent-wins", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-agent-pipeline", () => ({
+  useAgentPipeline: () => ({
+    data: {
+      agentKey: "alex",
+      pipelineKind: "leads",
+      countNoun: "people",
+      totalCount: 0,
+      tiles: [],
+      setupLink: { kind: "agent-setup", agentKey: "alex" },
+      freshness: {
+        generatedAt: new Date().toISOString(),
+        window: "today",
+        dataSource: "live",
+      },
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
 vi.mock("@/hooks/use-query-keys", () => ({
   useScopedQueryKeys: () => null,
   useTenantContext: () => null,
