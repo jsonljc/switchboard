@@ -34,9 +34,10 @@ export function formatRelativeAge(occurredAt: Date, now: Date, timezone: string)
     return `${days}d ago`;
   }
 
-  // For "month" window semantics, we use a trailing 30-day lookback from
-  // today's start (not calendar month boundaries). This ensures April 25
-  // from May 7 shows "12d ago", but March 3 shows "Mar 3".
+  // Trailing 30-day window for the month branch — NOT computeWindowStart("month",...)
+  // which returns the calendar-month 1st. Calendar-aligned semantics would create
+  // a gap (e.g., April 25 from May 7 would fall through to "Apr 25" instead of
+  // "12d ago"). Pipeline ctx wants smooth "Nd ago" up to ~30d, then a date.
   const monthStart = new Date(todayStart.getTime() - 30 * 86_400_000);
   if (occurredAt.getTime() >= monthStart.getTime()) {
     const days = Math.floor(deltaMs / 86_400_000);
