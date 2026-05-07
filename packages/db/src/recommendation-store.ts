@@ -245,6 +245,62 @@ export class PrismaRecommendationStore implements RecommendationStore {
     });
   }
 
+  async listPendingForAgent(args: {
+    orgId: string;
+    agentKey: AgentKey;
+    surface: "queue";
+    limit: number;
+  }): Promise<{ rows: Recommendation[]; totalCount: number }> {
+    // Postgres sorts text alphabetically — "high" < "low" < "medium" — which
+    // would put medium ahead of high. Use a CASE expression for the intended
+    // urgency ordinal. Raw SQL is fine here: it's a single read-only query.
+    const orgId = args.orgId;
+    const agentKey = args.agentKey;
+    const surface = args.surface;
+    const take = args.limit;
+
+    const where = {
+      organizationId: orgId,
+      surface,
+      status: "pending",
+      sourceAgent: agentKey,
+      approvalRequired: { not: "auto" },
+    } as const;
+
+    const [rawRows, totalCount] = await Promise.all([
+      this.prisma.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT
+          "id", "idempotencyKey", "intent", "status", "humanSummary", "confidence",
+          "riskLevel", "dollarsAtRisk", "targetEntities", "parameters",
+          "approvalRequired", "sourceAgent", "sourceWorkflow", "organizationId",
+          "surface", "undoableUntil", "createdAt", "expiresAt", "resolvedAt", "resolvedBy"
+        FROM "PendingActionRecord"
+        WHERE "organizationId" = ${orgId}
+          AND "surface" = ${surface}
+          AND "status" = 'pending'
+          AND "sourceAgent" = ${agentKey}
+          AND "approvalRequired" <> 'auto'
+        ORDER BY
+          CASE "riskLevel"
+            WHEN 'high' THEN 3
+            WHEN 'medium' THEN 2
+            WHEN 'low' THEN 1
+            ELSE 0
+          END DESC,
+          "dollarsAtRisk" DESC,
+          "confidence" ASC,
+          "createdAt" DESC
+        LIMIT ${take}
+      `,
+      this.prisma.pendingActionRecord.count({ where }),
+    ]);
+
+    const rows = rawRows.map((r) =>
+      rowToRecommendation(r as Parameters<typeof rowToRecommendation>[0]),
+    );
+    return { rows, totalCount };
+  }
+
   async latestByAgent(input: {
     orgId: string;
     agentKey: string;

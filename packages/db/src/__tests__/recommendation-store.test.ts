@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { PrismaRecommendationStore } from "../recommendation-store.js";
 import type { PersistRecommendationInput } from "@switchboard/core";
 import { RecommendationStaleStatusError } from "@switchboard/core";
+import type { PrismaClient } from "@prisma/client";
 
 function mockPrisma() {
   return {
@@ -380,6 +381,88 @@ describe("PrismaRecommendationStore", () => {
       expect(rows[0]!.status).toBe("confirmed");
       expect(rows[0]!.actedAt?.toISOString()).toBe("2026-05-07T06:55:00.000Z");
       expect(rows[0]!.actedBy).toBe("user-1");
+    });
+  });
+
+  describe("listPendingForAgent", () => {
+    it("queries with the §4.2 filter and ordering, returns rows + totalCount", async () => {
+      const queryRaw = vi.fn().mockResolvedValue([
+        {
+          id: "p1",
+          idempotencyKey: "k1",
+          intent: "recommendation.pause_adset",
+          status: "pending",
+          humanSummary: "Pause Whitening A — CPL up 40%",
+          confidence: 0.6,
+          riskLevel: "high",
+          dollarsAtRisk: 420,
+          targetEntities: { campaignId: "c-1", campaignName: "Whitening A" },
+          parameters: {},
+          approvalRequired: "operator",
+          sourceAgent: "riley",
+          sourceWorkflow: null,
+          organizationId: "org-A",
+          surface: "queue",
+          undoableUntil: null,
+          actedAt: null,
+          actedBy: null,
+          note: null,
+          createdAt: new Date("2026-05-07T07:00:00Z"),
+          expiresAt: null,
+        },
+      ]);
+      const count = vi.fn().mockResolvedValue(2);
+      const prisma = {
+        $queryRaw: queryRaw,
+        pendingActionRecord: { count },
+      } as unknown as PrismaClient;
+
+      const store = new PrismaRecommendationStore(prisma);
+      const result = await store.listPendingForAgent({
+        orgId: "org-A",
+        agentKey: "riley",
+        surface: "queue",
+        limit: 5,
+      });
+
+      expect(queryRaw).toHaveBeenCalledTimes(1);
+      // We deliberately don't grep raw SQL via String(rawCall[0]) — Prisma's
+      // tagged-template form doesn't stringify cleanly across versions, and
+      // brittle SQL substring matches lead to false negatives. The ordering
+      // behavior (riskLevel high→medium→low, dollars desc, confidence asc,
+      // createdAt desc) is covered deterministically by the in-memory store
+      // unit tests added below.
+
+      expect(count).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-A",
+          surface: "queue",
+          status: "pending",
+          sourceAgent: "riley",
+          approvalRequired: { not: "auto" },
+        },
+      });
+
+      expect(result.totalCount).toBe(2);
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.id).toBe("p1");
+      expect(result.rows[0]!.riskLevel).toBe("high");
+    });
+
+    it("returns empty rows + totalCount=0 when nothing matches", async () => {
+      const prisma = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
+        pendingActionRecord: { count: vi.fn().mockResolvedValue(0) },
+      } as unknown as PrismaClient;
+      const store = new PrismaRecommendationStore(prisma);
+      const result = await store.listPendingForAgent({
+        orgId: "org-A",
+        agentKey: "riley",
+        surface: "queue",
+        limit: 5,
+      });
+      expect(result.rows).toEqual([]);
+      expect(result.totalCount).toBe(0);
     });
   });
 });

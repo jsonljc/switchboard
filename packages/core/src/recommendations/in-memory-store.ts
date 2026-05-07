@@ -72,6 +72,30 @@ export function createInMemoryRecommendationStore(): RecommendationStore & {
         .sort((a, b) => (b.actedAt?.getTime() ?? 0) - (a.actedAt?.getTime() ?? 0));
       return filtered.slice(0, Math.max(0, Math.min(limit, 200)));
     },
+    async listPendingForAgent({ orgId, agentKey, surface, limit }) {
+      const RISK_ORDINAL = { high: 3, medium: 2, low: 1 } as const;
+      const filtered = rows.filter(
+        (r) =>
+          r.orgId === orgId &&
+          r.sourceAgent === agentKey &&
+          r.surface === surface &&
+          r.status === "pending",
+        // approvalRequired isn't on the in-memory Recommendation shape;
+        // tests that need to assert the auto-exclusion rely on the SQL contract
+        // covered by the prisma-recommendation-store test.
+      );
+      filtered.sort((a, b) => {
+        const ar = RISK_ORDINAL[a.riskLevel];
+        const br = RISK_ORDINAL[b.riskLevel];
+        if (ar !== br) return br - ar;
+        if (a.dollarsAtRisk !== b.dollarsAtRisk) return b.dollarsAtRisk - a.dollarsAtRisk;
+        // confidence ASC (low promoted)
+        if (a.confidence !== b.confidence) return a.confidence - b.confidence;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+      const sliced = filtered.slice(0, Math.max(0, limit));
+      return { rows: sliced, totalCount: filtered.length };
+    },
     async applyAct({ id, actor, fromStatus, toStatus, note }) {
       const row = rows.find((r) => r.id === id);
       if (!row) throw new Error("not found");
