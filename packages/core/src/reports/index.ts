@@ -30,3 +30,7 @@ export { createPeriodRollup, type ReportDependencies } from "./period-rollup.js"
 export { computeCampaignRollup } from "./campaign-rollup.js";
 export { computeManagedComparison } from "./managed-comparison-rollup.js";
 export { captureAdsBaseline } from "./baseline-capture.js";
+export {
+  createPullQuoteGenerator,
+  createAnthropicReportLLMClient,
+} from "./pull-quote-generator.js";
