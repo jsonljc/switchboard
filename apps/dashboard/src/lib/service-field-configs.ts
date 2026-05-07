@@ -40,7 +40,8 @@ export const SERVICE_CONNECTION_CONFIGS: Record<string, ServiceConnectionConfig>
         type: "text",
         required: false,
         placeholder: "123456789",
-        helpText: "Found in Events Manager (optional)",
+        helpText:
+          "Found in Events Manager. Required for the Ad Optimizer agent (signal-health monitoring); optional for Lead Ads workflows.",
       },
     ],
     oauth: {
