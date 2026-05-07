@@ -468,6 +468,14 @@ find packages/db/src/__tests__ -name "recommendation*" -o -name "prisma-workflow
 
 Expected: at least `prisma-workflow-store.test.ts` (mocked-Prisma reference per `feedback_api_test_mocked_prisma.md`). If no `recommendation-store.test.ts` exists, create it; if it exists, append the new tests.
 
+- [ ] **Step 1.5: Confirm DB field names**
+
+```bash
+grep -n "sourceAgent\|resolvedAt" packages/db/prisma/schema.prisma | grep -A0 "PendingActionRecord\|model" | head -10
+```
+
+The `PendingActionRecord` model should have both `sourceAgent: String` and `resolvedAt: DateTime?`. If the field is named differently in your repo state (e.g. `agentKey`, `source_agent`), substitute everywhere `sourceAgent` appears in this task — including the `where` clause in Step 4.
+
 - [ ] **Step 2: Write failing tests for `listResolvedForAgent`**
 
 Add to `packages/db/src/__tests__/recommendation-store.test.ts`:
@@ -492,7 +500,7 @@ describe("PrismaRecommendationStore.listResolvedForAgent", () => {
     prisma.pendingActionRecord.findMany.mockReset();
   });
 
-  it("filters by org, sourceAgent, status set, and resolvedAt", async () => {
+  it("filters by org, sourceAgent, status set, and non-null resolvedAt >= resolvedSince", async () => {
     prisma.pendingActionRecord.findMany.mockResolvedValue([]);
     await store.listResolvedForAgent({
       orgId: "org-1",
@@ -506,7 +514,7 @@ describe("PrismaRecommendationStore.listResolvedForAgent", () => {
         organizationId: "org-1",
         sourceAgent: "alex",
         status: { in: ["acted", "confirmed"] },
-        resolvedAt: { gte: new Date("2026-05-07T00:00:00.000Z") },
+        resolvedAt: { not: null, gte: new Date("2026-05-07T00:00:00.000Z") },
         intent: { startsWith: "recommendation." },
       }),
       orderBy: { resolvedAt: "desc" },
@@ -586,6 +594,13 @@ Expected: FAIL — `listResolvedForAgent is not a function`.
 Edit `packages/db/src/recommendation-store.ts`. Locate `listBySurface` (~line 133) and add immediately after:
 
 ```ts
+/**
+ * Generic store method: filters terminal recommendations by org + agent +
+ * any subset of statuses + resolvedAt window. The wins projection narrows
+ * `statuses` to ["acted", "confirmed"] at its single call site; do not pass
+ * arbitrary statuses from new external callers without thinking about
+ * what "win" means in their context.
+ */
 async listResolvedForAgent(args: {
   orgId: string;
   agentKey: AgentKey;
@@ -593,12 +608,15 @@ async listResolvedForAgent(args: {
   resolvedSince: Date;
   limit: number;
 }): Promise<Recommendation[]> {
+  // Semantically "resolved wins": rows must have a non-null resolvedAt.
+  // We assert `not: null` explicitly even though `gte: <Date>` already
+  // excludes nulls in Prisma — explicit beats implicit.
   const rows = await this.prisma.pendingActionRecord.findMany({
     where: {
       organizationId: args.orgId,
       sourceAgent: args.agentKey,
       status: { in: [...args.statuses] },
-      resolvedAt: { gte: args.resolvedSince },
+      resolvedAt: { not: null, gte: args.resolvedSince },
       intent: { startsWith: RECOMMENDATION_INTENT_PREFIX },
     },
     orderBy: { resolvedAt: "desc" },
@@ -1365,16 +1383,31 @@ export const winsRoute: FastifyPluginAsync = async (app) => {
           resolvedSince,
           limit,
         });
-        return rows.map((r) => ({
-          id: r.id,
-          agentKey: r.agentKey as "alex" | "riley",
-          status: r.status as "acted" | "confirmed",
-          intent: r.intent,
-          humanSummary: r.humanSummary,
-          occurredAt: r.resolvedAt ?? new Date(),
-          undoableUntil: r.undoableUntil,
-          targetEntities: r.targetEntities,
-        }));
+        // Defensive: the store's `where` filters on `resolvedAt: { not: null, gte }`,
+        // so a null resolvedAt here would be a data invariant violation. Drop the
+        // row instead of fabricating "occurred now" — fake recency is worse than
+        // dropping a bad row in a "Recent Wins" feed.
+        return rows.flatMap((r) => {
+          if (!r.resolvedAt) {
+            app.log.warn(
+              { recommendationId: r.id, orgId: o },
+              "wins: dropped row with null resolvedAt despite store filter",
+            );
+            return [];
+          }
+          return [
+            {
+              id: r.id,
+              agentKey: r.agentKey as "alex" | "riley",
+              status: r.status as "acted" | "confirmed",
+              intent: r.intent,
+              humanSummary: r.humanSummary,
+              occurredAt: r.resolvedAt,
+              undoableUntil: r.undoableUntil,
+              targetEntities: r.targetEntities,
+            },
+          ];
+        });
       },
     };
 
@@ -1964,12 +1997,25 @@ describe("useUndoWin", () => {
     );
   });
 
-  it("surfaces error state on dispatch failure", async () => {
-    dispatchMock.mockRejectedValue(new Error("HTTP 409"));
-    const { result } = renderHook(() => useUndoWin(), { wrapper });
+  it("invalidates wins query on 409 error so the tile reflects expired state", async () => {
+    // Render with a real-ish QueryClient so we can spy on invalidate calls.
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    function localWrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+    dispatchMock.mockRejectedValue(new Error("Recommendation action failed (HTTP 409)"));
+
+    const { result } = renderHook(() => useUndoWin(), { wrapper: localWrapper });
     result.current.mutate({ winId: "rec-1", agentKey: "alex" });
+
+    // Mutation settles in error; onSettled still runs.
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect((result.current.error as Error).message).toMatch(/409/);
+    // The hook's `isError` is not user-visible — what matters is that
+    // wins were invalidated so the VM refreshes to the expired state.
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["org-A", "wins", "feed", "alex"] }),
+    );
   });
 });
 ```
@@ -1992,6 +2038,7 @@ Expected: FAIL — module not found.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AgentKey } from "@switchboard/schemas";
 import { dispatchDecisionAction } from "@/lib/decisions/dispatch-action";
+import { scopedKeys } from "@/lib/query-keys";
 import { useSession } from "./use-session"; // adjust to actual session hook path
 
 export function useUndoWin() {
@@ -2007,11 +2054,24 @@ export function useUndoWin() {
         agentKey,
       });
     },
+    // Always refetch wins after the mutation settles. On success,
+    // dispatchDecisionAction already invalidates; this is the safety net for
+    // the error path (notably 409 undo_window_closed) so the tile re-renders
+    // with the server's authoritative undo state — `unavailableReason: "expired"`
+    // — instead of relying on a hook-level error overlay.
+    onSettled: (_data, _error, variables) => {
+      const orgId = session?.user?.orgId;
+      if (!orgId) return;
+      const keys = scopedKeys(orgId);
+      void queryClient.invalidateQueries({ queryKey: keys.wins.byAgent(variables.agentKey) });
+    },
   });
 }
 ```
 
 If `session.user.orgId` lives at a different path or is fetched via `useScopedQueryKeys` (which already returns `null` when there's no org), use that pattern instead. The key invariant is: pull `orgId` from the same source the rest of the dashboard uses.
+
+**Single source of truth on undo error display**: The "Undo window closed" message is rendered by `WinsBlock` when the **VM** says `unavailableReason: "expired"`. The hook's `isError`/`error` state is _not_ surfaced visually in PR-S3 (no toast). The `onSettled` invalidation above guarantees that after a 409 the VM refresh reflects the expired state, which is what the tile renders.
 
 - [ ] **Step 4: Run tests to verify pass**
 
@@ -2027,8 +2087,10 @@ Expected: all pass.
 git add apps/dashboard/src/hooks/use-undo-win.ts apps/dashboard/src/hooks/__tests__/use-undo-win.test.tsx
 git commit -m "feat(dashboard): useUndoWin — wraps dispatchDecisionAction
 
-Mutation hook for the WinTile Undo button. Pulls orgId from session;
-dispatchDecisionAction handles fetch + invalidation."
+Mutation hook for the WinTile Undo button. onSettled invalidates the
+wins query on both success and error so a 409 (undo_window_closed)
+refreshes the tile to the server's authoritative \"expired\" state.
+No global toast; the inline message is driven by the VM only."
 ```
 
 ---
