@@ -44,7 +44,7 @@ describe("agent-home pipeline cross-org isolation", () => {
       surface: "queue",
       parameters: {},
       targetEntities: { campaignId: "secret-c", campaignName: "Secret Campaign" },
-      sourceWorkflow: null,
+      sourceWorkflow: undefined,
       undoableUntil: null,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
