@@ -63,26 +63,51 @@ function buildTemplate(
   };
 }
 
+type FailureKind = "llm-error" | "parse-failure" | "schema-failure";
+
+function warnFallback(kind: FailureKind, periodLabel: string): void {
+  console.warn({ kind, periodLabel });
+}
+
 export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQuoteGenerator {
   return async (input) => {
     const facts = buildFacts(input);
     const value = formatCurrencyUSD(facts.revenueUsd);
     const cost = formatCurrencyUSD(facts.costUsd);
+    const template = buildTemplate(facts, value, cost);
 
     if (deps.llm == null) {
-      return buildTemplate(facts, value, cost);
+      return template;
     }
 
-    const raw = await deps.llm.complete(PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt(facts));
-    const parsed = JSON.parse(raw.trim());
-    const validated = LLMOutputSchema.parse(parsed);
+    let raw: string;
+    try {
+      raw = await deps.llm.complete(PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt(facts));
+    } catch {
+      warnFallback("llm-error", facts.periodLabel);
+      return template;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw.trim());
+    } catch {
+      warnFallback("parse-failure", facts.periodLabel);
+      return template;
+    }
+
+    const validated = LLMOutputSchema.safeParse(parsed);
+    if (!validated.success) {
+      warnFallback("schema-failure", facts.periodLabel);
+      return template;
+    }
 
     return {
-      pre: validated.pre,
+      pre: validated.data.pre,
       value,
-      mid: validated.mid,
+      mid: validated.data.mid,
       cost,
-      post: validated.post,
+      post: validated.data.post,
     };
   };
 }

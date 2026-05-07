@@ -108,9 +108,6 @@ function makeRejectingLLM(error: Error) {
   };
 }
 
-// Suppress unused function warning — used by Task 5
-void makeRejectingLLM;
-
 describe("createPullQuoteGenerator — LLM happy path", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
@@ -150,5 +147,67 @@ describe("createPullQuoteGenerator — LLM happy path", () => {
     expect(user).toContain("this quarter");
     expect(user).toContain("$18,433");
     expect(user).toContain("$499");
+  });
+});
+
+describe("createPullQuoteGenerator — fallback paths", () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("falls back to template + warns when the LLM throws", async () => {
+    const llm = makeRejectingLLM(new Error("network down"));
+    const generator = createPullQuoteGenerator({ llm });
+
+    const result = await generator(makeInput());
+
+    expect(result.pre).toBe("This month, your team generated");
+    expect(result.value).toBe("$18,433");
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toMatchObject({
+      kind: "llm-error",
+      periodLabel: "this month",
+    });
+  });
+
+  it("falls back to template + warns when the LLM returns malformed JSON", async () => {
+    const llm = makeMockLLM("not json at all");
+    const generator = createPullQuoteGenerator({ llm });
+
+    const result = await generator(makeInput());
+
+    expect(result.pre).toBe("This month, your team generated");
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toMatchObject({
+      kind: "parse-failure",
+      periodLabel: "this month",
+    });
+  });
+
+  it("falls back to template + warns when JSON is valid but missing required fields", async () => {
+    const llm = makeMockLLM('{"pre": "x"}');
+    const generator = createPullQuoteGenerator({ llm });
+
+    const result = await generator(makeInput());
+
+    expect(result.pre).toBe("This month, your team generated");
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toMatchObject({
+      kind: "schema-failure",
+      periodLabel: "this month",
+    });
+  });
+
+  it("falls back to template + warns when a slot exceeds the 80-char limit", async () => {
+    const longString = "a".repeat(81);
+    const llm = makeMockLLM(`{"pre": "${longString}", "mid": "ok mid", "post": "ok post."}`);
+    const generator = createPullQuoteGenerator({ llm });
+
+    const result = await generator(makeInput());
+
+    expect(result.pre).toBe("This month, your team generated");
+    expect(warnSpy.mock.calls[0]?.[0]).toMatchObject({ kind: "schema-failure" });
   });
 });
