@@ -1,4 +1,5 @@
 import { z } from "zod";
+import Anthropic from "@anthropic-ai/sdk";
 import type { ReportDataV1, ReportWindow } from "@switchboard/schemas";
 import type { LLMClient, PullQuoteGenerator } from "./interfaces.js";
 import type { RollupContext } from "./types.js";
@@ -122,5 +123,54 @@ export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQ
       cost,
       post: validated.data.post,
     };
+  };
+}
+
+const REPORT_LLM_MODEL = "claude-haiku-4-5-20251001";
+const REPORT_LLM_MAX_TOKENS = 256;
+const REPORT_LLM_TEMPERATURE = 0.4;
+
+/**
+ * Narrow constructor type used by the test seam — captures only the surface this
+ * file actually consumes (the real SDK class is structurally compatible). Avoids
+ * a brittle `as unknown as typeof import("@anthropic-ai/sdk").default` cast at
+ * call sites.
+ */
+type AnthropicLikeCtor = new (args: { apiKey: string }) => {
+  messages: {
+    create(args: {
+      model: string;
+      max_tokens: number;
+      temperature: number;
+      system: string;
+      messages: Array<{ role: "user" | "assistant"; content: string }>;
+    }): Promise<{ content: Array<{ type: string; text: string }> }>;
+  };
+};
+
+export function createAnthropicReportLLMClient(
+  apiKey: string,
+  options?: { AnthropicCtor?: AnthropicLikeCtor },
+): LLMClient {
+  const Ctor: AnthropicLikeCtor =
+    options?.AnthropicCtor ?? (Anthropic as unknown as AnthropicLikeCtor);
+  const client = new Ctor({ apiKey });
+  return {
+    async complete(systemPrompt: string, userPrompt: string): Promise<string> {
+      const response = await client.messages.create({
+        model: REPORT_LLM_MODEL,
+        max_tokens: REPORT_LLM_MAX_TOKENS,
+        temperature: REPORT_LLM_TEMPERATURE,
+        system: systemPrompt,
+        messages: [
+          { role: "user", content: userPrompt },
+          { role: "assistant", content: "{" },
+        ],
+      });
+      const block = response.content[0];
+      const text = block && block.type === "text" ? block.text : "";
+      // Re-prepend the prefilled '{' since the SDK strips it from the response.
+      return `{${text}`;
+    },
   };
 }

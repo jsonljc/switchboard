@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createPullQuoteGenerator } from "./pull-quote-generator.js";
+import {
+  createPullQuoteGenerator,
+  createAnthropicReportLLMClient,
+} from "./pull-quote-generator.js";
 import type { ReportDataV1 } from "@switchboard/schemas";
 import type { RollupContext } from "./types.js";
 
@@ -256,5 +259,44 @@ describe("createPullQuoteGenerator — content guard", () => {
 
     expect(result.pre).toBe("This month the team turned conversations");
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("createAnthropicReportLLMClient", () => {
+  it("re-prepends the prefilled '{' so the returned string starts with '{'", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: '"pre": "In April, the team converted leads", "mid": "in revenue against a fee of", "post": "well below traditional costs."}',
+        },
+      ],
+    });
+    const FakeAnthropic = vi.fn().mockImplementation(() => ({
+      messages: { create },
+    }));
+
+    const client = createAnthropicReportLLMClient("test-key", {
+      AnthropicCtor: FakeAnthropic,
+    });
+    const out = await client.complete("system here", "user here");
+
+    expect(out.startsWith("{")).toBe(true);
+    expect(FakeAnthropic).toHaveBeenCalledWith({ apiKey: "test-key" });
+    expect(create).toHaveBeenCalledTimes(1);
+    const call = create.mock.calls[0]?.[0];
+    expect(call?.system).toBe("system here");
+    expect(call?.model).toBe("claude-haiku-4-5-20251001");
+    expect(call?.messages).toEqual([
+      { role: "user", content: "user here" },
+      { role: "assistant", content: "{" },
+    ]);
+  });
+
+  it("uses the real Anthropic constructor by default", () => {
+    // Smoke check — constructing the client with the real SDK constructor must not throw.
+    // We do not invoke .complete() (would hit the network); we only verify wiring.
+    const client = createAnthropicReportLLMClient("test-key");
+    expect(typeof client.complete).toBe("function");
   });
 });
