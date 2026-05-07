@@ -1,12 +1,80 @@
-import { describe, expect, it } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { useAgentWins } from "../use-agent-wins";
 
-describe("useAgentWins (fixture form)", () => {
-  it("returns immediate wins fixture data", () => {
-    const { result } = renderHook(() => useAgentWins("alex"));
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.data?.freshness.dataSource).toBe("fixture");
-    expect(result.current.data?.wins.length ?? 0).toBeGreaterThan(0);
+const fetchMock = vi.fn();
+vi.stubGlobal("fetch", fetchMock);
+
+vi.mock("../use-query-keys", () => ({
+  useScopedQueryKeys: () => ({
+    wins: {
+      feed: (agentKey: string, window: string) => ["org-A", "wins", "feed", agentKey, window],
+      byAgent: (agentKey: string) => ["org-A", "wins", "feed", agentKey],
+      all: () => ["org-A", "wins"],
+    },
+  }),
+}));
+
+function wrapper({ children }: { children: ReactNode }) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
+
+describe("useAgentWins (live)", () => {
+  beforeEach(() => fetchMock.mockReset());
+
+  it("returns vm on 200 happy path", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          vm: {
+            wins: [{ id: "r1" }],
+            hasMore: false,
+            freshness: {
+              generatedAt: "2026-05-07T06:30:00.000Z",
+              window: "today",
+              dataSource: "live",
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    const { result } = renderHook(() => useAgentWins("alex"), { wrapper });
+    await waitFor(() => expect(result.current.data?.wins).toHaveLength(1));
+    expect(result.current.isError).toBe(false);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/dashboard/agents/alex/wins?window=today"),
+    );
+  });
+
+  it("surfaces isError on non-200", async () => {
+    fetchMock.mockResolvedValue(new Response("nope", { status: 500 }));
+    const { result } = renderHook(() => useAgentWins("alex"), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  it("uses the window parameter when supplied", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          vm: {
+            wins: [],
+            hasMore: false,
+            freshness: { generatedAt: "x", window: "week", dataSource: "live" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    const { result } = renderHook(() => useAgentWins("alex", "week"), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/dashboard/agents/alex/wins?window=week"),
+    );
   });
 });
