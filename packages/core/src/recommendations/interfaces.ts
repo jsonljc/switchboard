@@ -3,6 +3,7 @@ import type {
   Recommendation,
   RecommendationStatus,
   RecommendationSurface,
+  AgentKey,
 } from "./types.js";
 
 export interface RecommendationStore {
@@ -19,6 +20,18 @@ export interface RecommendationStore {
     status?: RecommendationStatus;
     sinceMs?: number;
     limit?: number;
+  }): Promise<Recommendation[]>;
+
+  /**
+   * Lists terminal (acted/confirmed) recommendations for a specific agent
+   * within a resolvedAt time window. Used by the wins projection.
+   */
+  listResolvedForAgent(args: {
+    orgId: string;
+    agentKey: AgentKey;
+    statuses: readonly RecommendationStatus[];
+    resolvedSince: Date;
+    limit: number;
   }): Promise<Recommendation[]>;
 
   /** Atomic UPDATE + AuditEntry insert. Returns the updated row. */

@@ -1,24 +1,12 @@
 // apps/dashboard/src/app/(auth)/[agentKey]/__tests__/fixtures.test.ts
 import { describe, expect, it } from "vitest";
-import {
-  getFixtureGreeting,
-  getFixtureWins,
-  getFixtureMetrics,
-  getFixturePipeline,
-} from "../_fixtures";
+import { getFixtureGreeting, getFixtureMetrics, getFixturePipeline } from "../_fixtures";
 
 describe("agent-home fixtures", () => {
   it.each(["alex", "riley"] as const)("%s greeting fixture has dataSource fixture", (agentKey) => {
     const vm = getFixtureGreeting(agentKey);
     expect(vm.freshness.dataSource).toBe("fixture");
     expect(vm.segments.length).toBeGreaterThan(0);
-  });
-
-  it.each(["alex", "riley"] as const)("%s wins fixture has dataSource fixture", (agentKey) => {
-    const vm = getFixtureWins(agentKey);
-    expect(vm.freshness.dataSource).toBe("fixture");
-    expect(vm.wins.length).toBeGreaterThan(0);
-    expect(vm.wins.every((w) => w.agentKey === agentKey)).toBe(true);
   });
 
   it.each(["alex", "riley"] as const)(

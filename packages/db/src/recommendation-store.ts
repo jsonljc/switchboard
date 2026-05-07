@@ -152,6 +152,37 @@ export class PrismaRecommendationStore implements RecommendationStore {
     return rows.map(rowToRecommendation);
   }
 
+  /**
+   * Generic store method: filters terminal recommendations by org + agent +
+   * any subset of statuses + resolvedAt window. The wins projection narrows
+   * `statuses` to ["acted", "confirmed"] at its single call site; do not pass
+   * arbitrary statuses from new external callers without thinking about
+   * what "win" means in their context.
+   */
+  async listResolvedForAgent(args: {
+    orgId: string;
+    agentKey: AgentKey;
+    statuses: readonly RecommendationStatus[];
+    resolvedSince: Date;
+    limit: number;
+  }): Promise<Recommendation[]> {
+    // Semantically "resolved wins": rows must have a non-null resolvedAt.
+    // We assert `not: null` explicitly even though `gte: <Date>` already
+    // excludes nulls in Prisma — explicit beats implicit.
+    const rows = await this.prisma.pendingActionRecord.findMany({
+      where: {
+        organizationId: args.orgId,
+        sourceAgent: args.agentKey,
+        status: { in: [...args.statuses] },
+        resolvedAt: { not: null, gte: args.resolvedSince },
+        intent: { startsWith: RECOMMENDATION_INTENT_PREFIX },
+      },
+      orderBy: { resolvedAt: "desc" },
+      take: Math.max(0, Math.min(args.limit, 200)),
+    });
+    return rows.map(rowToRecommendation);
+  }
+
   async applyAct(args: {
     id: string;
     actor: { principalId: string; type: "operator" };

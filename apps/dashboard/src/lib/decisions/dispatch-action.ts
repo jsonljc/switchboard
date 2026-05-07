@@ -30,7 +30,7 @@ export interface DispatchContext {
 
 export async function dispatchDecisionAction(
   source: { kind: DecisionKind; sourceId: string },
-  action: "primary" | "secondary" | "dismiss",
+  action: "primary" | "secondary" | "dismiss" | "undo",
   payload?: { message?: string; resolutionNote?: string; note?: string },
   context?: DispatchContext,
 ): Promise<void> {
@@ -55,6 +55,10 @@ export async function dispatchDecisionAction(
       // primary → reply (operator takes over)
       // secondary/dismiss → resolve
       // The reply payload requires a message; if absent, B2's UI must surface a composer first.
+      // Undo is approval-only; handoffs cannot be undone in this slice.
+      if (action === "undo") {
+        throw new Error("Undo not supported for handoffs");
+      }
       if (action === "primary") {
         const res = await fetch(`/api/dashboard/escalations/${source.sourceId}/reply`, {
           method: "POST",

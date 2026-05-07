@@ -59,6 +59,19 @@ export function createInMemoryRecommendationStore(): RecommendationStore & {
       filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       return typeof limit === "number" ? filtered.slice(0, limit) : filtered;
     },
+    async listResolvedForAgent({ orgId, agentKey, statuses, resolvedSince, limit }) {
+      const filtered = rows
+        .filter(
+          (r) =>
+            r.orgId === orgId &&
+            r.agentKey === agentKey &&
+            statuses.includes(r.status) &&
+            r.actedAt !== null &&
+            r.actedAt >= resolvedSince,
+        )
+        .sort((a, b) => (b.actedAt?.getTime() ?? 0) - (a.actedAt?.getTime() ?? 0));
+      return filtered.slice(0, Math.max(0, Math.min(limit, 200)));
+    },
     async applyAct({ id, actor, fromStatus, toStatus, note }) {
       const row = rows.find((r) => r.id === id);
       if (!row) throw new Error("not found");
