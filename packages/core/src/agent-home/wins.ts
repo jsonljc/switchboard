@@ -113,7 +113,7 @@ export async function projectWins(input: ProjectWinsInput): Promise<WinsViewMode
 
 function buildWinViewModel(
   row: WinTerminalRecord,
-  _config: WinsAgentConfig,
+  config: WinsAgentConfig,
   now: Date,
   timezone: string,
 ): WinViewModel {
@@ -123,7 +123,16 @@ function buildWinViewModel(
     source: "recommendation",
     occurredAt: row.occurredAt.toISOString(),
     timeFolio: formatTimeFolio(row.occurredAt, now, timezone),
-    proseSegments: [{ kind: "text", text: row.humanSummary }], // placeholder; Task 5 replaces
+    proseSegments: composeWinProse(row, config),
     undo: { available: false, until: null, unavailableReason: "not-reversible" }, // Task 6 replaces
   };
+}
+
+function composeWinProse(row: WinTerminalRecord, config: WinsAgentConfig): readonly ProseSegment[] {
+  const ack: ProseSegment = { kind: "accent", text: config.ackPhrase };
+  if (config.agentKey === "alex") {
+    return [ack, { kind: "text", text: ` ${row.humanSummary}` }];
+  }
+  // riley
+  return [ack, { kind: "text", text: ` ${row.humanSummary}` }];
 }
