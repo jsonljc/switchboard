@@ -359,6 +359,16 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
 
 // ── Signal Health Recommendations ──
 
+/**
+ * Sentinel campaignId prefix for fix_signal_health recs. Signal-health
+ * issues are account/pixel-level, not campaign-level, but the
+ * recommendation schema requires a campaignId — so we encode the pixel
+ * here. Downstream routers/UIs should detect this prefix and group these
+ * recs under a single account-level card rather than dereferencing them
+ * as Meta campaign ids.
+ */
+export const SIGNAL_HEALTH_CAMPAIGN_ID_PREFIX = "signal:";
+
 export interface SignalHealthRecommendationContext {
   pixelId: string;
   accountId: string;
@@ -433,7 +443,7 @@ export function generateSignalHealthRecommendations(
   context: SignalHealthRecommendationContext,
 ): RecommendationOutput[] {
   const base = {
-    campaignId: `signal:${context.pixelId}`,
+    campaignId: `${SIGNAL_HEALTH_CAMPAIGN_ID_PREFIX}${context.pixelId}`,
     campaignName: `Account signal (pixel ${context.pixelId})`,
   };
   const results: RecommendationOutput[] = [];

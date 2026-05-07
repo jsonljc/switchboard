@@ -205,6 +205,30 @@ describe("SignalHealthChecker.getSignalHealthReport", () => {
     expect(breach).toBeDefined();
   });
 
+  it("does not emit dedup_low breach when matched_count is unavailable", async () => {
+    // Server traffic exists but matched_count is absent on every row —
+    // Meta's response did not surface dedup data, so dedupRate is unknown.
+    // We must NOT emit dedup_low (false positive) just because the field
+    // defaulted to 0/null.
+    queueReportFetches(fetchSpy, {
+      pixel: pixelResponse({ lastFired: lastFiredFresh }),
+      combined: statsResponse([{ event: "Lead", value: 1000 }]),
+      serverEvents: serverStatsResponse([
+        { event: "Lead", value: 950, last_event_time: lastFiredFresh },
+      ]),
+      daChecks: daChecksResponse([{ event_name: "Lead", result: "PASS" }]),
+    });
+
+    const report = await checker.getSignalHealthReport(PIXEL_ID);
+
+    expect(report.score).toBe("green");
+    expect(report.breaches.find((b) => b.signal === "dedup_low")).toBeUndefined();
+    expect(report.capiHealth.dedupRate).toBeNull();
+    // EMQ proxy collapses to 0 when dedup is unknown — surfaces as a clear
+    // signal in downstream displays rather than a misleading number.
+    expect(report.emqProxy).toBe(0);
+  });
+
   it("returns yellow with da_check_failed breach when DA check fails", async () => {
     queueReportFetches(fetchSpy, {
       pixel: pixelResponse({ lastFired: lastFiredFresh }),

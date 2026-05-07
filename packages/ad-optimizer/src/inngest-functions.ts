@@ -70,6 +70,12 @@ function fmt(d: Date): string {
   return d.toISOString().split("T")[0] ?? "";
 }
 
+// TODO(scale): Both weekly-audit and daily-signal-health crons loop
+// deployments serially. Each deployment runs ~4–6 Graph API calls inside a
+// single Inngest step, so wall time scales O(N). Acceptable up to ~25
+// deployments; revisit (parallelize via Promise.all of step.run) if launch
+// tenancy crosses that threshold.
+
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
   const dateRanges = getWeeklyDateRanges();
@@ -80,8 +86,8 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
     );
     if (!creds) continue;
 
-    // Resolve pixel id ahead of the audit step so the audit closure can
-    // construct a SignalHealthChecker only when both helpers are wired.
+    // Pixel id resolution is its own Inngest step so it gets persisted +
+    // retried independently from the audit itself.
     const pixelId = deps.getDeploymentPixelId
       ? await step.run(`pixel-${deployment.id}`, () => deps.getDeploymentPixelId!(deployment.id))
       : null;

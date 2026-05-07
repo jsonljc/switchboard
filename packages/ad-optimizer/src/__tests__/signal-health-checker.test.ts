@@ -245,7 +245,7 @@ describe("SignalHealthChecker", () => {
       expect(result.freshnessMs).toBeGreaterThan(60 * 60_000);
     });
 
-    it("returns zero ratios when there is no traffic", async () => {
+    it("returns zero ratio and null dedupRate when there is no traffic", async () => {
       fetchSpy
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) })
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
@@ -253,9 +253,32 @@ describe("SignalHealthChecker", () => {
       const result = await checker.getCAPIHealth(PIXEL_ID);
 
       expect(result.serverToBrowserRatio).toBe(0);
-      expect(result.dedupRate).toBe(0);
+      expect(result.dedupRate).toBeNull();
       expect(result.lastServerEventAt).toBeNull();
       expect(result.isFresh).toBe(false);
+    });
+
+    it("returns null dedupRate when matched_count is absent on every row", async () => {
+      // Server traffic exists but Meta did not include matched_count — we
+      // cannot compute dedup, so we report null (unknown), not 0 (broken).
+      const lastFired = new Date(NOW - 30 * 60_000).toISOString();
+      fetchSpy
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ data: [{ event: "Lead", value: 1000 }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              data: [{ event: "Lead", value: 900, last_event_time: lastFired }],
+            }),
+        });
+
+      const result = await checker.getCAPIHealth(PIXEL_ID);
+
+      expect(result.serverToBrowserRatio).toBeCloseTo(0.9, 5);
+      expect(result.dedupRate).toBeNull();
     });
   });
 

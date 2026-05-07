@@ -41,7 +41,14 @@ export interface EventVolume {
 
 export interface CAPIHealth {
   serverToBrowserRatio: number;
-  dedupRate: number;
+  /**
+   * `null` when dedup cannot be computed — either because there's no server
+   * traffic at all, or because Meta's response did not include the
+   * `matched_count` field on any row. Distinguishing "unknown" from "0%"
+   * matters: a 0% number triggers a `dedup_low` breach + `fix_signal_health`
+   * rec; an unknown value does not.
+   */
+  dedupRate: number | null;
   lastServerEventAt: string | null;
   freshnessMs: number;
   isFresh: boolean;
@@ -201,11 +208,15 @@ export class SignalHealthChecker {
 
     let totalServer = 0;
     let matchedServer = 0;
+    let matchedCountSeen = false;
     let latestServerTimestampMs: number | null = null;
     let latestServerIso: string | null = null;
     for (const row of serverOnly.data ?? []) {
       totalServer += row.value;
-      matchedServer += row.matched_count ?? 0;
+      if (typeof row.matched_count === "number") {
+        matchedServer += row.matched_count;
+        matchedCountSeen = true;
+      }
       if (row.last_event_time) {
         const ts = Date.parse(row.last_event_time);
         if (
@@ -219,7 +230,11 @@ export class SignalHealthChecker {
     }
 
     const serverToBrowserRatio = totalAll === 0 ? 0 : Math.min(1, totalServer / totalAll);
-    const dedupRate = totalServer === 0 ? 0 : matchedServer / totalServer;
+    // dedupRate is null when we have no signal to compute it from — either
+    // no server traffic, or the Graph API response omitted matched_count on
+    // every row. Treating that as 0% would drown operators in false-positive
+    // dedup_low breaches.
+    const dedupRate = totalServer === 0 || !matchedCountSeen ? null : matchedServer / totalServer;
     const now = Date.now();
     const freshnessMs = latestServerTimestampMs === null ? Infinity : now - latestServerTimestampMs;
     const isFresh = latestServerTimestampMs !== null && freshnessMs < FRESHNESS_THRESHOLD_MS;
@@ -255,7 +270,11 @@ export class SignalHealthChecker {
 
     const breaches = computeBreaches(pixelHealth, capiHealth, daChecks);
     const score = scoreFromBreaches(breaches);
-    const emqProxy = capiHealth.serverToBrowserRatio * capiHealth.dedupRate;
+    // EMQ proxy = ratio × dedup. When dedup is unknown we can't meaningfully
+    // compute the proxy, so collapse to 0 — downstream displays should treat
+    // 0 as "no signal" rather than "bad signal".
+    const emqProxy =
+      capiHealth.dedupRate === null ? 0 : capiHealth.serverToBrowserRatio * capiHealth.dedupRate;
 
     return {
       pixelId,
@@ -334,7 +353,11 @@ function computeBreaches(
     });
   }
 
-  if (capiHealth.dedupRate < DEDUP_GREEN && capiHealth.serverToBrowserRatio >= RATIO_RED) {
+  if (
+    capiHealth.dedupRate !== null &&
+    capiHealth.dedupRate < DEDUP_GREEN &&
+    capiHealth.serverToBrowserRatio >= RATIO_RED
+  ) {
     breaches.push({
       signal: "dedup_low",
       severity: "warning",

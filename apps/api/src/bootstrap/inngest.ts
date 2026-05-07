@@ -100,16 +100,31 @@ export async function registerInngest(
   const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
   const taskStore = new PrismaAgentTaskStore(app.prisma);
 
-  // Pixel id is captured into the meta-ads connection credentials at OAuth
-  // time (see apps/dashboard/src/lib/service-field-configs.ts). It's optional
-  // — operators may have wired ads + ad account but not yet supplied a pixel.
+  // Pixel id can be captured in two operator-facing places:
+  //   1. Meta-ads connection credentials (apps/dashboard/src/lib/
+  //      service-field-configs.ts) — the OAuth-time field.
+  //   2. Deployment.inputConfig.pixelId (packages/db/prisma/seed-marketplace.ts)
+  //      — the ad-optimizer onboarding-wizard field.
+  // Precedence: credentials → inputConfig. Credentials are the canonical
+  // location (same record as accessToken+accountId, easier to keep in sync);
+  // inputConfig is the fallback so operators who only wired the wizard don't
+  // silently miss out on signal-health checks.
   const getDeploymentPixelId = async (deploymentId: string): Promise<string | null> => {
     const connections = await connectionStore.listByDeployment(deploymentId);
     const conn = connections.find((c) => c.type === "meta-ads");
-    if (!conn) return null;
-    const creds = decryptCredentials(conn.credentials);
-    const pixelId = creds.pixelId;
-    return typeof pixelId === "string" && pixelId.length > 0 ? pixelId : null;
+    if (conn) {
+      const creds = decryptCredentials(conn.credentials);
+      const fromCreds = creds.pixelId;
+      if (typeof fromCreds === "string" && fromCreds.length > 0) {
+        return fromCreds;
+      }
+    }
+    const deployment = await deploymentStore.findById(deploymentId);
+    const inputConfig = (deployment?.inputConfig as Record<string, unknown> | undefined) ?? {};
+    const fromInputConfig = inputConfig["pixelId"];
+    return typeof fromInputConfig === "string" && fromInputConfig.length > 0
+      ? fromInputConfig
+      : null;
   };
   const createSignalHealthChecker = (creds: { accessToken: string }) =>
     new SignalHealthChecker({ accessToken: creds.accessToken });
