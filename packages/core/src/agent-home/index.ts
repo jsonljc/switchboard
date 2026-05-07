@@ -1,7 +1,7 @@
 // Agent Home projection and types
+export type { AgentHomeKey } from "./agent-key.js";
 export {
   projectWins,
-  type AgentHomeKey,
   type WinSource,
   type WinStatus,
   type WinTerminalRecord,
