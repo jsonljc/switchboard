@@ -2,7 +2,6 @@
 import type { AgentKey } from "@switchboard/schemas";
 import type {
   GreetingViewModel,
-  WinsViewModel,
   MetricsViewModel,
   PipelineViewModel,
 } from "@/lib/agent-home/types";
@@ -30,57 +29,6 @@ const greetings: Record<"alex" | "riley", GreetingViewModel> = {
       { kind: "text", text: " is bleeding budget faster than the others — start there." },
     ],
     signal: { inboxCount: 2, oldestOpenItemAgeHours: 6, hoursSinceLastOperatorAction: 18 },
-    freshness: { generatedAt: NOW_ISO, window: "today", dataSource: "fixture" },
-  },
-};
-
-const wins: Record<"alex" | "riley", WinsViewModel> = {
-  alex: {
-    wins: [
-      {
-        id: "win-alex-1",
-        agentKey: "alex",
-        source: "recommendation",
-        occurredAt: NOW_ISO,
-        timeFolio: "11:42 AM",
-        proseSegments: [
-          { kind: "accent", text: "Booked" },
-          { kind: "text", text: " a tour with Jordan for Saturday 10am." },
-        ],
-        undo: { available: true, until: "2026-05-05T11:42:00.000Z" },
-      },
-      {
-        id: "win-alex-2",
-        agentKey: "alex",
-        source: "recommendation",
-        occurredAt: NOW_ISO,
-        timeFolio: "9:15 AM",
-        proseSegments: [
-          { kind: "text", text: "Caught a duplicate inquiry from Priya M. before sending." },
-        ],
-        undo: { available: false, until: null },
-      },
-    ],
-    hasMore: true,
-    freshness: { generatedAt: NOW_ISO, window: "today", dataSource: "fixture" },
-  },
-  riley: {
-    wins: [
-      {
-        id: "win-riley-1",
-        agentKey: "riley",
-        source: "recommendation",
-        occurredAt: NOW_ISO,
-        timeFolio: "8:02 AM",
-        proseSegments: [
-          { kind: "text", text: "Paused " },
-          { kind: "accent", text: "Whitening B" },
-          { kind: "text", text: " — CPL doubled overnight." },
-        ],
-        undo: { available: true, until: "2026-05-05T08:02:00.000Z" },
-      },
-    ],
-    hasMore: false,
     freshness: { generatedAt: NOW_ISO, window: "today", dataSource: "fixture" },
   },
 };
@@ -219,11 +167,6 @@ const pipeline: Record<"alex" | "riley", PipelineViewModel> = {
 export function getFixtureGreeting(agentKey: AgentKey): GreetingViewModel {
   if (agentKey === "mira") throw new Error("mira is not enabled in slice B");
   return greetings[agentKey];
-}
-
-export function getFixtureWins(agentKey: AgentKey): WinsViewModel {
-  if (agentKey === "mira") throw new Error("mira is not enabled in slice B");
-  return wins[agentKey];
 }
 
 export function getFixtureMetrics(agentKey: AgentKey): MetricsViewModel {
