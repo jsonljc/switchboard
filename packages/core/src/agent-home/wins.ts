@@ -130,6 +130,8 @@ function buildWinViewModel(
 
 function composeWinProse(row: WinTerminalRecord, config: WinsAgentConfig): readonly ProseSegment[] {
   const ack: ProseSegment = { kind: "accent", text: config.ackPhrase };
+  // Branches are intentionally identical today; kept as a seam for per-agent
+  // prose divergence in a later slice. Do not collapse.
   if (config.agentKey === "alex") {
     return [ack, { kind: "text", text: ` ${row.humanSummary}` }];
   }
