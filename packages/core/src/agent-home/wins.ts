@@ -4,6 +4,13 @@ import { formatTimeFolio } from "./time-folio.js";
 export type WinSource = "recommendation" | "booking" | "conversion";
 export type WinStatus = "acted" | "confirmed";
 
+/**
+ * Subset of @switchboard/schemas AgentKey that has agent-home pages in Slice B.
+ * Mira (`launchTier: "day-thirty"`) is intentionally excluded — its agent home
+ * ships in a future slice.
+ */
+export type AgentHomeKey = "alex" | "riley";
+
 export interface ProseSegment {
   kind: "text" | "accent";
   text: string;
@@ -11,7 +18,7 @@ export interface ProseSegment {
 
 export interface WinTerminalRecord {
   id: string;
-  agentKey: "alex" | "riley";
+  agentKey: AgentHomeKey;
   status: WinStatus;
   intent: string;
   humanSummary: string;
@@ -23,7 +30,7 @@ export interface WinTerminalRecord {
 export interface WinsSignalStore {
   listResolvedForAgent(input: {
     orgId: string;
-    agentKey: "alex" | "riley";
+    agentKey: AgentHomeKey;
     statuses: readonly WinStatus[];
     resolvedSince: Date;
     limit: number;
@@ -32,7 +39,7 @@ export interface WinsSignalStore {
 
 export interface WinViewModel {
   id: string;
-  agentKey: "alex" | "riley";
+  agentKey: AgentHomeKey;
   source: WinSource;
   occurredAt: string;
   timeFolio: string;
@@ -59,18 +66,18 @@ export interface WinsViewModel {
 }
 
 export interface WinsAgentConfig {
-  agentKey: "alex" | "riley";
+  agentKey: AgentHomeKey;
   ackPhrase: string;
 }
 
-const AGENT_VOICE_CONFIGS: Record<"alex" | "riley", WinsAgentConfig> = {
+const AGENT_VOICE_CONFIGS: Record<AgentHomeKey, WinsAgentConfig> = {
   alex: { agentKey: "alex", ackPhrase: "Sent." },
   riley: { agentKey: "riley", ackPhrase: "Adjusted." },
 };
 
 export interface ProjectWinsInput {
   orgId: string;
-  agentKey: "alex" | "riley";
+  agentKey: AgentHomeKey;
   window: WinTimeWindow;
   now: Date;
   timezone: string;
