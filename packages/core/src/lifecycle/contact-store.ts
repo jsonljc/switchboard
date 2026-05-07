@@ -29,6 +29,12 @@ export interface ContactStore {
   updateLastActivity(orgId: string, id: string): Promise<void>;
   /** Record a WhatsApp messaging opt-out (e.g., user replied "STOP"). */
   recordMessagingOptOut(orgId: string, id: string): Promise<void>;
+  /**
+   * Hard-delete a Contact and all PII-bearing child records in a single
+   * transaction. Used by the Meta Data Deletion callback to comply with
+   * App Review requirements.
+   */
+  delete(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
   listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
 }

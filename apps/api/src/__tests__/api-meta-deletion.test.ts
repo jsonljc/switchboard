@@ -1,0 +1,262 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHmac } from "node:crypto";
+import Fastify, { type FastifyInstance } from "fastify";
+import formbody from "@fastify/formbody";
+import { metaDeletionRoutes } from "../routes/meta-deletion.js";
+
+const APP_SECRET = "test-app-secret";
+
+function base64url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function makeSignedRequest(payload: object, secret: string = APP_SECRET): string {
+  const payloadB64 = base64url(Buffer.from(JSON.stringify(payload)));
+  const sig = createHmac("sha256", secret).update(payloadB64).digest();
+  return `${base64url(sig)}.${payloadB64}`;
+}
+
+interface MockPrisma {
+  contact: {
+    findMany: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+  };
+  conversationThread: { deleteMany: ReturnType<typeof vi.fn> };
+  opportunity: { deleteMany: ReturnType<typeof vi.fn> };
+  lifecycleRevenueEvent: { deleteMany: ReturnType<typeof vi.fn> };
+  ownerTask: { deleteMany: ReturnType<typeof vi.fn> };
+  contactLifecycle: { deleteMany: ReturnType<typeof vi.fn> };
+  conversationMessage: { deleteMany: ReturnType<typeof vi.fn> };
+  conversationState: { deleteMany: ReturnType<typeof vi.fn> };
+  whatsAppMessageStatus: { deleteMany: ReturnType<typeof vi.fn> };
+  escalationRecord: { deleteMany: ReturnType<typeof vi.fn> };
+  handoff: { deleteMany: ReturnType<typeof vi.fn> };
+  interactionSummary: { deleteMany: ReturnType<typeof vi.fn> };
+  booking: { deleteMany: ReturnType<typeof vi.fn> };
+  dataDeletionRequest: {
+    create: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+  };
+  $transaction: ReturnType<typeof vi.fn>;
+}
+
+function makePrisma(): MockPrisma {
+  const px: MockPrisma = {
+    contact: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue({ id: "c-1", phone: "+12345" }),
+      delete: vi.fn().mockResolvedValue({}),
+    },
+    conversationThread: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    opportunity: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    lifecycleRevenueEvent: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    ownerTask: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    contactLifecycle: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationState: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    whatsAppMessageStatus: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    escalationRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    handoff: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    interactionSummary: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    booking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    dataDeletionRequest: {
+      create: vi.fn().mockImplementation(async ({ data }: { data: object }) => data),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    $transaction: vi.fn(),
+  };
+  px.$transaction.mockImplementation(async (fnOrArr: unknown) => {
+    if (typeof fnOrArr === "function") return (fnOrArr as (tx: MockPrisma) => unknown)(px);
+    return fnOrArr;
+  });
+  return px;
+}
+
+async function buildApp(prisma: MockPrisma): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false });
+  await app.register(formbody);
+  // PrismaContactStore is the real implementation; we only mock the prisma client.
+  app.decorate("prisma", prisma as unknown as never);
+  await app.register(metaDeletionRoutes, { prefix: "/api/meta/deletion", appSecret: APP_SECRET });
+  return app;
+}
+
+describe("POST /api/meta/deletion", () => {
+  let prisma: MockPrisma;
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    prisma = makePrisma();
+    app = await buildApp(prisma);
+  });
+
+  it("returns 400 when signed_request is missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: "",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/Missing signed_request/);
+    await app.close();
+  });
+
+  it("returns 400 when signed_request signature is invalid", async () => {
+    const sr = makeSignedRequest({ user_id: "12345" }, "wrong-secret");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/Invalid signed_request/);
+    await app.close();
+  });
+
+  it("returns 200 with url + confirmation_code on valid signed_request, even when no contacts match", async () => {
+    prisma.contact.findMany.mockResolvedValue([]);
+    const sr = makeSignedRequest({ user_id: "6591234567" });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        host: "api.example.com",
+        "x-forwarded-proto": "https",
+      },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.confirmation_code).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(body.url).toBe(
+      `https://api.example.com/api/meta/deletion/status?code=${body.confirmation_code}`,
+    );
+    expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: "6591234567",
+        confirmationCode: body.confirmation_code,
+        deletedContactIds: [],
+        status: "completed",
+      }),
+    });
+    await app.close();
+  });
+
+  it("matches contacts by phone with both with-+ and without-+ shapes", async () => {
+    const sr = makeSignedRequest({ user_id: "6591234567" });
+    await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+
+    expect(prisma.contact.findMany).toHaveBeenCalledWith({
+      where: { phone: { in: ["6591234567", "+6591234567"] } },
+      select: { id: true, organizationId: true },
+    });
+    await app.close();
+  });
+
+  it("deletes every matched contact via the cascade and records their ids", async () => {
+    prisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", organizationId: "org-1" },
+      { id: "c-2", organizationId: "org-2" },
+    ]);
+    prisma.contact.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      phone: "+6591234567",
+    }));
+
+    const sr = makeSignedRequest({ user_id: "6591234567" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.contact.delete).toHaveBeenCalledTimes(2);
+    expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        deletedContactIds: ["c-1", "c-2"],
+        status: "completed",
+      }),
+    });
+    await app.close();
+  });
+
+  it("records status=failed when the cascade throws", async () => {
+    prisma.contact.findMany.mockResolvedValue([{ id: "c-1", organizationId: "org-1" }]);
+    prisma.contact.findFirst.mockResolvedValue({ id: "c-1", phone: null });
+    prisma.$transaction.mockRejectedValueOnce(new Error("db boom"));
+
+    const sr = makeSignedRequest({ user_id: "6591234567" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+
+    // Meta still gets a 200 with a confirmation_code; ops triages via the failed row.
+    expect(res.statusCode).toBe(200);
+    expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ status: "failed", failureReason: "db boom" }),
+    });
+    await app.close();
+  });
+});
+
+describe("GET /api/meta/deletion/status", () => {
+  let prisma: MockPrisma;
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    prisma = makePrisma();
+    app = await buildApp(prisma);
+  });
+
+  it("returns 400 when code is missing", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/meta/deletion/status" });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns 404 when the code is unknown", async () => {
+    prisma.dataDeletionRequest.findUnique.mockResolvedValue(null);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/meta/deletion/status?code=missing",
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("returns 200 with the deletion record when found", async () => {
+    prisma.dataDeletionRequest.findUnique.mockResolvedValue({
+      status: "completed",
+      completedAt: new Date("2026-05-07T15:00:00Z"),
+      createdAt: new Date("2026-05-07T14:59:00Z"),
+      deletedContactIds: ["c-1", "c-2"],
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/meta/deletion/status?code=abc123",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.status).toBe("completed");
+    expect(body.completed_at).toBe("2026-05-07T15:00:00.000Z");
+    expect(body.deleted_record_count).toBe(2);
+    await app.close();
+  });
+});

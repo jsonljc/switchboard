@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaDbClient } from "../prisma-db.js";
+import { isRootPrismaClient } from "../prisma-db.js";
 import type {
   Contact,
   ContactStage,
@@ -39,6 +40,13 @@ interface ContactStore {
   updateStage(orgId: string, id: string, stage: ContactStage): Promise<Contact>;
   updateLastActivity(orgId: string, id: string): Promise<void>;
   recordMessagingOptOut(orgId: string, id: string): Promise<void>;
+  /**
+   * Hard-delete a Contact and all PII-bearing child records in a single
+   * transaction. Used by the Meta Data Deletion callback to comply with
+   * App Review requirements. No FK cascades exist for Contact; every
+   * dependent table is deleted manually here.
+   */
+  delete(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
   listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
 }
@@ -139,6 +147,46 @@ export class PrismaContactStore implements ContactStore {
         updatedAt: new Date(),
       },
     });
+  }
+
+  async delete(orgId: string, id: string): Promise<void> {
+    const existing = await this.prisma.contact.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!existing) {
+      throw new Error(`Contact not found or does not belong to organization: ${id}`);
+    }
+    const phone = existing.phone;
+
+    const cascade = async (tx: PrismaDbClient): Promise<void> => {
+      // contactId-keyed children. None of these FKs cascade at the DB level,
+      // so we delete every dependent row manually.
+      await tx.conversationThread.deleteMany({ where: { contactId: id } });
+      await tx.lifecycleRevenueEvent.deleteMany({ where: { contactId: id } });
+      await tx.ownerTask.deleteMany({ where: { contactId: id } });
+      await tx.opportunity.deleteMany({ where: { contactId: id } });
+      await tx.contactLifecycle.deleteMany({ where: { contactId: id } });
+      await tx.conversationMessage.deleteMany({ where: { contactId: id } });
+      await tx.escalationRecord.deleteMany({ where: { contactId: id } });
+      await tx.handoff.deleteMany({ where: { leadId: id } });
+      await tx.interactionSummary.deleteMany({ where: { contactId: id } });
+      await tx.booking.deleteMany({ where: { contactId: id } });
+
+      // phone-keyed children — only if we have a phone to match on
+      if (phone) {
+        await tx.whatsAppMessageStatus.deleteMany({ where: { recipientId: phone } });
+        await tx.conversationState.deleteMany({ where: { principalId: phone } });
+      }
+
+      await tx.contact.delete({ where: { id } });
+    };
+
+    if (isRootPrismaClient(this.prisma)) {
+      await this.prisma.$transaction(cascade);
+    } else {
+      // Already inside an outer transaction — run inline (Prisma forbids nesting).
+      await cascade(this.prisma);
+    }
   }
 
   async recordMessagingOptOut(orgId: string, id: string): Promise<void> {

@@ -113,7 +113,10 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       request.url === "/docs" ||
       request.url.startsWith("/docs/") ||
       request.url.startsWith("/api/setup/") ||
-      request.url === "/api/billing/webhook"
+      request.url === "/api/billing/webhook" ||
+      // Meta Data Deletion callback — verified by signed_request HMAC instead.
+      request.url === "/api/meta/deletion" ||
+      request.url.startsWith("/api/meta/deletion/status")
     ) {
       return;
     }

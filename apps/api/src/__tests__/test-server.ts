@@ -154,6 +154,11 @@ class TestContactStore implements ContactStore {
     });
   }
 
+  async delete(_orgId: string, id: string): Promise<void> {
+    if (!this.rows.has(id)) throw new Error(`Contact not found: ${id}`);
+    this.rows.delete(id);
+  }
+
   async findById(_orgId: string, id: string): Promise<Contact | null> {
     return this.rows.get(id) ?? null;
   }
