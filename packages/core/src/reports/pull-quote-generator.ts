@@ -1,8 +1,16 @@
+import { z } from "zod";
 import type { ReportDataV1, ReportWindow } from "@switchboard/schemas";
 import type { LLMClient, PullQuoteGenerator } from "./interfaces.js";
 import type { RollupContext } from "./types.js";
 import { formatCurrencyUSD } from "./period-helpers.js";
+import { PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt } from "./prompts/pull-quote-prompt.js";
 import type { PullQuoteFacts } from "./prompts/pull-quote-prompt.js";
+
+const LLMOutputSchema = z.object({
+  pre: z.string().min(1).max(80),
+  mid: z.string().min(1).max(80),
+  post: z.string().min(1).max(80),
+});
 
 function windowToLabel(window: ReportWindow): string {
   switch (window) {
@@ -65,7 +73,16 @@ export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQ
       return buildTemplate(facts, value, cost);
     }
 
-    // LLM path is added in subsequent tasks. For now, fall through to template.
-    return buildTemplate(facts, value, cost);
+    const raw = await deps.llm.complete(PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt(facts));
+    const parsed = JSON.parse(raw.trim());
+    const validated = LLMOutputSchema.parse(parsed);
+
+    return {
+      pre: validated.pre,
+      value,
+      mid: validated.mid,
+      cost,
+      post: validated.post,
+    };
   };
 }

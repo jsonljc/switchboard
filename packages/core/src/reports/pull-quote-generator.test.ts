@@ -94,3 +94,61 @@ describe("createPullQuoteGenerator — null client path", () => {
     expect(a).toEqual(b);
   });
 });
+
+function makeMockLLM(reply: string) {
+  return { complete: vi.fn(async () => reply) };
+}
+
+// Used by Task 5 for testing error/fallback paths
+function makeRejectingLLM(error: Error) {
+  return {
+    complete: vi.fn(async () => {
+      throw error;
+    }),
+  };
+}
+
+// Suppress unused function warning — used by Task 5
+void makeRejectingLLM;
+
+describe("createPullQuoteGenerator — LLM happy path", () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("returns LLM-written prose connectors merged with deterministic value/cost", async () => {
+    const llm = makeMockLLM(
+      '{"pre": "In April, the team converted leads", "mid": "in revenue against a Switchboard fee of", "post": "well below traditional staffing costs."}',
+    );
+
+    const generator = createPullQuoteGenerator({ llm });
+    const result = await generator(makeInput());
+
+    expect(result).toEqual({
+      pre: "In April, the team converted leads",
+      value: "$18,433",
+      mid: "in revenue against a Switchboard fee of",
+      cost: "$499",
+      post: "well below traditional staffing costs.",
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("calls LLMClient.complete with the system prompt and a user prompt containing the period label", async () => {
+    const completeSpy = vi.fn(async () => '{"pre": "ok pre", "mid": "ok mid", "post": "ok post."}');
+    const generator = createPullQuoteGenerator({ llm: { complete: completeSpy } });
+
+    await generator(makeInput("THIS QUARTER"));
+
+    expect(completeSpy).toHaveBeenCalledTimes(1);
+    const call = completeSpy.mock.calls[0];
+    expect(call).toBeDefined();
+    const [system, user] = call as unknown as [string, string];
+    expect(system).toMatch(/JSON/);
+    expect(user).toContain("this quarter");
+    expect(user).toContain("$18,433");
+    expect(user).toContain("$499");
+  });
+});
