@@ -282,6 +282,11 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     return this.request<{ vm: unknown }>(path);
   }
 
+  async listMetrics(agentKey: string, window: "week" = "week"): Promise<{ vm: unknown }> {
+    const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/metrics?window=${window}`;
+    return this.request<{ vm: unknown }>(path);
+  }
+
   // Decisions (cross-kind feed: recommendations + handoffs)
   /**
    * Reads the Decision Feed (Slice A PR 3 endpoint). Pass an `agentKey` to
