@@ -1,10 +1,11 @@
-// packages/core/src/ad-optimizer/inngest-functions.ts
+// packages/ad-optimizer/src/inngest-functions.ts
 import { Inngest } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 import { AuditRunner } from "./audit-runner.js";
 import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
+import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
 
 interface DeploymentInfo {
   id: string;
@@ -21,6 +22,8 @@ interface DeploymentCredentials {
   accountId: string;
 }
 
+type SignalHealthCheckerLike = SignalHealthReportProvider;
+
 export interface CronDependencies {
   listActiveDeployments: () => Promise<DeploymentInfo[]>;
   getDeploymentCredentials: (deploymentId: string) => Promise<DeploymentCredentials | null>;
@@ -28,6 +31,15 @@ export interface CronDependencies {
   createCrmProvider: (deploymentId: string) => CrmDataProvider;
   createInsightsProvider: (adsClient: AdsClientInterface) => CampaignInsightsProvider;
   saveAuditReport: (deploymentId: string, report: unknown) => Promise<void>;
+  /**
+   * Optional. When both this and `createSignalHealthChecker` are provided,
+   * the weekly audit pulls a signal-health report at the start of each
+   * deployment audit and either short-circuits diagnostics (red score) or
+   * appends `fix_signal_health` recs (yellow score). Optional for back-compat
+   * with callers that have not been re-wired yet.
+   */
+  getDeploymentPixelId?: (deploymentId: string) => Promise<string | null>;
+  createSignalHealthChecker?: (creds: DeploymentCredentials) => SignalHealthCheckerLike;
 }
 
 interface StepTools {
@@ -58,6 +70,12 @@ function fmt(d: Date): string {
   return d.toISOString().split("T")[0] ?? "";
 }
 
+// TODO(scale): Both weekly-audit and daily-signal-health crons loop
+// deployments serially. Each deployment runs ~4–6 Graph API calls inside a
+// single Inngest step, so wall time scales O(N). Acceptable up to ~25
+// deployments; revisit (parallelize via Promise.all of step.run) if launch
+// tenancy crosses that threshold.
+
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
   const dateRanges = getWeeklyDateRanges();
@@ -67,6 +85,12 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
       deps.getDeploymentCredentials(deployment.id),
     );
     if (!creds) continue;
+
+    // Pixel id resolution is its own Inngest step so it gets persisted +
+    // retried independently from the audit itself.
+    const pixelId = deps.getDeploymentPixelId
+      ? await step.run(`pixel-${deployment.id}`, () => deps.getDeploymentPixelId!(deployment.id))
+      : null;
 
     await step.run(`audit-${deployment.id}`, async () => {
       const adsClient = deps.createAdsClient(creds);
@@ -80,12 +104,18 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
           landingPageViewRate: 0.85,
           clickToLeadRate: 0.05,
         },
+        ...(pixelId ? { pixelId } : {}),
       };
+      const signalHealthChecker =
+        pixelId && deps.createSignalHealthChecker
+          ? deps.createSignalHealthChecker(creds)
+          : undefined;
       const runner = new AuditRunner({
         adsClient,
         crmDataProvider: deps.createCrmProvider(deployment.id),
         insightsProvider: deps.createInsightsProvider(adsClient),
         config,
+        ...(signalHealthChecker ? { signalHealthChecker } : {}),
       });
       const report = await runner.run(dateRanges);
       await deps.saveAuditReport(deployment.id, report);
@@ -133,6 +163,67 @@ export function createDailyCheckCron(deps: CronDependencies) {
     },
     async ({ step }) => {
       await executeDailyCheck(step as unknown as StepTools, deps);
+    },
+  );
+}
+
+// ── Signal Health Daily Cron ──
+
+export interface SignalHealthCronDependencies {
+  listActiveDeployments: () => Promise<DeploymentInfo[]>;
+  getDeploymentCredentials: (deploymentId: string) => Promise<DeploymentCredentials | null>;
+  getDeploymentPixelId: (deploymentId: string) => Promise<string | null>;
+  createSignalHealthChecker: (creds: DeploymentCredentials) => SignalHealthCheckerLike;
+  saveSignalHealthReport: (deploymentId: string, report: SignalHealthReport) => Promise<void>;
+}
+
+export async function executeDailySignalHealthCheck(
+  step: StepTools,
+  deps: SignalHealthCronDependencies,
+): Promise<void> {
+  const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
+
+  for (const deployment of deployments) {
+    const creds = await step.run(`creds-${deployment.id}`, () =>
+      deps.getDeploymentCredentials(deployment.id),
+    );
+    if (!creds) continue;
+
+    const pixelId = await step.run(`pixel-${deployment.id}`, () =>
+      deps.getDeploymentPixelId(deployment.id),
+    );
+    if (!pixelId) continue;
+
+    await step.run(`signal-health-${deployment.id}`, async () => {
+      const checker = deps.createSignalHealthChecker(creds);
+      const report = await checker.getSignalHealthReport(pixelId);
+      if (report.score === "red") {
+        const breachList = report.breaches
+          .filter((b) => b.severity === "critical")
+          .map((b) => b.signal)
+          .join(", ");
+        console.warn(
+          `[ad-optimizer] signal-health RED for deployment=${deployment.id} ` +
+            `pixel=${pixelId}: ${breachList || "critical breach"}`,
+        );
+      }
+      await deps.saveSignalHealthReport(deployment.id, report);
+    });
+  }
+}
+
+export function createDailySignalHealthCron(deps: SignalHealthCronDependencies) {
+  return inngestClient.createFunction(
+    {
+      id: "ad-optimizer-daily-signal-health",
+      name: "Ad Optimizer Daily Signal Health",
+      retries: 2,
+      // Runs at 07:00 UTC, ahead of the 08:00 daily check so signal failures
+      // are visible before the rest of the daily pipeline runs.
+      triggers: [{ cron: "0 7 * * *" }],
+    },
+    async ({ step }) => {
+      await executeDailySignalHealthCheck(step as unknown as StepTools, deps);
     },
   );
 }

@@ -1,4 +1,4 @@
-// packages/core/src/ad-optimizer/facebook-oauth.ts
+// packages/ad-optimizer/src/facebook-oauth.ts
 
 export const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
 export const OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth";

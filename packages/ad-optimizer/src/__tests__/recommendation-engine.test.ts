@@ -1,4 +1,4 @@
-// packages/core/src/ad-optimizer/__tests__/recommendation-engine.test.ts
+// packages/ad-optimizer/src/__tests__/recommendation-engine.test.ts
 import { describe, it, expect } from "vitest";
 import { generateRecommendations } from "../recommendation-engine.js";
 import type { RecommendationInput } from "../recommendation-engine.js";

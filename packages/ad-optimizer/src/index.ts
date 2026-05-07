@@ -16,8 +16,13 @@ export { generateRecommendations } from "./recommendation-engine.js";
 export type { RecommendationInput } from "./recommendation-engine.js";
 export { AuditRunner } from "./audit-runner.js";
 export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
-export { createWeeklyAuditCron, createDailyCheckCron } from "./inngest-functions.js";
-export type { CronDependencies } from "./inngest-functions.js";
+export {
+  createWeeklyAuditCron,
+  createDailyCheckCron,
+  createDailySignalHealthCron,
+  executeDailySignalHealthCheck,
+} from "./inngest-functions.js";
+export type { CronDependencies, SignalHealthCronDependencies } from "./inngest-functions.js";
 export { parseLeadWebhook, fetchLeadDetail, extractFieldValue } from "./meta-leads-ingester.js";
 export type { LeadData } from "./meta-leads-ingester.js";
 export {
@@ -57,6 +62,19 @@ export type {
   CrmFunnelDataWithSources,
 } from "./crm-data-provider/real-provider.js";
 export { runRecommendationSink } from "./recommendation-sink.js";
+export { SignalHealthChecker } from "./signal-health-checker.js";
+export type {
+  PixelHealth,
+  EventVolume,
+  EventVolumeEntry,
+  CAPIHealth,
+  DaCheck,
+  DaChecks,
+  Breach,
+  BreachSignal,
+  SignalHealthScore,
+  SignalHealthReport,
+} from "./signal-health-checker.js";
 export type {
   RunRecommendationSinkArgs,
   RunRecommendationSinkResult,

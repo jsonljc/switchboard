@@ -113,6 +113,8 @@ function humanizeRecommendation(rec: RecommendationOutput): string {
       return `Switch optimization event on ${name} — ${rec.estimatedImpact}`;
     case "harden_capi_attribution":
       return `Harden CAPI attribution for ${name} — ${rec.estimatedImpact}`;
+    case "fix_signal_health":
+      return `Fix pixel/CAPI signal — ${rec.estimatedImpact}`;
   }
 }
 
@@ -141,6 +143,7 @@ function buildPresentation(rec: RecommendationOutput): {
     shift_budget_to_source: { primary: "Shift budget", secondary: "Wait" },
     switch_optimization_event: { primary: "Switch event", secondary: "Wait" },
     harden_capi_attribution: { primary: "Fix attribution", secondary: "Skip" },
+    fix_signal_health: { primary: "Fix signal", secondary: "Skip" },
   };
   const found = labels[rec.action];
   return {

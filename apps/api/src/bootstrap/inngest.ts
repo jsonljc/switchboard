@@ -23,10 +23,16 @@ import {
 import {
   createWeeklyAuditCron,
   createDailyCheckCron,
+  createDailySignalHealthCron,
   MetaAdsClient,
   RealCrmDataProvider,
+  SignalHealthChecker,
 } from "@switchboard/ad-optimizer";
-import type { CronDependencies, InstantFormAdapter } from "@switchboard/ad-optimizer";
+import type {
+  CronDependencies,
+  SignalHealthCronDependencies,
+  InstantFormAdapter,
+} from "@switchboard/ad-optimizer";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -94,6 +100,35 @@ export async function registerInngest(
   const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
   const taskStore = new PrismaAgentTaskStore(app.prisma);
 
+  // Pixel id can be captured in two operator-facing places:
+  //   1. Meta-ads connection credentials (apps/dashboard/src/lib/
+  //      service-field-configs.ts) — the OAuth-time field.
+  //   2. Deployment.inputConfig.pixelId (packages/db/prisma/seed-marketplace.ts)
+  //      — the ad-optimizer onboarding-wizard field.
+  // Precedence: credentials → inputConfig. Credentials are the canonical
+  // location (same record as accessToken+accountId, easier to keep in sync);
+  // inputConfig is the fallback so operators who only wired the wizard don't
+  // silently miss out on signal-health checks.
+  const getDeploymentPixelId = async (deploymentId: string): Promise<string | null> => {
+    const connections = await connectionStore.listByDeployment(deploymentId);
+    const conn = connections.find((c) => c.type === "meta-ads");
+    if (conn) {
+      const creds = decryptCredentials(conn.credentials);
+      const fromCreds = creds.pixelId;
+      if (typeof fromCreds === "string" && fromCreds.length > 0) {
+        return fromCreds;
+      }
+    }
+    const deployment = await deploymentStore.findById(deploymentId);
+    const inputConfig = (deployment?.inputConfig as Record<string, unknown> | undefined) ?? {};
+    const fromInputConfig = inputConfig["pixelId"];
+    return typeof fromInputConfig === "string" && fromInputConfig.length > 0
+      ? fromInputConfig
+      : null;
+  };
+  const createSignalHealthChecker = (creds: { accessToken: string }) =>
+    new SignalHealthChecker({ accessToken: creds.accessToken });
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -148,6 +183,31 @@ export async function registerInngest(
         input: {},
       });
       await taskStore.submitOutput(task.id, report as Record<string, unknown>);
+      await taskStore.updateStatus(task.id, "completed");
+    },
+    getDeploymentPixelId,
+    createSignalHealthChecker,
+  };
+
+  // Signal-health daily cron uses a slimmer dep set than the audit cron —
+  // it only needs to list deployments, resolve creds + pixel, run the
+  // checker, and persist the report.
+  const signalHealthDeps: SignalHealthCronDependencies = {
+    listActiveDeployments: adOptimizerDeps.listActiveDeployments,
+    getDeploymentCredentials: adOptimizerDeps.getDeploymentCredentials,
+    getDeploymentPixelId,
+    createSignalHealthChecker,
+    saveSignalHealthReport: async (deploymentId, report) => {
+      const deployment = await deploymentStore.findById(deploymentId);
+      if (!deployment) return;
+      const task = await taskStore.create({
+        deploymentId,
+        organizationId: deployment.organizationId,
+        listingId: deployment.listingId,
+        category: "signal_health",
+        input: {},
+      });
+      await taskStore.submitOutput(task.id, report as unknown as Record<string, unknown>);
       await taskStore.updateStatus(task.id, "completed");
     },
   };
@@ -449,6 +509,7 @@ export async function registerInngest(
       }),
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
+      createDailySignalHealthCron(signalHealthDeps),
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
