@@ -113,6 +113,12 @@ export interface StatCell {
   unavailable?: boolean;
 }
 
+// This shape is mirrored at packages/core/src/agent-home/metrics.ts. The core
+// type is intentionally narrower in PR-S5 (DataFreshness.window is the literal
+// "week" because the backend only emits week metrics). The dashboard form keeps
+// the wider AgentWindow union so future PRs that add today/month windows don't
+// require a coordinated dual edit. Wire shape is compatible: dashboard
+// supersets core.
 export interface MetricsViewModel {
   hero: HeroMetric;
   heroSubProseSegments: readonly ProseSegment[];

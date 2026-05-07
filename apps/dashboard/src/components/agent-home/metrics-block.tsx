@@ -5,9 +5,9 @@ import { FixtureFolioBadge } from "./fixture-folio-badge";
 import { Sparkline } from "./sparkline";
 
 const SOURCE_LABEL: Record<string, string> = {
-  "ad-platform-spend": "spend",
+  "ad-platform-spend": "Spend",
   "ad-platform-ctr": "CTR",
-  "attribution-revenue": "revenue",
+  "attribution-revenue": "Revenue",
 };
 
 function HeroNumber({ hero }: { hero: HeroMetric }) {

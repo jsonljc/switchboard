@@ -79,10 +79,10 @@ describe("MetricsBlock — PR-S5 UX", () => {
 
   it("renders '· no data: spend' chip when one source unavailable", () => {
     render(<MetricsBlock vm={makeVm()} agentKey="alex" />);
-    expect(screen.getByText(/no data: spend/i)).toBeInTheDocument();
+    expect(screen.getByText(/no data: Spend/)).toBeInTheDocument();
   });
 
-  it("renders '· no data: CTR, spend' chip (alphabetized) when multiple", () => {
+  it("renders '· no data: CTR, Spend' chip (alphabetized) when multiple", () => {
     const vm = makeVm({
       freshness: {
         generatedAt: "2026-05-06T07:30:00.000Z",
@@ -92,7 +92,20 @@ describe("MetricsBlock — PR-S5 UX", () => {
       },
     });
     render(<MetricsBlock vm={vm} agentKey="riley" />);
-    expect(screen.getByText(/no data: CTR, spend/i)).toBeInTheDocument();
+    expect(screen.getByText(/no data: CTR, Spend/)).toBeInTheDocument();
+  });
+
+  it("falls back to the raw token when source is not in the SOURCE_LABEL map", () => {
+    const vm = makeVm({
+      freshness: {
+        generatedAt: "2026-05-06T07:30:00.000Z",
+        window: "week",
+        dataSource: "live",
+        unavailableSources: ["unmapped-future-source"],
+      },
+    });
+    render(<MetricsBlock vm={vm} agentKey="alex" />);
+    expect(screen.getByText(/no data: unmapped-future-source/)).toBeInTheDocument();
   });
 
   it("renders '0' (not '—') for cells with rawValue=0 and no unavailable flag", () => {
