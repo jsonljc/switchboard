@@ -115,6 +115,7 @@ class TestContactStore implements ContactStore {
   async create(input: import("@switchboard/core").CreateContactInput): Promise<Contact> {
     const id = `contact-${this.rows.size + 1}`;
     const now = new Date();
+    const messagingOptIn = input.messagingOptIn ?? false;
     const contact: Contact = {
       id,
       organizationId: input.organizationId,
@@ -127,6 +128,10 @@ class TestContactStore implements ContactStore {
       source: input.source ?? null,
       attribution: (input.attribution as Contact["attribution"]) ?? null,
       roles: input.roles ?? ["lead"],
+      messagingOptIn,
+      messagingOptInAt: messagingOptIn ? now : null,
+      messagingOptInSource: input.messagingOptInSource ?? null,
+      messagingOptOutAt: null,
       firstContactAt: now,
       lastActivityAt: now,
       createdAt: now,
@@ -134,6 +139,18 @@ class TestContactStore implements ContactStore {
     };
     this.rows.set(id, contact);
     return contact;
+  }
+
+  async recordMessagingOptOut(_orgId: string, id: string): Promise<void> {
+    const c = this.rows.get(id);
+    if (!c) throw new Error(`Contact not found: ${id}`);
+    const now = new Date();
+    this.rows.set(id, {
+      ...c,
+      messagingOptIn: false,
+      messagingOptOutAt: now,
+      updatedAt: now,
+    });
   }
 
   async findById(_orgId: string, id: string): Promise<Contact | null> {

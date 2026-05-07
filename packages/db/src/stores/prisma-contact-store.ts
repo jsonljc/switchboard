@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaDbClient } from "../prisma-db.js";
-import type { Contact, ContactStage, AttributionChain } from "@switchboard/schemas";
+import type {
+  Contact,
+  ContactStage,
+  AttributionChain,
+  MessagingOptInSource,
+} from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
 // Store Interface (structural match with @switchboard/core)
@@ -16,6 +21,8 @@ interface CreateContactInput {
   source?: string | null;
   attribution?: Record<string, unknown> | null;
   roles?: string[];
+  messagingOptIn?: boolean;
+  messagingOptInSource?: MessagingOptInSource;
 }
 
 interface ContactFilters {
@@ -31,6 +38,7 @@ interface ContactStore {
   findByPhone(orgId: string, phone: string): Promise<Contact | null>;
   updateStage(orgId: string, id: string, stage: ContactStage): Promise<Contact>;
   updateLastActivity(orgId: string, id: string): Promise<void>;
+  recordMessagingOptOut(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
   listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
 }
@@ -45,6 +53,7 @@ export class PrismaContactStore implements ContactStore {
   async create(input: CreateContactInput): Promise<Contact> {
     const id = randomUUID();
     const now = new Date();
+    const messagingOptIn = input.messagingOptIn ?? false;
 
     const created = await this.prisma.contact.create({
       data: {
@@ -59,6 +68,9 @@ export class PrismaContactStore implements ContactStore {
         attribution: input.attribution ? (input.attribution as object) : undefined,
         roles: input.roles ?? ["lead"],
         stage: "new",
+        messagingOptIn,
+        messagingOptInAt: messagingOptIn ? now : null,
+        messagingOptInSource: input.messagingOptInSource ?? null,
         firstContactAt: now,
         lastActivityAt: now,
         createdAt: now,
@@ -129,6 +141,25 @@ export class PrismaContactStore implements ContactStore {
     });
   }
 
+  async recordMessagingOptOut(orgId: string, id: string): Promise<void> {
+    const existing = await this.prisma.contact.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!existing) {
+      throw new Error(`Contact not found or does not belong to organization: ${id}`);
+    }
+
+    const now = new Date();
+    await this.prisma.contact.update({
+      where: { id },
+      data: {
+        messagingOptIn: false,
+        messagingOptOutAt: now,
+        updatedAt: now,
+      },
+    });
+  }
+
   async listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>> {
     if (ids.length === 0) return new Map();
     const rows = await this.prisma.contact.findMany({
@@ -176,6 +207,10 @@ function mapRowToContact(row: {
   source: string | null;
   attribution: unknown;
   roles: string[];
+  messagingOptIn?: boolean;
+  messagingOptInAt?: Date | null;
+  messagingOptInSource?: string | null;
+  messagingOptOutAt?: Date | null;
   firstContactAt: Date;
   lastActivityAt: Date;
   createdAt: Date;
@@ -193,6 +228,10 @@ function mapRowToContact(row: {
     source: row.source,
     attribution: row.attribution as AttributionChain | null | undefined,
     roles: row.roles,
+    messagingOptIn: row.messagingOptIn ?? false,
+    messagingOptInAt: row.messagingOptInAt ?? null,
+    messagingOptInSource: (row.messagingOptInSource ?? null) as MessagingOptInSource | null,
+    messagingOptOutAt: row.messagingOptOutAt ?? null,
     firstContactAt: row.firstContactAt,
     lastActivityAt: row.lastActivityAt,
     createdAt: row.createdAt,

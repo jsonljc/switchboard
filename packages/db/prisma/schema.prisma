@@ -1484,6 +1484,12 @@ model Contact {
   roles             String[] @default(["lead"])
   leadgenId         String?
   idempotencyKey    String?
+  // WhatsApp Business API messaging consent (separate from creative-pipeline ConsentRecord).
+  // Required for proactive template sends outside the 24hr conversation window.
+  messagingOptIn       Boolean   @default(false)
+  messagingOptInAt     DateTime?
+  messagingOptInSource String? // "ctwa" | "organic_inbound" | "web_form" | "manual"
+  messagingOptOutAt    DateTime?
   firstContactAt    DateTime @default(now())
   lastActivityAt    DateTime @default(now())
   createdAt         DateTime @default(now())

@@ -21,6 +21,8 @@ export interface SkillStores {
       name?: string | null;
       primaryChannel: "whatsapp" | "telegram" | "dashboard";
       source?: string | null;
+      messagingOptIn?: boolean;
+      messagingOptInSource?: "ctwa" | "organic_inbound" | "web_form" | "manual";
     }): Promise<{ id: string }>;
   };
   activityStore: {

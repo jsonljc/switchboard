@@ -27,6 +27,10 @@ function makeContact(overrides: Record<string, unknown> = {}) {
     source: "facebook_ad",
     attribution: { fbclid: "abc123", sourceCampaignId: "camp-1" },
     roles: ["lead"],
+    messagingOptIn: false,
+    messagingOptInAt: null,
+    messagingOptInSource: null,
+    messagingOptOutAt: null,
     firstContactAt: now,
     lastActivityAt: now,
     createdAt: now,
@@ -115,8 +119,59 @@ describe("PrismaContactStore", () => {
           primaryChannel: "telegram",
           roles: ["lead"],
           stage: "new",
+          messagingOptIn: false,
+          messagingOptInAt: null,
+          messagingOptInSource: null,
         }),
       });
+    });
+
+    it("persists messagingOptIn with source and timestamp when opted in", async () => {
+      const input = {
+        organizationId: "org-1",
+        phone: "+6591111111",
+        primaryChannel: "whatsapp" as const,
+        messagingOptIn: true,
+        messagingOptInSource: "organic_inbound" as const,
+      };
+
+      prisma.contact.create.mockResolvedValue(
+        makeContact({
+          messagingOptIn: true,
+          messagingOptInAt: now,
+          messagingOptInSource: "organic_inbound",
+        }),
+      );
+
+      const result = await store.create(input);
+
+      expect(prisma.contact.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          messagingOptIn: true,
+          messagingOptInAt: expect.any(Date),
+          messagingOptInSource: "organic_inbound",
+        }),
+      });
+      expect(result.messagingOptIn).toBe(true);
+      expect(result.messagingOptInSource).toBe("organic_inbound");
+      expect(result.messagingOptInAt).toBeInstanceOf(Date);
+    });
+
+    it("does not set messagingOptInAt when messagingOptIn is false", async () => {
+      const input = {
+        organizationId: "org-1",
+        primaryChannel: "telegram" as const,
+      };
+
+      prisma.contact.create.mockResolvedValue(makeContact({ primaryChannel: "telegram" }));
+
+      await store.create(input);
+
+      const callArgs = prisma.contact.create.mock.calls[0]?.[0] as {
+        data: { messagingOptIn: boolean; messagingOptInAt: Date | null };
+      };
+      expect(callArgs.data.messagingOptIn).toBe(false);
+      expect(callArgs.data.messagingOptInAt).toBeNull();
     });
   });
 
@@ -242,6 +297,38 @@ describe("PrismaContactStore", () => {
       await expect(store.updateLastActivity("org-1", "contact-999")).rejects.toThrow(
         /not found or does not belong/,
       );
+    });
+  });
+
+  describe("recordMessagingOptOut", () => {
+    it("sets messagingOptIn=false and messagingOptOutAt on the contact", async () => {
+      prisma.contact.findFirst.mockResolvedValue(makeContact({ messagingOptIn: true }));
+      prisma.contact.update.mockResolvedValue(
+        makeContact({ messagingOptIn: false, messagingOptOutAt: now }),
+      );
+
+      await store.recordMessagingOptOut("org-1", "contact-1");
+
+      expect(prisma.contact.findFirst).toHaveBeenCalledWith({
+        where: { id: "contact-1", organizationId: "org-1" },
+      });
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: "contact-1" },
+        data: {
+          messagingOptIn: false,
+          messagingOptOutAt: expect.any(Date),
+          updatedAt: expect.any(Date),
+        },
+      });
+    });
+
+    it("throws when contact not found or wrong org (tenant isolation)", async () => {
+      prisma.contact.findFirst.mockResolvedValue(null);
+
+      await expect(store.recordMessagingOptOut("org-1", "contact-999")).rejects.toThrow(
+        /not found or does not belong/,
+      );
+      expect(prisma.contact.update).not.toHaveBeenCalled();
     });
   });
 
