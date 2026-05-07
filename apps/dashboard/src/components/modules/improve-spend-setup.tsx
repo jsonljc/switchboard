@@ -137,6 +137,66 @@ function ComingSoonStep({ step }: { step: Step }) {
   );
 }
 
+// Loose validation: Meta pixel ids are numeric strings, typically 15–16 digits.
+// Accept anything 5+ digits to leave room for legacy or test-account ids.
+function isValidPixelId(value: string): boolean {
+  return /^\d{5,}$/.test(value);
+}
+
+export function ConnectCapiStep({
+  pixelId,
+  loading,
+  error,
+  onPixelIdChange,
+  onSave,
+}: {
+  pixelId: string;
+  loading: boolean;
+  error: string | null;
+  onPixelIdChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  const canSave = isValidPixelId(pixelId) && !loading;
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-medium">Connect Conversions API</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Switchboard checks your Meta pixel daily to confirm conversion events are flowing. Without
+          a Pixel ID we can&apos;t run signal-health monitoring or recommend pixel/CAPI fixes.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="pixel-id" className="block text-sm font-medium">
+          Pixel ID
+        </label>
+        <input
+          id="pixel-id"
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={pixelId}
+          onChange={(e) => onPixelIdChange(e.target.value.trim())}
+          placeholder="123456789012345"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+        />
+        <p className="text-xs text-muted-foreground">
+          Find this in Events Manager → Data Sources. Usually 15–16 digits.
+        </p>
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={!canSave}
+        className="w-full rounded-lg bg-foreground text-background py-2.5 text-sm font-medium hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loading ? "Saving…" : "Save and continue"}
+      </button>
+    </div>
+  );
+}
+
 export function ImproveSpendSetup({
   initialStep,
   onComplete,
@@ -153,11 +213,12 @@ export function ImproveSpendSetup({
         ? (initialStep as Step)
         : "connect-meta";
 
-  const [currentStep] = useState<Step>(resolvedInitialStep);
+  const [currentStep, setCurrentStep] = useState<Step>(resolvedInitialStep);
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pixelId, setPixelId] = useState("");
 
   const currentIndex = STEPS.indexOf(currentStep);
 
@@ -214,13 +275,46 @@ export function ImproveSpendSetup({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to save account selection");
       }
-      onComplete();
+      // Skip the still-stubbed "set-targets" step and route the operator
+      // straight into pixel-id capture — that's the gating prerequisite for
+      // signal-health monitoring (Gap 2). set-targets and activate remain
+      // out of scope for this change.
+      setError(null);
+      setCurrentStep("connect-capi");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save account selection");
     } finally {
       setLoading(false);
     }
-  }, [selectedAccountId, deploymentIdParam, accounts, onComplete]);
+  }, [selectedAccountId, deploymentIdParam, accounts]);
+
+  const handleSavePixelId = useCallback(async () => {
+    if (!deploymentIdParam) {
+      setError("No deployment ID available. Please restart the setup.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/dashboard/marketplace/deployments/${deploymentIdParam}/pixel-id`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pixelId }),
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save pixel id");
+      }
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save pixel id");
+    } finally {
+      setLoading(false);
+    }
+  }, [pixelId, deploymentIdParam, onComplete]);
 
   const handleConnectMeta = useCallback(() => {
     if (!deploymentIdParam) {
@@ -259,9 +353,19 @@ export function ImproveSpendSetup({
         />
       )}
 
-      {(currentStep === "set-targets" ||
-        currentStep === "connect-capi" ||
-        currentStep === "activate") && <ComingSoonStep step={currentStep} />}
+      {currentStep === "connect-capi" && (
+        <ConnectCapiStep
+          pixelId={pixelId}
+          loading={loading}
+          error={error}
+          onPixelIdChange={setPixelId}
+          onSave={handleSavePixelId}
+        />
+      )}
+
+      {(currentStep === "set-targets" || currentStep === "activate") && (
+        <ComingSoonStep step={currentStep} />
+      )}
     </div>
   );
 }
