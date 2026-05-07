@@ -4,7 +4,8 @@ import { formatTimeFolio } from "./time-folio.js";
 export type WinSource = "recommendation" | "booking" | "conversion";
 export type WinStatus = "acted" | "confirmed";
 
-export type { AgentHomeKey } from "./agent-key.js";
+import type { AgentHomeKey } from "./agent-key.js";
+export type { AgentHomeKey };
 
 export interface ProseSegment {
   kind: "text" | "accent";
