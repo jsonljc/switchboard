@@ -3,17 +3,14 @@ import type { PipelineViewModel, PipelineTileViewModel, PipelineStage } from "./
 export interface RileyPipelineRow {
   id: string;
   intent: string;
-  humanSummary: string;
   riskLevel: "low" | "medium" | "high";
   dollarsAtRisk: number;
-  confidence: number;
   campaignName: string;
   campaignId: string;
   createdAt: Date;
-  // Note: approvalRequired is not on this row shape. Auto-class exclusion
-  // happens at the SQL filter layer (RecommendationStore.listPendingForAgent
-  // uses approvalRequired <> 'auto'). Core has no logic that depends on the
-  // value, so it doesn't need to cross the store→core boundary.
+  // humanSummary, confidence, approvalRequired are intentionally not on this
+  // row. Riley tiles render synthesized copy ($X at risk · verb) from intent
+  // + dollarsAtRisk; the others are SQL-side ordering/filter inputs.
 }
 
 export interface BuildRileyPipelineInput {

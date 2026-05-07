@@ -74,12 +74,14 @@ export function createInMemoryRecommendationStore(): RecommendationStore & {
     },
     async listPendingForAgent({ orgId, agentKey, surface, limit }) {
       const RISK_ORDINAL = { high: 3, medium: 2, low: 1 } as const;
+      const now = new Date();
       const filtered = rows.filter(
         (r) =>
           r.orgId === orgId &&
           r.sourceAgent === agentKey &&
           r.surface === surface &&
-          r.status === "pending",
+          r.status === "pending" &&
+          (r.expiresAt === null || r.expiresAt.getTime() > now.getTime()),
         // approvalRequired isn't on the in-memory Recommendation shape;
         // tests that need to assert the auto-exclusion rely on the SQL contract
         // covered by the prisma-recommendation-store test.

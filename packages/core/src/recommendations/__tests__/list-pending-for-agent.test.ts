@@ -109,4 +109,28 @@ describe("InMemoryRecommendationStore.listPendingForAgent — ordering", () => {
     expect(result.rows.map((r) => r.humanSummary)).toEqual(["right"]);
     expect(result.totalCount).toBe(1);
   });
+
+  it("excludes pending recs whose expiresAt is in the past", async () => {
+    const store = createInMemoryRecommendationStore();
+    await store.insert(
+      persistInput({
+        humanSummary: "expired",
+        expiresAt: new Date(Date.now() - 60_000),
+      }),
+    );
+    await store.insert(
+      persistInput({
+        humanSummary: "live",
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    );
+    const result = await store.listPendingForAgent({
+      orgId: "org-A",
+      agentKey: "riley",
+      surface: "queue",
+      limit: 10,
+    });
+    expect(result.rows.map((r) => r.humanSummary)).toEqual(["live"]);
+    expect(result.totalCount).toBe(1);
+  });
 });

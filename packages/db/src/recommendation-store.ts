@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import type {
   AgentKey,
   PersistRecommendationInput,
@@ -259,13 +259,22 @@ export class PrismaRecommendationStore implements RecommendationStore {
     const surface = args.surface;
     const take = args.limit;
 
-    const where = {
+    // Predicate is duplicated between the raw $queryRaw (rows) and the
+    // pendingActionRecord.count (totalCount). Keep these in lockstep — if
+    // one path filters a row the other doesn't, totalCount would diverge
+    // from rows.length in surprising ways. Filter list:
+    //   organizationId / surface / status='pending' / sourceAgent /
+    //   approvalRequired <> 'auto' / not yet expired
+    // act.ts lazily flips status to 'expired' on write; this read-side
+    // filter complements that so stale tiles don't linger.
+    const where: Prisma.PendingActionRecordWhereInput = {
       organizationId: orgId,
       surface,
       status: "pending",
       sourceAgent: agentKey,
       approvalRequired: { not: "auto" },
-    } as const;
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    };
 
     const [rawRows, totalCount] = await Promise.all([
       this.prisma.$queryRaw<Array<Record<string, unknown>>>`
@@ -280,6 +289,7 @@ export class PrismaRecommendationStore implements RecommendationStore {
           AND "status" = 'pending'
           AND "sourceAgent" = ${agentKey}
           AND "approvalRequired" <> 'auto'
+          AND ("expiresAt" IS NULL OR "expiresAt" > now())
         ORDER BY
           CASE "riskLevel"
             WHEN 'high' THEN 3

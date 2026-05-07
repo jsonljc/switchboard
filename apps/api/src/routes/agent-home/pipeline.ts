@@ -100,18 +100,22 @@ export const pipelineRoute: FastifyPluginAsync = async (app) => {
             return [];
           }
           if (r.riskLevel !== "low" && r.riskLevel !== "medium" && r.riskLevel !== "high") {
+            log.warn(
+              {
+                pendingActionRecordId: r.id,
+                orgId: o,
+                validationIssue: `riskLevel: unexpected value '${r.riskLevel}'`,
+              },
+              "pipeline-riley: dropped row with unknown riskLevel",
+            );
             return [];
           }
           return [
             {
               id: r.id,
               intent: r.intent,
-              humanSummary: r.humanSummary,
               riskLevel: r.riskLevel,
               dollarsAtRisk: r.dollarsAtRisk,
-              confidence: r.confidence,
-              // approvalRequired intentionally omitted — SQL filter excludes
-              // 'auto' rows; core has no use for the value.
               campaignName: parsed.data.campaignName,
               campaignId: parsed.data.campaignId,
               createdAt: r.createdAt,
@@ -132,8 +136,8 @@ export const pipelineRoute: FastifyPluginAsync = async (app) => {
       });
       return reply.code(200).send({ vm });
     } catch (err) {
-      app.log.error({ err }, "pipeline projection failed");
-      return reply.code(500).send({ error: "Pipeline projection failed" });
+      app.log.error({ err, requestId: request.id }, "pipeline projection failed");
+      return reply.code(500).send({ error: "Pipeline projection failed", requestId: request.id });
     }
   });
 };

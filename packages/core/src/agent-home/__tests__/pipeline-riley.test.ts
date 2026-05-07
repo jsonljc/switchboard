@@ -7,10 +7,8 @@ function row(overrides: Partial<RileyPipelineRow> = {}): RileyPipelineRow {
   return {
     id: "p1",
     intent: "recommendation.pause_adset",
-    humanSummary: "Pause Whitening A — CPL up 40%",
     riskLevel: "high",
     dollarsAtRisk: 420,
-    confidence: 0.6,
     campaignName: "Whitening A",
     campaignId: "c-1",
     createdAt: new Date("2026-05-07T07:00:00+08:00"),

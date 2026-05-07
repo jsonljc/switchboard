@@ -43,10 +43,8 @@ describe("projectPipeline", () => {
         {
           id: "p1",
           intent: "recommendation.pause_adset",
-          humanSummary: "Pause Whitening A",
           riskLevel: "high" as const,
           dollarsAtRisk: 420,
-          confidence: 0.6,
           campaignName: "Whitening A",
           campaignId: "c-1",
           createdAt: new Date("2026-05-07T07:00:00+08:00"),

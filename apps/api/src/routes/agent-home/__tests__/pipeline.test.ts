@@ -132,6 +132,54 @@ describe("GET /api/dashboard/agents/:agentId/pipeline", () => {
     );
   });
 
+  it("drops Riley rows with unknown riskLevel and logs a warning", async () => {
+    const warnSpy = vi.spyOn(ctx.app.log, "warn");
+    vi.spyOn(ctx.app.recommendationStore!, "listPendingForAgent").mockResolvedValue({
+      rows: [
+        {
+          id: "p-rogue",
+          orgId: "org-A",
+          agentKey: "riley",
+          intent: "recommendation.pause_adset",
+          status: "pending",
+          humanSummary: "Pause something",
+          confidence: 0.6,
+          riskLevel: "rogue",
+          dollarsAtRisk: 100,
+          targetEntities: { campaignId: "c-1", campaignName: "Whitening A" },
+          parameters: {},
+          surface: "queue",
+          undoableUntil: null,
+          actedAt: null,
+          actedBy: null,
+          note: null,
+          sourceAgent: "riley",
+          sourceWorkflow: null,
+          createdAt: new Date(),
+          expiresAt: null,
+        },
+      ],
+      totalCount: 1,
+    } as never);
+
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/pipeline",
+      headers: { "x-org-id": "org-A" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { vm: { tiles: unknown[] } };
+    expect(body.vm.tiles).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingActionRecordId: "p-rogue",
+        orgId: "org-A",
+        validationIssue: expect.stringContaining("riskLevel"),
+      }),
+      expect.stringContaining("unknown riskLevel"),
+    );
+  });
+
   it("returns 404 for mira", async () => {
     const res = await ctx.app.inject({
       method: "GET",
