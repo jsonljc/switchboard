@@ -83,6 +83,9 @@ export type AttributionChain = z.infer<typeof AttributionChainSchema>;
 export const LeadSourceTypeSchema = z.enum(["ctwa", "instant_form", "organic", "web"]);
 export type LeadSourceType = z.infer<typeof LeadSourceTypeSchema>;
 
+export const MessagingOptInSourceSchema = z.enum(["ctwa", "organic_inbound", "web_form", "manual"]);
+export type MessagingOptInSource = z.infer<typeof MessagingOptInSourceSchema>;
+
 export const ContactSchema = z.object({
   id: z.string().min(1),
   organizationId: z.string().min(1),
@@ -97,6 +100,10 @@ export const ContactSchema = z.object({
   attribution: AttributionChainSchema.nullable().optional(),
   roles: z.array(z.string()).default(["lead"]),
   qualificationData: z.record(z.unknown()).nullable().optional(),
+  messagingOptIn: z.boolean().default(false),
+  messagingOptInAt: z.coerce.date().nullable().optional(),
+  messagingOptInSource: MessagingOptInSourceSchema.nullable().optional(),
+  messagingOptOutAt: z.coerce.date().nullable().optional(),
   firstContactAt: z.coerce.date(),
   lastActivityAt: z.coerce.date(),
   createdAt: z.coerce.date(),

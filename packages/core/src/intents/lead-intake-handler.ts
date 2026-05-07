@@ -19,6 +19,8 @@ export interface LeadIntakeStore {
     sourceAdsetId?: string;
     attribution: Record<string, unknown>;
     idempotencyKey: string;
+    messagingOptIn?: boolean;
+    messagingOptInSource?: "ctwa" | "organic_inbound" | "web_form" | "manual";
   }): Promise<{ id: string }>;
   createActivity(input: {
     contactId: string;
@@ -47,6 +49,17 @@ export class LeadIntakeHandler {
     if (existing) {
       return { contactId: existing.id, duplicate: true };
     }
+    // CTWA click and Instant Form submission both serve as WhatsApp messaging
+    // consent — flag opt-in for those sources when the lead lands on the
+    // whatsapp channel. Email/SMS leads do not get a WhatsApp opt-in.
+    const isWhatsAppLead = intake.contact.channel === "whatsapp";
+    const optInSource = isWhatsAppLead
+      ? intake.source === "ctwa"
+        ? "ctwa"
+        : intake.source === "instant_form"
+          ? "web_form"
+          : null
+      : null;
     const contact = await this.deps.store.upsertContact({
       organizationId: intake.organizationId,
       deploymentId: intake.deploymentId,
@@ -59,6 +72,7 @@ export class LeadIntakeHandler {
       sourceAdsetId: intake.attribution.sourceAdsetId,
       attribution: intake.attribution,
       idempotencyKey: intake.idempotencyKey,
+      ...(optInSource ? { messagingOptIn: true, messagingOptInSource: optInSource } : {}),
     });
     await this.deps.store.createActivity({
       contactId: contact.id,

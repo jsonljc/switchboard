@@ -18,12 +18,16 @@ export const alexBuilder: ParameterBuilder = async (ctx, config, stores) => {
     if (!existingContact && stores.contactStore.create) {
       const phone = config.phone;
       const channel = config.channel ?? "whatsapp";
+      const isWhatsApp = channel === "whatsapp";
       const newContact = await stores.contactStore.create({
         organizationId: orgId,
         phone: phone ?? null,
         name: null,
         primaryChannel: channel as "whatsapp" | "telegram" | "dashboard",
         source: channel,
+        ...(isWhatsApp
+          ? { messagingOptIn: true, messagingOptInSource: "organic_inbound" as const }
+          : {}),
       });
       resolvedContactId = newContact.id;
     } else if (existingContact) {

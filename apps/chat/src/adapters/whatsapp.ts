@@ -68,6 +68,29 @@ export function isWithinWhatsAppWindow(lastInboundAt: Date | null): boolean {
   return Date.now() - lastInboundAt.getTime() < WHATSAPP_WINDOW_MS;
 }
 
+export type WhatsAppTemplateConsentReason = "outside_window_no_consent";
+
+/**
+ * Determine whether a proactive WhatsApp template can be sent to a contact.
+ *
+ * Inside the 24-hour conversation window, any template send is allowed —
+ * the inbound itself is implicit consent. Outside the window, the contact
+ * must have explicit `messagingOptIn = true` (e.g., from prior inbound,
+ * CTWA click, or web form). Without explicit opt-in, sending is refused.
+ */
+export function canSendWhatsAppTemplate(args: {
+  contact: { messagingOptIn: boolean };
+  lastInboundAt: Date | null;
+}): { allowed: true } | { allowed: false; reason: WhatsAppTemplateConsentReason } {
+  if (isWithinWhatsAppWindow(args.lastInboundAt)) {
+    return { allowed: true };
+  }
+  if (args.contact.messagingOptIn) {
+    return { allowed: true };
+  }
+  return { allowed: false, reason: "outside_window_no_consent" };
+}
+
 export class WhatsAppAdapter implements ChannelAdapter {
   readonly channel = "whatsapp" as const;
   private token: string;

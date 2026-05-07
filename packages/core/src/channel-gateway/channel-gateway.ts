@@ -11,6 +11,10 @@ import { DeploymentInactiveError } from "../platform/deployment-resolver.js";
 import { resolveContactIdentity } from "./resolve-contact-identity.js";
 import { parseApprovalResponsePayload } from "./approval-response-payload.js";
 import { handleApprovalResponse } from "./handle-approval-response.js";
+import { isOptOutKeyword } from "./opt-out-keywords.js";
+
+const OPT_OUT_CONFIRMATION =
+  "You've been opted out of WhatsApp messages from us. Reply START at any time to opt back in.";
 
 const MAX_HISTORY_MESSAGES = 30;
 
@@ -158,6 +162,23 @@ export class ChannelGateway {
           contactStore: this.config.contactStore,
         })
       : { contactId: null, phone: null, channel: message.channel };
+
+    // 4d. WhatsApp opt-out keyword detection — terminal branch.
+    // STOP / UNSUBSCRIBE / OPT OUT records the opt-out, replies confirmation,
+    // and skips skill dispatch. Required for WhatsApp Business API compliance.
+    if (
+      message.channel === "whatsapp" &&
+      identity.contactId &&
+      this.config.contactStore?.recordMessagingOptOut &&
+      isOptOutKeyword(message.text)
+    ) {
+      await this.config.contactStore.recordMessagingOptOut(
+        resolved.organizationId,
+        identity.contactId,
+      );
+      await replySink.send(OPT_OUT_CONFIRMATION);
+      return;
+    }
 
     // 5. Signal typing
     replySink.onTyping?.();

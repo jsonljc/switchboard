@@ -11,7 +11,11 @@ export interface GatewayContactStore {
     phone: string;
     primaryChannel: "whatsapp";
     source: string;
+    messagingOptIn?: boolean;
+    messagingOptInSource?: "ctwa" | "organic_inbound" | "web_form" | "manual";
   }): Promise<{ id: string }>;
+  /** Records a WhatsApp messaging opt-out triggered by inbound STOP/UNSUBSCRIBE keyword. */
+  recordMessagingOptOut?(orgId: string, contactId: string): Promise<void>;
 }
 
 export interface ChannelGatewayConfig {

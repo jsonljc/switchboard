@@ -29,6 +29,8 @@ export async function resolveContactIdentity(args: {
     phone,
     primaryChannel: "whatsapp",
     source: "whatsapp_inbound",
+    messagingOptIn: true,
+    messagingOptInSource: "organic_inbound",
   });
   return { contactId: created.id, phone, channel };
 }

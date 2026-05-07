@@ -25,6 +25,7 @@ class InMemoryContactStore implements ContactStore {
   async create(input: CreateContactInput): Promise<Contact> {
     const id = `contact-${this.idCounter++}`;
     const now = new Date();
+    const messagingOptIn = input.messagingOptIn ?? false;
     const contact: Contact = {
       id,
       organizationId: input.organizationId,
@@ -37,6 +38,10 @@ class InMemoryContactStore implements ContactStore {
       source: input.source ?? null,
       attribution: (input.attribution as Contact["attribution"]) ?? null,
       roles: input.roles ?? ["lead"],
+      messagingOptIn,
+      messagingOptInAt: messagingOptIn ? now : null,
+      messagingOptInSource: input.messagingOptInSource ?? null,
+      messagingOptOutAt: null,
       firstContactAt: now,
       lastActivityAt: now,
       createdAt: now,
@@ -44,6 +49,18 @@ class InMemoryContactStore implements ContactStore {
     };
     this.contacts.set(id, contact);
     return contact;
+  }
+
+  async recordMessagingOptOut(_orgId: string, id: string): Promise<void> {
+    const contact = this.contacts.get(id);
+    if (!contact) throw new Error(`Contact not found: ${id}`);
+    const now = new Date();
+    this.contacts.set(id, {
+      ...contact,
+      messagingOptIn: false,
+      messagingOptOutAt: now,
+      updatedAt: now,
+    });
   }
 
   async findById(_orgId: string, id: string): Promise<Contact | null> {

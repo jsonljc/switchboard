@@ -138,6 +138,8 @@ describe("alexBuilder", () => {
         organizationId: "org_1",
         phone: "+6599999999",
         primaryChannel: "whatsapp",
+        messagingOptIn: true,
+        messagingOptInSource: "organic_inbound",
       }),
     );
     expect(createOpportunity).toHaveBeenCalledWith(
@@ -147,6 +149,44 @@ describe("alexBuilder", () => {
       }),
     );
     expect(result.OPPORTUNITY_ID).toBe("opp_auto");
+  });
+
+  it("does not set messaging opt-in when auto-creating Contact for non-WhatsApp channel", async () => {
+    const ctx = createMockCtx();
+    const createContact = vi.fn().mockResolvedValue({
+      id: "contact_new",
+      name: null,
+      phone: null,
+    });
+    const createOpportunity = vi.fn().mockResolvedValue({
+      id: "opp_auto",
+      stage: "interested",
+      createdAt: new Date(),
+    });
+    const stores = createMockStores({
+      opportunityStore: {
+        findActiveByContact: vi.fn().mockResolvedValue([]),
+        create: createOpportunity,
+      } as never,
+      contactStore: {
+        findById: vi.fn().mockResolvedValue(null),
+        create: createContact,
+      } as never,
+    });
+
+    await alexBuilder(
+      ctx,
+      {
+        ...config,
+        channel: "telegram",
+      },
+      stores,
+    );
+
+    const callArgs = createContact.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs.primaryChannel).toBe("telegram");
+    expect(callArgs).not.toHaveProperty("messagingOptIn");
+    expect(callArgs).not.toHaveProperty("messagingOptInSource");
   });
 
   it("auto-creates Opportunity only when Contact exists but no Opportunity", async () => {

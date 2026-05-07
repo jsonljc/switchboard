@@ -64,4 +64,37 @@ describe("LeadIntakeHandler", () => {
     expect(result.contactId).toBe("existing");
     expect(result.duplicate).toBe(true);
   });
+
+  it("flags messagingOptIn for CTWA leads on whatsapp (click is consent)", async () => {
+    await handler.handle(
+      makeIntake({ source: "ctwa", contact: { phone: "+1", channel: "whatsapp" } }),
+    );
+    expect(store.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messagingOptIn: true,
+        messagingOptInSource: "ctwa",
+      }),
+    );
+  });
+
+  it("flags messagingOptIn for Instant Form leads on whatsapp (form has WA opt-in)", async () => {
+    await handler.handle(
+      makeIntake({ source: "instant_form", contact: { phone: "+1", channel: "whatsapp" } }),
+    );
+    expect(store.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messagingOptIn: true,
+        messagingOptInSource: "web_form",
+      }),
+    );
+  });
+
+  it("does not flag messagingOptIn when channel is not whatsapp", async () => {
+    await handler.handle(
+      makeIntake({ source: "ctwa", contact: { email: "a@b.co", channel: "email" } }),
+    );
+    const callArgs = store.upsertContact.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs.messagingOptIn).toBeUndefined();
+    expect(callArgs.messagingOptInSource).toBeUndefined();
+  });
 });

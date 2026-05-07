@@ -1,4 +1,4 @@
-import type { Contact, ContactStage } from "@switchboard/schemas";
+import type { Contact, ContactStage, MessagingOptInSource } from "@switchboard/schemas";
 
 export interface CreateContactInput {
   organizationId: string;
@@ -10,6 +10,8 @@ export interface CreateContactInput {
   source?: string | null;
   attribution?: Record<string, unknown> | null;
   roles?: string[];
+  messagingOptIn?: boolean;
+  messagingOptInSource?: MessagingOptInSource;
 }
 
 export interface ContactFilters {
@@ -25,6 +27,8 @@ export interface ContactStore {
   findByPhone(orgId: string, phone: string): Promise<Contact | null>;
   updateStage(orgId: string, id: string, stage: ContactStage): Promise<Contact>;
   updateLastActivity(orgId: string, id: string): Promise<void>;
+  /** Record a WhatsApp messaging opt-out (e.g., user replied "STOP"). */
+  recordMessagingOptOut(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
   listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
 }

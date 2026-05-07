@@ -11,7 +11,7 @@ function makeStore(overrides: Partial<GatewayContactStore> = {}): GatewayContact
 }
 
 describe("resolveContactIdentity", () => {
-  it("WhatsApp + new phone: creates Contact once and returns its id", async () => {
+  it("WhatsApp + new phone: creates Contact once with messaging opt-in and returns its id", async () => {
     const store = makeStore();
     const result = await resolveContactIdentity({
       channel: "whatsapp",
@@ -26,6 +26,8 @@ describe("resolveContactIdentity", () => {
       phone: "+6599999999",
       primaryChannel: "whatsapp",
       source: "whatsapp_inbound",
+      messagingOptIn: true,
+      messagingOptInSource: "organic_inbound",
     });
     expect(result).toEqual({
       contactId: "new-contact-id",
