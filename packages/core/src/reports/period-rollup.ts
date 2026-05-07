@@ -1,6 +1,11 @@
-import type { PullQuoteCopy, ReportInsightsProvider } from "@switchboard/schemas";
+import type { ReportInsightsProvider } from "@switchboard/schemas";
 import type { RollupContext } from "./types.js";
-import type { ReportStores, ReportCacheStore, BaselineStore } from "./interfaces.js";
+import type {
+  ReportStores,
+  ReportCacheStore,
+  BaselineStore,
+  PullQuoteGenerator,
+} from "./interfaces.js";
 import type { PeriodRollup } from "./interfaces.js";
 import { formatDateFolio } from "./period-helpers.js";
 import { computeAttribution } from "./attribution-rule.js";
@@ -15,15 +20,8 @@ export interface ReportDependencies {
   reportCache: ReportCacheStore;
   baselineStore: BaselineStore;
   planMonthlyUSD: number;
+  pullQuoteGenerator: PullQuoteGenerator;
 }
-
-const STUB_PULLQUOTE: PullQuoteCopy = {
-  pre: "This period, your team generated",
-  value: "—",
-  mid: "in revenue, with Switchboard costing",
-  cost: "—",
-  post: "compared to a traditional stack.",
-};
 
 export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
   return async ({ orgId, current, prior, computedAt }) => {
@@ -43,11 +41,18 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       ],
     );
 
+    const pullquote = await deps.pullQuoteGenerator({
+      ctx,
+      attribution,
+      cost: costResult.cost,
+      funnelNarrative: funnelResult.funnelNarrative,
+    });
+
     return {
       label: current.window,
       period: formatDateFolio(current),
       dateFolio: formatDateFolio(current),
-      pullquote: STUB_PULLQUOTE,
+      pullquote,
       attribution,
       funnel: funnelResult.funnel,
       funnelNarrative: funnelResult.funnelNarrative,
