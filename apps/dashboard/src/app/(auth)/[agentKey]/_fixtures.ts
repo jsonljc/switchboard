@@ -59,6 +59,7 @@ const metrics: Record<"alex" | "riley", MetricsViewModel> = {
       { label: "Spend", display: "$0", rawValue: 0, unit: "currency" },
     ],
     freshness: { generatedAt: NOW_ISO, window: "week", dataSource: "fixture" },
+    folioRange: "Mon — Fri",
   },
   riley: {
     hero: { kind: "ad-leads", value: 86, comparator: { window: "week", value: 71 } },
@@ -82,6 +83,7 @@ const metrics: Record<"alex" | "riley", MetricsViewModel> = {
       { label: "Spend", display: "$1,420", rawValue: 1420, unit: "currency" },
     ],
     freshness: { generatedAt: NOW_ISO, window: "week", dataSource: "fixture" },
+    folioRange: "Mon — Fri",
   },
 };
 
