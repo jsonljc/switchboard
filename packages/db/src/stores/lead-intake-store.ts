@@ -13,6 +13,8 @@ interface UpsertContactInput {
   sourceAdsetId?: string;
   attribution: Record<string, unknown>;
   idempotencyKey: string;
+  messagingOptIn?: boolean;
+  messagingOptInSource?: "ctwa" | "organic_inbound" | "web_form" | "manual";
 }
 
 interface CreateActivityInput {
@@ -59,6 +61,7 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
   async upsertContact(input: UpsertContactInput): Promise<{ id: string }> {
     const primaryChannel = input.channel ?? "whatsapp";
     const now = new Date();
+    const messagingOptIn = input.messagingOptIn ?? false;
 
     const row = await this.prisma.contact.upsert({
       where: {
@@ -77,6 +80,9 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
         source: input.sourceType,
         attribution: input.attribution as object,
         idempotencyKey: input.idempotencyKey,
+        messagingOptIn,
+        messagingOptInAt: messagingOptIn ? now : null,
+        messagingOptInSource: input.messagingOptInSource ?? null,
         firstContactAt: now,
         lastActivityAt: now,
       },
