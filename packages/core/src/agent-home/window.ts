@@ -53,11 +53,15 @@ function getDateParts(d: Date, timezone: string): DateParts {
     Sat: 6,
     Sun: 7,
   };
+  const wd = weekdayMap[parts["weekday"] as string];
+  if (wd === undefined) {
+    throw new Error(`Unexpected weekday: ${String(parts["weekday"])}`);
+  }
   return {
     year: Number(parts["year"]),
     month: Number(parts["month"]),
     day: Number(parts["day"]),
-    weekday: weekdayMap[parts["weekday"] as string],
+    weekday: wd,
   };
 }
 

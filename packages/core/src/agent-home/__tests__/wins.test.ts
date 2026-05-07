@@ -46,8 +46,8 @@ describe("projectWins — voice & prose", () => {
       timezone: "Asia/Singapore",
       store: inMemoryStore([{ ...baseRow, agentKey: "alex", status: "acted" }]),
     });
-    expect(vm.wins[0].proseSegments[0]).toEqual({ kind: "accent", text: "Sent." });
-    expect(vm.wins[0].proseSegments.map((s) => s.text).join("")).toContain("Maya");
+    expect(vm.wins[0]!.proseSegments[0]).toEqual({ kind: "accent", text: "Sent." });
+    expect(vm.wins[0]!.proseSegments.map((s) => s.text).join("")).toContain("Maya");
   });
 
   it("riley prose leads with the riley ack phrase", async () => {
@@ -61,8 +61,8 @@ describe("projectWins — voice & prose", () => {
         { ...baseRow, agentKey: "riley", status: "acted", humanSummary: "Adjusted ad-set bid" },
       ]),
     });
-    expect(vm.wins[0].proseSegments[0]).toEqual({ kind: "accent", text: "Adjusted." });
-    expect(vm.wins[0].proseSegments.map((s) => s.text).join("")).toContain("ad-set bid");
+    expect(vm.wins[0]!.proseSegments[0]).toEqual({ kind: "accent", text: "Adjusted." });
+    expect(vm.wins[0]!.proseSegments.map((s) => s.text).join("")).toContain("ad-set bid");
   });
 
   it("prose for alex differs from prose for riley (verifiable voice divergence)", async () => {
@@ -82,7 +82,7 @@ describe("projectWins — voice & prose", () => {
       timezone: "Asia/Singapore",
       store: inMemoryStore([{ ...baseRow, agentKey: "riley", status: "acted" }]),
     });
-    expect(alex.wins[0].proseSegments[0].text).not.toBe(riley.wins[0].proseSegments[0].text);
+    expect(alex.wins[0]!.proseSegments[0]!.text).not.toBe(riley.wins[0]!.proseSegments[0]!.text);
   });
 });
 
@@ -106,7 +106,7 @@ describe("projectWins — undo", () => {
       timezone: "Asia/Singapore",
       store: inMemoryStore([{ ...baseRow, status: "acted", undoableUntil: null }]),
     });
-    expect(vm.wins[0].undo).toEqual({
+    expect(vm.wins[0]!.undo).toEqual({
       available: false,
       until: null,
       unavailableReason: "not-reversible",
@@ -123,7 +123,7 @@ describe("projectWins — undo", () => {
       timezone: "Asia/Singapore",
       store: inMemoryStore([{ ...baseRow, status: "confirmed", undoableUntil: future }]),
     });
-    expect(vm.wins[0].undo).toEqual({
+    expect(vm.wins[0]!.undo).toEqual({
       available: true,
       until: future.toISOString(),
     });
@@ -139,7 +139,7 @@ describe("projectWins — undo", () => {
       timezone: "Asia/Singapore",
       store: inMemoryStore([{ ...baseRow, status: "confirmed", undoableUntil: past }]),
     });
-    expect(vm.wins[0].undo).toEqual({
+    expect(vm.wins[0]!.undo).toEqual({
       available: false,
       until: past.toISOString(),
       unavailableReason: "expired",
@@ -155,7 +155,7 @@ describe("projectWins — undo", () => {
       timezone: "Asia/Singapore",
       store: inMemoryStore([{ ...baseRow, status: "confirmed", undoableUntil: null }]),
     });
-    expect(vm.wins[0].undo).toEqual({
+    expect(vm.wins[0]!.undo).toEqual({
       available: false,
       until: null,
       unavailableReason: "not-reversible",
