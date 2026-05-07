@@ -27,6 +27,7 @@ export const AdRecommendationActionSchema = z.enum([
   "shift_budget_to_source",
   "switch_optimization_event",
   "harden_capi_attribution",
+  "fix_signal_health",
 ]);
 export type AdRecommendationActionSchema = z.infer<typeof AdRecommendationActionSchema>;
 
