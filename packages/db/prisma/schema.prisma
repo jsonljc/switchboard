@@ -1971,3 +1971,20 @@ model PreSwitchboardBaseline {
   @@unique([organizationId, dimension, metric, periodStart, periodEnd])
   @@index([organizationId, dimension, metric])
 }
+
+// Meta Data Deletion Callback request log. Persisted so the user-facing
+// `confirmation_code` can be verified at the public status URL the callback
+// returns. Deletion runs synchronously, so `status` is "completed" on success;
+// "failed" rows are kept for ops triage.
+model DataDeletionRequest {
+  id                String    @id @default(uuid())
+  userId            String // Meta app-scoped user_id from signed_request
+  confirmationCode  String    @unique
+  deletedContactIds String[]  @default([])
+  status            String    @default("completed") // "completed" | "failed"
+  failureReason     String?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId])
+}

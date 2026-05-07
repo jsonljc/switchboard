@@ -11,6 +11,7 @@ import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import rawBody from "fastify-raw-body";
+import formbody from "@fastify/formbody";
 import { setMetrics, evaluate, resolveIdentity } from "@switchboard/core";
 import type { StorageContext, PolicyCache, AgentNotifier } from "@switchboard/core";
 import { AuditLedger, NoopOperatorAlerter, WebhookOperatorAlerter } from "@switchboard/core";
@@ -155,6 +156,10 @@ export async function buildServer() {
     encoding: "utf8",
     runFirst: true,
   });
+
+  // application/x-www-form-urlencoded body parsing — Meta's Data Deletion
+  // callback POSTs `signed_request` as form data.
+  await app.register(formbody);
 
   // OpenAPI documentation + optional Swagger UI
   await registerSwagger(app);
