@@ -113,6 +113,16 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
     );
   }
 
+  async setMetaPixelId(deploymentId: string, pixelId: string) {
+    return this.request<{ deployment: MarketplaceDeployment }>(
+      `/api/marketplace/deployments/${deploymentId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ inputConfig: { pixelId } }),
+      },
+    );
+  }
+
   async createTask(data: {
     deploymentId: string;
     listingId: string;
