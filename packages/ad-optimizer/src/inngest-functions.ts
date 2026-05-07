@@ -1,10 +1,11 @@
-// packages/core/src/ad-optimizer/inngest-functions.ts
+// packages/ad-optimizer/src/inngest-functions.ts
 import { Inngest } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 import { AuditRunner } from "./audit-runner.js";
 import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
+import type { SignalHealthReport } from "./signal-health-checker.js";
 
 interface DeploymentInfo {
   id: string;
@@ -133,6 +134,71 @@ export function createDailyCheckCron(deps: CronDependencies) {
     },
     async ({ step }) => {
       await executeDailyCheck(step as unknown as StepTools, deps);
+    },
+  );
+}
+
+// ── Signal Health Daily Cron ──
+
+interface SignalHealthCheckerLike {
+  getSignalHealthReport(pixelId: string): Promise<SignalHealthReport>;
+}
+
+export interface SignalHealthCronDependencies {
+  listActiveDeployments: () => Promise<DeploymentInfo[]>;
+  getDeploymentCredentials: (deploymentId: string) => Promise<DeploymentCredentials | null>;
+  getDeploymentPixelId: (deploymentId: string) => Promise<string | null>;
+  createSignalHealthChecker: (creds: DeploymentCredentials) => SignalHealthCheckerLike;
+  saveSignalHealthReport: (deploymentId: string, report: SignalHealthReport) => Promise<void>;
+}
+
+export async function executeDailySignalHealthCheck(
+  step: StepTools,
+  deps: SignalHealthCronDependencies,
+): Promise<void> {
+  const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
+
+  for (const deployment of deployments) {
+    const creds = await step.run(`creds-${deployment.id}`, () =>
+      deps.getDeploymentCredentials(deployment.id),
+    );
+    if (!creds) continue;
+
+    const pixelId = await step.run(`pixel-${deployment.id}`, () =>
+      deps.getDeploymentPixelId(deployment.id),
+    );
+    if (!pixelId) continue;
+
+    await step.run(`signal-health-${deployment.id}`, async () => {
+      const checker = deps.createSignalHealthChecker(creds);
+      const report = await checker.getSignalHealthReport(pixelId);
+      if (report.score === "red") {
+        const breachList = report.breaches
+          .filter((b) => b.severity === "critical")
+          .map((b) => b.signal)
+          .join(", ");
+        console.warn(
+          `[ad-optimizer] signal-health RED for deployment=${deployment.id} ` +
+            `pixel=${pixelId}: ${breachList || "critical breach"}`,
+        );
+      }
+      await deps.saveSignalHealthReport(deployment.id, report);
+    });
+  }
+}
+
+export function createDailySignalHealthCron(deps: SignalHealthCronDependencies) {
+  return inngestClient.createFunction(
+    {
+      id: "ad-optimizer-daily-signal-health",
+      name: "Ad Optimizer Daily Signal Health",
+      retries: 2,
+      // Runs at 07:00 UTC, ahead of the 08:00 daily check so signal failures
+      // are visible before the rest of the daily pipeline runs.
+      triggers: [{ cron: "0 7 * * *" }],
+    },
+    async ({ step }) => {
+      await executeDailySignalHealthCheck(step as unknown as StepTools, deps);
     },
   );
 }

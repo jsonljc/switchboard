@@ -1,12 +1,15 @@
-// packages/core/src/ad-optimizer/__tests__/inngest-functions.test.ts
+// packages/ad-optimizer/src/__tests__/inngest-functions.test.ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   executeWeeklyAudit,
   executeDailyCheck,
+  executeDailySignalHealthCheck,
   createWeeklyAuditDispatcher,
   createDailyCheckDispatcher,
   type CronDependencies,
+  type SignalHealthCronDependencies,
 } from "../inngest-functions.js";
+import type { SignalHealthReport } from "../signal-health-checker.js";
 
 function makeMockStep() {
   return {
@@ -186,6 +189,113 @@ describe("createWeeklyAuditDispatcher", () => {
         scheduleName: "ad-optimizer-weekly",
       },
     });
+  });
+});
+
+describe("executeDailySignalHealthCheck", () => {
+  let deps: SignalHealthCronDependencies;
+  let step: ReturnType<typeof makeMockStep>;
+  let getReport: ReturnType<typeof vi.fn>;
+
+  function makeReport(): SignalHealthReport {
+    return {
+      pixelId: "px_1",
+      score: "yellow",
+      pixelHealth: {
+        pixelId: "px_1",
+        name: "P",
+        lastFiredAt: new Date().toISOString(),
+        isUnavailable: false,
+        automaticMatchingFields: ["em"],
+        isDead: false,
+      },
+      eventVolume: { events: [] },
+      capiHealth: {
+        serverToBrowserRatio: 0.85,
+        dedupRate: 0.6,
+        lastServerEventAt: new Date().toISOString(),
+        freshnessMs: 60_000,
+        isFresh: true,
+      },
+      daChecks: { checks: [], hasFailure: false },
+      emqProxy: 0.51,
+      breaches: [
+        {
+          signal: "server_to_browser_low",
+          severity: "warning",
+          message: "Ratio 85% (target >90%).",
+        },
+      ],
+    };
+  }
+
+  beforeEach(() => {
+    step = makeMockStep();
+    getReport = vi.fn().mockResolvedValue(makeReport());
+    deps = {
+      listActiveDeployments: vi.fn().mockResolvedValue([
+        { id: "dep-1", organizationId: "org-1", inputConfig: {} },
+        { id: "dep-2", organizationId: "org-2", inputConfig: {} },
+      ]),
+      getDeploymentCredentials: vi
+        .fn()
+        .mockResolvedValue({ accessToken: "tok", accountId: "act_1" }),
+      getDeploymentPixelId: vi.fn().mockResolvedValue("px_1"),
+      createSignalHealthChecker: vi.fn().mockReturnValue({
+        getSignalHealthReport: getReport,
+      }),
+      saveSignalHealthReport: vi.fn().mockResolvedValue(undefined),
+    };
+  });
+
+  it("runs signal-health check for each deployment with credentials and a pixel", async () => {
+    await executeDailySignalHealthCheck(step as never, deps);
+
+    expect(deps.listActiveDeployments).toHaveBeenCalledTimes(1);
+    expect(deps.getDeploymentCredentials).toHaveBeenCalledTimes(2);
+    expect(deps.getDeploymentPixelId).toHaveBeenCalledTimes(2);
+    expect(deps.createSignalHealthChecker).toHaveBeenCalledTimes(2);
+    expect(getReport).toHaveBeenCalledTimes(2);
+    expect(getReport).toHaveBeenCalledWith("px_1");
+    expect(deps.saveSignalHealthReport).toHaveBeenCalledTimes(2);
+    expect(deps.saveSignalHealthReport).toHaveBeenCalledWith("dep-1", expect.any(Object));
+  });
+
+  it("skips deployments missing credentials", async () => {
+    deps.getDeploymentCredentials = vi
+      .fn()
+      .mockResolvedValueOnce({ accessToken: "tok", accountId: "act_1" })
+      .mockResolvedValueOnce(null);
+
+    await executeDailySignalHealthCheck(step as never, deps);
+
+    expect(deps.createSignalHealthChecker).toHaveBeenCalledTimes(1);
+    expect(deps.saveSignalHealthReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips deployments without a configured pixelId", async () => {
+    deps.getDeploymentPixelId = vi.fn().mockResolvedValueOnce("px_1").mockResolvedValueOnce(null);
+
+    await executeDailySignalHealthCheck(step as never, deps);
+
+    expect(getReport).toHaveBeenCalledTimes(1);
+    expect(deps.saveSignalHealthReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a warning when score is red but does not throw", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    getReport.mockResolvedValue({
+      ...makeReport(),
+      score: "red",
+      breaches: [{ signal: "pixel_dead", severity: "critical", message: "Dead." }],
+    });
+
+    await executeDailySignalHealthCheck(step as never, deps);
+
+    expect(warnSpy).toHaveBeenCalled();
+    const allWarnText = warnSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(allWarnText).toMatch(/signal-health/i);
+    warnSpy.mockRestore();
   });
 });
 
