@@ -311,4 +311,73 @@ describe("PrismaRecommendationStore", () => {
       }),
     ).rejects.toThrow(RecommendationStaleStatusError);
   });
+
+  describe("listResolvedForAgent", () => {
+    it("filters by org, sourceAgent, status set, and non-null resolvedAt >= resolvedSince", async () => {
+      (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+      await store.listResolvedForAgent({
+        orgId: "org-1",
+        agentKey: "alex",
+        statuses: ["acted", "confirmed"],
+        resolvedSince: new Date("2026-05-07T00:00:00.000Z"),
+        limit: 6,
+      });
+      expect(prisma.pendingActionRecord.findMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          sourceAgent: "alex",
+          status: { in: ["acted", "confirmed"] },
+          resolvedAt: { not: null, gte: new Date("2026-05-07T00:00:00.000Z") },
+          intent: { startsWith: "recommendation." },
+        }),
+        orderBy: { resolvedAt: "desc" },
+        take: 6,
+      });
+    });
+
+    it("caps limit at 200", async () => {
+      (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+      await store.listResolvedForAgent({
+        orgId: "org-1",
+        agentKey: "riley",
+        statuses: ["acted"],
+        resolvedSince: new Date(),
+        limit: 9999,
+      });
+      expect(prisma.pendingActionRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 200 }),
+      );
+    });
+
+    it("returns mapped Recommendation rows", async () => {
+      const resolvedDate = new Date("2026-05-07T06:55:00.000Z");
+      (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        makeDbRow({
+          id: "r1",
+          sourceAgent: "alex",
+          organizationId: "org-1",
+          status: "confirmed",
+          resolvedAt: resolvedDate,
+          resolvedBy: "user-1",
+          humanSummary: "Sent tour invite to Maya",
+          confidence: 0.7,
+          riskLevel: "low",
+          dollarsAtRisk: 0,
+          surface: "queue",
+          undoableUntil: new Date("2026-05-07T07:00:00.000Z"),
+        }),
+      ]);
+      const rows = await store.listResolvedForAgent({
+        orgId: "org-1",
+        agentKey: "alex",
+        statuses: ["acted", "confirmed"],
+        resolvedSince: new Date(0),
+        limit: 5,
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.id).toBe("r1");
+      expect(rows[0]!.agentKey).toBe("alex");
+      expect(rows[0]!.status).toBe("confirmed");
+    });
+  });
 });
