@@ -15,3 +15,4 @@ export {
 } from "./wins.js";
 export { computeWindowStart, type WinTimeWindow } from "./window.js";
 export { formatTimeFolio } from "./time-folio.js";
+export { formatRelativeAge } from "./relative-age.js";
