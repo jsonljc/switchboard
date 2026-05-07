@@ -12,7 +12,7 @@
 
 Take the agent-home **B3 Recent Wins** block from fixture data to live data. After this PR, when an operator opens `/alex` (or `/riley`), the wins block reads from `PendingActionRecord` via a new `packages/core/src/agent-home/wins.ts` projection, served through a new `/api/dashboard/agents/[agentId]/wins` endpoint, with per-agent voice in win prose and an Undo affordance that respects `undoableUntil`.
 
-PR-S3 adds **one new vertical slice** (core projection → api route → dashboard proxy → live hook) and extends `dispatch-action.ts` with an `"undo"` action branch. No schema migrations. No UI restyling. No new view-model fields.
+PR-S3 adds **one new vertical slice** (core projection → api route → dashboard proxy → live hook), extends `dispatch-action.ts` with an `"undo"` action branch, and adds one targeted method to `PrismaRecommendationStore` (`listResolvedForAgent` — see §5.1) so the wins query is fully push-down filtered. No schema migrations. No UI restyling. No new view-model fields.
 
 ---
 
@@ -49,9 +49,11 @@ Returns `"11:42 AM"` for same-day, `"Yesterday · 6:14 PM"` for prior day, `"Mon
 
 ### Q4 — Pagination: cap at 5, `hasMore: true` is a flag
 
-`getAgentWinsViewModel` queries `listBySurface` with `limit: 6`, slices to 5 for the response, and sets `hasMore: rawRows.length > 5`. No cursor. No `?limit` query parameter. `/{agent}/wins` is `ROUTE_AVAILABILITY: false` in PR-S3 (see parent spec §4.2 line 346), so `hasMore: true` is a flag the UI may use to render "see more →" against a disabled link.
+`projectWins` calls a new dedicated store method `listResolvedForAgent` (see §5.1) with `limit: 6`, slices to 5 for the response, and sets `hasMore: rawRows.length > 5`. The filter is **pushed down to the DB** (agentKey + status set + `resolvedAt >= since`), so the limit is honoured against the right rows — no client-side post-filtering. No cursor. No `?limit` query parameter. `/{agent}/wins` is `ROUTE_AVAILABILITY: false` in PR-S3 (see parent spec §4.2 line 346), so `hasMore: true` is a flag the UI may use to render "see more →" against a disabled link.
 
 **Why 5**: matches the design bundle's recent-wins block (5 tiles visible on agent home). More belongs on a `/{agent}/wins` page that doesn't exist yet.
+
+**Why a new store method instead of extending `listBySurface`**: `listBySurface` filters by `createdAt`. Wins need `resolvedAt` (a recommendation created 3 weeks ago and confirmed today is _today's_ win). Conflating the two on a single method would degrade the existing API. A dedicated method is ~30 lines + tests and keeps each method's contract clear.
 
 ### Q5 — Undo flow: WinTile owns the button, dispatch-action gets a fourth branch
 
@@ -126,7 +128,7 @@ Which terminal `PendingActionRecord` rows count as wins, given the actual `Recom
 
 ## 5. Backend — `packages/core/src/agent-home/wins.ts`
 
-Mirrors PR-S2 `greeting.ts` shape exactly (single store interface, no `DepResult` fan-out):
+Mirrors PR-S2 `greeting.ts` shape exactly (single store interface, no `DepResult` fan-out). **All filtering is pushed down to the DB** — the core projection does no in-memory filtering. The naming convention throughout the runtime is `agentKey`; the underlying `PendingActionRecord.sourceAgent` DB column is mapped by the store layer (see §5.1) and is not visible above it.
 
 ```ts
 // packages/core/src/agent-home/wins.ts
@@ -136,21 +138,22 @@ export type WinTimeWindow = "today" | "week" | "month";
 
 export interface WinTerminalRecord {
   id: string;
-  agentKey: AgentKey;
+  agentKey: "alex" | "riley"; // mira excluded by type
   status: "acted" | "confirmed"; // store filters to these two
   intent: string; // e.g. "recommendation.send_tour_invite"
   humanSummary: string; // already-composed summary written at insert time
-  occurredAt: Date; // resolvedAt
+  occurredAt: Date; // = resolvedAt
   undoableUntil: Date | null;
   targetEntities: unknown; // Json — read defensively
 }
 
 export interface WinsSignalStore {
-  listTerminalRecommendations(input: {
+  listResolvedForAgent(input: {
     orgId: string;
-    agentKey: AgentKey;
-    sinceMs: number;
-    limit: number; // request limit + 1 for hasMore
+    agentKey: "alex" | "riley";
+    statuses: readonly ("acted" | "confirmed")[];
+    resolvedSince: Date; // absolute timestamp; resolvedAt >= this
+    limit: number; // pass `limit + 1` for hasMore
   }): Promise<WinTerminalRecord[]>;
 }
 
@@ -185,13 +188,14 @@ export interface ProjectWinsInput {
 
 export async function projectWins(input: ProjectWinsInput): Promise<WinsViewModel> {
   const { orgId, agentKey, window, now, timezone, store } = input;
-  const sinceMs = windowStartMs(window, now);
+  const resolvedSince = computeWindowStart(window, now, timezone);
   const limit = 5;
 
-  const rows = await store.listTerminalRecommendations({
+  const rows = await store.listResolvedForAgent({
     orgId,
     agentKey,
-    sinceMs,
+    statuses: ["acted", "confirmed"],
+    resolvedSince,
     limit: limit + 1,
   });
 
@@ -212,9 +216,41 @@ export async function projectWins(input: ProjectWinsInput): Promise<WinsViewMode
 
 `buildWinViewModel`, `composeWinProse`, `computeUndo` — all pure functions with co-located unit tests.
 
-`windowStartMs(window, now)` returns the epoch-ms boundary for `today | week | month`. Today = midnight in `timezone`. Week = Monday 00:00. Month = first of the month 00:00. Same helper as PR-S5 will need for metrics (move to a shared helper if both ship in the same window).
+`computeWindowStart(window: WinTimeWindow, now: Date, timezone: string): Date` returns the absolute timestamp for the start of the requested window **in the given timezone**: today = midnight in `timezone`; week = Monday 00:00 in `timezone`; month = 1st of the month 00:00 in `timezone`. Timezone is required (no hidden default). Same helper PR-S5 (metrics) will need; lives at `packages/core/src/agent-home/window.ts` and is shared from day one.
 
 **Mira excluded by type**: `agentKey: "alex" | "riley"` (not `AgentKey`). Mira returns 404 at the route layer.
+
+### 5.1 Store extension — `PrismaRecommendationStore.listResolvedForAgent`
+
+`listBySurface` filters by `createdAt`, but wins must filter by `resolvedAt` (when the operator confirmed/acted), not when the recommendation was created. PR-S3 adds a dedicated method to keep each contract clean:
+
+```ts
+// packages/db/src/recommendation-store.ts
+async listResolvedForAgent(args: {
+  orgId: string;
+  agentKey: AgentKey;        // mapped to PendingActionRecord.sourceAgent in the where clause
+  statuses: readonly RecommendationStatus[];
+  resolvedSince: Date;
+  limit: number;             // hard-capped at 200
+}): Promise<Recommendation[]> {
+  const rows = await this.prisma.pendingActionRecord.findMany({
+    where: {
+      organizationId: args.orgId,
+      sourceAgent: args.agentKey,
+      status: { in: [...args.statuses] },
+      resolvedAt: { gte: args.resolvedSince },
+      intent: { startsWith: RECOMMENDATION_INTENT_PREFIX },
+    },
+    orderBy: { resolvedAt: "desc" },
+    take: Math.min(args.limit, 200),
+  });
+  return rows.map(rowToRecommendation);
+}
+```
+
+Filter is fully push-down — no client-side post-filtering. Order by `resolvedAt desc` so the most recently resolved wins surface first. The existing `@@index([organizationId, surface, status])` on `PendingActionRecord` doesn't perfectly cover this query (it lacks `sourceAgent` and `resolvedAt`), but Prisma will still execute correctly — performance is acceptable for v1 because terminal-rec rows per org per agent per recent window is small. If profiling shows hotspot, add `@@index([organizationId, sourceAgent, status, resolvedAt])` in a follow-up migration.
+
+Co-located test: `packages/db/src/__tests__/recommendation-store.test.ts` — extend with cases for the new method (mocked Prisma).
 
 ---
 
@@ -235,25 +271,24 @@ Same auth, isolation, and shape as the existing `/api/dashboard/agents/:agentId/
 - `OrgAgentEnablement` check — same helper the decisions route uses.
 - Default `window: "today"`. Validate via `z.enum(["today", "week", "month"])`.
 
-Wires `PrismaRecommendationStore.listBySurface` into the `WinsSignalStore` adapter:
+Wires `PrismaRecommendationStore.listResolvedForAgent` (added in §5.1) into the `WinsSignalStore` adapter:
 
 ```ts
 const store: WinsSignalStore = {
-  async listTerminalRecommendations({ orgId, agentKey, sinceMs, limit }) {
-    const rows = await app.recommendationStore.listBySurface({
+  async listResolvedForAgent({ orgId, agentKey, statuses, resolvedSince, limit }) {
+    const rows = await app.recommendationStore.listResolvedForAgent({
       orgId,
-      surface: "queue",
-      sinceMs,
+      agentKey,
+      statuses,
+      resolvedSince,
       limit,
     });
-    return rows
-      .filter((r) => r.agentKey === agentKey && (r.status === "acted" || r.status === "confirmed"))
-      .map(toWinTerminalRecord);
+    return rows.map(toWinTerminalRecord);
   },
 };
 ```
 
-`toWinTerminalRecord` maps DB row → core type. Note the **client-side filter** by agentKey + status — `listBySurface` doesn't yet take `agentKey` or a status set. Acceptable for v1: we cap at `limit + 1 = 6` after the in-memory filter, and the store already caps at 200 raw rows. If this becomes a hot path, push the filter into the store (deferred — flagged in §10).
+`toWinTerminalRecord` maps the runtime `Recommendation` type → core's `WinTerminalRecord` (drops fields the wins block doesn't need; narrows `status` from `RecommendationStatus` to `"acted" | "confirmed"`). No client-side filtering — all happens in the DB.
 
 **Timezone resolution**: Look up via `app.organizationConfigStore?.getByOrgId(orgId)?.timezone ?? "Asia/Singapore"`. If `OrganizationConfig` lacks the field, the fallback applies. Recorded in `.agent/notes/agent-home-wins-audit.md` §11.
 
@@ -363,8 +398,10 @@ function WinTile({ win, agentKey }: { win: WinViewModel; agentKey: AgentKey }) {
 
 **Modified**
 
-- `packages/core/src/agent-home/index.ts` — re-export `projectWins`, `formatTimeFolio`, related types.
-- `apps/dashboard/src/lib/decisions/dispatch-action.ts` — extend action union to include `"undo"`. Two-line change.
+- `packages/core/src/agent-home/index.ts` — re-export `projectWins`, `formatTimeFolio`, `computeWindowStart`, related types.
+- `packages/db/src/recommendation-store.ts` — add `listResolvedForAgent` method (see §5.1). Targeted ~30-line addition; no existing callers affected.
+- `packages/db/src/__tests__/recommendation-store.test.ts` — add cases for `listResolvedForAgent` (mocked Prisma).
+- `apps/dashboard/src/lib/decisions/dispatch-action.ts` — extend action union to include `"undo"`. Two-line change to the type union; no body change to the `"approval"` case (it already spreads `action` into the request body).
 - `apps/dashboard/src/hooks/use-agent-wins.ts` — fixture form → live form (signature stays the same; adds optional `window` param).
 - `apps/dashboard/src/hooks/__tests__/use-agent-wins.test.tsx` — replace fixture test with live test (mocked fetch).
 - `apps/dashboard/src/components/agent-home/wins-block.tsx` — add Undo button to tile renderer; consume `win.undo` shape.
@@ -382,7 +419,7 @@ function WinTile({ win, agentKey }: { win: WinViewModel; agentKey: AgentKey }) {
 
 ## 11. Acceptance criteria
 
-1. `GET /api/dashboard/agents/alex/wins` returns `{ vm: WinsViewModel }` with `wins` sourced from the org's terminal `PendingActionRecord` rows where `sourceAgent = "alex"` and `status ∈ {acted, confirmed}`. Same for `riley`. `mira` returns 404.
+1. `GET /api/dashboard/agents/alex/wins` returns `{ vm: WinsViewModel }` with `wins` sourced from `PendingActionRecord` rows whose runtime `agentKey` is `"alex"` (DB column: `sourceAgent`) and `status ∈ {acted, confirmed}`, ordered by `resolvedAt` desc. Same for `riley`. `mira` returns 404.
 2. `WinsViewModel.freshness.dataSource === "live"` (no FIXTURE badge).
 3. `wins[*].timeFolio` formatted per §4 (Q3 rules), in the org's timezone (or `Asia/Singapore` fallback).
 4. Per-agent voice differs verifiably between alex and riley win prose (separate test cases assert this).
@@ -393,22 +430,22 @@ function WinTile({ win, agentKey }: { win: WinViewModel; agentKey: AgentKey }) {
    - On 200: invalidates wins + decisions query keys (already wired in `dispatch-action.ts`); the win disappears from the list on next render (its status is now `dismissed_by_undo`).
    - On 409 `undo_window_closed`: surfaces an inline "Undo window closed" message under the tile (no retry; no global toast system in v1).
 8. Cross-org isolation: an isolation test confirms Org B cannot see Org A's wins.
-9. Empty state: when zero wins exist, the block renders the parent-spec §7.3 copy `"No wins to show yet. {agentName} is still warming up."`.
+9. Empty state: when zero wins exist, the block renders `"No recent wins yet. {agentName} is waiting for the next approved action."` (more operationally precise than the parent-spec §7.3 draft; parent spec §7.3 should be amended to match in a small follow-up doc PR or by patching PR #376 before merge).
 10. Production gate is unchanged from PR-S1 — `/alex` is still gated until PR-S6.
 
 ---
 
 ## 12. Test plan (mirrors parent spec §8.1)
 
-| Layer           | Tests                                                                                                                                                                                                                                                                                                                                   |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core            | `projectWins` — empty list, single win, capped at 5, hasMore true/false, alex voice differs from riley voice (snapshot of `proseSegments`), undo states (available/expired/not-reversible). `formatTimeFolio` — same-day, yesterday, this-week, older, midnight boundary, timezone respected. `windowStartMs` — today/week/month edges. |
-| API route       | Mocked Prisma (`buildTestServer`). Cases: 200 happy path, 401 no session, 404 unknown agent, 404 disabled agent, 404 `mira`, 200 with org A doesn't include org B's rows, 500 on store throw. Window query param accepted.                                                                                                              |
-| Dashboard proxy | Rejects unauthenticated, validates `agentKey ∈ AGENT_KEYS`, forwards to api with window query, surfaces upstream errors as JSON.                                                                                                                                                                                                        |
-| Hook            | `useAgentWins` — happy path returns vm, sets data; isError on bad fetch; query key uses `keys.wins.feed`.                                                                                                                                                                                                                               |
-| Undo hook       | `useUndoWin` — happy path POSTs to dispatch-action; 409 surfaces toast; invalidation happens (assert via `queryClient.invalidateQueries` mock).                                                                                                                                                                                         |
-| Component       | `WinsBlock` — fixture-folio badge absent for live data; tile renders prose + undo button when `available`; "Undo window closed" line when expired; no button when `not-reversible`; empty state copy.                                                                                                                                   |
-| Isolation       | Extend `api-agent-home-isolation.test.ts` (or `api-decisions-isolation.test.ts`) to assert wins endpoint never returns Org B's rows.                                                                                                                                                                                                    |
+| Layer           | Tests                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core            | `projectWins` — empty list, single win, capped at 5, hasMore true/false, alex voice differs from riley voice (snapshot of `proseSegments`), undo states (available/expired/not-reversible). `formatTimeFolio` — same-day, yesterday, this-week, older, midnight boundary, timezone respected. `computeWindowStart` — today/week/month edges in `Asia/Singapore` and `America/New_York` (DST-spanning case included). |
+| API route       | Mocked Prisma (`buildTestServer`). Cases: 200 happy path, 401 no session, 404 unknown agent, 404 disabled agent, 404 `mira`, 200 with org A doesn't include org B's rows, 500 on store throw. Window query param accepted.                                                                                                                                                                                           |
+| Dashboard proxy | Rejects unauthenticated, validates `agentKey ∈ AGENT_KEYS`, forwards to api with window query, surfaces upstream errors as JSON.                                                                                                                                                                                                                                                                                     |
+| Hook            | `useAgentWins` — happy path returns vm, sets data; isError on bad fetch; query key uses `keys.wins.feed`.                                                                                                                                                                                                                                                                                                            |
+| Undo hook       | `useUndoWin` — happy path POSTs to dispatch-action; 409 surfaces inline `undo-window-closed` state for the tile (no toast); invalidation happens (assert via `queryClient.invalidateQueries` mock).                                                                                                                                                                                                                  |
+| Component       | `WinsBlock` — fixture-folio badge absent for live data; tile renders prose + undo button when `available`; "Undo window closed" line when expired; no button when `not-reversible`; empty state copy.                                                                                                                                                                                                                |
+| Isolation       | Extend `api-agent-home-isolation.test.ts` (or `api-decisions-isolation.test.ts`) to assert wins endpoint never returns Org B's rows.                                                                                                                                                                                                                                                                                 |
 
 Coverage thresholds remain at parent-spec values (core 65/65/70/65, dashboard global 55/50/52/55).
 
@@ -416,30 +453,30 @@ Coverage thresholds remain at parent-spec values (core 65/65/70/65, dashboard gl
 
 ## 13. Out of scope (explicitly deferred)
 
-| Item                                                                     | Why deferred                                                          | Future PR |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------- | --------- |
-| Booking + ConversionRecord as optional sources                           | Both lack agent attribution; needs schema migration or WorkTrace map. | PR-S3.1   |
-| `DepResult<T>` fan-out infrastructure                                    | One required source in v1 — no value to add. Lands with PR-S3.1.      | PR-S3.1   |
-| `/{agent}/wins` page (full-list view)                                    | `ROUTE_AVAILABILITY: false` already; `hasMore: true` is a UI flag.    | Phase D   |
-| Window-switcher UI (today/week/month picker)                             | Backend supports it; no UI ships in PR-S3.                            | Future    |
-| Push-down filtering (move agentKey + status filter into `listBySurface`) | Post-launch perf optimization; current limits keep query bounded.     | Optional  |
-| Org-timezone schema field                                                | Hardcoded fallback to `"Asia/Singapore"`; parent backlog.             | Future    |
-| Cross-agent wins inbox                                                   | `WinViewModel.agentKey` already on the type; UI ships per-agent only. | Phase D   |
-| `unavailableReason: "missing-permission"`                                | Reserved for future role-aware policy.                                | Future    |
-| Toast / global notification system                                       | PR-S3 surfaces undo-failure as inline text under the tile.            | Future    |
+| Item                                                                | Why deferred                                                             | Future PR |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------- |
+| Booking + ConversionRecord as optional sources                      | Both lack agent attribution; needs schema migration or WorkTrace map.    | PR-S3.1   |
+| `DepResult<T>` fan-out infrastructure                               | One required source in v1 — no value to add. Lands with PR-S3.1.         | PR-S3.1   |
+| `/{agent}/wins` page (full-list view)                               | `ROUTE_AVAILABILITY: false` already; `hasMore: true` is a UI flag.       | Phase D   |
+| Window-switcher UI (today/week/month picker)                        | Backend supports it; no UI ships in PR-S3.                               | Future    |
+| Composite index `(organizationId, sourceAgent, status, resolvedAt)` | Existing indexes acceptable for v1 scale; add only if profiling demands. | Optional  |
+| Org-timezone schema field                                           | Hardcoded fallback to `"Asia/Singapore"`; parent backlog.                | Future    |
+| Cross-agent wins inbox                                              | `WinViewModel.agentKey` already on the type; UI ships per-agent only.    | Phase D   |
+| `unavailableReason: "missing-permission"`                           | Reserved for future role-aware policy.                                   | Future    |
+| Toast / global notification system                                  | PR-S3 surfaces undo-failure as inline text under the tile.               | Future    |
 
 ---
 
 ## 14. Risks & mitigations
 
-| Risk                                                                                        | Mitigation                                                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Org-tz fallback masks production bugs (operator in NY sees Singapore times).                | Document gap in spec + audit notes. Not blocking — `Asia/Singapore` is the same fallback `Booking.timezone` defaults to. Add an org-tz field in a follow-up PR.                                                                                 |
-| `dismissed_by_undo` semantics differ from parent-spec mental model (`confirmed → pending`). | Document in §2 Q5 + §4 win-classification. Wins query filters out `dismissed_by_undo`, so the user-visible behaviour matches "win disappears on undo" — only the internal status differs.                                                       |
-| Client-side filter on agentKey + status defeats the store's index in pathological orgs.     | Cap at 200 raw rows (existing) + cap at 6 visible. Acceptable for launch. Push-down deferred.                                                                                                                                                   |
-| Undo race: operator clicks Undo just as `undoableUntil` passes.                             | Server returns 409 `undo_window_closed`; client surfaces "Undo window closed" toast; query invalidation refreshes the tile to show `unavailableReason: "expired"`. No client-side time check needed.                                            |
-| `dispatch-action.ts` now handles four actions instead of three.                             | Type-checked union extension. Existing tests for primary/secondary/dismiss continue to assert their branches; one new test for undo. Two-line change to the union; no other callers affected because the function shape is otherwise identical. |
-| PR-S3 lands before PR-S2.                                                                   | PR-S3 has no dep on greeting going live; the `dispatch-action.ts` invalidation of `keys.greeting.feed(agentKey)` already exists from PR-S1. If PR-S2 hasn't merged, greeting still serves fixture data — wins works regardless.                 |
+| Risk                                                                                        | Mitigation                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Org-tz fallback masks production bugs (operator in NY sees Singapore times).                | Document gap in spec + audit notes. Not blocking — `Asia/Singapore` is the same fallback `Booking.timezone` defaults to. Add an org-tz field in a follow-up PR.                                                                                               |
+| `dismissed_by_undo` semantics differ from parent-spec mental model (`confirmed → pending`). | Document in §2 Q5 + §4 win-classification. Wins query filters out `dismissed_by_undo`, so the user-visible behaviour matches "win disappears on undo" — only the internal status differs.                                                                     |
+| `listResolvedForAgent` query lacks a perfectly-covering composite index.                    | Existing single-column indexes on `sourceAgent` + `(organizationId, status)` execute the query correctly; row volume per org per agent per recent window is small. Add `(organizationId, sourceAgent, status, resolvedAt)` only if profiling shows a hotspot. |
+| Undo race: operator clicks Undo just as `undoableUntil` passes.                             | Server returns 409 `undo_window_closed`; client surfaces inline "Undo window closed" text under the tile; query invalidation refreshes the tile to show `unavailableReason: "expired"`. No client-side time check needed.                                     |
+| `dispatch-action.ts` now handles four actions instead of three.                             | Type-checked union extension. Existing tests for primary/secondary/dismiss continue to assert their branches; one new test for undo. Two-line change to the union; no other callers affected because the function shape is otherwise identical.               |
+| PR-S3 lands before PR-S2.                                                                   | PR-S3 has no dep on greeting going live; the `dispatch-action.ts` invalidation of `keys.greeting.feed(agentKey)` already exists from PR-S1. If PR-S2 hasn't merged, greeting still serves fixture data — wins works regardless.                               |
 
 ---
 
