@@ -491,4 +491,161 @@ describe("AuditRunner", () => {
     expect(report.summary.adSetsInLearning).toBe(1);
     expect(report.summary.adSetsLearningLimited).toBe(1);
   });
+
+  // ── Signal-health pre-check ──
+
+  describe("signal-health pre-check", () => {
+    function makeReport(overrides: {
+      score: "red" | "yellow" | "green";
+      breaches: Array<{
+        signal:
+          | "pixel_dead"
+          | "server_to_browser_low"
+          | "dedup_low"
+          | "freshness_stale"
+          | "da_check_failed";
+        severity: "critical" | "warning";
+        message: string;
+      }>;
+    }) {
+      return {
+        pixelId: "px_1",
+        score: overrides.score,
+        pixelHealth: {
+          pixelId: "px_1",
+          name: "P",
+          lastFiredAt: new Date().toISOString(),
+          isUnavailable: false,
+          automaticMatchingFields: ["em"],
+          isDead: overrides.score === "red",
+        },
+        eventVolume: { events: [] },
+        capiHealth: {
+          serverToBrowserRatio: 0.95,
+          dedupRate: 0.85,
+          lastServerEventAt: new Date().toISOString(),
+          freshnessMs: 60_000,
+          isFresh: true,
+        },
+        daChecks: { checks: [], hasFailure: false },
+        emqProxy: 0.85 * 0.95,
+        breaches: overrides.breaches,
+      };
+    }
+
+    it("runs normally and emits no signal-health recs when no checker provided", async () => {
+      const deps = buildMockDeps();
+      const runner = new AuditRunner(deps);
+
+      const report = await runner.run({
+        dateRange: { since: "2026-03-01", until: "2026-03-31" },
+        previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+      });
+
+      const sigRecs = report.recommendations.filter((r) => r.action === "fix_signal_health");
+      expect(sigRecs).toEqual([]);
+    });
+
+    it("appends fix_signal_health recs when checker reports yellow score", async () => {
+      const deps = buildMockDeps();
+      const checker = {
+        getSignalHealthReport: vi.fn().mockResolvedValue(
+          makeReport({
+            score: "yellow",
+            breaches: [
+              {
+                signal: "server_to_browser_low",
+                severity: "warning",
+                message: "Ratio 70% (target >90%).",
+              },
+              {
+                signal: "dedup_low",
+                severity: "warning",
+                message: "Dedup low.",
+              },
+            ],
+          }),
+        ),
+      };
+      const runner = new AuditRunner({
+        ...deps,
+        signalHealthChecker: checker as never,
+        config: { ...deps.config, pixelId: "px_1" },
+      });
+
+      const report = await runner.run({
+        dateRange: { since: "2026-03-01", until: "2026-03-31" },
+        previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+      });
+
+      const sigRecs = report.recommendations.filter((r) => r.action === "fix_signal_health");
+      expect(sigRecs).toHaveLength(2);
+      expect(checker.getSignalHealthReport).toHaveBeenCalledWith("px_1");
+      // Other audit work should still be present (campaign-level analysis).
+      expect(report.summary.activeCampaigns).toBe(1);
+    });
+
+    it("short-circuits per-campaign diagnostics when score is red", async () => {
+      // Set up a campaign that WOULD generate per-campaign recs (CPA way over).
+      const insight = makeCampaignInsight({
+        campaignId: "camp-overspend",
+        spend: 10_000,
+        conversions: 10,
+        revenue: 5_000,
+      });
+      const deps = buildMockDeps({
+        currentInsights: [insight],
+        previousInsights: [insight],
+      });
+      deps.config.targetCPA = 100;
+      const checker = {
+        getSignalHealthReport: vi.fn().mockResolvedValue(
+          makeReport({
+            score: "red",
+            breaches: [
+              {
+                signal: "pixel_dead",
+                severity: "critical",
+                message: "Pixel dead.",
+              },
+            ],
+          }),
+        ),
+      };
+      const runner = new AuditRunner({
+        ...deps,
+        signalHealthChecker: checker as never,
+        config: { ...deps.config, pixelId: "px_1" },
+      });
+
+      const report = await runner.run({
+        dateRange: { since: "2026-03-01", until: "2026-03-31" },
+        previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+      });
+
+      // Only signal-health recs — no per-campaign recs (add_creative, pause, etc.)
+      const nonSignalRecs = report.recommendations.filter((r) => r.action !== "fix_signal_health");
+      expect(nonSignalRecs).toEqual([]);
+      const sigRecs = report.recommendations.filter((r) => r.action === "fix_signal_health");
+      expect(sigRecs).toHaveLength(1);
+      expect(sigRecs[0]!.urgency).toBe("immediate");
+    });
+
+    it("does not call signalHealthChecker when pixelId is absent", async () => {
+      const deps = buildMockDeps();
+      const checker = { getSignalHealthReport: vi.fn() };
+      const runner = new AuditRunner({
+        ...deps,
+        signalHealthChecker: checker as never,
+        // no pixelId set
+      });
+
+      await runner.run({
+        dateRange: { since: "2026-03-01", until: "2026-03-31" },
+        previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+      });
+
+      expect(checker.getSignalHealthReport).not.toHaveBeenCalled();
+    });
+  });
 });

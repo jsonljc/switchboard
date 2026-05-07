@@ -1,4 +1,4 @@
-// packages/core/src/ad-optimizer/audit-runner.ts
+// packages/ad-optimizer/src/audit-runner.ts
 import type {
   AuditReportSchema as AuditReport,
   CampaignInsightSchema as CampaignInsight,
@@ -25,11 +25,15 @@ import { detectFunnelShape } from "./funnel-detector.js";
 import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
 import { diagnose } from "./metric-diagnostician.js";
-import { generateRecommendations } from "./recommendation-engine.js";
+import {
+  generateRecommendations,
+  generateSignalHealthRecommendations,
+} from "./recommendation-engine.js";
 import { runRecommendationSink, type RecommendationEmitter } from "./recommendation-sink.js";
 import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
+import type { SignalHealthChecker, SignalHealthReport } from "./signal-health-checker.js";
 
 // ── Interfaces ──
 
@@ -51,6 +55,13 @@ export interface AuditConfig {
   targetCPA: number;
   targetROAS: number;
   mediaBenchmarks: MediaBenchmarks;
+  /**
+   * Optional Meta Pixel ID. When present alongside `signalHealthChecker`,
+   * the runner pulls a signal-health report at the start of each audit and
+   * short-circuits per-campaign diagnostics if the pixel is dead or
+   * server-to-browser ratio falls below 50%. Optional for back-compat.
+   */
+  pixelId?: string;
 }
 
 export interface AuditDependencies {
@@ -79,6 +90,14 @@ export interface AuditDependencies {
    * the store are accessible.
    */
   recommendationEmitter?: RecommendationEmitter;
+  /**
+   * Optional. When provided alongside `config.pixelId`, the runner pulls a
+   * Meta Pixel + CAPI signal-health report and emits `fix_signal_health`
+   * recommendations for any breaches. Critical breaches short-circuit
+   * downstream per-campaign diagnostics — there is no point recommending
+   * creative changes when the conversion signal is broken.
+   */
+  signalHealthChecker?: SignalHealthChecker;
 }
 
 // ── Helpers ──
@@ -167,6 +186,7 @@ export class AuditRunner {
   private readonly getAdSetInsightsFn?: AuditDependencies["getAdSetInsights"];
   private readonly getTrendDataFn?: AuditDependencies["getTrendData"];
   private readonly recommendationEmitter?: RecommendationEmitter;
+  private readonly signalHealthChecker?: SignalHealthChecker;
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -178,6 +198,7 @@ export class AuditRunner {
     this.getAdSetInsightsFn = deps.getAdSetInsights;
     this.getTrendDataFn = deps.getTrendData;
     this.recommendationEmitter = deps.recommendationEmitter;
+    this.signalHealthChecker = deps.signalHealthChecker;
   }
 
   async run(params: {
@@ -186,12 +207,52 @@ export class AuditRunner {
   }): Promise<AuditReport> {
     const { dateRange, previousDateRange } = params;
 
+    // Step 0: Signal-health pre-check. Surfaces fix_signal_health recs and
+    // (when score=red) short-circuits the downstream per-campaign analysis.
+    let signalHealthReport: SignalHealthReport | null = null;
+    let signalHealthRecs: RecommendationOutput[] = [];
+    if (this.signalHealthChecker && this.config.pixelId) {
+      signalHealthReport = await this.signalHealthChecker.getSignalHealthReport(
+        this.config.pixelId,
+      );
+      signalHealthRecs = generateSignalHealthRecommendations(signalHealthReport, {
+        pixelId: this.config.pixelId,
+        accountId: this.config.accountId,
+      });
+    }
+    const signalHealthCritical = signalHealthReport?.score === "red";
+
     // Step 1: Pull current + previous period campaign insights + account summary (parallel)
     const [currentInsights, previousInsights, _accountSummary] = await Promise.all([
       this.adsClient.getCampaignInsights({ dateRange, fields: INSIGHT_FIELDS }),
       this.adsClient.getCampaignInsights({ dateRange: previousDateRange, fields: INSIGHT_FIELDS }),
       this.adsClient.getAccountSummary(),
     ]);
+
+    if (signalHealthCritical) {
+      const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
+      const totalLeads = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
+      const totalRevenue = currentInsights.reduce((sum, i) => sum + i.revenue, 0);
+      return {
+        accountId: this.config.accountId,
+        dateRange,
+        summary: {
+          totalSpend,
+          totalLeads,
+          totalRevenue,
+          overallROAS: safeDivide(totalRevenue, totalSpend),
+          activeCampaigns: currentInsights.length,
+          campaignsInLearning: 0,
+          adSetsInLearning: 0,
+          adSetsLearningLimited: 0,
+        },
+        funnel: [],
+        periodDeltas: [],
+        insights: [],
+        watches: [],
+        recommendations: signalHealthRecs,
+      };
+    }
 
     // Step 2: Pull CRM funnel data + benchmarks (parallel)
     const campaignIds = currentInsights.map((i) => i.campaignId);
@@ -428,6 +489,12 @@ export class AuditRunner {
     if (bySource && Object.keys(bySource).length > 0) {
       const spendBySource = computeSpendBySource(currentInsights, bySource, adSetData);
       sourceComparison = compareSources({ bySource, spendBySource });
+    }
+
+    // Step 8c: Append signal-health recommendations (non-critical breaches —
+    // critical case short-circuited above before per-campaign work began).
+    if (signalHealthRecs.length > 0) {
+      recommendations.push(...signalHealthRecs);
     }
 
     // Step 9: Emit recommendations to the v1 pipeline (queue / shadow / dropped).
