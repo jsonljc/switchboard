@@ -267,6 +267,21 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     );
   }
 
+  // Wins (Slice B agent-home wins feed)
+  /**
+   * Reads the Wins feed for a given agent and time window.
+   * Slice B endpoint: GET /api/dashboard/agents/:agentKey/wins?window=…
+   *
+   * Returns the wire shape unchanged — `vm` contains the wins view-model.
+   */
+  async listWins(
+    agentKey: string,
+    window: "today" | "week" | "month" = "today",
+  ): Promise<{ vm: unknown }> {
+    const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/wins?window=${window}`;
+    return this.request<{ vm: unknown }>(path);
+  }
+
   // Decisions (cross-kind feed: recommendations + handoffs)
   /**
    * Reads the Decision Feed (Slice A PR 3 endpoint). Pass an `agentKey` to
