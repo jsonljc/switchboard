@@ -10,6 +10,19 @@ vi.mock("@/hooks/use-decision-feed", () => ({
   useInboxCount: () => 0,
 }));
 
+vi.mock("@/hooks/use-agent-wins", () => ({
+  useAgentWins: () => ({
+    data: {
+      wins: [],
+      hasMore: false,
+      freshness: { generatedAt: "2026-05-07T00:00:00Z", window: "today", dataSource: "live" },
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
 vi.mock("@/hooks/use-query-keys", () => ({
   useScopedQueryKeys: () => null,
   useTenantContext: () => null,
