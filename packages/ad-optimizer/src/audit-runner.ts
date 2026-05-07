@@ -33,7 +33,7 @@ import { runRecommendationSink, type RecommendationEmitter } from "./recommendat
 import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
-import type { SignalHealthChecker, SignalHealthReport } from "./signal-health-checker.js";
+import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
 
 // ── Interfaces ──
 
@@ -97,7 +97,7 @@ export interface AuditDependencies {
    * downstream per-campaign diagnostics — there is no point recommending
    * creative changes when the conversion signal is broken.
    */
-  signalHealthChecker?: SignalHealthChecker;
+  signalHealthChecker?: SignalHealthReportProvider;
 }
 
 // ── Helpers ──
@@ -186,7 +186,7 @@ export class AuditRunner {
   private readonly getAdSetInsightsFn?: AuditDependencies["getAdSetInsights"];
   private readonly getTrendDataFn?: AuditDependencies["getTrendData"];
   private readonly recommendationEmitter?: RecommendationEmitter;
-  private readonly signalHealthChecker?: SignalHealthChecker;
+  private readonly signalHealthChecker?: SignalHealthReportProvider;
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;

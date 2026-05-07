@@ -85,6 +85,16 @@ export interface SignalHealthReport {
   breaches: Breach[];
 }
 
+/**
+ * Slim interface consumed by AuditRunner and the inngest cron — keeps
+ * call sites decoupled from the concrete SignalHealthChecker class so
+ * tests and alt implementations (e.g. cached/mock providers) can plug in
+ * without inheritance gymnastics.
+ */
+export interface SignalHealthReportProvider {
+  getSignalHealthReport(pixelId: string): Promise<SignalHealthReport>;
+}
+
 interface PixelMetadataResponse {
   id: string;
   name: string;

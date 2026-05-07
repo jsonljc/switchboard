@@ -23,10 +23,16 @@ import {
 import {
   createWeeklyAuditCron,
   createDailyCheckCron,
+  createDailySignalHealthCron,
   MetaAdsClient,
   RealCrmDataProvider,
+  SignalHealthChecker,
 } from "@switchboard/ad-optimizer";
-import type { CronDependencies, InstantFormAdapter } from "@switchboard/ad-optimizer";
+import type {
+  CronDependencies,
+  SignalHealthCronDependencies,
+  InstantFormAdapter,
+} from "@switchboard/ad-optimizer";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -94,6 +100,20 @@ export async function registerInngest(
   const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
   const taskStore = new PrismaAgentTaskStore(app.prisma);
 
+  // Pixel id is captured into the meta-ads connection credentials at OAuth
+  // time (see apps/dashboard/src/lib/service-field-configs.ts). It's optional
+  // — operators may have wired ads + ad account but not yet supplied a pixel.
+  const getDeploymentPixelId = async (deploymentId: string): Promise<string | null> => {
+    const connections = await connectionStore.listByDeployment(deploymentId);
+    const conn = connections.find((c) => c.type === "meta-ads");
+    if (!conn) return null;
+    const creds = decryptCredentials(conn.credentials);
+    const pixelId = creds.pixelId;
+    return typeof pixelId === "string" && pixelId.length > 0 ? pixelId : null;
+  };
+  const createSignalHealthChecker = (creds: { accessToken: string }) =>
+    new SignalHealthChecker({ accessToken: creds.accessToken });
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -148,6 +168,31 @@ export async function registerInngest(
         input: {},
       });
       await taskStore.submitOutput(task.id, report as Record<string, unknown>);
+      await taskStore.updateStatus(task.id, "completed");
+    },
+    getDeploymentPixelId,
+    createSignalHealthChecker,
+  };
+
+  // Signal-health daily cron uses a slimmer dep set than the audit cron —
+  // it only needs to list deployments, resolve creds + pixel, run the
+  // checker, and persist the report.
+  const signalHealthDeps: SignalHealthCronDependencies = {
+    listActiveDeployments: adOptimizerDeps.listActiveDeployments,
+    getDeploymentCredentials: adOptimizerDeps.getDeploymentCredentials,
+    getDeploymentPixelId,
+    createSignalHealthChecker,
+    saveSignalHealthReport: async (deploymentId, report) => {
+      const deployment = await deploymentStore.findById(deploymentId);
+      if (!deployment) return;
+      const task = await taskStore.create({
+        deploymentId,
+        organizationId: deployment.organizationId,
+        listingId: deployment.listingId,
+        category: "signal_health",
+        input: {},
+      });
+      await taskStore.submitOutput(task.id, report as unknown as Record<string, unknown>);
       await taskStore.updateStatus(task.id, "completed");
     },
   };
@@ -449,6 +494,7 @@ export async function registerInngest(
       }),
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
+      createDailySignalHealthCron(signalHealthDeps),
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),

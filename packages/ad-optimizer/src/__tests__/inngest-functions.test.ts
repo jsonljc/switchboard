@@ -116,6 +116,59 @@ describe("executeWeeklyAudit", () => {
     expect(deps.createAdsClient).toHaveBeenCalledTimes(1);
     expect(deps.saveAuditReport).toHaveBeenCalledTimes(1);
   });
+
+  it("threads signal-health deps into the runner when configured", async () => {
+    const getReport = vi.fn().mockResolvedValue({
+      pixelId: "px_1",
+      score: "yellow",
+      pixelHealth: {
+        pixelId: "px_1",
+        name: "P",
+        lastFiredAt: new Date().toISOString(),
+        isUnavailable: false,
+        automaticMatchingFields: ["em"],
+        isDead: false,
+      },
+      eventVolume: { events: [] },
+      capiHealth: {
+        serverToBrowserRatio: 0.85,
+        dedupRate: 0.6,
+        lastServerEventAt: new Date().toISOString(),
+        freshnessMs: 60_000,
+        isFresh: true,
+      },
+      daChecks: { checks: [], hasFailure: false },
+      emqProxy: 0.51,
+      breaches: [{ signal: "server_to_browser_low", severity: "warning", message: "Ratio 85%." }],
+    });
+    deps.getDeploymentPixelId = vi.fn().mockResolvedValue("px_1");
+    deps.createSignalHealthChecker = vi.fn().mockReturnValue({ getSignalHealthReport: getReport });
+
+    await executeWeeklyAudit(step as never, deps);
+
+    // 2 deployments × 1 pixel lookup + 1 checker per deployment
+    expect(deps.getDeploymentPixelId).toHaveBeenCalledTimes(2);
+    expect(deps.createSignalHealthChecker).toHaveBeenCalledTimes(2);
+    // The checker should have been invoked once per deployment (proves the
+    // AuditRunner actually consumed the optional dep, not just constructed it).
+    expect(getReport).toHaveBeenCalledTimes(2);
+    expect(getReport).toHaveBeenCalledWith("px_1");
+  });
+
+  it("skips signal-health pre-check when pixelId lookup returns null", async () => {
+    const getReport = vi.fn();
+    deps.getDeploymentPixelId = vi.fn().mockResolvedValue(null);
+    deps.createSignalHealthChecker = vi.fn().mockReturnValue({ getSignalHealthReport: getReport });
+
+    await executeWeeklyAudit(step as never, deps);
+
+    // Pixel-id lookup happens, but no checker is built and no report fetched.
+    expect(deps.getDeploymentPixelId).toHaveBeenCalledTimes(2);
+    expect(deps.createSignalHealthChecker).not.toHaveBeenCalled();
+    expect(getReport).not.toHaveBeenCalled();
+    // Audits still run normally for both deployments.
+    expect(deps.saveAuditReport).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("executeDailyCheck", () => {
