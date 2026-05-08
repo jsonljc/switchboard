@@ -442,7 +442,7 @@ editorial pages — see §7 for the impact framing.
 | ---------------------------- | ------------------------- | -------------------------------------------------------- |
 | Loading (no cached data)     | `Reading the trail…`      | Italic muted; matches C1's `Reading your inbox…` cadence |
 | Error                        | `Couldn't load activity.` | Italic muted                                             |
-| Empty (loaded, zero entries) | `Nothing to report.`      | First-person editorial register; succinct                |
+| Empty (loaded, zero entries) | `Nothing to report.`      | Editorial register; succinct                             |
 | Populated                    | `<ul>` of up to 10 rows   | Static rows; `time · agent · message`                    |
 
 The status header (`System live` + Halt button) renders in **all** states
@@ -638,8 +638,9 @@ state tests, **open the popover through the actual trigger** so trigger
   referencing its own internals) plus the explicit re-export shim. No
   new external imports.
 - **C2b:** `git grep -nE "components/console|/console" apps/dashboard/src`
-  returns zero hits after the sweep, except parent directory listings in
-  `app/(auth)/`. Verifies full retirement.
+  returns zero runtime/source references after the sweep. Any incidental
+  hits (e.g. test snapshots, framework-generated path strings) must be
+  explicitly reviewed in the PR.
 
 ### 5.4 Not tested in C2 (covered elsewhere or out of scope)
 
@@ -743,7 +744,8 @@ cleanup is the point.
 - `pnpm lint && pnpm typecheck && pnpm --filter @switchboard/dashboard test`
   clean.
 - `git grep -nE "components/console|/console" apps/dashboard/src` returns
-  zero hits except parent directory listings in `app/(auth)/`.
+  zero runtime/source references; any incidental hits (test snapshots,
+  framework-generated path strings) are explicitly reviewed in the PR.
 - Visiting `/console` returns Next's default 404 (no redirect, no shim).
 - The pip in the editorial header is interactive; clicking it opens a
   popover anchored to it; popover content matches §3 + §4.
@@ -779,7 +781,7 @@ cleanup is the point.
 | HelpOverlay focus-trap regression after rewrite                                                                                                      | Keyboard users escape the modal involuntarily                 | §5.1 #5 explicitly asserts focus trap. If the existing `FOCUSABLE_SELECTORS` constant + Tab interception pattern is preserved verbatim during rewrite, behavior is unchanged                                                                                                       |
 | Two halt controls (header button + popover button) drift visually or label-wise                                                                      | Operator confusion ("does Halt mean different things?")       | Both controls bind to the same `useHalt()`. Visual styling: keep the header button's existing tokens; popover halt button uses an inline editorial style explicitly distinct (no destructive coloring). They're peers; one source of truth                                         |
 | C2b deletion sweep removes a console-tree file that has an unaudited consumer outside the tree                                                       | Type error or runtime null after merge                        | Spec-freeze grep audit (§2.7) verified no external module imports beyond the three known ones. C2b's plan re-runs `git grep "@/components/console"` and `git grep "/console"` immediately before the delete commit and immediately after (must be zero outside the parent listing) |
-| `ToastShelf` dropped → operators relying on halt-confirmation toast lose feedback                                                                    | Behavior change with no user-facing signal                    | Pip + popover lockstep flip is the confirmation. Acceptance criterion in §6.2 explicitly tests this. If user research surfaces toast demand later, a global toast layer can be re-added without touching halt — they're orthogonal                                                 |
+| `ToastShelf` dropped → operators relying on halt-confirmation toast lose feedback                                                                    | Behavior change with no user-facing signal                    | Pip + popover lockstep flip is the confirmation. Acceptance criterion in §6.3 verifies the pip + popover lockstep flip. If user research surfaces toast demand later, a global toast layer can be re-added without touching halt — they're orthogonal                              |
 | Memory note `project_console_halt_state_phase2_lift.md` not updated → future sessions act on stale "needs lifting" guidance                          | Wasted future agent effort                                    | §6.4 explicitly lists the memory note touch-up as a C2a merge step                                                                                                                                                                                                                 |
 
 ---
