@@ -12,8 +12,6 @@ export default async function AgentHomePage({ params }: { params: { agentKey: st
   const enabled = await fetchEnabledAgentsServer();
   if (!enabled.includes(agentKey)) notFound();
 
-  if (process.env.NEXT_PUBLIC_DEPLOY_ENV === "production") notFound();
-
   return (
     <EditorialAuthShell>
       <AgentHomeClient agentKey={agentKey} />
