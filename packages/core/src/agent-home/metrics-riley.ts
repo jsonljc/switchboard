@@ -9,7 +9,7 @@ import type {
 
 const RILEY_VOICE = {
   up: (delta: number) => `+${delta} from last week.`,
-  down: (delta: number) => `${delta} from last week.`, // delta already negative
+  down: (delta: number) => `${Math.abs(delta)} fewer from last week.`,
   flat: () => `Flat vs last week.`,
 };
 

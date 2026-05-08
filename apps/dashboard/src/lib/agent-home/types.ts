@@ -82,6 +82,7 @@ export interface WinViewModel {
 }
 
 export interface WinsViewModel {
+  defaultUndoLabel?: string;
   wins: readonly WinViewModel[];
   hasMore: boolean;
   freshness: DataFreshness;

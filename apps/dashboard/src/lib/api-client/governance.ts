@@ -6,6 +6,12 @@ import type {
   RecommendationApiRow,
   RecommendationActAction,
 } from "../api-client-types";
+import type {
+  GreetingViewModel,
+  MetricsViewModel,
+  PipelineViewModel,
+  WinsViewModel,
+} from "@/lib/agent-home/types";
 import { SwitchboardClientCore } from "./core";
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
@@ -277,9 +283,9 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   async listWins(
     agentKey: string,
     window: "today" | "week" | "month" = "today",
-  ): Promise<{ vm: unknown }> {
+  ): Promise<{ vm: WinsViewModel }> {
     const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/wins?window=${window}`;
-    return this.request<{ vm: unknown }>(path);
+    return this.request<{ vm: WinsViewModel }>(path);
   }
 
   // Pipeline (Slice B agent-home pipeline block)
@@ -289,9 +295,9 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
    *
    * Returns the wire shape unchanged — `vm` contains the pipeline view-model.
    */
-  async listPipeline(agentKey: string): Promise<{ vm: unknown }> {
+  async listPipeline(agentKey: string): Promise<{ vm: PipelineViewModel }> {
     const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/pipeline`;
-    return this.request<{ vm: unknown }>(path);
+    return this.request<{ vm: PipelineViewModel }>(path);
   }
 
   // Metrics (Slice B agent-home metrics block — PR-S5)
@@ -303,9 +309,9 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
    * extension. Returns the wire shape unchanged — `vm` contains the metrics
    * view-model.
    */
-  async listMetrics(agentKey: string, window: "week" = "week"): Promise<{ vm: unknown }> {
+  async listMetrics(agentKey: string, window: "week" = "week"): Promise<{ vm: MetricsViewModel }> {
     const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/metrics?window=${window}`;
-    return this.request<{ vm: unknown }>(path);
+    return this.request<{ vm: MetricsViewModel }>(path);
   }
 
   // Decisions (cross-kind feed: recommendations + handoffs)
@@ -329,8 +335,8 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     }>(path);
   }
 
-  async getGreeting(agentKey: string): Promise<{ data: unknown }> {
-    return this.request<{ data: unknown }>(
+  async getGreeting(agentKey: string): Promise<{ data: GreetingViewModel }> {
+    return this.request<{ data: GreetingViewModel }>(
       `/api/dashboard/agents/${encodeURIComponent(agentKey)}/greeting`,
     );
   }

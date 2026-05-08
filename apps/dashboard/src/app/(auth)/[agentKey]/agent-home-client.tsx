@@ -22,19 +22,19 @@ export function AgentHomeClient({ agentKey }: { agentKey: AgentKey }) {
 
   return (
     <>
-      <AgentBlockBoundary>
+      <AgentBlockBoundary key={`${agentKey}-greeting`}>
         <GreetingBlock vm={greeting.data} agentKey={agentKey} />
       </AgentBlockBoundary>
-      <AgentBlockBoundary>
+      <AgentBlockBoundary key={`${agentKey}-needs-you`}>
         <NeedsYouBlock agentKey={agentKey} />
       </AgentBlockBoundary>
-      <AgentBlockBoundary>
+      <AgentBlockBoundary key={`${agentKey}-wins`}>
         <WinsBlock vm={wins.data} agentKey={agentKey} />
       </AgentBlockBoundary>
-      <AgentBlockBoundary>
+      <AgentBlockBoundary key={`${agentKey}-metrics`}>
         <MetricsBlock vm={metrics.data} agentKey={agentKey} />
       </AgentBlockBoundary>
-      <AgentBlockBoundary>
+      <AgentBlockBoundary key={`${agentKey}-pipeline`}>
         <PipelineBlock vm={pipeline.data} />
       </AgentBlockBoundary>
     </>

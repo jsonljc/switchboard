@@ -56,6 +56,7 @@ export interface DataFreshness {
 }
 
 export interface WinsViewModel {
+  defaultUndoLabel: string;
   wins: readonly WinViewModel[];
   hasMore: boolean;
   freshness: DataFreshness;
@@ -64,11 +65,12 @@ export interface WinsViewModel {
 export interface WinsAgentConfig {
   agentKey: AgentHomeKey;
   ackPhrase: string;
+  defaultUndoLabel: string;
 }
 
 const AGENT_VOICE_CONFIGS: Record<AgentHomeKey, WinsAgentConfig> = {
-  alex: { agentKey: "alex", ackPhrase: "Sent." },
-  riley: { agentKey: "riley", ackPhrase: "Adjusted." },
+  alex: { agentKey: "alex", ackPhrase: "Sent.", defaultUndoLabel: "Undo last reply" },
+  riley: { agentKey: "riley", ackPhrase: "Adjusted.", defaultUndoLabel: "Revert change" },
 };
 
 export interface ProjectWinsInput {
@@ -97,6 +99,7 @@ export async function projectWins(input: ProjectWinsInput): Promise<WinsViewMode
   const config = AGENT_VOICE_CONFIGS[agentKey];
 
   return {
+    defaultUndoLabel: config.defaultUndoLabel,
     wins: visible.map((row) => buildWinViewModel(row, config, now, timezone)),
     hasMore: rows.length > VISIBLE_LIMIT,
     freshness: {
