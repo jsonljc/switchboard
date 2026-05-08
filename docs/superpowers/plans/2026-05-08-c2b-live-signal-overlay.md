@@ -537,11 +537,13 @@ export function LiveSignalPopover() {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: hsl(140 60% 45%);
+  /* Match the existing global .live-pip .pulse green (globals.css:559) */
+  background: hsl(140 50% 38%);
 }
 
 .live-popover-head .status-dot.halted {
-  background: hsl(0 65% 50%);
+  /* Match the existing .folio-link.is-halt halted token (globals.css:606) */
+  background: hsl(0 75% 50%);
 }
 
 .live-popover-head .status-label {
@@ -613,11 +615,16 @@ export function LiveSignalPopover() {
 }
 
 /* Halted-state pip: pulse becomes a static dot, color shifts.
-   The base .live-pip styling lives in the editorial header CSS;
-   only halted-state overrides live here. */
+   The base .live-pip styling (size, ring animation, base green) lives in
+   globals.css:549-578; we don't redefine it here. We only override for the
+   halted state, suppressing the ::after ring animation and shifting the dot
+   color to match the existing .folio-link.is-halt halted token. */
 .live-pip.halted .pulse {
+  background: hsl(0 75% 50%);
+}
+.live-pip.halted .pulse::after {
   animation: none;
-  background: hsl(0 65% 50%);
+  border-color: hsl(0 75% 50% / 0.4);
 }
 ```
 
@@ -734,9 +741,16 @@ pnpm --filter @switchboard/dashboard typecheck
 
 Expected: clean. Nothing imports from `app/(auth)/console/` in production code.
 
-- [ ] **Step 3: Verify dev server returns 404 for `/console`**
+- [ ] **Step 3: Verify the route deletion does not break the build**
 
-Restart the dev server (`Ctrl+C`, then `pnpm --filter @switchboard/dashboard dev`). Visit `http://localhost:3002/console`. Expected: Next.js's default 404 page (not a redirect — middleware still gates the path until Task 8, but with no matching route the response is 404 from Next).
+Run typecheck and the full dashboard test suite:
+
+```bash
+pnpm --filter @switchboard/dashboard typecheck
+pnpm --filter @switchboard/dashboard test
+```
+
+Expected: clean. **Do not assert on `/console` HTTP behavior at this point** — `/console` is still in the middleware allowlist (until Task 8), and the exact response (Next 404 vs. middleware-mediated path) is implementation-dependent on Next's matcher resolution order. The authoritative `/console` 404 verification happens in **Task 10 Step 3** after middleware cleanup.
 
 - [ ] **Step 4: Commit**
 

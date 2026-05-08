@@ -42,60 +42,31 @@
 
 ---
 
-## Task 1: Relocate `halt-context.tsx` (and tests) into `layout/halt/`
+## Task 1: Relocate `halt-context.tsx` to `layout/halt/` AND replace the old path with a re-export shim (atomic)
 
 **Files:**
 
 - Move: `apps/dashboard/src/components/console/halt-context.tsx` → `apps/dashboard/src/components/layout/halt/halt-context.tsx`
 - Move: `apps/dashboard/src/components/console/__tests__/halt-context.test.tsx` → `apps/dashboard/src/components/layout/halt/__tests__/halt-context.test.tsx`
+- Create: `apps/dashboard/src/components/console/halt-context.tsx` (re-export shim, replacing the moved file at its old path)
 
-The file content does not change — same `HaltProvider`, `useHalt`, `toggleHaltWithToast` exports; same `sb_halt_state` localStorage key.
+The file content does not change — same `HaltProvider`, `useHalt`, `toggleHaltWithToast` exports; same `sb_halt_state` localStorage key. The dormant console tree (e.g. `console-view.tsx`, `op-strip.tsx`) imports via the old path; the shim keeps those imports valid until C2b deletion.
 
-- [ ] **Step 1: Create the target directory and move the source file**
+**The relocation and the shim creation happen in a single commit** so the working tree never sits in a transient broken state.
+
+- [ ] **Step 1: Create the target directory and move the source + test files**
 
 ```bash
 mkdir -p apps/dashboard/src/components/layout/halt/__tests__
 git mv apps/dashboard/src/components/console/halt-context.tsx \
        apps/dashboard/src/components/layout/halt/halt-context.tsx
-```
-
-- [ ] **Step 2: Move the test file**
-
-```bash
 git mv apps/dashboard/src/components/console/__tests__/halt-context.test.tsx \
        apps/dashboard/src/components/layout/halt/__tests__/halt-context.test.tsx
 ```
 
 The test imports from `"../halt-context"` — a relative path that still resolves correctly after the move. No content change required.
 
-- [ ] **Step 3: Run the relocated tests to verify they pass**
-
-```bash
-pnpm --filter @switchboard/dashboard test halt-context.test
-```
-
-Expected: all existing assertions pass at the new location.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add apps/dashboard/src/components/layout/halt/
-git add apps/dashboard/src/components/console/halt-context.tsx
-git add apps/dashboard/src/components/console/__tests__/halt-context.test.tsx
-git commit -m "refactor(dashboard): relocate halt-context.tsx into layout/halt/ cluster"
-```
-
----
-
-## Task 2: Reduce `console/halt-context.tsx` to a re-export shim
-
-The dormant console tree (e.g. `console-view.tsx`, `op-strip.tsx`) still imports from `@/components/console/halt-context`. C2a keeps those imports valid via a re-export shim.
-
-**Files:**
-
-- Create: `apps/dashboard/src/components/console/halt-context.tsx`
-
-- [ ] **Step 1: Write the shim file**
+- [ ] **Step 2: Recreate the old path as a re-export shim (in the same working-tree change as Step 1)**
 
 ```bash
 cat > apps/dashboard/src/components/console/halt-context.tsx <<'EOF'
@@ -106,20 +77,29 @@ export * from "@/components/layout/halt/halt-context";
 EOF
 ```
 
-- [ ] **Step 2: Run typecheck to verify the dormant tree still compiles**
+- [ ] **Step 3: Run typecheck and the relocated tests**
 
 ```bash
 pnpm --filter @switchboard/dashboard typecheck
+pnpm --filter @switchboard/dashboard test halt-context.test
 ```
 
-Expected: no errors. The console tree's `import { HaltProvider, useHalt, toggleHaltWithToast } from "../halt-context"` style imports continue to resolve via the shim.
+Expected: typecheck clean (the shim absorbs dormant-tree imports); all halt-context test assertions pass at the new location.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit (single atomic commit)**
 
 ```bash
+git add apps/dashboard/src/components/layout/halt/
 git add apps/dashboard/src/components/console/halt-context.tsx
-git commit -m "refactor(dashboard): reduce console/halt-context.tsx to a re-export shim (c2a)"
+git add apps/dashboard/src/components/console/__tests__/halt-context.test.tsx
+git commit -m "refactor(dashboard): relocate halt-context.tsx to layout/halt/, leave re-export shim at old path (c2a)"
 ```
+
+---
+
+## Task 2: _(merged into Task 1)_
+
+This slot is intentionally preserved so subsequent task numbers don't shift. The shim creation that previously lived here is now part of Task 1's atomic commit. Skip to Task 3.
 
 ---
 
@@ -229,13 +209,14 @@ git commit -m "refactor(dashboard): drop halt-provider-client shim, import HaltP
 
 ---
 
-## Task 5: Relocate `use-keyboard-shortcuts.ts` into `components/layout/`
+## Task 5: Relocate `use-keyboard-shortcuts.ts` AND replace the old path with a re-export shim (atomic)
 
-The hook is a pure utility — no internal imports, no behavioral coupling to the console tree.
+The hook is a pure utility, but `console-view.tsx:15` imports it via the relative path `./use-keyboard-shortcuts`. Move + shim happen together in a single commit so the working tree never sits in a state where the dormant tree fails to typecheck.
 
 **Files:**
 
 - Move: `apps/dashboard/src/components/console/use-keyboard-shortcuts.ts` → `apps/dashboard/src/components/layout/use-keyboard-shortcuts.ts`
+- Create: `apps/dashboard/src/components/console/use-keyboard-shortcuts.ts` (re-export shim, replacing the moved file at its old path)
 
 - [ ] **Step 1: Move the file**
 
@@ -244,15 +225,7 @@ git mv apps/dashboard/src/components/console/use-keyboard-shortcuts.ts \
        apps/dashboard/src/components/layout/use-keyboard-shortcuts.ts
 ```
 
-- [ ] **Step 2: Run typecheck — `console-view.tsx` still imports it via `./use-keyboard-shortcuts`**
-
-```bash
-pnpm --filter @switchboard/dashboard typecheck
-```
-
-Expected: **fails**. `console-view.tsx:15` references `from "./use-keyboard-shortcuts"`, which no longer exists at that path.
-
-- [ ] **Step 3: Add a re-export shim at the old path so the dormant tree still type-checks**
+- [ ] **Step 2: Recreate the old path as a re-export shim (in the same working-tree change as Step 1)**
 
 ```bash
 cat > apps/dashboard/src/components/console/use-keyboard-shortcuts.ts <<'EOF'
@@ -263,20 +236,20 @@ export * from "@/components/layout/use-keyboard-shortcuts";
 EOF
 ```
 
-- [ ] **Step 4: Run typecheck again**
+- [ ] **Step 3: Run typecheck**
 
 ```bash
 pnpm --filter @switchboard/dashboard typecheck
 ```
 
-Expected: clean.
+Expected: clean. The shim absorbs the dormant tree's relative-path import (`./use-keyboard-shortcuts`).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit (single atomic commit)**
 
 ```bash
 git add apps/dashboard/src/components/layout/use-keyboard-shortcuts.ts
 git add apps/dashboard/src/components/console/use-keyboard-shortcuts.ts
-git commit -m "refactor(dashboard): relocate use-keyboard-shortcuts.ts into layout/, leave shim for dormant tree"
+git commit -m "refactor(dashboard): relocate use-keyboard-shortcuts.ts to layout/, leave re-export shim at old path (c2a)"
 ```
 
 ---
