@@ -44,6 +44,34 @@ vi.mock("@/hooks/use-agent-pipeline", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-agent-metrics", () => ({
+  useAgentMetrics: () => ({
+    data: {
+      hero: { kind: "tours-booked", value: 0, comparator: { window: "week", value: 0 } },
+      heroSubProseSegments: [{ kind: "text", text: "Flat vs last week." }],
+      spark: [
+        { label: "Mon", value: 0 },
+        { label: "Tue", value: 0, isProjection: true },
+      ],
+      stats: [
+        { label: "Leads", display: "0", rawValue: 0, unit: "count" },
+        { label: "Conversion", display: "0%", rawValue: 0, unit: "percent" },
+        { label: "Spend", display: "—", rawValue: null, unit: "currency", unavailable: true },
+      ],
+      freshness: {
+        generatedAt: "2026-05-07T00:00:00Z",
+        window: "week",
+        dataSource: "live",
+        unavailableSources: ["ad-platform-spend"],
+      },
+      folioRange: "Mon — Tue",
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
 vi.mock("@/hooks/use-query-keys", () => ({
   useScopedQueryKeys: () => null,
   useTenantContext: () => null,

@@ -294,6 +294,20 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     return this.request<{ vm: unknown }>(path);
   }
 
+  // Metrics (Slice B agent-home metrics block — PR-S5)
+  /**
+   * Reads the Metrics block for a given agent.
+   * Slice B endpoint: GET /api/dashboard/agents/:agentKey/metrics?window=week
+   *
+   * PR-S5 ships window=week only; the parameter is kept on the type for future
+   * extension. Returns the wire shape unchanged — `vm` contains the metrics
+   * view-model.
+   */
+  async listMetrics(agentKey: string, window: "week" = "week"): Promise<{ vm: unknown }> {
+    const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/metrics?window=${window}`;
+    return this.request<{ vm: unknown }>(path);
+  }
+
   // Decisions (cross-kind feed: recommendations + handoffs)
   /**
    * Reads the Decision Feed (Slice A PR 3 endpoint). Pass an `agentKey` to

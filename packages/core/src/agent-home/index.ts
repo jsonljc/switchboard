@@ -29,3 +29,16 @@ export {
   type PipelineFreshness,
   type AgentHomeLink,
 } from "./pipeline.js";
+
+// Metrics (PR-S5)
+export {
+  projectMetrics,
+  type ProjectMetricsInput,
+  type MetricsSignalStore,
+  type MetricsViewModel,
+  type HeroMetric,
+  type MetricComparator,
+  type SparkPoint,
+  type StatCell,
+} from "./metrics.js";
+export { buildWeekContext, type WeekContext } from "./metrics-buckets.js";

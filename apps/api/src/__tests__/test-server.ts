@@ -11,6 +11,7 @@ import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
+import { metricsRoute } from "../routes/agent-home/metrics.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
   createInMemoryStorage,
@@ -568,6 +569,7 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   await app.register(winsRoute, { prefix: "/api/dashboard" });
   await app.register(pipelineRoute, { prefix: "/api/dashboard" });
+  await app.register(metricsRoute, { prefix: "/api/dashboard" });
 
   const { dashboardReportsRoutes } = await import("../routes/dashboard-reports.js");
   await app.register(dashboardReportsRoutes);

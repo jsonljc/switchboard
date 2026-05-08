@@ -169,9 +169,8 @@ export const scopedKeys = (orgId: string) => ({
   },
   metrics: {
     all: () => [orgId, "metrics"] as const,
-    feed: (agentKey: string, window: "today" | "week" | "month") =>
+    feed: (agentKey: string, window: string) =>
       [orgId, "metrics", "feed", agentKey, window] as const,
-    /** Use for prefix invalidation across all windows. */
     byAgent: (agentKey: string) => [orgId, "metrics", "feed", agentKey] as const,
   },
   pipeline: {

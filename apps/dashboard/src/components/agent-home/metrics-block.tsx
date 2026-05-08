@@ -1,8 +1,14 @@
 import type { AgentKey } from "@switchboard/schemas";
-import type { HeroMetric, MetricsViewModel } from "@/lib/agent-home/types";
+import type { HeroMetric, MetricsViewModel, StatCell } from "@/lib/agent-home/types";
 import { ProseSegments } from "./prose-segments";
 import { FixtureFolioBadge } from "./fixture-folio-badge";
 import { Sparkline } from "./sparkline";
+
+const SOURCE_LABEL: Record<string, string> = {
+  "ad-platform-spend": "Spend",
+  "ad-platform-ctr": "CTR",
+  "attribution-revenue": "Revenue",
+};
 
 function HeroNumber({ hero }: { hero: HeroMetric }) {
   switch (hero.kind) {
@@ -37,6 +43,28 @@ function HeroNumber({ hero }: { hero: HeroMetric }) {
   }
 }
 
+function StatCellView({ cell }: { cell: StatCell }) {
+  const display = cell.unavailable ? "—" : cell.display;
+  return (
+    <div className="stat-cell">
+      <span className="stat-label">{cell.label}</span>
+      <span className="stat-num" data-unavailable={cell.unavailable ? "true" : undefined}>
+        {display}
+      </span>
+      <span className="stat-rule" />
+    </div>
+  );
+}
+
+function NoDataChip({ tokens }: { tokens: readonly string[] }) {
+  if (tokens.length === 0) return null;
+  const labels = tokens
+    .map((t) => SOURCE_LABEL[t] ?? t)
+    .sort((a, b) => a.localeCompare(b))
+    .join(", ");
+  return <span className="folio-chip-nodata">· no data: {labels}</span>;
+}
+
 export function MetricsBlock({
   vm,
   agentKey: _agentKey,
@@ -44,12 +72,14 @@ export function MetricsBlock({
   vm: MetricsViewModel;
   agentKey: AgentKey;
 }) {
+  const unavailable = vm.freshness.unavailableSources ?? [];
   return (
     <section className="section page-wide" data-block="metrics" data-testid="block-metrics">
       <div className="folio">
         <span className="folio-l">This week</span>
         <span className="folio-r">
-          Mon — Fri
+          {vm.folioRange}
+          <NoDataChip tokens={unavailable} />
           <FixtureFolioBadge dataSource={vm.freshness.dataSource} />
         </span>
       </div>
@@ -60,11 +90,7 @@ export function MetricsBlock({
       <Sparkline data={vm.spark} />
       <div className="stats-row">
         {vm.stats.map((s) => (
-          <div key={s.label} className="stat-cell">
-            <span className="stat-label">{s.label}</span>
-            <span className="stat-num">{s.display}</span>
-            <span className="stat-rule" />
-          </div>
+          <StatCellView key={s.label} cell={s} />
         ))}
       </div>
     </section>

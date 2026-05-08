@@ -107,17 +107,25 @@ export interface SparkPoint {
 // what each cell means per-agent.
 export interface StatCell {
   label: string;
-  display: string; // pre-formatted: "47" / "26%" / "$0"
-  rawValue: number;
+  display: string;
+  rawValue: number | null;
   unit: "count" | "percent" | "currency";
+  unavailable?: boolean;
 }
 
+// This shape is mirrored at packages/core/src/agent-home/metrics.ts. The core
+// type is intentionally narrower in PR-S5 (DataFreshness.window is the literal
+// "week" because the backend only emits week metrics). The dashboard form keeps
+// the wider AgentWindow union so future PRs that add today/month windows don't
+// require a coordinated dual edit. Wire shape is compatible: dashboard
+// supersets core.
 export interface MetricsViewModel {
   hero: HeroMetric;
   heroSubProseSegments: readonly ProseSegment[];
   spark: readonly SparkPoint[];
-  stats: readonly [StatCell, StatCell, StatCell]; // exactly 3
+  stats: readonly [StatCell, StatCell, StatCell];
   freshness: DataFreshness;
+  folioRange: string;
 }
 
 // ─── B5 Pipeline ──────────────────────────────────────────────
