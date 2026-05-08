@@ -3,6 +3,7 @@ import { z } from "zod";
 import { projectMetrics, type MetricsSignalStore } from "@switchboard/core";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
+import { getOrgTimezone } from "../../lib/org-timezone.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
 const QuerySchema = z.object({ window: z.enum(["week"]).default("week") });
@@ -43,7 +44,7 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
     }
 
     const reportStores = app.reportStores;
-    const timezone = "Asia/Singapore";
+    const timezone = await getOrgTimezone(app.prisma, orgId);
 
     const store: MetricsSignalStore = {
       countBookingsCreated: ({ orgId: o, excludeStatuses, from, to }) =>

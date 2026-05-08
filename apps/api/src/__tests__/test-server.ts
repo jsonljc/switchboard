@@ -443,6 +443,9 @@ export async function buildTestServer(): Promise<TestContext> {
   // Test harness runs without auth middleware; mark dev mode so org-derivation helpers
   // accept body.organizationId (matches the documented dev-mode behavior).
   app.decorate("authDisabled", true);
+  // No real Prisma in tests — routes that call getOrgTimezone(app.prisma, ...) will
+  // get null and fall back to the default timezone ("Asia/Singapore").
+  app.decorate("prisma", null);
   app.decorate("approvalRoutingConfig", approvalRoutingConfig);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);

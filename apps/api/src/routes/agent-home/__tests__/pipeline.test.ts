@@ -1,5 +1,8 @@
+import Fastify from "fastify";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildTestServer, type TestContext } from "../../../__tests__/test-server.js";
+import { pipelineRoute } from "../pipeline.js";
+import { createInMemoryRecommendationStore } from "@switchboard/core";
 
 describe("GET /api/dashboard/agents/:agentId/pipeline", () => {
   let ctx: TestContext;
@@ -211,5 +214,52 @@ describe("GET /api/dashboard/agents/:agentId/pipeline", () => {
       headers: { "x-org-id": "org-A" },
     });
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("GET /api/dashboard/agents/:agentId/pipeline — org timezone wiring", () => {
+  it("reads timezone from OrganizationConfig.businessHours and uses it for projection", async () => {
+    const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
+    app.addHook("onRequest", async (req) => {
+      (req as unknown as { organizationIdFromAuth?: string }).organizationIdFromAuth = undefined;
+      (req as unknown as { principalIdFromAuth?: string }).principalIdFromAuth = undefined;
+    });
+
+    const mockFindFirst = vi.fn().mockResolvedValue({
+      businessHours: {
+        timezone: "America/New_York",
+        days: [{ day: 1, open: "09:00", close: "17:00" }],
+        defaultDurationMinutes: 60,
+        bufferMinutes: 15,
+      },
+    });
+    app.decorate("prisma", {
+      organizationConfig: { findFirst: mockFindFirst },
+    } as unknown as import("@switchboard/db").PrismaClient);
+
+    const recommendationStore = createInMemoryRecommendationStore();
+    app.decorate("recommendationStore", recommendationStore);
+
+    await app.register(pipelineRoute, { prefix: "/api/dashboard" });
+
+    vi.spyOn(recommendationStore, "listPendingForAgent").mockResolvedValue({
+      rows: [],
+      totalCount: 0,
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/pipeline",
+      headers: { "x-org-id": "org-ny" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Verify prisma was queried for the org's timezone
+    expect(mockFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "org-ny" }, select: { businessHours: true } }),
+    );
+
+    await app.close();
   });
 });

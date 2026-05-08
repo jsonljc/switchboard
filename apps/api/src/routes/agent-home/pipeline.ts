@@ -8,6 +8,7 @@ import {
 } from "@switchboard/core";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
+import { getOrgTimezone } from "../../lib/org-timezone.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
 
@@ -55,7 +56,7 @@ export const pipelineRoute: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Recommendations store unavailable" });
     }
 
-    const timezone = "Asia/Singapore";
+    const timezone = await getOrgTimezone(app.prisma, orgId);
     const log = app.log;
 
     const store: PipelineSignalStore = {
