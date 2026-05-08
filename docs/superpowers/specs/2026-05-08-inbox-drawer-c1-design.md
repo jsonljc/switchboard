@@ -75,6 +75,7 @@ PR-S6 landed earlier today, so the editorial shell on `/`, `/alex`, and `/riley`
 **Modified files:**
 
 - `apps/dashboard/src/components/layout/editorial-auth-shell.tsx` — replace one import (`InboxLinkClient` → `InboxDrawer`) and one element. ~2-line diff.
+- `apps/dashboard/src/components/layout/__tests__/editorial-auth-shell.test.tsx` — retarget the layout-level mock (`../inbox-link-client` → `../inbox-drawer`) and retire the placeholder-only assertion (`aria-disabled="true"`). The drawer no longer carries that semantic.
 - `apps/dashboard/src/hooks/use-decision-feed.ts` — delete the orphaned `useInboxCount` export (no remaining callers after `inbox-link-client.tsx` is deleted).
 - `apps/dashboard/src/app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx` — remove the `useInboxCount: () => 0` line from the module mock (`useInboxCount` no longer exists to mock).
 
@@ -283,7 +284,7 @@ For empty / loading / error / populated state tests, **open the drawer through t
 4. **Empty state copy** — render with `total=0`, tenant present; click the trigger; assert the empty-state prose renders.
 5. **Loading state copy** — render with `useDecisionFeed` returning `isLoading=true` and no cached data; click the trigger; assert `Reading your inbox…` renders.
 6. **Error state copy** — render with `useDecisionFeed` returning `isError=true`; click the trigger; assert `Couldn't load your inbox.` renders.
-7. **Populated list reuses DecisionCard with composed agent label** — feed returns one Alex approval and one Riley handoff; click the trigger. This is a layout-level test of drawer composition, not of `DecisionCard` internals. The cleanest implementation lightly mocks `DecisionCard` and asserts it receives `folio.kindLabel === "Alex · Approval"` for the first item and `"Riley · Handoff"` for the second, plus the corresponding wrapper attributes (`data-agent="alex"`/`"riley"`, `style["--inbox-agent-accent"]` set to the registry value). Asserting against rendered DOM text is acceptable but couples this test to `DecisionCard`'s markup; prefer the prop-shape assertion.
+7. **Populated list reuses DecisionCard with composed agent label** — feed returns one Alex approval and one Riley handoff; click the trigger. This is a layout-level test of drawer composition, not of `DecisionCard` internals. The cleanest implementation lightly mocks `DecisionCard` and asserts it receives `folio.kindLabel` with the **agent-name prefix added at the drawer call site** — i.e., the value starts with `"Alex · "` for the first item and `"Riley · "` for the second. The suffix (e.g., `"DECISION 1"`, `"HANDOFF 1"`) is `mapToDecisionCard`'s contract, not C1's; do not assert against the full string. The test should also verify the wrapper attributes (`data-agent="alex"`/`"riley"`, `style["--inbox-agent-accent"]` set to the registry value).
 8. **Action dispatches with the per-item agentKey** — feed returns one Riley handoff; click the trigger; click primary on the rendered card; assert `dispatchDecisionAction` was called with `agentKey: "riley"` (not the page-level agent).
 9. **Auto-close on inbox-zero requires a successful in-session action.** Mock the feed return as a mutable value so `rerender` can simulate the post-dispatch refetch from `total=1` to `total=0`. Positive case: open with 1 item; act; mock dispatch resolves successfully; rerender feed to `total=0`; assert drawer is closed. Negative case: open with 1 item; do not act; rerender feed to `total=0` (simulating another surface clearing it); assert drawer stays open.
 10. **Auto-close ref resets on close as well as open** — open with 1 item; act; dispatch resolves but rerender keeps `total=1`; drawer stays open; user closes manually; reopen; rerender feed to `total=0` without acting; assert drawer stays open. (Protects the bidirectional reset of `actedInSessionRef`.)
@@ -310,15 +311,16 @@ Single PR titled `feat(dashboard): C1 — inbox drawer (cross-agent decisions ov
 
 ### 6.1 Diff shape
 
-| File                                                         | Lines (approx) | Change kind             |
-| ------------------------------------------------------------ | -------------- | ----------------------- |
-| `components/layout/inbox-drawer.tsx`                         | +130           | New                     |
-| `components/layout/inbox-drawer.css`                         | +30            | New                     |
-| `components/layout/__tests__/inbox-drawer.test.tsx`          | +220           | New                     |
-| `components/layout/editorial-auth-shell.tsx`                 | ~2 changed     | Modified                |
-| `hooks/use-decision-feed.ts`                                 | -5             | `useInboxCount` removed |
-| `app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx` | -1             | mock entry removed      |
-| `components/layout/inbox-link-client.tsx`                    | -25            | Deleted                 |
+| File                                                         | Lines (approx) | Change kind                                        |
+| ------------------------------------------------------------ | -------------- | -------------------------------------------------- |
+| `components/layout/inbox-drawer.tsx`                         | +130           | New                                                |
+| `components/layout/inbox-drawer.css`                         | +30            | New                                                |
+| `components/layout/__tests__/inbox-drawer.test.tsx`          | +220           | New                                                |
+| `components/layout/editorial-auth-shell.tsx`                 | ~2 changed     | Modified                                           |
+| `components/layout/__tests__/editorial-auth-shell.test.tsx`  | ~10 changed    | Mock retargeted; placeholder-semantic test retired |
+| `hooks/use-decision-feed.ts`                                 | -5             | `useInboxCount` removed                            |
+| `app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx` | -1             | mock entry removed                                 |
+| `components/layout/inbox-link-client.tsx`                    | -25            | Deleted                                            |
 
 Net new: ~350 lines, ~30 deleted.
 

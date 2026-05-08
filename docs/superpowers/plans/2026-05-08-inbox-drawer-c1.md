@@ -20,6 +20,7 @@
 | `apps/dashboard/src/components/layout/inbox-drawer.css`                         | CREATE | Drawer-specific tokens (per-agent accent dot via `--inbox-agent-accent`, list spacing). Editorial register tokens stay in `globals.css`.                                          |
 | `apps/dashboard/src/components/layout/__tests__/inbox-drawer.test.tsx`          | CREATE | Unit tests for header DOM contract, aria-label cases, tenant-null disabled trigger, list states, agent-label composition, action dispatch, auto-close semantics, accessible name. |
 | `apps/dashboard/src/components/layout/editorial-auth-shell.tsx`                 | MODIFY | Replace one import (`InboxLinkClient` → `InboxDrawer`) and one element.                                                                                                           |
+| `apps/dashboard/src/components/layout/__tests__/editorial-auth-shell.test.tsx`  | MODIFY | Retarget the layout-level mock (`../inbox-link-client` → `../inbox-drawer`) and retire the placeholder-semantic assertion (`aria-disabled="true"`).                               |
 | `apps/dashboard/src/hooks/use-decision-feed.ts`                                 | MODIFY | Delete the orphaned `useInboxCount` export.                                                                                                                                       |
 | `apps/dashboard/src/app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx` | MODIFY | Remove the `useInboxCount: () => 0` mock entry (the hook no longer exists).                                                                                                       |
 | `apps/dashboard/src/components/layout/inbox-link-client.tsx`                    | DELETE | Responsibility moves into `InboxDrawer`'s trigger button.                                                                                                                         |
@@ -867,7 +868,7 @@ export function InboxDrawer() {
 pnpm --filter @switchboard/dashboard test src/components/layout/__tests__/inbox-drawer.test.tsx
 ```
 
-Expected: PASS, including the new populated-list test. (TypeScript may complain about `decisions[i]`'s type — `useDecisionFeed`'s return type is `Decision[]`. The mock returns plain objects shaped like `Decision`, which is enough for the drawer's call site to compile against `Decision`.)
+Expected: PASS, including the new populated-list test.
 
 - [ ] **Step 5: Commit**
 
@@ -1279,13 +1280,16 @@ git commit -m "feat(dashboard): inbox drawer — action-driven auto-close with b
 
 ---
 
-## Task 8: Wire `InboxDrawer` into the editorial header
+## Task 8: Wire `InboxDrawer` into the editorial header (production + test)
+
+The editorial-auth-shell test file mocks the inbox component as a layout-level stub and explicitly asserts the placeholder `aria-disabled="true"` semantic. Both pieces need to change in lockstep with the production swap so the test file doesn't break mid-plan or carry stale semantics into main.
 
 **Files:**
 
 - Modify: `apps/dashboard/src/components/layout/editorial-auth-shell.tsx`
+- Modify: `apps/dashboard/src/components/layout/__tests__/editorial-auth-shell.test.tsx`
 
-- [ ] **Step 1: Replace the import and the element**
+- [ ] **Step 1: Replace the import and the element in the production file**
 
 Open `apps/dashboard/src/components/layout/editorial-auth-shell.tsx`. Change one import line and one JSX element.
 
@@ -1313,22 +1317,71 @@ with:
 <InboxDrawer />
 ```
 
-- [ ] **Step 2: Run typecheck and the editorial-auth-shell tests**
+- [ ] **Step 2: Update the editorial-auth-shell test file**
+
+Open `apps/dashboard/src/components/layout/__tests__/editorial-auth-shell.test.tsx`. Two edits:
+
+**Edit 2a — retarget the mock** (lines 8-14 currently):
+
+Replace:
+
+```tsx
+vi.mock("../inbox-link-client", () => ({
+  InboxLinkClient: () => (
+    <button type="button" aria-disabled="true">
+      Inbox
+    </button>
+  ),
+}));
+```
+
+with:
+
+```tsx
+vi.mock("../inbox-drawer", () => ({
+  InboxDrawer: () => (
+    <button type="button" className="folio-link">
+      Inbox
+    </button>
+  ),
+}));
+```
+
+(The `folio-link` class is the user-visible header contract — keeping it in the mock lets us add a smoke assertion in step 2b.)
+
+**Edit 2b — retire the placeholder-semantic test, replace with a header-contract smoke test.**
+
+Replace the `it("renders the inbox link as aria-disabled (no navigation in slice B)", …)` block with:
+
+```tsx
+it("renders an inbox trigger with the folio-link header contract", () => {
+  render(
+    <EditorialAuthShellInner enabledAgents={["alex"]}>
+      <p>page</p>
+    </EditorialAuthShellInner>,
+  );
+  const inbox = screen.getByRole("button", { name: /inbox/i });
+  expect(inbox.className).toContain("folio-link");
+});
+```
+
+The `aria-disabled="true"` semantic is retired in C1 — the drawer is fully interactive. The replacement test still protects the user-visible header layout: future regressions that drop the `folio-link` class will fail this assertion.
+
+- [ ] **Step 3: Run typecheck and the editorial-auth-shell tests**
 
 ```bash
 pnpm --filter @switchboard/dashboard typecheck
 pnpm --filter @switchboard/dashboard test src/components/layout/__tests__/editorial-auth-shell.test.tsx
 ```
 
-Expected: typecheck clean. Existing editorial-auth-shell tests pass — they were not asserting on `InboxLinkClient` specifically; if any do, update them to expect `InboxDrawer` (likely just a string match in the rendered output if the test does a smoke render).
+Expected: typecheck clean, all three tests in `editorial-auth-shell.test.tsx` pass (brand-nav, inbox-trigger header contract, `<main>` wrap).
 
-If the editorial-auth-shell test fails because it asserts that `InboxLinkClient` renders, update the assertion to look for a button with class `folio-link` and the text `Inbox` — the user-visible contract is what we promised to preserve.
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add apps/dashboard/src/components/layout/editorial-auth-shell.tsx
-git commit -m "feat(dashboard): editorial-auth-shell uses InboxDrawer in place of placeholder"
+git add apps/dashboard/src/components/layout/editorial-auth-shell.tsx \
+        apps/dashboard/src/components/layout/__tests__/editorial-auth-shell.test.tsx
+git commit -m "feat(dashboard): editorial-auth-shell uses InboxDrawer + retire placeholder-semantic test"
 ```
 
 ---
@@ -1397,9 +1450,12 @@ Expected: no matches.
 
 ```bash
 pnpm --filter @switchboard/dashboard typecheck
-pnpm --filter @switchboard/dashboard test src/components/layout/__tests__/inbox-drawer.test.tsx \
-                                          src/app/\(auth\)/\[agentKey\]/__tests__/agent-home-client.test.tsx
+pnpm --filter @switchboard/dashboard test \
+  "src/components/layout/__tests__/inbox-drawer.test.tsx" \
+  "src/app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx"
 ```
+
+(The paths are quoted so parentheses and brackets pass through to vitest unchanged on both bash and zsh.)
 
 Expected: typecheck clean, all tests pass.
 
@@ -1407,7 +1463,7 @@ Expected: typecheck clean, all tests pass.
 
 ```bash
 git add apps/dashboard/src/hooks/use-decision-feed.ts \
-        apps/dashboard/src/app/\(auth\)/\[agentKey\]/__tests__/agent-home-client.test.tsx
+        "apps/dashboard/src/app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx"
 git commit -m "chore(dashboard): delete inbox-link-client.tsx + remove orphaned useInboxCount"
 ```
 
@@ -1493,7 +1549,7 @@ Walking through `docs/superpowers/specs/2026-05-08-inbox-drawer-c1-design.md` se
 - §1.4 Q9 (local useState, no provider) — Task 1 / 7.
 - §1.4 Q10 (agent label composed at call site, untouched mapToDecisionCard) — Task 5.
 - §1.4 Q11 (real `disabled` button when tenant null) — Task 2.
-- §2.1 file layout — every file in the table maps to a task (1, 8, 9).
+- §2.1 file layout — every file in the table maps to a task: `inbox-drawer.tsx` / `.css` / test → Task 1; `editorial-auth-shell.tsx` + its test → Task 8; `use-decision-feed.ts` + `agent-home-client.test.tsx` + `inbox-link-client.tsx` deletion → Task 9.
 - §3.1–3.5 sketch and data flow — Tasks 1, 3, 5, 6, 7.
 - §4.1 drawer chrome — Tasks 3 + 5 (CSS class + width override).
 - §4.2 trigger button — Tasks 1 + 2.
