@@ -42,12 +42,7 @@ describe("AgentHomePage server gates", () => {
     await expect(AgentHomePage({ params: { agentKey: "mira" } })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it("notFound() in production env", async () => {
-    process.env.NEXT_PUBLIC_DEPLOY_ENV = "production";
-    await expect(AgentHomePage({ params: { agentKey: "alex" } })).rejects.toThrow("NEXT_NOT_FOUND");
-  });
-
-  it("renders AgentHomeClient for valid + enabled + non-prod", async () => {
+  it("renders AgentHomeClient for valid + enabled agent", async () => {
     process.env.NEXT_PUBLIC_DEPLOY_ENV = "preview";
     const tree = await AgentHomePage({ params: { agentKey: "alex" } });
     const { render, screen } = await import("@testing-library/react");
