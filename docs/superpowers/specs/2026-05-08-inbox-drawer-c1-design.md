@@ -30,35 +30,35 @@ The goals:
 
 ### 1.3 Dependencies (already shipped or in flight)
 
-| Item                                                                    | Source                                                          | Status                      |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------- |
-| `GET /api/dashboard/decisions` cross-agent route                        | `apps/dashboard/src/app/api/dashboard/decisions/route.ts`       | Shipped                     |
-| `useDecisionFeed(null)` hook                                            | `apps/dashboard/src/hooks/use-decision-feed.ts`                 | Shipped                     |
-| `DecisionCard` component                                                | `apps/dashboard/src/components/decisions/decision-card.tsx`     | Shipped                     |
-| `mapToDecisionCard`                                                     | `apps/dashboard/src/lib/decisions/map-to-decision-card.ts`      | Shipped                     |
-| `dispatchDecisionAction`                                                | `apps/dashboard/src/lib/decisions/dispatch-action.ts`           | Shipped                     |
-| `Sheet` primitive (Radix-based, side variants)                          | `apps/dashboard/src/components/ui/sheet.tsx`                    | Shipped                     |
-| `EditorialAuthShell` + header chrome with `InboxLinkClient` placeholder | `apps/dashboard/src/components/layout/editorial-auth-shell.tsx` | Shipped (Slice B)           |
-| `AGENT_REGISTRY` (display names + accents per agent)                    | `@switchboard/schemas`                                          | Shipped                     |
-| Production env gate on `/alex` and `/riley`                             | `apps/dashboard/src/app/(auth)/[agentKey]/page.tsx`             | Lift in PR-S6 (separate PR) |
+| Item                                                                    | Source                                                          | Status                     |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------- |
+| `GET /api/dashboard/decisions` cross-agent route                        | `apps/dashboard/src/app/api/dashboard/decisions/route.ts`       | Shipped                    |
+| `useDecisionFeed(null)` hook                                            | `apps/dashboard/src/hooks/use-decision-feed.ts`                 | Shipped                    |
+| `DecisionCard` component                                                | `apps/dashboard/src/components/decisions/decision-card.tsx`     | Shipped                    |
+| `mapToDecisionCard`                                                     | `apps/dashboard/src/lib/decisions/map-to-decision-card.ts`      | Shipped                    |
+| `dispatchDecisionAction`                                                | `apps/dashboard/src/lib/decisions/dispatch-action.ts`           | Shipped                    |
+| `Sheet` primitive (Radix-based, side variants)                          | `apps/dashboard/src/components/ui/sheet.tsx`                    | Shipped                    |
+| `EditorialAuthShell` + header chrome with `InboxLinkClient` placeholder | `apps/dashboard/src/components/layout/editorial-auth-shell.tsx` | Shipped (Slice B)          |
+| `AGENT_REGISTRY` (display names + accents per agent)                    | `@switchboard/schemas`                                          | Shipped                    |
+| Slice B PR-S6 cutover (production env gate lifted)                      | `apps/dashboard/src/app/(auth)/[agentKey]/page.tsx`             | Shipped (#389, 2026-05-08) |
 
-C1 ships independently of PR-S6. The drawer lives inside `EditorialAuthShell`, which already only mounts on `/`, `/alex`, and `/riley`. Those routes remain `notFound()` in production until PR-S6 cuts over. C1 is preview-visible immediately and prod-visible when PR-S6 lands — zero coordination needed between the two PRs.
+PR-S6 landed earlier today, so the editorial shell on `/`, `/alex`, and `/riley` is now production-visible for orgs with the agents enabled. C1 is therefore production-visible the moment it merges — no follow-on cutover, no separate gate. The only access control remaining on those routes is the org-enabled-agents check (`notFound()` if the requested agent isn't enabled for the org), which is unrelated to C1.
 
 ### 1.4 Decisions ledger
 
-| #   | Question                | Locked answer                                                                                                                                              |
-| --- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q1  | Form factor             | Right-side sheet using existing `Sheet` primitive                                                                                                          |
-| Q2  | Grouping                | Single list, urgency-sorted (existing API order), per-item agent chip                                                                                      |
-| Q3  | Item layout             | Reuse `DecisionCard` as-is, full editorial card with action pills                                                                                          |
-| Q4  | Post-action behavior    | Drawer stays open; acted item disappears via existing React Query invalidation; auto-close only when count hits 0 **after** a successful in-session action |
-| Q5  | Thread link             | Reuse `threadHref` as-is; Sheet auto-closes on navigation                                                                                                  |
-| Q6  | Empty/loading copy      | First-person editorial voice (`I'll write again when something needs you`)                                                                                 |
-| Q7  | Gating                  | Inherit Slice B's existing production env gate; no new flag                                                                                                |
-| Q8  | Mira                    | No special handling; naturally absent in v1                                                                                                                |
-| Q9  | State management        | Local `useState` inside a single self-contained component; no provider, no lifted context                                                                  |
-| Q10 | Agent label composition | Composed at drawer call site (`${displayName} · ${kindLabel}`); `mapToDecisionCard` and `DecisionCard` stay untouched                                      |
-| Q11 | Tenant-null trigger     | Rendered as a real `disabled` button (the `disabled` HTML attribute on the `<button>` inside `SheetTrigger asChild`); clicking it does not open the dialog |
+| #   | Question                | Locked answer                                                                                                                                                   |
+| --- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | Form factor             | Right-side sheet using existing `Sheet` primitive                                                                                                               |
+| Q2  | Grouping                | Single list, urgency-sorted (existing API order), per-item agent chip                                                                                           |
+| Q3  | Item layout             | Reuse `DecisionCard` as-is, full editorial card with action pills                                                                                               |
+| Q4  | Post-action behavior    | Drawer stays open; acted item disappears via existing React Query invalidation; auto-close only when count hits 0 **after** a successful in-session action      |
+| Q5  | Thread link             | Reuse `threadHref` as-is; Sheet auto-closes on navigation                                                                                                       |
+| Q6  | Empty/loading copy      | First-person editorial voice (`I'll write again when something needs you`)                                                                                      |
+| Q7  | Gating                  | None — the editorial shell is already prod-visible after PR-S6 (#389). C1 ships behind the same org-enabled-agents check the rest of Slice B uses. No new flag. |
+| Q8  | Mira                    | No special handling; naturally absent in v1                                                                                                                     |
+| Q9  | State management        | Local `useState` inside a single self-contained component; no provider, no lifted context                                                                       |
+| Q10 | Agent label composition | Composed at drawer call site (`${displayName} · ${kindLabel}`); `mapToDecisionCard` and `DecisionCard` stay untouched                                           |
+| Q11 | Tenant-null trigger     | Rendered as a real `disabled` button (the `disabled` HTML attribute on the `<button>` inside `SheetTrigger asChild`); clicking it does not open the dialog      |
 
 ---
 
@@ -321,21 +321,21 @@ Net new: ~350 lines, ~30 deleted.
 - Visual smoke (dev): on `/alex` (or `/`), click `Inbox` in the header; verify a right-side drawer slides in with editorial chrome; click a card's primary action; verify the item disappears from the drawer and (with one item) the drawer closes
 - Header DOM diff in `editorial-auth-shell.tsx` is exactly two lines (one import, one element swap)
 - No remaining imports or references to `inbox-link-client.tsx` or `useInboxCount` anywhere in `apps/dashboard/src`
-- No production-visibility change until PR-S6 lifts the editorial-shell route gate (independent of this PR)
+- Drawer is production-visible immediately upon merge (PR-S6 already lifted the editorial-shell route gate; the only remaining access control is the per-org agent-enablement check)
 
 ---
 
 ## 7. Risks + mitigations
 
-| Risk                                                                                              | Impact                                               | Mitigation                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SheetTrigger asChild` + `disabled` button has unexpected Radix interaction                       | Tenant-null state silently opens drawer              | Test 3 in §5.1 explicitly asserts no dialog opens; verified via testing-library click simulation, not via internal state                                                                       |
-| Sheet primitive mounts `SheetContent` regardless of open state, causing unintended fetch behavior | Hidden duplicate query work                          | Inspection acceptance in §5.2 — only one `useDecisionFeed(null)` call site. React Query dedupes anyway, but the structural rule is the load-bearing guarantee                                  |
-| Auto-close-on-zero closes the drawer when an unrelated surface clears the inbox while it's open   | Confusing close-without-context                      | Action-driven gate: drawer only auto-closes when the user acted **inside this open session** (negative test case in §5.1 #9)                                                                   |
-| Header layout shifts visibly because the new component renders different DOM than the deleted one | Visible regression on `/`, `/alex`, `/riley` headers | Test 1 in §5.1 protects the exact DOM contract                                                                                                                                                 |
-| Editorial copy ("I'll write again when something needs you") drifts as product voice tightens     | Voice inconsistency over time                        | Empty-state copy is one string in one component; future tightening is a one-line change with a test update                                                                                     |
-| C1 ships before PR-S6 and accidentally exposes the drawer in production                           | UX leak                                              | Drawer lives inside `EditorialAuthShell`, which is only mounted by `/`, `/alex`, `/riley` — all three return `notFound()` in production until PR-S6 lifts the gate. C1 needs no separate gate. |
-| `useInboxCount` deletion breaks an unaudited consumer                                             | Type error or runtime null                           | Audit performed (only `inbox-link-client.tsx` and a single test mock) — both updated atomically in this PR                                                                                     |
+| Risk                                                                                              | Impact                                               | Mitigation                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SheetTrigger asChild` + `disabled` button has unexpected Radix interaction                       | Tenant-null state silently opens drawer              | Test 3 in §5.1 explicitly asserts no dialog opens; verified via testing-library click simulation, not via internal state                                                                                                           |
+| Sheet primitive mounts `SheetContent` regardless of open state, causing unintended fetch behavior | Hidden duplicate query work                          | Inspection acceptance in §5.2 — only one `useDecisionFeed(null)` call site. React Query dedupes anyway, but the structural rule is the load-bearing guarantee                                                                      |
+| Auto-close-on-zero closes the drawer when an unrelated surface clears the inbox while it's open   | Confusing close-without-context                      | Action-driven gate: drawer only auto-closes when the user acted **inside this open session** (negative test case in §5.1 #9)                                                                                                       |
+| Header layout shifts visibly because the new component renders different DOM than the deleted one | Visible regression on `/`, `/alex`, `/riley` headers | Test 1 in §5.1 protects the exact DOM contract                                                                                                                                                                                     |
+| Editorial copy ("I'll write again when something needs you") drifts as product voice tightens     | Voice inconsistency over time                        | Empty-state copy is one string in one component; future tightening is a one-line change with a test update                                                                                                                         |
+| Drawer renders for an org with zero enabled agents                                                | Empty/confusing inbox surface                        | The editorial shell already only renders the brand-nav for org-enabled agents (Slice B Q12). For orgs with zero enabled agents the inbox feed is naturally empty and the empty-state copy applies. No special-casing needed in C1. |
+| `useInboxCount` deletion breaks an unaudited consumer                                             | Type error or runtime null                           | Audit performed (only `inbox-link-client.tsx` and a single test mock) — both updated atomically in this PR                                                                                                                         |
 
 ---
 
