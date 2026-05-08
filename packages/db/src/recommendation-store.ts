@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import type {
   AgentKey,
   PersistRecommendationInput,
@@ -243,6 +243,72 @@ export class PrismaRecommendationStore implements RecommendationStore {
       });
       return rowToRecommendation(updated);
     });
+  }
+
+  async listPendingForAgent(args: {
+    orgId: string;
+    agentKey: AgentKey;
+    surface: "queue";
+    limit: number;
+  }): Promise<{ rows: Recommendation[]; totalCount: number }> {
+    // Postgres sorts text alphabetically — "high" < "low" < "medium" — which
+    // would put medium ahead of high. Use a CASE expression for the intended
+    // urgency ordinal. Raw SQL is fine here: it's a single read-only query.
+    const orgId = args.orgId;
+    const agentKey = args.agentKey;
+    const surface = args.surface;
+    const take = args.limit;
+
+    // Predicate is duplicated between the raw $queryRaw (rows) and the
+    // pendingActionRecord.count (totalCount). Keep these in lockstep — if
+    // one path filters a row the other doesn't, totalCount would diverge
+    // from rows.length in surprising ways. Filter list:
+    //   organizationId / surface / status='pending' / sourceAgent /
+    //   approvalRequired <> 'auto' / not yet expired
+    // act.ts lazily flips status to 'expired' on write; this read-side
+    // filter complements that so stale tiles don't linger.
+    const where: Prisma.PendingActionRecordWhereInput = {
+      organizationId: orgId,
+      surface,
+      status: "pending",
+      sourceAgent: agentKey,
+      approvalRequired: { not: "auto" },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    };
+
+    const [rawRows, totalCount] = await Promise.all([
+      this.prisma.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT
+          "id", "idempotencyKey", "intent", "status", "humanSummary", "confidence",
+          "riskLevel", "dollarsAtRisk", "targetEntities", "parameters",
+          "approvalRequired", "sourceAgent", "sourceWorkflow", "organizationId",
+          "surface", "undoableUntil", "createdAt", "expiresAt", "resolvedAt", "resolvedBy"
+        FROM "PendingActionRecord"
+        WHERE "organizationId" = ${orgId}
+          AND "surface" = ${surface}
+          AND "status" = 'pending'
+          AND "sourceAgent" = ${agentKey}
+          AND "approvalRequired" <> 'auto'
+          AND ("expiresAt" IS NULL OR "expiresAt" > now())
+        ORDER BY
+          CASE "riskLevel"
+            WHEN 'high' THEN 3
+            WHEN 'medium' THEN 2
+            WHEN 'low' THEN 1
+            ELSE 0
+          END DESC,
+          "dollarsAtRisk" DESC,
+          "confidence" ASC,
+          "createdAt" DESC
+        LIMIT ${take}
+      `,
+      this.prisma.pendingActionRecord.count({ where }),
+    ]);
+
+    const rows = rawRows.map((r) =>
+      rowToRecommendation(r as Parameters<typeof rowToRecommendation>[0]),
+    );
+    return { rows, totalCount };
   }
 
   async latestByAgent(input: {

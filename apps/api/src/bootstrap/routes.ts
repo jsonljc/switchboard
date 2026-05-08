@@ -52,6 +52,7 @@ import { metaDeletionRoutes } from "../routes/meta-deletion.js";
 import { googleCalendarOAuthRoutes } from "../routes/google-calendar-oauth.js";
 import { dashboardReportsRoutes } from "../routes/dashboard-reports.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
+import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -68,7 +69,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   // winsRoute: GET /api/dashboard/agents/:agentId/wins — agent-home wins feed
   await app.register(winsRoute, { prefix: "/api/dashboard" });
-  // metricsRoute: GET /api/dashboard/agents/:agentId/metrics — agent-home metrics
+  // pipelineRoute: GET /api/dashboard/agents/:agentId/pipeline — agent-home pipeline feed
+  await app.register(pipelineRoute, { prefix: "/api/dashboard" });
+  // metricsRoute: GET /api/dashboard/agents/:agentId/metrics — agent-home metrics feed
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });

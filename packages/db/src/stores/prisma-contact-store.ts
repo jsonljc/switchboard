@@ -49,6 +49,11 @@ interface ContactStore {
   delete(orgId: string, id: string): Promise<void>;
   list(orgId: string, filters?: ContactFilters): Promise<Contact[]>;
   listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>>;
+  listForPipeline(args: {
+    orgId: string;
+    activitySince: Date;
+    limit: number;
+  }): Promise<{ rows: Contact[]; totalCount: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +243,27 @@ export class PrismaContactStore implements ContactStore {
     });
 
     return rows.map(mapRowToContact);
+  }
+
+  async listForPipeline(args: {
+    orgId: string;
+    activitySince: Date;
+    limit: number;
+  }): Promise<{ rows: Contact[]; totalCount: number }> {
+    const where = {
+      organizationId: args.orgId,
+      stage: { in: ["active", "new"] },
+      lastActivityAt: { gte: args.activitySince },
+    };
+    const [rows, totalCount] = await Promise.all([
+      this.prisma.contact.findMany({
+        where,
+        orderBy: { lastActivityAt: "desc" },
+        take: args.limit,
+      }),
+      this.prisma.contact.count({ where }),
+    ]);
+    return { rows: rows.map(mapRowToContact), totalCount };
   }
 }
 

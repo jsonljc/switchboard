@@ -34,6 +34,26 @@ export interface RecommendationStore {
     limit: number;
   }): Promise<Recommendation[]>;
 
+  /**
+   * Lists non-terminal recommendations for a specific agent on a given surface.
+   * Used by the Riley pipeline projection. Filter:
+   *   organizationId + surface + status="pending" + sourceAgent + approvalRequired <> "auto"
+   * Order:
+   *   riskLevel DESC (high→medium→low via ordinal map),
+   *   dollarsAtRisk DESC, confidence ASC, createdAt DESC.
+   *
+   * `approvalRequired <> "auto"` is a defensive filter — auto-class actions
+   * don't currently land in PendingActionRecord (they execute via a different
+   * path), but the producer literal layer is loose so the negative filter
+   * future-proofs the read path.
+   */
+  listPendingForAgent(args: {
+    orgId: string;
+    agentKey: AgentKey;
+    surface: "queue";
+    limit: number;
+  }): Promise<{ rows: Recommendation[]; totalCount: number }>;
+
   /** Atomic UPDATE + AuditEntry insert. Returns the updated row. */
   applyAct(args: {
     id: string;

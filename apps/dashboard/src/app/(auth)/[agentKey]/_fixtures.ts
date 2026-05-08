@@ -1,6 +1,6 @@
 // apps/dashboard/src/app/(auth)/[agentKey]/_fixtures.ts
 import type { AgentKey } from "@switchboard/schemas";
-import type { GreetingViewModel, PipelineViewModel } from "@/lib/agent-home/types";
+import type { GreetingViewModel } from "@/lib/agent-home/types";
 
 const NOW_ISO = "2026-05-04T08:00:00.000Z";
 
@@ -29,91 +29,7 @@ const greetings: Record<"alex" | "riley", GreetingViewModel> = {
   },
 };
 
-const pipeline: Record<"alex" | "riley", PipelineViewModel> = {
-  alex: {
-    agentKey: "alex",
-    pipelineKind: "leads",
-    totalCount: 7,
-    countNoun: "people",
-    tiles: [
-      {
-        id: "c1",
-        stage: "hot",
-        name: "Maya R.",
-        ctx: "Asked about Saturday classes. Two days ready.",
-        link: { kind: "contact", id: "c1" },
-      },
-      {
-        id: "c2",
-        stage: "warm",
-        name: "Jordan F.",
-        ctx: "Wants 6-month pricing. Saturday tour booked.",
-        link: { kind: "contact", id: "c2" },
-      },
-      {
-        id: "c3",
-        stage: "warm",
-        name: "Priya M.",
-        ctx: "Injury question, escalated to you.",
-        link: { kind: "contact", id: "c3" },
-      },
-      {
-        id: "c4",
-        stage: "new",
-        name: "Tom W.",
-        ctx: "Cold — refund request saved with guest passes.",
-        link: { kind: "contact", id: "c4" },
-      },
-      {
-        id: "c5",
-        stage: "new",
-        name: "Avi R.",
-        ctx: "14-day-cold lead, just re-engaged.",
-        link: { kind: "contact", id: "c5" },
-      },
-    ],
-    setupLink: { kind: "agent-setup", agentKey: "alex" },
-    freshness: { generatedAt: NOW_ISO, window: "today", dataSource: "fixture" },
-  },
-  riley: {
-    agentKey: "riley",
-    pipelineKind: "ad-sets",
-    totalCount: 4,
-    countNoun: "ad sets",
-    tiles: [
-      {
-        id: "as-1",
-        stage: "hot",
-        name: "Whitening A",
-        ctx: "CPL stable, scaling up budget today.",
-        link: { kind: "ad-set", id: "as-1" },
-      },
-      {
-        id: "as-2",
-        stage: "warm",
-        name: "Cleaning Combo",
-        ctx: "Frequency creeping; rotate creatives.",
-        link: { kind: "ad-set", id: "as-2" },
-      },
-      {
-        id: "as-3",
-        stage: "new",
-        name: "Aligners (Test)",
-        ctx: "Just launched. Watching first 48h.",
-        link: { kind: "ad-set", id: "as-3" },
-      },
-    ],
-    setupLink: { kind: "agent-setup", agentKey: "riley" },
-    freshness: { generatedAt: NOW_ISO, window: "today", dataSource: "fixture" },
-  },
-};
-
 export function getFixtureGreeting(agentKey: AgentKey): GreetingViewModel {
   if (agentKey === "mira") throw new Error("mira is not enabled in slice B");
   return greetings[agentKey];
-}
-
-export function getFixturePipeline(agentKey: AgentKey): PipelineViewModel {
-  if (agentKey === "mira") throw new Error("mira is not enabled in slice B");
-  return pipeline[agentKey];
 }

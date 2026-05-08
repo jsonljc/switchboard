@@ -10,6 +10,7 @@ import { recommendationsRoutes } from "../routes/recommendations.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
+import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
@@ -198,6 +199,22 @@ class TestContactStore implements ContactStore {
       if (c && c.organizationId === orgId) out.set(id, c);
     }
     return out;
+  }
+
+  async listForPipeline(args: {
+    orgId: string;
+    activitySince: Date;
+    limit: number;
+  }): Promise<{ rows: Contact[]; totalCount: number }> {
+    const filtered = Array.from(this.rows.values())
+      .filter(
+        (c) =>
+          c.organizationId === args.orgId &&
+          (c.stage === "active" || c.stage === "new") &&
+          c.lastActivityAt.getTime() >= args.activitySince.getTime(),
+      )
+      .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
+    return { rows: filtered.slice(0, args.limit), totalCount: filtered.length };
   }
 }
 
@@ -551,6 +568,7 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   await app.register(winsRoute, { prefix: "/api/dashboard" });
+  await app.register(pipelineRoute, { prefix: "/api/dashboard" });
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
 
   const { dashboardReportsRoutes } = await import("../routes/dashboard-reports.js");

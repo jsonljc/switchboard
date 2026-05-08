@@ -1,10 +1,10 @@
 import { computeWindowStart, type WinTimeWindow } from "./window.js";
 import { formatTimeFolio } from "./time-folio.js";
+import type { AgentHomeKey } from "./agent-key.js";
 
 export type WinSource = "recommendation" | "booking" | "conversion";
 export type WinStatus = "acted" | "confirmed";
 
-import type { AgentHomeKey } from "./agent-key.js";
 export type { AgentHomeKey };
 
 export interface ProseSegment {
