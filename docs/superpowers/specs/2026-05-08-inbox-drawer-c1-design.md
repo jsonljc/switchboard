@@ -200,13 +200,19 @@ Composed at the drawer call site:
 {
   decisions.map((d, i) => {
     const card = mapToDecisionCard(d, i);
-    const agentName = AGENT_REGISTRY[d.agentKey].displayName;
+    const agent = AGENT_REGISTRY[d.agentKey];
+    const agentName = agent?.displayName ?? d.agentKey;
     const folioWithAgent = {
       ...card.folio,
       kindLabel: `${agentName} · ${card.folio.kindLabel}`,
     };
     return (
-      <div key={d.id} data-agent={d.agentKey} className="inbox-item">
+      <div
+        key={d.id}
+        data-agent={d.agentKey}
+        className="inbox-item"
+        style={{ "--inbox-agent-accent": agent?.accent } as React.CSSProperties}
+      >
         <DecisionCard
           {...card}
           folio={folioWithAgent}
@@ -219,7 +225,9 @@ Composed at the drawer call site:
 }
 ```
 
-The card receives `folio={folioWithAgent}` and is wrapped in `<div data-agent={d.agentKey} className="inbox-item">` so drawer-scoped CSS in `inbox-drawer.css` can render a small accent dot in the agent's brand color (`AGENT_REGISTRY[key].accent`) by selecting `.inbox-item[data-agent="alex"]` etc. `DecisionCard` itself stays agent-agnostic — the wrapper owns cross-agent context, the card owns decision rendering.
+The card receives `folio={folioWithAgent}` and is wrapped in `<div data-agent={d.agentKey} className="inbox-item">` with the agent's brand color piped in as the CSS custom property `--inbox-agent-accent` (sourced from `AGENT_REGISTRY[key].accent`). Drawer-scoped CSS in `inbox-drawer.css` then reads it generically — e.g. `.inbox-item::before { background: var(--inbox-agent-accent); }` — without hard-coding any agent key. The registry remains the single source of truth; CSS doesn't claim to know about Alex/Riley/Mira.
+
+The lookup is **defensively optional** (`agent?.displayName ?? d.agentKey`, `agent?.accent`) so the drawer doesn't explode if a future agent key reaches the feed before the registry catalog is updated. Fallback is the raw key (e.g. `"morgan · Approval"` with no accent dot) — ugly but visible and debuggable rather than a runtime crash.
 
 `handleAction` is a local function that calls `dispatchDecisionAction(d.sourceRef, action, undefined, { queryClient, orgId: tenant.orgId, agentKey: d.agentKey })`, awaits the result, and on success sets `actedInSessionRef.current = true`.
 
@@ -245,7 +253,7 @@ The card receives `folio={folioWithAgent}` and is wrapped in `<div data-agent={d
   - `total === 0` → `"Inbox, empty"`
   - `total === 1` → `"Inbox, 1 item"`
   - `total >= 2` → `"Inbox, {total} items"`
-- When `tenant === null` (race during initial mount, or unauthenticated edge): the trigger renders the static `Inbox` label with no count, `disabled` attribute set, and clicking it does not open the dialog. Once tenant resolves, full behavior takes over with no flicker (the same query was already running).
+- When `tenant === null` (race during initial mount, or unauthenticated edge): the trigger renders the static `Inbox` label with no count, `disabled` attribute set, and clicking it does not open the dialog. `useDecisionFeed` already guards on tenant readiness internally (`enabled: !!keys` derived from `useScopedQueryKeys`), so the query is naturally paused until tenant resolves. Once it does, the count populates from the first successful fetch. **Do not add a second tenant gate inside `InboxDrawer`** — rely on the existing hook contract.
 
 ### 4.3 Polling and freshness
 
@@ -275,7 +283,7 @@ For empty / loading / error / populated state tests, **open the drawer through t
 4. **Empty state copy** — render with `total=0`, tenant present; click the trigger; assert the empty-state prose renders.
 5. **Loading state copy** — render with `useDecisionFeed` returning `isLoading=true` and no cached data; click the trigger; assert `Reading your inbox…` renders.
 6. **Error state copy** — render with `useDecisionFeed` returning `isError=true`; click the trigger; assert `Couldn't load your inbox.` renders.
-7. **Populated list reuses DecisionCard with composed agent label** — feed returns one Alex approval and one Riley handoff; click the trigger; assert two cards render, the first card's folio reads `Alex · Approval` and the second `Riley · Handoff`, and `data-agent` attributes on the wrapping divs are `alex` and `riley` respectively.
+7. **Populated list reuses DecisionCard with composed agent label** — feed returns one Alex approval and one Riley handoff; click the trigger. This is a layout-level test of drawer composition, not of `DecisionCard` internals. The cleanest implementation lightly mocks `DecisionCard` and asserts it receives `folio.kindLabel === "Alex · Approval"` for the first item and `"Riley · Handoff"` for the second, plus the corresponding wrapper attributes (`data-agent="alex"`/`"riley"`, `style["--inbox-agent-accent"]` set to the registry value). Asserting against rendered DOM text is acceptable but couples this test to `DecisionCard`'s markup; prefer the prop-shape assertion.
 8. **Action dispatches with the per-item agentKey** — feed returns one Riley handoff; click the trigger; click primary on the rendered card; assert `dispatchDecisionAction` was called with `agentKey: "riley"` (not the page-level agent).
 9. **Auto-close on inbox-zero requires a successful in-session action.** Mock the feed return as a mutable value so `rerender` can simulate the post-dispatch refetch from `total=1` to `total=0`. Positive case: open with 1 item; act; mock dispatch resolves successfully; rerender feed to `total=0`; assert drawer is closed. Negative case: open with 1 item; do not act; rerender feed to `total=0` (simulating another surface clearing it); assert drawer stays open.
 10. **Auto-close ref resets on close as well as open** — open with 1 item; act; dispatch resolves but rerender keeps `total=1`; drawer stays open; user closes manually; reopen; rerender feed to `total=0` without acting; assert drawer stays open. (Protects the bidirectional reset of `actedInSessionRef`.)
@@ -319,7 +327,7 @@ Net new: ~350 lines, ~30 deleted.
 - All required component tests in §5.1 pass (eleven tests including the dialog accessible-name assertion)
 - `pnpm lint && pnpm typecheck && pnpm --filter @switchboard/dashboard test` clean
 - Visual smoke (dev): on `/alex` (or `/`), click `Inbox` in the header; verify a right-side drawer slides in with editorial chrome; click a card's primary action; verify the item disappears from the drawer and (with one item) the drawer closes
-- Header DOM diff in `editorial-auth-shell.tsx` is exactly two lines (one import, one element swap)
+- Header diff in `editorial-auth-shell.tsx` is limited to replacing `InboxLinkClient` with `InboxDrawer`: one import swap and one element swap, excluding any formatter-only movement
 - No remaining imports or references to `inbox-link-client.tsx` or `useInboxCount` anywhere in `apps/dashboard/src`
 - Drawer is production-visible immediately upon merge (PR-S6 already lifted the editorial-shell route gate; the only remaining access control is the per-org agent-enablement check)
 
