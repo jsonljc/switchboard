@@ -264,6 +264,7 @@ export * from "./agents/index.js";
 
 // Agent Home (greeting, wins, metrics, pipeline block projections)
 export * from "./agent-home/index.js";
+export * as agentHome from "./agent-home/index.js";
 
 // Reports projection (operator deep-dive surface)
 export * as reports from "./reports/index.js";

@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import {
-  getFixtureGreeting,
-  getFixtureWins,
-  getFixtureMetrics,
-  getFixturePipeline,
-} from "../_fixtures";
+import { getFixtureGreeting } from "../_fixtures";
 
 vi.mock("@/hooks/use-decision-feed", () => ({
   useDecisionFeed: () => ({
@@ -90,33 +85,6 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("@/hooks/use-agent-greeting", () => ({
   useAgentGreeting: (agentKey: "alex" | "riley") => ({
     data: getFixtureGreeting(agentKey),
-    isLoading: false,
-    isError: false,
-    error: null,
-  }),
-}));
-
-vi.mock("@/hooks/use-agent-wins", () => ({
-  useAgentWins: (agentKey: "alex" | "riley") => ({
-    data: getFixtureWins(agentKey),
-    isLoading: false,
-    isError: false,
-    error: null,
-  }),
-}));
-
-vi.mock("@/hooks/use-agent-metrics", () => ({
-  useAgentMetrics: (agentKey: "alex" | "riley") => ({
-    data: getFixtureMetrics(agentKey),
-    isLoading: false,
-    isError: false,
-    error: null,
-  }),
-}));
-
-vi.mock("@/hooks/use-agent-pipeline", () => ({
-  useAgentPipeline: (agentKey: "alex" | "riley") => ({
-    data: getFixturePipeline(agentKey),
     isLoading: false,
     isError: false,
     error: null,
