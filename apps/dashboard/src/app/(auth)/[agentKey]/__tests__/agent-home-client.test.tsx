@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { getFixtureGreeting } from "../_fixtures";
 
 vi.mock("@/hooks/use-decision-feed", () => ({
   useDecisionFeed: () => ({
@@ -79,6 +80,15 @@ vi.mock("@/hooks/use-query-keys", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: () => {} }),
+}));
+
+vi.mock("@/hooks/use-agent-greeting", () => ({
+  useAgentGreeting: (agentKey: "alex" | "riley") => ({
+    data: getFixtureGreeting(agentKey),
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
 }));
 
 import { AgentHomeClient } from "../agent-home-client";
