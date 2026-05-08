@@ -25,7 +25,12 @@ export function WinsBlock({ vm, agentKey }: { vm: WinsViewModel; agentKey: Agent
       ) : (
         <div className="wins-grid">
           {vm.wins.map((w) => (
-            <WinTile key={w.id} win={w} agentKey={agentKey} />
+            <WinTile
+              key={w.id}
+              win={w}
+              agentKey={agentKey}
+              undoLabel={vm.defaultUndoLabel ?? "Undo"}
+            />
           ))}
         </div>
       )}
@@ -33,7 +38,15 @@ export function WinsBlock({ vm, agentKey }: { vm: WinsViewModel; agentKey: Agent
   );
 }
 
-function WinTile({ win, agentKey }: { win: WinViewModel; agentKey: AgentKey }) {
+function WinTile({
+  win,
+  agentKey,
+  undoLabel,
+}: {
+  win: WinViewModel;
+  agentKey: AgentKey;
+  undoLabel: string;
+}) {
   const { mutate, isPending } = useUndoWin();
   return (
     <article className="win">
@@ -49,7 +62,7 @@ function WinTile({ win, agentKey }: { win: WinViewModel; agentKey: AgentKey }) {
             onClick={() => mutate({ winId: win.id, agentKey })}
             disabled={isPending}
           >
-            Undo
+            {undoLabel}
           </button>
         )}
         {!win.undo.available && win.undo.unavailableReason === "expired" && (

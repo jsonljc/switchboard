@@ -32,9 +32,20 @@ describe("WinsBlock", () => {
     expect(screen.getByText("Booked")).toHaveClass("accent");
   });
 
-  it("renders Undo button when undo.available is true", () => {
+  it("renders Undo button when undo.available is true (no label override)", () => {
     render(<WinsBlock vm={baseVm} agentKey="alex" />);
     expect(screen.getByRole("button", { name: /undo/i })).toBeInTheDocument();
+  });
+
+  it("renders vm.defaultUndoLabel as button text when provided", () => {
+    const vmWithLabel: WinsViewModel = { ...baseVm, defaultUndoLabel: "Undo last reply" };
+    render(<WinsBlock vm={vmWithLabel} agentKey="alex" />);
+    expect(screen.getByRole("button", { name: "Undo last reply" })).toBeInTheDocument();
+  });
+
+  it("renders 'Undo' as fallback button text when defaultUndoLabel is absent", () => {
+    render(<WinsBlock vm={baseVm} agentKey="alex" />);
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 
   it("renders 'Undo window closed' inline when undo is expired", () => {

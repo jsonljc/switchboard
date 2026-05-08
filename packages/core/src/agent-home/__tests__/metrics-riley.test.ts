@@ -57,14 +57,14 @@ describe("buildRileyMetricsViewModel", () => {
     expect(vm.heroSubProseSegments).toEqual([{ kind: "text", text: "+15 from last week." }]);
   });
 
-  it("subprose: '-12 from last week.' when down", async () => {
+  it("subprose: '12 fewer from last week.' when down", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
       week,
       store: makeStore({ leadsThisWeek: 50, leadsLastWeek: 62 }),
     });
-    expect(vm.heroSubProseSegments).toEqual([{ kind: "text", text: "-12 from last week." }]);
+    expect(vm.heroSubProseSegments).toEqual([{ kind: "text", text: "12 fewer from last week." }]);
   });
 
   it("subprose: 'Flat vs last week.' when equal", async () => {

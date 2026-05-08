@@ -27,6 +27,32 @@ describe("projectWins — skeleton", () => {
   });
 });
 
+describe("projectWins — defaultUndoLabel", () => {
+  it("alex projection carries defaultUndoLabel 'Undo last reply'", async () => {
+    const vm = await projectWins({
+      orgId: "org-1",
+      agentKey: "alex",
+      window: "today",
+      now: new Date("2026-05-07T06:30:00.000Z"),
+      timezone: "Asia/Singapore",
+      store: inMemoryStore([]),
+    });
+    expect(vm.defaultUndoLabel).toBe("Undo last reply");
+  });
+
+  it("riley projection carries defaultUndoLabel 'Revert change'", async () => {
+    const vm = await projectWins({
+      orgId: "org-1",
+      agentKey: "riley",
+      window: "today",
+      now: new Date("2026-05-07T06:30:00.000Z"),
+      timezone: "Asia/Singapore",
+      store: inMemoryStore([]),
+    });
+    expect(vm.defaultUndoLabel).toBe("Revert change");
+  });
+});
+
 describe("projectWins — voice & prose", () => {
   const baseRow = {
     id: "r1",
