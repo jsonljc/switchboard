@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { getFixtureGreeting } from "../_fixtures";
 
 vi.mock("@/hooks/use-decision-feed", () => ({
   useDecisionFeed: () => ({
@@ -83,8 +82,21 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@/hooks/use-agent-greeting", () => ({
-  useAgentGreeting: (agentKey: "alex" | "riley") => ({
-    data: getFixtureGreeting(agentKey),
+  useAgentGreeting: () => ({
+    data: {
+      variant: "named-lead" as const,
+      segments: [
+        { kind: "text" as const, text: "Three leads are waiting on you. " },
+        { kind: "accent" as const, text: "Maya" },
+        { kind: "text" as const, text: " is the one I'd answer first." },
+      ],
+      signal: { inboxCount: 3, oldestOpenItemAgeHours: 48, hoursSinceLastOperatorAction: 12 },
+      freshness: {
+        generatedAt: "2026-05-07T00:00:00Z",
+        window: "today" as const,
+        dataSource: "live" as const,
+      },
+    },
     isLoading: false,
     isError: false,
     error: null,
