@@ -3,6 +3,7 @@ import { z } from "zod";
 import { projectWins, type WinsSignalStore } from "@switchboard/core";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
+import { getOrgTimezone } from "../../lib/org-timezone.js";
 
 const ParamsSchema = z.object({
   agentId: AgentKeySchema,
@@ -49,9 +50,7 @@ export const winsRoute: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Recommendations store unavailable" });
     }
 
-    // OrganizationConfigStore may not have a timezone field yet — fall back to
-    // Asia/Singapore (matches Booking.timezone default).
-    const timezone = "Asia/Singapore";
+    const timezone = await getOrgTimezone(app.prisma, orgId);
 
     const recommendationStore = app.recommendationStore;
 
