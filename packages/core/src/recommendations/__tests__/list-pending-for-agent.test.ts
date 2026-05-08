@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createInMemoryRecommendationStore } from "../in-memory-store.js";
 import type { PersistRecommendationInput } from "../types.js";
 
-const NOW = new Date("2026-05-07T08:00:00Z");
-
 function persistInput(over: Partial<PersistRecommendationInput>): PersistRecommendationInput {
   return {
     idempotencyKey: `k-${Math.random()}`,
@@ -20,7 +18,7 @@ function persistInput(over: Partial<PersistRecommendationInput>): PersistRecomme
     targetEntities: { campaignId: "c", campaignName: "c" },
     sourceWorkflow: null,
     undoableUntil: null,
-    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    expiresAt: new Date(Date.now() + 86_400_000),
     ...over,
   } as PersistRecommendationInput;
 }
