@@ -89,13 +89,15 @@ This task does TDD on the highest-value regression test: the editorial header's 
 Create `apps/dashboard/src/components/layout/__tests__/inbox-drawer.test.tsx` with:
 
 ```tsx
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-// Mocks shared across cases. Default mock returns 3 decisions for the
-// header-contract test; specific tests override below.
+// ---------- Stable top-level mocks (no resetModules / doMock anywhere) ----------
+
+// Feed: a mutable variable that tests reassign before render/rerender.
 let mockFeed: {
   data:
     | { decisions: unknown[]; counts: { total: number; approval: number; handoff: number } }
@@ -111,14 +113,61 @@ vi.mock("@/hooks/use-decision-feed", () => ({
   useDecisionFeed: () => mockFeed,
 }));
 
-vi.mock("next-auth/react", () => ({
-  useSession: () => ({
-    data: { organizationId: "org-1" },
-    status: "authenticated",
-  }),
+// Tenant: a mutable variable, mocked at the hook layer (not next-auth) so the
+// component's call to useTenantContext() flips behavior directly.
+let mockTenant: { orgId: string; keys: unknown } | null = {
+  orgId: "org-1",
+  keys: {},
+};
+vi.mock("@/hooks/use-query-keys", () => ({
+  useTenantContext: () => mockTenant,
+}));
+
+// Dispatch: a stable spy that tests inspect.
+const dispatchMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/decisions/dispatch-action", () => ({
+  dispatchDecisionAction: (...args: unknown[]) => dispatchMock(...args),
+}));
+
+// DecisionCard: a single mock that exposes folio.kindLabel as a data attr and
+// surfaces onPrimary / onSecondary as test-id'd buttons. Used by Tasks 5–7.
+vi.mock("@/components/decisions/decision-card", () => ({
+  DecisionCard: ({
+    folio,
+    serifSentence,
+    onPrimary,
+    onSecondary,
+  }: {
+    folio: { kindLabel: string };
+    serifSentence?: string;
+    onPrimary?: () => void;
+    onSecondary?: () => void;
+  }) => (
+    <article data-testid="mock-decision-card" data-folio-kind-label={folio.kindLabel}>
+      <p>{serifSentence}</p>
+      <button data-testid="card-primary" onClick={onPrimary}>
+        primary
+      </button>
+      <button data-testid="card-secondary" onClick={onSecondary}>
+        secondary
+      </button>
+    </article>
+  ),
 }));
 
 import { InboxDrawer } from "../inbox-drawer";
+
+beforeEach(() => {
+  // Reset mutable mock state to the default tenant-present, empty-feed shape.
+  mockTenant = { orgId: "org-1", keys: {} };
+  mockFeed = {
+    data: { decisions: [], counts: { total: 3, approval: 2, handoff: 1 } },
+    isLoading: false,
+    isError: false,
+  };
+  dispatchMock.mockReset();
+  dispatchMock.mockResolvedValue(undefined);
+});
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -289,34 +338,22 @@ describe("InboxDrawer — trigger aria-label", () => {
 });
 
 describe("InboxDrawer — tenant-null trigger", () => {
-  it("renders the trigger disabled when there is no tenant context", async () => {
-    // Override the next-auth mock just for this test by re-mocking the module.
-    // Switching mocks mid-suite requires resetModules + a fresh import.
-    vi.resetModules();
-    vi.doMock("next-auth/react", () => ({
-      useSession: () => ({ data: null, status: "unauthenticated" }),
-    }));
-    vi.doMock("@/hooks/use-decision-feed", () => ({
-      useDecisionFeed: () => ({
-        data: undefined,
-        isLoading: false,
-        isError: false,
-      }),
-    }));
+  it("renders the trigger disabled when tenant context is null", async () => {
+    mockTenant = null;
+    mockFeed = {
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    };
+    const user = userEvent.setup();
+    render(<InboxDrawer />, { wrapper });
 
-    const { InboxDrawer: FreshInboxDrawer } = await import("../inbox-drawer");
-    const { container } = render(<FreshInboxDrawer />, { wrapper });
-
-    const trigger = container.querySelector("button.folio-link") as HTMLButtonElement | null;
-    expect(trigger).not.toBeNull();
-    expect(trigger?.disabled).toBe(true);
+    const trigger = screen.getByRole("button", { name: "Inbox, empty" });
+    expect(trigger).toBeDisabled();
 
     // Clicking a disabled button must not open the dialog.
-    trigger?.click();
+    await user.click(trigger);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-    vi.doUnmock("next-auth/react");
-    vi.doUnmock("@/hooks/use-decision-feed");
   });
 });
 ```
@@ -628,25 +665,16 @@ This task wires `mapToDecisionCard` and `DecisionCard`, with the agent name comp
 - Modify: `apps/dashboard/src/components/layout/__tests__/inbox-drawer.test.tsx`
 - Modify: `apps/dashboard/src/components/layout/inbox-drawer.tsx`
 
-- [ ] **Step 1: Mock `DecisionCard` and add the populated-list test**
+- [ ] **Step 1: Add the populated-list test**
 
-Add the mock near the top of the test file (alongside the other `vi.mock` calls):
+(No new mock needed — the top-level `DecisionCard` mock from the test file's preamble already exposes `data-folio-kind-label`.)
 
-```tsx
-vi.mock("@/components/decisions/decision-card", () => ({
-  DecisionCard: (props: { folio: { kindLabel: string }; serifSentence: string }) => (
-    <article data-testid="mock-decision-card" data-folio-kind-label={props.folio.kindLabel}>
-      {props.serifSentence}
-    </article>
-  ),
-}));
-```
-
-Then append:
+Append to the test file:
 
 ```tsx
 describe("InboxDrawer — populated list", () => {
-  it("renders one DecisionCard per item, with composed agent label and accent", async () => {
+  it("renders one DecisionCard per item with the agent name prefix and accent variable", async () => {
+    const user = userEvent.setup();
     const now = new Date().toISOString();
     mockFeed = {
       data: {
@@ -695,12 +723,14 @@ describe("InboxDrawer — populated list", () => {
     };
 
     render(<InboxDrawer />, { wrapper });
-    screen.getByRole("button", { name: /^Inbox/ }).click();
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
 
     const cards = await screen.findAllByTestId("mock-decision-card");
     expect(cards).toHaveLength(2);
-    expect(cards[0].getAttribute("data-folio-kind-label")).toMatch(/^Alex · DECISION /);
-    expect(cards[1].getAttribute("data-folio-kind-label")).toMatch(/^Riley · HANDOFF /);
+    // Assert the drawer-added prefix only; the suffix is mapToDecisionCard's
+    // contract, tested elsewhere. This isolates C1's responsibility.
+    expect(cards[0].getAttribute("data-folio-kind-label")).toContain("Alex ·");
+    expect(cards[1].getAttribute("data-folio-kind-label")).toContain("Riley ·");
 
     const list = screen.getByTestId("inbox-list");
     const wrappers = list.querySelectorAll(".inbox-item");
@@ -858,17 +888,14 @@ git commit -m "feat(dashboard): inbox drawer — populated list with composed ag
 
 - [ ] **Step 1: Add the dispatch test**
 
+(`dispatchMock` and the `DecisionCard` mock are already declared at the top of the test file.)
+
 Append to the test file:
 
 ```tsx
-const dispatchMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("@/lib/decisions/dispatch-action", () => ({
-  dispatchDecisionAction: (...args: unknown[]) => dispatchMock(...args),
-}));
-
 describe("InboxDrawer — action dispatch", () => {
   it("invokes dispatchDecisionAction with the per-item agentKey on primary click", async () => {
-    dispatchMock.mockClear();
+    const user = userEvent.setup();
     const now = new Date().toISOString();
     mockFeed = {
       data: {
@@ -898,31 +925,9 @@ describe("InboxDrawer — action dispatch", () => {
       isError: false,
     };
 
-    // Replace the mocked DecisionCard so it exposes the onPrimary it received.
-    // (Re-mock just for this test scope.)
-    vi.doMock("@/components/decisions/decision-card", () => ({
-      DecisionCard: ({
-        folio,
-        onPrimary,
-      }: {
-        folio: { kindLabel: string };
-        onPrimary?: () => void;
-      }) => (
-        <article data-testid="mock-decision-card" data-folio-kind-label={folio.kindLabel}>
-          <button data-testid="card-primary" onClick={onPrimary}>
-            primary
-          </button>
-        </article>
-      ),
-    }));
-    vi.resetModules();
-    const { InboxDrawer: FreshInboxDrawer } = await import("../inbox-drawer");
-
-    render(<FreshInboxDrawer />, { wrapper });
-    screen.getByRole("button", { name: /^Inbox/ }).click();
-
-    const primary = await screen.findByTestId("card-primary");
-    primary.click();
+    render(<InboxDrawer />, { wrapper });
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
 
     expect(dispatchMock).toHaveBeenCalledTimes(1);
     const callArgs = dispatchMock.mock.calls[0];
@@ -932,8 +937,6 @@ describe("InboxDrawer — action dispatch", () => {
       orgId: "org-1",
       agentKey: "riley",
     });
-
-    vi.doUnmock("@/components/decisions/decision-card");
   });
 });
 ```
@@ -955,7 +958,7 @@ Update `inbox-drawer.tsx` to import the dispatcher and `useQueryClient`, and pas
 
 import { useState, type CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
+import { AGENT_REGISTRY } from "@switchboard/schemas";
 import {
   Sheet,
   SheetTrigger,
@@ -971,6 +974,9 @@ import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
 import { dispatchDecisionAction } from "@/lib/decisions/dispatch-action";
 import type { Decision } from "@/lib/decisions/types";
 import "./inbox-drawer.css";
+
+// Note: Decision.agentKey is already typed as AgentKey upstream
+// (apps/dashboard/src/lib/decisions/types.ts). No cast needed at this call site.
 
 function describeTotal(total: number, isLoading: boolean, isError: boolean): string {
   if (isLoading) return "Reading…";
@@ -994,7 +1000,7 @@ export function InboxDrawer() {
     await dispatchDecisionAction(d.sourceRef, action, undefined, {
       queryClient,
       orgId: tenant.orgId,
-      agentKey: d.agentKey as AgentKey,
+      agentKey: d.agentKey,
     });
   }
 
@@ -1041,7 +1047,7 @@ export function InboxDrawer() {
           <div className="decisions" data-testid="inbox-list">
             {decisions.map((d, i) => {
               const card = mapToDecisionCard(d, i);
-              const agent = AGENT_REGISTRY[d.agentKey as AgentKey];
+              const agent = AGENT_REGISTRY[d.agentKey];
               const agentName = agent?.displayName ?? d.agentKey;
               const folioWithAgent = {
                 ...card.folio,
@@ -1104,14 +1110,9 @@ Append to the test file:
 
 ```tsx
 describe("InboxDrawer — auto-close on inbox-zero", () => {
-  beforeEach(() => {
-    dispatchMock.mockReset();
-    dispatchMock.mockResolvedValue(undefined);
-  });
-
-  it("closes the drawer when count hits 0 AFTER a successful in-session action", async () => {
+  function makeOneItemFeed() {
     const now = new Date().toISOString();
-    mockFeed = {
+    return {
       data: {
         decisions: [
           {
@@ -1138,162 +1139,79 @@ describe("InboxDrawer — auto-close on inbox-zero", () => {
       isLoading: false,
       isError: false,
     };
+  }
+  const emptyFeed = {
+    data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+    isLoading: false,
+    isError: false,
+  };
 
-    vi.doMock("@/components/decisions/decision-card", () => ({
-      DecisionCard: ({ onPrimary }: { onPrimary?: () => void }) => (
-        <button data-testid="card-primary" onClick={onPrimary}>
-          primary
-        </button>
-      ),
-    }));
-    vi.resetModules();
-    const { InboxDrawer: Fresh } = await import("../inbox-drawer");
+  it("closes the drawer when count hits 0 AFTER a successful in-session action", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeOneItemFeed();
+    const { rerender } = render(<InboxDrawer />, { wrapper });
 
-    const { rerender } = render(<Fresh />, { wrapper });
-    screen.getByRole("button", { name: /^Inbox/ }).click();
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
-    const primary = await screen.findByTestId("card-primary");
-    primary.click();
-    // Wait a microtask so the awaited dispatch resolves and ref flips.
-    await new Promise((r) => setTimeout(r, 0));
+    await user.click(await screen.findByTestId("card-primary"));
+    // The dispatcher promise resolves on the next microtask; wait for the spy
+    // so we know the in-session ref has flipped before the rerender.
+    await waitFor(() => expect(dispatchMock).toHaveBeenCalledTimes(1));
 
     // Simulate the post-dispatch refetch: count goes to 0.
-    mockFeed = {
-      data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
-      isLoading: false,
-      isError: false,
-    };
-    rerender(<Fresh />);
+    mockFeed = emptyFeed;
+    rerender(<InboxDrawer />);
 
-    await new Promise((r) => setTimeout(r, 0));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-    vi.doUnmock("@/components/decisions/decision-card");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("stays open when count drops to 0 without a successful in-session action", async () => {
-    const now = new Date().toISOString();
-    mockFeed = {
-      data: {
-        decisions: [
-          {
-            id: "approval:rec-1",
-            kind: "approval",
-            orgId: "org-1",
-            agentKey: "alex",
-            humanSummary: "Lead.",
-            presentation: {
-              primaryLabel: "Reply",
-              secondaryLabel: "Skip",
-              dismissLabel: "Dismiss",
-              dataLines: [],
-            },
-            urgencyScore: 80,
-            createdAt: now,
-            threadHref: null,
-            sourceRef: { kind: "approval", sourceId: "rec-1" },
-            meta: {},
-          },
-        ],
-        counts: { total: 1, approval: 1, handoff: 0 },
-      },
-      isLoading: false,
-      isError: false,
-    };
-
+    const user = userEvent.setup();
+    mockFeed = makeOneItemFeed();
     const { rerender } = render(<InboxDrawer />, { wrapper });
-    screen.getByRole("button", { name: /^Inbox/ }).click();
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
     // Another surface clears the inbox; user did not act inside the drawer.
-    mockFeed = {
-      data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
-      isLoading: false,
-      isError: false,
-    };
+    mockFeed = emptyFeed;
     rerender(<InboxDrawer />);
 
+    // Give effects a tick to run, then assert the drawer stayed open.
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("resets the in-session-action flag when the drawer closes manually", async () => {
-    const userEvent = (await import("@testing-library/user-event")).default;
     const user = userEvent.setup();
-    const now = new Date().toISOString();
-    mockFeed = {
-      data: {
-        decisions: [
-          {
-            id: "approval:rec-1",
-            kind: "approval",
-            orgId: "org-1",
-            agentKey: "alex",
-            humanSummary: "Lead.",
-            presentation: {
-              primaryLabel: "Reply",
-              secondaryLabel: "Skip",
-              dismissLabel: "Dismiss",
-              dataLines: [],
-            },
-            urgencyScore: 80,
-            createdAt: now,
-            threadHref: null,
-            sourceRef: { kind: "approval", sourceId: "rec-1" },
-            meta: {},
-          },
-        ],
-        counts: { total: 1, approval: 1, handoff: 0 },
-      },
-      isLoading: false,
-      isError: false,
-    };
+    // Dispatcher resolves but feed still shows the item — drawer stays open after action.
+    mockFeed = makeOneItemFeed();
+    const { rerender } = render(<InboxDrawer />, { wrapper });
 
-    vi.doMock("@/components/decisions/decision-card", () => ({
-      DecisionCard: ({ onPrimary }: { onPrimary?: () => void }) => (
-        <button data-testid="card-primary" onClick={onPrimary}>
-          primary
-        </button>
-      ),
-    }));
-    vi.resetModules();
-    const { InboxDrawer: Fresh } = await import("../inbox-drawer");
-
-    const { rerender } = render(<Fresh />, { wrapper });
-
-    // Open, act; mock dispatch resolves but feed still shows the item — drawer stays open.
     await user.click(screen.getByRole("button", { name: /^Inbox/ }));
     await user.click(await screen.findByTestId("card-primary"));
+    await waitFor(() => expect(dispatchMock).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    // User closes manually via Escape.
+    // User closes manually via Escape — Radix listens at document, userEvent fires it correctly.
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-    // Reopen with same items, then have the feed drop to 0 without acting.
+    // Reopen with the item still present.
     await user.click(screen.getByRole("button", { name: /^Inbox/ }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
-    mockFeed = {
-      data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
-      isLoading: false,
-      isError: false,
-    };
-    rerender(<Fresh />);
+    // Feed drops to 0 without acting — drawer must stay open (ref reset on close).
+    mockFeed = emptyFeed;
+    rerender(<InboxDrawer />);
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-
-    vi.doUnmock("@/components/decisions/decision-card");
   });
 });
 ```
 
-You will also need to add `beforeEach` to the import line at the top of the test file:
-
-```tsx
-import { describe, expect, it, vi, beforeEach } from "vitest";
-```
+(`beforeEach`, `userEvent`, and `waitFor` are already imported at the top of the test file from Task 1's preamble.)
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -1329,24 +1247,17 @@ useEffect(() => {
 }, [open, total]);
 ```
 
-Then update `handleAction` to flip the ref on success:
+Then update `handleAction` to flip the ref only after a successful dispatch. Don't wrap with try/catch — propagate errors to match the existing dispatcher contract used by the Needs You block. If dispatch rejects, the ref simply doesn't flip and the caller's promise rejects (React swallows the unhandled rejection from the `void` call site, same as the Needs You block).
 
 ```tsx
 async function handleAction(d: Decision, action: "primary" | "secondary"): Promise<void> {
   if (!tenant) return;
-  try {
-    await dispatchDecisionAction(d.sourceRef, action, undefined, {
-      queryClient,
-      orgId: tenant.orgId,
-      agentKey: d.agentKey as AgentKey,
-    });
-    actedInSessionRef.current = true;
-  } catch (err) {
-    // Do not flip the flag on dispatch failure. Surface the error via console
-    // (the existing dispatcher already throws; the error pill will show in
-    // future B2 polish work — out of scope for C1).
-    console.warn("Inbox action failed", err);
-  }
+  await dispatchDecisionAction(d.sourceRef, action, undefined, {
+    queryClient,
+    orgId: tenant.orgId,
+    agentKey: d.agentKey,
+  });
+  actedInSessionRef.current = true;
 }
 ```
 
