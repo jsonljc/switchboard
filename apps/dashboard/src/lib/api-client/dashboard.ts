@@ -3,6 +3,7 @@ import type {
   ScanResult,
   DashboardOverview,
   ContactsListResponse,
+  ContactDetailResponse,
 } from "@switchboard/schemas";
 import { SwitchboardAgentsClient } from "./agents";
 
@@ -96,5 +97,32 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     if (query.direction) params.set("direction", query.direction);
     const qs = params.toString();
     return this.request<ContactsListResponse>(`/api/dashboard/contacts${qs ? `?${qs}` : ""}`);
+  }
+
+  /**
+   * Fetch the composite payload for a single contact (D1.5). Uses a dedicated
+   * fetch path (not `request`) so the upstream HTTP status (notably 404 for
+   * unknown / cross-org contactId) survives back to the dashboard proxy. The
+   * shared `request` helper collapses all non-2xx into `Error("…")`, which
+   * would force every upstream 404 to surface as 500. The proxy reads `.status`
+   * off the thrown ApiError to preserve fidelity.
+   */
+  async getContact(id: string): Promise<ContactDetailResponse> {
+    const url = `${this.baseUrl}/api/dashboard/contacts/${encodeURIComponent(id)}`;
+    const res = await fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const err = new Error(body.error || `API error: ${res.status}`) as Error & {
+        status?: number;
+      };
+      err.status = res.status;
+      throw err;
+    }
+    return res.json() as Promise<ContactDetailResponse>;
   }
 }

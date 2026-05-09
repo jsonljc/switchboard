@@ -555,14 +555,22 @@ export async function buildServer() {
     app.decorate("greetingSignalStore", new PrismaGreetingSignalStore(prismaClient));
   }
 
-  // Decision feed deps — Prisma stores merged by /api/dashboard/[agents/:key/]decisions.
-  // Skipped when no DB; the route returns 500 ("dependencies not wired").
+  // Decision feed deps — Prisma stores merged by /api/dashboard/[agents/:key/]decisions
+  // and the /api/dashboard/contacts/:id detail route (D1.5). Skipped when no DB;
+  // routes return 503 ("dependencies not wired").
   if (prismaClient) {
-    const { PrismaContactStore, PrismaHandoffStore, PrismaConversationThreadStore } =
-      await import("@switchboard/db");
+    const {
+      PrismaContactStore,
+      PrismaHandoffStore,
+      PrismaConversationThreadStore,
+      PrismaOpportunityStore,
+      PrismaRevenueStore,
+    } = await import("@switchboard/db");
     app.decorate("contactStore", new PrismaContactStore(prismaClient));
     app.decorate("handoffStore", new PrismaHandoffStore(prismaClient));
     app.decorate("threadStore", new PrismaConversationThreadStore(prismaClient));
+    app.decorate("opportunityStore", new PrismaOpportunityStore(prismaClient));
+    app.decorate("revenueEventStore", new PrismaRevenueStore(prismaClient));
   }
 
   const { resolveAuthoritativeDeployment } =
