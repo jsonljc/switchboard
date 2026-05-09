@@ -565,12 +565,14 @@ export async function buildServer() {
       PrismaConversationThreadStore,
       PrismaOpportunityStore,
       PrismaRevenueStore,
+      PrismaTriggerStore,
     } = await import("@switchboard/db");
     app.decorate("contactStore", new PrismaContactStore(prismaClient));
     app.decorate("handoffStore", new PrismaHandoffStore(prismaClient));
     app.decorate("threadStore", new PrismaConversationThreadStore(prismaClient));
     app.decorate("opportunityStore", new PrismaOpportunityStore(prismaClient));
     app.decorate("revenueEventStore", new PrismaRevenueStore(prismaClient));
+    app.decorate("triggerStore", new PrismaTriggerStore(prismaClient));
   }
 
   const { resolveAuthoritativeDeployment } =
