@@ -221,14 +221,16 @@ class TestContactStore implements ContactStore {
   }
 
   /**
-   * Parity hazard: this in-memory shim is the only place where keyset
-   * pagination semantics are *executed* against real data in CI — the
-   * `prisma-contact-store-browse.test.ts` mocks Prisma at the call shape,
-   * not the row level. If `PrismaContactStore.listForBrowse`'s keyset
-   * direction, search OR-clause, or order tiebreak ever changes, the
-   * production behaviour and this shim must be kept in sync, otherwise
-   * the route-level pagination test at `api-contacts.test.ts` will keep
-   * passing while production silently breaks.
+   * KEEP IN SYNC WITH `PrismaContactStore.listForBrowse`.
+   *
+   * This in-memory shim is the only place keyset pagination semantics
+   * execute against real rows in CI — `prisma-contact-store-browse.test.ts`
+   * mocks Prisma at the call shape, not the row level. So if you change
+   * the production keyset direction, the search OR-clause, or the order
+   * tiebreak in `PrismaContactStore.listForBrowse`, **mirror the change
+   * here in lockstep** and update both `prisma-contact-store-browse.test.ts`
+   * (call-shape pin) and `api-contacts.test.ts` (route-level round-trip).
+   * Otherwise the route tests keep passing while production silently breaks.
    */
   async listForBrowse(query: {
     orgId: string;

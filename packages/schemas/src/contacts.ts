@@ -29,7 +29,11 @@ export type ContactBrowseRow = z.infer<typeof ContactBrowseRowSchema>;
 export const ContactsListQuerySchema = z.object({
   stage: ContactStageSchema.optional(),
   search: z.string().trim().min(1).max(100).optional(),
-  cursor: z.string().optional(),
+  // Opaque base64 — opaque to the dashboard, decoded server-side. .min(1)
+  // matches the search precedent (rejects empty `?cursor=`); .max(512) is a
+  // generous ceiling on the encoded `{ts: ISO, id}` payload to short-circuit
+  // unbounded input before Buffer.from allocates.
+  cursor: z.string().min(1).max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   sort: z.enum(["lastActivityAt", "firstContactAt"]).default("lastActivityAt"),
   direction: z.enum(["asc", "desc"]).default("desc"),
