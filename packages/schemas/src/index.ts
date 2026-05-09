@@ -56,6 +56,9 @@ export * from "./operator-command.js";
 // Unified lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle.js";
 
+// Contacts browse projection (surface-agnostic /contacts list view-model)
+export * from "./contacts.js";
+
 // Event types (RoutedEventEnvelope, createEventEnvelope)
 export * from "./event-types.js";
 

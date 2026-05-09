@@ -1,4 +1,9 @@
-import type { Playbook, ScanResult, DashboardOverview } from "@switchboard/schemas";
+import type {
+  Playbook,
+  ScanResult,
+  DashboardOverview,
+  ContactsListResponse,
+} from "@switchboard/schemas";
 import { SwitchboardAgentsClient } from "./agents";
 
 export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
@@ -70,5 +75,26 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  // ── Contacts (Mercury /contacts list) ──
+
+  async getContacts(query: {
+    stage?: string;
+    search?: string;
+    cursor?: string;
+    limit?: number;
+    sort?: string;
+    direction?: string;
+  }): Promise<ContactsListResponse> {
+    const params = new URLSearchParams();
+    if (query.stage) params.set("stage", query.stage);
+    if (query.search) params.set("search", query.search);
+    if (query.cursor) params.set("cursor", query.cursor);
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.sort) params.set("sort", query.sort);
+    if (query.direction) params.set("direction", query.direction);
+    const qs = params.toString();
+    return this.request<ContactsListResponse>(`/api/dashboard/contacts${qs ? `?${qs}` : ""}`);
   }
 }

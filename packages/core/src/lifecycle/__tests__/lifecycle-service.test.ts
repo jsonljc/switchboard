@@ -121,6 +121,16 @@ class InMemoryContactStore implements ContactStore {
     const sorted = all.sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
     return { rows: sorted.slice(0, args.limit), totalCount: sorted.length };
   }
+
+  async listForBrowse(): Promise<{
+    rows: Contact[];
+    opportunityCounts: Map<string, number>;
+    hasMore: boolean;
+    nextKeyset: { ts: Date; id: string } | null;
+  }> {
+    // lifecycle-service tests don't exercise the browse path; stub.
+    throw new Error("listForBrowse: not implemented in lifecycle-service test stub");
+  }
 }
 
 class InMemoryOpportunityStore implements OpportunityStore {

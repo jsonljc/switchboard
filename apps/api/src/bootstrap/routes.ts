@@ -52,6 +52,7 @@ import { billingRoutes } from "../routes/billing.js";
 import { metaDeletionRoutes } from "../routes/meta-deletion.js";
 import { googleCalendarOAuthRoutes } from "../routes/google-calendar-oauth.js";
 import { dashboardReportsRoutes } from "../routes/dashboard-reports.js";
+import { dashboardContactsRoutes } from "../routes/dashboard-contacts.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
@@ -145,6 +146,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(billingRoutes, { prefix: "/api/billing" });
   await app.register(metaDeletionRoutes, { prefix: "/api/meta/deletion" });
   await app.register(dashboardReportsRoutes);
+  await app.register(dashboardContactsRoutes);
   // playbook, simulate, and website-scan routes define their own full paths including /api prefix
   await app.register(playbookRoutes);
   await app.register(simulateRoutes);

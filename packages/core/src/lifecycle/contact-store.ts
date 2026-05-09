@@ -1,5 +1,34 @@
 import type { Contact, ContactStage, MessagingOptInSource } from "@switchboard/schemas";
 
+// ---------------------------------------------------------------------------
+// Browse query (powers the read-only /contacts list view via core's
+// `listContactsForBrowse` projection — distinct from `list(...)` which is
+// used by skill-runtime tools and lifecycle services and must not change).
+// ---------------------------------------------------------------------------
+
+export interface ContactBrowseQuery {
+  orgId: string;
+  stage?: ContactStage;
+  search?: string;
+  sort: "lastActivityAt" | "firstContactAt";
+  direction: "asc" | "desc";
+  /**
+   * Pre-decoded keyset cursor. The store is unaware of base64; the projector
+   * encodes/decodes on the way in/out.
+   */
+  cursor?: { ts: Date; id: string };
+  limit: number;
+}
+
+export interface ContactBrowseResult {
+  rows: Contact[];
+  /** contactId → non-terminal opportunity count, capped at 99. */
+  opportunityCounts: Map<string, number>;
+  hasMore: boolean;
+  /** The (sortField, id) of the last returned row when `hasMore`. */
+  nextKeyset: { ts: Date; id: string } | null;
+}
+
 export interface CreateContactInput {
   organizationId: string;
   name?: string | null;
@@ -48,4 +77,12 @@ export interface ContactStore {
     activitySince: Date;
     limit: number;
   }): Promise<{ rows: Contact[]; totalCount: number }>;
+  /**
+   * Read-only browse for the Mercury `/contacts` list surface. Distinct from
+   * `list(orgId, filters)` to keep the existing skill-runtime / lifecycle
+   * callers' contract stable. Cursor is `(sortField, id)` keyset; the
+   * `lastActivityAt` invariant (non-nullable in the current schema) is what
+   * makes the cursor totally ordered — see plan §"Implementer watch-outs".
+   */
+  listForBrowse(query: ContactBrowseQuery): Promise<ContactBrowseResult>;
 }
