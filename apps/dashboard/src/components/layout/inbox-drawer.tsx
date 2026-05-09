@@ -52,7 +52,26 @@ export function InboxDrawer() {
           <SheetTitle className="font-display">Inbox</SheetTitle>
           <SheetDescription>{describeTotal(total, isLoading, isError)}</SheetDescription>
         </SheetHeader>
-        {/* List body added in Task 4 */}
+        {isLoading && !data ? (
+          <p className="empty-state">
+            <em>Reading your inbox…</em>
+          </p>
+        ) : isError ? (
+          <p className="empty-state">
+            <em>Couldn&apos;t load your inbox.</em>
+          </p>
+        ) : total === 0 ? (
+          <p className="empty-state">
+            <em>
+              You&apos;re caught up across your team. I&apos;ll write again when something needs
+              you.
+            </em>
+          </p>
+        ) : (
+          <div className="decisions" data-testid="inbox-list">
+            {/* Populated list added in Task 5 */}
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );
