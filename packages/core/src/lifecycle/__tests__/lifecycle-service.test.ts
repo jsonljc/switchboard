@@ -257,6 +257,10 @@ class InMemoryRevenueStore implements RevenueStore {
     return Array.from(this.events.values()).filter((e) => e.opportunityId === opportunityId);
   }
 
+  async findByContact(_orgId: string, contactId: string): Promise<LifecycleRevenueEvent[]> {
+    return Array.from(this.events.values()).filter((e) => e.contactId === contactId);
+  }
+
   async sumByOrg(_orgId: string): Promise<RevenueSummary> {
     const events = Array.from(this.events.values());
     const totalAmount = events.reduce((sum, e) => sum + e.amount, 0);

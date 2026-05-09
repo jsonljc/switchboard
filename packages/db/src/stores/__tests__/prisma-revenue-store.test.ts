@@ -160,6 +160,36 @@ describe("PrismaRevenueStore", () => {
     });
   });
 
+  describe("findByContact", () => {
+    it("scopes to organizationId AND contactId in the where clause", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([]);
+
+      await store.findByContact("org-1", "c-1");
+
+      expect(prisma.lifecycleRevenueEvent.findMany).toHaveBeenCalledWith({
+        where: { organizationId: "org-1", contactId: "c-1" },
+        orderBy: { recordedAt: "desc" },
+      });
+    });
+
+    it("returns the rows mapped from prisma format", async () => {
+      const row = makeRevenueEvent({ id: "r-1", contactId: "c-1", amount: 1200, currency: "SGD" });
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([row]);
+
+      const result = await store.findByContact("org-1", "c-1");
+
+      expect(result).toHaveLength(1);
+      expect(result[0]?.id).toBe("r-1");
+      expect(result[0]?.amount).toBe(1200);
+    });
+
+    it("returns [] when no rows match", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([]);
+
+      expect(await store.findByContact("org-1", "c-1")).toEqual([]);
+    });
+  });
+
   describe("sumByOrg", () => {
     it("aggregates confirmed revenue without date range", async () => {
       prisma.lifecycleRevenueEvent.aggregate.mockResolvedValue({
