@@ -26,8 +26,3 @@ export function useDecisionFeed(agentKey: AgentKey | null) {
     enabled: !!keys,
   });
 }
-
-export function useInboxCount(): number {
-  const { data } = useDecisionFeed(null);
-  return data?.counts.total ?? 0;
-}
