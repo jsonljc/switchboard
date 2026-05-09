@@ -41,15 +41,17 @@ describe("dashboard middleware auth", () => {
     expect(response.headers.get("location")).toBe("http://localhost/login");
   });
 
-  it("redirects unauthenticated /console to /login", async () => {
+  it("does not gate /console (route removed in c2b — middleware matcher excludes it)", async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
 
     const { middleware } = await import("../middleware");
 
+    // /console is no longer in AUTH_PAGE_PREFIXES or config.matcher after C2b.
+    // Middleware passes the request through without redirecting to /login.
     const response = middleware(new NextRequest("http://localhost/console"));
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost/login");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("redirects unauthenticated /escalations to /login", async () => {
