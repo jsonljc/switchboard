@@ -189,4 +189,7 @@ export const scopedKeys = (orgId: string) => ({
   reports: {
     byWindow: (window: string) => [orgId, "reports", window] as const,
   },
+  contacts: {
+    list: (query: object) => [orgId, "contacts", "list", query] as const,
+  },
 });
