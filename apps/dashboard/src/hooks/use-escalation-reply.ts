@@ -14,7 +14,6 @@ export interface EscalationReplyResult {
  *
  * Used by:
  *   - /escalations list page reply form
- *   - /console <ReplyForm> (inline within <EscalationCardView>)
  *
  * Both surfaces post the reply through this single hook so they cannot
  * diverge on payload shape, cache invalidation, or 200/502 branching.
