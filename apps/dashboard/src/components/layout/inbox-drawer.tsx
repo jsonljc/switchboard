@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import { AGENT_REGISTRY } from "@switchboard/schemas";
 import {
   Sheet,
   SheetTrigger,
@@ -9,8 +10,10 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { DecisionCard } from "@/components/decisions/decision-card";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
 import { useTenantContext } from "@/hooks/use-query-keys";
+import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
 import "./inbox-drawer.css";
 
 function describeTotal(total: number, isLoading: boolean, isError: boolean): string {
@@ -25,6 +28,7 @@ export function InboxDrawer() {
   const { data, isLoading, isError } = useDecisionFeed(null);
   const tenant = useTenantContext();
 
+  const decisions = data?.decisions ?? [];
   const total = data?.counts.total ?? 0;
   const tenantReady = !!tenant;
 
@@ -69,7 +73,25 @@ export function InboxDrawer() {
           </p>
         ) : (
           <div className="decisions" data-testid="inbox-list">
-            {/* Populated list added in Task 5 */}
+            {decisions.map((d, i) => {
+              const card = mapToDecisionCard(d, i);
+              const agent = AGENT_REGISTRY[d.agentKey];
+              const agentName = agent?.displayName ?? d.agentKey;
+              const folioWithAgent = {
+                ...card.folio,
+                kindLabel: `${agentName} · ${card.folio.kindLabel}`,
+              };
+              return (
+                <div
+                  key={d.id}
+                  data-agent={d.agentKey}
+                  className="inbox-item"
+                  style={{ "--inbox-agent-accent": agent?.accent } as CSSProperties}
+                >
+                  <DecisionCard {...card} folio={folioWithAgent} />
+                </div>
+              );
+            })}
           </div>
         )}
       </SheetContent>

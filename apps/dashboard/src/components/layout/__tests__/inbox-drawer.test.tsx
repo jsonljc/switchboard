@@ -208,3 +208,76 @@ describe("InboxDrawer — list states", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("InboxDrawer — populated list", () => {
+  it("renders one DecisionCard per item with the agent name prefix and accent variable", async () => {
+    const user = userEvent.setup();
+    const now = new Date().toISOString();
+    mockFeed = {
+      data: {
+        decisions: [
+          {
+            id: "approval:rec-1",
+            kind: "approval",
+            orgId: "org-1",
+            agentKey: "alex",
+            humanSummary: "A new lead just walked in.",
+            presentation: {
+              primaryLabel: "Reply",
+              secondaryLabel: "Skip",
+              dismissLabel: "Dismiss",
+              dataLines: [],
+            },
+            urgencyScore: 80,
+            createdAt: now,
+            threadHref: null,
+            sourceRef: { kind: "approval", sourceId: "rec-1" },
+            meta: { contactName: "Sam Lee", riskLevel: "low" },
+          },
+          {
+            id: "handoff:hand-1",
+            kind: "handoff",
+            orgId: "org-1",
+            agentKey: "riley",
+            humanSummary: "Conversation needs a human.",
+            presentation: {
+              primaryLabel: "Take over",
+              secondaryLabel: "Resolve",
+              dismissLabel: "Dismiss",
+              dataLines: [],
+            },
+            urgencyScore: 60,
+            createdAt: now,
+            threadHref: "/contacts/c1/conversations/t1",
+            sourceRef: { kind: "handoff", sourceId: "hand-1" },
+            meta: { contactName: "Jay Park" },
+          },
+        ],
+        counts: { total: 2, approval: 1, handoff: 1 },
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<InboxDrawer />, { wrapper });
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+
+    const cards = await screen.findAllByTestId("mock-decision-card");
+    expect(cards).toHaveLength(2);
+    // Assert the drawer-added prefix only; the suffix is mapToDecisionCard's
+    // contract, tested elsewhere. This isolates C1's responsibility.
+    expect(cards[0].getAttribute("data-folio-kind-label")).toContain("Alex ·");
+    expect(cards[1].getAttribute("data-folio-kind-label")).toContain("Riley ·");
+
+    const list = screen.getByTestId("inbox-list");
+    const wrappers = list.querySelectorAll(".inbox-item");
+    expect(wrappers).toHaveLength(2);
+    expect(wrappers[0].getAttribute("data-agent")).toBe("alex");
+    expect(wrappers[1].getAttribute("data-agent")).toBe("riley");
+
+    const alexAccent = (wrappers[0] as HTMLElement).style.getPropertyValue("--inbox-agent-accent");
+    const rileyAccent = (wrappers[1] as HTMLElement).style.getPropertyValue("--inbox-agent-accent");
+    expect(alexAccent).toBe("hsl(20 90% 55%)");
+    expect(rileyAccent).toBe("hsl(15 45% 50%)");
+  });
+});
