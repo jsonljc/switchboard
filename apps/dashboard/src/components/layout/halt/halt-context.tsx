@@ -60,30 +60,3 @@ export function useHalt(): HaltContextValue {
   if (!ctx) throw new Error("useHalt must be used inside <HaltProvider>");
   return ctx;
 }
-
-type ShowToast = (t: {
-  title: string;
-  detail: string;
-  undoable: boolean;
-  onUndo?: () => void;
-}) => void;
-
-// Shared toggle-with-toast helper. Both the OpStrip click handler and the
-// keyboard `H` handler call this so their copy + undo behavior stays in lockstep.
-// Pure function — pass in the values from useHalt() + useToast() at the call site.
-export function toggleHaltWithToast(deps: {
-  halted: boolean;
-  toggleHalt: () => void;
-  setHalted: (next: boolean) => void;
-  showToast: ShowToast;
-}): void {
-  const { halted, toggleHalt, setHalted, showToast } = deps;
-  const wasHalted = halted;
-  toggleHalt();
-  showToast({
-    title: wasHalted ? "Resumed" : "Halted",
-    detail: wasHalted ? "All agents resumed." : "all agents halted — actions queued",
-    undoable: true,
-    onUndo: () => setHalted(wasHalted),
-  });
-}

@@ -1,6 +1,6 @@
 import { act, render, renderHook } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { HaltProvider, useHalt, toggleHaltWithToast } from "../halt-context";
+import { describe, it, expect, beforeEach } from "vitest";
+import { HaltProvider, useHalt } from "../halt-context";
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <HaltProvider>{children}</HaltProvider>
@@ -75,46 +75,5 @@ describe("HaltProvider + useHalt", () => {
 
   it("useHalt outside provider throws", () => {
     expect(() => renderHook(() => useHalt())).toThrow(/useHalt must be used inside <HaltProvider>/);
-  });
-});
-
-describe("toggleHaltWithToast", () => {
-  it("toggles state and fires Halted toast when previously live", () => {
-    const toggleHalt = vi.fn();
-    const setHalted = vi.fn();
-    const showToast = vi.fn();
-    toggleHaltWithToast({ halted: false, toggleHalt, setHalted, showToast });
-    expect(toggleHalt).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Halted",
-        detail: "all agents halted — actions queued",
-        undoable: true,
-      }),
-    );
-  });
-
-  it("toggles state and fires Resumed toast when previously halted", () => {
-    const toggleHalt = vi.fn();
-    const setHalted = vi.fn();
-    const showToast = vi.fn();
-    toggleHaltWithToast({ halted: true, toggleHalt, setHalted, showToast });
-    expect(showToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Resumed", detail: "All agents resumed." }),
-    );
-  });
-
-  it("undo restores the prior state", () => {
-    const setHalted = vi.fn();
-    const showToast = vi.fn();
-    toggleHaltWithToast({
-      halted: false,
-      toggleHalt: vi.fn(),
-      setHalted,
-      showToast,
-    });
-    const { onUndo } = showToast.mock.calls[0][0];
-    onUndo?.();
-    expect(setHalted).toHaveBeenCalledWith(false);
   });
 });

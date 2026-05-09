@@ -21,6 +21,14 @@ vi.mock("../ambient-cream", () => ({
 vi.mock("../tweaks-panel-mount", () => ({
   TweaksPanelMount: () => null,
 }));
+vi.mock("../live-signal-popover", () => ({
+  LiveSignalPopover: () => (
+    <button type="button" className="live-pip">
+      <span className="pulse" />
+      Live
+    </button>
+  ),
+}));
 
 describe("EditorialAuthShellInner", () => {
   it("renders Home + only enabled agents in brand-nav", () => {

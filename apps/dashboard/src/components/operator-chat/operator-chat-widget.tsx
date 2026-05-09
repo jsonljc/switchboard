@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useOperatorChat } from "./use-operator-chat";
 import { MessageBubble } from "./message-bubble";
 
-const HIDDEN_PATHS = ["/console"];
+const HIDDEN_PATHS: readonly string[] = [];
 
 export function OperatorChatWidget() {
   const pathname = usePathname();

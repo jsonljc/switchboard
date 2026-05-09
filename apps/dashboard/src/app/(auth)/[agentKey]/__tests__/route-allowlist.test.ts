@@ -8,7 +8,6 @@ const KNOWN_TOP_LEVEL = [
   "reports",
   "decide",
   "settings",
-  "console",
   "escalations",
   "tasks",
   "me",
