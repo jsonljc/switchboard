@@ -5,9 +5,9 @@ import { EditorialAuthShellInner } from "../editorial-auth-shell";
 vi.mock("@/lib/api-client/agents-server", () => ({
   fetchEnabledAgentsServer: vi.fn().mockResolvedValue(["alex"]),
 }));
-vi.mock("../inbox-link-client", () => ({
-  InboxLinkClient: () => (
-    <button type="button" aria-disabled="true">
+vi.mock("../inbox-drawer", () => ({
+  InboxDrawer: () => (
+    <button type="button" className="folio-link">
       Inbox
     </button>
   ),
@@ -43,14 +43,14 @@ describe("EditorialAuthShellInner", () => {
     expect(screen.queryByRole("link", { name: /mira/i })).toBeNull();
   });
 
-  it("renders the inbox link as aria-disabled (no navigation in slice B)", () => {
+  it("renders an inbox trigger with the folio-link header contract", () => {
     render(
       <EditorialAuthShellInner enabledAgents={["alex"]}>
         <p>page</p>
       </EditorialAuthShellInner>,
     );
     const inbox = screen.getByRole("button", { name: /inbox/i });
-    expect(inbox.getAttribute("aria-disabled")).toBe("true");
+    expect(inbox.className).toContain("folio-link");
   });
 
   it("wraps the children in a <main>", () => {

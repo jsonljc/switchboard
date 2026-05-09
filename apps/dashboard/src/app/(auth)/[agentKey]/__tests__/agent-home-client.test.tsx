@@ -7,7 +7,6 @@ vi.mock("@/hooks/use-decision-feed", () => ({
     isLoading: false,
     isError: false,
   }),
-  useInboxCount: () => 0,
 }));
 
 vi.mock("@/hooks/use-agent-wins", () => ({
