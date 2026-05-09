@@ -3,12 +3,11 @@ import { describe, expect, it } from "vitest";
 import { resolveAgentHomeLink } from "../resolve-link";
 
 describe("resolveAgentHomeLink", () => {
-  it("contact links resolve disabled until /contacts/[id] ships", () => {
+  it("contact links resolve to /contacts/[id] (D1.5+)", () => {
     const r = resolveAgentHomeLink({ kind: "contact", id: "c1" });
-    expect(r.disabled).toBe(true);
-    if (r.disabled) {
-      expect(r.href).toBeNull();
-      expect(r.reason).toBe("route-not-available");
+    expect(r.disabled).toBe(false);
+    if (!r.disabled) {
+      expect(r.href).toBe("/contacts/c1");
     }
   });
 

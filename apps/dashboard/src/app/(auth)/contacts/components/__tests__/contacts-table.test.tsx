@@ -36,7 +36,6 @@ describe("ContactsTable", () => {
     render(
       <ContactsTable
         rows={sampleRows}
-        detailEnabled={false}
         sort="lastActivityAt"
         direction="desc"
         onSortChange={() => {}}
@@ -58,7 +57,6 @@ describe("ContactsTable", () => {
     render(
       <ContactsTable
         rows={sampleRows}
-        detailEnabled={false}
         sort="lastActivityAt"
         direction="desc"
         onSortChange={() => {}}
@@ -80,7 +78,6 @@ describe("ContactsTable", () => {
     render(
       <ContactsTable
         rows={sampleRows}
-        detailEnabled={false}
         sort="lastActivityAt"
         direction="desc"
         onSortChange={onSortChange}
@@ -99,7 +96,6 @@ describe("ContactsTable", () => {
     render(
       <ContactsTable
         rows={sampleRows}
-        detailEnabled={false}
         sort="lastActivityAt"
         direction="desc"
         onSortChange={onSortChange}
@@ -116,7 +112,6 @@ describe("ContactsTable", () => {
     render(
       <ContactsTable
         rows={sampleRows}
-        detailEnabled={false}
         sort="lastActivityAt"
         direction="desc"
         onSortChange={() => {}}
@@ -129,50 +124,32 @@ describe("ContactsTable", () => {
     }
   });
 
-  it("marks the name cell aria-disabled with the redundancy tooltip when detailEnabled is false (D1)", () => {
+  it("renders each row's name cell as a link to its detail href (D1.5+)", () => {
     render(
       <ContactsTable
         rows={sampleRows}
-        detailEnabled={false}
         sort="lastActivityAt"
         direction="desc"
         onSortChange={() => {}}
         now={NOW}
       />,
     );
-    // aria-disabled lives on the element that would have been the Link, not on
-    // the <tr> (non-effective there per ARIA). The persistent above-table
-    // notice is the primary signal; this is the redundancy.
-    for (const row of sampleRows) {
-      const cell = screen.getByText(row.displayName);
-      expect(cell).toHaveAttribute("aria-disabled", "true");
-      expect(cell).toHaveAttribute("title", "Detail coming next");
-    }
-    // No <Link> in the disabled state.
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
-  });
-
-  it("renders rows as enabled with link cell when detailEnabled is true (D1.5+)", () => {
-    render(
-      <ContactsTable
-        rows={sampleRows}
-        detailEnabled={true}
-        sort="lastActivityAt"
-        direction="desc"
-        onSortChange={() => {}}
-        now={NOW}
-      />,
-    );
+    // The legacy disabled-state tooltip is gone.
     expect(screen.queryByTitle("Detail coming next")).toBeNull();
-    const link = screen.getByRole("link", { name: /Open Lisa K\./ });
-    expect(link).toHaveAttribute("href", "/contacts/c-1");
+    // No name cell carries aria-disabled anymore.
+    expect(screen.queryByText("Lisa K.")).not.toHaveAttribute("aria-disabled");
+    expect(screen.queryByText("Maya T.")).not.toHaveAttribute("aria-disabled");
+
+    const lisaLink = screen.getByRole("link", { name: /Open Lisa K\./ });
+    expect(lisaLink).toHaveAttribute("href", "/contacts/c-1");
+    const mayaLink = screen.getByRole("link", { name: /Open Maya T\./ });
+    expect(mayaLink).toHaveAttribute("href", "/contacts/c-2");
   });
 
   it("muted dash for opportunityCount=0", () => {
     render(
       <ContactsTable
         rows={sampleRows}
-        detailEnabled={false}
         sort="lastActivityAt"
         direction="desc"
         onSortChange={() => {}}

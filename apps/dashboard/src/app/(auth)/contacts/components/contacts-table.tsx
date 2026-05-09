@@ -9,7 +9,6 @@ export type ContactsSortDirection = "asc" | "desc";
 
 export interface ContactsTableProps {
   rows: ContactBrowseRow[];
-  detailEnabled: boolean;
   sort: ContactsSortColumn;
   direction: ContactsSortDirection;
   onSortChange: (column: ContactsSortColumn) => void;
@@ -34,14 +33,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "chevron", label: "" },
 ];
 
-export function ContactsTable({
-  rows,
-  detailEnabled,
-  sort,
-  direction,
-  onSortChange,
-  now,
-}: ContactsTableProps) {
+export function ContactsTable({ rows, sort, direction, onSortChange, now }: ContactsTableProps) {
   return (
     <div className={styles.tableWrap}>
       <table className={styles.contacts}>
@@ -102,7 +94,7 @@ export function ContactsTable({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <ContactRow key={row.id} row={row} detailEnabled={detailEnabled} now={now} />
+            <ContactRow key={row.id} row={row} now={now} />
           ))}
         </tbody>
       </table>

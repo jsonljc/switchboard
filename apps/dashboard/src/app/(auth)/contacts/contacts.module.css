@@ -324,20 +324,6 @@
   padding-bottom: 4px;
 }
 
-/* ============= browse-only notice =============
-   Folio-styled notice that lives between the title (which carries its
-   own border-bottom) and the toolbar. No border on this rule itself —
-   the title's hairline above plus the toolbar's natural spacing below
-   are enough; doubling them would create a stacked-rule artifact. */
-.disabledNotice {
-  margin: 18px 0 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: hsl(20 10% 12% / 0.55);
-}
-
 /* ============= toolbar (chips + search) ============= */
 .toolbar {
   display: flex;
@@ -491,9 +477,6 @@
 .contacts tbody tr:hover {
   background: var(--row-hover);
 }
-.contacts tbody tr.isDisabled {
-  cursor: not-allowed;
-}
 .contacts tbody td {
   padding: 14px 12px 14px 0;
   color: var(--ink);
@@ -509,7 +492,7 @@
 .cellName {
   font-weight: 500;
   color: var(--ink);
-  text-decoration: none; /* applies when cellName is rendered on a <Link> in D1.5+ */
+  text-decoration: none;
 }
 .cellChannel {
   display: inline-flex;
