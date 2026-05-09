@@ -33,6 +33,23 @@ interface ContactFilters {
   offset?: number;
 }
 
+interface ContactBrowseQuery {
+  orgId: string;
+  stage?: ContactStage;
+  search?: string;
+  sort: "lastActivityAt" | "firstContactAt";
+  direction: "asc" | "desc";
+  cursor?: { ts: Date; id: string };
+  limit: number;
+}
+
+interface ContactBrowseResult {
+  rows: Contact[];
+  opportunityCounts: Map<string, number>;
+  hasMore: boolean;
+  nextKeyset: { ts: Date; id: string } | null;
+}
+
 interface ContactStore {
   create(input: CreateContactInput): Promise<Contact>;
   findById(orgId: string, id: string): Promise<Contact | null>;
@@ -54,6 +71,7 @@ interface ContactStore {
     activitySince: Date;
     limit: number;
   }): Promise<{ rows: Contact[]; totalCount: number }>;
+  listForBrowse(query: ContactBrowseQuery): Promise<ContactBrowseResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +282,88 @@ export class PrismaContactStore implements ContactStore {
       this.prisma.contact.count({ where }),
     ]);
     return { rows: rows.map(mapRowToContact), totalCount };
+  }
+
+  async listForBrowse(q: ContactBrowseQuery): Promise<ContactBrowseResult> {
+    const { orgId, stage, search, sort, direction, cursor, limit } = q;
+    const tsField = sort; // "lastActivityAt" | "firstContactAt" — Prisma column names match.
+    const cmp = direction === "desc" ? "lt" : "gt";
+
+    // Search OR-clause (name | phone | email) — kept as a separate condition
+    // so combining with the cursor keyset uses AND, not OR-concatenation.
+    const searchClause: Record<string, unknown> | undefined = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { phone: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : undefined;
+
+    // Cursor keyset: (tsField, id) <op> (cursor.ts, cursor.id), expanded as
+    //   tsField <op> cursor.ts  OR  (tsField === cursor.ts AND id <op> cursor.id).
+    const cursorClause: Record<string, unknown> | undefined = cursor
+      ? {
+          OR: [
+            { [tsField]: { [cmp]: cursor.ts } },
+            {
+              AND: [{ [tsField]: cursor.ts }, { id: { [cmp]: cursor.id } }],
+            },
+          ],
+        }
+      : undefined;
+
+    const where: Record<string, unknown> = { organizationId: orgId };
+    if (stage) where.stage = stage;
+    const ands: Record<string, unknown>[] = [];
+    if (searchClause) ands.push(searchClause);
+    if (cursorClause) ands.push(cursorClause);
+    if (ands.length > 0) where.AND = ands;
+
+    const orderBy = [{ [tsField]: direction }, { id: direction }];
+
+    // Fetch limit+1 to detect hasMore without a separate COUNT(*) query.
+    const rows = await this.prisma.contact.findMany({
+      where,
+      orderBy,
+      take: limit + 1,
+    });
+
+    const hasMore = rows.length > limit;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+
+    const opportunityCounts =
+      trimmed.length === 0
+        ? new Map<string, number>()
+        : await this.fetchOpportunityCounts(trimmed.map((r) => r.id));
+
+    const lastRow = trimmed.at(-1);
+    const nextKeyset = hasMore && lastRow ? { ts: lastRow[tsField] as Date, id: lastRow.id } : null;
+
+    return {
+      rows: trimmed.map(mapRowToContact),
+      opportunityCounts,
+      hasMore,
+      nextKeyset,
+    };
+  }
+
+  /**
+   * Non-terminal opportunity count per contact, capped at 99. Single
+   * groupBy query, indexed on (organizationId, stage) and (contactId).
+   */
+  private async fetchOpportunityCounts(contactIds: string[]): Promise<Map<string, number>> {
+    const grouped = await this.prisma.opportunity.groupBy({
+      by: ["contactId"],
+      where: { contactId: { in: contactIds }, stage: { notIn: ["won", "lost"] } },
+      _count: { _all: true },
+    });
+    const map = new Map<string, number>();
+    for (const g of grouped) {
+      map.set(g.contactId, Math.min(g._count._all, 99));
+    }
+    return map;
   }
 }
 
