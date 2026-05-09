@@ -1,12 +1,16 @@
 # `/contacts` (Slice D1) — Design Spec
 
-_2026-05-08 · part of the agent-first redesign track · Phase D, surface 1 (Tools tier, Mercury register)_
+_2026-05-08 · amended 2026-05-09 (decisions locked) · part of the agent-first redesign track · Phase D, surface 1 (Tools tier, Mercury register)_
 
-> **Reading posture:** This is a **single-shot draft**. Tentative decisions appear inline as `OPEN: <decision> — chose <X> because <reason>; flip to <Y> if <condition>`. Reviewer should attack the OPENs first; the rest of the spec assumes those defaults hold. The implementation plan does not get written until the OPENs are settled.
+> **Reading posture:** First draft was a single-shot proposal with 20 tentative decisions marked `OPEN:`. They were reviewed on 2026-05-09 and **all 20 are now locked** (see §2.0 Decisions ledger). The OPEN narrative below is preserved for context; the ledger is the binding contract for the implementation plan.
 
 ---
 
 ## 1. Problem & scope
+
+### 1.0 One-line scope
+
+`/contacts` is a read-only operational register of people already captured by Switchboard. It is **not** a CRM replacement, **not** a pipeline board, and **not** a mutation surface in D1.
 
 ### 1.1 What this slice ships
 
@@ -17,7 +21,7 @@ Concretely:
 - New route `apps/dashboard/src/app/(auth)/contacts/page.tsx` rendering a Mercury surface that mirrors `/reports`' visual vocabulary (cream + ink + hairline tables + tabular numerals + JetBrains Mono labels).
 - New backend endpoint `GET /api/dashboard/contacts` (Next.js proxy) → `GET /api/contacts` (Fastify) → `ContactStore.listForBrowse(...)` (new core method) → `PrismaContactStore` (existing, extended).
 - New shared schema `ContactsListQuery` + `ContactsListResponse` types in `packages/schemas` so query params and the page-ready view model are typed end-to-end.
-- A small set of opinionated filter chips (Active leads / Booked / Dormant / All) + a single text search input + sortable `Last activity` and `First contact` columns.
+- A small set of opinionated filter chips backed **purely by `Contact.stage`** (`All / New / Active / Customer / Retained / Dormant`) + a single text search input + sortable `Last activity` and `First contact` columns. No `Opportunity`-derived chips in D1 — see §2.0 ledger note on OPEN-9.
 - Per-row "open" affordance that **navigates to `/contacts/[id]`** (which D1 does **not** ship — see §6.2 OPEN) — we set the destination but render rows as `<Link>` only when `ROUTE_AVAILABILITY.contact` flips true. Until then, row click is a no-op and the tile renders `aria-disabled="true"` — same pattern as the agent-home pipeline tiles use today.
 - Production gate identical to `/reports`: `NEXT_PUBLIC_CONTACTS_LIVE === "true"` flips fixtures off and live data on. Off, the page renders a small fixture so design review and Storybook-style screenshots stay decoupled from a live db.
 - Tests at three layers (projection, hook+route, page composition) mirroring the reports + agent-home test patterns already on `main`.
@@ -52,9 +56,39 @@ These are **already locked** elsewhere and not re-debated here:
 
 ---
 
-## 2. Open decisions (the ones the reviewer must vet before plan time)
+## 2. Decisions
 
-> Format: `OPEN: <decision> — chose <X> because <reason>; flip to <Y> if <condition>.`
+### 2.0 Decisions ledger (locked 2026-05-09)
+
+All 20 OPENs from the first draft have been resolved. Where the locked answer differs from the original `chose <X>`, the **Locked** column reflects the post-review decision. The implementation plan binds to this table; the original OPEN narrative in §2.1–§2.8 is kept for context only.
+
+| #   | Question                                                  | Locked answer                                                                                                                                                               |
+| --- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | List vs. List+Detail in D1                                | **List-only.** `/contacts/[id]` ships in D1.5.                                                                                                                              |
+| 2   | Read-only vs. mutating in v1                              | **Read-only.** No create/edit/archive/merge/tag/assign in D1.                                                                                                               |
+| 3   | Detail-route gating                                       | `ROUTE_AVAILABILITY.contact = false` for D1; flips when D1.5 ships.                                                                                                         |
+| 4   | Header strategy                                           | **Own `ContactsHeader`** (near-clone of `ReportsHeader`). Shared `MercuryAuthShell` extraction deferred to a later slice once a third Mercury surface lands.                |
+| 5   | Editorial-shell nav target                                | Do **not** add Contacts/Tools to `EditorialAuthShell` in D1.                                                                                                                |
+| 6   | Stage column source                                       | **`Contact.stage` (lifecycle).** No `Opportunity.stage`. No dual column.                                                                                                    |
+| 7   | Per-contact revenue total                                 | Omit. Belongs on the detail page, not the list.                                                                                                                             |
+| 8   | Channel column                                            | Show `Contact.primaryChannel`.                                                                                                                                              |
+| 9   | Filter primitive                                          | **Lifecycle-only chips:** `All / New / Active / Customer / Retained / Dormant`. No `Opportunity`-derived chips ("Booked", "Has active opportunity") in D1 — defer to D1.5+. |
+| 10  | Search shape                                              | Single text input, server-side `OR` substring across `name`, `phone`, `email`. `ILIKE` case-insensitive.                                                                    |
+| 11  | Pagination strategy                                       | **Cursor-based** via `(lastActivityAt, id)`, base64-encoded. Page size 50.                                                                                                  |
+| 12  | Default sort                                              | `lastActivityAt DESC`. Sortable columns in v1: `Last activity`, `First contact`.                                                                                            |
+| 13  | Where the read lives in core                              | New `packages/core/src/contacts/list.ts`. Sibling to `agent-home/`, not under `lifecycle/`.                                                                                 |
+| 14  | View-model shape                                          | Page-ready projection (`ContactBrowseRow`), not raw Prisma `Contact`.                                                                                                       |
+| 15  | `opportunityCount` denormalisation                        | Include, capped at 99.                                                                                                                                                      |
+| 16  | Empty-state copy register                                 | Mercury voice. No agent prose.                                                                                                                                              |
+| 17  | Filtered-empty distinct copy                              | Yes — distinct from zero-state, with a [Clear] affordance.                                                                                                                  |
+| 18  | Legacy disposition (`/me`, `/my-agent`, `/conversations`) | Defer entirely to D4. D1 does not absorb.                                                                                                                                   |
+| 19  | Gate variable name                                        | `NEXT_PUBLIC_CONTACTS_LIVE`.                                                                                                                                                |
+| 20  | Gate default at launch                                    | `false` until staging review; flip after.                                                                                                                                   |
+
+**Two amendments resolved alongside the ledger** (driven by reviewer feedback that surfaced inconsistency in the first draft):
+
+- **A.** Chip examples in the original §1.1 and §3.3 referenced "Booked" — that's an `Opportunity.stage` value, contradicting the locked OPEN-6 (`Contact.stage` only). Both locations have been corrected to the lifecycle-only set above.
+- **B.** Disabled-row affordance is upgraded from a `title` tooltip to a small **persistent notice above the table** while `ROUTE_AVAILABILITY.contact === false`: `Browse-only for now. Contact detail is coming next.` The hover tooltip on individual rows stays as a redundancy, but the notice is the primary signal.
 
 ### 2.1 Scope shape
 
@@ -181,7 +215,10 @@ Mirrors `/reports` rhythm without copy-pasting structure:
 │                                                          │
 │ Contacts                                          MAY 8  │
 │ ──────────────────────────────────────────────────────── │
-│ [All] [Active leads] [Booked] [Dormant]   [search input] │
+│ Browse-only for now. Contact detail is coming next.      │
+│                                                          │
+│ [All] [New] [Active] [Customer] [Retained] [Dormant]     │
+│                                            [search input]│
 │                                                          │
 │ NAME             STAGE     CHANNEL  LAST ACTIVITY    →   │
 │ ──────────────────────────────────────────────────────── │
@@ -424,16 +461,18 @@ contacts: {
 }
 ```
 
-### 6.2 Row click behaviour
+### 6.2 Row click behaviour and disabled-route notice
 
-Three states, decided at render time:
+Two states, decided at render time:
 
-| `ROUTE_AVAILABILITY.contact` | Element                                                            | UX                                      |
-| ---------------------------- | ------------------------------------------------------------------ | --------------------------------------- |
-| `false` (today / D1)         | `<div role="row" aria-disabled="true" title="Detail coming next">` | hover highlight + `cursor: not-allowed` |
-| `true` (D1.5+)               | `<Link href={row.detailHref}>`                                     | full row click → detail page            |
+| `ROUTE_AVAILABILITY.contact` | Page-level notice                                                                                                                | Row element                                                        | UX                                      |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------- |
+| `false` (today / D1)         | `<p>Browse-only for now. Contact detail is coming next.</p>` (visible above the table, hairline-bottom, mono-caps Mercury voice) | `<div role="row" aria-disabled="true" title="Detail coming next">` | hover highlight + `cursor: not-allowed` |
+| `true` (D1.5+)               | (no notice)                                                                                                                      | `<Link href={row.detailHref}>`                                     | full row click → detail page            |
 
 The page imports `ROUTE_AVAILABILITY` from the same module the agent-home pipeline tile does (`apps/dashboard/src/lib/agent-home/resolve-link.ts:8-14`). Single source of truth for "is the contact detail route real yet."
+
+The page-level notice is the **primary** signal that detail is unavailable; the per-row tooltip is a redundant fallback. Tooltips alone are too quiet for a deliberately-disabled primary affordance — operators should not have to hover-and-wait to learn the row click does nothing.
 
 ### 6.3 Filter / search debounce
 
@@ -592,16 +631,9 @@ PR-D1b is gated to staging-only by `NEXT_PUBLIC_CONTACTS_LIVE`. Production flip 
 
 ---
 
-## 12. Reviewer checklist
+## 12. Status
 
-The reviewer should attack the OPENs in this order — earlier choices cascade:
-
-1. **OPEN-1** (list-only vs list+detail in D1) — reframes scope, all later OPENs assume list-only.
-2. **OPEN-2** (read-only vs mutating) — same scope question, narrower.
-3. **OPEN-6** (stage column source) — drives the Prisma read shape.
-4. **OPEN-9** (filter primitive — chips vs facet) — drives the query schema and the toolbar UI.
-5. **OPEN-11** (pagination — cursor vs offset) — drives the API contract.
-6. **OPEN-4** (header strategy) — affects file layout but not API.
-7. **OPEN-5, 7, 8, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20** — minor tweaks; defaults are likely correct.
-
-After OPENs are settled, the next session writes the implementation plan and the two PRs ship in sequence.
+- **Spec drafted:** 2026-05-08 (single-shot, 20 OPENs).
+- **Decisions locked:** 2026-05-09. See §2.0 ledger.
+- **Next:** implementation plan at `docs/superpowers/plans/2026-05-09-contacts-d1.md`. Plan binds to §2.0; deviations require re-reviewing the ledger.
+- **PR shape at impl time:** D1a (backend — schemas + core + API + Next proxy), D1b (frontend page). Both target `main` independently. D1 ships behind `NEXT_PUBLIC_CONTACTS_LIVE=false` until staging review.
