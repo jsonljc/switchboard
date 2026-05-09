@@ -1,0 +1,111 @@
+/* apps/dashboard/src/components/layout/live-signal-popover.css */
+
+.live-popover {
+  width: 22rem;
+  max-width: calc(100vw - 2rem);
+  max-height: 28rem;
+  background: var(--ambient-cream, #f9f7f2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.live-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.live-popover-head .status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  /* Match the existing global .live-pip .pulse green (globals.css:559) */
+  background: hsl(140 50% 38%);
+}
+
+.live-popover-head .status-dot.halted {
+  /* Match the existing .folio-link.is-halt halted token (globals.css:606) */
+  background: hsl(0 75% 50%);
+}
+
+.live-popover-head .status-label {
+  flex: 1;
+  font-size: 0.95rem;
+}
+
+.live-popover-head .halt-action {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.live-popover .recent-events {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.live-popover .muted-state {
+  font-size: 0.85rem;
+  opacity: 0.65;
+  margin: 0;
+}
+
+.live-popover .event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.live-popover .event-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.live-popover .event-row .event-time {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+.live-popover .event-row .event-agent {
+  font-weight: 500;
+}
+
+.live-popover .shortcut-hint {
+  font-size: 0.75rem;
+  opacity: 0.55;
+  border-top: 1px solid currentColor;
+  padding-top: 0.5rem;
+}
+
+.live-popover .shortcut-hint kbd {
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0 0.25rem;
+  border: 1px solid currentColor;
+  border-radius: 0.2rem;
+  opacity: 0.7;
+}
+
+/* Halted-state pip: pulse becomes a static dot, color shifts.
+   The base .live-pip styling (size, ring animation, base green) lives in
+   globals.css:549-578; we don't redefine it here. We only override for the
+   halted state, suppressing the ::after ring animation and shifting the dot
+   color to match the existing .folio-link.is-halt halted token. */
+.live-pip.halted .pulse {
+  background: hsl(0 75% 50%);
+}
+.live-pip.halted .pulse::after {
+  animation: none;
+  border-color: hsl(0 75% 50% / 0.4);
+}
