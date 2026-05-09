@@ -12,7 +12,7 @@ vi.mock("../inbox-link-client", () => ({
     </button>
   ),
 }));
-vi.mock("../halt-button-client", () => ({
+vi.mock("../halt/halt-button-client", () => ({
   HaltButtonClient: () => <button type="button">Halt</button>,
 }));
 vi.mock("../ambient-cream", () => ({

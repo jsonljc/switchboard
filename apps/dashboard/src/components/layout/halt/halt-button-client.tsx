@@ -1,6 +1,6 @@
 "use client";
 
-import { useHalt } from "@/components/console/halt-context";
+import { useHalt } from "./halt-context";
 
 export function HaltButtonClient() {
   const { halted, toggleHalt } = useHalt();

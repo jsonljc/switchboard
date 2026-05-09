@@ -28,13 +28,13 @@ describe("PostAuthPage", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it("redirects to /console when the session is authenticated and onboarding is complete", () => {
+  it("redirects to / when the session is authenticated and onboarding is complete", () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: "u" }, organizationId: "org-1", onboardingComplete: true },
       status: "authenticated",
     });
     render(<PostAuthPage />);
-    expect(replaceMock).toHaveBeenCalledWith("/console");
+    expect(replaceMock).toHaveBeenCalledWith("/");
   });
 
   it("redirects to /onboarding when authenticated but onboarding is incomplete", () => {

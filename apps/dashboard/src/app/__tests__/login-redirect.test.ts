@@ -17,13 +17,13 @@ describe("defaultCallback", () => {
     ).toBe("/onboarding");
   });
 
-  it("returns /console when session is fully onboarded", () => {
+  it("returns / when session is fully onboarded", () => {
     expect(
       defaultCallback({
         user: { id: "u" },
         organizationId: "org-1",
         onboardingComplete: true,
       } as never),
-    ).toBe("/console");
+    ).toBe("/");
   });
 });
