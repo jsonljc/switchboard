@@ -16,9 +16,15 @@ function browserTimezone(): string {
 }
 
 /** Renders an ISO timestamp as the same short relative string the agent-home
- *  pipeline tiles use. `now` is injectable for deterministic tests. */
+ *  pipeline tiles use. `now` is injectable for deterministic tests.
+ *
+ *  Defensive against bad input — if the upstream ever delivers a malformed or
+ *  null timestamp (the schema rejects this, but a hot-fix could route around
+ *  it), fall back to "—" rather than rendering literal "Invalid Date". */
 export function relativeAge(iso: string, now: Date = new Date(), timezone?: string): string {
-  return formatRelativeAge(new Date(iso), now, timezone ?? browserTimezone());
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return formatRelativeAge(d, now, timezone ?? browserTimezone());
 }
 
 const STAGE_LABELS: Record<ContactBrowseRow["stage"], string> = {

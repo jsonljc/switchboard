@@ -47,4 +47,20 @@ describe("SearchInput", () => {
     await new Promise((r) => setTimeout(r, 60));
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it("resyncs local state when initialValue changes (Clear / back-forward)", async () => {
+    const onCommit = vi.fn();
+    const { rerender } = render(
+      <SearchInput initialValue="lisa" onCommit={onCommit} debounceMs={20} />,
+    );
+    expect(screen.getByLabelText("Search contacts")).toHaveValue("lisa");
+
+    rerender(<SearchInput initialValue="" onCommit={onCommit} debounceMs={20} />);
+    expect(screen.getByLabelText("Search contacts")).toHaveValue("");
+
+    // The resync must NOT trigger a debounced commit: parent already updated,
+    // re-emitting "" would be a feedback loop.
+    await new Promise((r) => setTimeout(r, 60));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
 });

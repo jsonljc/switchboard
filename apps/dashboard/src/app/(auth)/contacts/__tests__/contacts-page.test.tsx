@@ -109,7 +109,7 @@ describe("ContactsPage", () => {
     setSearch("sort=lastActivityAt&direction=desc");
     mockUseContactsList.mockReturnValue(hookResult({ pages: [CONTACTS_FIXTURE_PAGE] }));
     render(<ContactsPage />);
-    await userEvent.setup().click(screen.getByRole("columnheader", { name: /Last activity/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Last activity/ }));
     expect(mockReplace).toHaveBeenCalledWith("/contacts?sort=lastActivityAt&direction=asc", {
       scroll: false,
     });
@@ -118,7 +118,7 @@ describe("ContactsPage", () => {
   it("clicking a sortable header on a new column resets direction to desc", async () => {
     mockUseContactsList.mockReturnValue(hookResult({ pages: [CONTACTS_FIXTURE_PAGE] }));
     render(<ContactsPage />);
-    await userEvent.setup().click(screen.getByRole("columnheader", { name: /First contact/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /First contact/ }));
     expect(mockReplace).toHaveBeenCalledWith("/contacts?sort=firstContactAt&direction=desc", {
       scroll: false,
     });

@@ -20,6 +20,15 @@ export function SearchInput({
   const [value, setValue] = useState(initialValue);
   const lastCommittedRef = useRef(initialValue);
 
+  // Resync local state when the parent's URL-driven `initialValue` changes —
+  // e.g. after Clear, browser back/forward, or any external router.replace.
+  // Without this the input keeps showing stale text after a successful Clear,
+  // implying Clear is broken.
+  useEffect(() => {
+    setValue(initialValue);
+    lastCommittedRef.current = initialValue;
+  }, [initialValue]);
+
   useEffect(() => {
     const trimmed = value.trim();
     if (trimmed === lastCommittedRef.current) return;

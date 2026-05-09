@@ -87,8 +87,46 @@ describe("ContactsTable", () => {
         now={NOW}
       />,
     );
-    await user.click(screen.getByRole("columnheader", { name: /First contact/ }));
+    // Sortable headers wrap content in a <button> so keyboard users can
+    // activate sort. Click the inner button.
+    await user.click(screen.getByRole("button", { name: /First contact/ }));
     expect(onSortChange).toHaveBeenCalledWith("firstContactAt");
+  });
+
+  it("sortable headers are keyboard-activatable", async () => {
+    const user = userEvent.setup();
+    const onSortChange = vi.fn();
+    render(
+      <ContactsTable
+        rows={sampleRows}
+        detailEnabled={false}
+        sort="lastActivityAt"
+        direction="desc"
+        onSortChange={onSortChange}
+        now={NOW}
+      />,
+    );
+    const firstContactButton = screen.getByRole("button", { name: /First contact/ });
+    firstContactButton.focus();
+    await user.keyboard("{Enter}");
+    expect(onSortChange).toHaveBeenCalledWith("firstContactAt");
+  });
+
+  it("non-sortable headers do not render a button", () => {
+    render(
+      <ContactsTable
+        rows={sampleRows}
+        detailEnabled={false}
+        sort="lastActivityAt"
+        direction="desc"
+        onSortChange={() => {}}
+        now={NOW}
+      />,
+    );
+    // Name / Stage / Channel / Opps headers are plain <th> with no button.
+    for (const label of ["Name", "Stage", "Channel", "Opps"]) {
+      expect(screen.queryByRole("button", { name: label })).toBeNull();
+    }
   });
 
   it("marks the name cell aria-disabled with the redundancy tooltip when detailEnabled is false (D1)", () => {

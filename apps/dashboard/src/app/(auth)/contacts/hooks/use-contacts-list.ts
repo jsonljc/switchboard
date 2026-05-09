@@ -1,7 +1,11 @@
 "use client";
 
 import { useInfiniteQuery, type UseInfiniteQueryResult } from "@tanstack/react-query";
-import type { ContactsListQuery, ContactsListResponse } from "@switchboard/schemas";
+import {
+  ContactsListResponseSchema,
+  type ContactsListQuery,
+  type ContactsListResponse,
+} from "@switchboard/schemas";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { CONTACTS_FIXTURE_PAGE } from "../fixtures";
 
@@ -45,7 +49,10 @@ export function useContactsList(query: ContactsListQueryInput): UseContactsListR
       if (!live) return CONTACTS_FIXTURE_PAGE;
       const res = await fetch(`/api/dashboard/contacts${buildSearch(query, pageParam)}`);
       if (!res.ok) throw new Error(`Failed to load contacts: ${res.status}`);
-      return (await res.json()) as ContactsListResponse;
+      // Validate at the boundary — surfacing a ZodError as React Query's
+      // isError is more useful than rendering "Invalid Date" cells deeper in
+      // the tree if the upstream contract drifts.
+      return ContactsListResponseSchema.parse(await res.json());
     },
     initialPageParam: undefined,
     getNextPageParam: (last) => (live ? (last.nextCursor ?? undefined) : undefined),
