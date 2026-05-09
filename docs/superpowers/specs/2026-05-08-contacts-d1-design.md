@@ -1,6 +1,6 @@
 # `/contacts` (Slice D1) — Design Spec
 
-_2026-05-08 · amended 2026-05-09 (decisions locked) · part of the agent-first redesign track · Phase D, surface 1 (Tools tier, Mercury register)_
+_2026-05-08 · amended 2026-05-09 (decisions locked) · amended 2026-05-09 (path correction §5.4) · part of the agent-first redesign track · Phase D, surface 1 (Tools tier, Mercury register)_
 
 > **Reading posture:** First draft was a single-shot proposal with 20 tentative decisions marked `OPEN:`. They were reviewed on 2026-05-09 and **all 20 are now locked** (see §2.0 Decisions ledger). The OPEN narrative below is preserved for context; the ledger is the binding contract for the implementation plan.
 
@@ -19,7 +19,7 @@ The Tools-tier list view at `/contacts` — a Mercury-register page that lists e
 Concretely:
 
 - New route `apps/dashboard/src/app/(auth)/contacts/page.tsx` rendering a Mercury surface that mirrors `/reports`' visual vocabulary (cream + ink + hairline tables + tabular numerals + JetBrains Mono labels).
-- New backend endpoint `GET /api/dashboard/contacts` (Next.js proxy) → `GET /api/contacts` (Fastify) → `ContactStore.listForBrowse(...)` (new core method) → `PrismaContactStore` (existing, extended).
+- New backend endpoint `GET /api/dashboard/contacts` (Next.js proxy) → `GET /api/dashboard/contacts` (Fastify) → `ContactStore.listForBrowse(...)` (new core method) → `PrismaContactStore` (existing, extended).
 - New shared schema `ContactsListQuery` + `ContactsListResponse` types in `packages/schemas` so query params and the page-ready view model are typed end-to-end.
 - A small set of opinionated filter chips backed **purely by `Contact.stage`** (`All / New / Active / Customer / Retained / Dormant`) + a single text search input + sortable `Last activity` and `First contact` columns. No `Opportunity`-derived chips in D1 — see §2.0 ledger note on OPEN-9.
 - Per-row "open" affordance that **navigates to `/contacts/[id]`** (which D1 does **not** ship — see §6.2 OPEN) — we set the destination but render rows as `<Link>` only when `ROUTE_AVAILABILITY.contact` flips true. Until then, row click is a no-op and the tile renders `aria-disabled="true"` — same pattern as the agent-home pipeline tiles use today.
@@ -347,7 +347,7 @@ apps/dashboard/src/app/(auth)/contacts/
       └ use-contacts-list.test.ts
 
 apps/dashboard/src/app/api/dashboard/contacts/
-  └ route.ts                       (Next proxy → /api/contacts on Fastify)
+  └ route.ts                       (Next proxy → /api/dashboard/contacts on Fastify)
 
 apps/api/src/routes/
   └ contacts.ts                    (Fastify route, validates ContactsListQuerySchema, calls core)
@@ -403,10 +403,10 @@ The new browse method is sibling-shaped (`listForBrowse` next to `listForPipelin
 
 ### 5.4 Fastify route + Next proxy
 
-Mirrors the existing `/api/agents/[agentId]/pipeline` ↔ `/api/dashboard/agents/[agentId]/pipeline` pattern from PR-S4:
+Follows the `dashboard-<thing>.ts` route-file convention used by `apps/api/src/routes/dashboard-reports.ts`, `dashboard-overview.ts`, `dashboard-agents.ts`, etc. The Fastify URL path matches the Next.js proxy path 1:1 — both serve `/api/dashboard/contacts`. (An earlier draft of this spec proposed `apps/api/src/routes/contacts.ts` at `GET /api/contacts` with the proxy translating the namespace; the implementation pulled forward the existing `dashboard-<thing>.ts` precedent instead. PR-D1a #399.)
 
-- `apps/api/src/routes/contacts.ts` — `GET /api/contacts?stage=&search=&cursor=&limit=&sort=&direction=`. Auth: same org-scoping middleware as everything else; `req.organizationId` derives from the session. Validates query against `ContactsListQuerySchema`, calls `listContactsForBrowse`, returns the projection.
-- `apps/dashboard/src/app/api/dashboard/contacts/route.ts` — thin Next proxy that forwards the query and the auth header. Same `notFound()`-on-prod gating as `/decisions-preview` is **not** needed here — the API is the gate for the data; the page itself is gated by the env flag, not by a `notFound()`.
+- `apps/api/src/routes/dashboard-contacts.ts` — `GET /api/dashboard/contacts?stage=&search=&cursor=&limit=&sort=&direction=`. Auth: same org-scoping middleware as everything else; `req.organizationIdFromAuth` derives from the API key in production and from `x-org-id` in `authDisabled` mode. Validates query against `ContactsListQuerySchema`, calls `listContactsForBrowse`, returns the projection.
+- `apps/dashboard/src/app/api/dashboard/contacts/route.ts` — thin Next proxy that forwards via `getApiClient().getContacts(...)` (a new method on `SwitchboardDashboardClient`). Same `notFound()`-on-prod gating as `/decisions-preview` is **not** needed here — the API is the gate for the data; the page itself is gated by the env flag, not by a `notFound()`.
 
 ### 5.5 ESLint / layer enforcement
 
@@ -527,7 +527,7 @@ Targets the core 65/65/70/65 coverage thresholds (see CLAUDE.md).
 
 Coverage:
 
-- `GET /api/contacts` returns 200 with the projected shape on a happy path.
+- `GET /api/dashboard/contacts` returns 200 with the projected shape on a happy path.
 - Missing auth → 401 (existing middleware behaviour).
 - Invalid query (`stage=banana`) → 400 with Zod error path.
 - `limit > 100` → 400 (schema clamp).
@@ -560,7 +560,7 @@ D1 ships in **two PRs**, both targeting `main`. The second consumes a flag flip 
 - New `packages/schemas/src/contacts.ts` (3 schemas, 1 barrel re-export).
 - `ContactStore.listForBrowse` interface + Prisma + in-memory impls.
 - `packages/core/src/contacts/list.ts` + tests.
-- `apps/api/src/routes/contacts.ts` + tests.
+- `apps/api/src/routes/dashboard-contacts.ts` + tests.
 - `apps/dashboard/src/app/api/dashboard/contacts/route.ts` + minimal proxy test.
 
 No UI. No CSS. No new public route.
