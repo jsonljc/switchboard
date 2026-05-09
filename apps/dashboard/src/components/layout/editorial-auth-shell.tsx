@@ -6,7 +6,7 @@ import { EditorialShellBoundary } from "./editorial-shell-boundary";
 import { AmbientCream } from "./ambient-cream";
 import { EditorialKeys } from "./editorial-keys";
 import { LiveSignalPopover } from "./live-signal-popover";
-import { InboxLinkClient } from "./inbox-link-client";
+import { InboxDrawer } from "./inbox-drawer";
 import { HaltButtonClient } from "./halt/halt-button-client";
 import { HaltProvider } from "./halt/halt-context";
 import { TweaksPanelMount } from "./tweaks-panel-mount";
@@ -52,7 +52,7 @@ export function EditorialAuthShellInner({
           </div>
           <div className="header-actions">
             <LiveSignalPopover />
-            <InboxLinkClient />
+            <InboxDrawer />
             <HaltButtonClient />
             <span className="me-chip">M</span>
           </div>
