@@ -1,0 +1,24 @@
+/* =========================================================
+   Inbox Drawer — editorial register.
+   Editorial tokens (typography, hairlines, ambient cream)
+   live in globals.css. Drawer-specific styling only here.
+   ========================================================= */
+
+.inbox-drawer {
+  background: var(--ambient-cream, hsl(40 25% 94%));
+}
+
+.inbox-item {
+  position: relative;
+}
+
+.inbox-item::before {
+  content: "";
+  position: absolute;
+  top: 24px;
+  left: -10px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--inbox-agent-accent, transparent);
+}
