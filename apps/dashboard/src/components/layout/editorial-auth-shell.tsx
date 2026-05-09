@@ -5,6 +5,7 @@ import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
 import { EditorialShellBoundary } from "./editorial-shell-boundary";
 import { AmbientCream } from "./ambient-cream";
 import { EditorialKeys } from "./editorial-keys";
+import { LiveSignalPopover } from "./live-signal-popover";
 import { InboxLinkClient } from "./inbox-link-client";
 import { HaltButtonClient } from "./halt/halt-button-client";
 import { HaltProvider } from "./halt/halt-context";
@@ -50,10 +51,7 @@ export function EditorialAuthShellInner({
             </nav>
           </div>
           <div className="header-actions">
-            <span className="live-pip">
-              <span className="pulse" />
-              Live
-            </span>
+            <LiveSignalPopover />
             <InboxLinkClient />
             <HaltButtonClient />
             <span className="me-chip">M</span>
