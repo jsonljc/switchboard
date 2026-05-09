@@ -153,3 +153,19 @@ describe("InboxDrawer — tenant-null trigger", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
+
+describe("InboxDrawer — accessibility", () => {
+  it("opens a dialog with accessible name 'Inbox' when the trigger is clicked", async () => {
+    mockFeed = {
+      data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+      isLoading: false,
+      isError: false,
+    };
+    render(<InboxDrawer />, { wrapper });
+    const trigger = screen.getByRole("button", { name: /^Inbox/ });
+    trigger.click();
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Inbox");
+  });
+});
