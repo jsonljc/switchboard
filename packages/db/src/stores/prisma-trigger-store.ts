@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { ScheduledTrigger, TriggerFilters, TriggerStatus } from "@switchboard/schemas";
-import type { TriggerStore } from "@switchboard/core";
+import type { TriggerStore, TriggerBrowseQuery, TriggerBrowseResult } from "@switchboard/core";
 
 type PrismaRecord = {
   id: string;
@@ -100,5 +100,60 @@ export class PrismaTriggerStore implements TriggerStore {
       data: { status: "expired" },
     });
     return result.count;
+  }
+
+  async listForBrowse(query: TriggerBrowseQuery): Promise<TriggerBrowseResult> {
+    const { orgId, status, direction, cursor, limit } = query;
+
+    const where: Record<string, unknown> = { organizationId: orgId };
+    if (status) where.status = status;
+    if (cursor) {
+      // Strict keyset pagination: row must come *after* the cursor in sort
+      // direction. (createdAt, id) tuple comparison.
+      if (direction === "desc") {
+        where.OR = [
+          { createdAt: { lt: cursor.ts } },
+          { createdAt: cursor.ts, id: { lt: cursor.id } },
+        ];
+      } else {
+        where.OR = [
+          { createdAt: { gt: cursor.ts } },
+          { createdAt: cursor.ts, id: { gt: cursor.id } },
+        ];
+      }
+    }
+
+    const orderBy =
+      direction === "desc"
+        ? [{ createdAt: "desc" as const }, { id: "desc" as const }]
+        : [{ createdAt: "asc" as const }, { id: "asc" as const }];
+
+    const [records, grouped] = await Promise.all([
+      this.prisma.scheduledTriggerRecord.findMany({
+        where,
+        orderBy,
+        take: limit + 1,
+      }),
+      this.prisma.scheduledTriggerRecord.groupBy({
+        by: ["status"],
+        where: { organizationId: orgId },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const counts = { all: 0, active: 0, fired: 0, cancelled: 0, expired: 0 };
+    for (const g of grouped) {
+      const n = g._count._all;
+      counts.all += n;
+      if (g.status === "active") counts.active = n;
+      else if (g.status === "fired") counts.fired = n;
+      else if (g.status === "cancelled") counts.cancelled = n;
+      else if (g.status === "expired") counts.expired = n;
+    }
+
+    return {
+      rows: records.map((r) => toScheduledTrigger(r as PrismaRecord)),
+      statusCounts: counts,
+    };
   }
 }
