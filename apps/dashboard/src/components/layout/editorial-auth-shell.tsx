@@ -5,8 +5,8 @@ import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
 import { EditorialShellBoundary } from "./editorial-shell-boundary";
 import { AmbientCream } from "./ambient-cream";
 import { InboxLinkClient } from "./inbox-link-client";
-import { HaltButtonClient } from "./halt-button-client";
-import { HaltProvider } from "./halt-provider-client";
+import { HaltButtonClient } from "./halt/halt-button-client";
+import { HaltProvider } from "./halt/halt-context";
 import { TweaksPanelMount } from "./tweaks-panel-mount";
 
 export async function EditorialAuthShell({ children }: { children: ReactNode }) {
