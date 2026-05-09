@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -98,5 +99,57 @@ describe("InboxDrawer — header DOM contract", () => {
     expect(trigger?.textContent).toContain("·");
     const num = trigger?.querySelector("span.num");
     expect(num?.textContent).toBe("3");
+  });
+});
+
+describe("InboxDrawer — trigger aria-label", () => {
+  it("reads 'Inbox, empty' when total is 0", () => {
+    mockFeed = {
+      data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+      isLoading: false,
+      isError: false,
+    };
+    render(<InboxDrawer />, { wrapper });
+    expect(screen.getByRole("button", { name: "Inbox, empty" })).toBeInTheDocument();
+  });
+
+  it("reads 'Inbox, 1 item' when total is 1", () => {
+    mockFeed = {
+      data: { decisions: [], counts: { total: 1, approval: 1, handoff: 0 } },
+      isLoading: false,
+      isError: false,
+    };
+    render(<InboxDrawer />, { wrapper });
+    expect(screen.getByRole("button", { name: "Inbox, 1 item" })).toBeInTheDocument();
+  });
+
+  it("reads 'Inbox, 3 items' when total is 3", () => {
+    mockFeed = {
+      data: { decisions: [], counts: { total: 3, approval: 2, handoff: 1 } },
+      isLoading: false,
+      isError: false,
+    };
+    render(<InboxDrawer />, { wrapper });
+    expect(screen.getByRole("button", { name: "Inbox, 3 items" })).toBeInTheDocument();
+  });
+});
+
+describe("InboxDrawer — tenant-null trigger", () => {
+  it("renders the trigger disabled when tenant context is null", async () => {
+    mockTenant = null;
+    mockFeed = {
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    };
+    const user = userEvent.setup();
+    render(<InboxDrawer />, { wrapper });
+
+    const trigger = screen.getByRole("button", { name: "Inbox, empty" });
+    expect(trigger).toBeDisabled();
+
+    // Clicking a disabled button must not open the dialog.
+    await user.click(trigger);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
