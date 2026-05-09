@@ -14,6 +14,9 @@ import type {
   ConversationThreadStore,
   OpportunityStore,
   RevenueStore,
+  TriggerStore,
+  TriggerBrowseQuery,
+  TriggerBrowseResult,
 } from "@switchboard/core";
 import type {
   WorkTrace,
@@ -26,6 +29,9 @@ import type {
   ConversationThread,
   Opportunity,
   LifecycleRevenueEvent,
+  ScheduledTrigger,
+  TriggerFilters,
+  TriggerStatus,
 } from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
@@ -383,5 +389,84 @@ export class TestThreadStore implements ConversationThreadStore {
       if (t) out.set(id, t);
     }
     return out;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ScheduledTrigger — backs GET /api/dashboard/automations (D2)
+// ---------------------------------------------------------------------------
+
+export class TestTriggerStore implements TriggerStore {
+  private readonly triggers = new Map<string, ScheduledTrigger>();
+
+  async save(trigger: ScheduledTrigger): Promise<void> {
+    this.triggers.set(trigger.id, { ...trigger });
+  }
+
+  async findById(id: string): Promise<ScheduledTrigger | null> {
+    return this.triggers.get(id) ?? null;
+  }
+
+  async findByFilters(filters: TriggerFilters): Promise<ScheduledTrigger[]> {
+    let result = Array.from(this.triggers.values());
+    if (filters.organizationId) {
+      result = result.filter((t) => t.organizationId === filters.organizationId);
+    }
+    if (filters.status) result = result.filter((t) => t.status === filters.status);
+    if (filters.type) result = result.filter((t) => t.type === filters.type);
+    if (filters.sourceWorkflowId) {
+      result = result.filter((t) => t.sourceWorkflowId === filters.sourceWorkflowId);
+    }
+    return result;
+  }
+
+  async updateStatus(id: string, status: TriggerStatus): Promise<void> {
+    const t = this.triggers.get(id);
+    if (t) this.triggers.set(id, { ...t, status });
+  }
+
+  async deleteExpired(_before: Date): Promise<number> {
+    return 0;
+  }
+
+  async expireOverdue(_now: Date): Promise<number> {
+    return 0;
+  }
+
+  async listForBrowse(query: TriggerBrowseQuery): Promise<TriggerBrowseResult> {
+    const orgRows = Array.from(this.triggers.values()).filter(
+      (t) => t.organizationId === query.orgId,
+    );
+
+    const statusCounts = {
+      all: orgRows.length,
+      active: orgRows.filter((t) => t.status === "active").length,
+      fired: orgRows.filter((t) => t.status === "fired").length,
+      cancelled: orgRows.filter((t) => t.status === "cancelled").length,
+      expired: orgRows.filter((t) => t.status === "expired").length,
+    };
+
+    let filtered = orgRows;
+    if (query.status) filtered = filtered.filter((t) => t.status === query.status);
+
+    const dir = query.direction === "asc" ? 1 : -1;
+    filtered.sort((a, b) => {
+      const tsCmp = a.createdAt.getTime() - b.createdAt.getTime();
+      if (tsCmp !== 0) return tsCmp * dir;
+      return a.id.localeCompare(b.id) * dir;
+    });
+
+    if (query.cursor) {
+      const cTs = query.cursor.ts.getTime();
+      const cId = query.cursor.id;
+      filtered = filtered.filter((t) => {
+        const tsCmp = t.createdAt.getTime() - cTs;
+        if (tsCmp !== 0) return tsCmp * dir > 0;
+        return t.id.localeCompare(cId) * dir > 0;
+      });
+    }
+
+    const rows = filtered.slice(0, query.limit + 1);
+    return { rows, statusCounts };
   }
 }
