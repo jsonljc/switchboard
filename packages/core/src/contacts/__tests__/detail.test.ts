@@ -96,7 +96,7 @@ describe("getContactDetail", () => {
       surface: "queue",
       status: "pending",
       sourceAgent: "alex",
-      title: "Approve quote draft",
+      humanSummary: "Approve quote draft",
       createdAt: new Date("2026-05-09T00:00:00Z"),
       targetEntities: { contactId: "c-1" },
       ...overrides,
@@ -192,6 +192,16 @@ describe("getContactDetail", () => {
         const out = await getContactDetail({ orgId: "org-1", contactId: "c-1" }, deps);
         expect(out.openDecisions).toEqual([]);
       }
+    });
+
+    it("uses recommendation.humanSummary as the decision title", async () => {
+      const rec = matchingRec({ humanSummary: "Send a closing message to Maya" });
+      const deps = mkDeps({
+        recommendationStore: { listBySurface: vi.fn().mockResolvedValue([rec]) },
+      });
+      const out = await getContactDetail({ orgId: "org-1", contactId: "c-1" }, deps);
+      expect(out.openDecisions).toHaveLength(1);
+      expect(out.openDecisions[0]?.title).toBe("Send a closing message to Maya");
     });
   });
 

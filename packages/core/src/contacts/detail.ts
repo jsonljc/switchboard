@@ -132,17 +132,13 @@ export function buildContactDetailOpenDecisions(
 ): ContactDetailOpenDecision[] {
   const fromRecs: ContactDetailOpenDecision[] = recs
     .filter((r) => matchesContactIdInTargetEntities(r, contactId))
-    .map((r) => {
-      const title = readStringField(r, "title") ?? "Pending approval";
-      const agentKey = readStringField(r, "sourceAgent");
-      return {
-        id: r.id,
-        kind: "approval" as const,
-        agentKey: agentKey ?? null,
-        title,
-        createdAt: r.createdAt.toISOString(),
-      };
-    });
+    .map((r) => ({
+      id: r.id,
+      kind: "approval" as const,
+      agentKey: r.sourceAgent,
+      title: r.humanSummary,
+      createdAt: r.createdAt.toISOString(),
+    }));
 
   const fromHandoffs: ContactDetailOpenDecision[] = handoffs
     .filter((h) => matchesContactIdInLeadSnapshot(h, contactId))
@@ -188,12 +184,6 @@ function matchesContactIdInLeadSnapshot(h: HandoffPackage, contactId: string): b
   if (!ls || typeof ls !== "object") return false;
   const v = (ls as Record<string, unknown>)["leadId"];
   return typeof v === "string" && v.length > 0 && v === contactId;
-}
-
-function readStringField(obj: unknown, key: string): string | undefined {
-  if (!obj || typeof obj !== "object") return undefined;
-  const v = (obj as Record<string, unknown>)[key];
-  return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
 function summariseAttribution(attribution: unknown): string | null {
