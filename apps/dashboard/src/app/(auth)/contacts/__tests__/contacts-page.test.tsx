@@ -94,7 +94,7 @@ describe("ContactsPage", () => {
     render(<ContactsPage />);
     expect(screen.getByText(/Browse-only for now/)).toBeInTheDocument();
     expect(screen.getByText("Lisa K.")).toBeInTheDocument();
-    expect(screen.getByText("Marcus T.")).toBeInTheDocument();
+    expect(screen.getByText("Maya T.")).toBeInTheDocument();
     expect(screen.getByText("Priya S.")).toBeInTheDocument();
   });
 

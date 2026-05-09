@@ -12,6 +12,9 @@ export type UseContactsListResult = UseInfiniteQueryResult<
   Error
 >;
 
+// Read process.env per call so vitest can mutate NEXT_PUBLIC_CONTACTS_LIVE
+// between fixture-branch and live-branch tests. In production Next.js inlines
+// the value at build time, so this is effectively a constant.
 const isLive = (): boolean => process.env.NEXT_PUBLIC_CONTACTS_LIVE === "true";
 
 function buildSearch(query: ContactsListQueryInput, cursor: string | undefined): string {

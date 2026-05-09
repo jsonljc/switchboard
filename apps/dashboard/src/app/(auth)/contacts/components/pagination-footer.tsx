@@ -22,6 +22,7 @@ export function PaginationFooter({
       {hasMore ? (
         <>
           <span className={styles.count}>Showing 1–{rowsLoaded}</span>
+          <span aria-hidden="true">·</span>
           <button
             type="button"
             className={styles.moreButton}

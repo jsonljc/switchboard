@@ -17,21 +17,22 @@ export interface ContactRowProps {
 }
 
 export function ContactRow({ row, detailEnabled, now }: ContactRowProps) {
+  // aria-disabled belongs on the element that *would have been* the
+  // interactive Link — not on the <tr>, where it's non-effective per ARIA.
+  // The persistent above-table notice is the primary signal; the tooltip on
+  // the cell is a redundancy that also communicates state to screen readers.
   const nameCell = detailEnabled ? (
     <Link href={row.detailHref} className={styles.cellName} aria-label={`Open ${row.displayName}`}>
       {row.displayName}
     </Link>
   ) : (
-    <span className={styles.cellName}>{row.displayName}</span>
+    <span className={styles.cellName} aria-disabled="true" title={ROW_DISABLED_TITLE}>
+      {row.displayName}
+    </span>
   );
 
-  const trClasses = `${detailEnabled ? "" : styles.isDisabled}`.trim();
-  const trProps = detailEnabled
-    ? {}
-    : ({ "aria-disabled": "true", title: ROW_DISABLED_TITLE } as const);
-
   return (
-    <tr className={trClasses || undefined} {...trProps}>
+    <tr className={detailEnabled ? undefined : styles.isDisabled}>
       <td>{nameCell}</td>
       <td>
         <span className={styles.cellStage}>{stageLabel(row.stage)}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react"; // useMemo for `rows` flatten only
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ContactStage } from "@switchboard/schemas";
 import { ContactsHeader } from "./components/header";
@@ -45,18 +45,15 @@ export function ContactsPage() {
 
   const detailEnabled = ROUTE_AVAILABILITY.contact;
 
-  const queryArgs = useMemo(
-    () => ({
+  // TanStack Query serializes the queryKey on its own — no useMemo needed for
+  // referential identity. Build the args fresh; the inputs are scalars.
+  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useContactsList({
       stage: stage ?? undefined,
       search: search || undefined,
       sort,
       direction,
-    }),
-    [stage, search, sort, direction],
-  );
-
-  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useContactsList(queryArgs);
+    });
 
   const rows = useMemo(() => data?.pages.flatMap((page) => page.rows) ?? [], [data]);
   const lastPage = data?.pages.at(-1);

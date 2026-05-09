@@ -20,7 +20,7 @@ const sampleRows: ContactBrowseRow[] = [
   },
   {
     id: "c-2",
-    displayName: "Marcus T.",
+    displayName: "Maya T.",
     stage: "customer",
     primaryChannel: "telegram",
     source: null,
@@ -91,7 +91,7 @@ describe("ContactsTable", () => {
     expect(onSortChange).toHaveBeenCalledWith("firstContactAt");
   });
 
-  it("renders rows as aria-disabled when detailEnabled is false (D1)", () => {
+  it("marks the name cell aria-disabled with the redundancy tooltip when detailEnabled is false (D1)", () => {
     render(
       <ContactsTable
         rows={sampleRows}
@@ -102,13 +102,16 @@ describe("ContactsTable", () => {
         now={NOW}
       />,
     );
-    const rows = screen
-      .getAllByRole("row")
-      .filter((r) => r.getAttribute("aria-disabled") === "true");
-    expect(rows).toHaveLength(2);
-    for (const row of rows) {
-      expect(row).toHaveAttribute("title", "Detail coming next");
+    // aria-disabled lives on the element that would have been the Link, not on
+    // the <tr> (non-effective there per ARIA). The persistent above-table
+    // notice is the primary signal; this is the redundancy.
+    for (const row of sampleRows) {
+      const cell = screen.getByText(row.displayName);
+      expect(cell).toHaveAttribute("aria-disabled", "true");
+      expect(cell).toHaveAttribute("title", "Detail coming next");
     }
+    // No <Link> in the disabled state.
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
   it("renders rows as enabled with link cell when detailEnabled is true (D1.5+)", () => {
@@ -138,8 +141,8 @@ describe("ContactsTable", () => {
         now={NOW}
       />,
     );
-    const marcusRow = screen.getByText("Marcus T.").closest("tr") as HTMLTableRowElement;
-    expect(within(marcusRow).getByText("—")).toBeInTheDocument();
+    const mayaRow = screen.getByText("Maya T.").closest("tr") as HTMLTableRowElement;
+    expect(within(mayaRow).getByText("—")).toBeInTheDocument();
     const lisaRow = screen.getByText("Lisa K.").closest("tr") as HTMLTableRowElement;
     expect(within(lisaRow).getByText("2")).toBeInTheDocument();
   });

@@ -17,15 +17,15 @@ export const CONTACTS_FIXTURE_ROWS: ContactBrowseRow[] = [
     detailHref: "/contacts/fx-lisa",
   },
   {
-    id: "fx-marcus",
-    displayName: "Marcus T.",
+    id: "fx-maya",
+    displayName: "Maya T.",
     stage: "customer",
     primaryChannel: "whatsapp",
     source: null,
     lastActivityAt: daysAgo(1),
     firstContactAt: daysAgo(34),
     opportunityCount: 0,
-    detailHref: "/contacts/fx-marcus",
+    detailHref: "/contacts/fx-maya",
   },
   {
     id: "fx-priya",
