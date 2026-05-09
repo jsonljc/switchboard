@@ -32,27 +32,33 @@ export const dashboardContactDetailRoutes: FastifyPluginAsync = async (app) => {
 
     const { id } = request.params;
 
-    if (
-      !app.contactStore ||
-      !app.opportunityStore ||
-      !app.threadStore ||
-      !app.recommendationStore ||
-      !app.handoffStore ||
-      !app.revenueEventStore
-    ) {
-      return reply.code(503).send({ error: "Contact detail dependencies not wired" });
+    const stores = {
+      contactStore: app.contactStore,
+      opportunityStore: app.opportunityStore,
+      threadStore: app.threadStore,
+      recommendationStore: app.recommendationStore,
+      handoffStore: app.handoffStore,
+      revenueEventStore: app.revenueEventStore,
+    };
+    const missing = Object.entries(stores)
+      .filter(([, v]) => !v)
+      .map(([k]) => k);
+    if (missing.length > 0) {
+      return reply.code(503).send({
+        error: `Contact detail dependencies not wired [missing: ${missing.join(", ")}]`,
+      });
     }
 
     try {
       return await getContactDetail(
         { orgId, contactId: id },
         {
-          contactStore: app.contactStore,
-          opportunityStore: app.opportunityStore,
-          threadStore: app.threadStore,
-          recommendationStore: app.recommendationStore,
-          handoffStore: app.handoffStore,
-          revenueEventStore: app.revenueEventStore,
+          contactStore: stores.contactStore!,
+          opportunityStore: stores.opportunityStore!,
+          threadStore: stores.threadStore!,
+          recommendationStore: stores.recommendationStore!,
+          handoffStore: stores.handoffStore!,
+          revenueEventStore: stores.revenueEventStore!,
         },
       );
     } catch (e) {

@@ -105,7 +105,7 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
    * unknown / cross-org contactId) survives back to the dashboard proxy. The
    * shared `request` helper collapses all non-2xx into `Error("…")`, which
    * would force every upstream 404 to surface as 500. The proxy reads `.status`
-   * off the thrown ApiError to preserve fidelity.
+   * off the thrown Error (annotated with `.status`) to preserve fidelity.
    */
   async getContact(id: string): Promise<ContactDetailResponse> {
     const url = `${this.baseUrl}/api/dashboard/contacts/${encodeURIComponent(id)}`;
