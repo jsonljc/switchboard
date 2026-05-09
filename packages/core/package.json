@@ -105,6 +105,10 @@
     "./reports": {
       "types": "./dist/reports/index.d.ts",
       "import": "./dist/reports/index.js"
+    },
+    "./contacts": {
+      "types": "./dist/contacts/index.d.ts",
+      "import": "./dist/contacts/index.js"
     }
   },
   "scripts": {
