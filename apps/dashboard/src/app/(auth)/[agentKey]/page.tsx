@@ -5,9 +5,10 @@ import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
 import { EditorialAuthShell } from "@/components/layout/editorial-auth-shell";
 import { AgentHomeClient } from "./agent-home-client";
 
-export default async function AgentHomePage({ params }: { params: { agentKey: string } }) {
-  if (!(AGENT_KEYS as readonly string[]).includes(params.agentKey)) notFound();
-  const agentKey = params.agentKey as AgentKey;
+export default async function AgentHomePage({ params }: { params: Promise<{ agentKey: string }> }) {
+  const { agentKey: rawAgentKey } = await params;
+  if (!(AGENT_KEYS as readonly string[]).includes(rawAgentKey)) notFound();
+  const agentKey = rawAgentKey as AgentKey;
 
   const enabled = await fetchEnabledAgentsServer();
   if (!enabled.includes(agentKey)) notFound();

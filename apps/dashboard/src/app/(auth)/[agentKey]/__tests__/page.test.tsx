@@ -32,19 +32,21 @@ describe("AgentHomePage server gates", () => {
 
   it("notFound() when agentKey is not in registry", async () => {
     process.env.NEXT_PUBLIC_DEPLOY_ENV = "preview";
-    await expect(AgentHomePage({ params: { agentKey: "bogus" } })).rejects.toThrow(
+    await expect(AgentHomePage({ params: Promise.resolve({ agentKey: "bogus" }) })).rejects.toThrow(
       "NEXT_NOT_FOUND",
     );
   });
 
   it("notFound() when agentKey is mira (not enabled in slice B)", async () => {
     process.env.NEXT_PUBLIC_DEPLOY_ENV = "preview";
-    await expect(AgentHomePage({ params: { agentKey: "mira" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(AgentHomePage({ params: Promise.resolve({ agentKey: "mira" }) })).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
   });
 
   it("renders AgentHomeClient for valid + enabled agent", async () => {
     process.env.NEXT_PUBLIC_DEPLOY_ENV = "preview";
-    const tree = await AgentHomePage({ params: { agentKey: "alex" } });
+    const tree = await AgentHomePage({ params: Promise.resolve({ agentKey: "alex" }) });
     const { render, screen } = await import("@testing-library/react");
     render(tree);
     expect(screen.getByTestId("client")).toHaveTextContent("alex");
