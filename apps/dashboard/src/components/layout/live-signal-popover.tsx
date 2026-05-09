@@ -55,6 +55,12 @@ export function LiveSignalPopover() {
   const { halted, toggleHalt } = useHalt();
   const { data, isLoading, isError } = useAudit();
 
+  // The audit endpoint can return HTTP 200 with a `data.error` string when the
+  // upstream API is unreachable (see use-audit.ts). React Query's `isError`
+  // doesn't catch that case, so widen the surface here — silently rendering
+  // "Nothing to report" while the backend is down would mislead the operator.
+  const showError = isError || Boolean(data?.error);
+
   const entries = (data?.entries ?? [])
     .slice() // don't mutate React Query cache
     .sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""))
@@ -96,17 +102,17 @@ export function LiveSignalPopover() {
               <em>Reading the trail…</em>
             </p>
           )}
-          {isError && (
+          {!isLoading && showError && (
             <p className="muted-state">
               <em>Couldn&apos;t load activity.</em>
             </p>
           )}
-          {!isLoading && !isError && entries.length === 0 && (
+          {!isLoading && !showError && entries.length === 0 && (
             <p className="muted-state">
               <em>Nothing to report.</em>
             </p>
           )}
-          {!isLoading && !isError && entries.length > 0 && (
+          {!isLoading && !showError && entries.length > 0 && (
             <ul className="event-list">
               {entries.map((e) => (
                 <EventRow key={e.id} entry={e} />

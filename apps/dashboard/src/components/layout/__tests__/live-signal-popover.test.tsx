@@ -38,9 +38,14 @@ function setUseAudit(opts: {
   isLoading?: boolean;
   isError?: boolean;
   entries?: AuditEntryResponse[];
+  dataError?: string;
 }) {
+  const data =
+    opts.entries || opts.dataError
+      ? { entries: opts.entries ?? [], total: opts.entries?.length ?? 0, error: opts.dataError }
+      : undefined;
   vi.mocked(useAudit).mockReturnValue({
-    data: opts.entries ? { entries: opts.entries, total: opts.entries.length } : undefined,
+    data,
     isLoading: opts.isLoading ?? false,
     isError: opts.isError ?? false,
     error: null,
@@ -172,6 +177,18 @@ describe("LiveSignalPopover — recent activity preview", () => {
       within(screen.getByRole("dialog")).getByText(/couldn't load activity/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Halt$/ })).toBeInTheDocument();
+  });
+
+  it("renders 'Couldn't load activity.' when audit returns 200 with data.error (backend unreachable)", async () => {
+    const user = userEvent.setup();
+    setUseAudit({ dataError: "Failed to load activity" });
+    renderPopover();
+    await user.click(screen.getByRole("button", { name: /system live/i }));
+    expect(
+      within(screen.getByRole("dialog")).getByText(/couldn't load activity/i),
+    ).toBeInTheDocument();
+    // Empty-state copy must NOT appear when the data error path fires.
+    expect(within(screen.getByRole("dialog")).queryByText(/nothing to report/i)).toBeNull();
   });
 
   it("renders 'Nothing to report.' when entries is empty", async () => {

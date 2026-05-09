@@ -15,8 +15,8 @@ export interface EscalationReplyResult {
  * Used by:
  *   - /escalations list page reply form
  *
- * Both surfaces post the reply through this single hook so they cannot
- * diverge on payload shape, cache invalidation, or 200/502 branching.
+ * The escalation reply path goes through this single hook so payload shape,
+ * cache invalidation, and 200/502 branching cannot diverge per call site.
  *
  * Wraps POST /api/dashboard/escalations/:id/reply, which proxies to the
  * upstream API at /api/escalations/:id/reply. The upstream API returns:
