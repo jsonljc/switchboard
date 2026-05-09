@@ -1,17 +1,3 @@
-"use client";
-
-import { useHalt } from "@/components/console/halt-context";
-
-export function HaltButtonClient() {
-  const { halted, toggleHalt } = useHalt();
-  return (
-    <button
-      type="button"
-      className={`folio-link ${halted ? "is-halt" : ""}`}
-      aria-pressed={halted}
-      onClick={toggleHalt}
-    >
-      {halted ? "Halted" : "Halt"}
-    </button>
-  );
-}
+// Temporary C2a re-export shim — Task 4 will update editorial-auth-shell.tsx
+// to import directly from layout/halt/. Do not add new imports against this path.
+export * from "@/components/layout/halt/halt-button-client";
