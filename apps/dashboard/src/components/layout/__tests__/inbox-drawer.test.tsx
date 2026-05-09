@@ -281,3 +281,50 @@ describe("InboxDrawer — populated list", () => {
     expect(rileyAccent).toBe("hsl(15 45% 50%)");
   });
 });
+
+describe("InboxDrawer — action dispatch", () => {
+  it("invokes dispatchDecisionAction with the per-item agentKey on primary click", async () => {
+    const user = userEvent.setup();
+    const now = new Date().toISOString();
+    mockFeed = {
+      data: {
+        decisions: [
+          {
+            id: "handoff:hand-1",
+            kind: "handoff",
+            orgId: "org-1",
+            agentKey: "riley",
+            humanSummary: "Conversation needs a human.",
+            presentation: {
+              primaryLabel: "Take over",
+              secondaryLabel: "Resolve",
+              dismissLabel: "Dismiss",
+              dataLines: [],
+            },
+            urgencyScore: 60,
+            createdAt: now,
+            threadHref: null,
+            sourceRef: { kind: "handoff", sourceId: "hand-1" },
+            meta: { contactName: "Jay Park" },
+          },
+        ],
+        counts: { total: 1, approval: 0, handoff: 1 },
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<InboxDrawer />, { wrapper });
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
+
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+    const callArgs = dispatchMock.mock.calls[0];
+    expect(callArgs[0]).toEqual({ kind: "handoff", sourceId: "hand-1" });
+    expect(callArgs[1]).toBe("primary");
+    expect(callArgs[3]).toMatchObject({
+      orgId: "org-1",
+      agentKey: "riley",
+    });
+  });
+});

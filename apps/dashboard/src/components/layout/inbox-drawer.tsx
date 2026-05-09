@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import {
   Sheet,
@@ -14,6 +15,8 @@ import { DecisionCard } from "@/components/decisions/decision-card";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
 import { useTenantContext } from "@/hooks/use-query-keys";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
+import { dispatchDecisionAction } from "@/lib/decisions/dispatch-action";
+import type { Decision } from "@/lib/decisions/types";
 import "./inbox-drawer.css";
 
 function describeTotal(total: number, isLoading: boolean, isError: boolean): string {
@@ -27,10 +30,20 @@ export function InboxDrawer() {
   const [open, setOpen] = useState(false);
   const { data, isLoading, isError } = useDecisionFeed(null);
   const tenant = useTenantContext();
+  const queryClient = useQueryClient();
 
   const decisions = data?.decisions ?? [];
   const total = data?.counts.total ?? 0;
   const tenantReady = !!tenant;
+
+  async function handleAction(d: Decision, action: "primary" | "secondary"): Promise<void> {
+    if (!tenant) return;
+    await dispatchDecisionAction(d.sourceRef, action, undefined, {
+      queryClient,
+      orgId: tenant.orgId,
+      agentKey: d.agentKey,
+    });
+  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -88,7 +101,12 @@ export function InboxDrawer() {
                   className="inbox-item"
                   style={{ "--inbox-agent-accent": agent?.accent } as CSSProperties}
                 >
-                  <DecisionCard {...card} folio={folioWithAgent} />
+                  <DecisionCard
+                    {...card}
+                    folio={folioWithAgent}
+                    onPrimary={() => void handleAction(d, "primary")}
+                    onSecondary={() => void handleAction(d, "secondary")}
+                  />
                 </div>
               );
             })}
