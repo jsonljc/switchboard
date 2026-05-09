@@ -219,6 +219,63 @@ class TestContactStore implements ContactStore {
       .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
     return { rows: filtered.slice(0, args.limit), totalCount: filtered.length };
   }
+
+  async listForBrowse(query: {
+    orgId: string;
+    stage?: import("@switchboard/schemas").ContactStage;
+    search?: string;
+    sort: "lastActivityAt" | "firstContactAt";
+    direction: "asc" | "desc";
+    cursor?: { ts: Date; id: string };
+    limit: number;
+  }): Promise<{
+    rows: Contact[];
+    opportunityCounts: Map<string, number>;
+    hasMore: boolean;
+    nextKeyset: { ts: Date; id: string } | null;
+  }> {
+    const all = Array.from(this.rows.values()).filter((c) => c.organizationId === query.orgId);
+    const filtered = all.filter((c) => {
+      if (query.stage && c.stage !== query.stage) return false;
+      if (query.search) {
+        const s = query.search.toLowerCase();
+        const haystack = `${c.name ?? ""} ${c.phone ?? ""} ${c.email ?? ""}`.toLowerCase();
+        if (!haystack.includes(s)) return false;
+      }
+      return true;
+    });
+
+    const tsField = query.sort;
+    const sorted = filtered.sort((a, b) => {
+      const at = a[tsField].getTime();
+      const bt = b[tsField].getTime();
+      if (at !== bt) return query.direction === "desc" ? bt - at : at - bt;
+      return query.direction === "desc" ? b.id.localeCompare(a.id) : a.id.localeCompare(b.id);
+    });
+
+    const afterCursor = query.cursor
+      ? sorted.filter((c) => {
+          const ct = c[tsField].getTime();
+          const xt = query.cursor!.ts.getTime();
+          if (query.direction === "desc") {
+            return ct < xt || (ct === xt && c.id < query.cursor!.id);
+          }
+          return ct > xt || (ct === xt && c.id > query.cursor!.id);
+        })
+      : sorted;
+
+    const hasMore = afterCursor.length > query.limit;
+    const trimmed = afterCursor.slice(0, query.limit);
+    const last = trimmed.at(-1);
+    const nextKeyset = hasMore && last ? { ts: last[tsField], id: last.id } : null;
+
+    return {
+      rows: trimmed,
+      opportunityCounts: new Map(), // tests that care set their own counts
+      hasMore,
+      nextKeyset,
+    };
+  }
 }
 
 class TestHandoffStore implements HandoffStore {
@@ -583,6 +640,9 @@ export async function buildTestServer(): Promise<TestContext> {
 
   const { dashboardReportsRoutes } = await import("../routes/dashboard-reports.js");
   await app.register(dashboardReportsRoutes);
+
+  const { dashboardContactsRoutes } = await import("../routes/dashboard-contacts.js");
+  await app.register(dashboardContactsRoutes);
 
   return { app, cartridge, storage };
 }
