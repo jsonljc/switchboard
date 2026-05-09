@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -326,5 +326,106 @@ describe("InboxDrawer — action dispatch", () => {
       orgId: "org-1",
       agentKey: "riley",
     });
+  });
+});
+
+describe("InboxDrawer — auto-close on inbox-zero", () => {
+  function makeOneItemFeed() {
+    const now = new Date().toISOString();
+    return {
+      data: {
+        decisions: [
+          {
+            id: "approval:rec-1",
+            kind: "approval",
+            orgId: "org-1",
+            agentKey: "alex",
+            humanSummary: "Lead.",
+            presentation: {
+              primaryLabel: "Reply",
+              secondaryLabel: "Skip",
+              dismissLabel: "Dismiss",
+              dataLines: [],
+            },
+            urgencyScore: 80,
+            createdAt: now,
+            threadHref: null,
+            sourceRef: { kind: "approval", sourceId: "rec-1" },
+            meta: {},
+          },
+        ],
+        counts: { total: 1, approval: 1, handoff: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    };
+  }
+  const emptyFeed = {
+    data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+    isLoading: false,
+    isError: false,
+  };
+
+  it("closes the drawer when count hits 0 AFTER a successful in-session action", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeOneItemFeed();
+    const { rerender } = render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    await user.click(await screen.findByTestId("card-primary"));
+    // The dispatcher promise resolves on the next microtask; wait for the spy
+    // so we know the in-session ref has flipped before the rerender.
+    await waitFor(() => expect(dispatchMock).toHaveBeenCalledTimes(1));
+
+    // Simulate the post-dispatch refetch: count goes to 0.
+    mockFeed = emptyFeed;
+    rerender(<InboxDrawer />);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("stays open when count drops to 0 without a successful in-session action", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeOneItemFeed();
+    const { rerender } = render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // Another surface clears the inbox; user did not act inside the drawer.
+    mockFeed = emptyFeed;
+    rerender(<InboxDrawer />);
+
+    // Give effects a tick to run, then assert the drawer stayed open.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("resets the in-session-action flag when the drawer closes manually", async () => {
+    const user = userEvent.setup();
+    // Dispatcher resolves but feed still shows the item — drawer stays open after action.
+    mockFeed = makeOneItemFeed();
+    const { rerender } = render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
+    await waitFor(() => expect(dispatchMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // User closes manually via Escape — Radix listens at document, userEvent fires it correctly.
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // Reopen with the item still present.
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // Feed drops to 0 without acting — drawer must stay open (ref reset on close).
+    mockFeed = emptyFeed;
+    rerender(<InboxDrawer />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });

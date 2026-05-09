@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import {
@@ -36,6 +36,20 @@ export function InboxDrawer() {
   const total = data?.counts.total ?? 0;
   const tenantReady = !!tenant;
 
+  const actedInSessionRef = useRef(false);
+
+  // Reset the session-action flag on every open/close transition (in either direction).
+  useEffect(() => {
+    actedInSessionRef.current = false;
+  }, [open]);
+
+  // Auto-close when the inbox hits zero AFTER a successful in-session action.
+  useEffect(() => {
+    if (open && total === 0 && actedInSessionRef.current) {
+      setOpen(false);
+    }
+  }, [open, total]);
+
   async function handleAction(d: Decision, action: "primary" | "secondary"): Promise<void> {
     if (!tenant) return;
     await dispatchDecisionAction(d.sourceRef, action, undefined, {
@@ -43,6 +57,7 @@ export function InboxDrawer() {
       orgId: tenant.orgId,
       agentKey: d.agentKey,
     });
+    actedInSessionRef.current = true;
   }
 
   return (
