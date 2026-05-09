@@ -69,6 +69,18 @@ describe("ContactDetailOpportunitySchema", () => {
       }),
     ).not.toThrow();
   });
+  it("rejects an invalid stage", () => {
+    expect(() =>
+      ContactDetailOpportunitySchema.parse({
+        id: "o-1",
+        serviceName: "Wedding day",
+        stage: "banana",
+        estimatedValue: null,
+        openedAt: "2026-05-01T00:00:00Z",
+        closedAt: null,
+      }),
+    ).toThrow();
+  });
 });
 
 describe("ContactDetailThreadSchema", () => {
