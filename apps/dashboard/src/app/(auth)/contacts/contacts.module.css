@@ -26,9 +26,15 @@
     "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --mono: var(--font-mono-mercury);
   --col-wide: 1080px;
-  --gap-section: 64px;
-  --gap-section-tablet: 48px;
-  --gap-section-mobile: 36px;
+  /* Reserved for future detail-prose surfaces (D1.5 contact detail; D2/D3
+     narrative copy). Kept here so all Mercury surfaces share one alias block. */
+  --col-prose: 720px;
+  /* Section ramp matches /reports verbatim — same vertical rhythm across all
+     Mercury surfaces. Don't drift this in a future surface without lifting it
+     into a shared shell. */
+  --gap-section: 96px;
+  --gap-section-tablet: 72px;
+  --gap-section-mobile: 56px;
 
   background: var(--cream);
   color: var(--ink);
@@ -107,9 +113,13 @@
   align-items: center;
   gap: 0;
 }
-.brandNav span,
+/* Mirrors /reports' .brandNav rule. /contacts renders its nav as inert
+   <span>s today (Tools-tier surface, not agent-owned), so the hover and
+   active rules are dormant — but we keep them so swapping <span>→<Link>
+   in a future MercuryShell extraction needs zero CSS changes. */
 .brandNav a,
-.brandNav button {
+.brandNav button,
+.brandNav span {
   font-family: var(--serif);
   font-size: 15px;
   padding: 6px 14px;
@@ -117,7 +127,23 @@
   color: var(--ink-3);
   background: transparent;
   border: none;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+.brandNav span {
   cursor: default;
+}
+.brandNav a.isActive,
+.brandNav button.isActive,
+.brandNav span.isActive {
+  color: var(--ink);
+  background: hsl(20 10% 12% / 0.05);
+}
+.brandNav a:hover,
+.brandNav button:hover {
+  color: var(--ink);
 }
 .brandNav .navAdd {
   display: inline-flex;
@@ -298,11 +324,13 @@
   padding-bottom: 4px;
 }
 
-/* ============= browse-only notice ============= */
+/* ============= browse-only notice =============
+   Folio-styled notice that lives between the title (which carries its
+   own border-bottom) and the toolbar. No border on this rule itself —
+   the title's hairline above plus the toolbar's natural spacing below
+   are enough; doubling them would create a stacked-rule artifact. */
 .disabledNotice {
   margin: 18px 0 0;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--hair);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -455,16 +483,10 @@
 .contacts tbody td.isMuted {
   color: var(--ink-3);
 }
-.contacts tbody td a.rowLink {
-  color: var(--ink);
-  text-decoration: none;
-  display: block;
-  margin: -14px -12px -14px 0;
-  padding: 14px 12px 14px 0;
-}
 .cellName {
   font-weight: 500;
   color: var(--ink);
+  text-decoration: none; /* applies when cellName is rendered on a <Link> in D1.5+ */
 }
 .cellChannel {
   display: inline-flex;
