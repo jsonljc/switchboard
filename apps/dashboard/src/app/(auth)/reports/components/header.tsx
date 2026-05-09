@@ -1,12 +1,13 @@
+import Link from "next/link";
 import styles from "../reports.module.css";
 
 /**
  * Mercury-register header — visual port of the agent-home header.
- * Placeholder header — agent-home migration will wire these to live nav.
  *
- * Renders nav/action affordances as inert <span> elements (matching the
- * design bundle's anchor-with-no-target semantics minus the navigation)
- * so screen readers don't announce them as buttons that fire no action.
+ * Brand mark + agent names route to their real homes; Inbox / Halt / Me /
+ * `+` stay inert until C-slice and agent-management work wires them. Riley
+ * is .isActive on /reports because the renewal-checkpoint statement is
+ * Riley's surface (ad attribution narrative).
  */
 export function ReportsHeader() {
   const inboxCount = 3;
@@ -15,13 +16,15 @@ export function ReportsHeader() {
     <header className={styles.appHeader}>
       <div className={styles.appHeaderRow}>
         <div className={styles.brandCluster}>
-          <span className={styles.brandMark} aria-label="Switchboard home">
+          <Link href="/" className={styles.brandMark} aria-label="Switchboard home">
             <span className={styles.brandDot} />
             Switchboard
-          </span>
+          </Link>
           <nav className={styles.brandNav} aria-label="agents">
-            <span>Alex</span>
-            <span className={styles.isActive}>Riley</span>
+            <Link href="/alex">Alex</Link>
+            <Link href="/riley" className={styles.isActive}>
+              Riley
+            </Link>
             <span className={styles.navAdd} aria-label="Add an agent">
               +
             </span>

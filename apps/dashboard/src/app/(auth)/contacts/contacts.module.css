@@ -100,6 +100,7 @@
   border: none;
   cursor: pointer;
   padding: 0;
+  text-decoration: none;
 }
 .brandDot {
   width: 8px;
@@ -128,6 +129,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
+  text-decoration: none;
   transition:
     color 0.2s ease,
     background 0.2s ease;

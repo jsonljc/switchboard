@@ -13,6 +13,17 @@ describe("ContactsHeader", () => {
     expect(screen.getByLabelText("Add an agent")).toBeInTheDocument();
   });
 
+  it("brand mark links to home", () => {
+    render(<ContactsHeader />);
+    expect(screen.getByLabelText("Switchboard home")).toHaveAttribute("href", "/");
+  });
+
+  it("Alex and Riley link to their agent home pages", () => {
+    render(<ContactsHeader />);
+    expect(screen.getByRole("link", { name: "Alex" })).toHaveAttribute("href", "/alex");
+    expect(screen.getByRole("link", { name: "Riley" })).toHaveAttribute("href", "/riley");
+  });
+
   it("does not mark any agent active — /contacts is Tools-tier, not agent-owned", () => {
     const { container } = render(<ContactsHeader />);
     const active = container.querySelectorAll('[class*="isActive"]');

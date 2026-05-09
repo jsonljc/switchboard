@@ -1,3 +1,4 @@
+import Link from "next/link";
 import styles from "../contacts.module.css";
 
 /**
@@ -5,9 +6,10 @@ import styles from "../contacts.module.css";
  * deliberate difference: no agent name carries `.isActive`, since /contacts is
  * a Tools-tier surface that doesn't belong to any single agent.
  *
- * Nav and actions render as inert <span> elements — same posture as
- * ReportsHeader. A future Mercury-chrome consolidation slice will lift this
- * into a shared MercuryAuthShell once a third Mercury surface lands (D2/D3).
+ * Brand mark + agent names route to their real homes; the rest (Inbox, Halt,
+ * Me chip, +) stay inert until C-slice / agent-management work wires them. A
+ * future Mercury-chrome consolidation slice will lift this into a shared
+ * MercuryAuthShell once a third Mercury surface lands (D2/D3).
  */
 export function ContactsHeader() {
   const inboxCount = 0;
@@ -16,13 +18,13 @@ export function ContactsHeader() {
     <header className={styles.appHeader}>
       <div className={styles.appHeaderRow}>
         <div className={styles.brandCluster}>
-          <span className={styles.brandMark} aria-label="Switchboard home">
+          <Link href="/" className={styles.brandMark} aria-label="Switchboard home">
             <span className={styles.brandDot} />
             Switchboard
-          </span>
+          </Link>
           <nav className={styles.brandNav} aria-label="agents">
-            <span>Alex</span>
-            <span>Riley</span>
+            <Link href="/alex">Alex</Link>
+            <Link href="/riley">Riley</Link>
             <span className={styles.navAdd} aria-label="Add an agent">
               +
             </span>
