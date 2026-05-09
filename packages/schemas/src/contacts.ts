@@ -13,8 +13,8 @@ export const ContactBrowseRowSchema = z.object({
   stage: ContactStageSchema,
   primaryChannel: z.enum(["whatsapp", "telegram", "dashboard"]),
   source: z.string().nullable(),
-  lastActivityAt: z.string(),
-  firstContactAt: z.string(),
+  lastActivityAt: z.string().datetime(),
+  firstContactAt: z.string().datetime(),
   // Non-terminal opportunities for this contact, capped at 99 in the projection.
   opportunityCount: z.number().int().min(0).max(99),
   // Reserved for D1.5; the API emits it so the detail link can pre-warm.
