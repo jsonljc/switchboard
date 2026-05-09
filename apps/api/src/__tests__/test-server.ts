@@ -33,6 +33,8 @@ import type {
   ContactStore,
   HandoffStore,
   ConversationThreadStore,
+  OpportunityStore,
+  RevenueStore,
 } from "@switchboard/core";
 import type { ApprovalRoutingConfig } from "@switchboard/core/approval";
 import {
@@ -54,6 +56,8 @@ import {
   TestContactStore,
   TestHandoffStore,
   TestThreadStore,
+  TestOpportunityStore,
+  TestRevenueStore,
 } from "./test-stores.js";
 
 // Re-declare Fastify augmentation for test context
@@ -71,6 +75,8 @@ declare module "fastify" {
     contactStore?: ContactStore;
     handoffStore?: HandoffStore;
     threadStore?: ConversationThreadStore;
+    opportunityStore?: OpportunityStore;
+    revenueEventStore?: RevenueStore;
     reportCacheStore?: import("@switchboard/core/reports").ReportCacheStore;
     reportStores?: import("@switchboard/core/reports").ReportStores;
     reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
@@ -256,6 +262,8 @@ export async function buildTestServer(): Promise<TestContext> {
   app.decorate("contactStore", new TestContactStore());
   app.decorate("handoffStore", new TestHandoffStore());
   app.decorate("threadStore", new TestThreadStore());
+  app.decorate("opportunityStore", new TestOpportunityStore());
+  app.decorate("revenueEventStore", new TestRevenueStore());
 
   const { createInMemoryReportCacheStore } = await import("@switchboard/core/reports");
 
@@ -379,6 +387,9 @@ export async function buildTestServer(): Promise<TestContext> {
 
   const { dashboardContactsRoutes } = await import("../routes/dashboard-contacts.js");
   await app.register(dashboardContactsRoutes);
+
+  const { dashboardContactDetailRoutes } = await import("../routes/dashboard-contact-detail.js");
+  await app.register(dashboardContactDetailRoutes);
 
   return { app, cartridge, storage };
 }

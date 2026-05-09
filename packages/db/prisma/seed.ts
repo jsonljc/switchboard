@@ -9,16 +9,23 @@ import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
 const prisma = new PrismaClient();
 
 // ── Encryption for dev seed data ──
-// WARNING: This key is for dev seeding only. Never use a static key in production.
-const DEV_ENCRYPTION_KEY = Buffer.from(
-  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "hex",
-);
+// Must match apps/dashboard/src/lib/crypto.ts: AES-256-GCM with a key derived
+// as sha256(CREDENTIALS_ENCRYPTION_KEY). If this drifts from runtime, every
+// seeded user's apiKeyEncrypted becomes undecryptable at request time.
+function getKey(): Buffer {
+  const secret = process.env["CREDENTIALS_ENCRYPTION_KEY"];
+  if (!secret) {
+    throw new Error(
+      "CREDENTIALS_ENCRYPTION_KEY is not set. Seed needs the same secret the dashboard/API runtime use to decrypt apiKeyEncrypted.",
+    );
+  }
+  return createHash("sha256").update(secret).digest();
+}
 
 function encryptApiKey(apiKey: string): string {
   // AES-256-GCM requires a unique IV per encryption — use random bytes
   const iv = randomBytes(16);
-  const cipher = createCipheriv("aes-256-gcm", DEV_ENCRYPTION_KEY, iv);
+  const cipher = createCipheriv("aes-256-gcm", getKey(), iv);
   let encrypted = cipher.update(apiKey, "utf8", "hex");
   encrypted += cipher.final("hex");
   const authTag = cipher.getAuthTag().toString("hex");
@@ -141,10 +148,15 @@ async function main() {
   console.log("Seeded dev identity spec: spec_dev");
 
   // ── 6. Dashboard user ──
+  // Refresh apiKeyEncrypted on update so re-seeding self-heals rows that were
+  // encrypted under a different CREDENTIALS_ENCRYPTION_KEY.
   const devApiKey = "sb_dev_key_0123456789abcdef";
   await prisma.dashboardUser.upsert({
     where: { id: "dev-user" },
-    update: {},
+    update: {
+      apiKeyEncrypted: encryptApiKey(devApiKey),
+      apiKeyHash: sha256(devApiKey),
+    },
     create: {
       id: "dev-user",
       email: "dev@switchboard.local",
@@ -162,7 +174,11 @@ async function main() {
   const adminPasswordHash = await bcrypt.hash("admin123", 12);
   await prisma.dashboardUser.upsert({
     where: { id: "admin-user" },
-    update: { passwordHash: adminPasswordHash },
+    update: {
+      passwordHash: adminPasswordHash,
+      apiKeyEncrypted: encryptApiKey(adminApiKey),
+      apiKeyHash: sha256(adminApiKey),
+    },
     create: {
       id: "admin-user",
       email: "admin@switchboard.local",

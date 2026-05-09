@@ -6,7 +6,8 @@ export type ResolvedAgentHomeLink =
   | { href: null; disabled: true; reason: "route-not-available" };
 
 export const ROUTE_AVAILABILITY = {
-  contact: false,
+  contact: true,
+  thread: false,
   "ad-set": false,
   "creative-job": false,
   "agent-setup": false,

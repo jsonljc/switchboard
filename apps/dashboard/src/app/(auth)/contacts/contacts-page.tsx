@@ -10,7 +10,6 @@ import { ContactsTable, type ContactsSortColumn } from "./components/contacts-ta
 import { PaginationFooter } from "./components/pagination-footer";
 import { EmptyState } from "./components/empty-state";
 import { useContactsList } from "./hooks/use-contacts-list";
-import { ROUTE_AVAILABILITY } from "@/lib/agent-home/resolve-link";
 import styles from "./contacts.module.css";
 
 const VALID_STAGES = new Set<ContactStage>(["new", "active", "customer", "retained", "dormant"]);
@@ -42,8 +41,6 @@ export function ContactsPage() {
   const search = readSearch(searchParams);
   const sort = readSort(searchParams);
   const direction = readDirection(searchParams);
-
-  const detailEnabled = ROUTE_AVAILABILITY.contact;
 
   // TanStack Query serializes the queryKey on its own — no useMemo needed for
   // referential identity. Build the args fresh; the inputs are scalars.
@@ -116,12 +113,6 @@ export function ContactsPage() {
           <h1 className={styles.pageTitle}>Contacts</h1>
         </div>
 
-        {!detailEnabled && (
-          <p className={styles.disabledNotice}>
-            Browse-only for now. Contact detail is coming next.
-          </p>
-        )}
-
         <div className={styles.toolbar}>
           <FilterChips active={stage} onChange={onStageChange} />
           <SearchInput initialValue={search} onCommit={onSearchCommit} />
@@ -141,7 +132,6 @@ export function ContactsPage() {
           <>
             <ContactsTable
               rows={rows}
-              detailEnabled={detailEnabled}
               sort={sort}
               direction={direction}
               onSortChange={onSortChange}

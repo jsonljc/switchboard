@@ -12,6 +12,8 @@ import type {
   HandoffPackage,
   HandoffStatus,
   ConversationThreadStore,
+  OpportunityStore,
+  RevenueStore,
 } from "@switchboard/core";
 import type {
   WorkTrace,
@@ -19,7 +21,12 @@ import type {
   WorkTraceUpdateResult,
   WorkTraceReadResult,
 } from "@switchboard/core/platform";
-import type { Contact, ConversationThread } from "@switchboard/schemas";
+import type {
+  Contact,
+  ConversationThread,
+  Opportunity,
+  LifecycleRevenueEvent,
+} from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
 // WorkTrace
@@ -109,8 +116,12 @@ export class TestContactStore implements ContactStore {
     this.rows.delete(id);
   }
 
-  async findById(_orgId: string, id: string): Promise<Contact | null> {
-    return this.rows.get(id) ?? null;
+  async findById(orgId: string, id: string): Promise<Contact | null> {
+    const c = this.rows.get(id);
+    // Org-scoped: cross-org reads must return null (mirrors PrismaContactStore
+    // and the cross-org no-info-leak invariant exercised by api-contact-detail).
+    if (!c || c.organizationId !== orgId) return null;
+    return c;
   }
 
   async findByPhone(_orgId: string, phone: string): Promise<Contact | null> {
@@ -263,6 +274,82 @@ export class TestHandoffStore implements HandoffStore {
         r.organizationId === organizationId &&
         (r.status === "pending" || r.status === "assigned" || r.status === "active"),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Opportunity / Revenue stubs — added for /api/dashboard/contacts/:id (D1.5).
+// Only the methods exercised by the contact-detail route are real; everything
+// else throws so tests that need them must wire them explicitly. This mirrors
+// the "real-enough behaviour for tests" posture documented at the top of the
+// file.
+// ---------------------------------------------------------------------------
+
+export class TestOpportunityStore implements OpportunityStore {
+  private rows = new Map<string, Opportunity>();
+
+  /** Test-only seed helper. */
+  seed(opp: Opportunity): void {
+    this.rows.set(opp.id, opp);
+  }
+
+  async findByContact(orgId: string, contactId: string): Promise<Opportunity[]> {
+    return Array.from(this.rows.values()).filter(
+      (o) => o.organizationId === orgId && o.contactId === contactId,
+    );
+  }
+
+  async create(): Promise<Opportunity> {
+    throw new Error("TestOpportunityStore.create not implemented");
+  }
+  async findById(): Promise<Opportunity | null> {
+    throw new Error("TestOpportunityStore.findById not implemented");
+  }
+  async findActiveByContact(): Promise<Opportunity[]> {
+    throw new Error("TestOpportunityStore.findActiveByContact not implemented");
+  }
+  async updateStage(): Promise<Opportunity> {
+    throw new Error("TestOpportunityStore.updateStage not implemented");
+  }
+  async updateRevenueTotal(): Promise<void> {
+    throw new Error("TestOpportunityStore.updateRevenueTotal not implemented");
+  }
+  async countByStage(): Promise<
+    Array<{
+      stage: import("@switchboard/schemas").OpportunityStage;
+      count: number;
+      totalValue: number;
+    }>
+  > {
+    throw new Error("TestOpportunityStore.countByStage not implemented");
+  }
+}
+
+export class TestRevenueStore implements RevenueStore {
+  private rows = new Map<string, LifecycleRevenueEvent>();
+
+  /** Test-only seed helper. */
+  seed(evt: LifecycleRevenueEvent): void {
+    this.rows.set(evt.id, evt);
+  }
+
+  async findByContact(orgId: string, contactId: string): Promise<LifecycleRevenueEvent[]> {
+    return Array.from(this.rows.values()).filter(
+      (e) => e.organizationId === orgId && e.contactId === contactId,
+    );
+  }
+
+  async record(): Promise<LifecycleRevenueEvent> {
+    throw new Error("TestRevenueStore.record not implemented");
+  }
+  async findByOpportunity(): Promise<LifecycleRevenueEvent[]> {
+    throw new Error("TestRevenueStore.findByOpportunity not implemented");
+  }
+  async sumByOrg(): Promise<import("@switchboard/core").RevenueSummary> {
+    throw new Error("TestRevenueStore.sumByOrg not implemented");
+  }
+  async sumByCampaign(): Promise<import("@switchboard/core").CampaignRevenueSummary[]> {
+    throw new Error("TestRevenueStore.sumByCampaign not implemented");
   }
 }
 

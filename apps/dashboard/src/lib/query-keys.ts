@@ -191,5 +191,6 @@ export const scopedKeys = (orgId: string) => ({
   },
   contacts: {
     list: (query: object) => [orgId, "contacts", "list", query] as const,
+    detail: (id: string) => [orgId, "contacts", "detail", id] as const,
   },
 });

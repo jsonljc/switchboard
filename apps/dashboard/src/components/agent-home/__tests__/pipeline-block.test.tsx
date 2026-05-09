@@ -22,11 +22,12 @@ const baseVm: PipelineViewModel = {
 };
 
 describe("PipelineBlock", () => {
-  it("renders disabled span (not anchor) when contact route is unavailable", () => {
+  it("renders anchor with detail href when contact route is available (D1.5+)", () => {
     render(<PipelineBlock vm={baseVm} />);
     const tile = screen.getByText("Maya R.").closest("[data-stage]") as HTMLElement;
-    expect(tile.tagName).toBe("SPAN");
-    expect(tile.getAttribute("aria-disabled")).toBe("true");
+    expect(tile.tagName).toBe("A");
+    expect(tile.getAttribute("href")).toBe("/contacts/c1");
+    expect(tile.getAttribute("aria-disabled")).toBeNull();
   });
 
   it("renders empty-state for riley when no tiles", () => {

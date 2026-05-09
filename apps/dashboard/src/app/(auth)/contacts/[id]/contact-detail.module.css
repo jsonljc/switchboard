@@ -1,0 +1,350 @@
+/* =========================================================
+   CONTACT DETAIL — Mercury / work register detail surface.
+   Mirrors /contacts list module's Mercury alias block; ships
+   only the rules /contacts/[id] uses (header, profile dl,
+   hairline tables, thread tile, decision rows, empty/skeleton/
+   error states). No funnel, no cost-vs-value, no chips.
+   ========================================================= */
+
+.contactDetailPage {
+  /* Local aliases so design selectors read cleanly. */
+  --cream: var(--mercury-cream);
+  --ink: var(--mercury-ink);
+  --ink-2: var(--mercury-ink-2);
+  --ink-3: var(--mercury-ink-3);
+  --ink-4: var(--mercury-ink-4);
+  --accent: var(--mercury-accent);
+  --hair: var(--mercury-hairline);
+  --row-hover: var(--mercury-row-hover);
+  --serif: var(--font-serif-mercury);
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: var(--font-mono-mercury);
+  --col-wide: 1080px;
+  /* Section ramp matches /contacts list (and /reports) verbatim. */
+  --gap-section: 96px;
+  --gap-section-tablet: 72px;
+  --gap-section-mobile: 56px;
+
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  min-height: 100vh;
+  overflow-x: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.contactDetailPage ::selection {
+  background: var(--accent);
+  color: hsl(40 25% 94%);
+}
+
+/* ============= page shell ============= */
+.page {
+  max-width: var(--col-wide);
+  margin: 0 auto;
+  padding: 0 24px;
+  width: 100%;
+}
+@media (min-width: 768px) {
+  .page { padding: 0 40px; }
+}
+@media (min-width: 1280px) {
+  .page { padding: 0 56px; }
+}
+
+.section { padding-top: var(--gap-section-mobile); }
+.section:first-of-type { padding-top: 40px; }
+.section:last-of-type { padding-bottom: 80px; }
+@media (min-width: 768px) {
+  .section { padding-top: var(--gap-section-tablet); }
+  .section:first-of-type { padding-top: 48px; }
+}
+@media (min-width: 1280px) {
+  .section { padding-top: var(--gap-section); }
+  .section:first-of-type { padding-top: 56px; }
+}
+
+/* ============= header ============= */
+.headerSection {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--hair);
+}
+.displayName {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ink);
+  margin: 8px 0 0;
+}
+@media (min-width: 768px) {
+  .displayName { font-size: 42px; }
+}
+@media (min-width: 1280px) {
+  .displayName { font-size: 48px; letter-spacing: -0.025em; }
+}
+.headerMeta {
+  margin: 14px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.headerMeta .dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: hsl(20 10% 12% / 0.35);
+}
+
+/* ============= profile dl ============= */
+.profileGrid {
+  margin: 16px 0 0;
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr;
+  row-gap: 0;
+  column-gap: 24px;
+}
+.profileLabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hair);
+  margin: 0;
+}
+.profileValue {
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--ink);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hair);
+  margin: 0;
+}
+
+/* ============= hairline table (opps + revenue) ============= */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 16px;
+}
+.table thead th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: hsl(20 10% 12% / 0.55);
+  padding: 0 12px 12px 0;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+  white-space: nowrap;
+}
+.table tbody tr {
+  border-bottom: 1px solid var(--hair);
+  transition: background 0.15s ease;
+}
+.table tbody tr:hover {
+  background: var(--row-hover);
+}
+.table tbody td {
+  padding: 14px 12px 14px 0;
+  color: var(--ink);
+  vertical-align: middle;
+}
+.numCell {
+  text-align: right;
+  font-weight: 500;
+}
+.table thead th.numCell {
+  text-align: right;
+  font-weight: 500;
+}
+
+/* ============= thread tile ============= */
+.threadTile,
+.threadTileDisabled {
+  margin-top: 16px;
+  display: block;
+  padding: 18px 20px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.threadTile:hover {
+  border-color: var(--ink-3);
+  background: var(--row-hover);
+}
+.threadTileDisabled {
+  color: var(--ink-2);
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.threadMeta {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.threadMeta .dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: hsl(20 10% 12% / 0.35);
+}
+.threadSummary {
+  margin: 8px 0 0;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--ink);
+}
+.subLabel {
+  font-style: italic;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-3);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+
+/* ============= open decisions ============= */
+.decisionList {
+  margin: 16px 0 0;
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.decisionRow {
+  display: grid;
+  grid-template-columns: 64px 1fr auto auto;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.decisionKind {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.decisionTitle {
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--ink);
+}
+.decisionAgent {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+}
+.decisionTime {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+}
+
+/* ============= empty / skeleton / error ============= */
+.empty {
+  margin: 16px 0 0;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+.skeleton {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.skeletonHeader,
+.skeletonRow {
+  background: linear-gradient(
+    90deg,
+    hsl(40 18% 92% / 0) 0%,
+    hsl(40 18% 92% / 0.7) 50%,
+    hsl(40 18% 92% / 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: contactDetailShimmer 1.6s ease-in-out infinite;
+}
+.skeletonHeader {
+  height: 56px;
+  margin-bottom: 16px;
+}
+.skeletonRow {
+  height: 40px;
+  border-bottom: 1px solid var(--hair);
+}
+@keyframes contactDetailShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.errorState {
+  margin-top: 48px;
+  padding: 32px 0;
+  text-align: center;
+  font-family: var(--sans);
+  color: var(--ink-2);
+}
+.errorState button {
+  margin-top: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.errorState button:hover {
+  border-color: var(--ink-3);
+}

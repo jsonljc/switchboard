@@ -34,6 +34,7 @@ export interface CampaignRevenueSummary {
 export interface RevenueStore {
   record(input: RecordRevenueInput): Promise<LifecycleRevenueEvent>;
   findByOpportunity(orgId: string, opportunityId: string): Promise<LifecycleRevenueEvent[]>;
+  findByContact(orgId: string, contactId: string): Promise<LifecycleRevenueEvent[]>;
   sumByOrg(orgId: string, dateRange?: DateRange): Promise<RevenueSummary>;
   sumByCampaign(orgId: string, dateRange?: DateRange): Promise<CampaignRevenueSummary[]>;
 }

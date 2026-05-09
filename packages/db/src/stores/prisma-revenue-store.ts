@@ -40,6 +40,7 @@ interface CampaignRevenueSummary {
 interface RevenueStore {
   record(input: RecordRevenueInput): Promise<LifecycleRevenueEvent>;
   findByOpportunity(orgId: string, opportunityId: string): Promise<LifecycleRevenueEvent[]>;
+  findByContact(orgId: string, contactId: string): Promise<LifecycleRevenueEvent[]>;
   sumByOrg(orgId: string, dateRange?: DateRange): Promise<RevenueSummary>;
   sumByCampaign(orgId: string, dateRange?: DateRange): Promise<CampaignRevenueSummary[]>;
   revenueByCampaign(input: {
@@ -100,6 +101,15 @@ export class PrismaRevenueStore implements RevenueStore {
         organizationId: orgId,
         opportunityId,
       },
+      orderBy: { recordedAt: "desc" },
+    });
+
+    return rows.map(mapRowToRevenueEvent);
+  }
+
+  async findByContact(orgId: string, contactId: string): Promise<LifecycleRevenueEvent[]> {
+    const rows = await this.prisma.lifecycleRevenueEvent.findMany({
+      where: { organizationId: orgId, contactId },
       orderBy: { recordedAt: "desc" },
     });
 

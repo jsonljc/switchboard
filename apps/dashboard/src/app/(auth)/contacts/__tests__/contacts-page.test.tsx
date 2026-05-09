@@ -89,10 +89,10 @@ describe("ContactsPage", () => {
     expect(refetch).toHaveBeenCalled();
   });
 
-  it("renders the populated table and the browse-only notice while ROUTE_AVAILABILITY.contact === false", () => {
+  it("renders the populated table without the legacy browse-only notice (D1.5+)", () => {
     mockUseContactsList.mockReturnValue(hookResult({ pages: [CONTACTS_FIXTURE_PAGE] }));
     render(<ContactsPage />);
-    expect(screen.getByText(/Browse-only for now/)).toBeInTheDocument();
+    expect(screen.queryByText(/Browse-only for now/)).toBeNull();
     expect(screen.getByText("Lisa K.")).toBeInTheDocument();
     expect(screen.getByText("Maya T.")).toBeInTheDocument();
     expect(screen.getByText("Priya S.")).toBeInTheDocument();
