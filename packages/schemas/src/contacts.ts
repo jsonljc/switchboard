@@ -52,3 +52,74 @@ export const ContactsListResponseSchema = z.object({
   hasMore: z.boolean(),
 });
 export type ContactsListResponse = z.infer<typeof ContactsListResponseSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D1.5: /contacts/[id] detail page composite payload
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ContactDetailProfileSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  primaryChannel: z.enum(["whatsapp", "telegram", "dashboard"]),
+  stage: ContactStageSchema,
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  source: z.string().nullable(),
+  sourceType: z.string().nullable(),
+  attributionSummary: z.string().nullable(),
+  messagingConsent: z.object({
+    optedIn: z.boolean(),
+    optedInAt: z.string().nullable(),
+    source: z.string().nullable(),
+    optedOutAt: z.string().nullable(),
+  }),
+  firstContactAt: z.string(),
+  lastActivityAt: z.string(),
+});
+export type ContactDetailProfile = z.infer<typeof ContactDetailProfileSchema>;
+
+export const ContactDetailOpportunitySchema = z.object({
+  id: z.string(),
+  serviceName: z.string(),
+  stage: z.string(),
+  estimatedValue: z.number().int().nullable(),
+  openedAt: z.string(),
+  closedAt: z.string().nullable(),
+});
+export type ContactDetailOpportunity = z.infer<typeof ContactDetailOpportunitySchema>;
+
+export const ContactDetailThreadSchema = z.object({
+  id: z.string(),
+  assignedAgent: z.string(),
+  summary: z.string(),
+  lastMessageAt: z.string().nullable(),
+});
+export type ContactDetailThread = z.infer<typeof ContactDetailThreadSchema>;
+
+export const ContactDetailOpenDecisionSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["approval", "handoff"]),
+  agentKey: z.string().nullable(),
+  title: z.string(),
+  createdAt: z.string(),
+});
+export type ContactDetailOpenDecision = z.infer<typeof ContactDetailOpenDecisionSchema>;
+
+export const ContactDetailRevenueEventSchema = z.object({
+  id: z.string(),
+  amount: z.number().int(),
+  currency: z.string(),
+  type: z.string(),
+  status: z.string(),
+  recordedAt: z.string(),
+});
+export type ContactDetailRevenueEvent = z.infer<typeof ContactDetailRevenueEventSchema>;
+
+export const ContactDetailResponseSchema = z.object({
+  profile: ContactDetailProfileSchema,
+  opportunities: z.array(ContactDetailOpportunitySchema),
+  threads: z.array(ContactDetailThreadSchema),
+  openDecisions: z.array(ContactDetailOpenDecisionSchema),
+  revenueEvents: z.array(ContactDetailRevenueEventSchema),
+});
+export type ContactDetailResponse = z.infer<typeof ContactDetailResponseSchema>;
