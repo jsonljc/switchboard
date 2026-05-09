@@ -4,6 +4,7 @@ import { AGENT_REGISTRY } from "@switchboard/schemas";
 import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
 import { EditorialShellBoundary } from "./editorial-shell-boundary";
 import { AmbientCream } from "./ambient-cream";
+import { EditorialKeys } from "./editorial-keys";
 import { InboxLinkClient } from "./inbox-link-client";
 import { HaltButtonClient } from "./halt/halt-button-client";
 import { HaltProvider } from "./halt/halt-context";
@@ -28,6 +29,7 @@ export function EditorialAuthShellInner({
   return (
     <HaltProvider>
       <AmbientCream />
+      <EditorialKeys />
       <header className="app-header">
         <div className="app-header-row">
           <div className="brand-cluster">
