@@ -9,7 +9,7 @@ import { defaultCallback } from "../login/redirect-logic";
  * Sentinel resolver route for post-sign-in redirects.
  *
  * The login page sends fresh sign-ins here (instead of `/`) so the destination
- * is computed from the session shape (onboarded → /console, not onboarded →
+ * is computed from the session shape (onboarded → /, not onboarded →
  * /onboarding) rather than landing the user on the public marketing page.
  *
  * Renders nothing visible: the user sees a brief "Signing you in…" placeholder
