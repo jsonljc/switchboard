@@ -156,14 +156,14 @@ describe("InboxDrawer — tenant-null trigger", () => {
 
 describe("InboxDrawer — accessibility", () => {
   it("opens a dialog with accessible name 'Inbox' when the trigger is clicked", async () => {
+    const user = userEvent.setup();
     mockFeed = {
       data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
       isLoading: false,
       isError: false,
     };
     render(<InboxDrawer />, { wrapper });
-    const trigger = screen.getByRole("button", { name: /^Inbox/ });
-    trigger.click();
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveAccessibleName("Inbox");
@@ -172,35 +172,38 @@ describe("InboxDrawer — accessibility", () => {
 
 describe("InboxDrawer — list states", () => {
   it("renders 'Reading your inbox…' when the feed is loading and has no cached data", async () => {
+    const user = userEvent.setup();
     mockFeed = {
       data: undefined,
       isLoading: true,
       isError: false,
     };
     render(<InboxDrawer />, { wrapper });
-    screen.getByRole("button", { name: /^Inbox/ }).click();
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
     expect(await screen.findByText(/Reading your inbox/i)).toBeInTheDocument();
   });
 
   it("renders 'Couldn't load your inbox.' when the feed errored", async () => {
+    const user = userEvent.setup();
     mockFeed = {
       data: undefined,
       isLoading: false,
       isError: true,
     };
     render(<InboxDrawer />, { wrapper });
-    screen.getByRole("button", { name: /^Inbox/ }).click();
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
     expect(await screen.findByText(/Couldn't load your inbox\./i)).toBeInTheDocument();
   });
 
   it("renders the editorial empty-state copy when total is 0", async () => {
+    const user = userEvent.setup();
     mockFeed = {
       data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
       isLoading: false,
       isError: false,
     };
     render(<InboxDrawer />, { wrapper });
-    screen.getByRole("button", { name: /^Inbox/ }).click();
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
     expect(
       await screen.findByText(
         /You're caught up across your team\. I'll write again when something needs you\./i,
