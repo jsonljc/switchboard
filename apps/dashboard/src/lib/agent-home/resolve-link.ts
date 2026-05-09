@@ -7,6 +7,7 @@ export type ResolvedAgentHomeLink =
 
 export const ROUTE_AVAILABILITY = {
   contact: false,
+  thread: false,
   "ad-set": false,
   "creative-job": false,
   "agent-setup": false,
