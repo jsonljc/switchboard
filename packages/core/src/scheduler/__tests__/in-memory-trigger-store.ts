@@ -1,5 +1,5 @@
 import type { ScheduledTrigger, TriggerFilters, TriggerStatus } from "@switchboard/schemas";
-import type { TriggerStore } from "../trigger-store.js";
+import type { TriggerStore, TriggerBrowseQuery, TriggerBrowseResult } from "../trigger-store.js";
 
 /**
  * Test-only in-memory implementation of `TriggerStore`. Lives next to the
@@ -67,6 +67,48 @@ export class InMemoryTriggerStore implements TriggerStore {
       }
     }
     return count;
+  }
+
+  async listForBrowse(query: TriggerBrowseQuery): Promise<TriggerBrowseResult> {
+    const orgRows = Array.from(this.triggers.values()).filter(
+      (t) => t.organizationId === query.orgId,
+    );
+
+    // Per-status counts over the full org set (chip counts ignore filter/cursor).
+    const statusCounts = {
+      all: orgRows.length,
+      active: orgRows.filter((t) => t.status === "active").length,
+      fired: orgRows.filter((t) => t.status === "fired").length,
+      cancelled: orgRows.filter((t) => t.status === "cancelled").length,
+      expired: orgRows.filter((t) => t.status === "expired").length,
+    };
+
+    let filtered = orgRows;
+    if (query.status) {
+      filtered = filtered.filter((t) => t.status === query.status);
+    }
+
+    // Sort by (createdAt, id) — id is the stable tiebreak for keyset paging.
+    const dir = query.direction === "asc" ? 1 : -1;
+    filtered.sort((a, b) => {
+      const tsCmp = a.createdAt.getTime() - b.createdAt.getTime();
+      if (tsCmp !== 0) return tsCmp * dir;
+      return a.id.localeCompare(b.id) * dir;
+    });
+
+    // Apply cursor (strict: row must come *after* the cursor in sort order).
+    if (query.cursor) {
+      const cTs = query.cursor.ts.getTime();
+      const cId = query.cursor.id;
+      filtered = filtered.filter((t) => {
+        const tsCmp = t.createdAt.getTime() - cTs;
+        if (tsCmp !== 0) return tsCmp * dir > 0;
+        return t.id.localeCompare(cId) * dir > 0;
+      });
+    }
+
+    const rows = filtered.slice(0, query.limit + 1); // up to limit + 1; core trims
+    return { rows, statusCounts };
   }
 
   /**
