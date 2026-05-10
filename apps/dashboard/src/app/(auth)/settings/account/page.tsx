@@ -13,6 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIdentity, useUpdateIdentity } from "@/hooks/use-identity";
 import { useOrgConfig, useUpdateOrgConfig } from "@/hooks/use-org-config";
 import { useAgentRoster, useUpdateAgentRoster } from "@/hooks/use-agents";
+import { useQueryClient } from "@tanstack/react-query";
+import { signOut } from "@/lib/sign-out";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 export default function SettingsAccountPage() {
   const { status } = useSession();
+  const queryClient = useQueryClient();
   const { data, isLoading, isError, error, refetch } = useIdentity();
   const updateIdentity = useUpdateIdentity();
   const { data: orgData } = useOrgConfig();
@@ -197,6 +200,27 @@ export default function SettingsAccountPage() {
 
               <Button onClick={handleSaveGeneral} size="sm">
                 Save Changes
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-[15px] font-semibold tracking-tight text-foreground">
+                  Session
+                </h3>
+                <p className="text-[13px] text-muted-foreground">
+                  Sign out of this device. You can sign back in any time.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => signOut(queryClient)}
+              >
+                Sign out
               </Button>
             </CardContent>
           </Card>
