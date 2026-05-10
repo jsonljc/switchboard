@@ -319,6 +319,8 @@ Differences from the current AppShell:
 
 **Sign-out migration prerequisite.** `/settings/account/page.tsx` does **not** currently render a sign-out button (verified by grep). `/me/page.tsx` is the only sign-out surface in the dashboard. Before `/me` is deleted, the implementation plan adds a sign-out button to `/settings/account` (using the existing `signOut(queryClient)` from `@/lib/sign-out`). This must land in the same PR, ordered before the `/me` deletion commit.
 
+**Sign-out implementation guidance:** reuse the same `useQueryClient()` hook access pattern that `/me/page.tsx` uses today (`import { useQueryClient } from "@tanstack/react-query"` then `const queryClient = useQueryClient();`). The `QueryClient` instance comes from the existing `QueryClientProvider` higher in the tree (rendered by `apps/dashboard/src/providers/`). **Do not instantiate a new `QueryClient` inside `/settings/account`** — that would create a detached cache that desyncs from the rest of the app and causes subtle staleness bugs.
+
 **Smoke targets for `/settings/*` after the join:**
 
 - `/settings` (index)
@@ -350,7 +352,11 @@ Today, `/reports` and `/operator/reports` happen to skip the onboarding redirect
 
 This is treated as a **beneficial side-effect**: a user with incomplete onboarding shouldn't be able to land on `/reports` or change `/settings` either. The current behavior was an accident of coupling, not a deliberate exemption. Pre-launch is the right time to fix it. Recorded here so a reviewer can flip the call by tightening `ONBOARDING_EXEMPT_PATHS` if they prefer to preserve the old behavior verbatim.
 
-**Reviewer flip:** if you want to preserve current `/reports` / `/contacts` / `/automations` / `/operator/reports` exemption, add them to `ONBOARDING_EXEMPT_PATHS` in §5.1. The rest of the spec stands.
+**Reviewer flips (each is independent):**
+
+- **Preserve current `/reports`/`/contacts`/`/automations` exemption.** Add the relevant paths to `ONBOARDING_EXEMPT_PATHS` in §5.1. Recommended only if you want the implicit pre-existing behavior preserved verbatim.
+- **Exempt `/operator` for support/debugging.** Operator/admin routes sometimes need to remain accessible even if org onboarding is incomplete (e.g., for diagnostic access by Switchboard staff to a half-onboarded org). Currently `/operator/reports` would enforce onboarding under §5.1. If that breaks support workflows, add `"/operator"` to `ONBOARDING_EXEMPT_PATHS`. **Default in §5.1 is to gate it**; flip if support actually needs the bypass.
+- **Gate editorial paths too.** `/`, `/alex`, `/riley` currently skip onboarding via the `usesEditorialShell` branch (preserved as existing behavior). If you want full-app gating — i.e., even agent homes redirect to `/onboarding` when incomplete — that's a follow-up: change the `useEffect` condition from `if (shouldCheckOnboarding && …)` to fetch org-config for editorial paths too and gate them via the same flag. **Out of scope for this slice** because it's a real behavior change that touches the editorial home, not legacy-cleanup.
 
 ---
 
@@ -421,12 +427,14 @@ A narrow `href="…"` grep at spec time found two surviving files that link to d
 | `apps/dashboard/src/app/not-found.tsx:14`                      | Visible copy: `Back to Dashboard` | `Back home`                |
 | `apps/dashboard/src/components/landing/landing-nav.tsx:99,246` | `href="/me"`                      | `href="/settings/account"` |
 
-That narrow grep is **not** sufficient. Route strings appear in many forms beyond JSX `href=` — `router.push("/decide")`, `router.replace("/me")`, `redirect("/decide")`, fixture URLs, test path strings, API-payload URLs (notification bodies, adapter outputs). The implementation plan runs a broader grep across `apps/`, `packages/`, **and** `docs/`, with this exact form:
+That narrow grep is **not** sufficient. Route strings appear in many forms beyond JSX `href=` — `router.push("/decide")`, `router.replace('/me')`, `redirect("/decide")`, fixture URLs, test path strings, API-payload URLs (notification bodies, adapter outputs). Both single-quoted and double-quoted strings need to be caught. The implementation plan runs a broader grep across `apps/`, `packages/`, **and** `docs/`:
 
 ```bash
-grep -rnE '"/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|"|\?|#)' \
+grep -rnE '["'"'"']/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|["'"'"']|\?|#)' \
   apps packages docs
 ```
+
+(The shell-quoting `'"'"'` is the conventional way to embed a literal single quote inside a single-quoted bash string. Equivalent in `zsh`. If the implementer prefers, they can write the pattern to a file and use `grep -rnEf pattern.txt`.)
 
 Each hit must be classified into one of:
 
@@ -480,18 +488,19 @@ This callout is for reviewers: do not expect Tools nav inside this PR.
 - Onboarding/auth: `/login`, `/onboarding`, `/setup`
 - Admin: `/operator/reports`
 - **Public marketing site** (lives outside `(auth)`): `/agents/<known-slug>` — verify `profile-tabs` renders without errors, since this is the surviving consumer for `work-log-list`, `conversation-transcript`, and `trust-history-chart`. If your dev DB has no published agent profiles, at minimum hit the route and confirm no missing-import error in the server log.
-- Negative: `/dashboard`, `/decide`, `/me`, `/my-agent`, `/modules`, `/escalations`, `/conversations`, `/deployments/anything` — each returns 404, not redirect.
+- Negative (top-level): `/dashboard`, `/decide`, `/me`, `/my-agent`, `/modules`, `/escalations`, `/conversations` — each returns 404, not redirect.
+- Negative (nested — verifies middleware matcher cleanup): `/dashboard/roi`, `/decide/abc`, `/my-agent/abc`, `/modules/creative`, `/modules/foo/setup`, `/deployments/abc` — each returns 404. Middleware/matcher bugs typically surface on nested paths even when top-level paths look fine.
 
 **Final acceptance grep (hard gate):**
 
 ```bash
-grep -rnE '"/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|"|\?|#)' \
+grep -rnE '["'"'"']/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|["'"'"']|\?|#)' \
   apps packages \
   | grep -vE '^(packages/db/prisma/migrations/|docs/superpowers/specs/archive/)' \
   | grep -v "useAgentFirstNav"
 ```
 
-Expected: zero hits. Hits in `packages/db/prisma/migrations/` (historical SQL) and archived specs are explicitly allowed via the `grep -vE` filter — historical SQL doesn't get rewritten and archived specs are frozen.
+Catches both single-quoted (`'/decide'`) and double-quoted (`"/decide"`) string forms — JSX `href=`, `router.push`, `router.replace`, `redirect()`, fixture URLs, etc. all use one or the other. Expected: zero hits. Hits in `packages/db/prisma/migrations/` (historical SQL) and archived specs are explicitly allowed via the `grep -vE` filter — historical SQL doesn't get rewritten and archived specs are frozen.
 
 ---
 
@@ -520,18 +529,20 @@ These are referenced from this spec but explicitly do **not** ship in this PR:
 
 1. **Backend API endpoint deletion.** Roadmap §5 Track #10. Owns: `apps/api/src/routes/escalations.ts`, `marketplace.ts`, `conversations.ts`, `modules.ts` (if any), `deployments.ts`, plus any associated services / stores that lose their last consumer. Deferred until this consumer-removal PR has merged.
 2. **Editorial-shell Tools nav.** Roadmap §4 Phase D wrap-up. Adds `Contacts / Automations / Reports / Settings` (and any other Tools surfaces) to `editorial-auth-shell.tsx` brand-nav. Recorded as a known UX gap in §8.
+3. **D3 (`/activity` Mercury surface).** Separate slice in the original roadmap order; not bundled with D4+D5.
+4. **Backfill / migration of legacy operator workflows.** Pre-launch posture means no operator workflows to migrate. If a workflow is discovered after launch, it gets a real spec, not a rollback.
 
 ---
 
 ## 12. Implementation-plan guidance
 
-Single PR, but **not a single commit**. The implementation plan structures the work as a sequence of commits that each leave the branch in a coherent state, so review and bisect both work cleanly:
+Single PR, but **not a single commit**. The implementation plan structures the work as a sequence of commits ordered so each commit leaves the branch in a coherent (typechecks + tests pass + no dangling links) state. This makes review easier and `git bisect` viable.
 
-1. **Sign-out migration prep** — add the sign-out button to `/settings/account` (using `signOut(queryClient)` from `@/lib/sign-out`). Verify visually. This commit by itself is a no-op for the legacy `/me` route; it just adds a duplicate sign-out affordance.
-2. **Legacy route deletion** — delete the nine `(auth)/*` route directories + the `api/dashboard/modules/status/` proxy + their co-located `__tests__/`. This commit makes the legacy nav links broken (404), but `OwnerTabs` still renders them — that's caught by the next commit.
-3. **Component / hook pruning** — delete the layout chrome (OwnerShell, OwnerTabs), dashboard widgets, decide/approvals/tasks UI cluster, escalations, modules cluster, and the dying marketplace components per §4. Audit `use-marketplace.ts` per §4.7 and prune or delete.
-4. **AppShell + middleware + href cleanup** — apply the §5.1 AppShell rewrite (split `CHROME_HIDDEN_PATHS` from `ONBOARDING_EXEMPT_PATHS`); update middleware allowlist + matcher; fix `not-found.tsx` href + copy; fix `landing-nav.tsx` href. Run typecheck + tests.
+1. **Sign-out migration prep** — add the sign-out button to `/settings/account` using the existing `useQueryClient()` + `signOut(queryClient)` pattern from `/me/page.tsx` (see §5.2). Verify visually. This commit is a no-op for `/me`; it just adds a parallel sign-out affordance so the next steps can safely remove the legacy one.
+2. **Legacy-link removal + AppShell + middleware cleanup** — apply the §5.1 AppShell rewrite (split `CHROME_HIDDEN_PATHS` from `ONBOARDING_EXEMPT_PATHS`); delete `OwnerShell` and `OwnerTabs` (no surviving consumer once `app-shell.tsx` no longer references them); update `middleware.ts` allowlist + matcher; fix `not-found.tsx` href + copy; fix `landing-nav.tsx` href. After this commit, no in-tree code links to the legacy routes; the routes themselves still exist (deletion is the next commit) and remain reachable via direct URL only.
+3. **Legacy route deletion** — delete the nine `(auth)/*` route directories + the `api/dashboard/modules/status/` proxy + their co-located `__tests__/`. After this commit, the deleted routes return 404 (and nothing in surviving code links to them, courtesy of commit 2).
+4. **Component / hook pruning** — delete dashboard widgets, decide/approvals/tasks UI cluster, escalations, modules cluster, dying marketplace components per §4.3–§4.7. Audit `use-marketplace.ts` per §4.7 and prune or delete.
 5. **Flag retirement** — generate the Prisma migration via §6.3 commands; drop the four code references; delete `api-organizations-flag-safety.test.ts`; trim the round-trip case from `api-organizations.test.ts`. Run `pnpm reset && pnpm typecheck && pnpm test`.
-6. **Final pass** — re-run the §9 acceptance grep; perform manual smoke per §9; fix any stragglers; commit any final cleanups.
+6. **Final pass** — re-run the §9 acceptance grep; perform manual smoke per §9 (positive, settings deep routes, public marketing, negative top-level + nested); fix any stragglers; commit any final cleanups.
 
-The plan owns the exact ordering. This list is the spec's recommendation; the plan can deviate if it has a reason, but the prerequisite ordering — **sign-out migration before `/me` deletion**, **AppShell change after route deletion** — is load-bearing. 3. **D3 (`/activity` Mercury surface).** Separate slice in the original roadmap order; not bundled with D4+D5. 4. **Backfill / migration of legacy operator workflows.** Pre-launch posture means no operator workflows to migrate. If a workflow is discovered after launch, it gets a real spec, not a rollback.
+The plan owns the exact ordering. The prerequisite ordering — **sign-out migration before `/me` deletion** and **legacy-link removal before route deletion** — is load-bearing; the rest is reviewer ergonomics. If a particular pruning step (commit 4) needs to merge into commit 3 because they share a directory, that's fine; coherence per commit is the goal, not commit count.
