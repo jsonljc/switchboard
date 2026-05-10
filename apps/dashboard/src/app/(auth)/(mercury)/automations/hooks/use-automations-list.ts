@@ -7,6 +7,7 @@ import {
   type ScheduledTriggersListResponse,
 } from "@switchboard/schemas";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { isMercuryToolLive } from "@/lib/route-availability";
 import { AUTOMATIONS_FIXTURE_PAGE } from "../fixtures";
 
 export type AutomationsListQueryInput = Partial<Omit<ScheduledTriggersListQuery, "cursor">>;
@@ -16,7 +17,7 @@ export type UseAutomationsListResult = UseInfiniteQueryResult<
   Error
 >;
 
-const isLive = (): boolean => process.env.NEXT_PUBLIC_AUTOMATIONS_LIVE === "true";
+const isLive = (): boolean => isMercuryToolLive("automations");
 
 function buildSearch(query: AutomationsListQueryInput, cursor: string | undefined): string {
   const params = new URLSearchParams();

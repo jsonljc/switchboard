@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { isMercuryToolLive } from "@/lib/route-availability";
 import { FIXTURES_BY_WINDOW, type ReportData, type ReportWindow } from "../fixtures";
 
 export interface UseReportData {
@@ -12,7 +13,10 @@ export interface UseReportData {
   refresh: () => Promise<void>;
 }
 
-const isLive = process.env.NEXT_PUBLIC_REPORTS_LIVE === "true";
+// Captured at module load; the existing test file relies on this (its per-test
+// env mutations happen after the static import and don't affect this binding).
+// Production inlines NEXT_PUBLIC_* at build time, so this is constant either way.
+const isLive = isMercuryToolLive("reports");
 
 export function useReportData(window: ReportWindow): UseReportData {
   const keys = useScopedQueryKeys();

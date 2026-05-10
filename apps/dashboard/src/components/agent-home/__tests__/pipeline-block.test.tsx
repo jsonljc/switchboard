@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PipelineBlock } from "../pipeline-block";
 import type { PipelineViewModel } from "@/lib/agent-home/types";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const baseVm: PipelineViewModel = {
   agentKey: "alex",
@@ -22,12 +26,21 @@ const baseVm: PipelineViewModel = {
 };
 
 describe("PipelineBlock", () => {
-  it("renders anchor with detail href when contact route is available (D1.5+)", () => {
+  it("renders anchor with detail href when contact route is available (NEXT_PUBLIC_CONTACTS_LIVE='true')", () => {
+    vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "true");
     render(<PipelineBlock vm={baseVm} />);
     const tile = screen.getByText("Maya R.").closest("[data-stage]") as HTMLElement;
     expect(tile.tagName).toBe("A");
     expect(tile.getAttribute("href")).toBe("/contacts/c1");
     expect(tile.getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("renders disabled span when NEXT_PUBLIC_CONTACTS_LIVE is unset (couples list+detail)", () => {
+    vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "");
+    render(<PipelineBlock vm={baseVm} />);
+    const tile = screen.getByText("Maya R.").closest("[data-stage]") as HTMLElement;
+    expect(tile.tagName).toBe("SPAN");
+    expect(tile.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("renders empty-state for riley when no tiles", () => {

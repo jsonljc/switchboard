@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ContactDetailThread } from "@switchboard/schemas";
 import { ThreadsSection } from "../threads-section";
-import { ROUTE_AVAILABILITY } from "@/lib/agent-home/resolve-link";
 
 describe("ThreadsSection", () => {
   it("renders the empty copy when there is no thread", () => {
@@ -11,8 +10,6 @@ describe("ThreadsSection", () => {
   });
 
   it("renders an aria-disabled tile with the 'opening soon' sub-label while the thread route is closed", () => {
-    // Sanity-check the route is closed in this slice (component reads this directly).
-    expect(ROUTE_AVAILABILITY.thread).toBe(false);
     const items: ContactDetailThread[] = [
       {
         id: "t-1",

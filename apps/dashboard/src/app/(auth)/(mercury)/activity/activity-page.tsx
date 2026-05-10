@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { AuditEntriesListQuery } from "@switchboard/schemas";
 import { OPERATIONAL_AUDIT_EVENT_TYPES } from "@switchboard/schemas";
+import { isMercuryToolLive } from "@/lib/route-availability";
 import { useActivityList } from "./hooks/use-activity-list";
 import { ACTIVITY_FIXTURES } from "./fixtures";
 import { ActivityHeader } from "./components/header";
@@ -14,10 +15,7 @@ import { PaginationFooter } from "./components/pagination-footer";
 import { EmptyState } from "./components/empty-state";
 import styles from "./activity.module.css";
 
-// Read per-call so vitest can mutate NEXT_PUBLIC_ACTIVITY_LIVE between tests.
-// In production Next.js inlines the value at build time, so this is
-// effectively a constant in prod.
-const isActivityLive = (): boolean => process.env.NEXT_PUBLIC_ACTIVITY_LIVE === "true";
+const isActivityLive = (): boolean => isMercuryToolLive("activity");
 
 // ---------------------------------------------------------------------------
 // URL param readers
