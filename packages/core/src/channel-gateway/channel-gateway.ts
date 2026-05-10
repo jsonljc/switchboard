@@ -1,3 +1,4 @@
+import { createId } from "@paralleldrive/cuid2";
 import type {
   ChannelGatewayConfig,
   GatewayConversationStore,
@@ -12,6 +13,17 @@ import { resolveContactIdentity } from "./resolve-contact-identity.js";
 import { parseApprovalResponsePayload } from "./approval-response-payload.js";
 import { handleApprovalResponse } from "./handle-approval-response.js";
 import { isOptOutKeyword } from "./opt-out-keywords.js";
+import { scanForEscalationTriggers } from "../governance/scanner/escalation-trigger-scanner.js";
+import { renderHandoffTemplate } from "../governance/handoff-template.js";
+import { REASON_CODE_BY_TRIGGER } from "../governance/escalation-triggers/types.js";
+import { resolveGovernanceMode } from "@switchboard/schemas";
+import type {
+  GovernanceVerdictStore,
+  SaveGovernanceVerdictInput,
+} from "../governance/governance-verdict-store/types.js";
+import type { GovernancePostureCache } from "../governance/posture-cache.js";
+import type { HandoffStore, HandoffPackage } from "../handoff/types.js";
+import type { GatewayConversationStatusSetter } from "./types.js";
 
 const OPT_OUT_CONFIRMATION =
   "You've been opted out of WhatsApp messages from us. Reply START at any time to opt back in.";
@@ -75,6 +87,34 @@ async function dispatchResponse(params: {
   } else {
     await replySink.send("I'm having trouble right now. Let me connect you with the team.");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pre-input gate helpers
+// ---------------------------------------------------------------------------
+
+function buildInputHandoffPackage(
+  sessionId: string,
+  orgId: string,
+  clock: () => Date,
+): HandoffPackage {
+  return {
+    id: createId(),
+    sessionId,
+    organizationId: orgId,
+    reason: "compliance_concern",
+    status: "pending",
+    leadSnapshot: { channel: "channel" },
+    qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
+    conversationSummary: {
+      turnCount: 0,
+      keyTopics: [],
+      objectionHistory: [],
+      sentiment: "neutral",
+    },
+    slaDeadlineAt: new Date(clock().getTime() + 4 * 60 * 60 * 1000), // 4 h SLA
+    createdAt: clock(),
+  };
 }
 
 export class ChannelGateway {
@@ -180,6 +220,19 @@ export class ChannelGateway {
       return;
     }
 
+    // 4e. Pre-input deterministic gate — must run before typing signal and submit.
+    // Scans inbound text for escalation triggers; may short-circuit on enforce match.
+    const gateBlocked = await this.runPreInputGate(
+      message.text,
+      message.sessionId,
+      resolved.deploymentId,
+      resolved.organizationId,
+      replySink,
+    );
+    if (gateBlocked) {
+      return;
+    }
+
     // 5. Signal typing
     replySink.onTyping?.();
 
@@ -226,5 +279,247 @@ export class ChannelGateway {
       onMessageRecorded: this.config.onMessageRecorded,
       replySink,
     });
+  }
+
+  /**
+   * Pre-input deterministic gate.
+   *
+   * Runs between identity resolution and platformIngress.submit().
+   * Returns `true` when the inbound message has been escalated and submit MUST
+   * be skipped; `false` when submit should proceed normally.
+   *
+   * Failure-mode discipline: persistence errors are logged but do NOT skip the
+   * enforcement block. The caller checks the return value, not an exception.
+   */
+  private async runPreInputGate(
+    inboundText: string,
+    sessionId: string,
+    deploymentId: string,
+    organizationId: string,
+    replySink: ReplySink,
+  ): Promise<boolean> {
+    const {
+      governanceConfigResolver,
+      escalationTriggerLoader,
+      verdictStore,
+      postureCache,
+      handoffStore,
+      conversationStatusSetter,
+    } = this.config;
+
+    // Gate is opt-in. Skip entirely if not wired.
+    if (!governanceConfigResolver || !escalationTriggerLoader || !verdictStore || !postureCache) {
+      return false;
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Resolve governance config
+    // ------------------------------------------------------------------
+    const resolution = await governanceConfigResolver(deploymentId);
+
+    if (resolution.status === "missing") {
+      // No governance config — pass through, persist nothing.
+      return false;
+    }
+
+    if (resolution.status === "error") {
+      return this.handleInputGateResolverError(
+        resolution.error,
+        inboundText,
+        sessionId,
+        deploymentId,
+        organizationId,
+        verdictStore,
+        postureCache,
+        handoffStore,
+        conversationStatusSetter,
+        replySink,
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Resolved config — update cache, then scan
+    // ------------------------------------------------------------------
+    const { config } = resolution;
+    const mode = resolveGovernanceMode(config);
+
+    postureCache.remember(deploymentId, {
+      mode,
+      jurisdiction: config.jurisdiction,
+      clinicType: config.clinicType,
+    });
+
+    if (mode === "off") {
+      return false;
+    }
+
+    const entries = escalationTriggerLoader(config.jurisdiction);
+    const matches = scanForEscalationTriggers(inboundText, entries);
+
+    if (matches.length === 0) {
+      return false; // Clean inbound — persist nothing.
+    }
+
+    const firstMatch = matches[0]!;
+    const firstEntry = firstMatch.entry;
+    const reasonCode = REASON_CODE_BY_TRIGGER[firstEntry.category];
+    const decidedAt = new Date().toISOString();
+    const action = mode === "enforce" ? ("escalate" as const) : ("allow" as const);
+    const auditLevel = mode === "enforce" ? ("critical" as const) : ("warning" as const);
+
+    const verdictInput: SaveGovernanceVerdictInput = {
+      action,
+      reasonCode,
+      jurisdiction: config.jurisdiction,
+      clinicType: config.clinicType,
+      sourceGuard: "escalation_trigger",
+      originalText: inboundText,
+      auditLevel,
+      decidedAt,
+      conversationId: sessionId,
+      deploymentId,
+      details: {
+        matchCategory: firstEntry.category,
+        matchId: firstEntry.id,
+        matchedText: firstMatch.matched,
+        sentence: firstMatch.sentence,
+      },
+    };
+
+    // Persist verdict (errors must NOT skip the block in enforce mode).
+    try {
+      await verdictStore.save(verdictInput);
+    } catch (err) {
+      console.error(
+        `[ChannelGateway] pre-input gate: verdictStore.save failed (verdict still applied):`,
+        err,
+      );
+    }
+
+    if (mode === "observe") {
+      return false; // Log only — proceed to submit.
+    }
+
+    // Enforce: flip status, save handoff, send handoff text.
+    const handoffText = renderHandoffTemplate({
+      jurisdiction: config.jurisdiction,
+      reasonCode,
+    });
+
+    if (conversationStatusSetter) {
+      try {
+        await conversationStatusSetter.setConversationStatus(sessionId, "human_override");
+      } catch (err) {
+        console.error(
+          `[ChannelGateway] pre-input gate: setConversationStatus failed (block still applied):`,
+          err,
+        );
+      }
+    }
+
+    if (handoffStore) {
+      try {
+        await handoffStore.save(
+          buildInputHandoffPackage(sessionId, organizationId, () => new Date()),
+        );
+      } catch (err) {
+        console.error(
+          `[ChannelGateway] pre-input gate: handoffStore.save failed (block still applied):`,
+          err,
+        );
+      }
+    }
+
+    await replySink.send(handoffText);
+    return true; // Short-circuit submit.
+  }
+
+  /**
+   * Fail-closed path: resolver threw but posture cache has an enforce entry.
+   * Uses cached jurisdiction/clinicType — never hardcoded defaults.
+   */
+  private async handleInputGateResolverError(
+    error: Error,
+    inboundText: string,
+    sessionId: string,
+    deploymentId: string,
+    organizationId: string,
+    verdictStore: GovernanceVerdictStore,
+    postureCache: GovernancePostureCache,
+    handoffStore: HandoffStore | undefined,
+    conversationStatusSetter: GatewayConversationStatusSetter | undefined,
+    replySink: ReplySink,
+  ): Promise<boolean> {
+    const posture = postureCache.lastKnown(deploymentId);
+
+    if (!posture || posture.mode !== "enforce") {
+      console.error(
+        `[ChannelGateway] pre-input gate: resolver error for "${deploymentId}" — failing open (no cached enforce posture):`,
+        error,
+      );
+      return false;
+    }
+
+    console.error(
+      `[ChannelGateway] pre-input gate: resolver error for "${deploymentId}" — failing closed (cached ${posture.mode}/${posture.jurisdiction}/${posture.clinicType}):`,
+      error,
+    );
+
+    const reasonCode = "governance_unavailable" as const;
+    const decidedAt = new Date().toISOString();
+
+    const verdictInput: SaveGovernanceVerdictInput = {
+      action: "escalate",
+      reasonCode,
+      jurisdiction: posture.jurisdiction,
+      clinicType: posture.clinicType,
+      sourceGuard: "escalation_trigger",
+      originalText: inboundText,
+      auditLevel: "critical",
+      decidedAt,
+      conversationId: sessionId,
+      deploymentId,
+    };
+
+    try {
+      await verdictStore.save(verdictInput);
+    } catch (err) {
+      console.error(
+        `[ChannelGateway] pre-input gate: verdictStore.save failed (block still applied):`,
+        err,
+      );
+    }
+
+    const handoffText = renderHandoffTemplate({
+      jurisdiction: posture.jurisdiction,
+      reasonCode,
+    });
+
+    if (conversationStatusSetter) {
+      try {
+        await conversationStatusSetter.setConversationStatus(sessionId, "human_override");
+      } catch (err) {
+        console.error(
+          `[ChannelGateway] pre-input gate: setConversationStatus failed (block still applied):`,
+          err,
+        );
+      }
+    }
+
+    if (handoffStore) {
+      try {
+        await handoffStore.save(
+          buildInputHandoffPackage(sessionId, organizationId, () => new Date()),
+        );
+      } catch (err) {
+        console.error(
+          `[ChannelGateway] pre-input gate: handoffStore.save failed (block still applied):`,
+          err,
+        );
+      }
+    }
+
+    await replySink.send(handoffText);
+    return true; // Short-circuit submit.
   }
 }

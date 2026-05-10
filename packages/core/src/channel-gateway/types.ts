@@ -3,6 +3,11 @@ import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
 import type { ApprovalStore } from "../storage/interfaces.js";
 import type { HandleApprovalResponseConfig } from "./handle-approval-response.js";
+import type { GovernanceConfigResolver } from "../governance/governance-config-resolver.js";
+import type { EscalationTriggerEntry } from "../governance/escalation-triggers/types.js";
+import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
+import type { GovernancePostureCache } from "../governance/posture-cache.js";
+import type { HandoffStore } from "../handoff/types.js";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -16,6 +21,17 @@ export interface GatewayContactStore {
   }): Promise<{ id: string }>;
   /** Records a WhatsApp messaging opt-out triggered by inbound STOP/UNSUBSCRIBE keyword. */
   recordMessagingOptOut?(orgId: string, contactId: string): Promise<void>;
+}
+
+/**
+ * Minimal interface for marking a session as requiring human intervention
+ * from within the gateway (pre-input gate). The real implementation
+ * (adapter over ConversationStateStore or GatewayConversationStore) satisfies
+ * this structurally. Kept narrow so the gateway does not take a compile-time
+ * dependency on the full platform store. Task 14 wires the real adapter.
+ */
+export interface GatewayConversationStatusSetter {
+  setConversationStatus(sessionId: string, status: string): Promise<void>;
 }
 
 export interface ChannelGatewayConfig {
@@ -49,6 +65,37 @@ export interface ChannelGatewayConfig {
    * role check → shared respondToApproval call mutates the lifecycle.
    */
   approvalResponseConfig?: HandleApprovalResponseConfig;
+  // ---------------------------------------------------------------------------
+  // Pre-input deterministic gate deps (Task 13)
+  // All optional — when omitted, the gate is skipped (backward compatibility).
+  // ---------------------------------------------------------------------------
+  /**
+   * Resolves per-deployment governance config. When omitted, the gate is skipped.
+   */
+  governanceConfigResolver?: GovernanceConfigResolver;
+  /**
+   * Loads escalation trigger entries for a jurisdiction. When omitted, the gate is skipped.
+   */
+  escalationTriggerLoader?: (jurisdiction: "SG" | "MY") => ReadonlyArray<EscalationTriggerEntry>;
+  /**
+   * Persists governance audit verdicts. When omitted, the gate is skipped.
+   */
+  verdictStore?: GovernanceVerdictStore;
+  /**
+   * Cache for the last-known governance posture per deployment — enables
+   * fail-closed behaviour on resolver error. Shared instance with the
+   * pre-output banned-phrase gate.
+   */
+  postureCache?: GovernancePostureCache;
+  /**
+   * Persists the handoff package on enforce-mode escalation.
+   */
+  handoffStore?: HandoffStore;
+  /**
+   * Adapter for flipping conversation status to human_override on escalation.
+   * When omitted, the flip step is skipped (errors logged in enforce path).
+   */
+  conversationStatusSetter?: GatewayConversationStatusSetter;
 }
 
 export interface GatewayConversationStore {
