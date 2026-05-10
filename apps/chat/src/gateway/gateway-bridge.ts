@@ -5,6 +5,9 @@ import {
   PrismaDeploymentMemoryStore,
   PrismaContactStore,
   PrismaApprovalStore,
+  PrismaHandoffStore,
+  PrismaGovernanceVerdictStore,
+  PrismaDeploymentStore,
 } from "@switchboard/db";
 import { ChannelGateway, ConversationLifecycleTracker } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
@@ -15,6 +18,11 @@ import {
 } from "@switchboard/core";
 import type { EmbeddingAdapter } from "@switchboard/core";
 import { PrismaDeploymentResolver } from "@switchboard/core/platform";
+import {
+  createAgentDeploymentGovernanceResolver,
+  InMemoryGovernancePostureCache,
+  loadEscalationTriggers,
+} from "@switchboard/core/skill-runtime";
 import type { SubmitWorkResponse } from "@switchboard/core/platform";
 import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { PrismaGatewayConversationStore } from "./gateway-conversation-store.js";
@@ -93,12 +101,58 @@ export function createGatewayBridge(
   }
   const platformIngress = options.platformIngress;
 
+  // ---------------------------------------------------------------------------
+  // Deterministic gate deps (Task 14)
+  // Shared GovernancePostureCache so warm hits from the pre-output hook (in the
+  // API skill executor) propagate to this pre-input gate on subsequent requests
+  // when both servers share state (single-process dev). In production the cache
+  // is per-process — acceptable because each process warms independently on first
+  // resolve and fails closed from the cache on resolver error.
+  // ---------------------------------------------------------------------------
+  const deploymentStore = new PrismaDeploymentStore(prisma);
+  const gatewayGovernanceResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
+  const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma);
+  const gatewayPostureCache = new InMemoryGovernancePostureCache();
+  const gatewayHandoffStore = new PrismaHandoffStore(prisma);
+  // Adapter: GatewayConversationStatusSetter → direct conversationState updateMany.
+  // updateMany is intentionally soft: if no ConversationState row exists the call
+  // is a no-op. The block is applied regardless — status flip is best-effort.
+  const gatewayConversationStatusSetter = {
+    async setConversationStatus(sessionId: string, status: string): Promise<void> {
+      await prisma.conversationState.updateMany({
+        where: { threadId: sessionId },
+        data: { status },
+      });
+    },
+  };
+
+  // Startup assertion: all six ChannelGateway pre-input gate deps must be present.
+  // Missing deps cause silent gate degradation at runtime — fail fast instead.
+  const missingGatewayDeps: string[] = [];
+  if (!gatewayGovernanceResolver) missingGatewayDeps.push("governanceConfigResolver");
+  if (!loadEscalationTriggers) missingGatewayDeps.push("escalationTriggerLoader");
+  if (!gatewayGovernanceVerdictStore) missingGatewayDeps.push("verdictStore");
+  if (!gatewayPostureCache) missingGatewayDeps.push("postureCache");
+  if (!gatewayHandoffStore) missingGatewayDeps.push("handoffStore");
+  if (!gatewayConversationStatusSetter) missingGatewayDeps.push("conversationStatusSetter");
+  if (missingGatewayDeps.length > 0) {
+    throw new Error(
+      `ChannelGateway: deterministic gate deps incomplete — missing: ${missingGatewayDeps.join(", ")}`,
+    );
+  }
+
   return new ChannelGateway({
     deploymentResolver,
     platformIngress,
     conversationStore: new PrismaGatewayConversationStore(prisma),
     contactStore: new PrismaContactStore(prisma),
     approvalStore: new PrismaApprovalStore(prisma),
+    governanceConfigResolver: gatewayGovernanceResolver,
+    escalationTriggerLoader: loadEscalationTriggers,
+    verdictStore: gatewayGovernanceVerdictStore,
+    postureCache: gatewayPostureCache,
+    handoffStore: gatewayHandoffStore,
+    conversationStatusSetter: gatewayConversationStatusSetter,
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
       lifecycleTracker.recordMessage({

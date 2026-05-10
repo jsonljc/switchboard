@@ -23,6 +23,9 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   })),
   SkillExecutorImpl,
   GovernanceHook,
+  DeterministicSafetyGateHook: vi
+    .fn()
+    .mockImplementation(() => ({ name: "deterministic-safety-gate" })),
   SimulationPolicyHook: vi.fn().mockImplementation(() => ({ name: "simulation" })),
   AnthropicToolCallingAdapter: vi.fn().mockImplementation(() => ({})),
   BuilderRegistry: vi.fn().mockImplementation(() => ({
@@ -42,6 +45,12 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   })),
   BookingFailureHandler: vi.fn().mockImplementation(() => ({})),
   alexBuilder: vi.fn(async () => ({})),
+  createAgentDeploymentGovernanceResolver: vi.fn(() => vi.fn(async () => ({ status: "missing" }))),
+  InMemoryGovernancePostureCache: vi.fn().mockImplementation(() => ({
+    remember: vi.fn(),
+    lastKnown: vi.fn(() => null),
+  })),
+  loadBannedPhrases: vi.fn(() => []),
 }));
 
 vi.mock("@switchboard/core/platform", () => ({
@@ -76,6 +85,12 @@ vi.mock("@switchboard/db", () => ({
   PrismaBookingStore: vi.fn().mockImplementation(() => ({ findById: vi.fn(async () => null) })),
   PrismaHandoffStore: vi.fn().mockImplementation(() => ({})),
   PrismaBusinessFactsStore: vi.fn().mockImplementation(() => ({})),
+  PrismaDeploymentStore: vi.fn().mockImplementation(() => ({
+    findById: vi.fn(async () => null),
+  })),
+  PrismaGovernanceVerdictStore: vi.fn().mockImplementation(() => ({
+    save: vi.fn(async () => {}),
+  })),
 }));
 
 describe("bootstrapSkillMode governance wiring", () => {
@@ -117,6 +132,9 @@ describe("bootstrapSkillMode governance wiring", () => {
           findMany: vi.fn(async () => []),
           create: vi.fn(async () => ({ id: "booking_1" })),
           update: vi.fn(async () => ({ id: "booking_1" })),
+        },
+        conversationState: {
+          updateMany: vi.fn(async () => ({ count: 0 })),
         },
       } as never,
       intentRegistry: {} as never,

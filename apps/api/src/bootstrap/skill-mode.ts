@@ -29,6 +29,7 @@ export async function bootstrapSkillMode(
     loadSkill,
     SkillExecutorImpl,
     GovernanceHook,
+    DeterministicSafetyGateHook,
     AnthropicToolCallingAdapter,
     BuilderRegistry,
     createCrmQueryTool,
@@ -36,6 +37,9 @@ export async function bootstrapSkillMode(
     createCalendarBookToolFactory,
     createEscalateToolFactory,
     BookingFailureHandler,
+    createAgentDeploymentGovernanceResolver,
+    InMemoryGovernancePostureCache,
+    loadBannedPhrases,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
   const { HandoffPackageAssembler, HandoffNotifier } = await import("@switchboard/core");
@@ -46,6 +50,8 @@ export async function bootstrapSkillMode(
     PrismaBookingStore,
     PrismaHandoffStore,
     PrismaBusinessFactsStore,
+    PrismaDeploymentStore,
+    PrismaGovernanceVerdictStore,
   } = await import("@switchboard/db");
   const { NoopNotifier, TelegramApprovalNotifier, CompositeNotifier } =
     await import("@switchboard/core/notifications");
@@ -71,6 +77,32 @@ export async function bootstrapSkillMode(
 
   const handoffStore = new PrismaHandoffStore(prismaClient);
   const handoffAssembler = new HandoffPackageAssembler();
+
+  // ---------------------------------------------------------------------------
+  // Deterministic safety gate infrastructure (Task 14)
+  // Shared across the skill-executor hook and the channel-gateway pre-input gate
+  // so that a posture warm-hit from the pre-output hook also benefits the gateway.
+  // ---------------------------------------------------------------------------
+  const deploymentStore = new PrismaDeploymentStore(prismaClient);
+  const governanceConfigResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
+  const governanceVerdictStore = new PrismaGovernanceVerdictStore(prismaClient);
+  // Single shared posture cache — warm on first resolve, reused across both gates.
+  const governancePostureCache = new InMemoryGovernancePostureCache();
+  // Adapter: ConversationStatusSetter → direct conversationState updateMany.
+  // The DeterministicSafetyGateHook receives a sessionId (the channel session /
+  // WhatsApp phone number) which is stored as threadId in ConversationState.
+  // updateMany is intentionally soft: if no row exists the call is a no-op rather
+  // than a fatal error, because the conversation may not yet have a state row
+  // (e.g. very first message). The block is applied regardless — status flip is
+  // best-effort.
+  const conversationStatusSetter = {
+    async setConversationStatus(sessionId: string, status: string): Promise<void> {
+      await prismaClient.conversationState.updateMany({
+        where: { threadId: sessionId },
+        data: { status },
+      });
+    },
+  };
 
   const telegramToken = process.env["TELEGRAM_BOT_TOKEN"];
   const escalationChatId = process.env["ESCALATION_CHAT_ID"];
@@ -213,7 +245,22 @@ export async function bootstrapSkillMode(
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
   const adapter = new AnthropicToolCallingAdapter(anthropicClient);
-  const hooks = [new GovernanceHook(toolsMap)];
+
+  // DeterministicSafetyGateHook registered BEFORE TracePersistenceHook (and any
+  // future hooks that persist result.response) so the trace store never sees
+  // pre-block unsafe text. Hook-runner iterates in registration-array order —
+  // verified: hook-runner.ts uses sequential `for...of` loops, not Promise.all.
+  const safetyGateHook = new DeterministicSafetyGateHook({
+    governanceConfigResolver,
+    bannedPhraseLoader: loadBannedPhrases,
+    verdictStore: governanceVerdictStore,
+    handoffStore,
+    conversationStore: conversationStatusSetter,
+    postureCache: governancePostureCache,
+    clock: () => new Date(),
+  });
+
+  const hooks = [new GovernanceHook(toolsMap), safetyGateHook];
   const skillExecutor = new SkillExecutorImpl(
     adapter,
     toolsMap,
@@ -278,6 +325,21 @@ export async function bootstrapSkillMode(
     }),
   );
 
+  // Startup assertion: verify all six deterministic gate deps reached SkillMode.
+  // Missing deps cause silent gate degradation at runtime — fail fast instead.
+  const missingGateDeps: string[] = [];
+  if (!governanceConfigResolver) missingGateDeps.push("governanceConfigResolver");
+  if (!governanceVerdictStore) missingGateDeps.push("verdictStore");
+  if (!governancePostureCache) missingGateDeps.push("postureCache");
+  if (!handoffStore) missingGateDeps.push("handoffStore");
+  if (!conversationStatusSetter) missingGateDeps.push("conversationStatusSetter");
+  if (!loadBannedPhrases) missingGateDeps.push("bannedPhraseLoader");
+  if (missingGateDeps.length > 0) {
+    throw new Error(
+      `SkillMode: deterministic gate deps incomplete — missing: ${missingGateDeps.join(", ")}`,
+    );
+  }
+
   logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
 
   // Simulation executor: same adapter + tools, but with SimulationPolicyHook to block writes.
@@ -286,7 +348,12 @@ export async function bootstrapSkillMode(
   // schema-only synthetic context. SimulationPolicyHook still blocks write/external_send/
   // external_mutation/irreversible operations.
   const { SimulationPolicyHook } = await import("@switchboard/core/skill-runtime");
-  const simulationHooks = [new GovernanceHook(toolsMap), new SimulationPolicyHook()];
+  // Safety gate shared instance — same resolver/cache so simulation shares posture warm-hits.
+  const simulationHooks = [
+    new GovernanceHook(toolsMap),
+    safetyGateHook,
+    new SimulationPolicyHook(),
+  ];
   const simulationExecutor = new SkillExecutorImpl(
     adapter,
     toolsMap,
