@@ -13,9 +13,9 @@ export interface UseReportData {
   refresh: () => Promise<void>;
 }
 
-// Captured at module load. Tests pre-set NEXT_PUBLIC_REPORTS_LIVE before importing
-// the hook; production inlines NEXT_PUBLIC_* at build time, so this is constant
-// either way.
+// Captured at module load; the existing test file relies on this (its per-test
+// env mutations happen after the static import and don't affect this binding).
+// Production inlines NEXT_PUBLIC_* at build time, so this is constant either way.
 const isLive = isMercuryToolLive("reports");
 
 export function useReportData(window: ReportWindow): UseReportData {
