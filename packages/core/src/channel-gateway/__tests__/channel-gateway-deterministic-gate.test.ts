@@ -360,7 +360,10 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     expect(savedVerdict.details?.sentence).toBeDefined();
 
     // Status flipped
-    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override");
+    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
+      channel: "web_widget",
+      principalId: "visitor-sess-1",
+    });
 
     // Handoff saved
     expect(handoffStore.save).toHaveBeenCalledOnce();
@@ -462,7 +465,10 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     expect(savedVerdict.details?.matchCategory).toBe("pregnancy_breastfeeding");
 
     // Status flipped
-    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override");
+    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
+      channel: "web_widget",
+      principalId: "visitor-sess-1",
+    });
 
     // SG handoff text sent
     expect(sendSpy).toHaveBeenCalledOnce();
@@ -624,8 +630,124 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     const sentText: string = sendSpy.mock.calls[0]![0];
     expect(sentText).toContain(SG_HANDOFF_SUBSTRING);
     // Status still flipped
-    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override");
+    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
+      channel: "web_widget",
+      principalId: "visitor-sess-1",
+    });
     // Handoff still saved
     expect(handoffStore.save).toHaveBeenCalledOnce();
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 10: first-message enforce upsert — setConversationStatus receives
+  //           upsertContext with channel + principalId derived from sessionId
+  // -------------------------------------------------------------------------
+  it("10. enforce + match on first-message session → setConversationStatus called with upsertContext (channel + visitor-derived principalId)", async () => {
+    const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
+      status: "resolved",
+      config: {
+        jurisdiction: "SG",
+        clinicType: "medical",
+        deterministicGate: { mode: "enforce" },
+      },
+    });
+
+    const config = makeGatewayConfig(
+      { resolver, verdictStore, postureCache, handoffStore, statusSetter },
+      { platformIngress: { submit: submitSpy } },
+    );
+    const gw = new ChannelGateway(config);
+
+    // MSG_TRIGGER: channel="web_widget", sessionId="sess-1"
+    await gw.handleIncoming(MSG_TRIGGER, { send: sendSpy });
+
+    // Submit must NOT be called (gate blocked)
+    expect(submitSpy).not.toHaveBeenCalled();
+
+    // setConversationStatus must be called with 3 arguments:
+    //   sessionId, "human_override", { channel, principalId }
+    // This is the contract the gateway adapter uses to upsert the row.
+    expect(statusSetter.setConversationStatus).toHaveBeenCalledOnce();
+    const [calledSessionId, calledStatus, calledCtx] = statusSetter.setConversationStatus.mock
+      .calls[0] as [string, string, { channel: string; principalId: string } | undefined];
+    expect(calledSessionId).toBe("sess-1");
+    expect(calledStatus).toBe("human_override");
+    // upsertContext must be present and correctly derived
+    expect(calledCtx).not.toBeUndefined();
+    expect(calledCtx!.channel).toBe("web_widget");
+    // principalId must match the visitor derivation from gateway-conversation-store
+    expect(calledCtx!.principalId).toBe("visitor-sess-1");
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 11: second-inbound short-circuit — after status flipped on first
+  //           message, second message is suppressed before gate runs.
+  //
+  //           Simulate two messages in the same session:
+  //             1. First message triggers the gate → status set to human_override
+  //             2. Second message is benign → getConversationStatus returns
+  //                human_override → handleIncoming short-circuits at step 4b
+  //                → submit NOT called again.
+  // -------------------------------------------------------------------------
+  it("11. second inbound short-circuits after first-message enforce flip — submit called exactly once", async () => {
+    const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
+      status: "resolved",
+      config: {
+        jurisdiction: "SG",
+        clinicType: "medical",
+        deterministicGate: { mode: "enforce" },
+      },
+    });
+
+    // Track which status is "stored" so the second-message check reflects the flip.
+    let storedStatus: string | null = null;
+    const trackingStatusSetter: StatusSetterSpy = {
+      setConversationStatus: vi.fn().mockImplementation(async (_sid: string, status: string) => {
+        storedStatus = status;
+      }),
+    };
+
+    // conversationStore.getConversationStatus returns storedStatus after the flip.
+    const trackingConversationStore = {
+      getOrCreateBySession: vi.fn().mockResolvedValue({
+        conversationId: "conv-1",
+        messages: [],
+      }),
+      addMessage: vi.fn().mockResolvedValue(undefined),
+      getConversationStatus: vi.fn().mockImplementation(async () => storedStatus),
+    };
+
+    const config = makeGatewayConfig(
+      {
+        resolver,
+        verdictStore,
+        postureCache,
+        handoffStore,
+        statusSetter: trackingStatusSetter,
+      },
+      {
+        conversationStore: trackingConversationStore,
+        platformIngress: { submit: submitSpy },
+      },
+    );
+    const gw = new ChannelGateway(config);
+
+    // First message: triggers the gate → status flipped to human_override
+    await gw.handleIncoming(MSG_TRIGGER, { send: sendSpy });
+
+    // Submit must NOT have been called on the first message (gate blocked it)
+    expect(submitSpy).not.toHaveBeenCalled();
+    // Status was flipped
+    expect(trackingStatusSetter.setConversationStatus).toHaveBeenCalledOnce();
+    expect(storedStatus).toBe("human_override");
+
+    // Second message: clean, but status is now human_override → short-circuit at 4b
+    const sendSpy2 = vi.fn().mockResolvedValue(undefined);
+    await gw.handleIncoming(MSG_CLEAN, { send: sendSpy2 });
+
+    // Submit still NOT called — second message suppressed
+    expect(submitSpy).not.toHaveBeenCalled();
+    // Second send was not called (no reply sent for suppressed message)
+    expect(sendSpy2).not.toHaveBeenCalled();
   });
 });

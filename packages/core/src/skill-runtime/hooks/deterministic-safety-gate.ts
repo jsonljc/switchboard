@@ -12,6 +12,10 @@ import type {
 import type { GovernancePostureCache } from "../../governance/posture-cache.js";
 import type { HandoffStore, HandoffPackage } from "../../handoff/types.js";
 import { resolveGovernanceMode } from "@switchboard/schemas";
+import type { ConversationStatusUpsertContext } from "../../channel-gateway/types.js";
+
+// Re-export so callers can import from one place.
+export type { ConversationStatusUpsertContext };
 
 // ---------------------------------------------------------------------------
 // Dep interface — narrow slice of conversation state we actually need
@@ -22,9 +26,19 @@ import { resolveGovernanceMode } from "@switchboard/schemas";
  * The real implementation (e.g. via a dedicated status store or an adapter
  * over GatewayConversationStore) satisfies this structurally. Kept narrow so
  * the hook does not take a compile-time dependency on the full platform store.
+ *
+ * `upsertContext` is optional: the api-side hook adapter does not have
+ * channel/principalId in scope, so it omits ctx and falls back to
+ * update-only (the row is guaranteed to exist before skill execution).
+ * The gateway adapter passes ctx so first-message sessions get the row
+ * created immediately.
  */
 export interface ConversationStatusSetter {
-  setConversationStatus(sessionId: string, status: string): Promise<void>;
+  setConversationStatus(
+    sessionId: string,
+    status: string,
+    upsertContext?: ConversationStatusUpsertContext,
+  ): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

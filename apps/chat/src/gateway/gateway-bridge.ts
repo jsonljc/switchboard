@@ -16,7 +16,7 @@ import {
   VoyageEmbeddingAdapter,
   DisabledEmbeddingAdapter,
 } from "@switchboard/core";
-import type { EmbeddingAdapter } from "@switchboard/core";
+import type { ConversationStatusUpsertContext, EmbeddingAdapter } from "@switchboard/core";
 import { PrismaDeploymentResolver } from "@switchboard/core/platform";
 import {
   createAgentDeploymentGovernanceResolver,
@@ -114,40 +114,47 @@ export function createGatewayBridge(
   const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma);
   const gatewayPostureCache = new InMemoryGovernancePostureCache();
   const gatewayHandoffStore = new PrismaHandoffStore(prisma);
-  // Adapter: GatewayConversationStatusSetter → direct conversationState updateMany.
+  // Adapter: GatewayConversationStatusSetter → upsert when context available,
+  // update-only fallback otherwise.
   //
-  // WHY updateMany (not upsert):
-  // ConversationState has required non-nullable fields (channel, principalId,
-  // expiresAt) that this gate adapter does not possess.  The ChannelGateway
-  // pre-input gate runs before platformIngress.submit, so the only context
-  // available is the inbound sessionId and the requested status value.
+  // When upsertContext is provided (gateway path, which has channel+principalId
+  // in scope), perform a true upsert: create the ConversationState row if it
+  // does not yet exist so that brand-new sessions (first-message path) get the
+  // human_override status immediately. This closes the silent no-op window that
+  // existed when only updateMany was used.
   //
-  // Safety of updateMany here:
-  // The ChannelGateway pre-input gate is intentionally positioned to intercept
-  // inbound messages from real channel conversations.  Real channel conversations
-  // in the chat app go through the chat orchestrator and PrismaConversationStore,
-  // which writes the ConversationState row (including channel, principalId,
-  // expiresAt) during session initialisation before any message is processed.
+  // When upsertContext is omitted (api-side hook path), fall back to updateMany
+  // because the row is guaranteed to exist before skill execution (the chat
+  // lifecycle PrismaConversationStore.save writes it first).
   //
-  // IMPORTANT CONSTRAINT: ConversationState rows are only created by the chat
-  // conversation lifecycle (PrismaConversationStore.save).  In the ChannelGateway
-  // flow, the gateway uses ConversationThread (not ConversationState) for message
-  // persistence (see PrismaGatewayConversationStore).  If a ConversationState
-  // row has not been written yet for this sessionId (e.g. the very first message
-  // from a brand-new channel session), the updateMany is a silent no-op.  In that
-  // case the block is still fully applied (response replaced, handoff saved,
-  // submit skipped) — only the status flip is deferred.  This is acceptable
-  // because:
-  //   1. The enforcement block (return true / skip submit) is the primary safety
-  //      invariant; the status flip is a secondary bookkeeping step.
-  //   2. The chat orchestrator will write the ConversationState row shortly after,
-  //      at which point the "human_override" status can be set through the chat
-  //      layer's own state management if needed.
-  //
-  // A future 1b-1.5 hardening pass should consider passing channel+principalId
-  // into this adapter so a true upsert becomes feasible.
+  // expiresAt for upserted rows: 30 days from now, matching the outer
+  // conversation TTL convention. The exact value is not meaningful here —
+  // the row exists only to carry human_override status until the human
+  // operator clears it.
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
   const gatewayConversationStatusSetter = {
-    async setConversationStatus(sessionId: string, status: string): Promise<void> {
+    async setConversationStatus(
+      sessionId: string,
+      status: string,
+      upsertContext?: ConversationStatusUpsertContext,
+    ): Promise<void> {
+      if (upsertContext) {
+        await prisma.conversationState.upsert({
+          where: { threadId: sessionId },
+          update: { status },
+          create: {
+            threadId: sessionId,
+            channel: upsertContext.channel,
+            principalId: upsertContext.principalId,
+            status,
+            expiresAt: new Date(Date.now() + thirtyDaysMs),
+          },
+        });
+        return;
+      }
+      // Fallback: update-only (used by the api-side hook adapter where the
+      // ConversationState row is presumed to exist downstream of conversation
+      // lifecycle code).
       await prisma.conversationState.updateMany({
         where: { threadId: sessionId },
         data: { status },

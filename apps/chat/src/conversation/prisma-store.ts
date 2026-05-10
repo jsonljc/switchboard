@@ -45,12 +45,26 @@ export class PrismaConversationStore implements ConversationStore {
       expiresAt: state.expiresAt,
     };
 
+    // Sticky human_override guard: if the existing row has status="human_override"
+    // and the incoming save carries a different status, preserve the override.
+    // This prevents lifecycle code (e.g. status→"active" on next message) from
+    // silently clobbering a safety gate escalation. An explicit save with
+    // status="human_override" is always allowed (the guard passes through).
+    const existing = await this.prisma.conversationState.findUnique({
+      where: { threadId: state.threadId },
+      select: { status: true },
+    });
+    const finalStatus =
+      existing?.status === "human_override" && data.status !== "human_override"
+        ? existing.status
+        : data.status;
+
     // eslint-disable-next-line @typescript-eslint/ban-types -- Prisma types may not include lastInboundAt pre-migration
     await (this.prisma.conversationState.upsert as Function)({
       where: { threadId: state.threadId },
       create: data,
       update: {
-        status: data.status,
+        status: finalStatus,
         currentIntent: data.currentIntent,
         organizationId: data.organizationId,
         pendingProposalIds: data.pendingProposalIds,

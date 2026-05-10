@@ -24,14 +24,38 @@ export interface GatewayContactStore {
 }
 
 /**
+ * Context required to upsert a ConversationState row when none exists yet.
+ * Passed by the gateway (which has channel + principalId in scope) so that
+ * a brand-new session's status flip does not silently no-op on first message.
+ *
+ * Defined here (channel-gateway/types.ts) and re-exported from the skill-
+ * runtime hook so that a single adapter implementation can satisfy both
+ * GatewayConversationStatusSetter and ConversationStatusSetter without a
+ * circular import.
+ */
+export interface ConversationStatusUpsertContext {
+  channel: string;
+  principalId: string;
+}
+
+/**
  * Minimal interface for marking a session as requiring human intervention
  * from within the gateway (pre-input gate). The real implementation
  * (adapter over ConversationStateStore or GatewayConversationStore) satisfies
  * this structurally. Kept narrow so the gateway does not take a compile-time
  * dependency on the full platform store. Task 14 wires the real adapter.
+ *
+ * `upsertContext` is optional: when provided (gateway path), the adapter
+ * performs a true upsert so a brand-new session gets a ConversationState row
+ * immediately. When omitted (api-side hook path), the adapter falls back to
+ * update-only because the row is guaranteed to exist before skill execution.
  */
 export interface GatewayConversationStatusSetter {
-  setConversationStatus(sessionId: string, status: string): Promise<void>;
+  setConversationStatus(
+    sessionId: string,
+    status: string,
+    upsertContext?: ConversationStatusUpsertContext,
+  ): Promise<void>;
 }
 
 export interface ChannelGatewayConfig {

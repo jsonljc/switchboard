@@ -1,6 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import type {
   ChannelGatewayConfig,
+  ConversationStatusUpsertContext,
   GatewayConversationStore,
   IncomingChannelMessage,
   ReplySink,
@@ -225,6 +226,7 @@ export class ChannelGateway {
     const gateBlocked = await this.runPreInputGate(
       message.text,
       message.sessionId,
+      message.channel,
       resolved.deploymentId,
       resolved.organizationId,
       replySink,
@@ -290,10 +292,14 @@ export class ChannelGateway {
    *
    * Failure-mode discipline: persistence errors are logged but do NOT skip the
    * enforcement block. The caller checks the return value, not an exception.
+   *
+   * `channel` is passed so the status setter adapter can upsert a
+   * ConversationState row if none exists yet (first-message sessions).
    */
   private async runPreInputGate(
     inboundText: string,
     sessionId: string,
+    channel: string,
     deploymentId: string,
     organizationId: string,
     replySink: ReplySink,
@@ -327,6 +333,7 @@ export class ChannelGateway {
         resolution.error,
         inboundText,
         sessionId,
+        channel,
         deploymentId,
         organizationId,
         verdictStore,
@@ -408,7 +415,18 @@ export class ChannelGateway {
 
     if (conversationStatusSetter) {
       try {
-        await conversationStatusSetter.setConversationStatus(sessionId, "human_override");
+        // Pass upsertContext so the adapter can create the ConversationState
+        // row for brand-new sessions (first-message path) where no row exists
+        // yet. principalId mirrors gateway-conversation-store.ts derivation.
+        const upsertContext: ConversationStatusUpsertContext = {
+          channel,
+          principalId: `visitor-${sessionId}`,
+        };
+        await conversationStatusSetter.setConversationStatus(
+          sessionId,
+          "human_override",
+          upsertContext,
+        );
       } catch (err) {
         console.error(
           `[ChannelGateway] pre-input gate: setConversationStatus failed (block still applied):`,
@@ -458,6 +476,7 @@ export class ChannelGateway {
     error: Error,
     inboundText: string,
     sessionId: string,
+    channel: string,
     deploymentId: string,
     organizationId: string,
     verdictStore: GovernanceVerdictStore,
@@ -547,7 +566,18 @@ export class ChannelGateway {
 
     if (conversationStatusSetter) {
       try {
-        await conversationStatusSetter.setConversationStatus(sessionId, "human_override");
+        // Pass upsertContext so the adapter can create the ConversationState
+        // row for brand-new sessions (first-message path) where no row exists
+        // yet. principalId mirrors gateway-conversation-store.ts derivation.
+        const upsertContext: ConversationStatusUpsertContext = {
+          channel,
+          principalId: `visitor-${sessionId}`,
+        };
+        await conversationStatusSetter.setConversationStatus(
+          sessionId,
+          "human_override",
+          upsertContext,
+        );
       } catch (err) {
         console.error(
           `[ChannelGateway] pre-input gate: setConversationStatus failed (block still applied):`,
