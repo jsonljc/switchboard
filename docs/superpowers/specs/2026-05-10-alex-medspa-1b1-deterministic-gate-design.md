@@ -105,11 +105,14 @@ export const GovernanceVerdictReasonSchema = z.enum([
   "medical_safety_trigger",
   "sensitive_inbound",         // NEW: multi-treatment combos, sensitive keywords (inbound)
   "compliance_concern",        // NEW: prior complaint, competitor-negative (inbound)
+  "governance_unavailable",    // NEW: resolver/cache failure in enforce mode (fail-closed verdict)
   "outside_whatsapp_window",
   "consent_missing",
   "classifier_timeout",
 ]);
 ```
+
+`governance_unavailable` is distinct from `classifier_timeout` on purpose: there is no classifier in 1b-1, and overloading `classifier_timeout` for resolver failures would muddy 1b-2 analytics. `classifier_timeout` is reserved for the 1b-2 Layer-2 model classifier exceeding its latency budget.
 
 ### 1.2 Update `GovernanceVerdictSourceSchema`
 
@@ -239,9 +242,9 @@ Implementation: a `Map<string, GovernanceMode>` (no eviction needed in 1b-1; dep
 | `missing` | `mode = "off"`. Pass through. Do not persist verdict. | Same. |
 | `error`, last-known cache miss or `"off"` | Pass through (fail open). Log. Do not persist. | Pass through (fail open). Log. Do not persist. |
 | `error`, last-known cache `"observe"` | Pass through. Log. Do not persist. | Pass through. Log. Do not persist. |
-| `error`, last-known cache `"enforce"` | **Fail closed**: replace output with handoff template, flip status to `human_override`, save handoff, persist verdict with `auditLevel: "critical"`, `reasonCode: "classifier_timeout"` (reused for resolver failure pending a dedicated reason in 1c+). | **Fail closed**: skip `submit()`, send handoff template, flip status to `human_override`, save handoff, persist verdict (same fields). |
+| `error`, last-known cache `"enforce"` | **Fail closed**: replace output with handoff template, flip status to `human_override`, save handoff, persist verdict with `auditLevel: "critical"`, `reasonCode: "governance_unavailable"`. | **Fail closed**: skip `submit()`, send handoff template, flip status to `human_override`, save handoff, persist verdict (same fields). |
 
-Reusing `classifier_timeout` for resolver failure is a small semantic stretch but avoids adding a one-off reason just for this edge. 1c can promote it to a dedicated `governance_unavailable` reason if needed.
+In `observe` mode, resolver failure means **no verdict is persisted** — the gate cannot safely determine which jurisdiction-specific tables to scan against, so there is nothing to log against. Pass-through is the only safe action. The error itself is logged via `console.error` for SRE visibility but does not become a verdict row.
 
 The cache is in-process only. A first request to a freshly-restarted instance for an enforce-mode deployment whose config read fails falls in the "cache miss → fail open" bucket. This is an accepted trade-off: the alternative (persistent cache or a separate cheap "is governed?" lookup) doubles infrastructure cost for a rare transient-failure case. The risk is bounded — one request can leak during a resolver outage on the very first turn after restart, only for deployments not yet warmed.
 
@@ -305,6 +308,8 @@ const REASON_CODE_BY_CATEGORY: Record<BannedPhraseCategory, GovernanceVerdictRea
 - Strings are case-insensitive substring matches against the scanned text.
 - RegExps are normalized at scanner load: a fresh `RegExp(pattern.source, ensureFlags(pattern.flags, "i"))` is constructed without the `g` flag — see Section 4 for why. Authors are responsible for word-boundary anchors where required to avoid false positives (e.g., `/\bbest\b/i`, not `/best/i`, to skip "bestseller").
 - `id` must be unique within the merged jurisdiction set (`common ∪ sg` or `common ∪ my`). Loader asserts uniqueness at boot; duplicate IDs throw.
+- **Duplicate effective patterns** (after regex-source normalization and string-lowercase normalization) across the merged set are warned, not thrown — duplicates do not break correctness but they cause double matches and unstable "first-match" analytics. The loader logs `console.warn` per duplicate pair at boot. A loader unit test asserts the warning fires when a duplicate is introduced. A future `pnpm banned-phrase-audit` script (out of scope for 1b-1) can promote this to a CI gate.
+- Loader output ordering is deterministic: `common` entries first (in declaration order), then jurisdiction entries (in declaration order). A loader unit test snapshots the merged ordering for SG and MY.
 - Each entry's `notes` is a one-line authoring rationale (e.g., `"HSA — devices not approved for skin lightening claims"`). Used by reviewers, not by runtime.
 - The reference markdown at `skills/alex/references/regulatory/{sg,my}-rules.md` should mention the categories and reference the TS file path; it is not the source of truth and can drift in tone, but the categories must match.
 
@@ -316,13 +321,15 @@ The 1b-1 PR ships **conservative seed tables, not placeholders.** Each category 
 
 | Category | Minimum entries | Examples (common; SG/MY add jurisdiction-specific) |
 |---|---|---|
-| `superlative` | 5 | `\bbest\b`, `\b#?1\b` (with anchors), `leading`, `top`, `unmatched` |
+| `superlative` | 5 | `/\b(best\|leading\|top\|#?1\|no\.?\s?1)\s+(results?\|clinic\|treatment\|doctor\|aesthetic\|laser\|skin\|slimming\|facial)/i`, `unmatched results`, `the only treatment that` |
 | `guarantee` | 5 | `guaranteed`, `100%`, `permanent`, `lifetime`, `no side effects`, `painless` |
 | `medical_claim` | 5 | `cure`, `cures`, `fixes <condition>`, `treats <condition>`, `eliminates <condition>` |
 | `urgency` | 3 | `limited slots today`, `today only`, `last chance`, `expires (today\|tonight)` |
 | `testimonial` | 3 | `many clients say`, `we've heard`, `our clients all`, `every client` |
 
-These seed entries are deliberately phrased to false-negative on legitimate use ("this is our best practice for follow-up" passes `\bbest\b` only because we anchor; the word *does* match — authors must accept this and rely on context: "the *best results*" should be a model failure that the test fixture covers explicitly). The principle: **better to escalate one false positive than emit one violation.**
+The superlative pattern is **contextualized**, not bare-word: a regex like `/\bbest\b/i` would match "best practice" in a benign aftercare instruction and create observe-mode noise, which would then mask real signals. Pairing the superlative root with a noun-class that actually constitutes a marketing claim (`results`, `clinic`, `treatment`, `doctor`, `aesthetic`, `laser`, `skin`, `slimming`, `facial`) gives a much higher signal-to-noise ratio while still being deterministic and auditable.
+
+Other categories follow the same principle: prefer a phrase that is unambiguously a marketing claim ("guaranteed", "100%") over a word that has innocent uses ("results"). The principle: **better to escalate one true positive than to flood observe with false positives that desensitize operators.**
 
 The plan task that authors these seeds must include a comment block in each table file pointing to the regulatory-review handoff: who owns the next pass, when it's expected, and what's intentionally over-broad pending review.
 
@@ -465,10 +472,12 @@ export function renderHandoffTemplate(input: HandoffTemplateInput): string;
 Per-jurisdiction prose, no model involvement, no operator-configurable strings in 1b-1.
 
 **SG (default):**
-> Thanks for sharing that — because this involves a clinic-side detail, I'll get the team to advise you directly. They'll be in touch shortly.
+> Thanks for sharing that — this is something the clinic team should advise on directly. I'll get them to follow up with you shortly.
 
 **MY (default):**
-> Thanks for sharing that — because this is something the clinic team should advise on, I'll have them get in touch with you directly. They'll reach out soon.
+> Thanks for sharing that — this is something the clinic team should advise on directly. I'll have them follow up with you shortly.
+
+Wording deliberately avoids medical/safety leakage (no "medical detail", no "safety concern") because the pre-input gate fires on a range of triggers — including non-medical compliance and competitor concerns — and the user does not need to know which category they hit. The two jurisdictions vary by one verb ("get them to" vs. "have them") to match SG vs. MY register; otherwise identical.
 
 The function returns the same string regardless of `reasonCode` in 1b-1; the parameter is included so 1b-2 can specialize per reason without a signature change. Snapshot tests assert exact strings per jurisdiction.
 
@@ -541,7 +550,7 @@ export class DeterministicSafetyGateHook implements SkillHook {
 
 1. `resolution = await governanceConfigResolver(deploymentId)`.
 2. **`resolution.status === "missing"`** or resolved-with-`mode === "off"` → return original output unchanged. Do not persist.
-3. **`resolution.status === "error"`** → consult `modeCache.lastKnown(deploymentId)`. If `"enforce"` → fail closed (jump to step 6 with `reasonCode: "classifier_timeout"` and `originalText` = the joined message texts). Else → log and return original output unchanged (fail open). Do not persist on the fail-open branch.
+3. **`resolution.status === "error"`** → consult `modeCache.lastKnown(deploymentId)`. If `"enforce"` → fail closed (jump to step 6 with `reasonCode: "governance_unavailable"` and `originalText` = the joined message texts). Else → log and return original output unchanged (fail open). Do not persist on the fail-open branch.
 4. **`resolution.status === "resolved"`** → `modeCache.remember(deploymentId, mode)`. Load banned phrases for `config.jurisdiction`.
 5. For each outbound message in `ctx.skillOutput.messages`, run `scanForBannedPhrases`. Collect all matches.
 6. **No matches:** return original output unchanged. Do not persist.
@@ -556,7 +565,7 @@ export class DeterministicSafetyGateHook implements SkillHook {
 **Other failure modes (besides resolver):**
 - `verdictStore.save` throws → `console.error`, but still apply the block/handoff actions. Persistence failure must not cause a banned phrase to leak.
 - `handoffStore.save` throws → `console.error`, but still apply the block. Conversation status is still flipped; the operator sees the conversation paused even if the handoff envelope is missing.
-- `bannedPhraseLoader` throws (boot-time normalization should make this impossible at scan time, but for completeness) → fail closed in `enforce` mode, fail open in `observe` mode. Treat as a `classifier_timeout` reasonCode for the verdict.
+- `bannedPhraseLoader` throws (boot-time normalization should make this impossible at scan time, but for completeness) → fail closed in `enforce` mode, fail open in `observe` mode. Treat as a `governance_unavailable` reasonCode for the verdict.
 
 The deliberate priority: emission integrity > persistence completeness > observability detail. Block first, then try to record.
 
@@ -576,7 +585,7 @@ Insertion point: `packages/core/src/channel-gateway/channel-gateway.ts` between 
 
 1. `resolution = await governanceConfigResolver(deploymentId)`.
 2. **`resolution.status === "missing"`** or resolved-with-`mode === "off"` → proceed to `platformIngress.submit()`. Do not persist.
-3. **`resolution.status === "error"`** → consult `modeCache.lastKnown(deploymentId)`. If `"enforce"` → fail closed (skip submit, build a verdict with `reasonCode: "classifier_timeout"` and `originalText` = inbound, send handoff, persist). Else → log and proceed to `platformIngress.submit()` (fail open). Do not persist on the fail-open branch.
+3. **`resolution.status === "error"`** → consult `modeCache.lastKnown(deploymentId)`. If `"enforce"` → fail closed (skip submit, build a verdict with `reasonCode: "governance_unavailable"` and `originalText` = inbound, send handoff, persist). Else → log and proceed to `platformIngress.submit()` (fail open). Do not persist on the fail-open branch.
 4. **`resolution.status === "resolved"`** → `modeCache.remember(deploymentId, mode)`. Load triggers for `config.jurisdiction`.
 5. `scanForEscalationTriggers(inboundText, triggers)`.
 6. **No matches:** proceed to `platformIngress.submit()`. Do not persist.
@@ -614,10 +623,10 @@ Per the 1a pattern, all assertions go through `GovernanceVerdict` shape — no f
 | Surface | Fixture coverage |
 |---|---|
 | `GovernanceConfigSchema` | Round-trip for each mode; `resolveGovernanceMode(null)` returns `"off"`; rejects unknown jurisdiction/clinicType; passthrough preserves unknown sub-blocks |
-| `GovernanceVerdictReasonSchema` extension | Accepts `sensitive_inbound` and `compliance_concern`; existing reasons still parse |
+| `GovernanceVerdictReasonSchema` extension | Accepts `sensitive_inbound`, `compliance_concern`, `governance_unavailable`; existing reasons still parse |
 | `GovernanceVerdictSourceSchema` change | Accepts `banned_phrase_scanner` and `claim_classifier`; rejects `claim_scanner` |
 | RegExp normalization | `/foo/g` → matched as `/foo/i`; `/Bar/i` preserved; stateful-regex repeated-call test (same loader-loaded entry hits the same input twice without `lastIndex` drift) |
-| Banned-phrase tables | Per jurisdiction: 30+ positive (≥5 per category, **conservative seed per Section 2.5**), 50+ true-negative near-miss strings, unique-`id` invariant at loader boot, deterministic ordering of merged loader output |
+| Banned-phrase tables | Per jurisdiction: 30+ positive (≥5 per category, **conservative seed per Section 2.5**), 50+ true-negative near-miss strings (must include "best practice", "results so far", "today" used innocently to validate the contextualized superlative pattern), unique-`id` invariant throws at loader boot, duplicate-effective-pattern warns at loader boot, deterministic ordering snapshot of merged loader output |
 | Escalation-trigger tables | Per jurisdiction: 10+ positive across all six categories, 20+ true-negative including negation cases (`"I'm not pregnant"` does not trigger; `"my friend had a complaint"` does; `"never had a complaint"` does not). Unique-`id` invariant at loader boot. |
 | `scanForBannedPhrases` | Pure-function unit tests — case-insensitivity, multiple matches in one text, regex edge cases, `details.matchId` populated correctly |
 | `scanForEscalationTriggers` | Sentence-bounded scoping; per-entry negation suppression; multi-sentence text with one trigger and one negation in different sentences (only the unblocked sentence triggers) |
@@ -626,7 +635,7 @@ Per the 1a pattern, all assertions go through `GovernanceVerdict` shape — no f
 | `DeterministicSafetyGateHook` | Mode matrix: enforce/observe/off × match/no-match × jurisdiction (12 cases). Asserts: output replacement, conversation status flip, handoff save, verdict persisted with correct reasonCode/sourceGuard/details |
 | Pre-input gate (channel-gateway) | Same 12-case matrix. Asserts: `platformIngress.submit()` not called on enforce-match; handoff template sent; verdict persisted; status flipped |
 | Hook ordering | `DeterministicSafetyGateHook` runs before `TracePersistenceHook`. Trace store sees emitted (post-block) output only; never sees pre-block unsafe text |
-| Resolver failure × cache matrix | `error` + cold cache → fail open (no verdict). `error` + cache `"off"` → fail open. `error` + cache `"observe"` → fail open (consistent with observe-mode pass-through). `error` + cache `"enforce"` → fail closed (verdict with `reasonCode: "classifier_timeout"`, handoff sent). Coverage for both gates. |
+| Resolver failure × cache matrix | `error` + cold cache → fail open (no verdict). `error` + cache `"off"` → fail open (no verdict). `error` + cache `"observe"` → fail open (no verdict — gate cannot determine jurisdiction). `error` + cache `"enforce"` → fail closed (verdict with `reasonCode: "governance_unavailable"`, handoff sent). Coverage for both gates. |
 | `ModeCache` | Shared instance across both gates; warm-write by either gate makes the other read-warm; `lastKnown` returns `undefined` on miss |
 | Persistence-failure fail-open-of-block | `verdictStore.save` throws after match → block/escalate still applied; logged. `handoffStore.save` throws → status still flipped |
 
