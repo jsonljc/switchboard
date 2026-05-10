@@ -1,18 +1,18 @@
 "use client";
 
-import { useReportWindow } from "../../reports/hooks/use-report-window";
-import { useReportData } from "../../reports/hooks/use-report-data";
-import { ReportsHeader } from "../../reports/components/header";
-import { TitleControls } from "../../reports/components/title-controls";
-import { PullQuote } from "../../reports/components/pull-quote";
-import { Attribution } from "../../reports/components/attribution";
-import { Funnel } from "../../reports/components/funnel";
-import { Campaigns } from "../../reports/components/campaigns";
-import { CostVsValue } from "../../reports/components/cost-vs-value";
-import { ReportFooter } from "../../reports/components/report-footer";
-import { Disclosure } from "../../reports/components/disclosure";
+import { useReportWindow } from "../../(mercury)/reports/hooks/use-report-window";
+import { useReportData } from "../../(mercury)/reports/hooks/use-report-data";
+import { ReportsHeader } from "../../(mercury)/reports/components/header";
+import { TitleControls } from "../../(mercury)/reports/components/title-controls";
+import { PullQuote } from "../../(mercury)/reports/components/pull-quote";
+import { Attribution } from "../../(mercury)/reports/components/attribution";
+import { Funnel } from "../../(mercury)/reports/components/funnel";
+import { Campaigns } from "../../(mercury)/reports/components/campaigns";
+import { CostVsValue } from "../../(mercury)/reports/components/cost-vs-value";
+import { ReportFooter } from "../../(mercury)/reports/components/report-footer";
+import { Disclosure } from "../../(mercury)/reports/components/disclosure";
 import { ManagedComparison } from "./components/managed-comparison";
-import styles from "../../reports/reports.module.css";
+import styles from "../../(mercury)/reports/reports.module.css";
 
 export function OperatorReportsPage() {
   const { window: activeWindow, setWindow } = useReportWindow();

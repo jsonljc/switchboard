@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AppShell, CHROME_HIDDEN_PATHS, ONBOARDING_EXEMPT_PATHS } from "../app-shell.js";
+import { AppShell, ONBOARDING_EXEMPT_PATHS } from "../app-shell.js";
 
 const pathnameRef = { current: "/contacts" };
 const replaceMock = vi.fn();
@@ -45,15 +45,36 @@ describe("AppShell visual branches", () => {
     expect(screen.getByText("editorial-content")).toBeDefined();
   });
 
-  it("wraps non-editorial paths in a bare <main>", () => {
+  it("renders Mercury paths without a wrapper <main> (shell mounted via (mercury)/layout)", () => {
     pathnameRef.current = "/contacts";
     const { container } = render(
       <AppShell>
         <span>mercury-content</span>
       </AppShell>,
     );
-    expect(container.querySelector("main")).not.toBeNull();
+    expect(container.querySelector("main")).toBeNull();
     expect(screen.getByText("mercury-content")).toBeDefined();
+  });
+
+  it("treats Mercury detail paths as shell-owned (prefix match)", () => {
+    pathnameRef.current = "/contacts/abc-123";
+    const { container } = render(
+      <AppShell>
+        <span>detail-content</span>
+      </AppShell>,
+    );
+    expect(container.querySelector("main")).toBeNull();
+  });
+
+  it("wraps non-shell paths in a bare <main>", () => {
+    pathnameRef.current = "/settings";
+    const { container } = render(
+      <AppShell>
+        <span>settings-content</span>
+      </AppShell>,
+    );
+    expect(container.querySelector("main")).not.toBeNull();
+    expect(screen.getByText("settings-content")).toBeDefined();
   });
 
   it("source does not reference OwnerShell or OwnerTabs", () => {
@@ -71,28 +92,6 @@ describe("AppShell visual branches", () => {
     const source = fs.readFileSync(path.join(__dirname, "../app-shell.tsx"), "utf8");
     expect(source).not.toContain("OwnerShell");
     expect(source).not.toContain("OwnerTabs");
-  });
-});
-
-describe("CHROME_HIDDEN_PATHS membership", () => {
-  it("includes login/onboarding/setup", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/login");
-    expect(CHROME_HIDDEN_PATHS).toContain("/onboarding");
-    expect(CHROME_HIDDEN_PATHS).toContain("/setup");
-  });
-
-  it("includes the Mercury Tools surfaces", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/contacts");
-    expect(CHROME_HIDDEN_PATHS).toContain("/automations");
-    expect(CHROME_HIDDEN_PATHS).toContain("/reports");
-  });
-
-  it("includes /settings (joined post-OwnerShell deletion)", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/settings");
-  });
-
-  it("includes /operator/reports", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/operator/reports");
   });
 });
 

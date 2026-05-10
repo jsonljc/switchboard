@@ -11,58 +11,50 @@ const DevPanel =
     : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
 
 /**
- * Routes that mount their own EditorialAuthShell. The editorial shell owns
- * the page's <main> and chrome itself. /alex and /riley match the agent home
- * route; "/" is the Owner Home placeholder. Mira is intentionally absent —
- * /mira returns notFound().
+ * Paths that mount their own EditorialAuthShell — either directly (agent
+ * homes via [agentKey]/page.tsx) or via a route-group layout (Mercury Tools
+ * surfaces via (mercury)/layout.tsx). AppShell skips its bare-<main> wrapper
+ * for these so the page-owned <main> from EditorialAuthShell isn't nested.
+ *
+ * "/" is exact (Owner Home placeholder). Other entries are prefix matches so
+ * /alex/setup, /contacts/[id], etc. all resolve to the editorial shell.
+ * /mira is intentionally absent — /mira returns notFound().
  */
-const EDITORIAL_SHELL_PATHS = new Set(["/", "/alex", "/riley"]);
-
-/**
- * Visual decision: routes that own their own page chrome (no AppShell wrapping).
- * Includes Mercury Tools surfaces (/contacts, /automations, /reports), the
- * settings hub (/settings/* — its layout owns its sidebar), the onboarding/auth
- * flow, and the operator/reports admin surface.
- */
-export const CHROME_HIDDEN_PATHS = [
-  "/login",
-  "/onboarding",
-  "/setup",
+const SHELL_OWNED_EXACT = new Set(["/"]);
+const SHELL_OWNED_PREFIXES = [
+  "/alex",
+  "/riley",
   "/contacts",
   "/automations",
+  "/activity",
   "/reports",
-  "/settings",
-  "/operator/reports",
 ];
 
+function ownsItsShell(pathname: string): boolean {
+  if (SHELL_OWNED_EXACT.has(pathname)) return true;
+  return SHELL_OWNED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 /**
- * Gating decision: routes where the onboarding-completeness check should NOT
- * fire. Intentionally narrower than CHROME_HIDDEN_PATHS — most chrome-hidden
- * routes (Mercury surfaces, /settings, /operator/reports) still need
- * onboarding to be complete. Only the auth/setup flow itself is exempt.
- *
- * Editorial paths (/, /alex, /riley) are also exempt by their own branch
- * below (existing behavior preserved).
- *
- * Reviewer flips (per spec §5.4):
- *   - To preserve the implicit /reports exemption that existed pre-D4+D5,
- *     add "/reports" here.
- *   - To exempt /operator for support/debugging, add "/operator" here.
- *   - To gate editorial paths too, remove the usesEditorialShell check
- *     from shouldCheckOnboarding below.
+ * Paths exempt from the onboarding-completeness gate. Narrower than the
+ * shell-ownership set — Mercury surfaces, /settings, /operator/* still
+ * redirect to /onboarding when the org is incomplete. Only editorial agent
+ * homes and the auth/setup flow bypass.
  */
+const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/", "/alex", "/riley"]);
 export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding", "/setup"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const usesEditorialShell = EDITORIAL_SHELL_PATHS.has(pathname);
+  const usesEditorialShell = ownsItsShell(pathname);
+  const isGateExempt = ONBOARDING_GATE_EXEMPT_EXACT.has(pathname);
   const isOnboardingExempt = ONBOARDING_EXEMPT_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
 
-  const shouldCheckOnboarding = !usesEditorialShell && !isOnboardingExempt;
+  const shouldCheckOnboarding = !isGateExempt && !isOnboardingExempt;
   const { data: orgData, isLoading: orgLoading } = useOrgConfig(shouldCheckOnboarding);
 
   const onboardingComplete = orgData?.config?.onboardingComplete ?? true;
