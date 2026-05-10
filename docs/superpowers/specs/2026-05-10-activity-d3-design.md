@@ -434,7 +434,6 @@ export type AuditEntriesListResponse = z.infer<typeof AuditEntriesListResponseSc
  * contracts; the test forces the change through review.
  */
 export const OPERATIONAL_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
-  "action.proposed",
   "action.approved",
   "action.partially_approved",
   "action.rejected",
@@ -457,11 +456,11 @@ export const OPERATIONAL_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "connection.degraded",
   "competence.promoted",
   "competence.demoted",
-  "competence.updated",
   "identity.created",
   "identity.updated",
   "overlay.activated",
   "overlay.deactivated",
+  "work_trace.integrity_override",
 ] as const;
 ```
 
