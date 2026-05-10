@@ -17,11 +17,24 @@ import type { RedactionConfig } from "./redaction.js";
 import { storeEvidence } from "./evidence.js";
 import type { EvidencePointer } from "./evidence.js";
 
+export interface AuditLedgerBrowseFilter {
+  organizationId: string;
+  eventTypes: AuditEventType[] | null; // null = All events; [] = empty (returns no rows)
+  actorType: ActorType | null;
+  entityType: string | null;
+  entityId: string | null;
+  after: Date | null;
+  before: Date | null;
+  cursor: { timestamp: string; id: string } | null;
+  limit: number;
+}
+
 export interface LedgerStorage {
   append(entry: AuditEntry): Promise<void>;
   getLatest(): Promise<AuditEntry | null>;
   getById(id: string): Promise<AuditEntry | null>;
   query(filter: AuditQueryFilter): Promise<AuditEntry[]>;
+  listForBrowse(filter: AuditLedgerBrowseFilter): Promise<AuditEntry[]>;
   /**
    * Optional: atomically get latest + append within a serialized lock.
    * Prevents race conditions on previousEntryHash in multi-instance deployments.
@@ -226,6 +239,10 @@ export class AuditLedger {
     return this.storage.query(filter);
   }
 
+  async listForBrowse(filter: AuditLedgerBrowseFilter): Promise<AuditEntry[]> {
+    return this.storage.listForBrowse(filter);
+  }
+
   async getById(id: string): Promise<AuditEntry | null> {
     return this.storage.getById(id);
   }
@@ -379,6 +396,60 @@ export class InMemoryLedgerStorage implements LedgerStorage {
     }
 
     return result;
+  }
+
+  async listForBrowse(filter: AuditLedgerBrowseFilter): Promise<AuditEntry[]> {
+    // Visibility filter (always applied): only "public" or "org" entries
+    let result = this.entries.filter(
+      (e) => e.visibilityLevel === "public" || e.visibilityLevel === "org",
+    );
+
+    // organizationId (always applied)
+    result = result.filter((e) => e.organizationId === filter.organizationId);
+
+    // eventTypes: null = all events; [] = empty result
+    if (filter.eventTypes !== null) {
+      result = result.filter((e) => (filter.eventTypes as AuditEventType[]).includes(e.eventType));
+    }
+
+    // actorType, entityType, entityId: equality filter when non-null
+    if (filter.actorType !== null) {
+      result = result.filter((e) => e.actorType === filter.actorType);
+    }
+    if (filter.entityType !== null) {
+      result = result.filter((e) => e.entityType === filter.entityType);
+    }
+    if (filter.entityId !== null) {
+      result = result.filter((e) => e.entityId === filter.entityId);
+    }
+
+    // Time range: after = gte, before = lt
+    if (filter.after !== null) {
+      result = result.filter((e) => e.timestamp >= filter.after!);
+    }
+    if (filter.before !== null) {
+      result = result.filter((e) => e.timestamp < filter.before!);
+    }
+
+    // Sort: timestamp DESC, id DESC
+    result = result.sort((a, b) => {
+      const tDiff = b.timestamp.getTime() - a.timestamp.getTime();
+      if (tDiff !== 0) return tDiff;
+      return b.id < a.id ? -1 : b.id > a.id ? 1 : 0;
+    });
+
+    // Cursor: include only entries strictly "before" the cursor in sort order
+    if (filter.cursor !== null) {
+      const cursorDate = new Date(filter.cursor.timestamp);
+      const cursorId = filter.cursor.id;
+      result = result.filter(
+        (e) =>
+          e.timestamp < cursorDate ||
+          (e.timestamp.toISOString() === cursorDate.toISOString() && e.id < cursorId),
+      );
+    }
+
+    return result.slice(0, filter.limit);
   }
 
   async appendAtomic(

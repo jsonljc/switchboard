@@ -193,4 +193,32 @@ export const scopedKeys = (orgId: string) => ({
     list: (query: object) => [orgId, "contacts", "list", query] as const,
     detail: (id: string) => [orgId, "contacts", "detail", id] as const,
   },
+  activity: {
+    all: () => [orgId, "activity"] as const,
+    list: (query: {
+      scope?: string;
+      cursor?: string;
+      eventType?: string;
+      actorType?: string;
+      entityType?: string;
+      entityId?: string;
+      after?: string;
+      before?: string;
+    }) =>
+      [
+        orgId,
+        "activity",
+        "list",
+        {
+          scope: query.scope ?? "operational",
+          cursor: query.cursor,
+          eventType: query.eventType,
+          actorType: query.actorType,
+          entityType: query.entityType,
+          entityId: query.entityId,
+          after: query.after,
+          before: query.before,
+        },
+      ] as const,
+  },
 });

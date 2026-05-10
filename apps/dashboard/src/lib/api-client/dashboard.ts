@@ -5,6 +5,7 @@ import type {
   ContactsListResponse,
   ContactDetailResponse,
   ScheduledTriggersListResponse,
+  AuditEntriesListResponse,
 } from "@switchboard/schemas";
 import { SwitchboardAgentsClient } from "./agents";
 
@@ -98,6 +99,33 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     if (query.direction) params.set("direction", query.direction);
     const qs = params.toString();
     return this.request<ContactsListResponse>(`/api/dashboard/contacts${qs ? `?${qs}` : ""}`);
+  }
+
+  // ── Activity (Mercury /activity browse) ──
+
+  async getActivity(query: {
+    scope?: "operational" | "all";
+    cursor?: string;
+    limit?: number;
+    eventType?: string;
+    actorType?: string;
+    entityType?: string;
+    entityId?: string;
+    after?: string;
+    before?: string;
+  }): Promise<AuditEntriesListResponse> {
+    const params = new URLSearchParams();
+    if (query.scope) params.set("scope", query.scope);
+    if (query.cursor) params.set("cursor", query.cursor);
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.eventType) params.set("eventType", query.eventType);
+    if (query.actorType) params.set("actorType", query.actorType);
+    if (query.entityType) params.set("entityType", query.entityType);
+    if (query.entityId) params.set("entityId", query.entityId);
+    if (query.after) params.set("after", query.after);
+    if (query.before) params.set("before", query.before);
+    const qs = params.toString();
+    return this.request<AuditEntriesListResponse>(`/api/dashboard/activity${qs ? `?${qs}` : ""}`);
   }
 
   /**

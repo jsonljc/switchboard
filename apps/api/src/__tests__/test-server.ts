@@ -398,5 +398,8 @@ export async function buildTestServer(): Promise<TestContext> {
   const { dashboardAutomationsRoutes } = await import("../routes/dashboard-automations.js");
   await app.register(dashboardAutomationsRoutes);
 
+  const { dashboardActivityRoutes } = await import("../routes/dashboard-activity.js");
+  await app.register(dashboardActivityRoutes, { prefix: "/api/dashboard/activity" });
+
   return { app, cartridge, storage };
 }

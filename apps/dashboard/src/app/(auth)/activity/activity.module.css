@@ -1,0 +1,861 @@
+/* =========================================================
+   ACTIVITY — Mercury / audit ledger surface.
+   Third Tools-tier occupant after /reports and /contacts.
+   Inherits the --mercury-* tokens from globals.css via local
+   aliases at .activityPage. Mirrors /contacts' visual
+   vocabulary exactly; only the page-specific rules differ.
+   ========================================================= */
+
+.activityPage {
+  /* Local aliases so design selectors read cleanly. */
+  --cream: var(--mercury-cream);
+  --ink: var(--mercury-ink);
+  --ink-2: var(--mercury-ink-2);
+  --ink-3: var(--mercury-ink-3);
+  --ink-4: var(--mercury-ink-4);
+  --accent: var(--mercury-accent);
+  --accent-soft: var(--mercury-accent-soft);
+  --hair: var(--mercury-hairline);
+  --hair-soft: var(--mercury-hairline-soft);
+  --row-hover: var(--mercury-row-hover);
+  --pos: var(--mercury-pos);
+  --neg: var(--mercury-neg);
+  --serif: var(--font-serif-mercury);
+  --sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: var(--font-mono-mercury);
+  --col-wide: 1080px;
+  /* Reserved for drawer prose (D3 detail drawer). Kept here so all
+     Mercury surfaces share one alias block. */
+  --col-prose: 720px;
+  /* Section ramp matches /contacts verbatim — same vertical rhythm. */
+  --gap-section: 96px;
+  --gap-section-tablet: 72px;
+  --gap-section-mobile: 56px;
+
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  min-height: 100vh;
+  overflow-x: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.activityPage ::selection {
+  background: var(--accent);
+  color: hsl(40 25% 94%);
+}
+
+/* ============= header ============= */
+.appHeader {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--cream);
+  border-bottom: 1px solid var(--hair);
+}
+.appHeaderRow {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  gap: 24px;
+}
+@media (min-width: 768px) {
+  .appHeaderRow {
+    padding: 16px 40px;
+  }
+}
+@media (min-width: 1280px) {
+  .appHeaderRow {
+    padding: 18px 56px;
+  }
+}
+
+.brandCluster {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.brandDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  display: inline-block;
+}
+.brandNav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+/* Mirrors /contacts' .brandNav rule. /activity renders its nav as inert
+   <span>s (Tools-tier surface, not agent-owned), so hover and active
+   rules are dormant — kept so <span>→<Link> swap needs zero CSS changes. */
+.brandNav a,
+.brandNav button,
+.brandNav span {
+  font-family: var(--serif);
+  font-size: 15px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+.brandNav span {
+  cursor: default;
+}
+.brandNav a.isActive,
+.brandNav button.isActive,
+.brandNav span.isActive {
+  color: var(--ink);
+  background: hsl(20 10% 12% / 0.05);
+}
+.brandNav a:hover,
+.brandNav button:hover {
+  color: var(--ink);
+}
+.brandNav .navAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--hair);
+  font-size: 14px;
+  color: var(--ink-3);
+  margin-left: 6px;
+  background: transparent;
+  padding: 0;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+@media (min-width: 768px) {
+  .headerActions {
+    gap: 24px;
+  }
+}
+.livePip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+}
+.pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(140 50% 38%);
+  position: relative;
+  display: inline-block;
+}
+.pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid hsl(140 50% 38% / 0.4);
+  animation: activityPulseRing 2s ease-out infinite;
+}
+@keyframes activityPulseRing {
+  0% {
+    transform: scale(0.7);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+.folioLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+  font: inherit;
+}
+.folioLink .num {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.folioLink .pip {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+.meChip {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: hsl(40 25% 94%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--serif);
+  font-size: 13px;
+}
+
+/* ============= page shell ============= */
+.page {
+  max-width: var(--col-wide);
+  margin: 0 auto;
+  padding: 0 24px;
+  width: 100%;
+}
+@media (min-width: 768px) {
+  .page {
+    padding: 0 40px;
+  }
+}
+@media (min-width: 1280px) {
+  .page {
+    padding: 0 56px;
+  }
+}
+
+.section {
+  padding-top: var(--gap-section-mobile);
+}
+.section:first-of-type {
+  padding-top: 40px;
+}
+.section:last-of-type {
+  padding-bottom: 80px;
+}
+@media (min-width: 768px) {
+  .section {
+    padding-top: var(--gap-section-tablet);
+  }
+  .section:first-of-type {
+    padding-top: 48px;
+  }
+}
+@media (min-width: 1280px) {
+  .section {
+    padding-top: var(--gap-section);
+  }
+  .section:first-of-type {
+    padding-top: 56px;
+  }
+}
+
+/* ============= title row ============= */
+.titleRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--hair);
+}
+.pageTitle {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+  margin: 0;
+}
+@media (min-width: 768px) {
+  .pageTitle {
+    font-size: 42px;
+  }
+}
+@media (min-width: 1280px) {
+  .pageTitle {
+    font-size: 48px;
+    letter-spacing: -0.025em;
+  }
+}
+.titleFolio {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-bottom: 4px;
+}
+
+/* ============= toolbar (chips + search) ============= */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+  padding: 6px 0;
+  position: relative;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  background: transparent;
+  border: none;
+}
+.chip:hover {
+  color: var(--ink-2);
+}
+.chip.isActive {
+  color: var(--ink);
+}
+.chip.isActive::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* ============= activity table ============= */
+.tableWrap {
+  margin-top: 28px;
+  width: 100%;
+}
+.activity {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.activity thead th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: hsl(20 10% 12% / 0.55);
+  padding: 0 12px 12px 0;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+  user-select: none;
+  white-space: nowrap;
+  background: transparent;
+}
+.activity tbody tr {
+  border-bottom: 1px solid var(--hair);
+  transition: background 0.15s ease;
+}
+.activity tbody tr:hover {
+  background: var(--row-hover);
+}
+.activity tbody td {
+  padding: 14px 12px 14px 0;
+  color: var(--ink);
+  vertical-align: middle;
+}
+.activity tbody td.isMuted {
+  color: var(--ink-3);
+}
+
+/* Hash prefix cell — mono, tabular, muted. Full hash on copy. */
+.cellHash {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Risk badge */
+.riskBadge {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.riskNone {
+  color: var(--ink-4);
+  background: hsl(20 8% 88%);
+}
+.riskLow {
+  color: var(--pos);
+  background: hsl(140 30% 90%);
+}
+.riskMedium {
+  color: hsl(30 80% 38%);
+  background: hsl(30 60% 90%);
+}
+.riskHigh {
+  color: var(--neg);
+  background: hsl(0 50% 92%);
+}
+.riskCritical {
+  color: hsl(345 70% 40%);
+  background: hsl(345 60% 92%);
+}
+
+/* ============= section label (ACTIVITY caps mono) ============= */
+.sectionLabel {
+  font-family: var(--mono);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: hsl(20 10% 12% / 0.55);
+}
+
+/* muted-ink text utility */
+.isMuted {
+  color: var(--ink-3);
+}
+
+/* tabular numerals for timestamp cells */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============= skeleton loading ============= */
+.skeletonTable {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.skeletonRow {
+  height: 48px;
+  border-bottom: 1px solid var(--hair);
+  background: linear-gradient(
+    90deg,
+    hsl(40 18% 92% / 0) 0%,
+    hsl(40 18% 92% / 0.7) 50%,
+    hsl(40 18% 92% / 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: activityShimmer 1.6s ease-in-out infinite;
+}
+.skeletonRow:first-child {
+  border-top: 1px solid var(--hair);
+}
+@keyframes activityShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ============= empty action button (filtered-empty Clear filters) ============= */
+.emptyAction {
+  margin-top: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.emptyAction:hover {
+  border-color: var(--ink-3);
+}
+
+/* ============= filter chips — Filtered pill ============= */
+.filteredPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 3px 10px 3px 10px;
+  background: transparent;
+  margin-left: 12px;
+}
+.filteredLabel {
+  color: var(--ink-3);
+}
+.filteredDot {
+  color: var(--ink-4);
+}
+.filteredClear {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.filteredClear:hover {
+  color: var(--ink);
+}
+
+/* ============= table row / cell overrides for activity ============= */
+
+/* sticky first column */
+.stickyCol {
+  position: sticky;
+  left: 0;
+  background: var(--cream);
+  z-index: 1;
+}
+
+/* row expanded state — subtle background */
+.activityRow.isExpanded {
+  background: var(--row-hover);
+}
+
+/* cell styles for the activity table */
+.cellTimestamp {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  white-space: nowrap;
+  min-width: 160px;
+  position: sticky;
+  left: 0;
+  background: var(--cream);
+  z-index: 1;
+}
+.activityRow.isExpanded .cellTimestamp {
+  background: var(--row-hover);
+}
+.activity tbody tr:hover .cellTimestamp {
+  background: var(--row-hover);
+}
+
+.cellEvent {
+  min-width: 180px;
+}
+.cellActor {
+  min-width: 160px;
+}
+.cellEntity {
+  min-width: 160px;
+}
+.cellSummary {
+  min-width: 280px;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cellChevron {
+  text-align: right;
+  padding-right: 4px;
+  width: 36px;
+}
+
+/* mono cell text (event, actor, entity) */
+.cellMono {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
+/* chevron toggle button */
+.chevronButton {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+  border-radius: 3px;
+}
+.chevronButton:hover {
+  color: var(--ink);
+}
+.chevronButton:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.chevronIcon {
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1;
+  display: inline-block;
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+.chevronIcon.chevronUp {
+  transform: rotate(-90deg);
+}
+
+/* drawer row — no border-bottom on the row containing the drawer */
+.drawerRow {
+  border-bottom: none !important;
+}
+.drawerCell {
+  padding: 0 !important;
+  border-bottom: 1px solid var(--hair);
+}
+
+/* ============= inline drawer ============= */
+.drawer {
+  background: hsl(45 20% 96%);
+  border-top: 1px solid var(--hair-soft);
+  padding: 24px 28px 28px;
+}
+
+.drawerGrid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px 16px;
+  align-items: baseline;
+  max-width: var(--col-prose);
+}
+
+.drawerField {
+  display: contents;
+}
+
+.drawerLabel {
+  color: hsl(20 10% 12% / 0.55);
+  padding-top: 2px;
+  white-space: nowrap;
+  align-self: start;
+}
+
+.drawerValue {
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drawerSummary {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* snapshot keys */
+.drawerSnapshotKeys {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+.drawerRedacted {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  margin-top: 4px;
+}
+
+/* evidence pointers */
+.drawerEvidenceWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.drawerEvidenceCount {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.drawerEvidenceList {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.drawerEvidenceItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.drawerEvidenceItem::before {
+  content: "•";
+  color: var(--ink-4);
+  font-size: 12px;
+}
+.drawerEvidenceType {
+  display: inline-block;
+  min-width: 52px;
+  color: var(--ink-3);
+}
+
+/* [copy] ghost button */
+.copyButton {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+  align-self: center;
+}
+.copyButton:hover {
+  color: var(--accent);
+}
+.copyButton:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ============= pagination footer (prev/next cursor) ============= */
+.paginationFooter {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hair);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(20 10% 12% / 0.55);
+}
+.moreButton {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-3);
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+.moreButton:hover:not(:disabled) {
+  color: var(--ink);
+}
+.moreButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.arr {
+  font-family: var(--serif);
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ============= empty / error ============= */
+.emptyWrap {
+  margin-top: 48px;
+  padding: 32px 0;
+  text-align: center;
+  font-family: var(--sans);
+  color: var(--ink-2);
+}
+.emptyTitle {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+.emptyBody {
+  font-size: 15px;
+  color: var(--ink-3);
+  margin: 0 auto;
+  max-width: 420px;
+  text-wrap: pretty;
+}
+
+/* ============= utility ============= */
+.fadeIn {
+  animation: activityFadeIn 0.35s ease-out;
+}
+@keyframes activityFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

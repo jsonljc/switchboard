@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type { AuditEntry } from "@switchboard/schemas";
-import type { LedgerStorage, AuditQueryFilter } from "@switchboard/core";
+import type { LedgerStorage, AuditQueryFilter, AuditLedgerBrowseFilter } from "@switchboard/core";
 
 // Advisory lock key for serializing audit chain writes
 const AUDIT_CHAIN_LOCK_KEY = 900_001;
@@ -140,6 +140,45 @@ export class PrismaLedgerStorage implements LedgerStorage {
       orderBy: { timestamp: "asc" },
       take: filter.limit,
       skip: filter.offset,
+    });
+
+    return rows.map(toAuditEntry);
+  }
+
+  async listForBrowse(filter: AuditLedgerBrowseFilter): Promise<AuditEntry[]> {
+    const where: Prisma.AuditEntryWhereInput = {
+      organizationId: filter.organizationId,
+      visibilityLevel: { in: ["public", "org"] },
+    };
+
+    if (filter.eventTypes !== null) where.eventType = { in: filter.eventTypes };
+    if (filter.actorType !== null) where.actorType = filter.actorType;
+    if (filter.entityType !== null) where.entityType = filter.entityType;
+    if (filter.entityId !== null) where.entityId = filter.entityId;
+    if (filter.after !== null)
+      where.timestamp = { ...(where.timestamp as object | undefined), gte: filter.after };
+    if (filter.before !== null)
+      where.timestamp = { ...(where.timestamp as object | undefined), lt: filter.before };
+
+    if (filter.cursor !== null) {
+      // (timestamp, id) DESC tuple comparison: timestamp < cursor.timestamp
+      // OR (timestamp = cursor.timestamp AND id < cursor.id).
+      // Parens here are LOAD-BEARING — without them the OR escapes the org/visibility scope.
+      const cursorDate = new Date(filter.cursor.timestamp);
+      where.AND = [
+        {
+          OR: [
+            { timestamp: { lt: cursorDate } },
+            { timestamp: cursorDate, id: { lt: filter.cursor.id } },
+          ],
+        },
+      ];
+    }
+
+    const rows = await this.prisma.auditEntry.findMany({
+      where,
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      take: filter.limit,
     });
 
     return rows.map(toAuditEntry);
