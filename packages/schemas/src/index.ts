@@ -65,6 +65,9 @@ export * from "./event-types.js";
 // Marketplace types (Agent Listings, Deployments, Tasks, Trust Scores)
 export * from "./marketplace.js";
 
+// Reference metadata (skill reference YAML frontmatter contract)
+export * from "./reference-metadata.js";
+
 // Agent Persona (Sales Pipeline business context)
 export * from "./agent-persona.js";
 
