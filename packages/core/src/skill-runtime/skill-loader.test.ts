@@ -448,4 +448,94 @@ context: []
   it("throws SkillParseError when neither file nor directory exists", () => {
     expect(() => loadSkill("missing", testDir)).toThrow();
   });
+
+  it("loads and validates references when present", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: With references
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    const refContent = `---
+jurisdiction: SG
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: critical
+lastReviewedAt: "2026-05-10"
+owner: jasonli
+---
+# SG rules
+Banned phrases follow.
+`;
+    mkdirSync(join(testDir, "alex", "references", "regulatory"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+    writeFileSync(join(testDir, "alex", "references", "regulatory", "sg-rules.md"), refContent);
+
+    const skill = loadSkill("alex", testDir);
+    expect(skill.references).toBeDefined();
+    expect(skill.references).toHaveLength(1);
+    expect(skill.references![0]!.metadata.jurisdiction).toBe("SG");
+    expect(skill.references![0]!.metadata.riskLevel).toBe("critical");
+    expect(skill.references![0]!.path).toBe("references/regulatory/sg-rules.md");
+  });
+
+  it("throws when a reference frontmatter is invalid", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: With bad reference
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    const badRefContent = `---
+jurisdiction: US
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: critical
+lastReviewedAt: "2026-05-10"
+owner: jasonli
+---
+`;
+    mkdirSync(join(testDir, "alex", "references", "regulatory"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+    writeFileSync(join(testDir, "alex", "references", "regulatory", "us-rules.md"), badRefContent);
+
+    expect(() => loadSkill("alex", testDir)).toThrow();
+  });
+
+  it("returns references undefined when no references directory exists", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: No references
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    mkdirSync(join(testDir, "alex"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+
+    const skill = loadSkill("alex", testDir);
+    expect(skill.references).toBeUndefined();
+  });
 });
