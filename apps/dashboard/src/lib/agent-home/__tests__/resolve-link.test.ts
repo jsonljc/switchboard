@@ -1,13 +1,27 @@
 // apps/dashboard/src/lib/agent-home/__tests__/resolve-link.test.ts
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveAgentHomeLink } from "../resolve-link";
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("resolveAgentHomeLink", () => {
-  it("contact links resolve to /contacts/[id] (D1.5+)", () => {
+  it("contact links resolve to /contacts/[id] when NEXT_PUBLIC_CONTACTS_LIVE='true'", () => {
+    vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "true");
     const r = resolveAgentHomeLink({ kind: "contact", id: "c1" });
     expect(r.disabled).toBe(false);
     if (!r.disabled) {
       expect(r.href).toBe("/contacts/c1");
+    }
+  });
+
+  it("contact links resolve disabled when NEXT_PUBLIC_CONTACTS_LIVE is unset (couples list+detail)", () => {
+    vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "");
+    const r = resolveAgentHomeLink({ kind: "contact", id: "c1" });
+    expect(r.disabled).toBe(true);
+    if (r.disabled) {
+      expect(r.reason).toBe("route-not-available");
     }
   });
 
