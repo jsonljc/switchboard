@@ -7,12 +7,10 @@ import {
   type AuditEntriesListResponse,
 } from "@switchboard/schemas";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { isMercuryToolLive } from "@/lib/route-availability";
 import { ACTIVITY_FIXTURES } from "../fixtures";
 
-// Read process.env per call so vitest can mutate NEXT_PUBLIC_ACTIVITY_LIVE
-// between fixture-branch and live-branch tests. In production Next.js inlines
-// the value at build time, so this is effectively a constant.
-const isLive = (): boolean => process.env.NEXT_PUBLIC_ACTIVITY_LIVE === "true";
+const isLive = (): boolean => isMercuryToolLive("activity");
 
 function buildSearch(query: Partial<AuditEntriesListQuery>): string {
   const params = new URLSearchParams();

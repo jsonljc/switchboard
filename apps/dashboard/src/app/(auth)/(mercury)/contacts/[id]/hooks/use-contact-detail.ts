@@ -4,11 +4,10 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { notFound } from "next/navigation";
 import { ContactDetailResponseSchema, type ContactDetailResponse } from "@switchboard/schemas";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { isMercuryToolLive } from "@/lib/route-availability";
 import { CONTACT_DETAIL_FIXTURES } from "../fixtures";
 
-// Read process.env per call so vitest can mutate NEXT_PUBLIC_CONTACTS_LIVE
-// between fixture-branch and live-branch tests. Mirrors useContactsList.
-const isLive = (): boolean => process.env.NEXT_PUBLIC_CONTACTS_LIVE === "true";
+const isLive = (): boolean => isMercuryToolLive("contacts");
 
 export type UseContactDetailResult =
   | UseQueryResult<ContactDetailResponse, Error>

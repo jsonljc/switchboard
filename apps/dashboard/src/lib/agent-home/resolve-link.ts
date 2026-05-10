@@ -1,5 +1,5 @@
 // apps/dashboard/src/lib/agent-home/resolve-link.ts
-import { isAgentHomeLinkLive } from "../route-availability.js";
+import { isAgentHomeLinkLive } from "../route-availability";
 import type { AgentHomeLink } from "./types.js";
 
 export type ResolvedAgentHomeLink =

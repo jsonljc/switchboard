@@ -7,6 +7,7 @@ import {
   type ContactsListResponse,
 } from "@switchboard/schemas";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { isMercuryToolLive } from "@/lib/route-availability";
 import { CONTACTS_FIXTURE_PAGE } from "../fixtures";
 
 export type ContactsListQueryInput = Partial<Omit<ContactsListQuery, "cursor">>;
@@ -16,10 +17,7 @@ export type UseContactsListResult = UseInfiniteQueryResult<
   Error
 >;
 
-// Read process.env per call so vitest can mutate NEXT_PUBLIC_CONTACTS_LIVE
-// between fixture-branch and live-branch tests. In production Next.js inlines
-// the value at build time, so this is effectively a constant.
-const isLive = (): boolean => process.env.NEXT_PUBLIC_CONTACTS_LIVE === "true";
+const isLive = (): boolean => isMercuryToolLive("contacts");
 
 function buildSearch(query: ContactsListQueryInput, cursor: string | undefined): string {
   const params = new URLSearchParams();
