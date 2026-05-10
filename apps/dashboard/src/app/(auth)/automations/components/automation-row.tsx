@@ -28,18 +28,14 @@ const STATUS_CLASS: Record<ScheduledTriggerBrowseRow["status"], string> = {
 export function AutomationRow({ row, drawerId, expanded, onToggle, timezone }: Props) {
   return (
     <tr className={styles.dataRow}>
-      <td className={`${styles.cellType} ${styles.mono} ${styles.stickyType}`}>
-        {TYPE_LABEL[row.type]}
-      </td>
+      <td className={`${styles.mono} ${styles.stickyType}`}>{TYPE_LABEL[row.type]}</td>
       <td className={styles.mono}>{row.scheduleLabel}</td>
       <td className={styles.mono}>{row.actionType}</td>
       <td>
         <span className={`${styles.statusPill} ${STATUS_CLASS[row.status]}`}>{row.status}</span>
       </td>
       <td className={styles.mono}>{truncateWorkflowId(row.sourceWorkflowId)}</td>
-      <td className={`${styles.mono} ${styles.cellCreated}`}>
-        {formatShortDate(row.createdAt, timezone)}
-      </td>
+      <td className={styles.mono}>{formatShortDate(row.createdAt, timezone)}</td>
       <td className={styles.cellChevron}>
         <button
           type="button"
