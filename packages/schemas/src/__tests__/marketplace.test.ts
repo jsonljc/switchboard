@@ -502,5 +502,15 @@ describe("Marketplace schemas", () => {
       const result = ServiceSchema.safeParse(invalid);
       expect(result.success).toBe(false);
     });
+
+    it("rejects empty strings inside popularCombinations", () => {
+      const invalid = {
+        name: "Filler",
+        description: "Volume restoration",
+        popularCombinations: ["Skinbooster", ""],
+      };
+      const result = ServiceSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
   });
 });

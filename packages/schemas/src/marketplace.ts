@@ -257,11 +257,12 @@ export const ServiceSchema = z.object({
 
   // medspa-relevant operator-authored optional fields
   bookingBehavior: z.enum(["book_directly", "consultation_only", "ask_first"]).optional(),
+  // prepInstructions: service-specific prep; overrides bookingPolicies.prepInstructions when present.
   prepInstructions: z.string().optional(),
   aftercareNotes: z.string().optional(),
   idealFor: z.string().optional(),
   notSuitableFor: z.string().optional(),
-  popularCombinations: z.array(z.string()).optional(),
+  popularCombinations: z.array(z.string().min(1)).optional(),
   consultationRequired: z.boolean().optional(),
 });
 
