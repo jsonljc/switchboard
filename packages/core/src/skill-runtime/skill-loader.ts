@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -131,12 +131,23 @@ function validateContext(
 }
 
 export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
-  const filePath = join(skillsDir, `${slug}.md`);
+  const dirSkillPath = join(skillsDir, slug, "SKILL.md");
+  const fileSkillPath = join(skillsDir, `${slug}.md`);
+
+  let skillPath: string;
+  if (existsSync(dirSkillPath)) {
+    skillPath = dirSkillPath;
+  } else if (existsSync(fileSkillPath)) {
+    skillPath = fileSkillPath;
+  } else {
+    throw new SkillParseError(`Skill "${slug}" not found at ${dirSkillPath} or ${fileSkillPath}`);
+  }
+
   let raw: string;
   try {
-    raw = readFileSync(filePath, "utf-8");
+    raw = readFileSync(skillPath, "utf-8");
   } catch {
-    throw new SkillParseError(`Skill file not found: ${filePath}`);
+    throw new SkillParseError(`Skill file not found: ${skillPath}`);
   }
 
   const { frontmatterStr, body } = splitFrontmatter(raw);
