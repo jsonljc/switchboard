@@ -223,16 +223,24 @@ export type GovernanceConfigResolver = (
 ) => Promise<GovernanceConfigResolution>;
 ```
 
-A naive "throw → fail closed" rule would let one transient `AgentDeploymentStore` outage pause every Alex conversation globally, including conversations on deployments that have no governance enabled. To constrain the closed-fail to deployments already known to be governed, both gates wrap the resolver with a per-process **last-known-mode cache**:
+A naive "throw → fail closed" rule would let one transient `AgentDeploymentStore` outage pause every Alex conversation globally, including conversations on deployments that have no governance enabled. To constrain the closed-fail to deployments already known to be governed *and* to ensure the fail-closed branch uses the right per-deployment posture (an MY/nonMedical deployment must not get an SG/medical handoff), both gates wrap the resolver with a per-process **last-known-posture cache**:
 
 ```ts
-export interface ModeCache {
-  remember(deploymentId: string, mode: GovernanceMode): void;
-  lastKnown(deploymentId: string): GovernanceMode | undefined;
+export type GovernancePosture = {
+  mode: GovernanceMode;
+  jurisdiction: "SG" | "MY";
+  clinicType: "medical" | "nonMedical";
+};
+
+export interface GovernancePostureCache {
+  remember(deploymentId: string, posture: GovernancePosture): void;
+  lastKnown(deploymentId: string): GovernancePosture | undefined;
 }
 ```
 
-Implementation: a `Map<string, GovernanceMode>` (no eviction needed in 1b-1; deployments are bounded; cache reset on process restart is acceptable because the resolver succeeds on warm cache anyway).
+The cache stores the *full posture* (not just the mode) because the fail-closed branch needs jurisdiction and clinicType to pick the right handoff template and stamp the right verdict. A mode-only cache would force the gate to fall back to hardcoded defaults, which silently breaks the per-deployment compliance posture for any non-default deployment — a category of bug worth eliminating at the type level.
+
+Implementation: a `Map<string, GovernancePosture>` (no eviction needed in 1b-1; deployments are bounded; cache reset on process restart is acceptable because the resolver succeeds on warm cache anyway).
 
 **Decision rules per resolution status:**
 
@@ -240,9 +248,9 @@ Implementation: a `Map<string, GovernanceMode>` (no eviction needed in 1b-1; dep
 |---|---|---|
 | `resolved` | Use `config.deterministicGate.mode`. Update cache. | Same. |
 | `missing` | `mode = "off"`. Pass through. Do not persist verdict. | Same. |
-| `error`, last-known cache miss or `"off"` | Pass through (fail open). Log. Do not persist. | Pass through (fail open). Log. Do not persist. |
-| `error`, last-known cache `"observe"` | Pass through. Log. Do not persist. | Pass through. Log. Do not persist. |
-| `error`, last-known cache `"enforce"` | **Fail closed**: replace output with handoff template, flip status to `human_override`, save handoff, persist verdict with `auditLevel: "critical"`, `reasonCode: "governance_unavailable"`. | **Fail closed**: skip `submit()`, send handoff template, flip status to `human_override`, save handoff, persist verdict (same fields). |
+| `error`, posture cache miss or last-known `mode === "off"` | Pass through (fail open). Log. Do not persist. | Pass through (fail open). Log. Do not persist. |
+| `error`, last-known posture `mode === "observe"` | Pass through. Log. Do not persist. | Pass through. Log. Do not persist. |
+| `error`, last-known posture `mode === "enforce"` | **Fail closed using cached posture's jurisdiction and clinicType**: replace output with handoff template (rendered for cached jurisdiction), flip status to `human_override`, save handoff, persist verdict with `auditLevel: "critical"`, `reasonCode: "governance_unavailable"`, `jurisdiction` and `clinicType` from cached posture. | **Fail closed using cached posture**: skip `submit()`, send handoff template (cached jurisdiction), flip status to `human_override`, save handoff, persist verdict (same fields). |
 
 In `observe` mode, resolver failure means **no verdict is persisted** — the gate cannot safely determine which jurisdiction-specific tables to scan against, so there is nothing to log against. Pass-through is the only safe action. The error itself is logged via `console.error` for SRE visibility but does not become a verdict row.
 
@@ -532,7 +540,7 @@ export interface DeterministicSafetyGateHookDeps {
   verdictStore: GovernanceVerdictStore;
   handoffStore: HandoffStore;
   conversationStore: ConversationStateStore;
-  modeCache: ModeCache;
+  postureCache: GovernancePostureCache;
   clock: () => Date;
 }
 
@@ -550,8 +558,8 @@ export class DeterministicSafetyGateHook implements SkillHook {
 
 1. `resolution = await governanceConfigResolver(deploymentId)`.
 2. **`resolution.status === "missing"`** or resolved-with-`mode === "off"` → return original output unchanged. Do not persist.
-3. **`resolution.status === "error"`** → consult `modeCache.lastKnown(deploymentId)`. If `"enforce"` → fail closed (jump to step 6 with `reasonCode: "governance_unavailable"` and `originalText` = the joined message texts). Else → log and return original output unchanged (fail open). Do not persist on the fail-open branch.
-4. **`resolution.status === "resolved"`** → `modeCache.remember(deploymentId, mode)`. Load banned phrases for `config.jurisdiction`.
+3. **`resolution.status === "error"`** → consult `postureCache.lastKnown(deploymentId)`. If `posture?.mode === "enforce"` → fail closed *using the cached posture's `jurisdiction` and `clinicType`* (jump to step 7 with `reasonCode: "governance_unavailable"` and `originalText` = the joined message texts). Else → log and return original output unchanged (fail open). Do not persist on the fail-open branch.
+4. **`resolution.status === "resolved"`** → `postureCache.remember(deploymentId, { mode, jurisdiction: config.jurisdiction, clinicType: config.clinicType })`. Load banned phrases for `config.jurisdiction`.
 5. For each outbound message in `ctx.skillOutput.messages`, run `scanForBannedPhrases`. Collect all matches.
 6. **No matches:** return original output unchanged. Do not persist.
 7. **One or more matches** (or fail-closed from step 3):
@@ -577,7 +585,7 @@ Insertion point: `packages/core/src/channel-gateway/channel-gateway.ts` between 
 - `governanceConfigResolver: GovernanceConfigResolver`
 - `escalationTriggerLoader: (jurisdiction) => readonly EscalationTriggerEntry[]`
 - `verdictStore: GovernanceVerdictStore`
-- `modeCache: ModeCache` (shared instance with the output gate, so warm cache spans both gates)
+- `postureCache: GovernancePostureCache` (shared instance with the output gate, so warm cache spans both gates)
 - `handoffStore: HandoffStore` (likely already wired)
 - (`conversationStore` and `replySink` are already present)
 
@@ -585,8 +593,8 @@ Insertion point: `packages/core/src/channel-gateway/channel-gateway.ts` between 
 
 1. `resolution = await governanceConfigResolver(deploymentId)`.
 2. **`resolution.status === "missing"`** or resolved-with-`mode === "off"` → proceed to `platformIngress.submit()`. Do not persist.
-3. **`resolution.status === "error"`** → consult `modeCache.lastKnown(deploymentId)`. If `"enforce"` → fail closed (skip submit, build a verdict with `reasonCode: "governance_unavailable"` and `originalText` = inbound, send handoff, persist). Else → log and proceed to `platformIngress.submit()` (fail open). Do not persist on the fail-open branch.
-4. **`resolution.status === "resolved"`** → `modeCache.remember(deploymentId, mode)`. Load triggers for `config.jurisdiction`.
+3. **`resolution.status === "error"`** → consult `postureCache.lastKnown(deploymentId)`. If `posture?.mode === "enforce"` → fail closed *using the cached posture's `jurisdiction` and `clinicType`* (skip submit, build a verdict with `reasonCode: "governance_unavailable"` and `originalText` = inbound, send handoff rendered for cached jurisdiction, persist). Else → log and proceed to `platformIngress.submit()` (fail open). Do not persist on the fail-open branch.
+4. **`resolution.status === "resolved"`** → `postureCache.remember(deploymentId, { mode, jurisdiction: config.jurisdiction, clinicType: config.clinicType })`. Load triggers for `config.jurisdiction`.
 5. `scanForEscalationTriggers(inboundText, triggers)`.
 6. **No matches:** proceed to `platformIngress.submit()`. Do not persist.
 7. **Match** (or fail-closed from step 3):
@@ -614,7 +622,7 @@ The plan task that wires registration must verify the existing hook framework re
 - a null `governanceConfig` field (or no row) into `{ status: "missing" }`;
 - a thrown DB error into `{ status: "error", error }`.
 
-The `ModeCache` is a single shared `Map`-backed instance constructed at bootstrap and injected into both gates so a successful resolution by either gate warms the cache for the other.
+The `GovernancePostureCache` is a single shared `Map`-backed instance constructed at bootstrap and injected into both gates so a successful resolution by either gate warms the cache for the other.
 
 ## Section 10 — Test fixture coverage
 
@@ -635,8 +643,8 @@ Per the 1a pattern, all assertions go through `GovernanceVerdict` shape — no f
 | `DeterministicSafetyGateHook` | Mode matrix: enforce/observe/off × match/no-match × jurisdiction (12 cases). Asserts: output replacement, conversation status flip, handoff save, verdict persisted with correct reasonCode/sourceGuard/details |
 | Pre-input gate (channel-gateway) | Same 12-case matrix. Asserts: `platformIngress.submit()` not called on enforce-match; handoff template sent; verdict persisted; status flipped |
 | Hook ordering | `DeterministicSafetyGateHook` runs before `TracePersistenceHook`. Trace store sees emitted (post-block) output only; never sees pre-block unsafe text |
-| Resolver failure × cache matrix | `error` + cold cache → fail open (no verdict). `error` + cache `"off"` → fail open (no verdict). `error` + cache `"observe"` → fail open (no verdict — gate cannot determine jurisdiction). `error` + cache `"enforce"` → fail closed (verdict with `reasonCode: "governance_unavailable"`, handoff sent). Coverage for both gates. |
-| `ModeCache` | Shared instance across both gates; warm-write by either gate makes the other read-warm; `lastKnown` returns `undefined` on miss |
+| Resolver failure × cache matrix | `error` + cold cache → fail open (no verdict). `error` + cache `mode === "off"` → fail open (no verdict). `error` + cache `mode === "observe"` → fail open (no verdict — pass-through is the consistent observe-mode action). `error` + cache `mode === "enforce"` → fail closed; verdict with `reasonCode: "governance_unavailable"`, handoff sent; **`jurisdiction` and `clinicType` come from the cached posture, not defaults**. Coverage for both gates with both SG/medical and MY/nonMedical cached postures (the test must assert the verdict's jurisdiction matches the cached jurisdiction, not a hardcoded fallback). |
+| `GovernancePostureCache` | Shared instance across both gates; warm-write by either gate makes the other read-warm; `lastKnown` returns `undefined` on miss; remembered posture round-trips full `{ mode, jurisdiction, clinicType }` triple |
 | Persistence-failure fail-open-of-block | `verdictStore.save` throws after match → block/escalate still applied; logged. `handoffStore.save` throws → status still flipped |
 
 ## Section 11 — Operability
@@ -662,13 +670,13 @@ Per the 1a pattern, all assertions go through `GovernanceVerdict` shape — no f
 - A separate global feature-flag system (mode field IS the flag)
 - Operator-configurable handoff template strings
 - Per-tenant banned-phrase customization (tables are repo-level in 1b-1)
-- Persistent / cross-instance `ModeCache` (per-process is sufficient for the 1b-1 pilot envelope; see Open Question 1)
+- Persistent / cross-instance `GovernancePostureCache` (per-process is sufficient for the 1b-1 pilot envelope; see Open Question 1)
 - Phase 1b-1.5 regulatory expansion of the seed tables (set up the handoff in 1b-1, do the work in 1b-1.5)
 - Negation patterns on the output gate's banned-phrase entries (relies on the 1b-2 classifier for intent reasoning)
 
 ## Open questions
 
-1. **Persistent `ModeCache`.** The current spec uses a per-process in-memory cache. A horizontally-scaled deployment with N instances has N cold caches. For the 1b-1 traffic envelope (single-tenant pilot, low QPS) this is fine. If the pilot scales before 1b-2 lands, a Redis-backed cache (or just a separate cheap "is this deployment governed?" flag on `AgentDeployment` that the resolver consults independently) is the upgrade path. Surfaced here as a known limit, not a 1b-1 blocker.
+1. **Persistent `GovernancePostureCache`.** The current spec uses a per-process in-memory cache. A horizontally-scaled deployment with N instances has N cold caches, and each instance must independently warm its cache before fail-closed protection becomes available for that deployment. For the 1b-1 traffic envelope (single-tenant pilot, low QPS) this is fine. If the pilot scales before 1b-2 lands, a Redis-backed cache (or just a separate cheap "is this deployment governed?" flag on `AgentDeployment` that the resolver consults independently) is the upgrade path. Surfaced here as a known limit, not a 1b-1 blocker.
 
 2. **Hook framework order guarantee.** Section 9 asserts `DeterministicSafetyGateHook` runs before `TracePersistenceHook`. The plan task that wires registration must read `packages/core/src/skill-runtime/types.ts:224–233` and confirm `SkillExecutorImpl` iterates hooks in registration-array order. If it does not, the same task adds a `priority` (or equivalent) field — this is not a deferral, it is part of the registration task's definition of done.
 
