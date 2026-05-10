@@ -518,6 +518,39 @@ owner: jasonli
     expect(() => loadSkill("alex", testDir)).toThrow();
   });
 
+  it("throws SkillParseError when reference YAML is malformed", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: With malformed reference
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    const malformedRefContent = `---
+jurisdiction: SG
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: critical
+lastReviewedAt: "2026-05-10"
+owner: jasonli
+sources: ["unclosed-array"
+---
+# Malformed YAML
+`;
+    mkdirSync(join(testDir, "alex", "references", "regulatory"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+    writeFileSync(join(testDir, "alex", "references", "regulatory", "bad.md"), malformedRefContent);
+
+    expect(() => loadSkill("alex", testDir)).toThrow(SkillParseError);
+  });
+
   it("returns references undefined when no references directory exists", () => {
     const skillContent = `---
 name: alex

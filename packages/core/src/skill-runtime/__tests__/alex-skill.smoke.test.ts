@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
 import { loadSkill } from "../skill-loader.js";
 
-const SKILLS_DIR = resolve(__dirname, "../../../../../skills");
+const SKILLS_DIR = resolve(import.meta.dirname, "../../../../../skills");
 
 describe("Alex skill (real, not fixture)", () => {
   it("loads from directory layout", () => {

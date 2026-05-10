@@ -153,7 +153,14 @@ function loadReferences(skillDir: string): SkillReferenceFile[] | undefined {
           throw new SkillParseError(`Reference file ${full} missing YAML frontmatter`);
         }
         const [, fm, body] = split;
-        const parsed = parseYaml(fm!);
+        let parsed: unknown;
+        try {
+          parsed = parseYaml(fm!);
+        } catch (err) {
+          throw new SkillParseError(
+            `Reference file ${full} has invalid YAML: ${(err as Error).message}`,
+          );
+        }
         const result = ReferenceMetadataSchema.safeParse(parsed);
         if (!result.success) {
           throw new SkillValidationError(
