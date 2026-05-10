@@ -24,16 +24,20 @@ export const GovernanceVerdictReasonSchema = z.enum([
   "banned_phrase",
   "unsupported_claim",
   "medical_safety_trigger",
+  "sensitive_inbound",
+  "compliance_concern",
+  "governance_unavailable",
   "outside_whatsapp_window",
   "consent_missing",
   "classifier_timeout",
 ]);
 
 export const GovernanceVerdictSourceSchema = z.enum([
-  "claim_scanner",
+  "banned_phrase_scanner",
+  "claim_classifier",
+  "escalation_trigger",
   "consent_gate",
   "whatsapp_window",
-  "escalation_trigger",
 ]);
 
 export const GovernanceVerdictSchema = z.object({
