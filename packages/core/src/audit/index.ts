@@ -12,4 +12,4 @@ export {
 } from "./evidence.js";
 export type { EvidencePointer, EvidenceStore } from "./evidence.js";
 export { AuditLedger, InMemoryLedgerStorage } from "./ledger.js";
-export type { LedgerStorage, AuditQueryFilter } from "./ledger.js";
+export type { LedgerStorage, AuditQueryFilter, AuditLedgerBrowseFilter } from "./ledger.js";
