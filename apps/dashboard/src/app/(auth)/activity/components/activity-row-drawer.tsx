@@ -2,7 +2,7 @@
 
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { formatDrawer } from "./format.js";
+import { formatDrawer } from "./format";
 
 export interface ActivityRowDrawerProps {
   row: AuditEntryBrowseRow;
