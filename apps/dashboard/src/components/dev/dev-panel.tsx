@@ -9,7 +9,8 @@ const NAV_LINKS = [
   { href: "/", label: "Owner Home" },
   { href: "/alex", label: "Alex" },
   { href: "/contacts", label: "Contacts" },
-  // /automations frontend (D2b) not yet shipped — re-add when the route lands.
+  { href: "/automations", label: "Automations" },
+  { href: "/activity", label: "Activity" },
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
   { href: "/onboarding", label: "Onboarding" },
