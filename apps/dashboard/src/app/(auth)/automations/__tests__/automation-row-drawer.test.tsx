@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { AutomationRowDrawer } from "../components/automation-row-drawer";
 import type { ScheduledTriggerBrowseRow } from "@switchboard/schemas";
 
@@ -95,5 +95,58 @@ describe("<AutomationRowDrawer />", () => {
     );
     expect(screen.getByRole("button", { name: /Copy trigger id/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Copy source workflow id/i })).toBeInTheDocument();
+  });
+
+  describe("copy-button feedback", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("flips label to 'Copied' on successful click and reverts after 2s", async () => {
+      vi.useFakeTimers();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText },
+      });
+
+      render(
+        <table>
+          <tbody>
+            <AutomationRowDrawer row={baseRow} drawerId="d6" colSpan={6} timezone="UTC" />
+          </tbody>
+        </table>,
+      );
+      const button = screen.getByRole("button", { name: /Copy trigger id/i });
+      expect(button).toHaveTextContent("Copy");
+
+      fireEvent.click(button);
+      // Resolve the awaited writeText() and apply setCopied(true).
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(writeText).toHaveBeenCalledWith(baseRow.id);
+      expect(button).toHaveTextContent("Copied");
+
+      // 2-second timeout reverts the label.
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(button).toHaveTextContent("Copy");
+    });
+
+    it("does not throw when clipboard API is unavailable", () => {
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+      render(
+        <table>
+          <tbody>
+            <AutomationRowDrawer row={baseRow} drawerId="d7" colSpan={6} timezone="UTC" />
+          </tbody>
+        </table>,
+      );
+      const button = screen.getByRole("button", { name: /Copy trigger id/i });
+      expect(() => fireEvent.click(button)).not.toThrow();
+      expect(button).toHaveTextContent("Copy");
+    });
   });
 });

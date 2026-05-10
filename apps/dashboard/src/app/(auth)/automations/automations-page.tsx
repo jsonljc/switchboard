@@ -51,7 +51,8 @@ export function AutomationsPage() {
     } else {
       params.set("status", next);
     }
-    router.replace(params.toString() ? `?${params.toString()}` : "/automations");
+    const qs = params.toString();
+    router.replace(qs ? `/automations?${qs}` : "/automations");
   }
 
   let content: React.ReactNode;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ScheduledTriggerBrowseRow } from "@switchboard/schemas";
 import { formatFullIso, redactedKeyLabel } from "./format";
 import styles from "../automations.module.css";
@@ -64,18 +65,28 @@ export function AutomationRowDrawer({ row, drawerId, colSpan, timezone }: Props)
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable / blocked — keep the button silently usable.
+    }
+  }
+
   return (
     <button
       type="button"
       aria-label={label}
+      aria-live="polite"
       className={styles.copyButton}
-      onClick={() => {
-        if (typeof navigator !== "undefined" && navigator.clipboard) {
-          void navigator.clipboard.writeText(value);
-        }
-      }}
+      onClick={() => void handleCopy()}
     >
-      Copy
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }

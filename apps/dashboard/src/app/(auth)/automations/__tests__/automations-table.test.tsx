@@ -40,12 +40,17 @@ describe("<AutomationsTable />", () => {
     expect(chevrons[1]!).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("Enter key on the chevron toggles the drawer", () => {
+  it("chevron is a real <button> with type=button, so native keyboard activation works", () => {
+    // Real <button> elements dispatch click on Enter/Space natively. jsdom does
+    // not synthesize the native click from fireEvent.keyDown, so we assert the
+    // rendered element actually has the keyboard contract (button + type) and
+    // exercise the onClick path via a real click.
     render(<AutomationsTable rows={[ALL_ROWS[0]!]} timezone="UTC" />);
     const chevron = screen.getByRole("button", { name: /Expand row/i });
-    chevron.focus();
-    fireEvent.keyDown(chevron, { key: "Enter" });
     expect(chevron.tagName).toBe("BUTTON");
+    expect(chevron.getAttribute("type")).toBe("button");
+    fireEvent.click(chevron);
+    expect(chevron).toHaveAttribute("aria-expanded", "true");
   });
 
   it("clicking the row body does not open the drawer", () => {

@@ -37,6 +37,11 @@ describe("format helpers", () => {
       expect(out).toMatch(/2026-05-09T18:00:00.*\+08:00/);
     });
 
+    it("renders +00:00 for UTC", () => {
+      const out = formatFullIso("2026-05-09T10:00:00Z", "UTC");
+      expect(out).toBe("2026-05-09T10:00:00+00:00");
+    });
+
     it("falls back to em-dash on bad input", () => {
       expect(formatFullIso("nonsense", "UTC")).toBe("—");
     });

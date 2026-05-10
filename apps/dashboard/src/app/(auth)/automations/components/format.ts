@@ -49,10 +49,16 @@ export function formatFullIso(iso: string, timezone: string): string {
     const lookup = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
     const datePart = `${lookup("year")}-${lookup("month")}-${lookup("day")}`;
     const timePart = `${lookup("hour")}:${lookup("minute")}:${lookup("second")}`;
-    const offsetRaw = lookup("timeZoneName").replace("GMT", "");
+    const tzName = lookup("timeZoneName");
+    // shortOffset is locale/runtime-dependent; Node 20 + Chrome both emit
+    // "GMT" / "GMT+8" / "GMT-04:30". If a different runtime returns something
+    // we can't parse, fall back to the canonical ISO Z rather than emit garbage.
+    if (!tzName.startsWith("GMT")) return d.toISOString();
+    const offsetRaw = tzName.replace("GMT", "");
+    // `GMT` alone (UTC) → "+00:00"; otherwise parse the signed h[:mm].
     const sign = offsetRaw.startsWith("-") ? "-" : "+";
-    const num = offsetRaw.replace(/[+-]/, "");
-    const [h, m = "0"] = num.split(":");
+    const num = offsetRaw.replace(/^[+-]/, "");
+    const [h = "0", m = "0"] = num.split(":");
     const offset = `${sign}${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
     return `${datePart}T${timePart}${offset}`;
   } catch {
