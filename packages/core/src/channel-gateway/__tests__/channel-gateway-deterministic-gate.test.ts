@@ -11,12 +11,18 @@
  *     verdict action "escalate", status flipped, handoff saved
  *  5. enforce + no match → submit called, no verdict
  *  6. fail-open on resolver error with cold cache → submit called, no verdict
- *  7. fail-closed on resolver error with cached SG enforce posture → submit NOT
- *     called, verdict reasonCode "governance_unavailable", jurisdiction "SG",
+ *  7. fail-closed: resolver error + cached SG enforce + inbound MATCHES trigger
+ *     → submit NOT called, verdict reasonCode matches REASON_CODE_BY_TRIGGER
+ *     for the matched category (not bare "governance_unavailable"), jurisdiction "SG",
  *     SG handoff phrasing ("I'll get them")
- *  8. fail-closed uses cached MY/nonMedical posture (not hardcoded SG default)
+ *  7b. fail-closed: resolver error + cached SG enforce + inbound CLEAN (no match)
+ *      → submit IS called (scan-still-clean path, no block), no verdict, no send
+ *  8. fail-closed uses cached MY/nonMedical posture (not hardcoded SG default):
+ *     resolver error + cached MY enforce + inbound matches trigger
  *     → submit NOT called, verdict jurisdiction "MY", clinicType "nonMedical",
  *     MY handoff phrasing ("I'll have them")
+ *  8b. fail-closed: resolver error + cached MY enforce + inbound CLEAN
+ *      → submit IS called, no verdict, no send
  *  9. verdictStore.save throws in enforce → submit still NOT called, send still
  *     called, status still flipped (block applied)
  */
@@ -418,10 +424,12 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 7: fail-closed — resolver error, cached SG enforce → submit NOT called,
-  //         verdict reasonCode "governance_unavailable", SG phrasing
+  // Test 7: fail-closed — resolver error, cached SG enforce, inbound MATCHES
+  //         trigger → submit NOT called, verdict uses REASON_CODE_BY_TRIGGER
+  //         for matched category (natural reason code, not "governance_unavailable"),
+  //         SG phrasing
   // -------------------------------------------------------------------------
-  it('7. fail-closed: resolver error + cached SG enforce → submit NOT called, verdict "governance_unavailable", SG phrasing', async () => {
+  it("7. fail-closed: resolver error + cached SG enforce + trigger match → submit NOT called, verdict uses trigger natural reason code, SG phrasing", async () => {
     const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
       status: "error",
       error: new Error("DB timeout"),
@@ -436,19 +444,22 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     );
     const gw = new ChannelGateway(config);
 
+    // MSG_TRIGGER contains "pregnant" → matches pregnancy_breastfeeding → medical_safety_trigger
     await gw.handleIncoming(MSG_TRIGGER, { send: sendSpy });
 
     // Submit must NOT be called
     expect(submitSpy).not.toHaveBeenCalled();
 
-    // Verdict persisted with governance_unavailable + SG jurisdiction
+    // Verdict persisted with natural trigger reason code (not bare "governance_unavailable")
     expect(verdictStore.save).toHaveBeenCalledOnce();
     const savedVerdict = verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
-    expect(savedVerdict.reasonCode).toBe("governance_unavailable");
+    // pregnancy_breastfeeding → REASON_CODE_BY_TRIGGER → "medical_safety_trigger"
+    expect(savedVerdict.reasonCode).toBe("medical_safety_trigger");
     expect(savedVerdict.action).toBe("escalate");
     expect(savedVerdict.auditLevel).toBe("critical");
     expect(savedVerdict.jurisdiction).toBe("SG");
     expect(savedVerdict.clinicType).toBe("medical");
+    expect(savedVerdict.details?.matchCategory).toBe("pregnancy_breastfeeding");
 
     // Status flipped
     expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override");
@@ -461,9 +472,42 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 8: fail-closed uses cached MY/nonMedical posture (not hardcoded SG)
+  // Test 7b: fail-closed — resolver error, cached SG enforce, inbound CLEAN
+  //          → scan-still-clean: submit IS called, no verdict, no send
   // -------------------------------------------------------------------------
-  it("8. fail-closed: cached MY/nonMedical enforce posture → verdict jurisdiction MY, MY phrasing", async () => {
+  it("7b. fail-closed: resolver error + cached SG enforce + clean inbound → scan-still-clean, submit called, no verdict, no send", async () => {
+    const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
+      status: "error",
+      error: new Error("DB timeout"),
+    });
+
+    // Seed posture cache with SG/enforce
+    postureCache.remember("dep-1", { mode: "enforce", jurisdiction: "SG", clinicType: "medical" });
+
+    const config = makeGatewayConfig(
+      { resolver, verdictStore, postureCache, handoffStore, statusSetter },
+      { platformIngress: { submit: submitSpy } },
+    );
+    const gw = new ChannelGateway(config);
+
+    // MSG_CLEAN has no trigger match → scan-still-clean path → proceed
+    await gw.handleIncoming(MSG_CLEAN, { send: sendSpy });
+
+    // Submit IS called — text is clean
+    expect(submitSpy).toHaveBeenCalled();
+    // No verdict persisted
+    expect(verdictStore.save).not.toHaveBeenCalled();
+    // No status flip
+    expect(statusSetter.setConversationStatus).not.toHaveBeenCalled();
+    // AI reply sent (not handoff text)
+    expect(sendSpy).toHaveBeenCalledWith("Hello from agent");
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 8: fail-closed uses cached MY/nonMedical posture (not hardcoded SG)
+  //         inbound MATCHES trigger → submit NOT called, verdict MY/nonMedical
+  // -------------------------------------------------------------------------
+  it("8. fail-closed: cached MY/nonMedical enforce posture + trigger match → verdict jurisdiction MY, MY phrasing", async () => {
     const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
       status: "error",
       error: new Error("Config store unavailable"),
@@ -492,13 +536,51 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     const savedVerdict = verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
     expect(savedVerdict.jurisdiction).toBe("MY");
     expect(savedVerdict.clinicType).toBe("nonMedical");
-    expect(savedVerdict.reasonCode).toBe("governance_unavailable");
+    // Natural reason code from matched trigger category
+    expect(savedVerdict.reasonCode).toBe("medical_safety_trigger");
+    expect(savedVerdict.details?.matchCategory).toBe("pregnancy_breastfeeding");
 
     // MY handoff text sent
     expect(sendSpy).toHaveBeenCalledOnce();
     const sentText: string = sendSpy.mock.calls[0]![0];
     expect(sentText).toContain(MY_HANDOFF_SUBSTRING);
     expect(sentText).not.toContain(SG_HANDOFF_SUBSTRING);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 8b: fail-closed — resolver error, cached MY enforce, inbound CLEAN
+  //          → scan-still-clean: submit IS called, no verdict, no send
+  // -------------------------------------------------------------------------
+  it("8b. fail-closed: resolver error + cached MY/nonMedical enforce + clean inbound → scan-still-clean, submit called, no verdict", async () => {
+    const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
+      status: "error",
+      error: new Error("Config store unavailable"),
+    });
+
+    // Seed posture cache with MY/nonMedical/enforce
+    postureCache.remember("dep-1", {
+      mode: "enforce",
+      jurisdiction: "MY",
+      clinicType: "nonMedical",
+    });
+
+    const config = makeGatewayConfig(
+      { resolver, verdictStore, postureCache, handoffStore, statusSetter },
+      { platformIngress: { submit: submitSpy } },
+    );
+    const gw = new ChannelGateway(config);
+
+    // MSG_CLEAN has no trigger match → scan-still-clean path → proceed
+    await gw.handleIncoming(MSG_CLEAN, { send: sendSpy });
+
+    // Submit IS called — text is clean
+    expect(submitSpy).toHaveBeenCalled();
+    // No verdict persisted
+    expect(verdictStore.save).not.toHaveBeenCalled();
+    // No status flip
+    expect(statusSetter.setConversationStatus).not.toHaveBeenCalled();
+    // AI reply sent (not handoff text)
+    expect(sendSpy).toHaveBeenCalledWith("Hello from agent");
   });
 
   // -------------------------------------------------------------------------

@@ -436,6 +436,22 @@ export class ChannelGateway {
 
   /**
    * Fail-closed path: resolver threw but posture cache has an enforce entry.
+   *
+   * Symmetric with the output hook's handleResolverError: tables (escalation
+   * triggers) are TypeScript constants that remain available even when the
+   * resolver fails. We scan inbound text using the cached jurisdiction's table.
+   *
+   * Decision tree:
+   *   - no cached posture, or posture not "enforce" → fail open (return false)
+   *   - cached enforce + NO trigger match → log the resolver error but PROCEED
+   *     (return false). The text is clean; blocking would be a false positive.
+   *   - cached enforce + trigger match → block as usual.
+   *
+   * reasonCode: REASON_CODE_BY_TRIGGER from the matched entry category — more
+   * informative than a bare "governance_unavailable", which would obscure what
+   * actually fired. The resolver failure is captured in the console.error above
+   * and in the verdict's sourceGuard ("escalation_trigger").
+   *
    * Uses cached jurisdiction/clinicType — never hardcoded defaults.
    */
   private async handleInputGateResolverError(
@@ -461,11 +477,39 @@ export class ChannelGateway {
     }
 
     console.error(
-      `[ChannelGateway] pre-input gate: resolver error for "${deploymentId}" — failing closed (cached ${posture.mode}/${posture.jurisdiction}/${posture.clinicType}):`,
+      `[ChannelGateway] pre-input gate: resolver error for "${deploymentId}" — failing closed with scan (cached ${posture.mode}/${posture.jurisdiction}/${posture.clinicType}):`,
       error,
     );
 
-    const reasonCode = "governance_unavailable" as const;
+    // Scan inbound text using the cached jurisdiction's trigger table.
+    // Tables are TS constants — available even when the resolver fails.
+    // If the text is clean, proceed rather than unconditionally blocking.
+    const { escalationTriggerLoader } = this.config;
+    if (!escalationTriggerLoader) {
+      // Gate was wired without a loader — cannot scan, fail open.
+      console.error(
+        `[ChannelGateway] pre-input gate: no escalationTriggerLoader in cached-enforce path — failing open`,
+      );
+      return false;
+    }
+
+    const triggers = escalationTriggerLoader(posture.jurisdiction);
+    const matches = scanForEscalationTriggers(inboundText, triggers);
+
+    if (matches.length === 0) {
+      // Resolver failed but text is clean — log and proceed to submit.
+      console.error(
+        `[ChannelGateway] pre-input gate: resolver error for "${deploymentId}" — scan-still-clean, proceeding (cached ${posture.jurisdiction}/${posture.clinicType}):`,
+        error,
+      );
+      return false;
+    }
+
+    const firstMatch = matches[0]!;
+    const firstEntry = firstMatch.entry;
+    // Use the trigger's natural reason code — more informative than a generic
+    // "governance_unavailable" because the actual trigger category is known.
+    const reasonCode = REASON_CODE_BY_TRIGGER[firstEntry.category];
     const decidedAt = new Date().toISOString();
 
     const verdictInput: SaveGovernanceVerdictInput = {
@@ -479,6 +523,12 @@ export class ChannelGateway {
       decidedAt,
       conversationId: sessionId,
       deploymentId,
+      details: {
+        matchCategory: firstEntry.category,
+        matchId: firstEntry.id,
+        matchedText: firstMatch.matched,
+        sentence: firstMatch.sentence,
+      },
     };
 
     try {
