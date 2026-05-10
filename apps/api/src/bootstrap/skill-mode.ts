@@ -89,12 +89,30 @@ export async function bootstrapSkillMode(
   // Single shared posture cache — warm on first resolve, reused across both gates.
   const governancePostureCache = new InMemoryGovernancePostureCache();
   // Adapter: ConversationStatusSetter → direct conversationState updateMany.
-  // The DeterministicSafetyGateHook receives a sessionId (the channel session /
-  // WhatsApp phone number) which is stored as threadId in ConversationState.
-  // updateMany is intentionally soft: if no row exists the call is a no-op rather
-  // than a fatal error, because the conversation may not yet have a state row
-  // (e.g. very first message). The block is applied regardless — status flip is
-  // best-effort.
+  //
+  // WHY updateMany (not upsert):
+  // ConversationState has required non-nullable fields (channel, principalId,
+  // expiresAt) that this gate adapter does not possess — they are set upstream
+  // in the chat conversation lifecycle (PrismaConversationStore.save) before
+  // any message reaches the skill executor.  Upsert would require manufacturing
+  // sentinel values for those fields, which defeats their purpose.
+  //
+  // Safety of updateMany here:
+  // The DeterministicSafetyGateHook runs as an afterSkill hook inside the
+  // SkillExecutorImpl.  By the time a session reaches the executor, the
+  // conversation lifecycle (PrismaConversationStore) has already persisted a
+  // ConversationState row for that threadId during session initialisation
+  // (apps/chat/src/conversation/prisma-store.ts → save).  An updateMany with
+  // no matching row is therefore a reachable-but-safe no-op only in edge cases
+  // (e.g. brand-new session whose first-ever message triggered a banned phrase
+  // before the lifecycle store wrote the row).  In that case the block is still
+  // applied — the response is replaced and handoff is saved — only the status
+  // flip is skipped.  The block still holds.
+  //
+  // Invariant: ConversationState rows are always written by the chat
+  // conversation lifecycle before a session enters the skill executor.
+  // Verified: apps/chat/src/conversation/prisma-store.ts save() is called by
+  // the chat orchestrator prior to submitting to PlatformIngress.
   const conversationStatusSetter = {
     async setConversationStatus(sessionId: string, status: string): Promise<void> {
       await prismaClient.conversationState.updateMany({

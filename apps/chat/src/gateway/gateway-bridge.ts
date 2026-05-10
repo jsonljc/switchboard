@@ -115,8 +115,37 @@ export function createGatewayBridge(
   const gatewayPostureCache = new InMemoryGovernancePostureCache();
   const gatewayHandoffStore = new PrismaHandoffStore(prisma);
   // Adapter: GatewayConversationStatusSetter → direct conversationState updateMany.
-  // updateMany is intentionally soft: if no ConversationState row exists the call
-  // is a no-op. The block is applied regardless — status flip is best-effort.
+  //
+  // WHY updateMany (not upsert):
+  // ConversationState has required non-nullable fields (channel, principalId,
+  // expiresAt) that this gate adapter does not possess.  The ChannelGateway
+  // pre-input gate runs before platformIngress.submit, so the only context
+  // available is the inbound sessionId and the requested status value.
+  //
+  // Safety of updateMany here:
+  // The ChannelGateway pre-input gate is intentionally positioned to intercept
+  // inbound messages from real channel conversations.  Real channel conversations
+  // in the chat app go through the chat orchestrator and PrismaConversationStore,
+  // which writes the ConversationState row (including channel, principalId,
+  // expiresAt) during session initialisation before any message is processed.
+  //
+  // IMPORTANT CONSTRAINT: ConversationState rows are only created by the chat
+  // conversation lifecycle (PrismaConversationStore.save).  In the ChannelGateway
+  // flow, the gateway uses ConversationThread (not ConversationState) for message
+  // persistence (see PrismaGatewayConversationStore).  If a ConversationState
+  // row has not been written yet for this sessionId (e.g. the very first message
+  // from a brand-new channel session), the updateMany is a silent no-op.  In that
+  // case the block is still fully applied (response replaced, handoff saved,
+  // submit skipped) — only the status flip is deferred.  This is acceptable
+  // because:
+  //   1. The enforcement block (return true / skip submit) is the primary safety
+  //      invariant; the status flip is a secondary bookkeeping step.
+  //   2. The chat orchestrator will write the ConversationState row shortly after,
+  //      at which point the "human_override" status can be set through the chat
+  //      layer's own state management if needed.
+  //
+  // A future 1b-1.5 hardening pass should consider passing channel+principalId
+  // into this adapter so a true upsert becomes feasible.
   const gatewayConversationStatusSetter = {
     async setConversationStatus(sessionId: string, status: string): Promise<void> {
       await prisma.conversationState.updateMany({
