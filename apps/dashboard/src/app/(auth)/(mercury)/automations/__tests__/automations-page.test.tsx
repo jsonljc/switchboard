@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AutomationsPage } from "../automations-page";
@@ -16,7 +16,15 @@ vi.mock("@/hooks/use-query-keys", () => ({
 }));
 
 beforeEach(() => {
-  process.env.NEXT_PUBLIC_AUTOMATIONS_LIVE = "false";
+  // Empty string is falsy + `=== "true"` is false → useAutomationsList bails
+  // to fixtures, so render path doesn't issue real HTTP through the
+  // QueryClient wrapper below. (Real-QC pattern is incidental, not a tested
+  // contract — see D7-3 commit notes.)
+  vi.stubEnv("NEXT_PUBLIC_AUTOMATIONS_LIVE", "");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 function withQuery(node: React.ReactNode) {

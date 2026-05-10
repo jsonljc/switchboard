@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AuditEntriesListResponse } from "@switchboard/schemas";
@@ -76,10 +76,14 @@ describe("ActivityPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setSearch("");
-    // Default: gate is off (NEXT_PUBLIC_ACTIVITY_LIVE not set).
-    delete process.env.NEXT_PUBLIC_ACTIVITY_LIVE;
+    // Default: gate off. Per-test gate-on calls vi.stubEnv("…","true") below.
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "");
     // Provide a stub hook return value for gate-off tests (hook still mounts).
     mockUseActivityList.mockReturnValue(hookResult({}));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   // ── 1. Gate-off renders fixtures ──────────────────────────────────────────
@@ -94,7 +98,7 @@ describe("ActivityPage", () => {
 
   // ── 2. Gate-on renders rows from hook ─────────────────────────────────────
   it("gate-on: renders rows returned by useActivityList", () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     mockUseActivityList.mockReturnValue(
       hookResult({
         rows: [
@@ -127,7 +131,7 @@ describe("ActivityPage", () => {
 
   // ── 3. Empty state — no filters active ───────────────────────────────────
   it("zero-state: renders 'No activity yet' when rows are empty and no filters active", () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     mockUseActivityList.mockReturnValue(hookResult({ rows: [], scope: "operational" }));
     render(<ActivityPage />);
     expect(screen.getByText(/No activity yet/)).toBeInTheDocument();
@@ -137,7 +141,7 @@ describe("ActivityPage", () => {
 
   // ── 4. Filtered-empty distinction ─────────────────────────────────────────
   it("filtered-empty: renders 'No matching activity' with Clear filters when URL param is active", () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     setSearch("eventType=action.executed");
     mockUseActivityList.mockReturnValue(hookResult({ rows: [], scope: "custom" }));
     render(<ActivityPage />);
@@ -147,7 +151,7 @@ describe("ActivityPage", () => {
 
   it("filtered-empty Clear filters resets to default (drops scope=all)", async () => {
     // Empty-state Clear is a full reset: drop ALL params, including scope.
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     setSearch("scope=all&eventType=action.executed");
     mockUseActivityList.mockReturnValue(hookResult({ rows: [], scope: "custom" }));
     render(<ActivityPage />);
@@ -179,7 +183,7 @@ describe("ActivityPage", () => {
   it("Filtered pill Clear preserves the operator's chip choice when scope=all", async () => {
     // Spec §2.3: "[Clear] on the Filtered pill drops the URL params and returns
     // to whichever chip the operator has selected." If scope=all, keep it.
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     setSearch("scope=all&eventType=action.executed");
     // scope="custom" makes the Filtered pill render in FilterChips.
     mockUseActivityList.mockReturnValue(hookResult({ rows: [pillRow], scope: "custom" }));
@@ -191,7 +195,7 @@ describe("ActivityPage", () => {
   });
 
   it("Filtered pill Clear returns to default Operational when scope=operational", async () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     setSearch("eventType=action.executed");
     mockUseActivityList.mockReturnValue(hookResult({ rows: [pillRow], scope: "custom" }));
     render(<ActivityPage />);
@@ -219,7 +223,7 @@ describe("ActivityPage", () => {
   // The expandedRowId closure is verified via the row drawer: expand a row
   // before the chip toggle, then assert it's no longer expanded.
   it("chip toggle clears prevCursorStack and expanded drawer", async () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
 
     const liveRow = {
       id: "audit_live_001",
@@ -281,7 +285,7 @@ describe("ActivityPage", () => {
   // re-rendering with a new URL param. The filter-change effect must fire,
   // clearing the stack. Observable: PaginationFooter disappears.
   it("URL-param change clears prevCursorStack (filter-change invariant)", async () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
 
     const liveRow = {
       id: "audit_live_002",
@@ -347,7 +351,7 @@ describe("ActivityPage", () => {
   });
 
   it("threads scope and narrowing params from URL into the hook query", () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     setSearch("scope=all&actorType=agent&entityType=calendar_event");
     mockUseActivityList.mockReturnValue(hookResult({ rows: [], scope: "custom" }));
     render(<ActivityPage />);
@@ -367,14 +371,14 @@ describe("ActivityPage", () => {
   });
 
   it("renders loading skeleton when isLoading=true", () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     mockUseActivityList.mockReturnValue(hookResult({ isLoading: true }));
     render(<ActivityPage />);
     expect(screen.getByRole("status", { name: /Loading activity/ })).toBeInTheDocument();
   });
 
   it("renders error empty-state when isError=true", () => {
-    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     mockUseActivityList.mockReturnValue(hookResult({ isError: true }));
     render(<ActivityPage />);
     // isError renders the filtered-empty state (generic catch-all).
