@@ -132,7 +132,7 @@ export const GovernanceVerdictReasonSchema = z.enum([
 
 ### 1.2 Extend `GovernanceConfigSchema` (via `passthrough`)
 
-`packages/schemas/src/governance-config.ts` — no file-level change. The 1b-1 schema's `.passthrough()` already accepts an arbitrary `claimClassifier` sub-block at runtime. 1b-2 defines a Zod refinement that callers use at the hook boundary:
+`packages/schemas/src/governance-config.ts` — **additive schema helper only; no Prisma config migration.** The 1b-1 schema's `.passthrough()` already accepts an arbitrary `claimClassifier` sub-block in the stored JSON column at runtime. 1b-2 adds a Zod sub-schema (`ClaimClassifierConfigSchema`) and a resolver helper (`resolveClaimClassifierConfig`) to the same file — these are new exports, not edits to `GovernanceConfigSchema` itself:
 
 ```ts
 // packages/schemas/src/governance-config.ts (additive)
@@ -331,6 +331,7 @@ Notes:
 
 - `safety-claim` accepts either source tier: a doctor's named statement reviewed and stored as `approved_compliance_claim` *or* a public regulatory citation matching a `regulatory_public_source` entry. First match wins; preference order is `approved_compliance_claim` then `regulatory_public_source`.
 - `credentials` does *not* dispatch to rewrite. A credentials claim ("Dr. X is APC-licensed") is either true and substantiatable via the public registry pattern, or it must be escalated — a non-claim rewrite would be misleading ("the doctor will introduce themselves during consultation" is acceptable but the original credential claim cannot be silently softened).
+- **Credentials matching is intentionally narrow in v1.** `regulatory_public_source` entries fall into two shapes: (a) *generic credential-path language* (e.g., "registered with the SMC", "HSA-approved device class") that operators may safely use without naming a specific person/device, and (b) *named curated entries* (e.g., `hsa_thermage_flx_approval` matching the exact device name in the sentence). The classifier-flagged sentence matches `regulatory_public_source` only when one of those two cases applies. A claim like *"Dr. Jane Lim is a registered SMC dermatologist"* will NOT match a generic SMC-path entry — the named-person assertion needs either a curated entry for Dr. Lim (which 1b-2 does not ship) or escalation. This conservative posture is deliberate: silently allowing named-credential claims based on generic patterns is the failure mode regulators care about most.
 - `testimonial` is also caught by 1b-1's banned-phrase `testimonial` category for the obvious cases ("many clients say"). The classifier catches subtler testimonial shapes that didn't match the substring tables. Always escalates — there is no template that rewrites a testimonial into a non-testimonial.
 
 ## Section 3 — Classifier
@@ -414,8 +415,12 @@ export interface AnthropicClaimClassifier {
 const CLASSIFIER_TOOL = {
   name: "classify_claim",
   description: "Classify a single sentence into one regulatory claim type.",
+  // Anthropic structured-output reliability: strict mode rejects responses
+  // that deviate from input_schema. Force the tool with tool_choice below.
+  strict: true,
   input_schema: {
     type: "object" as const,
+    additionalProperties: false,
     properties: {
       claimType: {
         type: "string" as const,
@@ -488,9 +493,14 @@ export function createAnthropicClaimClassifier(
 }
 ```
 
-**Prompt caching:** both the system prompt and the tool definition carry `cache_control: { type: "ephemeral" }`. The 5-minute TTL amortizes cost across high-traffic conversations. On the cache miss path (first call after restart, or after 5 minutes idle), the cost is the standard Haiku 4.5 input rate; subsequent calls within the window pay the cache-hit rate.
+**Prompt caching:** Anthropic prompt caching caches the **prefix** up to and including any block carrying `cache_control: { type: "ephemeral" }`. Two cache breakpoints are set:
 
-`tool_choice: { type: "tool", name: "classify_claim" }` forces structured output — the model cannot return free-form text.
+1. `cache_control` on the system text — caches the system prompt prefix.
+2. `cache_control` on the **last tool definition** in the `tools` array — caches the tool-list prefix (per Anthropic prompt-caching docs for tool definitions). Since the classifier has only one tool, that single entry carries it; if future variants add more tools, the `cache_control` stays on the last entry.
+
+The per-turn `messages[0].content` (the sentence under classification) is the cache-miss tail. The 5-minute TTL amortizes the system+tools prefix cost across high-traffic conversations. On the cache miss path (first call after restart or 5 minutes idle), cost is standard Haiku 4.5 input; subsequent calls within the window pay the cache-hit rate on the prefix.
+
+`tool_choice: { type: "tool", name: "classify_claim" }` forces structured output — the model cannot return free-form text. Combined with `strict: true` on the tool definition, the response shape is contract-enforced server-side; Zod parsing at the client is a defense-in-depth check.
 
 ### 3.3 Sentence splitter
 
@@ -650,7 +660,10 @@ export interface SubstantiationCache {
 }
 
 export interface SubstantiationCacheKey {
-  claimTextHash: string;     // sha256(lowercase(sentence)) — short prefix is sufficient
+  sentenceHash: string;      // sha256(lowercase(sentence)) — short prefix is sufficient.
+                             // Name reflects what is hashed (the model-output sentence
+                             // under classification), NOT the operator-authored claimText
+                             // it might match against.
   jurisdiction: "SG" | "MY";
   claimType: ClaimType;
   deploymentId: string;
@@ -669,6 +682,7 @@ export function createInMemoryLRU(opts?: InMemoryLRUOptions): SubstantiationCach
 - Key incorporates `deploymentId` so a multi-tenant deployment cannot serve another tenant's match.
 - LRU eviction at `maxEntries` (default 5000) — bounded memory.
 - Invalidation on `ApprovedComplianceClaim` upsert is **out of scope** in 1b-2. The cache stores only matches, so a new approved claim that *would* match an unseen sentence does not need invalidation (cache miss = re-resolve). A new approved claim that supersedes an existing match would require the cache entry's stored `sourceId` to be invalidated; for the v1 traffic envelope this is a known limitation. Documented in Open Questions.
+- **Operator workaround until Phase 3 invalidation lands:** after seeding or admin-script updating `ApprovedComplianceClaim` rows, restart the API process (or expose an admin-only `/admin/governance/cache/clear` endpoint as a follow-up) to clear the LRU. Document this in the seed-script README. Acceptable because authoring is a low-frequency operator action in v1, not a real-time event.
 
 ### 4.6 Resolver implementation outline
 
@@ -869,7 +883,19 @@ Every classifier-driven verdict's `details` carries:
 }
 ```
 
-Timeout / error verdicts omit `promptVersion`/`promptHash`/`model`/`claimType`/`confidence` — those fields are only meaningful when the call completed.
+Timeout / error verdicts omit `promptVersion`/`promptHash`/`model`/`claimType`/`confidence` — those fields are only meaningful when the call completed. Timeout/error verdicts MUST still stamp `details`:
+
+```ts
+{
+  originalSentence: <the sentence that timed out or errored>,
+  errorKind: "timeout" | "api_error" | "schema_parse_error",
+  latencyBudgetMs: <the budget that was in effect for this turn>,
+  errorMessage?: <only for "api_error" / "schema_parse_error"; truncated to 200 chars>,
+  schemaVersion: "1.0.0",   // schema version is meaningful even when the call didn't complete
+}
+```
+
+Empty `details` is never acceptable. The `errorKind` discriminator lets analytics distinguish budget-exhaustion (a tuning signal) from API failure (an operational signal) from schema-parse failure (a prompt-drift signal).
 
 ### 6.6 Whole-message vs sentence-level effects
 
@@ -1008,7 +1034,7 @@ Per the 1a/1b-1 pattern, all runtime assertions go through `GovernanceVerdict` s
 
 ## Open questions
 
-1. **`Service` reference resolution from skill output.** Section 6.2 says the runtime threads `serviceId` from service-scoped tool calls into `AfterSkillContext.serviceContext`. The exact list of "service-scoped tools" in the current skill runtime (`services.lookup`, `calendar-book`, others?) needs to be enumerated in the plan task that touches `skill-runtime/types.ts`. If the runtime doesn't currently track tool-call → service-id correlation, the plan task adds it as part of the wiring step, not deferred.
+1. **`Service` reference resolution from skill output.** Section 6.2 says the runtime threads `serviceId` from service-scoped tool calls into `AfterSkillContext.serviceContext`. The exact list of "service-scoped tools" in the current skill runtime (`services.lookup`, `calendar-book`, others?) needs to be enumerated in the plan task that touches `skill-runtime/types.ts`. If the runtime doesn't currently track tool-call → service-id correlation, the plan must scope this as a **separate, fallback-tolerant task**: populate `serviceContext` when the correlation is obvious (a single service-scoped tool call this turn), otherwise leave it `null`. The classifier hook MUST function correctly with `serviceContext: null` (global-scope-only substantiation lookup). Perfect tool-call lineage is a refinement, not a 1b-2 blocker — the substantiation resolver's `serviceId IS NULL` global query is the safe fallback.
 
 2. **`ApprovedComplianceClaim` seed authorship.** 1b-2 ships an empty store. Operators (or the regulatory reviewer named in 1b-1.5) need to author rows for the pilot tenant. The PR description should call out a follow-up note: target tenant, expected first 10 claims, author. Not blocking 1b-2 merge.
 
