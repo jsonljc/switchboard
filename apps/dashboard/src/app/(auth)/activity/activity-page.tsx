@@ -147,7 +147,17 @@ export function ActivityPage() {
     [sp, updateUrl],
   );
 
-  const onClearFilters = useCallback(() => {
+  // Filtered-pill Clear: drop narrowing URL params but preserve the operator's
+  // chip choice (per spec §2.3). If scope=all was active, keep it.
+  const onClearFiltersPreserveScope = useCallback(() => {
+    const params = new URLSearchParams();
+    if (scope === "all") params.set("scope", "all");
+    const qs = params.toString();
+    router.replace(qs ? `/activity?${qs}` : "/activity", { scroll: false });
+  }, [router, scope]);
+
+  // Empty-state Clear: full reset to default Operational + no params.
+  const onResetToDefault = useCallback(() => {
     router.replace("/activity", { scroll: false });
   }, [router]);
 
@@ -223,7 +233,7 @@ export function ActivityPage() {
           <FilterChips
             scope={effectiveScope}
             onChipChange={onChipChange}
-            onClearFilters={onClearFilters}
+            onClearFilters={onClearFiltersPreserveScope}
           />
         </div>
 
@@ -236,7 +246,7 @@ export function ActivityPage() {
         ) : isError ? (
           <EmptyState variant="filtered" onClear={() => void refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState variant={emptyVariant} onClear={hasFilters ? onClearFilters : undefined} />
+          <EmptyState variant={emptyVariant} onClear={hasFilters ? onResetToDefault : undefined} />
         ) : (
           <ActivityTable rows={rows} expandedRowId={expandedRowId} onToggleRow={onToggleRow} />
         )}

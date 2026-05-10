@@ -145,12 +145,58 @@ describe("ActivityPage", () => {
     expect(screen.getByRole("button", { name: /Clear filters/ })).toBeInTheDocument();
   });
 
-  it("filtered-empty Clear filters navigates to /activity without params", async () => {
+  it("filtered-empty Clear filters resets to default (drops scope=all)", async () => {
+    // Empty-state Clear is a full reset: drop ALL params, including scope.
     process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
-    setSearch("eventType=action.executed");
+    setSearch("scope=all&eventType=action.executed");
     mockUseActivityList.mockReturnValue(hookResult({ rows: [], scope: "custom" }));
     render(<ActivityPage />);
     await userEvent.setup().click(screen.getByRole("button", { name: /Clear filters/ }));
+    expect(mockReplace).toHaveBeenCalledWith("/activity", { scroll: false });
+  });
+
+  // Shared minimal AuditEntryBrowseRow fixture for the pill-Clear tests below.
+  const pillRow = {
+    id: "audit_pill_001",
+    eventType: "action.executed" as const,
+    timestamp: "2026-05-10T10:00:00Z",
+    actorType: "agent" as const,
+    actorId: "agent_alex_001",
+    entityType: "calendar_event",
+    entityId: "cal_evt_1",
+    riskCategory: "low" as const,
+    visibilityLevel: "org" as const,
+    summary: "Pill row for filtered-pill Clear tests",
+    snapshotKeys: [],
+    redactedKeyCount: 0,
+    evidencePointers: [],
+    entryHash: "aaa",
+    previousEntryHash: "bbb",
+    envelopeId: null,
+    traceId: null,
+  };
+
+  it("Filtered pill Clear preserves the operator's chip choice when scope=all", async () => {
+    // Spec §2.3: "[Clear] on the Filtered pill drops the URL params and returns
+    // to whichever chip the operator has selected." If scope=all, keep it.
+    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    setSearch("scope=all&eventType=action.executed");
+    // scope="custom" makes the Filtered pill render in FilterChips.
+    mockUseActivityList.mockReturnValue(hookResult({ rows: [pillRow], scope: "custom" }));
+    render(<ActivityPage />);
+    // The Filtered pill's Clear button (rendered by FilterChips when scope=custom).
+    const pillClear = screen.getByRole("button", { name: /Clear/ });
+    await userEvent.setup().click(pillClear);
+    expect(mockReplace).toHaveBeenCalledWith("/activity?scope=all", { scroll: false });
+  });
+
+  it("Filtered pill Clear returns to default Operational when scope=operational", async () => {
+    process.env.NEXT_PUBLIC_ACTIVITY_LIVE = "true";
+    setSearch("eventType=action.executed");
+    mockUseActivityList.mockReturnValue(hookResult({ rows: [pillRow], scope: "custom" }));
+    render(<ActivityPage />);
+    const pillClear = screen.getByRole("button", { name: /Clear/ });
+    await userEvent.setup().click(pillClear);
     expect(mockReplace).toHaveBeenCalledWith("/activity", { scroll: false });
   });
 
