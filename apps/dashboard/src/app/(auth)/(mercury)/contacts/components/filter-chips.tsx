@@ -1,11 +1,14 @@
 "use client";
 
 import type { ContactStage } from "@switchboard/schemas";
-import styles from "../contacts.module.css";
+import {
+  FilterChips as MercuryFilterChips,
+  type FilterChipItem,
+} from "@/components/mercury/filter-chips";
 
 export type StageFilter = ContactStage | null;
 
-const CHIPS: ReadonlyArray<{ key: "all" | ContactStage; label: string; value: StageFilter }> = [
+const ITEMS: ReadonlyArray<FilterChipItem<StageFilter>> = [
   { key: "all", label: "All", value: null },
   { key: "new", label: "New", value: "new" },
   { key: "active", label: "Active", value: "active" },
@@ -21,24 +24,11 @@ export interface FilterChipsProps {
 
 export function FilterChips({ active, onChange }: FilterChipsProps) {
   return (
-    <nav className={styles.chips} aria-label="Filter contacts by lifecycle stage">
-      {CHIPS.map((chip) => {
-        const isActive = chip.value === active;
-        return (
-          <button
-            key={chip.key}
-            type="button"
-            className={`${styles.chip} ${isActive ? styles.isActive : ""}`}
-            aria-pressed={isActive}
-            onClick={() => {
-              if (isActive) return; // clicking the active chip is a no-op
-              onChange(chip.value);
-            }}
-          >
-            {chip.label}
-          </button>
-        );
-      })}
-    </nav>
+    <MercuryFilterChips
+      items={ITEMS}
+      active={active}
+      onChange={onChange}
+      ariaLabel="Filter contacts by lifecycle stage"
+    />
   );
 }

@@ -55,29 +55,14 @@
   font-family: var(--mono);
 }
 
-.chipRow {
-  display: flex;
-  gap: 8px;
+/* Filter-chip styles moved to components/mercury/filter-chips.module.css.
+ * The automations surface now consumes the shared <FilterChips> primitive,
+ * which standardizes on the contacts/activity text-underline visual.
+ *
+ * .chipRowWrap is layout-only spacing for the chip strip on this surface;
+ * the chip styles themselves live in the shared primitive. */
+.chipRowWrap {
   margin: 24px 0 16px;
-  flex-wrap: wrap;
-}
-
-.chip,
-.chipActive {
-  border: 1px solid var(--hair);
-  background: transparent;
-  color: var(--ink-3);
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 6px 12px;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.chipActive {
-  border-color: var(--ink);
-  color: var(--ink);
-  font-weight: 500;
 }
 
 .tableScroll {

@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  FilterChips as MercuryFilterChips,
+  type FilterChipItem,
+} from "@/components/mercury/filter-chips";
 import styles from "../activity.module.css";
 
 export type ActivityScope = "operational" | "all";
@@ -11,6 +15,11 @@ export interface FilterChipsProps {
   /** Called when the user clicks [Clear] on the Filtered pill. */
   onClearFilters: () => void;
 }
+
+const ITEMS: ReadonlyArray<FilterChipItem<ActivityScope>> = [
+  { key: "operational", label: "Operational", value: "operational" },
+  { key: "all", label: "All events", value: "all" },
+];
 
 /**
  * Two-chip scope toggle for /activity.
@@ -26,52 +35,36 @@ export interface FilterChipsProps {
  */
 export function FilterChips({ scope, onChipChange, onClearFilters }: FilterChipsProps) {
   // When scope is "custom" the server detected a narrowing URL param. We keep
-  // "Operational" visually selected because it's the default intent.
-  const operationalActive = scope === "operational" || scope === "custom";
-  const allEventsActive = scope === "all";
+  // "Operational" visually selected because it's the default intent — but
+  // clicks on Operational must still fire (to clear the custom narrowing),
+  // so we disable the primitive's active-click suppression in that case.
+  const visualActive: ActivityScope = scope === "all" ? "all" : "operational";
 
   return (
-    <nav className={styles.chips} aria-label="Filter activity by scope">
-      <button
-        type="button"
-        className={`${styles.chip} ${operationalActive ? styles.isActive : ""}`}
-        aria-pressed={operationalActive}
-        onClick={() => {
-          if (scope === "operational") return; // already selected, no-op
-          onChipChange("operational");
-        }}
-      >
-        Operational
-      </button>
-
-      <button
-        type="button"
-        className={`${styles.chip} ${allEventsActive ? styles.isActive : ""}`}
-        aria-pressed={allEventsActive}
-        onClick={() => {
-          if (scope === "all") return; // already selected, no-op
-          onChipChange("all");
-        }}
-      >
-        All events
-      </button>
-
-      {scope === "custom" && (
-        <span className={styles.filteredPill}>
-          <span className={styles.filteredLabel}>Filtered</span>
-          <span aria-hidden="true" className={styles.filteredDot}>
-            ·
+    <MercuryFilterChips
+      items={ITEMS}
+      active={visualActive}
+      onChange={onChipChange}
+      ariaLabel="Filter activity by scope"
+      suppressActiveClick={scope !== "custom"}
+      trailing={
+        scope === "custom" ? (
+          <span className={styles.filteredPill}>
+            <span className={styles.filteredLabel}>Filtered</span>
+            <span aria-hidden="true" className={styles.filteredDot}>
+              ·
+            </span>
+            <button
+              type="button"
+              className={styles.filteredClear}
+              onClick={onClearFilters}
+              aria-label="Clear active filters"
+            >
+              Clear
+            </button>
           </span>
-          <button
-            type="button"
-            className={styles.filteredClear}
-            onClick={onClearFilters}
-            aria-label="Clear active filters"
-          >
-            Clear
-          </button>
-        </span>
-      )}
-    </nav>
+        ) : null
+      }
+    />
   );
 }

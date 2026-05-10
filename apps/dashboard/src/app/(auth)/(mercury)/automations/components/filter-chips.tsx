@@ -1,11 +1,14 @@
 "use client";
 
 import type { TriggerStatus, TriggerStatusCounts } from "@switchboard/schemas";
-import styles from "../automations.module.css";
+import {
+  FilterChips as MercuryFilterChips,
+  type FilterChipItem,
+} from "@/components/mercury/filter-chips";
 
 export type ChipKey = TriggerStatus | "all";
 
-const CHIPS: Array<{ key: ChipKey; label: string }> = [
+const KEYS: ReadonlyArray<{ key: ChipKey; label: string }> = [
   { key: "active", label: "Active" },
   { key: "fired", label: "Fired" },
   { key: "cancelled", label: "Cancelled" },
@@ -20,23 +23,20 @@ interface Props {
 }
 
 export function FilterChips({ active, counts, onChange }: Props) {
+  const items: ReadonlyArray<FilterChipItem<ChipKey>> = KEYS.map(({ key, label }) => {
+    const count = key === "all" ? counts.all : counts[key];
+    return { key, label: `${label} ${count}`, value: key };
+  });
+
   return (
-    <div className={styles.chipRow} role="group" aria-label="Status filter">
-      {CHIPS.map(({ key, label }) => {
-        const count = key === "all" ? counts.all : counts[key];
-        const pressed = key === active;
-        return (
-          <button
-            key={key}
-            type="button"
-            className={pressed ? styles.chipActive : styles.chip}
-            aria-pressed={pressed}
-            onClick={() => onChange(key)}
-          >
-            {label} {count}
-          </button>
-        );
-      })}
-    </div>
+    <MercuryFilterChips
+      items={items}
+      active={active}
+      onChange={onChange}
+      ariaLabel="Filter automations by status"
+      // Preserve historical behavior: every click forwards to onChange,
+      // even on the already-active chip. The page's URL handler is idempotent.
+      suppressActiveClick={false}
+    />
   );
 }
