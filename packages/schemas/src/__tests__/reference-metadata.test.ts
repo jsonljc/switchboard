@@ -59,6 +59,49 @@ describe("ReferenceMetadataSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects calendar-invalid lastReviewedAt", () => {
+    const meta = {
+      jurisdiction: "SG",
+      vertical: "medspa",
+      clinicType: "medical",
+      appliesTo: "regulatory",
+      riskLevel: "high",
+      lastReviewedAt: "2026-13-99",
+      owner: "jasonli",
+    };
+    const result = ReferenceMetadataSchema.safeParse(meta);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty owner string", () => {
+    const meta = {
+      jurisdiction: "SG",
+      vertical: "medspa",
+      clinicType: "medical",
+      appliesTo: "regulatory",
+      riskLevel: "high",
+      lastReviewedAt: "2026-05-10",
+      owner: "",
+    };
+    const result = ReferenceMetadataSchema.safeParse(meta);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-URL entries in sources", () => {
+    const meta = {
+      jurisdiction: "SG",
+      vertical: "medspa",
+      clinicType: "medical",
+      appliesTo: "regulatory",
+      riskLevel: "high",
+      lastReviewedAt: "2026-05-10",
+      owner: "jasonli",
+      sources: ["not-a-url"],
+    };
+    const result = ReferenceMetadataSchema.safeParse(meta);
+    expect(result.success).toBe(false);
+  });
+
   it("rejects missing required fields", () => {
     const meta = {
       jurisdiction: "SG",
