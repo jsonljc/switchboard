@@ -1,16 +1,4 @@
-const FALLBACK_TZ = "UTC";
-
-function browserTimezone(): string {
-  if (typeof Intl !== "undefined") {
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (tz) return tz;
-    } catch {
-      // fall through
-    }
-  }
-  return FALLBACK_TZ;
-}
+import { browserTimezone } from "@/lib/format/browser-timezone";
 
 /** Resolve the display timezone: org tz → browser tz → UTC. */
 export function resolveTimezone(orgTimezone: string | null | undefined): string {

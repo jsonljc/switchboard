@@ -1,19 +1,7 @@
 import { formatRelativeAge } from "@switchboard/core";
 import type { ContactBrowseRow } from "@switchboard/schemas";
 
-const FALLBACK_TZ = "UTC";
-
-function browserTimezone(): string {
-  if (typeof Intl !== "undefined") {
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (tz) return tz;
-    } catch {
-      // fall through
-    }
-  }
-  return FALLBACK_TZ;
-}
+import { browserTimezone } from "@/lib/format/browser-timezone";
 
 /** Renders an ISO timestamp as the same short relative string the agent-home
  *  pipeline tiles use. `now` is injectable for deterministic tests.
