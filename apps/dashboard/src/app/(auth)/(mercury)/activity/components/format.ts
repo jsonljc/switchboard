@@ -5,19 +5,9 @@
  * New helpers: formatCell, formatDrawer, truncate, hashPrefix.
  */
 
-const FALLBACK_TZ = "UTC";
+import { browserTimezone } from "@/lib/format/browser-timezone";
 
-function browserTimezone(): string {
-  if (typeof Intl !== "undefined") {
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (tz) return tz;
-    } catch {
-      // fall through
-    }
-  }
-  return FALLBACK_TZ;
-}
+const FALLBACK_TZ = "UTC";
 
 /**
  * Resolve the timezone to use for display.
