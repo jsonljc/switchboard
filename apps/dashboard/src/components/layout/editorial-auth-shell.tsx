@@ -9,6 +9,7 @@ import { LiveSignalPopover } from "./live-signal-popover";
 import { InboxDrawer } from "./inbox-drawer";
 import { HaltButtonClient } from "./halt/halt-button-client";
 import { HaltProvider } from "./halt/halt-context";
+import { ToolsOverflow } from "./tools-overflow";
 import { TweaksPanelMount } from "./tweaks-panel-mount";
 
 export async function EditorialAuthShell({ children }: { children: ReactNode }) {
@@ -55,6 +56,7 @@ export function EditorialAuthShellInner({
             <InboxDrawer />
             <HaltButtonClient />
             <span className="me-chip">M</span>
+            <ToolsOverflow />
           </div>
         </div>
       </header>

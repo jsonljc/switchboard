@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { ToolsOverflow } from "../tools-overflow";
 
 // Mock next/navigation. Each test sets the return value via mockReturnValue.
-const mockUsePathname = vi.fn<[], string>(() => "/");
+const mockUsePathname = vi.fn(() => "/");
 vi.mock("next/navigation", () => ({
   usePathname: () => mockUsePathname(),
 }));
