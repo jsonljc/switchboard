@@ -2,8 +2,8 @@
 
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { ActivityRow } from "./activity-row.js";
-import { ActivityRowDrawer } from "./activity-row-drawer.js";
+import { ActivityRow } from "./activity-row";
+import { ActivityRowDrawer } from "./activity-row-drawer";
 
 export interface ActivityTableProps {
   rows: AuditEntryBrowseRow[];
