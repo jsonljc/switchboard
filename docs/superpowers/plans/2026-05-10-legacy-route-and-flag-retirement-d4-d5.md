@@ -131,7 +131,7 @@ Expected: PASS.
 - [ ] **Step 6: Run the dashboard tests for /settings/account if any**
 
 ```bash
-pnpm --filter @switchboard/dashboard test -- src/app/\\(auth\\)/settings/account 2>&1 | tail -20
+pnpm --filter @switchboard/dashboard test -- --run src/app/\\(auth\\)/settings/account 2>&1 | tail -20
 ```
 
 Expected: tests pass (or report "no tests found", which is fine — there is no existing settings/account test file at spec time).
@@ -241,12 +241,21 @@ describe("AppShell visual branches", () => {
     expect(screen.getByText("mercury-content")).toBeDefined();
   });
 
-  it("does not import or mount OwnerShell anywhere", () => {
-    // Compile-time guarantee: AppShell module must not import OwnerShell.
-    // This assertion is structural — if someone re-adds OwnerShell, the
-    // import would fail (file deleted in Phase 2 Task 5) and the test
-    // suite would fail to load.
-    expect(true).toBe(true);
+  it("source does not reference OwnerShell or OwnerTabs", () => {
+    // Source-text guardrail: prevents anyone from re-introducing the
+    // legacy chrome via dynamic import or string-keyed lookup that
+    // wouldn't be caught by typecheck. Reads the file off disk because
+    // assertion-against-the-imported-module symbol can't see textual
+    // references.
+    // (After Phase 2 Task 5 deletes owner-shell.tsx, a static import of
+    // OwnerShell would also fail typecheck — this is defense-in-depth.)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require("node:path") as typeof import("node:path");
+    const source = fs.readFileSync(path.join(__dirname, "../app-shell.tsx"), "utf8");
+    expect(source).not.toContain("OwnerShell");
+    expect(source).not.toContain("OwnerTabs");
   });
 });
 
@@ -398,7 +407,7 @@ describe("Onboarding-redirect behavior", () => {
 - [ ] **Step 3: Run the new test suite — confirm it FAILS**
 
 ```bash
-pnpm --filter @switchboard/dashboard test -- app-shell.test.tsx 2>&1 | tail -30
+pnpm --filter @switchboard/dashboard test -- --run app-shell.test.tsx 2>&1 | tail -30
 ```
 
 Expected: FAIL. Most failures will be `ReferenceError: ONBOARDING_EXEMPT_PATHS is not defined` or similar — the new export doesn't exist yet. That's fine; we wrote the tests first. Move to Task 3.
@@ -474,9 +483,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const usesEditorialShell = EDITORIAL_SHELL_PATHS.has(pathname);
-  const isChromeHidden = CHROME_HIDDEN_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
   const isOnboardingExempt = ONBOARDING_EXEMPT_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
@@ -501,11 +507,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // All non-editorial routes (chrome-hidden Mercury surfaces, /settings,
-  // operator, login/onboarding/setup) get the bare <main> wrapper.
-  // The route's own layout.tsx (e.g., SettingsLayout, ReportsLayout)
-  // is responsible for any sidebar/header/back-link chrome.
-  void isChromeHidden;
+  // All non-editorial routes (Mercury surfaces, /settings, /operator/reports,
+  // /login, /onboarding, /setup) get the bare <main> wrapper. The route's
+  // own layout.tsx (e.g., SettingsLayout, ReportsLayout) is responsible for
+  // any sidebar/header/back-link chrome.
   return (
     <main className="min-h-screen bg-background">
       {children}
@@ -515,12 +520,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 ```
 
-(The `void isChromeHidden;` line silences an unused-variable lint without removing the variable — it's intentionally exposed for any consumer reading the module's `isChromeHidden` semantic, even though the current branch doesn't switch on it. If your linter doesn't complain, delete that line.)
+**Note on `CHROME_HIDDEN_PATHS`:** the constant is exported (used by tests in Task 2 to assert membership) but does not drive a runtime branch — after `OwnerShell` deletion, every non-editorial route renders identically. The export is kept as the single source of truth for which routes own their own chrome, primarily for the tests and as a documented invariant for future readers. **Do not** add a `void` statement or other lint-silencer to keep an unused local — the version above does not compute `isChromeHidden` inside the component for exactly this reason.
 
 - [ ] **Step 2: Run the AppShell tests — confirm PASS**
 
 ```bash
-pnpm --filter @switchboard/dashboard test -- app-shell.test.tsx 2>&1 | tail -30
+pnpm --filter @switchboard/dashboard test -- --run app-shell.test.tsx 2>&1 | tail -30
 ```
 
 Expected: PASS, 14+ tests.
@@ -580,7 +585,9 @@ const AUTH_PAGE_PREFIXES = [
 ] as const;
 ```
 
-Removed (deleted in Phase 3): `/dashboard`, `/deployments`, `/decide`, `/me`, `/my-agent`, `/tasks`, `/modules`, `/escalations`, `/conversations`. Kept: `/marketplace` and `/deploy` (out of D4+D5 scope; they're public/legacy and may be addressed elsewhere). Added: `/contacts`, `/automations` (Mercury surfaces shipped after this middleware was last edited; should be in the auth-required allowlist alongside `/reports`).
+Removed (deleted in Phase 3): `/dashboard`, `/deployments`, `/decide`, `/me`, `/my-agent`, `/tasks`, `/modules`, `/escalations`, `/conversations`. Added: `/contacts`, `/automations` (Mercury surfaces shipped after this middleware was last edited; belong in the auth-required allowlist alongside `/reports`).
+
+**Kept intentionally:** `/marketplace` and `/deploy`. These are **not** part of the D4+D5 deletion scope — neither has a route directory under `apps/dashboard/src/app/(auth)/` at task time (verified by `ls apps/dashboard/src/app/(auth)/{marketplace,deploy} 2>/dev/null` returning nothing), but they appear in `(public)/` and the prefixes may exist for legacy/forwarding reasons. Disposition is a separate decision; preserving them here keeps this commit narrowly focused on D4+D5.
 
 - [ ] **Step 2: Update the `matcher` config**
 
@@ -683,7 +690,7 @@ rm apps/dashboard/src/components/layout/__tests__/owner-tabs.test.tsx
 
 ```bash
 pnpm --filter @switchboard/dashboard typecheck 2>&1 | tail -20
-pnpm --filter @switchboard/dashboard test -- app-shell.test.tsx 2>&1 | tail -10
+pnpm --filter @switchboard/dashboard test -- --run app-shell.test.tsx 2>&1 | tail -10
 ```
 
 Expected: both PASS. Typecheck may surface transient errors from `useApprovalCount` / `useEscalationCount` in deleted-but-still-imported files — those resolve in Phase 4.
@@ -925,18 +932,32 @@ Now that no route references them, dead components and hooks can be deleted in b
 
 - [ ] **Step 1: Re-grep each component for any surviving consumer**
 
+For each (kebab filename, PascalCase symbol) pair, grep both names. Listed explicitly because portable PascalCase generation via `sed` is unreliable (macOS `sed` does not support `\u` for upper-casing).
+
 ```bash
-for c in owner-today owner-task-list revenue-summary activity-feed synergy-strip recommendation-bar module-card module-cards; do
-  echo "=== $c ==="
-  grep -rln "$c\|$(echo $c | sed 's/-//g; s/\b./\u&/g')" apps/dashboard/src --include="*.tsx" --include="*.ts" 2>/dev/null \
-    | grep -v "components/dashboard/$c\.tsx" \
-    | grep -v ".test.ts"
+# Pairs: kebab-file-name PascalCaseSymbol
+PAIRS=(
+  "owner-today OwnerToday"
+  "owner-task-list OwnerTaskList"
+  "revenue-summary RevenueSummary"
+  "activity-feed ActivityFeed"
+  "synergy-strip SynergyStrip"
+  "recommendation-bar RecommendationBar"
+  "module-card ModuleCard"
+  "module-cards ModuleCards"
+)
+for pair in "${PAIRS[@]}"; do
+  read -r kebab pascal <<<"$pair"
+  echo "=== $kebab / $pascal ==="
+  grep -rnE "\\b($kebab|$pascal)\\b" apps/dashboard/src --include="*.tsx" --include="*.ts" 2>/dev/null \
+    | grep -v "components/dashboard/$kebab\.tsx" \
+    | grep -v ".test."
 done
 ```
 
-Expected: zero hits per component (after the route deletions in Phase 3, no consumer survives).
+Expected: zero hits per pair. After Phase 3 route deletion, no consumer of these widgets survives.
 
-If any hit comes back, that's a missed consumer — open the file, decide if it's also dying or if the spec's delete set was wrong. Do not proceed until the grep is clean.
+If any hit comes back, that's a missed consumer — open the file, decide if it's also dying or if the spec's delete set was wrong. Do not proceed until the grep is clean. Typecheck (Step 5) is the final safety net.
 
 - [ ] **Step 2: List the dashboard component dir to find any sibling files not in the spec list**
 
@@ -1001,17 +1022,28 @@ Expected: PASS.
 
 - [ ] **Step 1: Re-grep each file for surviving consumers**
 
+Listed explicitly (kebab file name + PascalCase symbol) because portable PascalCase generation via `sed` is unreliable across macOS/Linux.
+
 ```bash
-for c in ApprovalCard RespondDialog TaskCard CreativeTaskCard TaskReviewDialog; do
-  echo "=== $c ==="
-  grep -rln "$c" apps/dashboard/src --include="*.tsx" --include="*.ts" 2>/dev/null \
-    | grep -v ".test." \
-    | grep -v "components/approvals/$(echo $c | sed 's/\([A-Z]\)/-\L\1/g; s/^-//' ).tsx" \
-    | grep -v "components/tasks/$(echo $c | sed 's/\([A-Z]\)/-\L\1/g; s/^-//' ).tsx"
+# Pairs: kebab-file-name PascalCaseSymbol home-dir
+COMPONENT_PAIRS=(
+  "approval-card ApprovalCard approvals"
+  "respond-dialog RespondDialog approvals"
+  "task-card TaskCard tasks"
+  "creative-task-card CreativeTaskCard tasks"
+  "task-review-dialog TaskReviewDialog tasks"
+)
+for pair in "${COMPONENT_PAIRS[@]}"; do
+  read -r kebab pascal dir <<<"$pair"
+  echo "=== $dir/$kebab ($pascal) ==="
+  grep -rnE "\\b($kebab|$pascal)\\b" apps/dashboard/src --include="*.tsx" --include="*.ts" 2>/dev/null \
+    | grep -v "components/$dir/$kebab\.tsx" \
+    | grep -v ".test."
 done
+
 for h in use-approval-action use-approvals use-escalations; do
   echo "=== $h ==="
-  grep -rln "from \"@/hooks/$h\"\|from '@/hooks/$h'" apps/dashboard/src --include="*.tsx" --include="*.ts" 2>/dev/null
+  grep -rnE "from [\"']@/hooks/$h[\"']" apps/dashboard/src --include="*.tsx" --include="*.ts" 2>/dev/null
 done
 ```
 
@@ -1250,7 +1282,7 @@ For each export with zero surviving consumers: it dies.
 
 ```bash
 pnpm --filter @switchboard/dashboard typecheck 2>&1 | tail -10
-pnpm --filter @switchboard/dashboard test -- use-marketplace 2>&1 | tail -10
+pnpm --filter @switchboard/dashboard test -- --run use-marketplace 2>&1 | tail -10
 ```
 
 Expected: PASS.
@@ -1291,7 +1323,7 @@ in the deleted route set:
   (work-log-list, conversation-transcript, trust-history-chart kept
   for public marketing site at /(public)/agents/[slug])
 - conversations: use-conversations, use-conversation-override
-- use-marketplace.ts: pruned/deleted per surviving-export audit
+- use-marketplace.ts: <REPLACE WITH ACTUAL OUTCOME — either "deleted (no surviving consumer)" or "pruned to keep <export-name(s)> for <surviving-consumer>">.
 
 Spec: docs/superpowers/specs/2026-05-10-legacy-route-and-flag-retirement-d4-d5-design.md §4
 EOF
@@ -1348,14 +1380,21 @@ DATABASE_URL="$(awk -F= '/^DATABASE_URL=/ { sub(/^DATABASE_URL=/, ""); print; ex
 cat "$MIGDIR/migration.sql"
 ```
 
-Expected output:
+**Expected invariant:** the only SQL statement in the file is exactly:
 
 ```sql
--- DropIndex / column drop
 ALTER TABLE "OrganizationConfig" DROP COLUMN "useAgentFirstNav";
 ```
 
-(The exact wording may include a comment header from Prisma; the only SQL statement should be the `ALTER TABLE … DROP COLUMN`.)
+Prisma may emit one or more leading comment lines (`-- …`) describing the migration. Those are fine; do not assert on the exact comment text. The only thing that matters is that the SQL statements (lines that don't start with `--`) are exactly the one `ALTER TABLE … DROP COLUMN` above.
+
+Quick verifier:
+
+```bash
+grep -v '^--' "$MIGDIR/migration.sql" | grep -v '^[[:space:]]*$'
+```
+
+Expected: exactly one line — the `ALTER TABLE` statement.
 
 If the SQL contains anything other than that single column drop, **stop** — that means the schema diverges from the DB in other ways, and you'd be bundling drift fixes into this migration. Investigate before proceeding.
 
@@ -1538,7 +1577,9 @@ Expected: commit succeeds.
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run the broadened reference grep**
+**Scope of the hard gate:** searches `apps` and `packages` only. `docs` is excluded by design — the current D4+D5 spec and plan necessarily mention deleted route names (e.g., the §3 disposition matrix lists every deleted route as a literal string, and this plan repeats those names in code blocks). Including `docs` would produce expected hits that drown the signal. An optional informational pass over `docs` is in Step 3.
+
+- [ ] **Step 1: Run the quoted-string acceptance grep**
 
 ```bash
 grep -rnE '["'"'"']/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|["'"'"']|\?|#)' \
@@ -1547,24 +1588,39 @@ grep -rnE '["'"'"']/(dashboard|escalations|decide|tasks|me|my-agent|modules|conv
   | grep -v "useAgentFirstNav"
 ```
 
-Expected: **zero hits**. Hits in `packages/db/prisma/migrations/` (historical SQL) and archived specs are explicitly allowed via the `grep -vE` filter — historical SQL doesn't get rewritten and archived specs are frozen.
+Expected: **zero hits**. Hits in `packages/db/prisma/migrations/` (historical SQL) are explicitly allowed via the `grep -vE` filter — historical SQL doesn't get rewritten.
 
-If hits come back:
+If hits come back, classify and fix:
 
-- **In `apps/`**: that's a missed reference — fix the file (re-target or delete the reference) and re-run.
+- **In `apps/`**: a missed reference — fix the file (re-target or delete the reference) and re-run.
 - **In `packages/`**: same — fix and re-run.
-- **In current `docs/`** (not archive): a current spec or plan still references a deleted route. Update the doc or deliberately keep it (e.g., this spec's text mentions deleted routes; that's fine — those mentions are inside backticks and `grep -E` patterns that won't match the literal-quote grep). If the grep does match, the doc has a literal `'/decide'` or `"/me"` it shouldn't.
 
-- [ ] **Step 2: Re-run the narrower historical grep to confirm parity**
+- [ ] **Step 2: Run the backtick template-literal acceptance grep**
+
+Quoted-string grep doesn't catch template literals like `` `/decide/${id}` `` or `` `/me` ``. Run a second pass:
 
 ```bash
-grep -rnE '"/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|"|\?|#)' \
+grep -rnE '`/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|`|\?|#|\$)' \
   apps packages \
-  | grep -vE '^(packages/db/prisma/migrations/|docs/superpowers/specs/archive/)' \
+  | grep -vE '^(packages/db/prisma/migrations/)' \
   | grep -v "useAgentFirstNav"
 ```
 
-Expected: same result as Step 1 (the broader regex is a superset). Verifying both gives confidence the regex isn't broken in some shell-quoting edge case.
+Expected: **zero hits**. Same classification rules as Step 1.
+
+- [ ] **Step 3: Optional informational pass over `docs/`**
+
+This is informational only — failures here do **not** block the PR.
+
+```bash
+grep -rnE '["'"'"'`]/(dashboard|escalations|decide|tasks|me|my-agent|modules|conversations|deployments)(/|["'"'"'`]|\?|#|\$)' \
+  docs \
+  | grep -vE '^docs/superpowers/specs/archive/' \
+  | grep -vE '^docs/superpowers/specs/2026-05-10-legacy-route-and-flag-retirement-d4-d5-design\.md' \
+  | grep -vE '^docs/superpowers/plans/2026-05-10-legacy-route-and-flag-retirement-d4-d5\.md'
+```
+
+Expected: hits are likely (other specs/plans/docs may reference legacy routes for history). Skim the output — anything that looks like a current document still steering operators toward a deleted route (e.g., a runbook telling them to "go to `/decide`") should be updated. Stale historical references in archived material are fine.
 
 ### Task 25: Manual smoke (positive + negative)
 
