@@ -11,7 +11,15 @@ const MERCURY_ROOT = join(AUTH_ROOT, "(mercury)");
 // Concrete directories that beat [agentKey] in Next.js route resolution.
 // Legacy routes (/decide, /escalations, /tasks, /me, /my-agent, /modules,
 // /conversations, /deployments, /dashboard) were removed in D4.
-const KNOWN_TOP_LEVEL = ["reports", "settings", "contacts", "operator", "onboarding"];
+const KNOWN_TOP_LEVEL = [
+  "reports",
+  "settings",
+  "contacts",
+  "automations",
+  "activity",
+  "operator",
+  "onboarding",
+];
 
 function hasRouteSegment(segment: string): boolean {
   return existsSync(join(AUTH_ROOT, segment)) || existsSync(join(MERCURY_ROOT, segment));

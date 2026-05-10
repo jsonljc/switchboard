@@ -77,14 +77,23 @@ describe("AppShell visual branches", () => {
     expect(screen.getByText("settings-content")).toBeDefined();
   });
 
+  it("does not match prefix-collisions (treats /contactsx as non-shell)", () => {
+    // Guards the canonical `pathname === p || pathname.startsWith(p + "/")`
+    // shape against an accidental drop of the trailing slash, which would
+    // silently swallow paths that share a prefix with a Mercury surface.
+    pathnameRef.current = "/contactsx";
+    const { container } = render(
+      <AppShell>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(container.querySelector("main")).not.toBeNull();
+  });
+
   it("source does not reference OwnerShell or OwnerTabs", () => {
-    // Source-text guardrail: prevents anyone from re-introducing the
-    // legacy chrome via dynamic import or string-keyed lookup that
-    // wouldn't be caught by typecheck. Reads the file off disk because
-    // assertion-against-the-imported-module symbol can't see textual
-    // references.
-    // (After Phase 2 Task 5 deletes owner-shell.tsx, a static import of
-    // OwnerShell would also fail typecheck — this is defense-in-depth.)
+    // Source-text guardrail against re-introducing legacy chrome via dynamic
+    // import or string-keyed lookup. owner-shell.tsx is already deleted, so
+    // a static import would also fail typecheck — this is defense-in-depth.
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const fs = require("node:fs") as typeof import("node:fs");
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
