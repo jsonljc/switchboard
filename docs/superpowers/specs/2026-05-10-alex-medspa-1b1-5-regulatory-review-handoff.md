@@ -60,3 +60,12 @@ DeterministicSafetyGateHook(...)`.
   exercised only by the real seed (which has no duplicates). Add a
   positive test for the warn path, or move duplicate detection to a
   `pnpm banned-phrase-audit` CI script.
+- `GovernancePostureCache` is constructed independently in `apps/api`
+  (skill-mode.ts) and `apps/chat` (gateway-bridge.ts) — these are
+  separate processes in production, so warm hits do NOT propagate
+  cross-process. The spec's "shared cache" wording is misleading; it
+  applies in single-process dev only. Each process fails closed
+  independently after its own first successful resolution. Promoting
+  to a Redis-backed cache (or a separate cheap "is-governed" flag on
+  AgentDeployment that the resolver consults independently) is the
+  upgrade path captured in spec Open Question 1.
