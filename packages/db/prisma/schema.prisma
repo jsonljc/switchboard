@@ -177,6 +177,9 @@ model AuditEntry {
   @@index([organizationId])
   @@index([traceId])
   @@index([timestamp])
+  // D3 — efficient org-scoped browse cursor pagination matching the
+  // (timestamp, id) tuple comparison + ORDER BY timestamp DESC, id DESC exactly.
+  @@index([organizationId, timestamp(sort: Desc), id(sort: Desc)])
 }
 
 model CartridgeRegistration {
