@@ -180,11 +180,12 @@ describe("ToolsOverflow", () => {
     render(<ToolsOverflow />);
     await openMenu();
     const menu = await screen.findByRole("menu");
-    const links = within(menu)
-      .getAllByRole("menuitem")
-      .map((el) => el.querySelector("a"));
-    for (const link of links) {
-      expect(link).not.toHaveAttribute("aria-current");
+    // With shadcn DropdownMenuItem `asChild`, the menuitem role is forwarded
+    // onto the inner <Link>/<a>; the menuitem element IS the anchor, so
+    // assert directly on it (mirrors Case 10's `text.closest("a")` pattern).
+    const items = within(menu).getAllByRole("menuitem");
+    for (const item of items) {
+      expect(item).not.toHaveAttribute("aria-current");
     }
   });
 });
