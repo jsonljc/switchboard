@@ -41,6 +41,20 @@ export interface FilterChipsProps<T> {
    */
   isEqual?: (a: T, b: T) => boolean;
   /**
+   * Optional override for the per-chip pressed state. When supplied this
+   * controls both aria-pressed and the click-suppression behavior described
+   * by `suppressActiveClick`. Surfaces whose visual selected state diverges
+   * from `active` (e.g. activity in scope=custom) use this to keep visual
+   * intent independent of click semantics.
+   */
+  isPressed?: (item: FilterChipItem<T>) => boolean;
+  /**
+   * When true (default), clicking the active chip is a no-op — onChange is
+   * not called. Set to false to forward every click; consumers handle their
+   * own suppression.
+   */
+  suppressActiveClick?: boolean;
+  /**
    * Optional trailing content rendered inside the same nav (after the chips).
    * Surface-specific adornments such as the activity Filtered pill belong here.
    */
@@ -53,20 +67,22 @@ export function FilterChips<T>({
   onChange,
   ariaLabel,
   isEqual = Object.is,
+  isPressed,
+  suppressActiveClick = true,
   trailing,
 }: FilterChipsProps<T>) {
   return (
     <nav className={styles.chips} aria-label={ariaLabel}>
       {items.map((item) => {
-        const isActive = isEqual(item.value, active);
+        const pressed = isPressed ? isPressed(item) : isEqual(item.value, active);
         return (
           <button
             key={item.key}
             type="button"
-            className={`${styles.chip} ${isActive ? styles.isActive : ""}`}
-            aria-pressed={isActive}
+            className={`${styles.chip} ${pressed ? styles.isActive : ""}`}
+            aria-pressed={pressed}
             onClick={() => {
-              if (isActive) return; // clicking the active chip is a no-op
+              if (pressed && suppressActiveClick) return;
               onChange(item.value);
             }}
           >

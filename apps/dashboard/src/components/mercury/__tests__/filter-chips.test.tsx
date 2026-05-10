@@ -88,6 +88,37 @@ describe("Mercury <FilterChips />", () => {
     expect(pressed[0]).toHaveAccessibleName("Two");
   });
 
+  it("isPressed override controls aria-pressed independently of `active`", () => {
+    render(
+      <FilterChips
+        items={ITEMS}
+        active="all"
+        onChange={() => {}}
+        ariaLabel="x"
+        // Force "active" to be visually pressed even though `active` is "all".
+        isPressed={(item) => item.value === "active"}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Active" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("suppressActiveClick=false forwards onChange even when chip is pressed", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn<(next: Stage) => void>();
+    render(
+      <FilterChips
+        items={ITEMS}
+        active="active"
+        onChange={onChange}
+        ariaLabel="x"
+        suppressActiveClick={false}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Active" }));
+    expect(onChange).toHaveBeenCalledWith("active");
+  });
+
   it("accepts an extra trailing slot for surface-specific adornments (e.g. Filtered pill)", () => {
     render(
       <FilterChips

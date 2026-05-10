@@ -88,7 +88,9 @@ export function AutomationsPage() {
     <div className={styles.automationsPage}>
       <AutomationsHeader />
       <h1 className={styles.title}>Automations</h1>
-      <FilterChips active={chip} counts={counts} onChange={setChip} />
+      <div className={styles.chipRowWrap}>
+        <FilterChips active={chip} counts={counts} onChange={setChip} />
+      </div>
       {content}
     </div>
   );
