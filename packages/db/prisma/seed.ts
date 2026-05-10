@@ -76,10 +76,6 @@ async function main() {
       governanceProfile: "guarded",
       onboardingComplete: true,
       provisioningStatus: "active",
-      // Slice A PR 2: brand-new orgs land on the agent-first nav. The `update`
-      // branch above stays empty — existing orgs keep their current value
-      // until a future Phase D5 backfill explicitly migrates them.
-      useAgentFirstNav: true,
     },
   });
   console.log("Seeded organization config: org_dev");
