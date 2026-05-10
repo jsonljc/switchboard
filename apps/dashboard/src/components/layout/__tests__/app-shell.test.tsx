@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AppShell, CHROME_HIDDEN_PATHS, ONBOARDING_EXEMPT_PATHS } from "../app-shell.js";
+import { AppShell, ONBOARDING_EXEMPT_PATHS } from "../app-shell.js";
 
 const pathnameRef = { current: "/contacts" };
 const replaceMock = vi.fn();
@@ -45,25 +45,55 @@ describe("AppShell visual branches", () => {
     expect(screen.getByText("editorial-content")).toBeDefined();
   });
 
-  it("wraps non-editorial paths in a bare <main>", () => {
+  it("renders Mercury paths without a wrapper <main> (shell mounted via (mercury)/layout)", () => {
     pathnameRef.current = "/contacts";
     const { container } = render(
       <AppShell>
         <span>mercury-content</span>
       </AppShell>,
     );
-    expect(container.querySelector("main")).not.toBeNull();
+    expect(container.querySelector("main")).toBeNull();
     expect(screen.getByText("mercury-content")).toBeDefined();
   });
 
+  it("treats Mercury detail paths as shell-owned (prefix match)", () => {
+    pathnameRef.current = "/contacts/abc-123";
+    const { container } = render(
+      <AppShell>
+        <span>detail-content</span>
+      </AppShell>,
+    );
+    expect(container.querySelector("main")).toBeNull();
+  });
+
+  it("wraps non-shell paths in a bare <main>", () => {
+    pathnameRef.current = "/settings";
+    const { container } = render(
+      <AppShell>
+        <span>settings-content</span>
+      </AppShell>,
+    );
+    expect(container.querySelector("main")).not.toBeNull();
+    expect(screen.getByText("settings-content")).toBeDefined();
+  });
+
+  it("does not match prefix-collisions (treats /contactsx as non-shell)", () => {
+    // Guards the canonical `pathname === p || pathname.startsWith(p + "/")`
+    // shape against an accidental drop of the trailing slash, which would
+    // silently swallow paths that share a prefix with a Mercury surface.
+    pathnameRef.current = "/contactsx";
+    const { container } = render(
+      <AppShell>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(container.querySelector("main")).not.toBeNull();
+  });
+
   it("source does not reference OwnerShell or OwnerTabs", () => {
-    // Source-text guardrail: prevents anyone from re-introducing the
-    // legacy chrome via dynamic import or string-keyed lookup that
-    // wouldn't be caught by typecheck. Reads the file off disk because
-    // assertion-against-the-imported-module symbol can't see textual
-    // references.
-    // (After Phase 2 Task 5 deletes owner-shell.tsx, a static import of
-    // OwnerShell would also fail typecheck — this is defense-in-depth.)
+    // Source-text guardrail against re-introducing legacy chrome via dynamic
+    // import or string-keyed lookup. owner-shell.tsx is already deleted, so
+    // a static import would also fail typecheck — this is defense-in-depth.
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const fs = require("node:fs") as typeof import("node:fs");
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
@@ -71,28 +101,6 @@ describe("AppShell visual branches", () => {
     const source = fs.readFileSync(path.join(__dirname, "../app-shell.tsx"), "utf8");
     expect(source).not.toContain("OwnerShell");
     expect(source).not.toContain("OwnerTabs");
-  });
-});
-
-describe("CHROME_HIDDEN_PATHS membership", () => {
-  it("includes login/onboarding/setup", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/login");
-    expect(CHROME_HIDDEN_PATHS).toContain("/onboarding");
-    expect(CHROME_HIDDEN_PATHS).toContain("/setup");
-  });
-
-  it("includes the Mercury Tools surfaces", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/contacts");
-    expect(CHROME_HIDDEN_PATHS).toContain("/automations");
-    expect(CHROME_HIDDEN_PATHS).toContain("/reports");
-  });
-
-  it("includes /settings (joined post-OwnerShell deletion)", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/settings");
-  });
-
-  it("includes /operator/reports", () => {
-    expect(CHROME_HIDDEN_PATHS).toContain("/operator/reports");
   });
 });
 
