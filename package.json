@@ -21,6 +21,7 @@
     "prepare": "husky || true",
     "arch:check": "npx tsx scripts/arch-check.ts",
     "preflight": "bash scripts/preflight.sh",
+    "reference-audit": "node scripts/reference-audit.mjs",
     "worktree:init": "bash scripts/worktree-init.sh",
     "audit:validate": "npx tsx scripts/audit-validate-findings.ts",
     "audit:lighthouse": "bash scripts/audit-run-lighthouse.sh",
@@ -60,6 +61,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20",
     "@commitlint/config-conventional": "^19",
+    "@switchboard/schemas": "workspace:*",
     "@types/node": "^25.5.0",
     "@typescript-eslint/eslint-plugin": "^7",
     "@typescript-eslint/parser": "^7",
@@ -71,6 +73,7 @@
     "tsx": "^4.7.0",
     "turbo": "^2.3.0",
     "typescript": "^6.0.3",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "yaml": "^2.8.3"
   }
 }
