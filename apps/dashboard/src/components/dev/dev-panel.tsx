@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/settings/team", label: "AI Team" },
-  { href: "/decide", label: "Decide" },
+  { href: "/", label: "Owner Home" },
+  { href: "/alex", label: "Alex" },
+  { href: "/contacts", label: "Contacts" },
+  // /automations frontend (D2b) not yet shipped — re-add when the route lands.
+  { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
   { href: "/onboarding", label: "Onboarding" },
   { href: "/login", label: "Login" },

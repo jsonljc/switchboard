@@ -96,7 +96,7 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
           >
             {isAuthenticated ? (
               <Link
-                href="/me"
+                href="/settings/account"
                 style={{
                   fontFamily: "var(--font-display)",
                   fontWeight: 600,
@@ -243,7 +243,7 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
               <div style={{ height: "1px", background: "#DDD9D3", margin: "0.5rem 0.75rem" }} />
               {isAuthenticated ? (
                 <Link
-                  href="/me"
+                  href="/settings/account"
                   style={{
                     fontFamily: "var(--font-display)",
                     fontWeight: 600,

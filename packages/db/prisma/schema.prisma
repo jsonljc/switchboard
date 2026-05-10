@@ -428,7 +428,6 @@ model OrganizationConfig {
   /// an active Stripe subscription. Intended for internal beta, comped pilots,
   /// or manually approved exceptions.
   entitlementOverride  Boolean         @default(false)
-  useAgentFirstNav     Boolean         @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   escalationConfig     Json? // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }

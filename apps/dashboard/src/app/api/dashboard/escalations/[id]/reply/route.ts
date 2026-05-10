@@ -16,7 +16,7 @@ import { proxyError } from "@/lib/proxy-error";
  *
  * Collapsing 502 into a generic 500 (the previous behavior, which used
  * `replyToEscalation()` whose base `request()` throws on every non-ok
- * status) makes the dashboard banner copy on `/escalations` factually
+ * status) makes the dashboard banner copy in the inbox drawer factually
  * incorrect (DC-23). It said "your reply will be delivered when the
  * customer next messages", which was never true — the API only returns
  * 200 after `agentNotifier.sendProactive()` succeeds. The 502 path needs

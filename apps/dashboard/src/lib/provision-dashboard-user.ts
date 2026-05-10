@@ -30,10 +30,6 @@ export async function provisionDashboardUser(
         governanceProfile: "guarded",
         onboardingComplete: false,
         provisioningStatus: "pending",
-        // Slice A PR 2: brand-new orgs land on the agent-first nav. This is a
-        // fresh `create()` (not an upsert) — there is no `update` branch to
-        // worry about. Existing orgs are not affected by this code path.
-        useAgentFirstNav: true,
       },
     });
 

@@ -66,10 +66,6 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           onboardingComplete: false,
           managedChannels: [],
           provisioningStatus: "pending",
-          // Slice A PR 2: brand-new orgs land on the agent-first nav. The
-          // `update` branch stays a no-op — existing orgs keep their current
-          // value until a future Phase D5 backfill explicitly migrates them.
-          useAgentFirstNav: true,
         },
         update: {},
       });

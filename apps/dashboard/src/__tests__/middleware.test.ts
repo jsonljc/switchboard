@@ -24,7 +24,7 @@ describe("dashboard middleware auth", () => {
 
     const { middleware } = await import("../middleware");
 
-    const response = middleware(new NextRequest("http://localhost/dashboard"));
+    const response = middleware(new NextRequest("http://localhost/settings"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
@@ -35,7 +35,7 @@ describe("dashboard middleware auth", () => {
 
     const { middleware } = await import("../middleware");
 
-    const response = middleware(new NextRequest("http://localhost/dashboard"));
+    const response = middleware(new NextRequest("http://localhost/settings"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost/login");
@@ -54,26 +54,41 @@ describe("dashboard middleware auth", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("redirects unauthenticated /escalations to /login", async () => {
+  it("does not gate /dashboard (legacy route removed in D4+D5)", async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
 
     const { middleware } = await import("../middleware");
 
-    const response = middleware(new NextRequest("http://localhost/escalations"));
+    // /dashboard is no longer in AUTH_PAGE_PREFIXES after D4+D5 retirement.
+    // Middleware passes the request through without redirecting to /login.
+    const response = middleware(new NextRequest("http://localhost/dashboard"));
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost/login");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 
-  it("redirects unauthenticated /conversations to /login", async () => {
+  it("does not gate /escalations (legacy route removed in D4+D5)", async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
 
     const { middleware } = await import("../middleware");
 
+    // /escalations is no longer in AUTH_PAGE_PREFIXES after D4+D5 retirement.
+    const response = middleware(new NextRequest("http://localhost/escalations"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not gate /conversations (legacy route removed in D4+D5)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    // /conversations is no longer in AUTH_PAGE_PREFIXES after D4+D5 retirement.
     const response = middleware(new NextRequest("http://localhost/conversations"));
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost/login");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("redirects unauthenticated /reports to /login", async () => {
@@ -82,6 +97,28 @@ describe("dashboard middleware auth", () => {
     const { middleware } = await import("../middleware");
 
     const response = middleware(new NextRequest("http://localhost/reports"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /contacts to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/contacts"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /automations to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/automations"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost/login");
