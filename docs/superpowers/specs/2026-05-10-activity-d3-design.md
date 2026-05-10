@@ -70,15 +70,16 @@ These are **already locked** elsewhere and not re-debated:
 
 | #   | Question                        | Locked answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | --- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Surface subject                 | **Raw `AuditEntry` rows.** Not the `TranslatedActivity` shape; not a synthesized "decision feed." Audit is the authoritative record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 2   | List vs. List+Detail in D3      | **List-only; no separate route.** Rows expand inline into a read-only **details drawer** (drawer, not page) showing full ids, hash anchors, evidence pointers, redacted snapshot. (See §2.2.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 1   | Surface subject                 | **Source-of-truth `AuditEntry` ledger, projected into `AuditEntryBrowseRow`.** Not the `TranslatedActivity` shape; not a synthesized "decision feed." Audit is the authoritative record. The API never returns raw `AuditEntry` (per #12); the browse projection is the contract.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 2   | List vs. List+Detail in D3      | **List-only; no separate route.** Rows expand inline into a read-only **details drawer** (drawer, not page) showing full ids, hash anchors, evidence pointers, redacted snapshot. The drawer is toggled by a chevron/button on the row, **not** by clicking the row body — keeps `summary` text selectable, plays well with copy-to-clipboard, simplifies a11y (`<button>` + `aria-expanded` + `aria-controls`). (See §2.2, §6.4.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 3   | Mutating actions in v1          | **Read-only.** Audit ledger is append-only and tamper-evident; not relitigated.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 4   | Header strategy                 | **Own `ActivityHeader`** (clone of `AutomationsHeader`). Defer shared `MercuryAuthShell` extraction; revisit after D3 implementation lands and D4 is in flight (four occupants is when the duplication actually hurts).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 5   | Editorial-shell nav target      | Do **not** add Activity / Tools to `EditorialAuthShell` in D3. Same posture as D1, D2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 6   | Filter primitive                | **Two chips:** `[Operational] [All events]`. No counts. No actor-type chip, no event-type chip, no date picker in v1. URL params (`?eventType=`, `?actorType=`, `?after=`, `?before=`, `?entityType=`, `?entityId=`) accepted by the API and respected by the UI as power-user escape hatches.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 6a  | Default chip                    | **`Operational`.** The product question is "what has happened that an operator cares about." Forensic firehose is a deliberate switch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 6b  | Scope semantics + URL conflict  | **Three scope states:** `operational` (default, no params), `all` (`?scope=all`), `custom` (any narrowing URL param present — `eventType`, `actorType`, `entityType`, `entityId`, `after`, `before`). `custom` overrides the chip's effective filter. UI shows a small "Filtered" pill with a `[Clear]` affordance; the chip stays visually selected (the operator is still on `Operational` or `All` in _intent_) but the page header makes the narrowing explicit so the operator never thinks `?scope=operational&eventType=work_trace.persisted` shows operational events. API response carries `scope: "operational" \| "all" \| "custom"` so the UI doesn't have to re-derive it. (See §2.3.)                                                                                                                                                                                                                          |
 | 7   | Search                          | **Skip in v1.** Audit `summary` is freeform. Full-text search over a high-volume table is not D3's lift. URL params are the named escape hatch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 8   | Pagination strategy             | **Cursor-based** via `(timestamp DESC, id DESC)`, base64-encoded. Page size 50.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 8   | Pagination strategy             | **Cursor-based** via `(timestamp DESC, id DESC)`, `base64url`-encoded. Page size 50. **Strict cursor decoding:** malformed cursor → `400 Bad Request`, not silent fallback. Audit surfaces should fail visibly — silent page-1 fallback would let an operator click "next" and see the same rows again without realising the cursor broke (a forensic-correctness bug, not just a UX bug). (See §5.2.) Prev-cursor stack lives in the page component; **must reset and close any open drawer on any scope/URL-param change** to avoid landing on a cursor from a different filter set.                                                                                                                                                                                                                                                                                                                                       |
 | 9   | Default sort                    | `timestamp DESC`. Sortable columns: `Timestamp` only. Other sorts (eventType alphabetical, actorType grouped) considered and dropped — `timestamp DESC` is the operationally correct default and the only one that pairs cleanly with cursor pagination.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 10  | Where the read lives in core    | New `packages/core/src/audit/list-entries.ts` exporting `listAuditEntriesForBrowse`. Sibling to `ledger.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 11  | Store interface extension       | Add `listForBrowse(filter: AuditLedgerBrowseFilter)` to the existing **`LedgerStorage`** interface (`packages/core/src/audit/ledger.ts:20`); implement on `InMemoryLedgerStorage` (already exists, same file, line 335) and `PrismaLedgerStorage` (`packages/db/src/storage/prisma-ledger-storage.ts`); add a thin pass-through `AuditLedger.listForBrowse` mirroring the existing `query()` pass-through (`ledger.ts:225`). The filter shape (precise definition in §5.3) takes `{organizationId, eventTypes, actorType, entityType, entityId, after, before, cursor, limit}` — no `scope`, no `sort`/`direction` (scope→eventTypes mapping happens in core; sort is always `(timestamp DESC, id DESC)` in v1). Do **not** overload existing `query()` — that's used by `auditRoutes` (`audit.ts`), `dashboard-overview.ts`, and core tests; shape change there is risky. Cursor encoding and trimming live in core (§5.2). |
@@ -89,13 +90,13 @@ These are **already locked** elsewhere and not re-debated:
 | 16  | `summaryLabel` rendering        | Server-trusted `summary` field rendered as plain text in the table (truncated to 80 chars), full text in the drawer. **No HTML, no markdown rendering** — `summary` is operator-readable prose written by the audit-emitter, not user-controlled input, but the rendering path treats it as text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 17  | `snapshot` redaction            | Drawer surfaces an **allowlisted** subset of `snapshot` key names plus a `redactedKeyCount` for the rest. Allowlist (§4.5): `id`, `kind`, `source`, `actionType`, `decisionId`, `recommendationId`, `approvalId`, `envelopeId`, `agentKey`, `targetEntityType`, `targetEntityId`, `correlationId`, `traceId`. Everything else (e.g., `patchValue`, `reason`, `amount`, `budget`, free-form content) is rolled into the redacted count. **No snapshot values, ever.** Allowlist seeded by inspecting actual audit emitters in `packages/core/src/platform/platform-lifecycle.ts`, `read-adapter.ts`, and `work-trace-integrity.ts`.                                                                                                                                                                                                                                                                                           |
 | 18  | Hash-chain rendering            | `entryHash` + `previousEntryHash` shown in the **drawer only** (not the table) as truncated mono prefixes (`HASH:abcd1234`) with full string available via copy-to-clipboard. Inert (no link). No verification action. (See §6.4.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| 19  | `evidencePointers` rendering    | Drawer shows: count + per-pointer `(type, hashPrefix)`. **No `storageRef` content, no inline content fetch.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 19  | `evidencePointers` rendering    | API response carries `(type, hash)` per pointer — **full hash, not prefix**. Hashes are integrity anchors derived from public-by-design audit content; not sensitive. Drawer displays a 16-char prefix and offers `[copy full]`; full hash comes from the API payload, not a separate fetch. **No `storageRef` content** (that's the only sensitive part). Same posture for `entryHash` / `previousEntryHash` (full in API, prefix in UI).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 20  | Visibility scoping              | **Server filters by `visibilityLevel ∈ {public, org}`** at the SQL level. `admin` and `system` visibility levels are excluded from the browse projection regardless of operator role. (Operator role still needed; admin-visible entries surface only via direct `/api/audit/:id` lookup with admin-role gate.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 21  | Empty-state copy register       | Mercury voice. No agent prose.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 22  | Filtered-empty distinct copy    | Yes, distinct from zero-state, with a `[Clear]` affordance (returns to default `Operational` chip + clears any URL params).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 23  | Gate variable name              | `NEXT_PUBLIC_ACTIVITY_LIVE`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 24  | Gate default at launch          | `false` until staging review.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| 25  | Schema migration                | **One additive non-functional composite index:** `@@index([organizationId, timestamp(sort: Desc)])` on `AuditEntry`. The existing single-column `@@index([timestamp])` and `@@index([organizationId])` are insufficient for cursor-paginated org-scoped listing at scale. No model shape change, no data migration. (See §4.1.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 25  | Schema migration                | **One additive non-functional composite index:** `@@index([organizationId, timestamp(sort: Desc), id(sort: Desc)])` on `AuditEntry`. Three columns (not two) so the index matches the `ORDER BY timestamp DESC, id DESC` and the cursor's `(timestamp, id)` tuple comparison exactly — Postgres can walk the index for the tie-break instead of doing an in-memory sort on dense timestamps. The existing single-column `@@index([timestamp])` and `@@index([organizationId])` are insufficient for cursor-paginated org-scoped listing at scale. No model shape change, no data migration. (See §4.1.)                                                                                                                                                                                                                                                                                                                      |
 | 26  | Date / timezone formatting      | Backend always returns ISO8601 strings; frontend resolves the display timezone. Table cells: short human date in **org timezone** when the page shell already has it available, else browser timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`, mirroring `apps/dashboard/src/app/(auth)/contacts/components/format.ts:6`), else UTC. Tz abbreviation displayed in the column header. Drawer: full ISO8601 with offset. **If org timezone is not already plumbed at impl time, D3b ships with browser-tz fallback** — same posture as D2.                                                                                                                                                                                                                                                                                                                                                                         |
 | 27  | Responsive behaviour            | Desktop-first. Below ~960 px viewport: **horizontal scroll inside the Mercury container**, no stacked-row rewrite, no column hiding. Sticky first column (`TIMESTAMP`) so context survives the scroll. Same posture as D2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 28  | Polling cadence                 | **None on /activity v1.** Set explicit `staleTime: 30_000` on the query (TanStack Query default is `0`, so this needs to be set, not relied on) to dedup tab-switch refetches; no `refetchInterval`. (Compare `useAudit()`, which polls 30s; D3's list semantics are different.) Manual refresh = page reload. "Tail mode" deferred to D3.5.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -135,51 +136,62 @@ The user's brainstorm guidance considered a 7-category chip set (`Agents`, `Acti
 
 **Flip** to "category chips" if reviewer wants discoverability: add a category dropdown above the chip row, mapping categories to event-type sets defined alongside `OPERATIONAL_AUDIT_EVENT_TYPES`. Backend already supports the `eventType` IN filter via the URL param.
 
+#### Three scope states (resolves the URL-conflict semantic bug)
+
+The chip set is two values (`Operational` / `All events`), but the **effective scope** has three states because URL params can narrow either chip:
+
+| Effective scope | Trigger                                                                 | Backend filter                                                                 | UI affordance                                                                                                                               |
+| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `operational`   | Default (no URL params)                                                 | `eventType IN OPERATIONAL_AUDIT_EVENT_TYPES`                                   | `Operational` chip selected, no pill                                                                                                        |
+| `all`           | `?scope=all`                                                            | No event-type filter                                                           | `All events` chip selected, no pill                                                                                                         |
+| `custom`        | Any narrowing URL param present (`eventType`, `actorType`, range, etc.) | URL params overlay; if `eventType` URL param present, chip's allowlist ignored | Chip stays visually selected (intent), small `[Filtered · Clear]` pill appears next to chip row, response payload carries `scope: "custom"` |
+
+The `custom` state exists because `?scope=operational&eventType=work_trace.persisted` would otherwise lie to the operator: the chip says "Operational" but the row is non-operational. Surfacing `custom` in both the API response and the UI avoids that lie. `[Clear]` on the Filtered pill drops the URL params and returns to whichever chip the operator has selected.
+
 ### 2.4 The Operational allowlist — what's in, what's out, why
 
 The allowlist defines what `Operational` shows. It is a **domain-shaped curation** (operationally meaningful events), not a UI configuration, and lives in `packages/schemas/src/audit.ts` next to `AuditEventTypeSchema`.
 
 **In (Operational, default view):**
 
-| Event type                  | Why operationally meaningful                       |
-| --------------------------- | -------------------------------------------------- |
-| `action.proposed`           | An action entered the queue.                       |
-| `action.approved`           | A human/agent approved an action.                  |
-| `action.partially_approved` | A scoped approval — needs operator visibility.     |
-| `action.rejected`           | Someone said no — operator wants to know who/when. |
-| `action.executed`           | The most-asked-about row in audit.                 |
-| `action.failed`             | Failure modes are first-class debugging questions. |
-| `action.denied`             | Policy refused; operator wants the record.         |
-| `action.expired`            | Approval window lapsed; operator wants the record. |
-| `action.cancelled`          | Operator-meaningful terminal state.                |
-| `action.undo_requested`     | Reversal intent; operator wants the trail.         |
-| `action.undo_executed`      | Reversal completed; operator wants the trail.      |
-| `action.approval_expired`   | The approval-side analog of `action.expired`.      |
-| `agent.activated`           | Control-plane change.                              |
-| `agent.emergency-halted`    | Safety-critical operator-visible event.            |
-| `agent.resumed`             | Pairs with `agent.emergency-halted`.               |
-| `policy.created`            | Authority change.                                  |
-| `policy.updated`            | Authority change.                                  |
-| `policy.deleted`            | Authority change.                                  |
-| `connection.established`    | External-surface gain.                             |
-| `connection.revoked`        | External-surface loss.                             |
-| `connection.degraded`       | Partial external-surface loss; on-call signal.     |
-| `competence.promoted`       | Agent-capability change; operator-visible.         |
-| `competence.demoted`        | Agent-capability change; operator-visible.         |
-| `competence.updated`        | Agent-capability change; operator-visible.         |
-| `identity.created`          | Identity-doctrine change (rare, very high signal). |
-| `identity.updated`          | Identity-doctrine change.                          |
-| `overlay.activated`         | Operational-mode change.                           |
-| `overlay.deactivated`       | Operational-mode change.                           |
+| Event type                      | Why operationally meaningful                                                                                           |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `action.approved`               | A human/agent approved an action.                                                                                      |
+| `action.partially_approved`     | A scoped approval — needs operator visibility.                                                                         |
+| `action.rejected`               | Someone said no — operator wants to know who/when.                                                                     |
+| `action.executed`               | The most-asked-about row in audit.                                                                                     |
+| `action.failed`                 | Failure modes are first-class debugging questions.                                                                     |
+| `action.denied`                 | Policy refused; operator wants the record.                                                                             |
+| `action.expired`                | Approval window lapsed; operator wants the record.                                                                     |
+| `action.cancelled`              | Operator-meaningful terminal state.                                                                                    |
+| `action.undo_requested`         | Reversal intent; operator wants the trail.                                                                             |
+| `action.undo_executed`          | Reversal completed; operator wants the trail.                                                                          |
+| `action.approval_expired`       | The approval-side analog of `action.expired`.                                                                          |
+| `agent.activated`               | Control-plane change.                                                                                                  |
+| `agent.emergency-halted`        | Safety-critical operator-visible event.                                                                                |
+| `agent.resumed`                 | Pairs with `agent.emergency-halted`.                                                                                   |
+| `policy.created`                | Authority change.                                                                                                      |
+| `policy.updated`                | Authority change.                                                                                                      |
+| `policy.deleted`                | Authority change.                                                                                                      |
+| `connection.established`        | External-surface gain.                                                                                                 |
+| `connection.revoked`            | External-surface loss.                                                                                                 |
+| `connection.degraded`           | Partial external-surface loss; on-call signal.                                                                         |
+| `competence.promoted`           | Agent-capability change; operator-visible.                                                                             |
+| `competence.demoted`            | Agent-capability change; operator-visible.                                                                             |
+| `identity.created`              | Identity-doctrine change (rare, very high signal).                                                                     |
+| `identity.updated`              | Identity-doctrine change.                                                                                              |
+| `overlay.activated`             | Operational-mode change.                                                                                               |
+| `overlay.deactivated`           | Operational-mode change.                                                                                               |
+| `work_trace.integrity_override` | A human deliberately overrode an integrity check — exactly the rare-but-load-bearing event Operational should surface. |
 
-That's **28 event types in `Operational`** (out of 45 total in `AuditEventTypeSchema`).
+That's **27 event types in `Operational`** (out of 45 total in `AuditEventTypeSchema`).
 
 **Out (forensic firehose, visible only under "All events"):**
 
-- Low-level action lifecycle: `action.resolved`, `action.enriched`, `action.evaluated`, `action.patched`, `action.queued`, `action.executing`, `action.snapshot` — these are between-state ticks that the `proposed → approved/rejected → executed/failed` arc already implies. Operators reading them in the firehose without context get confused.
-- Internal orchestration: `delegation.chain_resolved`, `event.published`, `event.reaction.triggered`, `event.reaction.created` — bookkeeping; not operator-shaped.
-- Linkage bookkeeping: `entity.linked`, `entity.unlinked`, `entity.resolved` — useful for cross-system reconciliation, not for "what happened in my org today."
-- Persistence telemetry: `work_trace.persisted`, `work_trace.updated`, `work_trace.integrity_override` — `work_trace.integrity_override` is arguably operationally meaningful (it's the only one of the three that involves a human override decision) but is rare enough that operators reach for `All events` when they want it; including it in `Operational` would give it disproportionate visual weight on the default view.
+- Lifecycle starts and intermediate states: `action.proposed` is the start of every action lifecycle, including ones that never reach a terminal state — high volume, low signal on the default view (operators see the terminal state in Operational; the proposal is reachable via `All events` if needed). `action.resolved`, `action.enriched`, `action.evaluated`, `action.patched`, `action.queued`, `action.executing`, `action.snapshot` are between-state ticks that the `approved/rejected → executed/failed` arc already implies.
+- Bookkeeping: `competence.updated` (vague auto-bookkeeping; `competence.promoted`/`demoted` are the load-bearing transitions). `delegation.chain_resolved`. Internal orchestration: `event.published`, `event.reaction.triggered`, `event.reaction.created`.
+- Linkage: `entity.linked`, `entity.unlinked`, `entity.resolved` — useful for cross-system reconciliation, not for "what happened in my org today."
+- Persistence telemetry: `work_trace.persisted`, `work_trace.updated` — too frequent to be informative.
 
 **Pinned-set test:** `packages/core/src/audit/__tests__/operational-allowlist.test.ts` snapshots the exact set against a literal expected list. Adding or removing an event type from the allowlist requires intentionally updating the test, which forces the change through review (mirrors D2's fallback-branch tests). The test also asserts every entry in `OPERATIONAL_AUDIT_EVENT_TYPES` is a member of `AuditEventTypeSchema` (catches drift if the master enum is renamed).
 
@@ -262,9 +274,11 @@ Page (server component)
                   WHERE "organizationId" = $1
                     AND "visibilityLevel" IN ('public', 'org')
                     AND "eventType" = ANY($2)        -- only when scope='operational' or eventType filter
-                    AND "timestamp" < $3              -- only when cursor
-                    OR  ("timestamp" = $3 AND "id" < $4)
-                    AND ...                           -- other URL-param filters
+                    AND ...                          -- other URL-param filters (actorType, entityType/Id, after, before)
+                    AND (                            -- cursor: parens are LOAD-BEARING here.
+                      "timestamp" < $3               -- without them, the OR escapes the org/visibility scope
+                      OR ("timestamp" = $3 AND "id" < $4)
+                    )                                -- only emitted when cursor is present
                   ORDER BY "timestamp" DESC, "id" DESC
                   LIMIT 51
             ← raw rows (Prisma type)
@@ -308,11 +322,11 @@ model AuditEntry {
   @@index([timestamp])
 
   // D3 — efficient org-scoped browse cursor pagination
-  @@index([organizationId, timestamp(sort: Desc)])
+  @@index([organizationId, timestamp(sort: Desc), id(sort: Desc)])
 }
 ```
 
-The new composite index covers the dominant query (`WHERE organizationId = $1 ORDER BY timestamp DESC, id DESC LIMIT 51`). The single-column `@@index([organizationId])` and `@@index([timestamp])` would each force one half of the query to be a heap scan; the composite covers both.
+The three-column composite index matches the query exactly: `WHERE organizationId = $1 ORDER BY timestamp DESC, id DESC LIMIT 51` and the cursor's `(timestamp, id)` tuple comparison. With a two-column index Postgres would walk the index for `(organizationId, timestamp)` and then need an in-memory sort or extra row reads to resolve the `id` tie-break on dense timestamps; the three-column form lets the index walk the tie-break too. The single-column `@@index([organizationId])` and `@@index([timestamp])` are insufficient — each would force one half of the query to be a heap scan.
 
 Migration generated via `pnpm db:migrate` — but per `feedback_prisma_migrate_dev_tty.md`, in agent sessions use `prisma migrate diff --from-url --to-schema-datamodel --script` then `prisma migrate deploy`.
 
@@ -351,15 +365,16 @@ export const AuditEntryBrowseRowSchema = z.object({
   snapshotKeys: z.array(z.string()), // allowlist intersection only
   redactedKeyCount: z.number().int().nonnegative(),
 
-  // Evidence (counts + hash prefixes only)
+  // Evidence (full hash + display prefix; storageRef NEVER included)
   evidencePointers: z.array(
     z.object({
       type: z.enum(["inline", "pointer"]),
-      hashPrefix: z.string(), // first 16 chars of full hash
+      hash: z.string(), // full hash (integrity anchor, not sensitive)
+      hashPrefix: z.string(), // first 16 chars, for display (server-computed for cache stability)
     }),
   ),
 
-  // Hash chain (drawer only — these are surfaced raw by design)
+  // Hash chain (full values, displayed truncated in the drawer with [copy full])
   entryHash: z.string(),
   previousEntryHash: z.string().nullable(),
 
@@ -374,11 +389,14 @@ export type AuditEntryBrowseRow = z.infer<typeof AuditEntryBrowseRowSchema>;
 
 ```ts
 export const AuditEntriesListQuerySchema = z.object({
+  // `operational` and `all` are user-controllable; `custom` is computed by the
+  // backend when narrowing URL params are present (clients should not set it).
   scope: z.enum(["operational", "all"]).default("operational"),
-  cursor: z.string().optional(), // base64 of {timestamp, id}
-  limit: z.number().int().min(1).max(100).default(50),
+  cursor: z.string().optional(), // base64url of {timestamp, id}; malformed → 400
+  limit: z.coerce.number().int().min(1).max(100).default(50), // URL param arrives as string
 
-  // URL-param escape hatches (no chrome)
+  // URL-param escape hatches (no chrome). Presence of any of these
+  // promotes the effective scope to `custom` in the response.
   eventType: AuditEventTypeSchema.optional(),
   actorType: ActorTypeSchema.optional(),
   entityType: z.string().optional(),
@@ -391,7 +409,7 @@ export type AuditEntriesListQuery = z.infer<typeof AuditEntriesListQuerySchema>;
 export const AuditEntriesListResponseSchema = z.object({
   rows: z.array(AuditEntryBrowseRowSchema),
   nextCursor: z.string().nullable(),
-  scope: z.enum(["operational", "all"]),
+  scope: z.enum(["operational", "all", "custom"]), // includes `custom` (server-derived)
   appliedFilters: z.object({
     eventType: AuditEventTypeSchema.nullable(),
     actorType: ActorTypeSchema.nullable(),
@@ -521,13 +539,23 @@ function encodeCursor(c: CursorShape): string {
   return Buffer.from(JSON.stringify(c)).toString("base64url");
 }
 
-function decodeCursor(s: string): CursorShape | null {
+export class CursorDecodeError extends Error {
+  constructor(message = "Malformed cursor") {
+    super(message);
+    this.name = "CursorDecodeError";
+  }
+}
+
+function decodeCursor(s: string): CursorShape {
   try {
     const parsed = JSON.parse(Buffer.from(s, "base64url").toString("utf8"));
-    if (typeof parsed?.timestamp !== "string" || typeof parsed?.id !== "string") return null;
-    return parsed;
-  } catch {
-    return null;
+    if (typeof parsed?.timestamp !== "string" || typeof parsed?.id !== "string") {
+      throw new CursorDecodeError();
+    }
+    return { timestamp: parsed.timestamp, id: parsed.id };
+  } catch (err) {
+    if (err instanceof CursorDecodeError) throw err;
+    throw new CursorDecodeError();
   }
 }
 
@@ -554,13 +582,27 @@ function project(entry: AuditEntry): AuditEntryBrowseRow {
     redactedKeyCount,
     evidencePointers: entry.evidencePointers.map((p) => ({
       type: p.type,
+      hash: p.hash, // full hash — integrity anchor, not sensitive
       hashPrefix: p.hash.slice(0, HASH_PREFIX_LEN),
+      // NOTE: `storageRef` deliberately omitted — that's the only sensitive part.
     })),
     entryHash: entry.entryHash,
     previousEntryHash: entry.previousEntryHash,
     envelopeId: entry.envelopeId,
     traceId: entry.traceId ?? null,
   };
+}
+
+function isCustomScope(query: AuditEntriesListQuery): boolean {
+  // Any narrowing URL param promotes the effective scope to `custom`.
+  return Boolean(
+    query.eventType ||
+    query.actorType ||
+    query.entityType ||
+    query.entityId ||
+    query.after ||
+    query.before,
+  );
 }
 
 export async function listAuditEntriesForBrowse(
@@ -570,13 +612,23 @@ export async function listAuditEntriesForBrowse(
 ): Promise<AuditEntriesListResponse> {
   const query: AuditEntriesListQuery = AuditEntriesListQuerySchema.parse(rawQuery);
   const limit = Math.min(query.limit, MAX_LIMIT);
+  // Throws CursorDecodeError on malformed input; the route handler maps that to 400.
   const cursor = query.cursor ? decodeCursor(query.cursor) : null;
+
+  // Effective scope is `custom` when any narrowing URL param is present.
+  // When `eventType` is present, it overrides the chip's allowlist entirely
+  // (so `?scope=operational&eventType=work_trace.persisted` actually filters
+  //  to that event type, but the response carries scope='custom' so the UI
+  //  can show a "Filtered" pill rather than lying to the operator).
+  const effectiveScope: "operational" | "all" | "custom" = isCustomScope(query)
+    ? "custom"
+    : query.scope;
 
   const eventTypeFilter = query.eventType
     ? [query.eventType]
-    : query.scope === "operational"
+    : effectiveScope === "operational"
       ? [...OPERATIONAL_AUDIT_EVENT_TYPES]
-      : null; // null = no event-type filter (All events)
+      : null; // null = no event-type filter (All events / custom-without-eventType)
 
   const rawRows = await ledger.listForBrowse({
     organizationId,
@@ -599,7 +651,7 @@ export async function listAuditEntriesForBrowse(
   return AuditEntriesListResponseSchema.parse({
     rows: trimmed.map(project),
     nextCursor,
-    scope: query.scope,
+    scope: effectiveScope,
     appliedFilters: {
       eventType: query.eventType ?? null,
       actorType: query.actorType ?? null,
@@ -617,7 +669,7 @@ export async function listAuditEntriesForBrowse(
 - **Encoding lives in core**, not the store. The store accepts a decoded `{timestamp, id} | null` and returns raw `AuditEntry[]`; core encodes the next cursor from the last trimmed row.
 - **Stable tie-break.** Cursor is `(timestamp, id)`, not `(timestamp)`. Audit can have multiple entries at the same `timestamp` (especially in batch backfills); without an `id` tie-break, cursor pagination skips or duplicates rows at boundaries.
 - **`base64url`, not `base64`.** Cursor goes in URL query strings; `base64url` avoids `+`, `/`, `=` URL-encoding contortions.
-- **Decode tolerant.** `decodeCursor` returns `null` on any parse failure; the query falls back to "no cursor." Never throw on malformed cursors — operators may share URLs across staging/prod with ledger drift.
+- **Decode strict.** Malformed cursor → `CursorDecodeError`, mapped to `400 Bad Request` by the route handler. **Never silently fall back to page 1** — for an audit surface, that lets an operator click "Next" and see the same rows again without realising the cursor broke. Forensic correctness is more important than URL-sharing convenience; staging-prod URL drift is rare and easy to recover from (operator clears the cursor query param).
 - **Encode deterministic.** `JSON.stringify({timestamp, id})` with the keys in that exact order. Test pins it.
 
 ### 5.3 Store interface extension
@@ -701,7 +753,8 @@ The in-memory implementation already exists — `InMemoryLedgerStorage` at `pack
 
 ```ts
 import type { FastifyPluginAsync } from "fastify";
-import { listAuditEntriesForBrowse } from "@switchboard/core";
+import { z } from "zod";
+import { CursorDecodeError, listAuditEntriesForBrowse } from "@switchboard/core";
 
 export const dashboardActivityRoutes: FastifyPluginAsync = async (app) => {
   app.get(
@@ -713,8 +766,11 @@ export const dashboardActivityRoutes: FastifyPluginAsync = async (app) => {
         querystring: {
           type: "object",
           properties: {
+            // Note: clients pick `operational` or `all`; `custom` is server-derived
+            // when narrowing URL params are present (rejected here as input).
             scope: { type: "string", enum: ["operational", "all"] },
             cursor: { type: "string" },
+            // limit arrives as a string from URL params; Zod coerces in core (§4.3).
             limit: { type: "integer", minimum: 1, maximum: 100 },
             eventType: { type: "string" },
             actorType: { type: "string", enum: ["user", "agent", "service_account", "system"] },
@@ -734,6 +790,9 @@ export const dashboardActivityRoutes: FastifyPluginAsync = async (app) => {
         const result = await listAuditEntriesForBrowse(app.auditLedger, orgId, request.query);
         return reply.code(200).send(result);
       } catch (err) {
+        if (err instanceof CursorDecodeError) {
+          return reply.code(400).send({ error: "Malformed cursor" });
+        }
         if (err instanceof z.ZodError) {
           return reply.code(400).send({ error: "Invalid query", details: err.flatten() });
         }
@@ -779,17 +838,19 @@ export default function Page() {
 - Reads `process.env.NEXT_PUBLIC_ACTIVITY_LIVE === "true"`.
 - If gate `false`: renders header + chips + table from `fixtures.ts` (~12 rows representing the operational allowlist plus one `event.published` row that only shows under `All events`).
 - If gate `true`: mounts `useActivityList()` hook, passes data to `ActivityTable`.
-- Owns chip state (`scope: "operational" | "all"`) and drawer state (`expandedRowId: string | null`).
+- Owns chip state (`scope: "operational" | "all"`), drawer state (`expandedRowId: string | null`), and prev-cursor stack (`prevCursors: string[]`).
 - Reads URL params via `useSearchParams()` to populate optional filters; pushes chip changes into the URL via `useRouter().replace()` so back-button works.
+- Reads `scope` from the API response (which can be `"operational" | "all" | "custom"` per §2.3); when `custom`, renders the `[Filtered · Clear]` pill next to the chip row.
+- **State invariants on filter change:** any change to `scope` or any URL param **must** clear `prevCursors` and close `expandedRowId`. Cursors from a different filter set are forensically wrong, and a drawer pinned to a row that's no longer in view is confusing.
 
 Components (in `components/`):
 
 - `header.tsx` — clone of `automations/components/header.tsx`. Title `"Activity"`, subtitle `"Audit ledger — every action, approval, and override."`.
-- `filter-chips.tsx` — two-chip toggle (`Operational` / `All events`).
-- `activity-table.tsx` — hairline table; columns `TIMESTAMP / EVENT / ACTOR / ENTITY / SUMMARY`. Sticky first column. Mono-prefix labels in `EVENT / ACTOR / ENTITY`. `SUMMARY` truncated to 80 chars.
-- `activity-row.tsx` — single row. Click anywhere expands into the inline drawer below.
+- `filter-chips.tsx` — two-chip toggle (`Operational` / `All events`) plus a conditional `[Filtered · Clear]` pill rendered when the API response carries `scope === "custom"`.
+- `activity-table.tsx` — hairline table; columns `TIMESTAMP / EVENT / ACTOR / ENTITY / SUMMARY / ⌄`. Sticky first column. Mono-prefix labels in `EVENT / ACTOR / ENTITY`. `SUMMARY` truncated to 80 chars; the trailing `⌄` column is the chevron toggle (see `activity-row.tsx`).
+- `activity-row.tsx` — single row. **Row body is non-interactive** (so `summary` text remains selectable; copy-to-clipboard works without misclicks). Drawer toggle is a `<button>` chevron at the row end with `aria-expanded` + `aria-controls`; Enter/Space toggles.
 - `activity-row-drawer.tsx` — drawer content (§6.4).
-- `pagination-footer.tsx` — `[← Prev] [Next →]` buttons; cursor-based; `Prev` is a stack of cursors held in component state (no `prevCursor` API).
+- `pagination-footer.tsx` — `[← Prev] [Next →]` buttons; cursor-based; `Prev` is a stack of cursors held in component state (no `prevCursor` API). Stack resets on filter change (per state invariants above).
 - `empty-state.tsx` — distinct copy for zero-state vs. filtered-empty.
 - `format.ts` — date/time formatting helpers (clone of `contacts/components/format.ts`).
 
@@ -900,21 +961,30 @@ Identical posture to D2:
 - `cursor encode/decode round-trip`
 - `cursor pagination — fetches one extra, trims, computes nextCursor`
 - `nextCursor null when fewer rows than limit`
-- `cursor decoding tolerant of malformed input`
+- `decodeCursor THROWS CursorDecodeError on malformed input` (not silent fallback)
 - `cursor pagination stable across (timestamp, id) ties`
 - `projection redacts non-allowlisted snapshot keys`
 - `projection sets redactedKeyCount correctly`
-- `projection truncates evidence-pointer hashes to 16 chars`
+- `projection emits both full hash and 16-char hashPrefix on evidencePointers`
+- `projection NEVER emits evidencePointers[].storageRef` (regression — assert key absent on every row)
 - `projection drops admin-visibility entries (server filter)`
 - `limit clamped to MAX_LIMIT`
 - `default limit is 50`
+- `limit accepts string input ("50") via z.coerce` (URL-param coercion)
 - `empty result returns rows: [], nextCursor: null`
+- `scope === "custom" when any narrowing URL param is present`
+- `scope === "operational" when no params and chip default applies`
+- `scope === "all" when ?scope=all and no narrowing params`
+- `?scope=operational&eventType=work_trace.persisted yields scope="custom" and rows of that type` (the URL-conflict case)
 
 ### 7.2 Allowlist — `operational-allowlist.test.ts`
 
-- `OPERATIONAL_AUDIT_EVENT_TYPES matches expected literal set` (snapshot)
+- `OPERATIONAL_AUDIT_EVENT_TYPES matches expected 27-entry literal set` (snapshot)
 - `every entry is a member of AuditEventTypeSchema`
-- `excludes work_trace.* events` (regression)
+- `INCLUDES work_trace.integrity_override` (positive regression — operator-relevant despite work_trace prefix)
+- `excludes work_trace.persisted and work_trace.updated` (regression)
+- `excludes action.proposed` (regression — high-volume lifecycle start, not in default view)
+- `excludes competence.updated` (regression — vague auto-bookkeeping)
 - `excludes event.* events` (regression)
 - `excludes entity.* events` (regression)
 
@@ -930,12 +1000,17 @@ Following `feedback_api_test_mocked_prisma.md` and the `buildTestServer` pattern
 - `400 on invalid scope`
 - `400 on invalid limit`
 - `400 on invalid date format`
+- `400 on malformed cursor` (CursorDecodeError → 400, never silent fallback)
+- `400 when client sends ?scope=custom` (custom is server-derived, rejected as input)
+- `response carries scope='custom' when ?eventType=... is set with default chip`
 - `500 on ledger throw`
 
 ### 7.4 Hook — `use-activity-list.test.ts`
 
 - `initial query uses scope=operational`
 - `chip toggle updates scope`
+- `chip toggle clears prevCursor stack and closes drawer` (state invariants)
+- `URL-param change clears prevCursor stack and closes drawer`
 - `cursor advance updates query key`
 - `URL params populate query`
 - `error response surfaces as { error }`
@@ -946,8 +1021,13 @@ Following `feedback_api_test_mocked_prisma.md` and the `buildTestServer` pattern
 - empty-state vs filtered-empty distinction
 - chip toggle clears drawer
 - drawer renders allowlisted keys + redacted count
-- drawer never renders snapshot values (regression — string-search the rendered DOM)
-- copy-to-clipboard wired (mocked)
+- drawer never renders snapshot values (regression — string-search the rendered DOM with sentinel value `__NEVER_RENDER_SENTINEL__` injected into a fixture's snapshot)
+- drawer never renders evidencePointers[].storageRef (regression — sentinel `s3://private-bucket/__SENTINEL__` injected into fixture; assert absent in DOM)
+- summary rendering escapes `<script>alert(1)</script>` as text (defense-in-depth; React escapes by default but test pins the contract)
+- chevron toggles drawer (not row body click); row body remains text-selectable
+- chevron has `role=button` + `aria-expanded` + `aria-controls`; Enter and Space trigger toggle
+- copy-to-clipboard wired (mocked) for full id and full hash
+- `[Filtered · Clear]` pill appears when API response carries `scope === "custom"`; Clear drops URL params
 - date formatting under tz fallbacks
 
 ---
@@ -956,9 +1036,9 @@ Following `feedback_api_test_mocked_prisma.md` and the `buildTestServer` pattern
 
 ### 8.1 Audit volume hits the index hard
 
-The composite index `(organizationId, timestamp DESC)` covers the common case. Worst case is `WHERE organizationId = $1 AND eventType IN (28 values) ORDER BY timestamp DESC LIMIT 51` — Postgres should use the index for the org-scope and timestamp ordering, then filter eventType in-memory. For orgs with millions of audit rows, the in-memory filter could be expensive on `Operational` because the allowlist excludes only a minority of rows; for orgs heavy in `work_trace.*` or `event.*` it could be substantial.
+The composite index `(organizationId, timestamp DESC, id DESC)` covers the common case. Worst case is `WHERE organizationId = $1 AND eventType IN (27 values) ORDER BY timestamp DESC, id DESC LIMIT 51` — Postgres uses the index for the org-scope and ordering, then filters eventType. For orgs with millions of audit rows, the eventType filter could be expensive on `Operational` because the allowlist excludes a minority of rows; for orgs heavy in `work_trace.persisted` or `event.published` it could be substantial.
 
-**Mitigation:** if profiling shows eventType-filtering as a hot path, add a partial index `@@index([organizationId, timestamp(sort: Desc)], where: eventType IN (operational set))`. Defer until evidence. Document as a D3.5 candidate.
+**Mitigation:** if profiling shows eventType-filtering as a hot path, add a partial index whose predicate is the literal allowlist (Postgres requires a `WHERE` predicate of constants for partial indexes; the 27 event types must be inlined as string literals, not parameterised). Defer until evidence. Document as a D3.5 candidate.
 
 ### 8.2 Cursor drift across writes
 
@@ -966,7 +1046,7 @@ Audit is append-only at the head; `(timestamp, id)` cursors paginate **backwards
 
 ### 8.3 Snapshot redaction false-negatives
 
-The allowlist of 10 keys is opinionated. If an audit emitter writes a key like `customerEmail` or `phoneNumber` directly into snapshot, the allowlist would silently leak nothing (good — it's not allowlisted), but if an emitter writes `id: "user-john@example.com"` (using the email as a literal id), the value never leaves the row anyway because we only project key _names_, not values. **The redaction architecture is value-based, not key-based** — `snapshotKeys` is a list of strings, never a `Record<key, value>`. The allowlist is defence-in-depth against a future regression that tries to "helpfully" surface values.
+The allowlist of 13 keys is opinionated. If an audit emitter writes a key like `customerEmail` or `phoneNumber` directly into snapshot, the allowlist would silently leak nothing (good — it's not allowlisted), but if an emitter writes `id: "user-john@example.com"` (using the email as a literal id), the value never leaves the row anyway because we only project key _names_, not values. **The redaction architecture is value-based, not key-based** — `snapshotKeys` is a list of strings, never a `Record<key, value>`. The allowlist is defence-in-depth against a future regression that tries to "helpfully" surface values.
 
 **Test discipline:** `activity-row-drawer.test.tsx` asserts via DOM string-search that no snapshot value is rendered. Regression-class.
 
@@ -1006,15 +1086,20 @@ D3 ships when:
 - [ ] Page renders Mercury-style header `ACTIVITY` + subtitle.
 - [ ] Two-chip filter row visible; default `Operational` selected; toggle to `All events` works without navigation.
 - [ ] Hairline table renders 50 rows by default; `[Next →]` advances cursor; `[← Prev]` returns to the previous page; pagination footer hides when `nextCursor === null`.
-- [ ] Row click expands an inline drawer; drawer shows full ids, hash anchors, evidence pointer prefixes, and allowlisted snapshot key names + redacted-count.
+- [ ] Chevron button (not row body) toggles the inline drawer; drawer shows full ids, hash anchors, evidence pointer prefixes (with full hash available via `[copy full]`), and allowlisted snapshot key names + redacted-count.
 - [ ] Drawer never renders any snapshot value (DOM-string-search regression test passes).
+- [ ] Drawer never renders `evidencePointers[].storageRef` (DOM-string-search regression test passes; sentinel-injection fixture used).
 - [ ] URL params `?eventType=`, `?actorType=`, `?entityType=`, `?entityId=`, `?after=`, `?before=` filter results without UI chrome.
 - [ ] `?scope=all` renders firehose; `?scope=operational` (or absent) renders curated.
+- [ ] Any narrowing URL param promotes API response `scope` to `"custom"`; UI shows the `[Filtered · Clear]` pill.
+- [ ] Malformed cursor returns `400 Bad Request` (never silent fallback).
+- [ ] Filter / scope change resets the prev-cursor stack and closes any open drawer.
+- [ ] **Server filters `visibilityLevel` to `{public, org}`** — admin/system entries are excluded from `/api/dashboard/activity` regardless of operator role (asserted via fixture with admin-visibility row that does not appear in the response).
 - [ ] Empty-state and filtered-empty render distinct copy; `Clear filters` returns to default.
 - [ ] Production gate `NEXT_PUBLIC_ACTIVITY_LIVE=false` renders fixtures; `=true` renders live data.
 - [ ] All tests in §7 pass; `pnpm typecheck` clean; `pnpm lint` clean.
-- [ ] Composite index `@@index([organizationId, timestamp(sort: Desc)])` on `AuditEntry` exists in `schema.prisma` and a migration is generated.
-- [ ] Existing `/api/audit/*` Fastify routes, `useAudit()` hook, and `activity-translator.ts` are untouched and continue to feed live-signal-popover and event-history components.
+- [ ] Composite index `@@index([organizationId, timestamp(sort: Desc), id(sort: Desc)])` on `AuditEntry` exists in `schema.prisma` and a migration is generated.
+- [ ] Existing `/api/audit/*` Fastify routes, `useAudit()` hook, and `activity-translator.ts` files are not modified by D3a/D3b PRs (asserted via PR diff review — these files do not appear in the changed-files list).
 
 ---
 
