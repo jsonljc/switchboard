@@ -139,4 +139,39 @@ export const COMMON_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
     patterns: ["real stories from clients", "our clients tell us"],
     severity: "block",
   },
+
+  // Additional superlative entries — anchored pattern, avoids false-positives
+  {
+    id: "superlative_no_other",
+    category: "superlative",
+    patterns: [/\bno other (clinic|treatment|technology|provider) (in|near|across)\b/i],
+    severity: "block",
+    notes: "Anchored — avoids matching 'no other option' or 'no other way'.",
+  },
+
+  // Additional guarantee entries
+  {
+    id: "guarantee_money_back",
+    category: "guarantee",
+    patterns: ["money-back guarantee", "money back guarantee", "100% refund"],
+    severity: "block",
+  },
+
+  // Additional medical-claim entries — anchored verb+condition patterns
+  {
+    id: "medical_removes",
+    category: "medical_claim",
+    patterns: [
+      /\bremoves? (scars?|stretch marks?|dark spots?|age spots?|pigmentation) permanently\b/i,
+    ],
+    severity: "block",
+  },
+
+  // Additional urgency entries
+  {
+    id: "urgency_act_now",
+    category: "urgency",
+    patterns: [/\bact now (to|and) (secure|claim|book|get)\b/i, "don't wait, book now"],
+    severity: "block",
+  },
 ];

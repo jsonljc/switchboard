@@ -21,4 +21,25 @@ export const SG_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
     patterns: ["non-invasive surgery", "surgery without surgery"],
     severity: "block",
   },
+  // §2.5 conservative seed additions — SG-specific regulatory patterns
+  {
+    id: "sg_smc_unlicensed_practice",
+    category: "medical_claim",
+    patterns: [
+      /\b(perform(s)?|offer(s)?|do(es)?) (surgery|surgical|invasive) (without|no need for) (a )?(doctor|physician|surgeon)\b/i,
+    ],
+    severity: "block",
+    notes:
+      "SMC — procedures requiring a licensed physician cannot be framed as tech-only or non-medical.",
+  },
+  {
+    id: "sg_hsa_approved_superlative",
+    category: "superlative",
+    patterns: [
+      /\b(hsa|moh|ministry)[ -]?(approved|certified|endorsed) (and |&amp; )?(best|top|leading)\b/i,
+    ],
+    severity: "block",
+    notes:
+      "HCSA/HSA — regulatory endorsement cannot be combined with superlative marketing claims.",
+  },
 ];

@@ -57,4 +57,31 @@ describe("loadEscalationTriggers", () => {
       }
     }
   });
+
+  it("merged tables meet total entry floor per spec §10 (≥10 per jurisdiction)", () => {
+    for (const j of ["SG", "MY"] as const) {
+      _resetEscalationTriggerCache();
+      const entries = loadEscalationTriggers(j);
+      expect(entries.length, `${j} total escalation-trigger entries`).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it("merged tables cover all six trigger categories per spec §10", () => {
+    const allCategories = [
+      "pregnancy_breastfeeding",
+      "prior_adverse_reaction",
+      "prior_complaint",
+      "competitor_negative",
+      "multi_treatment_combo",
+      "sensitive_keyword",
+    ] as const;
+    for (const j of ["SG", "MY"] as const) {
+      _resetEscalationTriggerCache();
+      const entries = loadEscalationTriggers(j);
+      const presentCategories = new Set(entries.map((e) => e.category));
+      for (const cat of allCategories) {
+        expect(presentCategories.has(cat), `${j} has category ${cat}`).toBe(true);
+      }
+    }
+  });
 });

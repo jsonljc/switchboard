@@ -58,4 +58,14 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
       /\b(diabet(es|ic)|hypertension|high blood pressure|cancer|chemo(therapy)?|pacemaker|epilepsy|seizures?)\b/i,
     ],
   },
+  // §2.5 conservative seed addition — mental health keywords
+  // Depression, anxiety, and suicidal ideation require immediate human review;
+  // AI should not engage with these in an aesthetic-clinic context.
+  {
+    id: "sensitive_keyword_mental_health",
+    category: "sensitive_keyword",
+    patterns: [
+      /\b(depress(ed|ion)|anxiety|anxious|suicidal|self.harm|eating disorder|anorexia|bulimia)\b/i,
+    ],
+  },
 ];

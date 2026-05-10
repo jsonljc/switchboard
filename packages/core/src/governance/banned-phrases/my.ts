@@ -22,4 +22,23 @@ export const MY_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
     patterns: [/\bspecialist (in|of) (every|all)\b/i],
     severity: "block",
   },
+  // §2.5 conservative seed additions — MY-specific regulatory patterns
+  {
+    id: "my_mmc_guaranteed_outcome",
+    category: "guarantee",
+    patterns: [/\b(guaranteed|promise(d)?|assure(d)?) (result|outcome|effect|improvement)\b/i],
+    severity: "block",
+    notes:
+      "MMC — guaranteeing clinical outcomes is prohibited under MY medical advertising guidelines.",
+  },
+  {
+    id: "my_kkm_urgency_slots",
+    category: "urgency",
+    patterns: [
+      /\b(last|only|remaining) \d+ (slot|spot|appointment|seat)s? (available|left|today)\b/i,
+    ],
+    severity: "block",
+    notes:
+      "KKM — artificial urgency around appointment scarcity is prohibited in MY health advertising.",
+  },
 ];

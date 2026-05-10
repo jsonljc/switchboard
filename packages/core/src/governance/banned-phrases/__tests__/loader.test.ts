@@ -97,4 +97,12 @@ describe("loadBannedPhrases", () => {
       }
     }
   });
+
+  it("merged tables meet total entry floor per spec §10 (≥30 per jurisdiction)", () => {
+    for (const j of ["SG", "MY"] as const) {
+      _resetBannedPhraseCache();
+      const entries = loadBannedPhrases(j);
+      expect(entries.length, `${j} total banned-phrase entries`).toBeGreaterThanOrEqual(30);
+    }
+  });
 });
