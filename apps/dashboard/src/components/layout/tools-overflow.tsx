@@ -10,27 +10,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { isMercuryToolLive, type ToolsNavId } from "@/lib/route-availability";
 import styles from "./tools-overflow.module.css";
 
-export const TOOLS_NAV_ITEMS = [
+export const TOOLS_NAV_ITEMS: ReadonlyArray<{
+  readonly id: ToolsNavId;
+  readonly label: string;
+  readonly href: string;
+}> = [
   { id: "contacts", label: "Contacts", href: "/contacts" },
   { id: "automations", label: "Automations", href: "/automations" },
   { id: "activity", label: "Activity", href: "/activity" },
   { id: "reports", label: "Reports", href: "/reports" },
-] as const;
+];
 
 export const TOOLS_PREFIXES = TOOLS_NAV_ITEMS.map((it) => it.href);
 
-export type ToolsNavId = (typeof TOOLS_NAV_ITEMS)[number]["id"];
-
-export function getToolsRouteAvailability(): Record<ToolsNavId, boolean> {
-  return {
-    contacts: process.env.NEXT_PUBLIC_CONTACTS_LIVE === "true",
-    automations: process.env.NEXT_PUBLIC_AUTOMATIONS_LIVE === "true",
-    activity: process.env.NEXT_PUBLIC_ACTIVITY_LIVE === "true",
-    reports: process.env.NEXT_PUBLIC_REPORTS_LIVE === "true",
-  };
-}
+export type { ToolsNavId };
 
 export function isPathActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -38,8 +34,7 @@ export function isPathActive(pathname: string, href: string): boolean {
 
 export function ToolsOverflow() {
   const pathname = usePathname() ?? "";
-  const availability = getToolsRouteAvailability();
-  const visibleItems = TOOLS_NAV_ITEMS.filter((it) => availability[it.id]);
+  const visibleItems = TOOLS_NAV_ITEMS.filter((it) => isMercuryToolLive(it.id));
 
   // Hide the entire trigger when zero Tools routes are live (decision §2 row 11).
   if (visibleItems.length === 0) return null;
