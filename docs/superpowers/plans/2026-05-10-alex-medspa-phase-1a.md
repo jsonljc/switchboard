@@ -6,7 +6,7 @@
 
 **Architecture:** Refactor Alex from `skills/alex.md` (single file) to `skills/alex/SKILL.md` + `skills/alex/references/` (directory with metadata-tagged reference files loaded on demand by the skill loader). Add `GovernanceVerdict` as the unified output-governance audit event shape (distinct from the existing `GovernanceDecision` action-approval type, which stays unchanged). Extend `ServiceSchema` with operator-authored optional fields (booking behavior, prep/aftercare, suitability) without introducing structured clinical data. Introduce `ReferenceMetadataSchema` so every reference file declares jurisdiction, vertical, clinic type, risk level, owner, and review date.
 
-**Tech Stack:** TypeScript ESM, Zod, Vitest, pnpm workspaces, Turbo. Skill loader at `packages/core/src/skill-runtime/skill-loader.ts`. Schemas at `packages/schemas/`. No database migration required — `BusinessFacts` is not yet persisted to a dedicated Prisma table; service-field extension is purely additive on the Zod schema.
+**Tech Stack:** TypeScript ESM, Zod, Vitest, pnpm workspaces, Turbo. Skill loader at `packages/core/src/skill-runtime/skill-loader.ts`. Schemas at `packages/schemas/`. No Prisma migration required; `ServiceSchema` extension is an additive Zod contract change and remains backward-compatible with existing `BusinessFacts` payloads (every new field is optional).
 
 **Spec:** `docs/superpowers/specs/2026-05-10-alex-medspa-sg-my-design.md`
 
@@ -20,6 +20,16 @@
 - Authoring complete content for each reference file — Phase 1a ships placeholders with valid frontmatter and a clear authoring note
 
 **Naming reconciliation:** The spec uses `GovernanceDecision` for the new structured audit event. That name already exists at `packages/core/src/skill-runtime/governance.ts:16` as a 3-tier union (`"auto-approve" | "require-approval" | "deny"`) used for action approval. To avoid a rippling rename, the new structured type is named **`GovernanceVerdict`** in this plan. Semantics match the spec — only the identifier differs.
+
+## Plan hardening notes
+
+These rules apply across all tasks. They were lifted from review feedback and are load-bearing for clean execution:
+
+- **Deterministic reference discovery.** Sort `readdirSync` output and the final returned references array by relative path. Without this, snapshot tests are flaky and diffs are noisy.
+- **POSIX-style relative paths.** Reference paths returned from the loader and emitted in tests must use forward slashes regardless of host OS. Use `relative(skillDir, full).split(path.sep).join("/")`.
+- **Audit script reuses `ReferenceMetadataSchema`.** `pnpm reference-audit` validates every reference file against the same Zod schema the loader uses, then applies policy checks on top (staleness, critical-source presence). Two contracts diverging would defeat the purpose.
+- **`riskLevel: critical` requires sources.** Audit-script policy: any reference with `riskLevel: critical` must declare at least one entry in `sources`. The schema makes `sources` optional; the policy check elevates it for critical files.
+- **Phase 1a does not yet thin SKILL.md.** The fat-skill *directory* lands in 1a; reducing `SKILL.md` to ≤500 lines as the spec describes is a separate authoring pass that lands alongside reference content (1b-1 / 1b-2 timing). Coverage table reflects this.
 
 ---
 
@@ -303,6 +313,23 @@ describe("ReferenceMetadataSchema", () => {
     const result = ReferenceMetadataSchema.safeParse(meta);
     expect(result.success).toBe(false);
   });
+
+  it("accepts vertical=none and clinicType=none for cross-cutting references", () => {
+    // Channel/platform references that don't meaningfully map to a clinic
+    // type or vertical (e.g., a generic platform-policy doc) need this
+    // escape hatch.
+    const meta = {
+      jurisdiction: "both",
+      vertical: "none",
+      clinicType: "none",
+      appliesTo: "channel",
+      riskLevel: "low",
+      lastReviewedAt: "2026-05-10",
+      owner: "jasonli",
+    };
+    const result = ReferenceMetadataSchema.safeParse(meta);
+    expect(result.success).toBe(true);
+  });
 });
 ```
 
@@ -323,8 +350,8 @@ import { z } from "zod";
 
 export const ReferenceMetadataSchema = z.object({
   jurisdiction: z.enum(["SG", "MY", "both", "none"]),
-  vertical: z.enum(["medspa", "dental", "fitness", "generic"]),
-  clinicType: z.enum(["medical", "nonMedical", "both"]),
+  vertical: z.enum(["medspa", "dental", "fitness", "generic", "none"]),
+  clinicType: z.enum(["medical", "nonMedical", "both", "none"]),
   appliesTo: z.enum(["voice", "regulatory", "pattern", "channel"]),
   riskLevel: z.enum(["low", "medium", "high", "critical"]),
   lastReviewedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
@@ -944,7 +971,7 @@ In `packages/core/src/skill-runtime/skill-loader.ts`, add a helper function abov
 
 ```typescript
 import { readdirSync, statSync } from "node:fs";
-import { relative } from "node:path";
+import { relative, sep } from "node:path";
 import { ReferenceMetadataSchema } from "@switchboard/schemas";
 import type { SkillReferenceFile } from "./types.js";
 
@@ -957,7 +984,9 @@ function loadReferences(skillDir: string): SkillReferenceFile[] | undefined {
   const files: SkillReferenceFile[] = [];
 
   function walk(dir: string): void {
-    for (const entry of readdirSync(dir)) {
+    // Deterministic ordering — readdirSync order is platform/inode-dependent
+    // and produces flaky tests / noisy diffs without explicit sort.
+    for (const entry of readdirSync(dir).sort()) {
       const full = join(dir, entry);
       const stat = statSync(full);
       if (stat.isDirectory()) {
@@ -978,8 +1007,11 @@ function loadReferences(skillDir: string): SkillReferenceFile[] | undefined {
             `Reference ${full} failed validation: ${JSON.stringify(result.error.issues)}`,
           );
         }
+        // Normalize to POSIX-style forward slashes so paths are stable
+        // across host OS (matters if CI ever runs on Windows).
+        const posixPath = relative(skillDir, full).split(sep).join("/");
         files.push({
-          path: relative(skillDir, full),
+          path: posixPath,
           metadata: result.data,
           body,
         });
@@ -988,6 +1020,9 @@ function loadReferences(skillDir: string): SkillReferenceFile[] | undefined {
   }
 
   walk(referencesRoot);
+  // Final sort by path so the returned array is fully deterministic
+  // regardless of recursion order.
+  files.sort((a, b) => a.path.localeCompare(b.path));
   return files;
 }
 ```
@@ -1386,25 +1421,68 @@ Only Meta-pre-approved templates: Utility (appt confirm/reminder/reschedule, rec
 New WABA numbers: 250 business-initiated conversations / 24h. Scales with quality rating.
 ```
 
-- [ ] **Step 6.3: Verify Alex still loads via the test runner**
+- [ ] **Step 6.3: Add smoke test that loads the real Alex skill**
 
-Write a quick smoke test in `packages/core/src/skill-runtime/skill-loader.test.ts` if one doesn't already cover real-skill loading, or run a one-off:
+Create `packages/core/src/skill-runtime/__tests__/alex-skill.smoke.test.ts`:
 
-```bash
-node --experimental-strip-types -e '
-import { loadSkill } from "./packages/core/dist/skill-runtime/skill-loader.js";
-const skill = loadSkill("alex", "./skills");
-console.log("Loaded:", skill.frontmatter.name, "with", skill.references?.length ?? 0, "references");
-' 2>&1 || true
+```typescript
+import { describe, it, expect } from "vitest";
+import { resolve } from "node:path";
+import { loadSkill } from "../skill-loader.js";
+
+const SKILLS_DIR = resolve(__dirname, "../../../../../skills");
+
+describe("Alex skill (real, not fixture)", () => {
+  it("loads from directory layout", () => {
+    const skill = loadSkill("alex", SKILLS_DIR);
+    expect(skill.frontmatter.slug).toBe("alex");
+  });
+
+  it("discovers all reference files with valid metadata", () => {
+    const skill = loadSkill("alex", SKILLS_DIR);
+    expect(skill.references).toBeDefined();
+    expect(skill.references!.length).toBeGreaterThanOrEqual(10);
+
+    // Every reference must have populated metadata
+    for (const ref of skill.references!) {
+      expect(ref.metadata.owner.length).toBeGreaterThan(0);
+      expect(ref.metadata.lastReviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it("returns reference paths in deterministic POSIX-style order", () => {
+    const skill = loadSkill("alex", SKILLS_DIR);
+    const paths = skill.references!.map((r) => r.path);
+    // POSIX-style: no backslashes regardless of host OS
+    for (const p of paths) {
+      expect(p).not.toContain("\\");
+    }
+    // Deterministic: sorted
+    const sorted = [...paths].sort();
+    expect(paths).toEqual(sorted);
+  });
+
+  it("includes critical regulatory references with sources", () => {
+    const skill = loadSkill("alex", SKILLS_DIR);
+    const critical = skill.references!.filter(
+      (r) => r.metadata.riskLevel === "critical",
+    );
+    expect(critical.length).toBeGreaterThan(0);
+    for (const ref of critical) {
+      expect(ref.metadata.sources).toBeDefined();
+      expect(ref.metadata.sources!.length).toBeGreaterThan(0);
+    }
+  });
+});
 ```
 
-Or alternatively, run all skill-loader tests and trust them:
+Run:
 
 ```bash
-pnpm --filter @switchboard/core test skill-loader
+pnpm --filter @switchboard/core test alex-skill.smoke
 ```
 
-Expected: all green, including a successful directory-mode load.
+Expected: all 4 smoke tests pass, confirming Phase 1a delivers a real working directory-mode skill load with no runtime behavior change to the existing skill body.
 
 - [ ] **Step 6.4: Run typecheck and full tests**
 
@@ -1510,13 +1588,16 @@ EOF
 
 - [ ] **Step 8.1: Create the audit script**
 
+The script imports `ReferenceMetadataSchema` from `@switchboard/schemas` and uses it as the validation contract — ad-hoc field-level checks would diverge from the loader over time. Policy checks (staleness, critical-source presence) live on top of the schema.
+
 Create `scripts/reference-audit.mjs`:
 
 ```javascript
 #!/usr/bin/env node
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { ReferenceMetadataSchema } from "@switchboard/schemas";
 
 const SKILLS_DIR = join(process.cwd(), "skills");
 const STALE_DAYS = 180;
@@ -1526,51 +1607,73 @@ let warnings = 0;
 let errors = 0;
 
 function walk(dir) {
-  for (const entry of readdirSync(dir)) {
+  // Deterministic order: matches loader's reference discovery.
+  for (const entry of readdirSync(dir).sort()) {
     const full = join(dir, entry);
     const stat = statSync(full);
     if (stat.isDirectory()) {
       walk(full);
-    } else if (entry.endsWith(".md") && full.includes(`${"references"}/`)) {
+    } else if (
+      entry.endsWith(".md") &&
+      full.includes(`${sep}references${sep}`)
+    ) {
       auditOne(full);
     }
   }
 }
 
 function auditOne(path) {
+  const display = relative(process.cwd(), path).split(sep).join("/");
   const raw = readFileSync(path, "utf-8");
   const m = raw.match(/^---\n([\s\S]*?)\n---/);
   if (!m) {
-    console.error(`ERROR: ${path} missing frontmatter`);
+    console.error(`ERROR: ${display} missing YAML frontmatter`);
     errors++;
     return;
   }
-  let fm;
+
+  let parsed;
   try {
-    fm = parseYaml(m[1]);
+    parsed = parseYaml(m[1]);
   } catch (e) {
-    console.error(`ERROR: ${path} frontmatter not valid YAML: ${e.message}`);
+    console.error(`ERROR: ${display} frontmatter not valid YAML: ${e.message}`);
     errors++;
     return;
   }
-  if (!fm.lastReviewedAt) {
-    console.error(`ERROR: ${path} missing lastReviewedAt`);
+
+  // Reuse the same Zod schema the loader uses. One contract, not two.
+  const result = ReferenceMetadataSchema.safeParse(parsed);
+  if (!result.success) {
+    console.error(
+      `ERROR: ${display} fails ReferenceMetadataSchema: ` +
+        JSON.stringify(result.error.issues),
+    );
     errors++;
     return;
   }
+  const fm = result.data;
+
+  // Policy: staleness
   const reviewed = new Date(fm.lastReviewedAt);
   const ageDays = (today - reviewed) / (1000 * 60 * 60 * 24);
   if (ageDays > STALE_DAYS) {
-    console.warn(`WARN: ${path} lastReviewedAt ${fm.lastReviewedAt} is ${Math.round(ageDays)} days old (>${STALE_DAYS})`);
+    console.warn(
+      `WARN: ${display} lastReviewedAt ${fm.lastReviewedAt} is ` +
+        `${Math.round(ageDays)} days old (>${STALE_DAYS})`,
+    );
     warnings++;
   }
-  if (fm.riskLevel === "critical" && !fm.owner) {
-    console.error(`ERROR: ${path} riskLevel=critical requires owner`);
+
+  // Policy: critical riskLevel requires at least one source
+  if (fm.riskLevel === "critical" && (!fm.sources || fm.sources.length === 0)) {
+    console.error(
+      `ERROR: ${display} riskLevel=critical requires at least one entry in sources`,
+    );
     errors++;
   }
 }
 
-if (!statSync(SKILLS_DIR, { throwIfNoEntry: false })) {
+if (!existsSync(SKILLS_DIR)) {
   console.log("No skills/ directory; skipping reference audit");
   process.exit(0);
 }
@@ -1580,6 +1683,8 @@ walk(SKILLS_DIR);
 console.log(`Reference audit: ${warnings} warnings, ${errors} errors`);
 process.exit(errors > 0 ? 1 : 0);
 ```
+
+**Note on dependency.** The script imports from `@switchboard/schemas`, so it requires the schemas package to be built. Add a guard or document that `pnpm build` (or at least `pnpm --filter @switchboard/schemas build`) must run before the audit. The pre-flight Step P3 already covers this.
 
 - [ ] **Step 8.2: Add npm script**
 
@@ -1603,30 +1708,87 @@ Reference audit: 0 warnings, 0 errors
 
 (Or zero warnings since all references have `lastReviewedAt: "2026-05-10"` which is fresh.)
 
-- [ ] **Step 8.4: Verify the script catches a stale or invalid reference**
+- [ ] **Step 8.4: Verify the script catches stale, invalid-schema, and missing-source cases**
 
-Temporarily add a stale reference (do not commit this) to test:
+Temporarily add three problem references (do not commit them) and confirm the script catches each:
 
 ```bash
-cat > /tmp/test-stale.md <<'EOF'
+mkdir -p skills/alex/references/_test
+
+# Case 1: stale (warning only, exit 0)
+cat > skills/alex/references/_test/stale.md <<'EOF'
+---
+jurisdiction: SG
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: high
+lastReviewedAt: "2024-01-01"
+owner: jasonli
+sources:
+  - "https://example.com"
+---
+# Stale test
+EOF
+
+# Case 2: critical without sources (error, exit 1)
+cat > skills/alex/references/_test/no-sources.md <<'EOF'
 ---
 jurisdiction: SG
 vertical: medspa
 clinicType: medical
 appliesTo: regulatory
 riskLevel: critical
-lastReviewedAt: "2024-01-01"
+lastReviewedAt: "2026-05-10"
 owner: jasonli
 ---
-# Stale test
+# Critical without sources
 EOF
-mkdir -p skills/alex/references/_test
-cp /tmp/test-stale.md skills/alex/references/_test/stale.md
-pnpm reference-audit || echo "Script returned non-zero as expected for warnings? (check above output)"
-rm -rf skills/alex/references/_test
+
+# Case 3: schema-invalid (error, exit 1)
+cat > skills/alex/references/_test/bad-schema.md <<'EOF'
+---
+jurisdiction: US
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: critical
+lastReviewedAt: "2026-05-10"
+owner: jasonli
+sources:
+  - "https://example.com"
+---
+# US is not a valid jurisdiction
+EOF
+
+pnpm reference-audit
+echo "exit=$?"
 ```
 
-Expected: script emits `WARN: skills/alex/references/_test/stale.md ... days old`, exit code 0 (warnings only). Then script returns clean again after cleanup.
+Expected output (order may vary by sort):
+
+```
+WARN: skills/alex/references/_test/stale.md lastReviewedAt 2024-01-01 is ... days old (>180)
+ERROR: skills/alex/references/_test/no-sources.md riskLevel=critical requires at least one entry in sources
+ERROR: skills/alex/references/_test/bad-schema.md fails ReferenceMetadataSchema: [...]
+Reference audit: 1 warnings, 2 errors
+exit=1
+```
+
+Then clean up and verify the script returns clean:
+
+```bash
+rm -rf skills/alex/references/_test
+pnpm reference-audit
+echo "exit=$?"
+```
+
+Expected:
+
+```
+Reference audit: 0 warnings, 0 errors
+exit=0
+```
 
 - [ ] **Step 8.5: Commit**
 
@@ -1737,7 +1899,7 @@ EOF
 
 | Spec section | Plan task |
 |---|---|
-| Section 1 — SKILL.md (thin orchestrator) | Task 6 (preserves current SKILL.md content; thinning is Phase 1b+ work) |
+| Section 1 — SKILL.md (thin orchestrator) | **Partial.** Directory layout covered (Task 6); SKILL.md thinning to ≤500 lines is deferred — content preservation only in Phase 1a |
 | Section 2 — Reference file governance contract | Task 2 (`ReferenceMetadataSchema`), Task 5 (loader validation), Task 8 (audit script) |
 | Section 3.1 — Claim scanner | Out of scope (Phase 1b-1 / 1b-2) |
 | Section 3.2 — Mandatory escalation triggers | Out of scope (Phase 1b-1) |
@@ -1750,4 +1912,4 @@ EOF
 | Operability — feature flag | Out of scope for 1a (no runtime behavior to flag); flag added in 1b-1 |
 | Operability — test fixtures per phase | Tests in Tasks 1–5 cover Phase 1a fixture coverage |
 
-All Phase 1a spec content is covered. All deferred sections are explicitly marked out-of-scope with their target phase.
+All Phase 1a spec content is covered, **except SKILL.md thinning to ≤500 lines** which is explicitly deferred (see Section 1 row above and the Plan hardening notes near the top). All other deferred sections are explicitly marked out-of-scope with their target phase.
