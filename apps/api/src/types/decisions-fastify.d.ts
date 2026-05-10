@@ -4,6 +4,7 @@ import type {
   ConversationThreadStore,
   OpportunityStore,
   RevenueStore,
+  TriggerStore,
 } from "@switchboard/core";
 
 declare module "fastify" {
@@ -13,5 +14,6 @@ declare module "fastify" {
     threadStore?: ConversationThreadStore;
     opportunityStore?: OpportunityStore;
     revenueEventStore?: RevenueStore;
+    triggerStore?: TriggerStore;
   }
 }

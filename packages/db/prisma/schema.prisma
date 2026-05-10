@@ -1405,6 +1405,7 @@ model ScheduledTriggerRecord {
   @@index([status, type])
   @@index([sourceWorkflowId])
   @@index([fireAt])
+  @@index([organizationId, createdAt])
 }
 
 model OperatorRequestRecord {

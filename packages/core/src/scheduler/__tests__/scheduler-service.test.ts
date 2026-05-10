@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { SchedulerService, RegisterTriggerInput } from "../scheduler-service.js";
 import type { TriggerStore } from "../trigger-store.js";
-import type { ScheduledTrigger, TriggerFilters, TriggerStatus } from "@switchboard/schemas";
+import type { ScheduledTrigger } from "@switchboard/schemas";
 import { createSchedulerService } from "../scheduler-service.js";
+import { InMemoryTriggerStore } from "./in-memory-trigger-store.js";
 import {
   canTriggerTransition,
   validateTriggerTransition,
@@ -10,65 +11,6 @@ import {
   isTerminalTriggerStatus,
   filterMatchingTriggers,
 } from "../trigger-types.js";
-
-function createInMemoryTriggerStore(): TriggerStore {
-  const triggers = new Map<string, ScheduledTrigger>();
-
-  return {
-    async save(trigger: ScheduledTrigger): Promise<void> {
-      triggers.set(trigger.id, { ...trigger });
-    },
-    async findById(id: string): Promise<ScheduledTrigger | null> {
-      return triggers.get(id) ?? null;
-    },
-    async findByFilters(filters: TriggerFilters): Promise<ScheduledTrigger[]> {
-      let result = Array.from(triggers.values());
-      if (filters.organizationId) {
-        result = result.filter((t) => t.organizationId === filters.organizationId);
-      }
-      if (filters.status) {
-        result = result.filter((t) => t.status === filters.status);
-      }
-      if (filters.type) {
-        result = result.filter((t) => t.type === filters.type);
-      }
-      if (filters.sourceWorkflowId) {
-        result = result.filter((t) => t.sourceWorkflowId === filters.sourceWorkflowId);
-      }
-      return result;
-    },
-    async updateStatus(id: string, status: TriggerStatus): Promise<void> {
-      const trigger = triggers.get(id);
-      if (trigger) {
-        triggers.set(id, { ...trigger, status });
-      }
-    },
-    async deleteExpired(before: Date): Promise<number> {
-      let count = 0;
-      for (const [id, trigger] of triggers) {
-        if (
-          trigger.expiresAt &&
-          trigger.expiresAt < before &&
-          ["fired", "cancelled", "expired"].includes(trigger.status)
-        ) {
-          triggers.delete(id);
-          count++;
-        }
-      }
-      return count;
-    },
-    async expireOverdue(now: Date): Promise<number> {
-      let count = 0;
-      for (const [id, trigger] of triggers) {
-        if (trigger.status === "active" && trigger.expiresAt && trigger.expiresAt < now) {
-          triggers.set(id, { ...trigger, status: "expired" });
-          count++;
-        }
-      }
-      return count;
-    },
-  };
-}
 
 describe("Trigger state transitions", () => {
   it("allows active -> fired", () => {
@@ -108,7 +50,7 @@ describe("SchedulerService (in-memory)", () => {
   let store: TriggerStore;
 
   beforeEach(() => {
-    store = createInMemoryTriggerStore();
+    store = new InMemoryTriggerStore();
     service = createSchedulerService({ store });
   });
 

@@ -4,6 +4,7 @@ import type {
   DashboardOverview,
   ContactsListResponse,
   ContactDetailResponse,
+  ScheduledTriggersListResponse,
 } from "@switchboard/schemas";
 import { SwitchboardAgentsClient } from "./agents";
 
@@ -124,5 +125,24 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
       throw err;
     }
     return res.json() as Promise<ContactDetailResponse>;
+  }
+
+  // ── Automations (Mercury /automations list — D2) ──
+
+  async getAutomations(query: {
+    status?: string;
+    cursor?: string;
+    limit?: number;
+    sort?: string;
+    direction?: string;
+  }): Promise<ScheduledTriggersListResponse> {
+    const params = new URLSearchParams();
+    if (query.status) params.set("status", query.status);
+    if (query.cursor) params.set("cursor", query.cursor);
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.sort) params.set("sort", query.sort);
+    if (query.direction) params.set("direction", query.direction);
+    const qs = params.toString();
+    return this.request(`/api/dashboard/automations${qs ? `?${qs}` : ""}`);
   }
 }
