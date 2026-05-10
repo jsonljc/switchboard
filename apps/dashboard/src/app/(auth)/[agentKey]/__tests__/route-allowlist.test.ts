@@ -4,20 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const AUTH_ROOT = join(__dirname, "..", "..");
 
-const KNOWN_TOP_LEVEL = [
-  "reports",
-  "decide",
-  "settings",
-  "escalations",
-  "tasks",
-  "me",
-  "my-agent",
-  "modules",
-  "conversations",
-  "deployments",
-  "onboarding",
-  "dashboard",
-];
+// Concrete directories that beat [agentKey] in Next.js route resolution.
+// Legacy routes (/decide, /escalations, /tasks, /me, /my-agent, /modules,
+// /conversations, /deployments, /dashboard) were removed in D4.
+const KNOWN_TOP_LEVEL = ["reports", "settings", "contacts", "operator", "onboarding"];
 
 describe("route allowlist — concrete top-level routes beat [agentKey]", () => {
   for (const segment of KNOWN_TOP_LEVEL) {
