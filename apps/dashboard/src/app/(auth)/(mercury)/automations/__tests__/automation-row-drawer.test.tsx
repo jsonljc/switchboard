@@ -95,6 +95,19 @@ describe("<AutomationRowDrawer />", () => {
     }
   });
 
+  it("renders as a region with aria-label for screen readers (m3 ARIA alignment)", () => {
+    render(
+      <table>
+        <tbody>
+          <AutomationRowDrawer row={baseRow} drawerId="d-aria" colSpan={6} timezone="UTC" />
+        </tbody>
+      </table>,
+    );
+    expect(
+      screen.getByRole("region", { name: /Details for automation trigger abcd-1234-uuid-rest/ }),
+    ).toBeInTheDocument();
+  });
+
   it("provides copy-to-clipboard buttons for trigger id and source workflow", () => {
     render(
       <table>
