@@ -10,6 +10,10 @@ import { isDevBypassEnabled } from "@/lib/dev-auth";
 
 const WINDOW_MS = 60_000; // 1 minute
 const MAX_REQUESTS = 120; // 120 req/min per IP
+// Authenticated route prefixes that require a session cookie.
+// `/automations` is forward-compat for slice D2b's frontend page which has not
+// shipped yet (D2a backend has). Keep both this list and the matcher below in
+// sync so D2b can land without touching middleware.
 const AUTH_PAGE_PREFIXES = [
   "/marketplace",
   "/deploy",
