@@ -21,14 +21,14 @@ describe("skill-mode hook chain ordering (Phase 1c)", () => {
   it("registers hooks in the order: GovernanceHook, safetyGateHook, claimClassifierHook, pdpaConsentGateHook", () => {
     // Locate the `const hooks = [...]` array literal in the production executor.
     const match = source.match(
-      /const hooks = \[\s*new GovernanceHook\([^)]*\),\s*safetyGateHook,\s*claimClassifierHook,\s*pdpaConsentGateHook\s*\]/,
+      /const hooks = \[\s*new GovernanceHook\([^)]*\),\s*safetyGateHook,\s*claimClassifierHook,\s*pdpaConsentGateHook,?\s*\]/,
     );
     expect(match).not.toBeNull();
   });
 
   it("simulationHooks chain mirrors the production order with SimulationPolicyHook last", () => {
     const match = source.match(
-      /const simulationHooks = \[\s*new GovernanceHook\([^)]*\),\s*safetyGateHook,\s*claimClassifierHook,\s*pdpaConsentGateHook,\s*new SimulationPolicyHook\(\),?\s*\]/,
+      /const simulationHooks = \[\s*new GovernanceHook\([^)]*\),\s*safetyGateHook,\s*claimClassifierHook,\s*pdpaConsentGateHook,?\s*new SimulationPolicyHook\(\),?\s*\]/,
     );
     expect(match).not.toBeNull();
   });
