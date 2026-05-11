@@ -6,7 +6,7 @@ import { V6Topbar } from "@/components/landing/v6/topbar";
 import { V6Hero } from "@/components/landing/v6/hero";
 import { V6Synergy } from "@/components/landing/v6/synergy";
 import { V6BeatAlex } from "@/components/landing/v6/beat-alex";
-import { V6BeatNova } from "@/components/landing/v6/beat-nova";
+import { V6BeatRiley } from "@/components/landing/v6/beat-riley";
 import { V6BeatMira } from "@/components/landing/v6/beat-mira";
 import { V6Control } from "@/components/landing/v6/control";
 import { V6Pricing } from "@/components/landing/v6/pricing";
@@ -17,7 +17,7 @@ import { V6Dock } from "@/components/landing/v6/dock";
 export const metadata: Metadata = {
   title: "Switchboard — Hire your revenue desk. One agent at a time.",
   description:
-    "Hire your revenue desk one agent at a time. Alex replies. Nova watches spend. Mira ships creative. They share context as they go.",
+    "Hire your revenue desk one agent at a time. Alex replies. Riley watches spend. Mira ships creative. They share context as they go.",
 };
 
 export default function HomePage() {
@@ -29,7 +29,7 @@ export default function HomePage() {
         <V6Hero />
         <V6Synergy />
         <V6BeatAlex />
-        <V6BeatNova />
+        <V6BeatRiley />
         <V6BeatMira />
         <V6Control />
         <V6Pricing />
