@@ -70,12 +70,10 @@ const ROWS = [
 ];
 
 const BULLETS = [
-  ["Plans", " campaigns from a brief — objective, audience, budget, structure"],
-  ["Reads", " spend, CPL, CPA, ROAS by ad set"],
-  ["Finds", " budget leaks before they become habits"],
-  ["Drafts", " pauses, reallocations, audience swaps, and launch plans"],
-  ["Compares", " what changed against what happened"],
-  ["Reports", " the next move in plain English"],
+  "Builds the plan, ships the ad sets",
+  "Watches spend before it leaks",
+  "Drafts the next move for approval",
+  "Reports in plain English",
 ];
 
 function dirClass(dir: "up" | "down" | "neutral", strong = false) {
@@ -354,13 +352,12 @@ export function V6BeatRiley() {
             </div>
 
             <ul className="mt-2 grid grid-cols-1 gap-[0.85rem] border-t border-[hsl(20_8%_14%_/_0.12)] pt-6">
-              {BULLETS.map(([head, tail]) => (
+              {BULLETS.map((b, i) => (
                 <li
-                  key={head}
+                  key={i}
                   className="relative pl-[1.05rem] text-[0.95rem] leading-[1.4] text-v6-graphite before:absolute before:left-0 before:top-[0.55rem] before:h-[5px] before:w-[5px] before:rounded-full before:bg-v6-graphite-4 before:content-['']"
                 >
-                  <b className="font-medium">{head}</b>
-                  {tail}
+                  {b}
                 </li>
               ))}
             </ul>

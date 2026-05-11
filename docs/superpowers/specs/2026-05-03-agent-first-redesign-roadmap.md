@@ -145,7 +145,7 @@ This determines fonts, layout, density, and component palette per surface.
 
 ### Phase E — separate tracks (don't block A–D)
 
-- **E1.** Public marketing site three-wedge redesign (Alex + Riley + Mira instead of Alex-only)
+- **E1.** ✅ Public marketing site three-wedge redesign — shipped via PR #426 (Nova→Riley), PR #430 (marketing truth-up), and the polish PR for this work.
 - **E2.** Onboarding reframe (does it become "pick agents to enable" or stay single-agent-first?)
 
 ---
