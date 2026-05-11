@@ -40,8 +40,8 @@ export function V6Glyphs() {
           />
         </symbol>
 
-        {/* NOVA glyph: scope/signal — the watcher */}
-        <symbol id="mark-nova" viewBox="0 0 48 48">
+        {/* RILEY glyph: scope/signal — the watcher */}
+        <symbol id="mark-riley" viewBox="0 0 48 48">
           <circle cx="24" cy="24" r="16" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <circle
             cx="24"

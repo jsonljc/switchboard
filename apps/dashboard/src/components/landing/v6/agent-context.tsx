@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-export type AgentKey = "alex" | "nova" | "mira";
+export type AgentKey = "alex" | "riley" | "mira";
 
 export interface AgentMeta {
   name: string;
@@ -23,11 +23,11 @@ export const AGENTS: Record<AgentKey, AgentMeta> = {
     cta: "Alex",
     anchor: "#alex",
   },
-  nova: {
-    name: "Nova",
+  riley: {
+    name: "Riley",
     head: 'catches what you <em class="text-v6-coral not-italic">miss</em>.',
-    cta: "Nova",
-    anchor: "#nova",
+    cta: "Riley",
+    anchor: "#riley",
   },
   mira: {
     name: "Mira",
@@ -37,7 +37,7 @@ export const AGENTS: Record<AgentKey, AgentMeta> = {
   },
 };
 
-const ORDER: AgentKey[] = ["alex", "nova", "mira"];
+const ORDER: AgentKey[] = ["alex", "riley", "mira"];
 const STORAGE_KEY = "switchboard.landing.agent.v1";
 
 interface Ctx {
@@ -59,7 +59,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "alex" || saved === "nova" || saved === "mira") {
+      if (saved === "alex" || saved === "riley" || saved === "mira") {
         setAgentState(saved);
       }
     } catch {
