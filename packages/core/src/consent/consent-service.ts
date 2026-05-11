@@ -35,6 +35,9 @@ export interface ConsentService {
     grantedAt: Date;
     actor: string;
     notes?: string;
+    // Per-call overrides for verdict context. Defaults to constructor-bound values.
+    organizationId?: string;
+    deploymentId?: string;
   }): Promise<void>;
 
   recordRevocation(input: {
@@ -44,9 +47,19 @@ export interface ConsentService {
     actor: string;
     notes?: string;
     openConversationSessionId?: string;
+    // Per-call overrides for verdict context. Defaults to constructor-bound values.
+    organizationId?: string;
+    deploymentId?: string;
   }): Promise<void>;
 
-  clearConsent(input: { contactId: string; actor: string; notes: string }): Promise<void>;
+  clearConsent(input: {
+    contactId: string;
+    actor: string;
+    notes: string;
+    // Per-call overrides for verdict context. Defaults to constructor-bound values.
+    organizationId?: string;
+    deploymentId?: string;
+  }): Promise<void>;
 }
 
 export interface ConsentServiceDeps {
@@ -105,12 +118,15 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
     jurisdiction: PdpaJurisdiction;
     conversationId: string;
     details: Record<string, unknown>;
+    // Per-call override — defaults to constructor-bound deploymentId.
+    deploymentId?: string;
   }) {
+    const effectiveDeploymentId = input.deploymentId ?? deploymentId;
     try {
       // Cast needed: GovernanceVerdictDetails is narrower than our custom details shapes.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (verdictStore.save as any)({
-        deploymentId,
+        deploymentId: effectiveDeploymentId,
         sourceGuard: "consent_gate",
         action: input.action,
         reasonCode: input.reasonCode,
@@ -170,7 +186,16 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       });
     },
 
-    async recordGrant({ contactId, jurisdiction, source, grantedAt, actor, notes }) {
+    async recordGrant({
+      contactId,
+      jurisdiction,
+      source,
+      grantedAt,
+      actor,
+      notes,
+      organizationId: _organizationId,
+      deploymentId: deploymentIdOverride,
+    }) {
       const current = await store.readOrNull(contactId);
       if (!current) throw new ContactNotFound({ contactId });
       if (current.consentRevokedAt) {
@@ -187,6 +212,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
         action: "allow",
         jurisdiction,
         conversationId: contactId,
+        deploymentId: deploymentIdOverride,
         details: { event: "consent_granted", source, jurisdiction },
       });
     },
@@ -198,7 +224,12 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       actor,
       notes,
       openConversationSessionId,
+      organizationId: organizationIdOverride,
+      deploymentId: deploymentIdOverride,
     }) {
+      const effectiveOrgId = organizationIdOverride ?? orgId;
+      const effectiveDeploymentId = deploymentIdOverride ?? deploymentId;
+
       const current = await store.readOrNull(contactId);
       if (!current) throw new ContactNotFound({ contactId });
 
@@ -225,7 +256,9 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
             openConversationSessionId,
             "human_override",
           );
-          await handoffStore.save(buildHandoffPackage(openConversationSessionId, orgId, 0, clock));
+          await handoffStore.save(
+            buildHandoffPackage(openConversationSessionId, effectiveOrgId, 0, clock),
+          );
         } catch (err) {
           console.error("[consent-service] handoff or status flip failure", err);
         }
@@ -237,6 +270,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
         action: "block",
         jurisdiction,
         conversationId: openConversationSessionId ?? contactId,
+        deploymentId: effectiveDeploymentId,
         details: {
           event: "consent_revoked",
           source,
@@ -246,7 +280,13 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       });
     },
 
-    async clearConsent({ contactId, actor, notes }) {
+    async clearConsent({
+      contactId,
+      actor,
+      notes,
+      organizationId: _organizationId,
+      deploymentId: deploymentIdOverride,
+    }) {
       if (!notes || notes.trim().length === 0) {
         throw new Error("clearConsent requires non-empty notes (audit trail)");
       }
@@ -269,6 +309,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
         action: "allow",
         jurisdiction,
         conversationId: contactId,
+        deploymentId: deploymentIdOverride,
         details: {
           event: "consent_cleared",
           previousGrantedAt: previousGrantedAt ? previousGrantedAt.toISOString() : null,

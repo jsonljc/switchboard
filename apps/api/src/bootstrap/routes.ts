@@ -177,11 +177,26 @@ export async function registerRoutes(
       consentService: deps.consentService,
       consentReader: deps.consentReader,
       resolveActor: async (req) => {
-        // Read actor from request auth context. Apps using authMiddleware should
-        // populate req.user.id. Fallback for any caller without auth:
+        // Primary: principalIdFromAuth populated by authMiddleware.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const user = (req as any).user;
-        return (user?.id as string | undefined) ?? "system:unknown_admin";
+        const principal = (req as any).principalIdFromAuth as string | undefined;
+        if (principal) return principal;
+        // Reject in production rather than fall back to a placeholder. The audit
+        // trail must always have a real actor. Tests / dev paths may run without
+        // auth — fall back to system:unknown_admin only in those cases.
+        if (process.env["NODE_ENV"] === "production") {
+          throw new Error("admin-consent endpoint requires authenticated principal");
+        }
+        return "system:unknown_admin";
+      },
+      resolveOrganizationId: async (req) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const orgId = (req as any).organizationIdFromAuth as string | undefined;
+        if (orgId) return orgId;
+        if (process.env["NODE_ENV"] === "production") {
+          throw new Error("admin-consent endpoint requires authenticated organization context");
+        }
+        return "system:admin-endpoint";
       },
     });
   }

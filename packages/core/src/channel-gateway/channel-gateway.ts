@@ -178,6 +178,32 @@ export class ChannelGateway {
         resolved.organizationId,
         identity.contactId,
       );
+
+      // Phase 1c — also record PDPA revocation when consent gate is configured.
+      // The WhatsApp opt-out path is a channel-layer signal; PDPA revocation is
+      // the data-subject-rights superset. Recording both keeps the audit trail
+      // aligned and ensures enforce-mode consent gates fire on subsequent turns.
+      if (this.config.consentRevocationGate) {
+        const cfg = this.config.consentRevocationGate;
+        const contactId = identity.contactId;
+        try {
+          await cfg.consentService.recordRevocation({
+            contactId,
+            source: "inbound_keyword_revocation",
+            revokedAt: cfg.clock(),
+            actor: "system:whatsapp_opt_out",
+            notes: `WhatsApp opt-out keyword on channel ${message.channel}`,
+            openConversationSessionId: message.sessionId,
+            organizationId: resolved.organizationId,
+            deploymentId: resolved.deploymentId,
+          });
+        } catch (err) {
+          console.error("[channel-gateway] PDPA revocation from WhatsApp opt-out failed", err);
+          // Do not block — the WhatsApp opt-out is the primary signal; PDPA
+          // mirror is best-effort.
+        }
+      }
+
       await replySink.send(OPT_OUT_CONFIRMATION);
       return;
     }

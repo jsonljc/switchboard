@@ -23,7 +23,7 @@ export interface RunConsentRevocationGateInput {
 export async function runConsentRevocationGate(
   input: RunConsentRevocationGateInput,
 ): Promise<"revoked" | "proceed"> {
-  const { cfg, inboundText, sessionId, deploymentId, replySink } = input;
+  const { cfg, inboundText, sessionId, deploymentId, organizationId, replySink } = input;
 
   const resolution = await cfg.governanceConfigResolver(deploymentId);
   if (resolution.status === "missing") return "proceed";
@@ -106,6 +106,8 @@ export async function runConsentRevocationGate(
     actor: "system:inbound_keyword_revocation",
     notes: `keyword=${firstMatch.entry.id}, matched="${firstMatch.matched}"`,
     openConversationSessionId: sessionId,
+    organizationId, // from runConsentRevocationGate input — scopes handoff to operator tenant
+    deploymentId, // from runConsentRevocationGate input — scopes verdict to deployment
   });
 
   await replySink.send(REVOCATION_ACK[resolution.config.jurisdiction as PdpaJurisdiction]);

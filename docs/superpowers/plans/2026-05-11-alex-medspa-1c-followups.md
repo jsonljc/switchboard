@@ -43,3 +43,7 @@
 
 - The api process (`bootstrapSkillMode`) and the chat process (`createGatewayBridge`) each construct their own `ConsentService` instance against the same Prisma database. This is intentional: in-memory dependencies (posture cache, etc.) cannot cross process boundaries.
 - After the Phase 2 refactor of `ConsentService` to be deployment-agnostic at construction, this duplication remains but is benign — both instances are equivalent because all state lives in Prisma.
+
+## TracePersistenceHook documentation drift (NEW from review)
+
+- Several comments in `apps/api/src/bootstrap/skill-mode.ts` and `packages/core/src/skill-runtime/hooks/deterministic-safety-gate.ts` reference "TracePersistenceHook" and "before TracePersistenceHook" in their rationale. The hook exists at `packages/core/src/skill-runtime/hooks/trace-persistence-hook.ts` but is never registered in the production hook array. Either register it (and update the hook-ordering test to include it) or sweep the comments to stop referencing a non-existent hook. Captured for cleanup; not a 1c regression.

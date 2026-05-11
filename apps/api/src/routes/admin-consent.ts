@@ -34,12 +34,23 @@ export interface AdminConsentRouteDeps {
   consentReader: ContactConsentReader;
   /** Resolves the actor (operator userId) from the request. */
   resolveActor: (req: import("fastify").FastifyRequest) => Promise<string>;
+  /**
+   * Resolves the organization context from the request auth.
+   * Used to scope verdicts and handoffs to the operator's tenant.
+   * Falls back to "system:admin-endpoint" when not provided (dev / legacy callers).
+   */
+  resolveOrganizationId?: (req: import("fastify").FastifyRequest) => Promise<string>;
 }
 
 export function registerAdminConsentRoutes(
   app: FastifyInstance,
   deps: AdminConsentRouteDeps,
 ): void {
+  const resolveOrganizationId = async (req: import("fastify").FastifyRequest): Promise<string> => {
+    if (deps.resolveOrganizationId) return deps.resolveOrganizationId(req);
+    return "system:admin-endpoint";
+  };
+
   const respondWithState = async (contactId: string) => {
     const state = await deps.consentReader.read(contactId);
     return {
@@ -59,6 +70,7 @@ export function registerAdminConsentRoutes(
 
     try {
       const actor = await deps.resolveActor(req);
+      const organizationId = await resolveOrganizationId(req);
       await deps.consentService.recordGrant({
         contactId: parsed.data.contactId,
         jurisdiction: parsed.data.jurisdiction,
@@ -66,6 +78,8 @@ export function registerAdminConsentRoutes(
         grantedAt: new Date(parsed.data.grantedAt),
         actor,
         notes: parsed.data.notes,
+        organizationId,
+        deploymentId: "system:admin-endpoint",
       });
       return reply.send(await respondWithState(parsed.data.contactId));
     } catch (err) {
@@ -80,12 +94,15 @@ export function registerAdminConsentRoutes(
 
     try {
       const actor = await deps.resolveActor(req);
+      const organizationId = await resolveOrganizationId(req);
       await deps.consentService.recordRevocation({
         contactId: parsed.data.contactId,
         source: "operator_recorded_revocation",
         revokedAt: new Date(parsed.data.revokedAt),
         actor,
         notes: parsed.data.notes,
+        organizationId,
+        deploymentId: "system:admin-endpoint",
       });
       return reply.send(await respondWithState(parsed.data.contactId));
     } catch (err) {
@@ -100,10 +117,13 @@ export function registerAdminConsentRoutes(
 
     try {
       const actor = await deps.resolveActor(req);
+      const organizationId = await resolveOrganizationId(req);
       await deps.consentService.clearConsent({
         contactId: parsed.data.contactId,
         actor,
         notes: parsed.data.notes,
+        organizationId,
+        deploymentId: "system:admin-endpoint",
       });
       return reply.send(await respondWithState(parsed.data.contactId));
     } catch (err) {

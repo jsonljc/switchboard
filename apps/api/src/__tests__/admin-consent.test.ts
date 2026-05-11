@@ -25,6 +25,7 @@ interface BuildOpts {
   consentService?: Partial<ConsentService>;
   consentReader?: Partial<ContactConsentReader>;
   actor?: string;
+  organizationId?: string;
 }
 
 const buildApp = async (
@@ -52,6 +53,9 @@ const buildApp = async (
     consentService,
     consentReader,
     resolveActor: async () => opts.actor ?? "operator_42",
+    resolveOrganizationId: opts.organizationId
+      ? async () => opts.organizationId as string
+      : undefined,
   });
   return { app, consentService, consentReader };
 };
@@ -222,5 +226,31 @@ describe("GET /api/admin/consent/:contactId", () => {
     const json = JSON.parse(res.payload);
     expect(json).toHaveProperty("status");
     expect(json).toHaveProperty("pdpaJurisdiction");
+  });
+});
+
+describe("resolveOrganizationId — tenant scoping for verdicts and handoffs", () => {
+  it("passes organizationId to recordRevocation when resolveOrganizationId is wired", async () => {
+    const { app, consentService } = await buildApp({ organizationId: "org-sg-001" });
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/consent/revoke",
+      payload: revokeBody,
+    });
+    expect(consentService.recordRevocation).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-sg-001" }),
+    );
+  });
+
+  it("falls back to system:admin-endpoint when resolveOrganizationId is not provided", async () => {
+    const { app, consentService } = await buildApp(); // no organizationId override
+    await app.inject({
+      method: "POST",
+      url: "/api/admin/consent/revoke",
+      payload: revokeBody,
+    });
+    expect(consentService.recordRevocation).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "system:admin-endpoint" }),
+    );
   });
 });

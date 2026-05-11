@@ -283,6 +283,36 @@ describe("ConsentService.recordRevocation", () => {
     // Option (b): only 2 args — no upsertContext
     expect(conversationStore.setConversationStatus).toHaveBeenCalledWith("sess1", "human_override");
   });
+
+  it("per-call organizationId override is used in handoff package (not constructor orgId)", async () => {
+    const { service, handoffStore } = ctx();
+    await service.recordRevocation({
+      contactId: "c1",
+      source: "inbound_keyword_revocation",
+      revokedAt: new Date(),
+      actor: "system:inbound_keyword_revocation",
+      openConversationSessionId: "sess1",
+      organizationId: "org-override",
+    });
+    // handoffStore.save receives the package built with the override orgId, not "org1"
+    expect(handoffStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-override" }),
+    );
+  });
+
+  it("per-call deploymentId override scopes verdict to that deployment", async () => {
+    const { service, verdictStore } = ctx();
+    await service.recordRevocation({
+      contactId: "c1",
+      source: "inbound_keyword_revocation",
+      revokedAt: new Date(),
+      actor: "system:inbound_keyword_revocation",
+      deploymentId: "d-override",
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const saved = (verdictStore.save as any).mock.calls[0][0];
+    expect(saved.deploymentId).toBe("d-override");
+  });
 });
 
 describe("ConsentService.clearConsent", () => {
