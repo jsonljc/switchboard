@@ -64,6 +64,26 @@ describe("ClassifierSentenceResultSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("rejects an empty sentence", () => {
+    expect(
+      ClassifierSentenceResultSchema.safeParse({
+        sentence: "",
+        claimType: "none",
+        confidence: 0.5,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an unknown claimType inside the composed object", () => {
+    expect(
+      ClassifierSentenceResultSchema.safeParse({
+        sentence: "x",
+        claimType: "bogus",
+        confidence: 0.5,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("CLASSIFIER_SCHEMA_VERSION", () => {
