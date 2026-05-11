@@ -53,9 +53,12 @@ escalation as a backstop.
   bootstrap function. Either remove them or convert to typed assertions
   on the inputs to `new ChannelGateway(...)` / `new
 DeterministicSafetyGateHook(...)`.
-- The `conversationStatusSetter` adapter is duplicated verbatim across
-  `skill-mode.ts` and `gateway-bridge.ts`. Acceptable for v1; consider
-  a small shared helper if a third call site appears.
+- The `conversationStatusSetter` adapter implementations differ between
+  `skill-mode.ts` (update-only — row exists by the time skill execution
+  runs) and `gateway-bridge.ts` (upsert when context is available, for
+  first-message sessions). The split is load-bearing; do not collapse
+  them into one shared helper without verifying the invariant still
+  holds for both call sites.
 - The banned-phrase loader's "duplicate effective patterns" warning is
   exercised only by the real seed (which has no duplicates). Add a
   positive test for the warn path, or move duplicate detection to a
@@ -69,3 +72,10 @@ DeterministicSafetyGateHook(...)`.
   to a Redis-backed cache (or a separate cheap "is-governed" flag on
   AgentDeployment that the resolver consults independently) is the
   upgrade path captured in spec Open Question 1.
+- The sticky `human_override` guard in `PrismaConversationStore.save()`
+  (Step 4 of the 1b-1 follow-up hardening) does a `findUnique` before
+  each `upsert`. This is a small extra query per save. If profiling
+  shows it's a hot path, consider promoting `human_override` to a
+  dedicated `is_overridden: boolean` column with a schema migration —
+  that would let the guard be expressed as a conditional column write
+  without a separate read.
