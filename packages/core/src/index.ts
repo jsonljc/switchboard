@@ -277,3 +277,6 @@ export * as reports from "./reports/index.js";
 
 // Contacts read-side projection (Mercury /contacts list surface)
 export * as contacts from "./contacts/index.js";
+
+// Consent (reader interface, errors, PDPA utilities)
+export * from "./consent/index.js";
