@@ -136,3 +136,6 @@ export * from "./reports/v1.js";
 
 // Claim classifier (Layer 2 classifier output types — Alex medspa governance)
 export * from "./claim-classifier.js";
+
+// Substantiation (Layer 3 source types + resolution outcome — Alex medspa governance)
+export * from "./substantiation.js";
