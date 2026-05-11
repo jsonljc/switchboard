@@ -117,7 +117,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "classifier-eval": "tsx src/governance/classifier/eval/run-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
@@ -133,6 +134,7 @@
   },
   "devDependencies": {
     "@types/node": "^25",
+    "tsx": "^4.7.0",
     "typescript": "^6.0.3",
     "vitest": "^2.1.0"
   }
