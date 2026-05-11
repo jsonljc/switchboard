@@ -2,11 +2,11 @@ import type { BannedPhraseEntry } from "./types.js";
 import { COMMON_BANNED_PHRASES } from "./common.js";
 import { SG_BANNED_PHRASES } from "./sg.js";
 import { MY_BANNED_PHRASES } from "./my.js";
+import { normalizeRegex } from "../text/regex.js";
 
 function normalizePattern(p: string | RegExp): string | RegExp {
   if (typeof p === "string") return p;
-  const flags = p.flags.replace(/g/g, "");
-  return new RegExp(p.source, flags.includes("i") ? flags : flags + "i");
+  return normalizeRegex(p);
 }
 
 function normalizeEntry(entry: BannedPhraseEntry): BannedPhraseEntry {
