@@ -138,6 +138,12 @@ Validation sequence (run from repo root):
 rg '/signup|/get-started|/agents|/pricing|/how-it-works' apps/dashboard/src
 rg 'demo-data|agent-marketplace-card|Sales Closer|Nurture Specialist|Browse by outcome|Agent marketplace|Browse agents|Choose an agent|Free trial|Self-serve|Start free' apps/dashboard/src
 
+# Visual confirmation that only the intended public route-group dirs remain.
+# Expected: (public), agents-removed; how-it-works-removed; pricing-removed;
+# signup-removed; get-started-removed. Surviving children should be only
+# privacy/ and terms/ (plus loose files like page.tsx, layout.tsx, loading.tsx).
+find apps/dashboard/src/app/\(public\) -maxdepth 2 -type d
+
 # Build + verify
 pnpm --filter @switchboard/dashboard build
 pnpm typecheck
