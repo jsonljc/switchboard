@@ -9,3 +9,5 @@ export * from "./handoff-template.js";
 export * from "./classifier/approved-compliance-claim-store/index.js";
 export * from "./classifier/regulatory-sources/index.js";
 export * from "./classifier/rewrite-templates/index.js";
+export * from "./classifier/substantiation-cache.js";
+export * from "./classifier/substantiation-resolver.js";
