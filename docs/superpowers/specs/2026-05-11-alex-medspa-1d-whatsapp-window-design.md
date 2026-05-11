@@ -24,6 +24,14 @@ Meta Business API restricts WhatsApp business outbounds to two regimes:
 
 The Alex SG/MY skill currently emits free-form responses from `SkillExecutionResult.response` without checking either constraint. Existing helpers in `apps/chat/src/adapters/whatsapp.ts` (`isWithinWhatsAppWindow`, `canSendWhatsAppTemplate`) are scaffolding — they are not wired to any caller. There is also no Meta-approved template registry, no mechanism for the skill to declare what intent class an outbound serves, and no governed substitution path. Sending non-compliant content risks Meta phone-number quality downgrades and outright cutoffs.
 
+### 1.1 Cost reality (paid-messaging path)
+
+Outside-window template substitution is **not free**. Since 2025-07-01 Meta's WhatsApp Business Platform charges per delivered template message; the price is set by recipient market and template category. Inside-window service replies remain free; utility templates sent in response to user-initiated conversations can be free in certain markets; marketing-category templates are paid.
+
+1d's job is **compliance-first**, not cost control. The gate decides allow / substitute / handoff based on window, opt-in, intent class, and template fit — same as if every send were free. But every `substitute` verdict must carry enough metadata for a downstream Phase 2 billing layer to price the send retroactively. Concretely the substitute verdict includes `templateCategory`, `recipientMarket`, `metaTemplateName`, `costRisk: "paid_template_message"`, and `costEstimateStatus: "not_priced_in_1d"`. Budget caps, operator approval thresholds for marketing templates, daily/monthly cost dashboards, and per-tenant fee accounting are explicitly Phase 2 (see §3 Non-goals).
+
+The re-engagement-offer intent class is the only family expected to be reliably **marketing**-category at submission time, which makes it both the most commercially sensitive and the most expensive. The spec calls this out so Phase 2 can target it for extra gating (operator approval, per-day caps) without re-litigating the data model.
+
 ## 2. Goal
 
 Land a hard gate on the outbound path that, for WhatsApp emits:
@@ -49,6 +57,7 @@ Explicitly **out of scope** for 1d:
 - Multi-deployment jurisdiction reconciliation per contact (Phase 2 carry-over from 1c).
 - `ConsentService` per-call refactor (Phase 2 carry-over from 1c followups).
 - Replacing the existing `canSendWhatsAppTemplate` adapter helper. 1d's gate is the primary check; the adapter helper remains as a second wall.
+- **Cost accounting, budget caps, and approval thresholds**. 1d annotates substitute verdicts with the metadata needed to price sends after the fact (§4.3) but does **not** estimate, sum, or enforce spend. Specifically Phase 2 owns: per-tenant daily/monthly template-send budget caps; operator approval workflow for marketing-category templates; actual Meta / BSP fee accounting and client billing pass-through; per-template-category send-rate controls; cost dashboards on operator surfaces.
 
 ## 4. Architecture
 
@@ -92,6 +101,18 @@ export type IntentClass =
 
 export type Jurisdiction = "SG" | "MY";
 
+/**
+ * Meta-defined template category. Carried on every template entry because the gate
+ * must propagate it into substitute verdicts (§4.3) for downstream Phase 2 pricing.
+ *
+ * - "utility"         — service / transactional (appointment-confirm, appointment-reminder, etc.).
+ *                       Often free or low-cost; in some markets free when sent in response to a user inbound.
+ * - "marketing"       — promotional / re-engagement (re-engagement-offer).
+ *                       Always paid; commercially sensitive; targeted for extra gating in Phase 2.
+ * - "authentication"  — OTP / 2FA. Not used by 1d v1 templates but reserved for future intent classes.
+ */
+export type TemplateCategory = "utility" | "marketing" | "authentication";
+
 export interface WhatsAppTemplate {
   /** Internal name; also used in audit logs. */
   name: string;
@@ -99,6 +120,8 @@ export interface WhatsAppTemplate {
   metaTemplateName: string;
   intentClass: IntentClass;
   jurisdiction: Jurisdiction;
+  /** Meta-defined category. Propagated into substitute verdicts for downstream pricing. */
+  templateCategory: TemplateCategory;
   /** Rendered body used for substitution. Must pass 1b-1 banned-phrase scanner AND 1b-2 claim classifier. */
   body: string;
   /** Variable placeholders, in Meta order. */
@@ -114,6 +137,18 @@ export function selectTemplate(args: {
   jurisdiction: Jurisdiction;
 }): WhatsAppTemplate | null;
 ```
+
+**Default category mapping per intent class (v1 authoring guidance):**
+
+| Intent class           | Likely Meta category      | Notes                                                                                                                                |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `appointment-confirm`  | `utility`                 | Service / transactional. Authored to read as confirmation of a user-initiated booking.                                               |
+| `appointment-reminder` | `utility`                 | Service / transactional. Time-bound reminder for an existing booking.                                                                |
+| `aftercare-checkin`    | `utility` (content-gated) | Authored as a service follow-up after a procedure. Avoid promotional copy — would re-categorize as marketing at Meta submission.     |
+| `consult-followup`     | `utility` (content-gated) | Authored as a service-style continuation of a prior consult. Same authoring constraint as aftercare-checkin.                         |
+| `re-engagement-offer`  | `marketing`               | Always paid; commercially sensitive. Phase 2 will gate this with operator approval and per-day caps; 1d does not differentiate cost. |
+
+These hints encode the **expected** category at Meta-submission time; the actual category is whatever Meta approves the template as. The `templateCategory` field on each `WhatsAppTemplate` entry must reflect Meta's approval, not the hint. Templates whose approved category drifts from the hint are still valid; the hint is authoring guidance, not a runtime constraint.
 
 **Rationale:** Templates are external-Meta-approved, slow to change (weeks per Meta App Review cycle). TypeScript const + PR review makes the claim-scanner regression test trivial (loop the array, run each body through the 1b-1 + 1b-2 scanners) and prevents tenants from accidentally shipping un-approved content. Tenant-editable templates are a Phase 2 concern, gated on operator UI.
 
@@ -245,9 +280,16 @@ Every path emits exactly one `GovernanceVerdict`. The primary `reasonCode` is `o
     intentClass,
     templateName: <template.name>,
     metaTemplateName: <template.metaTemplateName>,
+    // Cost annotation (Phase 2 will consume these; 1d only writes them).
+    templateCategory: <template.templateCategory>,  // "utility" | "marketing" | "authentication"
+    recipientMarket: <jurisdiction>,                // "SG" | "MY" — proxy for Meta's recipient-market pricing key
+    costRisk: "paid_template_message",
+    costEstimateStatus: "not_priced_in_1d",
   }
 }
 ```
+
+**Why these fields:** Phase 2 will price each substitute retroactively. `templateCategory` + `recipientMarket` are the two inputs to Meta's per-message pricing table; `metaTemplateName` is the join key to Meta's billing exports; `costRisk: "paid_template_message"` is a coarse static tag so audit queries can `WHERE details->>'costRisk' = 'paid_template_message'` without inspecting Meta's rate card; `costEstimateStatus: "not_priced_in_1d"` is the explicit "this verdict has not been priced" signal so a Phase 2 backfill job can find unpriced rows. **1d never estimates a cost.**
 
 **Outside-window block — opt-in missing:**
 
@@ -377,6 +419,8 @@ Required by parent spec §Operability:
 2. **`templates/whatsapp-registry.test.ts`** (packages/core)
    - `selectTemplate` returns the correct entry for each `(intentClass, jurisdiction)` pair
    - `selectTemplate` returns null for unknown combinations
+   - Every entry has a `templateCategory` populated (no nulls)
+   - The `re-engagement-offer` entries are all `templateCategory: "marketing"` (sanity check on the most cost-sensitive class)
    - **Cross-phase regression**: every template body passes the 1b-1 banned-phrase scanner
    - **Cross-phase regression**: every template body passes the 1b-2 claim classifier (no claims that trip the substantiation tier)
 3. **Window detection edge cases** (synthetic timelines)
@@ -388,6 +432,7 @@ Required by parent spec §Operability:
    - `sourceGuard === "whatsapp_window"` (already reserved since 1a — first emitter is 1d)
    - `reasonCode === "outside_whatsapp_window"` (already reserved since 1a — first emitter is 1d)
    - `details.windowStatus`, `details.optInStatus`, `details.templateMatch` are present on every block/substitute verdict and uniquely identify the sub-cause
+   - **Cost annotation contract** on `action: "substitute"` verdicts: `details.templateCategory`, `details.recipientMarket`, `details.metaTemplateName`, `details.costRisk === "paid_template_message"`, `details.costEstimateStatus === "not_priced_in_1d"` — all present and non-null. Phase 2's pricing backfill depends on this contract.
 5. **Handoff package shape**
    - `HandoffReason === "outside_whatsapp_window"` for all three block sub-causes
    - `metadata.blockSubCause` distinguishes `missing_opt_in` / `missing_intent_class` / `no_template_fit`
@@ -408,16 +453,17 @@ DB tests use mocked Prisma (no Postgres in CI — see `feedback_api_test_mocked_
 
 ## 8. Open questions resolved during brainstorming
 
-| Question                                      | Decision                                                                                                                                                                                                 |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Template storage                              | In-repo TS const (`packages/core/src/skill-runtime/templates/whatsapp-registry.ts`). Tenant-editable templates and operator UI = Phase 2.                                                                |
-| Window calculation source                     | New `ConversationThread.lastWhatsAppInboundAt` column, WhatsApp-write-only invariant.                                                                                                                    |
-| Template selection mechanism                  | Skill tags `SkillExecutionResult.intentClass` explicitly; gate consumes the tag.                                                                                                                         |
-| No-template-fits behavior                     | Hard escalate via `buildHandoffPackage` with new `HandoffReason: "outside_whatsapp_window"`.                                                                                                             |
-| Opt-in interaction                            | Gate checks **both** window AND `Contact.messagingOptIn`. Both must allow before substituting. Existing `canSendWhatsAppTemplate` adapter helper remains as a defense-in-depth second wall, not deleted. |
-| Proactive sender call site                    | **Out of scope for 1d.** 1d wires reactive substitution only — no new triggers, no `ProactiveSender` wiring, no scheduled job.                                                                           |
-| Handoff annotation on substitute (happy path) | None. Verdict-only, mirrors 1b-2's `unsupported_claim_rewritten` pattern. Substitution-count-based handoff is Phase 2.                                                                                   |
-| Verdict sub-cause distinguishability          | `details.windowStatus` + `details.optInStatus` + `details.templateMatch` uniquely identify every block/substitute sub-cause even though primary `reasonCode` is always `outside_whatsapp_window`.        |
+| Question                                      | Decision                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Template storage                              | In-repo TS const (`packages/core/src/skill-runtime/templates/whatsapp-registry.ts`). Tenant-editable templates and operator UI = Phase 2.                                                                                                                                                                                                              |
+| Window calculation source                     | New `ConversationThread.lastWhatsAppInboundAt` column, WhatsApp-write-only invariant.                                                                                                                                                                                                                                                                  |
+| Template selection mechanism                  | Skill tags `SkillExecutionResult.intentClass` explicitly; gate consumes the tag.                                                                                                                                                                                                                                                                       |
+| No-template-fits behavior                     | Hard escalate via `buildHandoffPackage` with new `HandoffReason: "outside_whatsapp_window"`.                                                                                                                                                                                                                                                           |
+| Opt-in interaction                            | Gate checks **both** window AND `Contact.messagingOptIn`. Both must allow before substituting. Existing `canSendWhatsAppTemplate` adapter helper remains as a defense-in-depth second wall, not deleted.                                                                                                                                               |
+| Proactive sender call site                    | **Out of scope for 1d.** 1d wires reactive substitution only — no new triggers, no `ProactiveSender` wiring, no scheduled job.                                                                                                                                                                                                                         |
+| Handoff annotation on substitute (happy path) | None. Verdict-only, mirrors 1b-2's `unsupported_claim_rewritten` pattern. Substitution-count-based handoff is Phase 2.                                                                                                                                                                                                                                 |
+| Verdict sub-cause distinguishability          | `details.windowStatus` + `details.optInStatus` + `details.templateMatch` uniquely identify every block/substitute sub-cause even though primary `reasonCode` is always `outside_whatsapp_window`.                                                                                                                                                      |
+| Cost awareness on substitute path             | Substitute verdicts carry `templateCategory`, `recipientMarket`, `metaTemplateName`, `costRisk: "paid_template_message"`, `costEstimateStatus: "not_priced_in_1d"` so Phase 2 can price retroactively. 1d does not estimate, sum, or enforce cost. `re-engagement-offer` flagged as the marketing-category family for future operator-approval gating. |
 
 ## 9. Constraints (from CLAUDE.md)
 
