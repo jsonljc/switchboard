@@ -32,7 +32,7 @@ These rules apply across all tasks. They are load-bearing for clean execution; r
 - **Prerequisites: Phase 1a and Phase 1b-1 must be on the working branch before Task 1.** This worktree was created off `main` *before* 1a (PR #409) and 1b-1 merged. Pre-flight resolves the dependency.
 - **Schema enum changes are atomic with their consumers.** Task 1 extends `GovernanceVerdictReasonSchema` with four new entries; the same task updates any 1a/1b-1 fixture tests so `packages/schemas` stays green between commits.
 - **No `console.log`.** Use `console.error` for fail-open / fail-closed branches, classifier API errors, and loader assertions. Use `console.warn` for soft warnings (duplicate patterns, eval-harness misses). Lint will flag `console.log`.
-- **No `any`.** Resolver, classifier, store, and cache types are all explicitly typed. If TypeScript inference produces `any`, refine the type instead of casting.
+- **No production `any`.** Resolver, classifier, store, and cache types in `src/` are all explicitly typed. If TypeScript inference produces `any`, refine the type instead of casting. **Test-only narrow casts via `as any` (with an `eslint-disable-next-line @typescript-eslint/no-explicit-any` comment on the same line) are permitted in `__tests__/*` files** for mocking the Prisma client and constructing minimal `SkillHookContext` / `SkillExecutionResult` fixtures. The escape is bounded to mock construction; do not propagate `any` into the system under test.
 - **Layer rules.** `packages/schemas` (Layer 1) has no `@switchboard/*` imports. `packages/core` (Layer 3) imports schemas + sdk + cartridge-sdk only — never `packages/db`. Prisma store impls live in `packages/db` (Layer 4) and depend on the interface declared in core.
 - **Tests use mocked Prisma.** Per `feedback_api_test_mocked_prisma.md`, db tests mock the Prisma client. Don't require a running PostgreSQL for `pnpm test` to pass.
 - **Anthropic SDK calls are mocked in tests.** Classifier tests never hit the real API. The `AnthropicClaimClassifier` interface is the seam — tests inject a mock implementation. Only `pnpm classifier-eval` (Task 18) hits the real API, gated by `EVAL=1` env flag.
@@ -3792,7 +3792,7 @@ pnpm --filter @switchboard/core build
 
 Expected: all pass. If a test fails because of slight signature mismatches with 1b-1's actual `GovernanceConfigResolver` / `GovernancePostureCache` exports, align field names — type errors are the test signal.
 
-- [ ] **Step 6: Update governance/classifier barrel**
+- [ ] **Step 6: Update barrels — governance/classifier AND skill-runtime/index**
 
 Edit (or create) `packages/core/src/governance/classifier/index.ts`:
 
@@ -3806,6 +3806,14 @@ export * from "./substantiation-cache.js";
 export * from "./substantiation-resolver.js";
 export * from "./prompt.js";
 ```
+
+Also append to `packages/core/src/skill-runtime/index.ts` (next to the existing `GovernanceHook` and `SimulationPolicyHook` re-exports):
+
+```ts
+export { ClaimClassifierHook } from "./hooks/claim-classifier.js";
+```
+
+This is what makes `import { ClaimClassifierHook } from "@switchboard/core/skill-runtime"` resolvable from `apps/api/src/bootstrap/skill-mode.ts`. The `@switchboard/core` package only exports defined subpaths (`.`, `./skill-runtime`, `./platform`, etc.) — direct file imports like `@switchboard/core/skill-runtime/hooks/claim-classifier.js` are NOT in the exports map and will fail at build time.
 
 - [ ] **Step 7: Commit**
 
@@ -3884,7 +3892,7 @@ Expected: tests fail (no ClaimClassifierHook in the chain).
 Edit `apps/api/src/bootstrap/skill-mode.ts`. Adjacent to existing 1b-1 construction, add:
 
 ```ts
-import { Anthropic } from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";   // default export, not named
 import {
   createAnthropicClaimClassifier,
   createSubstantiationResolver,
@@ -3893,7 +3901,7 @@ import {
   loadRewriteTemplates,
 } from "@switchboard/core";
 import { createPrismaApprovedComplianceClaimStore } from "@switchboard/db";
-import { ClaimClassifierHook } from "@switchboard/core/skill-runtime/hooks/claim-classifier.js";
+import { ClaimClassifierHook } from "@switchboard/core/skill-runtime";   // requires Task 15 Step 6 to re-export from the skill-runtime barrel
 import { InMemoryGovernancePostureCache } from "@switchboard/core";  // 1b-1's impl
 import { renderHandoffTemplate } from "@switchboard/core";            // 1b-1's helper
 
