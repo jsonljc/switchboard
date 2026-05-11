@@ -4,10 +4,7 @@ export function LandingFooter() {
   return (
     <footer style={{ background: "#EDEAE5", borderTop: "1px solid #DDD9D3" }}>
       <div className="page-width" style={{ paddingTop: "3rem", paddingBottom: "3rem" }}>
-        <div
-          style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "2rem" }}
-          className="sm:grid-cols-3"
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "2rem" }}>
           {/* Brand */}
           <div>
             <span
@@ -31,41 +28,6 @@ export function LandingFooter() {
             >
               AI-powered revenue operations for growing businesses.
             </p>
-          </div>
-
-          {/* Product */}
-          <div>
-            <p
-              style={{
-                marginBottom: "0.75rem",
-                fontSize: "0.6875rem",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: "#9C958F",
-              }}
-            >
-              Product
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {[
-                { href: "/how-it-works", label: "How it works" },
-                { href: "/pricing", label: "Pricing" },
-              ].map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "0.875rem",
-                    color: "#6B6560",
-                    textDecoration: "none",
-                  }}
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
           </div>
 
           {/* Company */}

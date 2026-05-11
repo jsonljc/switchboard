@@ -8,18 +8,6 @@ describe("LandingNav", () => {
     expect(screen.getByText("Switchboard")).toBeInTheDocument();
   });
 
-  it("shows How it works and Pricing links", () => {
-    render(<LandingNav isAuthenticated={false} />);
-    expect(screen.getByRole("link", { name: /how it works/i, hidden: true })).toHaveAttribute(
-      "href",
-      "/how-it-works",
-    );
-    expect(screen.getByRole("link", { name: /pricing/i, hidden: true })).toHaveAttribute(
-      "href",
-      "/pricing",
-    );
-  });
-
   it("does not show Agents link", () => {
     render(<LandingNav isAuthenticated={false} />);
     expect(screen.queryByRole("link", { name: /^agents$/i, hidden: true })).not.toBeInTheDocument();
@@ -38,11 +26,22 @@ describe("LandingNav", () => {
     expect(screen.getByRole("link", { name: /dashboard/i, hidden: true })).toBeInTheDocument();
   });
 
-  it("shows Get Started CTA", () => {
+  it("does not show How it works or Pricing links", () => {
     render(<LandingNav isAuthenticated={false} />);
-    expect(screen.getByRole("link", { name: /get started/i, hidden: true })).toHaveAttribute(
-      "href",
-      "/signup",
-    );
+    expect(
+      screen.queryByRole("link", { name: /how it works/i, hidden: true }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /^pricing$/i, hidden: true }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not link to deleted /signup or /get-started routes", () => {
+    const { container } = render(<LandingNav isAuthenticated={false} />);
+    const anchors = Array.from(container.querySelectorAll("a"));
+    for (const a of anchors) {
+      expect(a.getAttribute("href")).not.toBe("/signup");
+      expect(a.getAttribute("href")).not.toBe("/get-started");
+    }
   });
 });

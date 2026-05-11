@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
+import Link from "next/link";
 import { signIn, useSession, SessionProvider } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { AgentMark } from "@/components/character/agent-mark";
 import { defaultCallback } from "./redirect-logic";
 
@@ -483,26 +483,6 @@ function LoginForm() {
             </>
           )}
         </div>
-
-        {/* Footer note */}
-        <p className="mt-6 text-center" style={{ fontSize: "13px", color: "var(--sw-text-muted)" }}>
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/signup"
-            style={{
-              color: "var(--sw-text-secondary)",
-              textDecoration: "none",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color = "var(--sw-text-primary)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.color = "var(--sw-text-secondary)";
-            }}
-          >
-            Get started
-          </Link>
-        </p>
       </div>
     </div>
   );

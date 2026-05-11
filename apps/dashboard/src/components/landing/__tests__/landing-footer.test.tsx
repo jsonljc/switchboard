@@ -3,14 +3,9 @@ import { render, screen } from "@testing-library/react";
 import { LandingFooter } from "../landing-footer";
 
 describe("LandingFooter", () => {
-  it("renders wordmark and product links", () => {
+  it("renders wordmark", () => {
     render(<LandingFooter />);
     expect(screen.getByText("Switchboard")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /how it works/i })).toHaveAttribute(
-      "href",
-      "/how-it-works",
-    );
-    expect(screen.getByRole("link", { name: /pricing/i })).toHaveAttribute("href", "/pricing");
   });
 
   it("renders contact link", () => {
@@ -27,10 +22,19 @@ describe("LandingFooter", () => {
     expect(screen.getByRole("link", { name: /^terms$/i })).toHaveAttribute("href", "/terms");
   });
 
-  it("does not render removed links", () => {
+  it("does not render deleted product links", () => {
     render(<LandingFooter />);
-    expect(screen.queryByText(/build an agent/i)).toBeNull();
-    expect(screen.queryByText(/get started/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /how it works/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^pricing$/i })).not.toBeInTheDocument();
+  });
+
+  it("does not link to deleted /signup or /get-started routes", () => {
+    const { container } = render(<LandingFooter />);
+    const anchors = Array.from(container.querySelectorAll("a"));
+    for (const a of anchors) {
+      expect(a.getAttribute("href")).not.toBe("/signup");
+      expect(a.getAttribute("href")).not.toBe("/get-started");
+    }
   });
 
   it("renders copyright", () => {
