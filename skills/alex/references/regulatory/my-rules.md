@@ -48,3 +48,33 @@ explanatory.
 The pre-input escalation-trigger tables for MY live at
 `packages/core/src/governance/escalation-triggers/{common,my}.ts` with
 the same authoring contract.
+
+## Runtime claim classification (Phase 1b-2)
+
+Every outbound model message that survives 1b-1's banned-phrase scanner is
+sentence-classified by `ClaimClassifierHook` (Haiku 4.5 with prompt caching).
+The classifier maps each sentence to one of:
+
+`efficacy | safety-claim | superiority | urgency | testimonial | medical-advice | diagnosis | credentials | none`
+
+Layer 3 substantiation tiers per claim type:
+
+| Claim type                                      | Required source                                                        | If missing                      |
+| ----------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------- |
+| efficacy / safety-claim / superiority / urgency | `approved_compliance_claim` (operator-authored, named reviewer, <180d) | Rewrite to non-claim template   |
+| credentials                                     | `regulatory_public_source` (curated MY: MDA / KKM / MMC / MAB entries) | Escalate                        |
+| testimonial / medical-advice / diagnosis        | none — never auto-answer                                               | Escalate                        |
+| safety-claim                                    | also accepts `regulatory_public_source`                                | Rewrite if neither tier matches |
+| none                                            | n/a                                                                    | Allow                           |
+
+Source-of-truth (TS modules):
+
+- Claim-type enum: `packages/schemas/src/claim-classifier.ts`
+- Regulatory entries (MY): `packages/core/src/governance/classifier/regulatory-sources/my.ts`
+- Rewrite templates (MY): `packages/core/src/governance/classifier/rewrite-templates/my.ts`
+- Substantiation resolver: `packages/core/src/governance/classifier/substantiation-resolver.ts`
+- Hook: `packages/core/src/skill-runtime/hooks/claim-classifier.ts`
+
+This markdown is not parsed at runtime; it documents the runtime behavior for
+operator and reviewer reference. Update both this file and the TS modules
+together when authoring new rules.
