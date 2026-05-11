@@ -1,21 +1,13 @@
 // apps/dashboard/src/lib/agent-home/resolve-link.ts
+import { isAgentHomeLinkLive } from "../route-availability";
 import type { AgentHomeLink } from "./types.js";
 
 export type ResolvedAgentHomeLink =
   | { href: string; disabled: false }
   | { href: null; disabled: true; reason: "route-not-available" };
 
-export const ROUTE_AVAILABILITY = {
-  contact: true,
-  thread: false,
-  "ad-set": false,
-  "creative-job": false,
-  "agent-setup": false,
-  "all-wins": false,
-} as const;
-
 export function resolveAgentHomeLink(link: AgentHomeLink): ResolvedAgentHomeLink {
-  if (!ROUTE_AVAILABILITY[link.kind]) {
+  if (!isAgentHomeLinkLive(link.kind)) {
     return { href: null, disabled: true, reason: "route-not-available" };
   }
   switch (link.kind) {

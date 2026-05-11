@@ -39,6 +39,15 @@ export function renderBusinessFacts(facts: BusinessFacts): string {
     if (svc.durationMinutes) line += ` (${svc.durationMinutes} min)`;
     if (svc.price) line += ` — ${svc.price} ${svc.currency}`;
     lines.push(line);
+    if (svc.idealFor) lines.push(`    Ideal for: ${svc.idealFor}`);
+    if (svc.notSuitableFor) lines.push(`    Not suitable for: ${svc.notSuitableFor}`);
+    if (svc.bookingBehavior) lines.push(`    Booking: ${svc.bookingBehavior}`);
+    if (svc.consultationRequired) lines.push(`    Consultation required.`);
+    if (svc.prepInstructions) lines.push(`    Prep: ${svc.prepInstructions}`);
+    if (svc.aftercareNotes) lines.push(`    Aftercare: ${svc.aftercareNotes}`);
+    if (svc.popularCombinations && svc.popularCombinations.length > 0) {
+      lines.push(`    Often combined with: ${svc.popularCombinations.join(", ")}`);
+    }
   }
 
   if (facts.bookingPolicies) {

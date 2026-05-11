@@ -1,7 +1,7 @@
 "use client";
 
 import type { ManagedComparisonData, ManagedComparisonPair } from "@switchboard/schemas";
-import styles from "../../../reports/reports.module.css";
+import styles from "../../../(mercury)/reports/reports.module.css";
 
 function fmtMoney(n: number): string {
   return new Intl.NumberFormat("en-US", {

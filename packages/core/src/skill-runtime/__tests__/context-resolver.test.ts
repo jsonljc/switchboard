@@ -371,6 +371,56 @@ describe("ContextResolverImpl — business-facts", () => {
     expect(result.variables).not.toHaveProperty("BUSINESS_FACTS");
   });
 
+  it("renders all extended Service fields when present", async () => {
+    const facts: BusinessFacts = {
+      businessName: "Glow Medspa",
+      timezone: "Asia/Singapore",
+      locations: [{ name: "Main", address: "1 Orchard Rd" }],
+      openingHours: {
+        monday: { open: "09:00", close: "18:00", closed: false },
+      },
+      services: [
+        {
+          name: "Botox",
+          description: "Cosmetic injection",
+          durationMinutes: 45,
+          price: "600",
+          currency: "SGD",
+          idealFor: "fine lines",
+          notSuitableFor: "pregnant clients",
+          bookingBehavior: "consultation_only",
+          consultationRequired: true,
+          prepInstructions: "Avoid blood thinners 48h before",
+          aftercareNotes: "No exercise for 24h",
+          popularCombinations: ["Filler", "HydraFacial"],
+        },
+      ],
+      escalationContact: { name: "Dr Tan", channel: "whatsapp" as const, address: "+6591234567" },
+      additionalFaqs: [],
+    };
+    const factsStore = mockBusinessFactsStore(facts);
+    const store = mockStore([]);
+    const resolver = new ContextResolverImpl(store, factsStore);
+
+    const result = await resolver.resolve("org_test", [
+      {
+        kind: "business-facts" as KnowledgeKind,
+        scope: "operator-approved",
+        injectAs: "BUSINESS_FACTS",
+        required: true,
+      },
+    ]);
+
+    const rendered = result.variables.BUSINESS_FACTS!;
+    expect(rendered).toContain("Ideal for: fine lines");
+    expect(rendered).toContain("Not suitable for: pregnant clients");
+    expect(rendered).toContain("Booking: consultation_only");
+    expect(rendered).toContain("Consultation required.");
+    expect(rendered).toContain("Prep: Avoid blood thinners 48h before");
+    expect(rendered).toContain("Aftercare: No exercise for 24h");
+    expect(rendered).toContain("Often combined with: Filler, HydraFacial");
+  });
+
   it("resolves business-facts alongside other kinds", async () => {
     const facts = makeFacts();
     const factsStore = mockBusinessFactsStore(facts);

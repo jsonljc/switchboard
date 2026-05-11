@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { ContextRequirementSchema } from "@switchboard/schemas";
+import { ContextRequirementSchema, ReferenceMetadataSchema } from "@switchboard/schemas";
 import type { ContextRequirement } from "@switchboard/schemas";
 import { SkillParseError, SkillValidationError } from "./types.js";
-import type { SkillDefinition, ParameterDeclaration } from "./types.js";
+import type { SkillDefinition, ParameterDeclaration, SkillReferenceFile } from "./types.js";
 
 const ParameterDeclarationSchema = z.object({
   name: z.string(),
@@ -130,13 +130,83 @@ function validateContext(
   return { normalized, issues };
 }
 
+function loadReferences(skillDir: string): SkillReferenceFile[] | undefined {
+  const referencesRoot = join(skillDir, "references");
+  if (!existsSync(referencesRoot)) {
+    return undefined;
+  }
+
+  const files: SkillReferenceFile[] = [];
+
+  function walk(dir: string): void {
+    // Deterministic ordering — readdirSync order is platform/inode-dependent
+    // and produces flaky tests / noisy diffs without explicit sort.
+    for (const entry of readdirSync(dir).sort()) {
+      const full = join(dir, entry);
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        walk(full);
+      } else if (entry.endsWith(".md")) {
+        const raw = readFileSync(full, "utf-8");
+        const split = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+        if (!split) {
+          throw new SkillParseError(`Reference file ${full} missing YAML frontmatter`);
+        }
+        const [, fm, body] = split;
+        let parsed: unknown;
+        try {
+          parsed = parseYaml(fm!);
+        } catch (err) {
+          throw new SkillParseError(
+            `Reference file ${full} has invalid YAML: ${(err as Error).message}`,
+          );
+        }
+        const result = ReferenceMetadataSchema.safeParse(parsed);
+        if (!result.success) {
+          throw new SkillValidationError(
+            `Reference ${full} failed validation: ${JSON.stringify(result.error.issues)}`,
+            result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`),
+          );
+        }
+        // Normalize to POSIX-style forward slashes so paths are stable
+        // across host OS (matters if CI ever runs on Windows).
+        const posixPath = relative(skillDir, full).split(sep).join("/");
+        files.push({
+          path: posixPath,
+          metadata: result.data,
+          body: body!,
+        });
+      }
+    }
+  }
+
+  walk(referencesRoot);
+  // Final sort by path so the returned array is fully deterministic
+  // regardless of recursion order.
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  return files;
+}
+
 export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
-  const filePath = join(skillsDir, `${slug}.md`);
+  const dirSkillPath = join(skillsDir, slug, "SKILL.md");
+  const fileSkillPath = join(skillsDir, `${slug}.md`);
+
+  let skillPath: string;
+  let references: SkillReferenceFile[] | undefined;
+  if (existsSync(dirSkillPath)) {
+    skillPath = dirSkillPath;
+    references = loadReferences(join(skillsDir, slug));
+  } else if (existsSync(fileSkillPath)) {
+    skillPath = fileSkillPath;
+  } else {
+    throw new SkillParseError(`Skill "${slug}" not found at ${dirSkillPath} or ${fileSkillPath}`);
+  }
+
   let raw: string;
   try {
-    raw = readFileSync(filePath, "utf-8");
+    raw = readFileSync(skillPath, "utf-8");
   } catch {
-    throw new SkillParseError(`Skill file not found: ${filePath}`);
+    throw new SkillParseError(`Skill file not found: ${skillPath}`);
   }
 
   const { frontmatterStr, body } = splitFrontmatter(raw);
@@ -187,5 +257,6 @@ export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
     context,
     minimumModelTier: frontmatter.minimumModelTier,
     intent: frontmatter.intent,
+    references,
   };
 }

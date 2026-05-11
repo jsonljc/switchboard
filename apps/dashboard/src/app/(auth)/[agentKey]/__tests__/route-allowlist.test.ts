@@ -3,17 +3,32 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const AUTH_ROOT = join(__dirname, "..", "..");
+// Mercury surfaces live under a (mercury) route group; route groups don't
+// affect URL resolution, so /contacts still beats [agentKey] even when its
+// concrete dir is at (auth)/(mercury)/contacts.
+const MERCURY_ROOT = join(AUTH_ROOT, "(mercury)");
 
 // Concrete directories that beat [agentKey] in Next.js route resolution.
 // Legacy routes (/decide, /escalations, /tasks, /me, /my-agent, /modules,
 // /conversations, /deployments, /dashboard) were removed in D4.
-const KNOWN_TOP_LEVEL = ["reports", "settings", "contacts", "operator", "onboarding"];
+const KNOWN_TOP_LEVEL = [
+  "reports",
+  "settings",
+  "contacts",
+  "automations",
+  "activity",
+  "operator",
+  "onboarding",
+];
+
+function hasRouteSegment(segment: string): boolean {
+  return existsSync(join(AUTH_ROOT, segment)) || existsSync(join(MERCURY_ROOT, segment));
+}
 
 describe("route allowlist — concrete top-level routes beat [agentKey]", () => {
   for (const segment of KNOWN_TOP_LEVEL) {
     it(`/${segment} resolves via concrete directory, not [agentKey]`, () => {
-      const dir = join(AUTH_ROOT, segment);
-      expect(existsSync(dir)).toBe(true);
+      expect(hasRouteSegment(segment)).toBe(true);
     });
   }
 

@@ -31,7 +31,7 @@ const ITEMS: Item[] = [
     num: "/04/",
     title: "Hands-off when ready",
     detail:
-      "Once a workflow is proven — Alex's first replies, Nova's draft pauses — graduate it to autonomous as the agent earns trust. You stay in control of the leash.",
+      "Once a workflow is proven — Alex's first replies, Riley's draft pauses — graduate it to autonomous as the agent earns trust. You stay in control of the leash.",
   },
 ];
 

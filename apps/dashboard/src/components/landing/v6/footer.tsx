@@ -15,14 +15,14 @@ export function V6Footer() {
               Switchboard
             </span>
             <span className="text-[0.8125rem] leading-[1.5] text-v6-graphite-2">
-              Hire your revenue desk one agent at a time. Alex replies. Nova watches spend. Mira
+              Hire your revenue desk one agent at a time. Alex replies. Riley watches spend. Mira
               ships creative. They share context as they go.
             </span>
           </div>
 
           <FooterCol heading="The desk">
             <a href="#alex">Alex · lead reply</a>
-            <a href="#nova">Nova · ad optimizer</a>
+            <a href="#riley">Riley · ad optimizer</a>
             <a href="#mira">Mira · creative</a>
             <a href="#how">How it works</a>
             <a href="#pricing">Pricing</a>

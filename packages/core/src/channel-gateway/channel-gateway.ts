@@ -12,6 +12,7 @@ import { resolveContactIdentity } from "./resolve-contact-identity.js";
 import { parseApprovalResponsePayload } from "./approval-response-payload.js";
 import { handleApprovalResponse } from "./handle-approval-response.js";
 import { isOptOutKeyword } from "./opt-out-keywords.js";
+import { runPreInputGate } from "./pre-input-gate.js";
 
 const OPT_OUT_CONFIRMATION =
   "You've been opted out of WhatsApp messages from us. Reply START at any time to opt back in.";
@@ -177,6 +178,21 @@ export class ChannelGateway {
         identity.contactId,
       );
       await replySink.send(OPT_OUT_CONFIRMATION);
+      return;
+    }
+
+    // 4e. Pre-input deterministic gate — must run before typing signal and submit.
+    // Scans inbound text for escalation triggers; may short-circuit on enforce match.
+    const gateBlocked = await runPreInputGate(
+      this.config,
+      message.text,
+      message.sessionId,
+      message.channel,
+      resolved.deploymentId,
+      resolved.organizationId,
+      replySink,
+    );
+    if (gateBlocked) {
       return;
     }
 

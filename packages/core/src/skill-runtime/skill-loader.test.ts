@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { writeFileSync, mkdirSync, rmSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSkill } from "./skill-loader.js";
@@ -375,5 +376,199 @@ describe("loadSkill - real files", () => {
     expect(skill.tools).toEqual(["ads-analytics"]);
     expect(skill.output).toBeDefined();
     expect(skill.output!.fields.length).toBeGreaterThan(0);
+  });
+});
+
+describe("loadSkill directory mode", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), "skill-loader-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("loads a skill from <slug>/SKILL.md when both <slug>.md and <slug>/SKILL.md exist", () => {
+    const dirSkillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: Directory-mode test
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex (directory mode)
+`;
+    const fileSkillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: File-mode test
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex (file mode)
+`;
+    mkdirSync(join(testDir, "alex"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), dirSkillContent);
+    writeFileSync(join(testDir, "alex.md"), fileSkillContent);
+
+    const skill = loadSkill("alex", testDir);
+    expect(skill.description).toBe("Directory-mode test");
+  });
+
+  it("falls back to <slug>.md when no directory exists", () => {
+    const fileSkillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: File-mode only
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    writeFileSync(join(testDir, "alex.md"), fileSkillContent);
+
+    const skill = loadSkill("alex", testDir);
+    expect(skill.description).toBe("File-mode only");
+  });
+
+  it("throws SkillParseError when neither file nor directory exists", () => {
+    expect(() => loadSkill("missing", testDir)).toThrow();
+  });
+
+  it("loads and validates references when present", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: With references
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    const refContent = `---
+jurisdiction: SG
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: critical
+lastReviewedAt: "2026-05-10"
+owner: jasonli
+---
+# SG rules
+Banned phrases follow.
+`;
+    mkdirSync(join(testDir, "alex", "references", "regulatory"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+    writeFileSync(join(testDir, "alex", "references", "regulatory", "sg-rules.md"), refContent);
+
+    const skill = loadSkill("alex", testDir);
+    expect(skill.references).toBeDefined();
+    expect(skill.references).toHaveLength(1);
+    expect(skill.references![0]!.metadata.jurisdiction).toBe("SG");
+    expect(skill.references![0]!.metadata.riskLevel).toBe("critical");
+    expect(skill.references![0]!.path).toBe("references/regulatory/sg-rules.md");
+  });
+
+  it("throws when a reference frontmatter is invalid", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: With bad reference
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    const badRefContent = `---
+jurisdiction: US
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: critical
+lastReviewedAt: "2026-05-10"
+owner: jasonli
+---
+`;
+    mkdirSync(join(testDir, "alex", "references", "regulatory"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+    writeFileSync(join(testDir, "alex", "references", "regulatory", "us-rules.md"), badRefContent);
+
+    expect(() => loadSkill("alex", testDir)).toThrow();
+  });
+
+  it("throws SkillParseError when reference YAML is malformed", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: With malformed reference
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    const malformedRefContent = `---
+jurisdiction: SG
+vertical: medspa
+clinicType: medical
+appliesTo: regulatory
+riskLevel: critical
+lastReviewedAt: "2026-05-10"
+owner: jasonli
+sources: ["unclosed-array"
+---
+# Malformed YAML
+`;
+    mkdirSync(join(testDir, "alex", "references", "regulatory"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+    writeFileSync(join(testDir, "alex", "references", "regulatory", "bad.md"), malformedRefContent);
+
+    expect(() => loadSkill("alex", testDir)).toThrow(SkillParseError);
+  });
+
+  it("returns references undefined when no references directory exists", () => {
+    const skillContent = `---
+name: alex
+slug: alex
+intent: alex.run
+version: 1.0.0
+description: No references
+author: switchboard
+parameters: []
+tools: []
+context: []
+---
+# Alex
+`;
+    mkdirSync(join(testDir, "alex"), { recursive: true });
+    writeFileSync(join(testDir, "alex", "SKILL.md"), skillContent);
+
+    const skill = loadSkill("alex", testDir);
+    expect(skill.references).toBeUndefined();
   });
 });

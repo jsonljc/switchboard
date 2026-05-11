@@ -64,6 +64,9 @@ export {
 } from "./governance/profile.js";
 export type { GovernanceProfileStore } from "./governance/profile.js";
 
+// Governance Verdict Store (interface + types)
+export * from "./governance/governance-verdict-store/index.js";
+
 // Policy Cache
 export { InMemoryPolicyCache, DEFAULT_POLICY_CACHE_TTL_MS } from "./policy-cache.js";
 export type { PolicyCache } from "./policy-cache.js";

@@ -1,0 +1,325 @@
+import { describe, it, expect, vi } from "vitest";
+import { DeterministicSafetyGateHook } from "../deterministic-safety-gate.js";
+import type { DeterministicSafetyGateHookDeps } from "../deterministic-safety-gate.js";
+import { InMemoryGovernancePostureCache } from "../../../governance/posture-cache.js";
+import type { SaveGovernanceVerdictInput } from "../../../governance/governance-verdict-store/types.js";
+import type { SkillHookContext, SkillExecutionResult } from "../../types.js";
+
+// ---------------------------------------------------------------------------
+// Mock store shapes — plain objects with vi.fn() spies (untyped generics)
+// ---------------------------------------------------------------------------
+
+type Spy = ReturnType<typeof vi.fn>;
+
+interface VerdictStoreSpy {
+  save: Spy;
+  listByConversation: Spy;
+  listByDeployment: Spy;
+}
+
+interface HandoffStoreSpy {
+  save: Spy;
+  getById: Spy;
+  getBySessionId: Spy;
+  updateStatus: Spy;
+  listPending: Spy;
+}
+
+interface ConversationStoreSpy {
+  setConversationStatus: Spy;
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const BANNED_ENTRIES = [
+  {
+    id: "g1",
+    category: "guarantee" as const,
+    patterns: ["guaranteed"],
+    severity: "block" as const,
+  },
+];
+
+const RESOLVED_VERDICT_RECORD = {
+  id: "v1",
+  action: "block" as const,
+  reasonCode: "unsupported_claim" as const,
+  jurisdiction: "SG" as const,
+  clinicType: "medical" as const,
+  sourceGuard: "banned_phrase_scanner" as const,
+  auditLevel: "critical" as const,
+  decidedAt: "2026-05-10T12:00:00.000Z",
+  conversationId: "sess-1",
+  deploymentId: "dep-1",
+  details: null,
+  createdAt: "2026-05-10T12:00:00.000Z",
+};
+
+function makeVerdictStoreSpy(): VerdictStoreSpy {
+  return {
+    save: vi.fn().mockResolvedValue(RESOLVED_VERDICT_RECORD),
+    listByConversation: vi.fn(),
+    listByDeployment: vi.fn(),
+  };
+}
+
+function makeHandoffStoreSpy(): HandoffStoreSpy {
+  return {
+    save: vi.fn().mockResolvedValue(undefined),
+    getById: vi.fn(),
+    getBySessionId: vi.fn(),
+    updateStatus: vi.fn(),
+    listPending: vi.fn(),
+  };
+}
+
+function makeConversationStoreSpy(): ConversationStoreSpy {
+  return {
+    setConversationStatus: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+/**
+ * Builds deps with sensible vi.fn() defaults. Overrides replace specific deps.
+ */
+function buildDeps(
+  overrides: {
+    resolver?: DeterministicSafetyGateHookDeps["governanceConfigResolver"];
+    store?: VerdictStoreSpy;
+    handoff?: HandoffStoreSpy;
+    conv?: ConversationStoreSpy;
+    banned?: typeof BANNED_ENTRIES;
+    cache?: InMemoryGovernancePostureCache;
+  } = {},
+): {
+  deps: DeterministicSafetyGateHookDeps;
+  spies: {
+    verdictStore: VerdictStoreSpy;
+    handoffStore: HandoffStoreSpy;
+    conversationStore: ConversationStoreSpy;
+  };
+} {
+  const verdictStore = overrides.store ?? makeVerdictStoreSpy();
+  const handoffStore = overrides.handoff ?? makeHandoffStoreSpy();
+  const conversationStore = overrides.conv ?? makeConversationStoreSpy();
+  const banned = overrides.banned ?? BANNED_ENTRIES;
+  const cache = overrides.cache ?? new InMemoryGovernancePostureCache();
+  const resolver: DeterministicSafetyGateHookDeps["governanceConfigResolver"] =
+    overrides.resolver ?? (async () => ({ status: "missing" as const }));
+
+  const deps: DeterministicSafetyGateHookDeps = {
+    governanceConfigResolver: resolver,
+    bannedPhraseLoader: () => banned as never,
+    verdictStore: verdictStore as never,
+    handoffStore: handoffStore as never,
+    conversationStore: conversationStore as never,
+    postureCache: cache,
+    clock: () => new Date("2026-05-10T12:00:00.000Z"),
+  };
+
+  return { deps, spies: { verdictStore, handoffStore, conversationStore } };
+}
+
+/**
+ * Build a real SkillHookContext + SkillExecutionResult pair.
+ * `text` is the LLM response string (the value the hook scans and may mutate).
+ */
+function makeCtxAndResult(
+  text: string,
+  deploymentId = "dep-1",
+): { ctx: SkillHookContext; result: SkillExecutionResult } {
+  const ctx: SkillHookContext = {
+    deploymentId,
+    orgId: "org-1",
+    skillSlug: "alex-medspa",
+    skillVersion: "1.0.0",
+    sessionId: "sess-1",
+    trustLevel: "guided",
+    trustScore: 60,
+  };
+
+  const result: SkillExecutionResult = {
+    response: text,
+    toolCalls: [],
+    tokenUsage: { input: 100, output: 50 },
+    trace: {
+      durationMs: 1000,
+      turnCount: 2,
+      status: "success",
+      responseSummary: text.slice(0, 500),
+      writeCount: 0,
+      governanceDecisions: [],
+    },
+  };
+
+  return { ctx, result };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("DeterministicSafetyGateHook.afterSkill", () => {
+  it("passes through when config is missing", async () => {
+    const { deps, spies } = buildDeps();
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).toBe("This is guaranteed.");
+    expect(spies.verdictStore.save).not.toHaveBeenCalled();
+  });
+
+  it("passes through and persists nothing when mode is off", async () => {
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved",
+        config: {
+          jurisdiction: "SG",
+          clinicType: "medical",
+          deterministicGate: { mode: "off" },
+        },
+      }),
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).toBe("This is guaranteed.");
+    expect(spies.verdictStore.save).not.toHaveBeenCalled();
+  });
+
+  it("logs verdict but does not block in observe mode on match", async () => {
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved",
+        config: {
+          jurisdiction: "SG",
+          clinicType: "medical",
+          deterministicGate: { mode: "observe" },
+        },
+      }),
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    // Output unchanged in observe mode.
+    expect(result.response).toBe("This is guaranteed.");
+    expect(spies.verdictStore.save).toHaveBeenCalledTimes(1);
+    const savedArg = spies.verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
+    expect(savedArg.action).toBe("allow");
+    expect(spies.handoffStore.save).not.toHaveBeenCalled();
+    expect(spies.conversationStore.setConversationStatus).not.toHaveBeenCalled();
+  });
+
+  it("blocks, replaces output with handoff template, flips status, saves handoff in enforce mode", async () => {
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved",
+        config: {
+          jurisdiction: "SG",
+          clinicType: "medical",
+          deterministicGate: { mode: "enforce" },
+        },
+      }),
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).toContain("clinic team");
+    const savedArg = spies.verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
+    expect(savedArg.action).toBe("block");
+    expect(spies.handoffStore.save).toHaveBeenCalledTimes(1);
+    expect(spies.conversationStore.setConversationStatus).toHaveBeenCalledWith(
+      "sess-1",
+      "human_override",
+    );
+  });
+
+  it("does not persist when mode is enforce and no banned phrase is present", async () => {
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved",
+        config: {
+          jurisdiction: "SG",
+          clinicType: "medical",
+          deterministicGate: { mode: "enforce" },
+        },
+      }),
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("Our consultation includes an honest assessment.");
+    await hook.afterSkill(ctx, result);
+    expect(spies.verdictStore.save).not.toHaveBeenCalled();
+  });
+
+  it("fail-open on resolver error with cold cache (no verdict, output unchanged)", async () => {
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({ status: "error", error: new Error("db blip") }),
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).toBe("This is guaranteed.");
+    expect(spies.verdictStore.save).not.toHaveBeenCalled();
+  });
+
+  it("fail-closed on resolver error with cache lastKnown.mode=enforce (SG)", async () => {
+    const cache = new InMemoryGovernancePostureCache();
+    cache.remember("dep-1", { mode: "enforce", jurisdiction: "SG", clinicType: "medical" });
+    const { deps, spies } = buildDeps({
+      cache,
+      resolver: async () => ({ status: "error", error: new Error("db blip") }),
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).toContain("clinic team");
+    expect(result.response).toContain("I'll get them"); // SG handoff phrasing
+    expect(spies.verdictStore.save).toHaveBeenCalledTimes(1);
+    const saved = spies.verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
+    expect(saved.reasonCode).toBe("governance_unavailable");
+    expect(saved.jurisdiction).toBe("SG");
+    expect(saved.clinicType).toBe("medical");
+  });
+
+  it("fail-closed uses cached MY/nonMedical posture (NOT a hardcoded SG default)", async () => {
+    const cache = new InMemoryGovernancePostureCache();
+    cache.remember("dep_my", { mode: "enforce", jurisdiction: "MY", clinicType: "nonMedical" });
+    const { deps, spies } = buildDeps({
+      cache,
+      resolver: async () => ({ status: "error", error: new Error("db blip") }),
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.", "dep_my");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).toContain("I'll have them"); // MY handoff phrasing
+    const saved = spies.verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
+    expect(saved.jurisdiction).toBe("MY");
+    expect(saved.clinicType).toBe("nonMedical");
+  });
+
+  it("still applies the block when verdictStore.save throws", async () => {
+    const failingVerdictStore = {
+      save: vi.fn().mockRejectedValue(new Error("disk full")),
+      listByConversation: vi.fn(),
+      listByDeployment: vi.fn(),
+    };
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved",
+        config: {
+          jurisdiction: "SG",
+          clinicType: "medical",
+          deterministicGate: { mode: "enforce" },
+        },
+      }),
+      store: failingVerdictStore,
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).toContain("clinic team");
+    expect(spies.conversationStore.setConversationStatus).toHaveBeenCalled();
+  });
+});

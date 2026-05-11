@@ -2,6 +2,13 @@ export { loadSkill } from "./skill-loader.js";
 export { SkillExecutorImpl } from "./skill-executor.js";
 export { GovernanceHook } from "./hooks/governance-hook.js";
 export { SimulationPolicyHook } from "./hooks/simulation-policy-hook.js";
+export { DeterministicSafetyGateHook } from "./hooks/deterministic-safety-gate.js";
+export type { DeterministicSafetyGateHookDeps } from "./hooks/deterministic-safety-gate.js";
+// Governance infrastructure re-exported for bootstrap wiring convenience
+export { createAgentDeploymentGovernanceResolver } from "../governance/governance-config-resolver.js";
+export { InMemoryGovernancePostureCache } from "../governance/posture-cache.js";
+export { loadBannedPhrases } from "../governance/banned-phrases/index.js";
+export { loadEscalationTriggers } from "../governance/escalation-triggers/index.js";
 export { AnthropicToolCallingAdapter } from "./tool-calling-adapter.js";
 export { interpolate } from "./template-engine.js";
 export { getGovernanceConstraints } from "./governance-injector.js";

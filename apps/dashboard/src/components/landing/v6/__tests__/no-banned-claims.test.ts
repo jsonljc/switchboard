@@ -47,8 +47,8 @@ const BANNED: Banned[] = [
   { pattern: /HD video = 50/, reason: "no Mira credit system" },
   { pattern: /in one toggle/, reason: "no per-action autonomy toggle UI" },
   { pattern: /per agent, per action/, reason: "no per-action autonomy toggle UI" },
-  { pattern: /moves money/, reason: "Nova has no approval gate (slice B)" },
-  { pattern: /Never auto-publishes the big stuff/, reason: "Nova has no approval gate (slice B)" },
+  { pattern: /moves money/, reason: "Riley has no approval gate (slice B)" },
+  { pattern: /Never auto-publishes the big stuff/, reason: "Riley has no approval gate (slice B)" },
   { pattern: /All systems normal/, reason: "no real status feed wired" },
   {
     pattern: /\$199(?!\d)/,

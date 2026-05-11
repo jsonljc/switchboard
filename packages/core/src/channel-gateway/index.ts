@@ -3,6 +3,8 @@ export type {
   ChannelGatewayConfig,
   GatewayConversationStore,
   GatewayContactStore,
+  GatewayConversationStatusSetter,
+  ConversationStatusUpsertContext,
   IncomingChannelMessage,
   ReplySink,
 } from "./types.js";

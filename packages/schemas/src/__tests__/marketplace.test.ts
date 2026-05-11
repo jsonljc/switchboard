@@ -20,6 +20,7 @@ import {
   SetupSchema,
   SetupFieldSchema,
   BusinessFactsSchema,
+  ServiceSchema,
 } from "../marketplace.js";
 
 describe("Marketplace schemas", () => {
@@ -455,6 +456,61 @@ describe("Marketplace schemas", () => {
       };
       const result = BusinessFactsSchema.safeParse(withOptional);
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe("ServiceSchema", () => {
+    it("validates a minimal service", () => {
+      const minimal = {
+        name: "Pico Laser",
+        description: "Pigmentation treatment",
+      };
+      const result = ServiceSchema.safeParse(minimal);
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts new medspa fields when provided", () => {
+      const enriched = {
+        name: "Botox",
+        description: "Wrinkle reduction",
+        durationMinutes: 30,
+        price: "from SGD 380",
+        currency: "SGD",
+        bookingBehavior: "consultation_only" as const,
+        prepInstructions: "Avoid alcohol 24h before.",
+        aftercareNotes: "No exercise for 24h. Avoid lying flat for 4h.",
+        idealFor: "Forehead lines, crow's feet.",
+        notSuitableFor: "Pregnancy, breastfeeding, neuromuscular disorders.",
+        popularCombinations: ["Skinbooster", "Profhilo"],
+        consultationRequired: true,
+      };
+      const result = ServiceSchema.safeParse(enriched);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.bookingBehavior).toBe("consultation_only");
+        expect(result.data.consultationRequired).toBe(true);
+        expect(result.data.popularCombinations).toEqual(["Skinbooster", "Profhilo"]);
+      }
+    });
+
+    it("rejects invalid bookingBehavior", () => {
+      const invalid = {
+        name: "Filler",
+        description: "Volume restoration",
+        bookingBehavior: "auto_book",
+      };
+      const result = ServiceSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects empty strings inside popularCombinations", () => {
+      const invalid = {
+        name: "Filler",
+        description: "Volume restoration",
+        popularCombinations: ["Skinbooster", ""],
+      };
+      const result = ServiceSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
     });
   });
 });

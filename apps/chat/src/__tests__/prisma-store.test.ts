@@ -69,6 +69,8 @@ describe("PrismaConversationStore integration", () => {
         upsert: async (args: unknown) => {
           upsertArgs.push(args);
         },
+        // findUnique required by sticky human_override guard in save()
+        findUnique: async () => null,
         findFirst: async () => null,
         findMany: async () => [],
         deleteMany: async () => ({ count: 0 }),
@@ -350,5 +352,146 @@ describe("PrismaConversationStore cross-tenant scoping (TI-5/TI-6)", () => {
     // No org filter — by design, this is the recovery-orchestrator path.
     expect(where["organizationId"]).toBeUndefined();
     expect(where["status"]).toEqual({ notIn: ["completed", "expired"] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sticky human_override guard — save() must NOT downgrade human_override.
+//
+// When the deterministic gate flips a session to human_override, subsequent
+// lifecycle saves (e.g. status→"active" triggered by the next inbound message
+// flow) must NOT clobber it. An explicit save with status="human_override"
+// must still be allowed.
+// ---------------------------------------------------------------------------
+
+describe("PrismaConversationStore — sticky human_override guard", () => {
+  /** Minimal ConversationStateData for testing save() status logic. */
+  function makeState(
+    status: string,
+    threadId = "thread-override",
+  ): Parameters<
+    (typeof import("../conversation/prisma-store.js"))["PrismaConversationStore"]["prototype"]["save"]
+  >[0] {
+    return {
+      id: "conv-override",
+      threadId,
+      organizationId: "org-1",
+      channel: "web_widget",
+      principalId: "visitor-abc",
+      status: status as "active" | "human_override",
+      currentIntent: null,
+      pendingProposalIds: [],
+      pendingApprovalIds: [],
+      clarificationQuestion: null,
+      firstReplyAt: null,
+      lastInboundAt: null,
+      messages: [],
+      lastActivityAt: new Date(),
+      expiresAt: new Date(Date.now() + 86400000),
+      crmContactId: null,
+      leadProfile: null,
+      detectedLanguage: null,
+      machineState: null,
+    };
+  }
+
+  it("save with status=active does NOT overwrite an existing human_override row", async () => {
+    const upsertArgs: unknown[] = [];
+
+    const mockPrisma = {
+      conversationState: {
+        findUnique: async (_args: unknown) =>
+          // Simulate existing row with human_override
+          ({ status: "human_override" }),
+        upsert: async (args: unknown) => {
+          upsertArgs.push(args);
+        },
+      },
+    };
+
+    const { PrismaConversationStore } = await import("../conversation/prisma-store.js");
+    const store = new PrismaConversationStore(mockPrisma as never);
+
+    // Lifecycle save with status=active — would normally clobber human_override
+    await store.save(makeState("active"));
+
+    expect(upsertArgs).toHaveLength(1);
+    const arg = upsertArgs[0] as { update: { status: string } };
+    // Guard must have preserved human_override instead of writing "active"
+    expect(arg.update.status).toBe("human_override");
+  });
+
+  it("save with status=human_override IS allowed (explicit set always wins)", async () => {
+    const upsertArgs: unknown[] = [];
+
+    const mockPrisma = {
+      conversationState: {
+        findUnique: async (_args: unknown) =>
+          // Existing row already has human_override
+          ({ status: "human_override" }),
+        upsert: async (args: unknown) => {
+          upsertArgs.push(args);
+        },
+      },
+    };
+
+    const { PrismaConversationStore } = await import("../conversation/prisma-store.js");
+    const store = new PrismaConversationStore(mockPrisma as never);
+
+    // Explicit human_override save — must pass through unchanged
+    await store.save(makeState("human_override"));
+
+    expect(upsertArgs).toHaveLength(1);
+    const arg = upsertArgs[0] as { update: { status: string } };
+    expect(arg.update.status).toBe("human_override");
+  });
+
+  it("save with status=active on a row without human_override proceeds normally", async () => {
+    const upsertArgs: unknown[] = [];
+
+    const mockPrisma = {
+      conversationState: {
+        findUnique: async (_args: unknown) =>
+          // Existing row has normal active status
+          ({ status: "active" }),
+        upsert: async (args: unknown) => {
+          upsertArgs.push(args);
+        },
+      },
+    };
+
+    const { PrismaConversationStore } = await import("../conversation/prisma-store.js");
+    const store = new PrismaConversationStore(mockPrisma as never);
+
+    await store.save(makeState("active"));
+
+    expect(upsertArgs).toHaveLength(1);
+    const arg = upsertArgs[0] as { update: { status: string } };
+    // No guard needed — normal save proceeds with requested status
+    expect(arg.update.status).toBe("active");
+  });
+
+  it("save on a new (non-existent) row proceeds with the incoming status", async () => {
+    const upsertArgs: unknown[] = [];
+
+    const mockPrisma = {
+      conversationState: {
+        findUnique: async (_args: unknown) =>
+          // No existing row
+          null,
+        upsert: async (args: unknown) => {
+          upsertArgs.push(args);
+        },
+      },
+    };
+
+    const { PrismaConversationStore } = await import("../conversation/prisma-store.js");
+    const store = new PrismaConversationStore(mockPrisma as never);
+
+    await store.save(makeState("active", "thread-new"));
+
+    expect(upsertArgs).toHaveLength(1);
+    const arg = upsertArgs[0] as { update: { status: string } };
+    expect(arg.update.status).toBe("active");
   });
 });

@@ -70,6 +70,9 @@ export const AgentDeploymentSchema = z.object({
   status: DeploymentStatus.default("provisioning"),
   inputConfig: z.record(z.unknown()).default({}),
   governanceSettings: z.record(z.unknown()).default({}),
+  /** Per-deployment governance configuration (jurisdiction, clinicType, mode, etc.).
+   * Parsed by GovernanceConfigSchema at runtime via createAgentDeploymentGovernanceResolver. */
+  governanceConfig: z.unknown().optional(),
   outputDestination: z.record(z.unknown()).nullable().optional(),
   connectionIds: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),
@@ -247,6 +250,27 @@ export type SetupSchemaType = z.infer<typeof SetupSchema>;
 
 // ── Business Facts (Operator-Approved Structured Knowledge) ──
 
+export const ServiceSchema = z.object({
+  // existing fields
+  name: z.string().min(1),
+  description: z.string().min(1),
+  durationMinutes: z.number().int().positive().optional(),
+  price: z.string().optional(),
+  currency: z.string().default("SGD"),
+
+  // medspa-relevant operator-authored optional fields
+  bookingBehavior: z.enum(["book_directly", "consultation_only", "ask_first"]).optional(),
+  // prepInstructions: service-specific prep; overrides bookingPolicies.prepInstructions when present.
+  prepInstructions: z.string().optional(),
+  aftercareNotes: z.string().optional(),
+  idealFor: z.string().optional(),
+  notSuitableFor: z.string().optional(),
+  popularCombinations: z.array(z.string().min(1)).optional(),
+  consultationRequired: z.boolean().optional(),
+});
+
+export type Service = z.infer<typeof ServiceSchema>;
+
 export const BusinessFactsSchema = z.object({
   businessName: z.string().min(1),
   timezone: z.string().default("Asia/Singapore"),
@@ -268,17 +292,7 @@ export const BusinessFactsSchema = z.object({
       closed: z.boolean().default(false),
     }),
   ),
-  services: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        description: z.string().min(1),
-        durationMinutes: z.number().int().positive().optional(),
-        price: z.string().optional(),
-        currency: z.string().default("SGD"),
-      }),
-    )
-    .min(1),
+  services: z.array(ServiceSchema).min(1),
   bookingPolicies: z
     .object({
       cancellationPolicy: z.string().optional(),
