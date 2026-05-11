@@ -5,6 +5,8 @@ const register = vi.fn();
 
 const governanceInstance = { name: "governance" };
 const GovernanceHook = vi.fn().mockImplementation(() => governanceInstance);
+const claimClassifierInstance = { name: "claim-classifier" };
+const ClaimClassifierHook = vi.fn().mockImplementation(() => claimClassifierInstance);
 
 const SkillExecutorImpl = vi.fn().mockImplementation(function (
   this: Record<string, unknown>,
@@ -26,6 +28,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   DeterministicSafetyGateHook: vi
     .fn()
     .mockImplementation(() => ({ name: "deterministic-safety-gate" })),
+  ClaimClassifierHook,
   SimulationPolicyHook: vi.fn().mockImplementation(() => ({ name: "simulation" })),
   AnthropicToolCallingAdapter: vi.fn().mockImplementation(() => ({})),
   BuilderRegistry: vi.fn().mockImplementation(() => ({
@@ -51,6 +54,19 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
     lastKnown: vi.fn(() => null),
   })),
   loadBannedPhrases: vi.fn(() => []),
+  // 1b-2 classifier infrastructure
+  createAnthropicClaimClassifier: vi.fn(() => ({ classify: vi.fn() })),
+  createSubstantiationResolver: vi.fn(() => ({
+    resolve: vi.fn(async () => ({ status: "not_found" })),
+  })),
+  createInMemoryLRU: vi.fn(() => ({
+    get: vi.fn(async () => null),
+    set: vi.fn(async () => {}),
+  })),
+  loadRegulatoryPublicSources: vi.fn(() => []),
+  loadRewriteTemplates: vi.fn(() => []),
+  splitSentences: vi.fn((text: string) => [text]),
+  renderHandoffTemplate: vi.fn(() => "Handoff message"),
 }));
 
 vi.mock("@switchboard/core/platform", () => ({
@@ -91,6 +107,9 @@ vi.mock("@switchboard/db", () => ({
   PrismaGovernanceVerdictStore: vi.fn().mockImplementation(() => ({
     save: vi.fn(async () => {}),
   })),
+  createPrismaApprovedComplianceClaimStore: vi.fn(() => ({
+    findApproved: vi.fn(async () => []),
+  })),
 }));
 
 describe("bootstrapSkillMode governance wiring", () => {
@@ -99,44 +118,47 @@ describe("bootstrapSkillMode governance wiring", () => {
     process.env["ANTHROPIC_API_KEY"] = "test-key";
   });
 
+  const buildPrismaClient = () =>
+    ({
+      $transaction: vi.fn(async (fn: (tx: Record<string, unknown>) => unknown) =>
+        fn({
+          booking: {
+            findMany: vi.fn(async () => []),
+            create: vi.fn(async () => ({
+              id: "booking_1",
+              startsAt: new Date(),
+              endsAt: new Date(),
+              status: "confirmed",
+              calendarEventId: "evt_1",
+              timezone: "UTC",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })),
+            update: vi.fn(),
+          },
+          escalationRecord: {},
+          outboxEvent: { create: vi.fn() },
+        }),
+      ),
+      escalationRecord: { findMany: vi.fn(async () => []) },
+      organizationConfig: {
+        // Bootstrap has no orgId; LocalCalendarProvider path now requires orgId.
+        // Return null so resolveCalendarProvider falls through to NoopCalendarProvider.
+        findFirst: vi.fn(async () => null),
+      },
+      booking: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(async () => ({ id: "booking_1" })),
+        update: vi.fn(async () => ({ id: "booking_1" })),
+      },
+      conversationState: {
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+    }) as never;
+
   it("constructs GovernanceHook and passes it to SkillExecutorImpl", async () => {
     await bootstrapSkillMode({
-      prismaClient: {
-        $transaction: vi.fn(async (fn: (tx: Record<string, unknown>) => unknown) =>
-          fn({
-            booking: {
-              findMany: vi.fn(async () => []),
-              create: vi.fn(async () => ({
-                id: "booking_1",
-                startsAt: new Date(),
-                endsAt: new Date(),
-                status: "confirmed",
-                calendarEventId: "evt_1",
-                timezone: "UTC",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              })),
-              update: vi.fn(),
-            },
-            escalationRecord: {},
-            outboxEvent: { create: vi.fn() },
-          }),
-        ),
-        escalationRecord: { findMany: vi.fn(async () => []) },
-        organizationConfig: {
-          // Bootstrap has no orgId; LocalCalendarProvider path now requires orgId.
-          // Return null so resolveCalendarProvider falls through to NoopCalendarProvider.
-          findFirst: vi.fn(async () => null),
-        },
-        booking: {
-          findMany: vi.fn(async () => []),
-          create: vi.fn(async () => ({ id: "booking_1" })),
-          update: vi.fn(async () => ({ id: "booking_1" })),
-        },
-        conversationState: {
-          updateMany: vi.fn(async () => ({ count: 0 })),
-        },
-      } as never,
+      prismaClient: buildPrismaClient(),
       intentRegistry: {} as never,
       modeRegistry: { register } as never,
       logger: { info: vi.fn(), error: vi.fn() },
@@ -156,5 +178,33 @@ describe("bootstrapSkillMode governance wiring", () => {
       (arg) => Array.isArray(arg) && arg.some((h) => h === governanceInstance),
     );
     expect(hooksArg).toBeDefined();
+  });
+
+  it("registers ClaimClassifierHook immediately after DeterministicSafetyGateHook in hook chain", async () => {
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    // ClaimClassifierHook was constructed once (shared with simulation)
+    expect(ClaimClassifierHook).toHaveBeenCalledTimes(1);
+
+    // Main executor hook chain: [GovernanceHook, safetyGateHook, claimClassifierHook]
+    const mainExecutorArgs = SkillExecutorImpl.mock.calls[0]!;
+    const mainHooks = mainExecutorArgs.find(
+      (arg) =>
+        Array.isArray(arg) &&
+        arg.some((h: { name?: string }) => h.name === "deterministic-safety-gate"),
+    ) as Array<{ name?: string }> | undefined;
+    expect(mainHooks).toBeDefined();
+
+    const deterministicIdx = mainHooks!.findIndex((h) => h.name === "deterministic-safety-gate");
+    const classifierIdx = mainHooks!.findIndex((h) => h === claimClassifierInstance);
+    expect(deterministicIdx).toBeGreaterThanOrEqual(0);
+    expect(classifierIdx).toBeGreaterThanOrEqual(0);
+    // ClaimClassifierHook MUST follow DeterministicSafetyGateHook
+    expect(classifierIdx).toBeGreaterThan(deterministicIdx);
   });
 });
