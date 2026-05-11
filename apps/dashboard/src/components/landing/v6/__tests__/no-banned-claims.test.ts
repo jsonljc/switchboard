@@ -58,6 +58,36 @@ const BANNED: Banned[] = [
     pattern: /[Aa]pproval-first/,
     reason: "doctrine softened to 'agents draft, you publish' until slice B ships",
   },
+  // --- Fictional-agent / marketplace / self-serve copy fingerprints. ---
+  // The pilot GTM is a fixed 3-agent desk (Alex/Riley/Mira) with email-only
+  // onboarding. Anything resembling a marketplace catalog or self-serve flow is
+  // product fiction and must not return.
+  { pattern: /Sales Closer/i, reason: "fictional agent — only Alex/Riley/Mira ship" },
+  { pattern: /Nurture Specialist/i, reason: "fictional agent — only Alex/Riley/Mira ship" },
+  { pattern: /Browse by outcome/i, reason: "marketplace framing — GTM is fixed 3-agent desk" },
+  { pattern: /Agent marketplace/i, reason: "marketplace framing — GTM is fixed 3-agent desk" },
+  { pattern: /Browse agents/i, reason: "marketplace framing — GTM is fixed 3-agent desk" },
+  {
+    pattern: />[^<]*Choose an agent[^<]*</i,
+    reason: "marketplace framing — GTM is fixed 3-agent desk",
+  },
+  { pattern: /Free trial/i, reason: "self-serve framing — GTM is pilot/email-only" },
+  { pattern: /Start free/i, reason: "self-serve framing — GTM is pilot/email-only" },
+  { pattern: /Self[- ]serve/i, reason: "self-serve framing — GTM is pilot/email-only" },
+  // --- Banned route hrefs (link literals only — do NOT ban the phrase "Get started"). ---
+  // "Get started" is still a legitimate CTA label when it points to #pricing. We
+  // only ban the hrefs that target deleted self-serve/marketplace routes.
+  { pattern: /href="\/signup"/, reason: "/signup route deleted — pilot is email-only" },
+  { pattern: /href="\/get-started"/, reason: "/get-started route deleted — pilot is email-only" },
+  { pattern: /href="\/agents"/, reason: "/agents route deleted — no marketplace catalog" },
+  {
+    pattern: /href="\/pricing"/,
+    reason: "/pricing route deleted — home #pricing is source of truth",
+  },
+  {
+    pattern: /href="\/how-it-works"/,
+    reason: "/how-it-works route deleted — home #synergy covers this",
+  },
 ];
 
 describe("v6 landing — no banned marketing claims", () => {
