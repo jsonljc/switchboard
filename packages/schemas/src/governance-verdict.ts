@@ -35,6 +35,13 @@ export const GovernanceVerdictReasonSchema = z.enum([
   "unsupported_claim_rewritten", // NEW (1b-2): Layer 3 rewrote — claim sentence swapped
   "unsupported_claim_escalated", // NEW (1b-2): Layer 3 escalated — non-rewriteable type
   "claim_substantiation_stale", // NEW (1b-2): source existed but stale
+  // Phase 1c additions
+  "consent_pending",
+  "consent_revoked",
+  "disclosure_not_shown",
+  "disclosure_version_outdated",
+  "consent_cycle_reset",
+  "jurisdiction_mismatch",
 ]);
 
 export const GovernanceVerdictSourceSchema = z.enum([
