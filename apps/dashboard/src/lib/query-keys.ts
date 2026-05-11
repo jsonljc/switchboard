@@ -187,13 +187,16 @@ export const scopedKeys = (orgId: string) => ({
       [orgId, "roi", "summary", filters] as const,
   },
   reports: {
+    all: () => [orgId, "reports"] as const,
     byWindow: (window: string) => [orgId, "reports", window] as const,
   },
   contacts: {
+    all: () => [orgId, "contacts"] as const,
     list: (query: object) => [orgId, "contacts", "list", query] as const,
     detail: (id: string) => [orgId, "contacts", "detail", id] as const,
   },
   automations: {
+    all: () => [orgId, "automations"] as const,
     list: (query: object) => [orgId, "automations", "list", query] as const,
   },
   activity: {

@@ -60,6 +60,10 @@ describe("scopedKeys", () => {
       { status: "open" },
     ]);
     expect(keys.conversations.detail("c-1")).toEqual(["org-1", "conversations", "detail", "c-1"]);
+    expect(keys.reports.all()).toEqual(["org-1", "reports"]);
+    expect(keys.contacts.all()).toEqual(["org-1", "contacts"]);
+    expect(keys.automations.all()).toEqual(["org-1", "automations"]);
+    expect(keys.activity.all()).toEqual(["org-1", "activity"]);
   });
 
   it("produces different keys for different orgs", () => {
