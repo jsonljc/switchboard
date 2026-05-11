@@ -4,12 +4,12 @@ const FLOW = [
   {
     key: "alex",
     name: "Alex",
-    line: "tells Nova",
+    line: "tells Riley",
     payload: "which audiences converted",
   },
   {
-    key: "nova",
-    name: "Nova",
+    key: "riley",
+    name: "Riley",
     line: "tells Mira",
     payload: "which angles to retire",
   },
@@ -58,7 +58,7 @@ export function V6Synergy() {
               className="max-w-[30rem] text-[1.125rem] leading-[1.55] text-v6-graphite-2"
             >
               Built so each agent&rsquo;s signal can flow to the others — what Alex hears in chat,
-              what Nova sees in spend, what Mira learns from creative reviews.{" "}
+              what Riley sees in spend, what Mira learns from creative reviews.{" "}
               <b className="font-medium text-v6-graphite">The desk shares context as it grows.</b>
             </Reveal>
 

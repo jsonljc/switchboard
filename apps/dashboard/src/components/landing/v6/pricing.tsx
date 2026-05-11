@@ -2,7 +2,7 @@ import { ArrowSig } from "./glyphs";
 import { Reveal } from "./reveal";
 
 interface Card {
-  agent: "alex" | "nova" | "mira";
+  agent: "alex" | "riley" | "mira";
   name: string;
   job: string;
   /** Pilot floor. Always rendered as "From $X / month". */
@@ -29,13 +29,13 @@ const CARDS: Card[] = [
     hint: "Recommended starting point",
   },
   {
-    agent: "nova",
-    name: "Nova",
+    agent: "riley",
+    name: "Riley",
     job: "ad optimizer",
     price: "$249",
     subtitle: "Ad planning and optimization operator.",
-    cta: "Start with Nova",
-    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Nova",
+    cta: "Start with Riley",
+    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Riley",
     featured: false,
   },
   {

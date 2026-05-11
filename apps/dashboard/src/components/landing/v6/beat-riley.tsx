@@ -84,11 +84,11 @@ function dirClass(dir: "up" | "down" | "neutral", strong = false) {
   return "text-v6-graphite-3";
 }
 
-export function V6BeatNova() {
+export function V6BeatRiley() {
   return (
     <section
-      id="nova"
-      data-screen-label="04 Nova"
+      id="riley"
+      data-screen-label="04 Riley"
       className="border-t border-[hsl(20_8%_14%_/_0.06)]"
     >
       {/* Full-bleed dashboard band */}
@@ -96,7 +96,7 @@ export function V6BeatNova() {
         {/* Process loop */}
         <Reveal
           as="ol"
-          aria-label="What Nova does, end to end"
+          aria-label="What Riley does, end to end"
           className="grid w-full max-w-[78rem] list-none grid-cols-5 overflow-hidden rounded-[0.85rem] border border-[hsl(20_8%_14%_/_0.12)] bg-[hsl(28_30%_96%)] max-[780px]:grid-cols-2"
         >
           {LOOP.map((s, i) => {
@@ -159,7 +159,7 @@ export function V6BeatNova() {
             </span>
             <span className="inline-flex items-center gap-[0.5rem] text-v6-coral">
               <span className="v6-dash-pulse relative h-[6px] w-[6px] rounded-full bg-v6-coral" />
-              Nova · drafting
+              Riley · drafting
             </span>
           </header>
 
@@ -267,16 +267,16 @@ export function V6BeatNova() {
             </tbody>
           </table>
 
-          {/* Nova note */}
+          {/* Riley note */}
           <aside className="flex gap-4 border-t border-[hsl(14_75%_55%_/_0.15)] bg-[hsl(14_75%_55%_/_0.04)] px-[1.6rem] py-[1.4rem]">
             <span className="flex h-[2.4rem] w-[2.4rem] flex-shrink-0 items-center justify-center rounded-lg border border-[hsl(20_8%_14%_/_0.06)] bg-white text-v6-coral">
               <svg viewBox="0 0 48 48" className="h-[1.4rem] w-[1.4rem]">
-                <use href="#mark-nova" />
+                <use href="#mark-riley" />
               </svg>
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <span className="font-mono-v6 text-[10.5px] font-medium uppercase tracking-[0.08em] text-v6-coral">
-                Nova · 6:41am · draft
+                Riley · 6:41am · draft
               </span>
               <p className="text-[0.9375rem] leading-[1.5] text-v6-graphite">
                 <b className="font-medium">Cleaning · retarget · 30d</b> — period-over-period CPA up
@@ -312,7 +312,7 @@ export function V6BeatNova() {
               <span className="mr-2 inline-block h-[6px] w-[6px] rounded-full bg-v6-coral align-middle" />
               <span>04 — Ad optimization</span>
             </span>
-            <span>a 02 / · nova · paid spend</span>
+            <span>a 02 / · riley · paid spend</span>
           </div>
 
           <div className="grid items-start gap-x-20 gap-y-12 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] max-[900px]:grid-cols-1 max-[900px]:gap-8">
@@ -320,10 +320,10 @@ export function V6BeatNova() {
               <span className="font-mono-v6 inline-flex items-center gap-[0.55rem] text-[11px] font-medium uppercase tracking-[0.06em] text-v6-graphite-3">
                 <span className="inline-flex h-[1.1rem] w-[1.1rem] items-center justify-center">
                   <svg viewBox="0 0 48 48" className="h-full w-full">
-                    <use href="#mark-nova" />
+                    <use href="#mark-riley" />
                   </svg>
                 </span>
-                a 02 — Nova · paid spend
+                a 02 — Riley · paid spend
               </span>
               <h2
                 className="text-balance font-medium leading-[1.05] tracking-[-0.018em] text-v6-graphite"
@@ -333,12 +333,12 @@ export function V6BeatNova() {
                   Bad ad sets don&rsquo;t pause themselves.
                 </span>
                 <span className="block font-semibold text-v6-graphite">
-                  Nova finds the waste and{" "}
+                  Riley finds the waste and{" "}
                   <em className="font-semibold not-italic text-v6-coral">drafts the fix</em>.
                 </span>
               </h2>
               <p className="max-w-[26rem] text-[1.0625rem] leading-[1.5] text-v6-graphite-2">
-                Nova is your ad operator on shift. She plans campaigns, reads performance, spots
+                Riley is your ad operator on shift — plans campaigns, reads performance, spots
                 budget leaks, prepares changes, and turns the next move into a reviewable draft.{" "}
                 <b className="font-medium text-v6-graphite">You approve what goes live.</b>
               </p>
@@ -347,7 +347,7 @@ export function V6BeatNova() {
                   href="#pricing"
                   className="inline-flex items-center gap-[0.4rem] border-b border-[hsl(20_8%_14%_/_0.12)] pb-[0.2rem] text-[0.95rem] font-medium text-v6-graphite hover:border-v6-graphite"
                 >
-                  Start with Nova
+                  Start with Riley
                   <ArrowSig className="!h-[0.55rem] !w-[0.9rem]" />
                 </a>
               </div>

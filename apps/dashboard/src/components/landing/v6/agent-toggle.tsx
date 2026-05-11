@@ -4,7 +4,7 @@ import { type AgentKey, useAgent } from "./agent-context";
 
 const ITEMS: { key: AgentKey; name: string; job: string }[] = [
   { key: "alex", name: "Alex", job: "lead reply" },
-  { key: "nova", name: "Nova", job: "ad optimizer" },
+  { key: "riley", name: "Riley", job: "ad optimizer" },
   { key: "mira", name: "Mira", job: "creative" },
 ];
 
