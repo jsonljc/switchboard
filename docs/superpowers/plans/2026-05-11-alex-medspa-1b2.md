@@ -87,12 +87,18 @@ git log --oneline origin/docs/alex-medspa-1b1-spec ^origin/main
 git cherry-pick <commit-range>
 ```
 
-**Path C: neither merged.** Cherry-pick 1a first, then 1b-1:
+**Path C: neither merged.** As of plan-write time, `docs/alex-medspa-1b1-spec` is NOT pushed to origin — the 1b-1 implementation lives only in the local worktree at `/Users/jasonli/switchboard-alex-medspa-1b1`. Two sub-paths:
+
+**C1 — push 1b-1 first (preferred):** ask the user to `git push origin docs/alex-medspa-1b1-spec` from that worktree, then follow Path B.
+
+**C2 — cherry-pick from the local 1b-1 worktree directly:**
 
 ```bash
-git fetch origin docs/alex-medspa-sg-my-spec docs/alex-medspa-1b1-spec
-git cherry-pick <1a-implementation-commits>
-git cherry-pick <1b-1-implementation-commits>
+git fetch origin docs/alex-medspa-sg-my-spec
+git cherry-pick <1a-implementation-commits>   # from origin/docs/alex-medspa-sg-my-spec
+# 1b-1 commits live only locally — reference by SHA from the 1b-1 worktree:
+git -C /Users/jasonli/switchboard-alex-medspa-1b1 log --oneline origin/docs/alex-medspa-sg-my-spec..
+git cherry-pick <1b-1-implementation-commits-by-SHA>
 ```
 
 Verify after any path:
@@ -3837,13 +3843,18 @@ describe("skill-mode bootstrap — 1b-2 wiring", () => {
     // bootstrap returns the hooks array, assert their constructor names in
     // order. Otherwise, instrument the bootstrap to capture them.
     const hooks = /* obtain hooks array from bootstrap */;
-    const names = hooks.map((h) => h.constructor.name);
-    const detIdx = names.indexOf("DeterministicSafetyGateHook");
-    const ccIdx = names.indexOf("ClaimClassifierHook");
-    const trIdx = names.indexOf("TracePersistenceHook");
+    const names = hooks.map((h) => (h as { name?: string }).name ?? h.constructor.name);
+    const detIdx = names.indexOf("deterministic-safety-gate");
+    const ccIdx = names.indexOf("claim-classifier");
     expect(detIdx).toBeGreaterThanOrEqual(0);
     expect(ccIdx).toBe(detIdx + 1);
-    expect(trIdx).toBeGreaterThan(ccIdx);
+    // TracePersistenceHook ordering: only assert if it is registered. On main it is
+    // NOT in the hooks array; 1b-1 may or may not add it. The 1b-2 invariant is only
+    // that ClaimClassifier runs immediately after DeterministicSafetyGate.
+    const trIdx = names.indexOf("trace-persistence");
+    if (trIdx >= 0) {
+      expect(trIdx).toBeGreaterThan(ccIdx);
+    }
   });
 
   it("constructs separate GovernancePostureCache instances for each hook", () => {
@@ -4327,13 +4338,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 - [ ] **Step 4: Add the package script**
 
-Edit `packages/core/package.json` — add to `"scripts"`:
+`tsx` is in the workspace root `devDependencies` and in `packages/db`. To keep `packages/core`'s script self-contained, add `tsx` to its devDependencies too:
+
+```bash
+pnpm --filter @switchboard/core add -D tsx@^4.7.0
+```
+
+Then edit `packages/core/package.json` — add to `"scripts"`:
 
 ```json
 "classifier-eval": "tsx src/governance/classifier/eval/run-eval.ts"
 ```
 
-(Use whichever runner the workspace uses for TS scripts. If `tsx` is not the convention, mirror an existing script that runs a TS file directly.)
+Workspace hoisting MAY make tsx available without the explicit devDependency, but adding it locally keeps the script reliable across `node_modules` cleanups.
 
 Optionally add a top-level proxy in the root `package.json`:
 
