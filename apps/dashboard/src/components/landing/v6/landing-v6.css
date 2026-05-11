@@ -205,7 +205,7 @@
   color: hsl(200 70% 50%);
 }
 
-/* ── NOVA loop step indicators ── */
+/* ── BEAT loop step indicators (Riley dashboard) ── */
 
 [data-v6-landing] .v6-nl-step.done .v6-nl-num::after {
   content: " ✓";
@@ -243,7 +243,7 @@
   }
 }
 
-/* ── DASH pulse (Nova "drafting") ── */
+/* ── DASH pulse (Riley "drafting") ── */
 
 [data-v6-landing] .v6-dash-pulse::before {
   content: "";
