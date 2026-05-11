@@ -113,3 +113,5 @@ export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 export { BuilderRegistry } from "./builder-registry.js";
 export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
 export type { BuilderContext, RegisteredBuilder } from "./builder-registry.js";
+export { ClaimClassifierHook } from "./hooks/claim-classifier.js";
+export type { ClaimClassifierHookDeps } from "./hooks/claim-classifier.js";
