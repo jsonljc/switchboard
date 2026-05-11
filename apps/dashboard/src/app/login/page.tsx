@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
+import Link from "next/link";
 import { signIn, useSession, SessionProvider } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AgentMark } from "@/components/character/agent-mark";
