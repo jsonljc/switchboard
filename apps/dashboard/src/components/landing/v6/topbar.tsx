@@ -36,7 +36,7 @@ export function V6Topbar() {
 
         <nav aria-label="primary" className="flex flex-nowrap items-center gap-6 max-[640px]:gap-4">
           <a
-            href="#how"
+            href="#synergy"
             className="whitespace-nowrap text-sm font-medium text-v6-graphite-2 transition-colors hover:text-v6-graphite max-[640px]:hidden"
           >
             How it works
@@ -55,7 +55,7 @@ export function V6Topbar() {
             Sign in
           </a>
           <a
-            href="#closer"
+            href="#pricing"
             className="inline-flex items-center gap-[0.45rem] whitespace-nowrap rounded-full bg-v6-graphite px-4 py-[0.55rem] text-[0.8125rem] font-medium text-v6-cream transition-[transform,background-color] duration-200 hover:-translate-y-px hover:bg-black"
           >
             Get started

@@ -5,7 +5,7 @@ export function V6Footer() {
       className="border-t border-[hsl(20_8%_14%_/_0.12)] bg-v6-cream-3 px-0 py-20 text-v6-graphite-2 max-[900px]:py-14"
     >
       <div className="mx-auto w-full max-w-[80rem] px-10 max-[900px]:px-6">
-        <div className="mb-16 grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-12 max-[900px]:grid-cols-2 max-[900px]:gap-10">
+        <div className="mb-16 grid grid-cols-[1.4fr_1fr_1fr] gap-12 max-[900px]:grid-cols-2 max-[900px]:gap-10">
           <div className="flex max-w-[18rem] flex-col gap-4">
             <span className="inline-flex items-center gap-[0.55rem] text-[1.0625rem] font-semibold tracking-[-0.014em] text-v6-graphite">
               <span
@@ -24,21 +24,15 @@ export function V6Footer() {
             <a href="#alex">Alex · lead reply</a>
             <a href="#riley">Riley · ad optimizer</a>
             <a href="#mira">Mira · creative</a>
-            <a href="#how">How it works</a>
+            <a href="#synergy">How it works</a>
             <a href="#pricing">Pricing</a>
           </FooterCol>
 
           <FooterCol heading="Company">
-            <a href="#">Contact</a>
+            <a href="mailto:hello@switchboard.ai">Contact</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
             <a href="#">Data &amp; security</a>
-          </FooterCol>
-
-          <FooterCol heading="Status">
-            <a href="#">Status</a>
-            <a href="#">status.switchboard.live</a>
-            <a href="#">@switchboard</a>
           </FooterCol>
         </div>
 
