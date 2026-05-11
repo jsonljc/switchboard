@@ -76,3 +76,19 @@ The Task 15 spec review noted these uncovered branches in `claim-classifier.test
 - Multi-sentence response with mixed allow + escalate
 
 All are test-coverage gaps, not implementation bugs.
+
+## 10. Widen `GovernanceVerdictDetails` so 1b-2 doesn't need `as any`
+
+The 1b-1 `GovernanceVerdictDetails` type in `packages/core/src/governance/governance-verdict-store/types.ts`
+is narrowly typed to four fields (`matchCategory`, `matchId`, `matchedText`, `sentence`). 1b-2 writes
+richer details (`promptVersion`, `promptHash`, `schemaVersion`, `model`, `claimType`, `confidence`,
+`originalSentence`, `rewrittenSentence`, `matchedSourceId`, `matchedSourceType`, `errorKind`,
+`latencyBudgetMs`, `errorMessage`), forcing four `as any` casts in `claim-classifier.ts` at the
+`verdictStore.save(...)` call sites.
+
+The JSON column persists the richer details fine (Prisma `Json?` accepts anything), so this is
+purely a TypeScript narrowness issue, not a runtime bug. Fix: widen `GovernanceVerdictDetails`
+to `Record<string, unknown> & { matchCategory?: string; matchId?: string; matchedText?: string;
+sentence?: string }` (or split into 1b-1 and 1b-2 detail shapes with a discriminator).
+
+Five-minute follow-up; removes the four `as any` casts and aligns the type with what's persisted.
