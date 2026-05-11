@@ -1,4 +1,3 @@
-import { createId } from "@paralleldrive/cuid2";
 import type { SkillHook, SkillHookContext, SkillExecutionResult } from "../types.js";
 import type { GovernanceConfigResolver } from "../../governance/governance-config-resolver.js";
 import type { BannedPhraseEntry } from "../../governance/banned-phrases/types.js";
@@ -10,7 +9,8 @@ import type {
   SaveGovernanceVerdictInput,
 } from "../../governance/governance-verdict-store/types.js";
 import type { GovernancePostureCache } from "../../governance/posture-cache.js";
-import type { HandoffStore, HandoffPackage } from "../../handoff/types.js";
+import type { HandoffStore } from "../../handoff/types.js";
+import { buildHandoffPackage } from "../../handoff/build-handoff-package.js";
 import { resolveGovernanceMode } from "@switchboard/schemas";
 import type { ConversationStatusUpsertContext } from "../../channel-gateway/types.js";
 
@@ -53,35 +53,6 @@ export interface DeterministicSafetyGateHookDeps {
   conversationStore: ConversationStatusSetter;
   postureCache: GovernancePostureCache;
   clock: () => Date;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function buildHandoffPackage(
-  sessionId: string,
-  orgId: string,
-  turnCount: number,
-  clock: () => Date,
-): HandoffPackage {
-  return {
-    id: createId(),
-    sessionId,
-    organizationId: orgId,
-    reason: "compliance_concern",
-    status: "pending",
-    leadSnapshot: { channel: "skill" },
-    qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
-    conversationSummary: {
-      turnCount,
-      keyTopics: [],
-      objectionHistory: [],
-      sentiment: "neutral",
-    },
-    slaDeadlineAt: new Date(clock().getTime() + 4 * 60 * 60 * 1000), // 4 h SLA
-    createdAt: clock(),
-  };
 }
 
 // ---------------------------------------------------------------------------

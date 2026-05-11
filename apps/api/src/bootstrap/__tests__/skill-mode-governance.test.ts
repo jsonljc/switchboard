@@ -204,7 +204,9 @@ describe("bootstrapSkillMode governance wiring", () => {
     const classifierIdx = mainHooks!.findIndex((h) => h === claimClassifierInstance);
     expect(deterministicIdx).toBeGreaterThanOrEqual(0);
     expect(classifierIdx).toBeGreaterThanOrEqual(0);
-    // ClaimClassifierHook MUST follow DeterministicSafetyGateHook
-    expect(classifierIdx).toBeGreaterThan(deterministicIdx);
+    // ClaimClassifierHook MUST run IMMEDIATELY after DeterministicSafetyGateHook —
+    // spec §7 requires the two governance gates be adjacent so no other hook can
+    // mutate `result.response` between them.
+    expect(classifierIdx).toBe(deterministicIdx + 1);
   });
 });

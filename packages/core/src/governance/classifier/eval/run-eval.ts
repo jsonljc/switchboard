@@ -8,7 +8,7 @@
  *   EVAL=1 ANTHROPIC_API_KEY=sk-... pnpm --filter @switchboard/core classifier-eval
  *
  * What it does:
- * - Iterates the GOLDEN_SET once per model (Haiku 4.5 + Sonnet 4.5).
+ * - Iterates the GOLDEN_SET once per model (Haiku 4.5 + Sonnet 4.6).
  * - Records pass/fail per entry (correct claimType + confidence ≥ floor).
  * - Computes per-model accuracy and inter-model disagreement rate.
  * - Emits a JSON report to stdout and a Markdown-friendly summary to stderr.
@@ -35,7 +35,15 @@ import { createAnthropicClaimClassifier } from "../anthropic-classifier.js";
 import { GOLDEN_SET } from "./golden-set.js";
 import type { ClaimType } from "@switchboard/schemas";
 
-const MODELS = ["claude-haiku-4-5", "claude-sonnet-4-5"] as const;
+// Pinned model IDs. Haiku uses the dated suffix so the eval is reproducible against
+// a specific snapshot (matches the production default in
+// `resolveClaimClassifierConfig` and `packages/core/src/model-router.ts`). Sonnet
+// uses the family-alias form the rest of the codebase already standardizes on
+// (`claude-sonnet-4-6`). To rerun against a different model snapshot, set
+// `EVAL_HAIKU_MODEL` / `EVAL_SONNET_MODEL` rather than editing this file.
+const HAIKU_MODEL = process.env["EVAL_HAIKU_MODEL"] ?? "claude-haiku-4-5-20251001";
+const SONNET_MODEL = process.env["EVAL_SONNET_MODEL"] ?? "claude-sonnet-4-6";
+const MODELS = [HAIKU_MODEL, SONNET_MODEL] as const;
 
 type Model = (typeof MODELS)[number];
 
@@ -197,7 +205,7 @@ export async function runEval(): Promise<void> {
   console.warn("| Model | Accuracy | Passed | Failed | Total |");
   console.warn("| ----- | -------- | ------ | ------ | ----- |");
   for (const model of MODELS) {
-    const r = models[model];
+    const r = models[model]!;
     console.warn(
       `| ${model} | ${(r.accuracy * 100).toFixed(1)}% | ${r.passed} | ${r.failed} | ${r.total} |`,
     );
@@ -207,8 +215,8 @@ export async function runEval(): Promise<void> {
       `(${(disagreementRate * 100).toFixed(1)}%)`,
   );
 
-  const haiku = models[primaryModel];
-  const sonnet = models[secondaryModel];
+  const haiku = models[primaryModel]!;
+  const sonnet = models[secondaryModel]!;
   const haikuPass = haiku.accuracy >= 0.8;
   const sonnetPass = sonnet.accuracy >= 0.85;
   const driftPass = disagreementRate <= 0.15;
@@ -221,7 +229,13 @@ export async function runEval(): Promise<void> {
   const allPass = haikuPass && sonnetPass && driftPass;
   console.warn(`\nOverall: ${allPass ? "PASS" : "FAIL"}`);
 
-  process.exitCode = allPass ? 0 : 1;
+  // Soft gate by default: warn but exit 0 so the harness can be embedded in
+  // notebooks / dashboards / informational CI runs without hard-blocking
+  // unrelated work. To enforce the thresholds (e.g. in a dedicated
+  // classifier-regression CI step), set `EVAL_FAIL_ON_THRESHOLD=1`.
+  if (!allPass && process.env["EVAL_FAIL_ON_THRESHOLD"] === "1") {
+    process.exitCode = 1;
+  }
 }
 
 // ESM main detection — allows `tsx run-eval.ts` to invoke directly.

@@ -6,11 +6,13 @@ import type { RewriteTemplateEntry } from "../../../governance/classifier/rewrit
 import type { GovernanceConfigResolver } from "../../../governance/governance-config-resolver.js";
 import type { GovernancePostureCache } from "../../../governance/posture-cache.js";
 import type { GovernanceVerdictStore } from "../../../governance/governance-verdict-store/index.js";
+import { splitSentences } from "../../../governance/text/sentence-splitter.js";
 import type { SkillHookContext, SkillExecutionResult } from "../../types.js";
 import type { ClaimType } from "@switchboard/schemas";
 
 function fakeResolver(
   mode: "off" | "observe" | "enforce" | "missing" | "error",
+  latencyBudgetMs = 800,
 ): GovernanceConfigResolver {
   return async () => {
     if (mode === "missing") return { status: "missing" };
@@ -21,7 +23,7 @@ function fakeResolver(
         jurisdiction: "SG",
         clinicType: "medical",
         deterministicGate: { mode: "off" },
-        claimClassifier: { mode, latencyBudgetMs: 800, model: "claude-haiku-4-5-20251001" },
+        claimClassifier: { mode, latencyBudgetMs, model: "claude-haiku-4-5-20251001" },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     };
@@ -70,6 +72,27 @@ function throwingClassifier(throwOn: string): AnthropicClaimClassifier {
         model,
       };
     },
+  };
+}
+
+// Classifier that never resolves until the dispatcher aborts its signal.
+// Used to exercise the per-turn latency-budget timeout path in runClassifier.
+function hangingClassifier(): AnthropicClaimClassifier {
+  return {
+    classify: ({ signal }) =>
+      new Promise((_resolve, reject) => {
+        if (signal?.aborted) {
+          const err = new Error("aborted");
+          err.name = "AbortError";
+          reject(err);
+          return;
+        }
+        signal?.addEventListener("abort", () => {
+          const err = new Error("aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      }),
   };
 }
 
@@ -129,6 +152,7 @@ function makeHook(
     substantiation: "matched" | "stale" | "missing";
     posture: { mode: "off" | "observe" | "enforce" } | undefined;
     rewrites: ReadonlyArray<RewriteTemplateEntry>;
+    latencyBudgetMs: number;
   }> = {},
 ) {
   const mode = overrides.configMode ?? "enforce";
@@ -139,7 +163,7 @@ function makeHook(
   const conversationStore = fakeConversationStore();
   const postureCache = fakePostureCache(overrides.posture);
   const hook = new ClaimClassifierHook({
-    governanceConfigResolver: fakeResolver(mode),
+    governanceConfigResolver: fakeResolver(mode, overrides.latencyBudgetMs),
     postureCache,
     classifier,
     substantiationResolver: substantiation,
@@ -149,11 +173,7 @@ function makeHook(
     handoffStore: handoffStore as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     conversationStore: conversationStore as any,
-    splitSentences: (text: string) =>
-      text
-        .split(/(?<=[.!?])\s+/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0),
+    splitSentences,
     clock: () => new Date("2026-05-11T12:00:00.000Z"),
     renderHandoff: ({ jurisdiction }) =>
       jurisdiction === "SG"
@@ -213,7 +233,7 @@ describe("ClaimClassifierHook — name + config + mode matrix", () => {
   it("observe mode persists verdicts but does not modify response", async () => {
     const { hook, verdictStore, handoffStore } = makeHook({
       configMode: "observe",
-      classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
+      classifierOutcomes: { "Visible slimming after one session": "efficacy" },
       substantiation: "missing",
     });
     const result = makeResult("Visible slimming after one session.");
@@ -252,7 +272,7 @@ describe("ClaimClassifierHook — name + config + mode matrix", () => {
 describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
   it("allows when classifier returns none", async () => {
     const { hook, verdictStore } = makeHook({
-      classifierOutcomes: { "Our address is 123 Orchard Road.": "none" },
+      classifierOutcomes: { "Our address is 123 Orchard Road": "none" },
     });
     const result = makeResult("Our address is 123 Orchard Road.");
     await hook.afterSkill!(HOOK_CTX, result);
@@ -262,7 +282,7 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
 
   it("allows when substantiation matches", async () => {
     const { hook, verdictStore } = makeHook({
-      classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
+      classifierOutcomes: { "Visible slimming after one session": "efficacy" },
       substantiation: "matched",
     });
     const result = makeResult("Visible slimming after one session.");
@@ -272,7 +292,7 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
 
   it("rewrites in place when substantiation is missing for rewriteable claim", async () => {
     const { hook, verdictStore, handoffStore, conversationStore } = makeHook({
-      classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
+      classifierOutcomes: { "Visible slimming after one session": "efficacy" },
       substantiation: "missing",
     });
     const result = makeResult("Visible slimming after one session.");
@@ -285,7 +305,7 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
     expect(v.conversationId).toBe("sess_1");
     expect(v.details.promptVersion).toBe("claim-classifier@1.0.0");
     expect(v.details.claimType).toBe("efficacy");
-    expect(v.details.originalSentence).toBe("Visible slimming after one session.");
+    expect(v.details.originalSentence).toBe("Visible slimming after one session");
     expect(v.details.rewrittenSentence).toContain("Results vary");
     expect(result.response).toContain("Results vary");
     expect(result.response).not.toContain("Visible slimming");
@@ -295,7 +315,7 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
 
   it("emits claim_substantiation_stale when stale", async () => {
     const { hook, verdictStore } = makeHook({
-      classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
+      classifierOutcomes: { "Visible slimming after one session": "efficacy" },
       substantiation: "stale",
     });
     const result = makeResult("Visible slimming after one session.");
@@ -337,7 +357,7 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
 
   it("escalates on classifier_error", async () => {
     const { hook, verdictStore, conversationStore } = makeHook({
-      classifier: throwingClassifier("This sentence will throw."),
+      classifier: throwingClassifier("This sentence will throw"),
     });
     const result = makeResult("This sentence will throw.");
     await hook.afterSkill!(HOOK_CTX, result);
@@ -353,7 +373,7 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
 
   it("falls through to escalate when no rewrite template for the claim type", async () => {
     const { hook, verdictStore } = makeHook({
-      classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
+      classifierOutcomes: { "Visible slimming after one session": "efficacy" },
       substantiation: "missing",
       rewrites: [], // empty templates
     });
@@ -363,5 +383,75 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
     const v = verdictStore.saved[0] as any;
     expect(v.action).toBe("escalate");
     expect(v.reasonCode).toBe("unsupported_claim_escalated");
+  });
+
+  it("escalates without rewriting on testimonial claim type", async () => {
+    const { hook, verdictStore, handoffStore, conversationStore } = makeHook({
+      classifierOutcomes: {
+        "Sarah lost 8kg in three weeks with our programme": "testimonial",
+      },
+    });
+    const result = makeResult("Sarah lost 8kg in three weeks with our programme.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = verdictStore.saved[0] as any;
+    expect(v.action).toBe("escalate");
+    expect(v.reasonCode).toBe("unsupported_claim_escalated");
+    expect(v.details.claimType).toBe("testimonial");
+    expect(handoffStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const h = handoffStore.saved[0] as any;
+    // Real HandoffPackage shape — buildHandoffPackage output.
+    expect(h.organizationId).toBe("org_1");
+    expect(h.sessionId).toBe("sess_1");
+    expect(h.reason).toBe("compliance_concern");
+    expect(h.status).toBe("pending");
+    expect(h.conversationSummary.turnCount).toBe(1);
+    expect(typeof h.id).toBe("string");
+    expect(conversationStore.getStatus("sess_1")).toBe("human_override");
+    expect(result.response).toContain("clinic team");
+    expect(result.response).not.toContain("Sarah");
+  });
+
+  it("escalates without rewriting on medical-advice claim type", async () => {
+    const { hook, verdictStore, handoffStore, conversationStore } = makeHook({
+      classifierOutcomes: {
+        "Stop taking your statins before your peel": "medical-advice",
+      },
+    });
+    const result = makeResult("Stop taking your statins before your peel.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = verdictStore.saved[0] as any;
+    expect(v.action).toBe("escalate");
+    expect(v.reasonCode).toBe("unsupported_claim_escalated");
+    expect(v.details.claimType).toBe("medical-advice");
+    expect(v.details.originalSentence).toBe("Stop taking your statins before your peel");
+    expect(handoffStore.saved).toHaveLength(1);
+    expect(conversationStore.getStatus("sess_1")).toBe("human_override");
+    expect(result.response).toContain("clinic team");
+    expect(result.response).not.toContain("statins");
+  });
+
+  it("escalates on classifier_timeout when latency budget elapses", async () => {
+    const { hook, verdictStore, handoffStore, conversationStore } = makeHook({
+      classifier: hangingClassifier(),
+      latencyBudgetMs: 5,
+    });
+    const result = makeResult("Most clients see results.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = verdictStore.saved[0] as any;
+    expect(v.action).toBe("escalate");
+    expect(v.reasonCode).toBe("classifier_timeout");
+    expect(v.details.errorKind).toBe("timeout");
+    expect(v.details.latencyBudgetMs).toBe(5);
+    expect(v.details.originalSentence).toBe("Most clients see results");
+    expect(handoffStore.saved).toHaveLength(1);
+    expect(conversationStore.getStatus("sess_1")).toBe("human_override");
+    expect(result.response).toContain("clinic team");
   });
 });

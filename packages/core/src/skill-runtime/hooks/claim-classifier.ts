@@ -7,6 +7,9 @@ import type { RewriteTemplateEntry } from "../../governance/classifier/rewrite-t
 import type { GovernanceVerdictStore } from "../../governance/governance-verdict-store/index.js";
 import type { GovernanceConfigResolver } from "../../governance/governance-config-resolver.js";
 import type { GovernancePostureCache } from "../../governance/posture-cache.js";
+import type { HandoffStore } from "../../handoff/types.js";
+import { buildHandoffPackage } from "../../handoff/build-handoff-package.js";
+import type { ConversationStatusSetter } from "./deterministic-safety-gate.js";
 import {
   runClassifier,
   type ClassifierOutcome,
@@ -19,9 +22,8 @@ export interface ClaimClassifierHookDeps {
   substantiationResolver: SubstantiationResolver;
   rewriteLoader: (j: "SG" | "MY") => readonly RewriteTemplateEntry[];
   verdictStore: GovernanceVerdictStore;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handoffStore: { save(input: any): Promise<void> };
-  conversationStore: { setConversationStatus(sessionId: string, status: string): Promise<void> };
+  handoffStore: HandoffStore;
+  conversationStore: ConversationStatusSetter;
   splitSentences: (text: string) => readonly string[];
   clock: () => Date;
   renderHandoff: (input: {
@@ -294,12 +296,9 @@ export class ClaimClassifierHook implements SkillHook {
       console.error("[claim-classifier] verdictStore.save threw on fail-closed", err);
     }
     try {
-      await this.deps.handoffStore.save({
-        reason: "compliance_concern",
-        deploymentId: ctx.deploymentId,
-        sessionId: ctx.sessionId,
-        payload: { sourceGuard: "claim_classifier", reasonCode: "governance_unavailable" },
-      });
+      await this.deps.handoffStore.save(
+        buildHandoffPackage(ctx.sessionId, ctx.orgId, result.trace.turnCount, this.deps.clock),
+      );
     } catch (err) {
       console.error("[claim-classifier] handoffStore.save threw on fail-closed", err);
     }
@@ -316,7 +315,6 @@ export class ClaimClassifierHook implements SkillHook {
     mode: "off" | "observe" | "enforce";
   }): Promise<void> {
     const { ctx, result, actions, jurisdiction, clinicType, mode } = args;
-    let firstEscalateVerdictId: string | null = null;
     const decidedAt = this.deps.clock().toISOString();
     const handoff = this.deps.renderHandoff({
       jurisdiction,
@@ -340,8 +338,7 @@ export class ClaimClassifierHook implements SkillHook {
       try {
         const saveInput = { ...verdict, deploymentId: ctx.deploymentId, details: a.details };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const saved = (await this.deps.verdictStore.save(saveInput as any)) as { id?: string };
-        if (firstEscalateVerdictId === null && saved.id) firstEscalateVerdictId = saved.id;
+        await this.deps.verdictStore.save(saveInput as any);
       } catch (err) {
         console.error("[claim-classifier] verdictStore.save threw on escalate", err);
       }
@@ -350,12 +347,9 @@ export class ClaimClassifierHook implements SkillHook {
     if (mode === "observe") return;
 
     try {
-      await this.deps.handoffStore.save({
-        reason: "compliance_concern",
-        deploymentId: ctx.deploymentId,
-        sessionId: ctx.sessionId,
-        payload: { sourceGuard: "claim_classifier", verdictId: firstEscalateVerdictId },
-      });
+      await this.deps.handoffStore.save(
+        buildHandoffPackage(ctx.sessionId, ctx.orgId, result.trace.turnCount, this.deps.clock),
+      );
     } catch (err) {
       console.error("[claim-classifier] handoffStore.save threw on escalate", err);
     }
