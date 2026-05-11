@@ -965,6 +965,7 @@ model AgentDeployment {
   deploymentStates      DeploymentState[]
   deploymentConnections DeploymentConnection[]
   governanceVerdicts    GovernanceVerdict[]
+  approvedComplianceClaims ApprovedComplianceClaim[]
 
   @@unique([organizationId, listingId])
   @@index([organizationId])
@@ -993,6 +994,25 @@ model GovernanceVerdict {
   @@index([deploymentId, decidedAt])
   @@index([conversationId, decidedAt])
   @@index([deploymentId, sourceGuard, decidedAt])
+}
+
+model ApprovedComplianceClaim {
+  id            String   @id @default(cuid())
+  deploymentId  String
+  jurisdiction  String   // "SG" | "MY"
+  claimType     String   // matches ClaimTypeSchema enum
+  claimText     String   @db.Text
+  reviewedBy    String
+  reviewedAt    DateTime
+  validUntil    DateTime?
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deployment    AgentDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId, jurisdiction, claimType])
+  @@index([deploymentId, validUntil])
 }
 
 // ── Marketplace: Agent Tasks (units of work) ──

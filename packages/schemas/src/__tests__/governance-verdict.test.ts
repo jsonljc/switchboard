@@ -128,6 +128,37 @@ describe("GovernanceVerdictReasonSchema (1b-1 extensions)", () => {
   });
 });
 
+describe("GovernanceVerdictReasonSchema — 1b-2 additions", () => {
+  it("accepts unsupported_claim_rewritten", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("unsupported_claim_rewritten");
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts unsupported_claim_escalated", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("unsupported_claim_escalated");
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts claim_substantiation_stale", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("claim_substantiation_stale");
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts classifier_error", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("classifier_error");
+    expect(result.success).toBe(true);
+  });
+
+  it("classifier_error is distinct from classifier_timeout (both valid, separate codes)", () => {
+    expect(GovernanceVerdictReasonSchema.safeParse("classifier_error").success).toBe(true);
+    expect(GovernanceVerdictReasonSchema.safeParse("classifier_timeout").success).toBe(true);
+    // two separate reason codes — not aliases of each other
+    const errorCode = "classifier_error" as string;
+    const timeoutCode = "classifier_timeout" as string;
+    expect(errorCode).not.toBe(timeoutCode);
+  });
+});
+
 describe("GovernanceVerdictSourceSchema (1b-1 changes)", () => {
   it("accepts banned_phrase_scanner", () => {
     expect(GovernanceVerdictSourceSchema.safeParse("banned_phrase_scanner").success).toBe(true);

@@ -30,6 +30,7 @@ export async function bootstrapSkillMode(
     SkillExecutorImpl,
     GovernanceHook,
     DeterministicSafetyGateHook,
+    ClaimClassifierHook,
     AnthropicToolCallingAdapter,
     BuilderRegistry,
     createCrmQueryTool,
@@ -40,6 +41,13 @@ export async function bootstrapSkillMode(
     createAgentDeploymentGovernanceResolver,
     InMemoryGovernancePostureCache,
     loadBannedPhrases,
+    createAnthropicClaimClassifier,
+    createSubstantiationResolver,
+    createInMemoryLRU,
+    loadRegulatoryPublicSources,
+    loadRewriteTemplates,
+    splitSentences,
+    renderHandoffTemplate,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
   const { HandoffPackageAssembler, HandoffNotifier } = await import("@switchboard/core");
@@ -52,6 +60,7 @@ export async function bootstrapSkillMode(
     PrismaBusinessFactsStore,
     PrismaDeploymentStore,
     PrismaGovernanceVerdictStore,
+    createPrismaApprovedComplianceClaimStore,
   } = await import("@switchboard/db");
   const { NoopNotifier, TelegramApprovalNotifier, CompositeNotifier } =
     await import("@switchboard/core/notifications");
@@ -278,7 +287,41 @@ export async function bootstrapSkillMode(
     clock: () => new Date(),
   });
 
-  const hooks = [new GovernanceHook(toolsMap), safetyGateHook];
+  // ---------------------------------------------------------------------------
+  // ClaimClassifierHook infrastructure (Task 15/16)
+  // Runs AFTER DeterministicSafetyGateHook (deterministic banned-phrase / escalation
+  // triggers have already fired by this point). Per spec §6.7 the posture cache is
+  // a distinct instance — mixing with 1b-1's cache could cause fail-closed mode
+  // contamination between the two independent governance gates.
+  // Reuses the process-level anthropicClient constructed above — no new client.
+  // ---------------------------------------------------------------------------
+  const approvedClaimStore = createPrismaApprovedComplianceClaimStore(prismaClient);
+  const substantiationCache = createInMemoryLRU();
+  const substantiationResolver = createSubstantiationResolver({
+    approvedClaimStore,
+    regulatoryLoader: loadRegulatoryPublicSources,
+    cache: substantiationCache,
+    clock: () => new Date(),
+  });
+  const claimClassifier = createAnthropicClaimClassifier(anthropicClient);
+  // Per-hook posture cache — separate instance from 1b-1's governancePostureCache.
+  const claimClassifierPostureCache = new InMemoryGovernancePostureCache();
+
+  const claimClassifierHook = new ClaimClassifierHook({
+    governanceConfigResolver,
+    postureCache: claimClassifierPostureCache,
+    classifier: claimClassifier,
+    substantiationResolver,
+    rewriteLoader: loadRewriteTemplates,
+    verdictStore: governanceVerdictStore,
+    handoffStore,
+    conversationStore: conversationStatusSetter,
+    splitSentences,
+    clock: () => new Date(),
+    renderHandoff: renderHandoffTemplate,
+  });
+
+  const hooks = [new GovernanceHook(toolsMap), safetyGateHook, claimClassifierHook];
   const skillExecutor = new SkillExecutorImpl(
     adapter,
     toolsMap,
@@ -343,19 +386,22 @@ export async function bootstrapSkillMode(
     }),
   );
 
-  // Startup assertion: verify all six deterministic gate deps reached SkillMode.
+  // Startup assertion: verify gate deps reached SkillMode.
   // Missing deps cause silent gate degradation at runtime — fail fast instead.
   const missingGateDeps: string[] = [];
+  // 1b-1 deterministic-gate deps
   if (!governanceConfigResolver) missingGateDeps.push("governanceConfigResolver");
   if (!governanceVerdictStore) missingGateDeps.push("verdictStore");
   if (!governancePostureCache) missingGateDeps.push("postureCache");
   if (!handoffStore) missingGateDeps.push("handoffStore");
   if (!conversationStatusSetter) missingGateDeps.push("conversationStatusSetter");
   if (!loadBannedPhrases) missingGateDeps.push("bannedPhraseLoader");
+  // 1b-2 claim-classifier deps
+  if (!claimClassifier) missingGateDeps.push("claimClassifier");
+  if (!substantiationResolver) missingGateDeps.push("substantiationResolver");
+  if (!claimClassifierPostureCache) missingGateDeps.push("claimClassifierPostureCache");
   if (missingGateDeps.length > 0) {
-    throw new Error(
-      `SkillMode: deterministic gate deps incomplete — missing: ${missingGateDeps.join(", ")}`,
-    );
+    throw new Error(`SkillMode: gate deps incomplete — missing: ${missingGateDeps.join(", ")}`);
   }
 
   logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
@@ -366,10 +412,13 @@ export async function bootstrapSkillMode(
   // schema-only synthetic context. SimulationPolicyHook still blocks write/external_send/
   // external_mutation/irreversible operations.
   const { SimulationPolicyHook } = await import("@switchboard/core/skill-runtime");
-  // Safety gate shared instance — same resolver/cache so simulation shares posture warm-hits.
+  // Safety gate and claim classifier shared instances — same resolver/cache so simulation
+  // shares posture warm-hits from the main executor. SimulationPolicyHook trails last to
+  // block any write operations that survive governance filtering.
   const simulationHooks = [
     new GovernanceHook(toolsMap),
     safetyGateHook,
+    claimClassifierHook,
     new SimulationPolicyHook(),
   ];
   const simulationExecutor = new SkillExecutorImpl(

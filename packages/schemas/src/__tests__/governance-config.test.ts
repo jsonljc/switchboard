@@ -3,6 +3,8 @@ import {
   GovernanceConfigSchema,
   GovernanceModeSchema,
   resolveGovernanceMode,
+  ClaimClassifierConfigSchema,
+  resolveClaimClassifierConfig,
 } from "../governance-config.js";
 
 describe("GovernanceModeSchema", () => {
@@ -79,5 +81,71 @@ describe("resolveGovernanceMode", () => {
         deterministicGate: { mode: "observe" },
       }),
     ).toBe("observe");
+  });
+});
+
+describe("ClaimClassifierConfigSchema", () => {
+  it("applies defaults when no fields provided", () => {
+    const parsed = ClaimClassifierConfigSchema.parse({});
+    expect(parsed).toEqual({
+      mode: "off",
+      latencyBudgetMs: 800,
+      model: "claude-haiku-4-5-20251001",
+    });
+  });
+
+  it("accepts an explicit enforce config", () => {
+    const parsed = ClaimClassifierConfigSchema.parse({
+      mode: "enforce",
+      latencyBudgetMs: 1200,
+      model: "claude-sonnet-4-6",
+    });
+    expect(parsed).toEqual({
+      mode: "enforce",
+      latencyBudgetMs: 1200,
+      model: "claude-sonnet-4-6",
+    });
+  });
+
+  it("rejects non-positive latencyBudgetMs", () => {
+    expect(ClaimClassifierConfigSchema.safeParse({ latencyBudgetMs: 0 }).success).toBe(false);
+    expect(ClaimClassifierConfigSchema.safeParse({ latencyBudgetMs: -1 }).success).toBe(false);
+  });
+
+  it("rejects unknown mode", () => {
+    expect(ClaimClassifierConfigSchema.safeParse({ mode: "warn" }).success).toBe(false);
+  });
+});
+
+describe("resolveClaimClassifierConfig", () => {
+  it("returns full defaults for null config", () => {
+    const resolved = resolveClaimClassifierConfig(null);
+    expect(resolved.mode).toBe("off");
+    expect(resolved.latencyBudgetMs).toBe(800);
+    expect(resolved.model).toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("returns defaults when claimClassifier sub-block is absent", () => {
+    const config = GovernanceConfigSchema.parse({
+      jurisdiction: "SG",
+      clinicType: "medical",
+    });
+    const resolved = resolveClaimClassifierConfig(config);
+    expect(resolved.mode).toBe("off");
+  });
+
+  it("reads enforce mode from passthrough sub-block", () => {
+    const config = GovernanceConfigSchema.parse({
+      jurisdiction: "SG",
+      clinicType: "medical",
+      claimClassifier: {
+        mode: "enforce",
+        latencyBudgetMs: 600,
+        model: "claude-haiku-4-5-20251001",
+      },
+    });
+    const resolved = resolveClaimClassifierConfig(config);
+    expect(resolved.mode).toBe("enforce");
+    expect(resolved.latencyBudgetMs).toBe(600);
   });
 });

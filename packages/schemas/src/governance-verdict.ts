@@ -31,6 +31,10 @@ export const GovernanceVerdictReasonSchema = z.enum([
   "outside_whatsapp_window",
   "consent_missing",
   "classifier_timeout",
+  "classifier_error", // NEW (1b-2): API failure (not timeout)
+  "unsupported_claim_rewritten", // NEW (1b-2): Layer 3 rewrote — claim sentence swapped
+  "unsupported_claim_escalated", // NEW (1b-2): Layer 3 escalated — non-rewriteable type
+  "claim_substantiation_stale", // NEW (1b-2): source existed but stale
 ]);
 
 export const GovernanceVerdictSourceSchema = z.enum([

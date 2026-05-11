@@ -113,3 +113,13 @@ export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 export { BuilderRegistry } from "./builder-registry.js";
 export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
 export type { BuilderContext, RegisteredBuilder } from "./builder-registry.js";
+export { ClaimClassifierHook } from "./hooks/claim-classifier.js";
+export type { ClaimClassifierHookDeps } from "./hooks/claim-classifier.js";
+// 1b-2 classifier infrastructure re-exported for bootstrap wiring convenience
+export { splitSentences } from "../governance/text/sentence-splitter.js";
+export { renderHandoffTemplate } from "../governance/handoff-template.js";
+export { createAnthropicClaimClassifier } from "../governance/classifier/anthropic-classifier.js";
+export { createSubstantiationResolver } from "../governance/classifier/substantiation-resolver.js";
+export { createInMemoryLRU } from "../governance/classifier/substantiation-cache.js";
+export { loadRegulatoryPublicSources } from "../governance/classifier/regulatory-sources/index.js";
+export { loadRewriteTemplates } from "../governance/classifier/rewrite-templates/index.js";
