@@ -3,6 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyInstance } from "fastify";
+import type { ConsentService, ContactConsentReader } from "@switchboard/core";
+import { registerAdminConsentRoutes } from "../routes/admin-consent.js";
 import { actionsRoutes } from "../routes/actions.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
@@ -60,7 +62,15 @@ import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 
-export async function registerRoutes(app: FastifyInstance): Promise<void> {
+export interface RegisterRoutesDeps {
+  consentService?: ConsentService;
+  consentReader?: ContactConsentReader;
+}
+
+export async function registerRoutes(
+  app: FastifyInstance,
+  deps?: RegisterRoutesDeps,
+): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
   await app.register(setupRoutes, { prefix: "/api/setup" });
   await app.register(actionsRoutes, { prefix: "/api/actions" });
@@ -157,4 +167,22 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(playbookRoutes);
   await app.register(simulateRoutes);
   await app.register(websiteScanRoutes);
+
+  // Phase 1c — admin consent endpoint.
+  // Only registered when consent deps are wired (SkillMode bootstrap succeeded).
+  // Existing callers (test-server.ts, etc.) that omit deps continue to work —
+  // admin endpoint simply won't be reachable in those environments.
+  if (deps?.consentService && deps?.consentReader) {
+    registerAdminConsentRoutes(app, {
+      consentService: deps.consentService,
+      consentReader: deps.consentReader,
+      resolveActor: async (req) => {
+        // Read actor from request auth context. Apps using authMiddleware should
+        // populate req.user.id. Fallback for any caller without auth:
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const user = (req as any).user;
+        return (user?.id as string | undefined) ?? "system:unknown_admin";
+      },
+    });
+  }
 }

@@ -395,6 +395,8 @@ export async function buildServer() {
   // --- SkillMode registration (skill-backed deployments) ---
   let simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null = null;
   let simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null = null;
+  let skillModeConsentService: import("@switchboard/core").ConsentService | null = null;
+  let skillModeContactConsentReader: import("@switchboard/core").ContactConsentReader | null = null;
   try {
     if (!prismaClient) {
       throw new Error("SkillMode requires DATABASE_URL — prismaClient is null");
@@ -408,6 +410,8 @@ export async function buildServer() {
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;
+    skillModeConsentService = skillModeResult.consentService;
+    skillModeContactConsentReader = skillModeResult.contactConsentReader;
   } catch (err) {
     if (process.env.NODE_ENV === "production") {
       throw err;
@@ -730,7 +734,10 @@ export async function buildServer() {
   await registerInngest(app, { instantFormAdapter });
 
   // --- Register all API routes ---
-  await registerRoutes(app);
+  await registerRoutes(app, {
+    consentService: skillModeConsentService ?? undefined,
+    consentReader: skillModeContactConsentReader ?? undefined,
+  });
 
   return app;
 }

@@ -8,8 +8,14 @@ import {
   PrismaHandoffStore,
   PrismaGovernanceVerdictStore,
   PrismaDeploymentStore,
+  createPrismaConsentStore,
 } from "@switchboard/db";
-import { ChannelGateway, ConversationLifecycleTracker } from "@switchboard/core";
+import {
+  ChannelGateway,
+  ConversationLifecycleTracker,
+  createConsentService,
+  loadRevocationKeywords,
+} from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
 import {
   ConversationCompoundingService,
@@ -162,6 +168,35 @@ export function createGatewayBridge(
     },
   };
 
+  // ---------------------------------------------------------------------------
+  // Phase 1c — consent revocation gate deps.
+  // Chat process is separate from the API process; can't share runtime instances.
+  // Each process has its own in-memory cache; acceptable because each process
+  // warms independently on first resolve.
+  //
+  // ConsentService construction-time binding to deploymentId/orgId/clinicType
+  // is a v1 limitation — see Phase 2 follow-up doc.
+  // ---------------------------------------------------------------------------
+  const gatewayConsentStore = createPrismaConsentStore({ prisma });
+  const gatewayConsentPostureCache = new InMemoryGovernancePostureCache();
+  const gatewaySessionContactResolver = async (sessionId: string): Promise<string | null> => {
+    const thread = await prisma.conversationThread.findFirst({
+      where: { id: sessionId },
+      select: { contactId: true },
+    });
+    return thread?.contactId ?? null;
+  };
+  const gatewayConsentService = createConsentService({
+    store: gatewayConsentStore,
+    verdictStore: gatewayGovernanceVerdictStore,
+    handoffStore: gatewayHandoffStore,
+    conversationStore: gatewayConversationStatusSetter,
+    clock: () => new Date(),
+    deploymentId: "system:consent-service",
+    orgId: "system",
+    clinicType: "medical",
+  });
+
   // Startup assertion: all six ChannelGateway pre-input gate deps must be present.
   // Missing deps cause silent gate degradation at runtime — fail fast instead.
   const missingGatewayDeps: string[] = [];
@@ -189,6 +224,15 @@ export function createGatewayBridge(
     postureCache: gatewayPostureCache,
     handoffStore: gatewayHandoffStore,
     conversationStatusSetter: gatewayConversationStatusSetter,
+    consentRevocationGate: {
+      governanceConfigResolver: gatewayGovernanceResolver,
+      consentService: gatewayConsentService,
+      postureCache: gatewayConsentPostureCache,
+      revocationKeywordLoader: loadRevocationKeywords,
+      sessionContactResolver: gatewaySessionContactResolver,
+      verdictStore: gatewayGovernanceVerdictStore,
+      clock: () => new Date(),
+    },
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
       lifecycleTracker.recordMessage({
