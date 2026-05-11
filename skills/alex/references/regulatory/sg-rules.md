@@ -82,3 +82,18 @@ Source-of-truth (TS modules):
 This markdown is not parsed at runtime; it documents the runtime behavior for
 operator and reviewer reference. Update both this file and the TS modules
 together when authoring new rules.
+
+## Runtime PDPA consent gate (Phase 1c)
+
+Runtime enforcement layered atop the prompt-level rules above. **Sources of truth (TS, not markdown):**
+
+- AI disclosure copy: `packages/core/src/consent/disclosure-copy.ts` (versioned `AI_DISCLOSURE_VERSIONS` in `packages/schemas/src/pdpa-consent.ts`).
+- Revocation keyword tables: `packages/core/src/consent/revocation-keywords/{common,sg,my}.ts`.
+- Revocation acknowledgment copy: `packages/core/src/consent/revocation-ack.ts`.
+- Consent state mutation surface: `packages/core/src/consent/consent-service.ts`.
+- Outbound consent gate: `packages/core/src/skill-runtime/hooks/pdpa-consent-gate.ts`.
+- Pre-input revocation gate: `packages/core/src/channel-gateway/consent-revocation-gate.ts`.
+
+The runtime hook detects whether your first outbound includes the disclosure copy verbatim (substring match). If it does not in enforce mode, a `disclosure_not_shown` warning verdict is emitted. The hook NEVER blocks on disclosure validation — this is a tuning signal, not a content gate.
+
+Revocation keywords are intentionally narrow. False-positive revoke is worse than missed revoke (1b-1 escalation triggers catch nuanced complaints). Tighten patterns before broadening.
