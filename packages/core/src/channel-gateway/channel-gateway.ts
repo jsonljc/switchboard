@@ -13,6 +13,7 @@ import { parseApprovalResponsePayload } from "./approval-response-payload.js";
 import { handleApprovalResponse } from "./handle-approval-response.js";
 import { isOptOutKeyword } from "./opt-out-keywords.js";
 import { runPreInputGate } from "./pre-input-gate.js";
+import { runConsentRevocationGate } from "./consent-revocation-gate.js";
 
 const OPT_OUT_CONFIRMATION =
   "You've been opted out of WhatsApp messages from us. Reply START at any time to opt back in.";
@@ -179,6 +180,21 @@ export class ChannelGateway {
       );
       await replySink.send(OPT_OUT_CONFIRMATION);
       return;
+    }
+
+    // 4e-pre. Pre-input consent revocation gate (Phase 1c). Runs BEFORE the
+    // 1b-1 escalation gate so user revocation takes precedence over medical-
+    // safety/compliance triggers.
+    if (this.config.consentRevocationGate) {
+      const consentOutcome = await runConsentRevocationGate({
+        cfg: this.config.consentRevocationGate,
+        inboundText: message.text,
+        sessionId: message.sessionId,
+        deploymentId: resolved.deploymentId,
+        organizationId: resolved.organizationId,
+        replySink,
+      });
+      if (consentOutcome === "revoked") return;
     }
 
     // 4e. Pre-input deterministic gate — must run before typing signal and submit.

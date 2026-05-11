@@ -8,6 +8,9 @@ import type { EscalationTriggerEntry } from "../governance/escalation-triggers/t
 import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
 import type { GovernancePostureCache } from "../governance/posture-cache.js";
 import type { HandoffStore } from "../handoff/types.js";
+import type { ConsentService } from "../consent/consent-service.js";
+import type { RevocationKeywordEntry } from "../consent/revocation-keywords/types.js";
+import type { PdpaJurisdiction } from "@switchboard/schemas";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -120,6 +123,21 @@ export interface ChannelGatewayConfig {
    * When omitted, the flip step is skipped (errors logged in enforce path).
    */
   conversationStatusSetter?: GatewayConversationStatusSetter;
+  // ---------------------------------------------------------------------------
+  // Pre-input consent revocation gate deps (Phase 1c).
+  // Optional — when omitted, the gate is a pass-through (backward compat).
+  // Runs BEFORE the 1b-1 escalation gate; user revocation takes precedence
+  // over medical-safety/compliance triggers.
+  // ---------------------------------------------------------------------------
+  consentRevocationGate?: {
+    governanceConfigResolver: GovernanceConfigResolver;
+    consentService: ConsentService;
+    postureCache: GovernancePostureCache;
+    revocationKeywordLoader: (j: PdpaJurisdiction) => ReadonlyArray<RevocationKeywordEntry>;
+    sessionContactResolver: (sessionId: string) => Promise<string | null>;
+    verdictStore: GovernanceVerdictStore;
+    clock: () => Date;
+  };
 }
 
 export interface GatewayConversationStore {
