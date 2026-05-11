@@ -128,6 +128,35 @@ describe("GovernanceVerdictReasonSchema (1b-1 extensions)", () => {
   });
 });
 
+describe("GovernanceVerdictReasonSchema — 1b-2 additions", () => {
+  it("accepts unsupported_claim_rewritten", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("unsupported_claim_rewritten");
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts unsupported_claim_escalated", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("unsupported_claim_escalated");
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts claim_substantiation_stale", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("claim_substantiation_stale");
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts classifier_error (distinct from classifier_timeout)", () => {
+    const errorParse = GovernanceVerdictReasonSchema.safeParse("classifier_error");
+    const timeoutParse = GovernanceVerdictReasonSchema.safeParse("classifier_timeout");
+    expect(errorParse.success).toBe(true);
+    expect(timeoutParse.success).toBe(true);
+  });
+
+  it("rejects unknown reasons", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("not_a_reason");
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("GovernanceVerdictSourceSchema (1b-1 changes)", () => {
   it("accepts banned_phrase_scanner", () => {
     expect(GovernanceVerdictSourceSchema.safeParse("banned_phrase_scanner").success).toBe(true);
