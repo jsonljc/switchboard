@@ -32,7 +32,6 @@ export function V6Footer() {
             <a href="mailto:hello@switchboard.ai">Contact</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
-            <a href="#">Data &amp; security</a>
           </FooterCol>
         </div>
 
