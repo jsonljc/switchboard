@@ -1,0 +1,251 @@
+import {
+  evaluateConsentGate,
+  resolveConsentStateConfig,
+  type PdpaJurisdiction,
+} from "@switchboard/schemas";
+import type { SkillHook, SkillHookContext, SkillExecutionResult } from "../types.js";
+import type { GovernanceConfigResolver } from "../../governance/governance-config-resolver.js";
+import type { GovernancePostureCache } from "../../governance/posture-cache.js";
+import type { GovernanceVerdictStore } from "../../governance/governance-verdict-store/types.js";
+import type { HandoffStore } from "../../handoff/types.js";
+import { buildHandoffPackage } from "../../handoff/build-handoff-package.js";
+import { renderHandoffTemplate } from "../../governance/handoff-template.js";
+import type { ConsentService } from "../../consent/consent-service.js";
+import type { ContactConsentReader } from "../../consent/contact-consent-reader.js";
+import { ConsentJurisdictionMismatch } from "../../consent/errors.js";
+import { DISCLOSURE_COPY } from "../../consent/disclosure-copy.js";
+import type { ConversationStatusSetter } from "./deterministic-safety-gate.js";
+
+export interface PdpaConsentGateHookDeps {
+  governanceConfigResolver: GovernanceConfigResolver;
+  postureCache: GovernancePostureCache;
+  consentService: ConsentService;
+  contactConsentReader: ContactConsentReader;
+  sessionContactResolver: (sessionId: string) => Promise<string | null>;
+  verdictStore: GovernanceVerdictStore;
+  handoffStore: HandoffStore;
+  conversationStore: ConversationStatusSetter;
+  clock: () => Date;
+}
+
+export class PdpaConsentGateHook implements SkillHook {
+  readonly name = "pdpa-consent-gate";
+
+  constructor(private readonly deps: PdpaConsentGateHookDeps) {}
+
+  async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
+    const {
+      governanceConfigResolver,
+      postureCache,
+      consentService,
+      contactConsentReader,
+      sessionContactResolver,
+    } = this.deps;
+
+    // 1. Resolve governance config.
+    const resolution = await governanceConfigResolver(ctx.deploymentId);
+    if (resolution.status === "missing") return;
+
+    if (resolution.status === "error") {
+      // Mirror 1b-1 fail-open/fail-closed semantics, scoped to consent-gate posture.
+      const cached = postureCache.lastKnown(ctx.deploymentId);
+      if (cached?.mode === "enforce") {
+        // 1c special-case: do NOT block result.response. Operational only blocks on
+        // revoked, which we cannot determine here. Emit critical verdict and proceed.
+        await this.saveVerdict({
+          reasonCode: "governance_unavailable",
+          action: "allow",
+          auditLevel: "critical",
+          jurisdiction: cached.jurisdiction,
+          clinicType: cached.clinicType,
+          conversationId: ctx.sessionId,
+          originalText: result.response,
+          details: { event: "resolver_error_fail_open_in_consent_gate" },
+          deploymentId: ctx.deploymentId,
+        });
+      } else {
+        console.error("[pdpa-consent-gate] resolver error; fail-open (no cached enforce posture)");
+      }
+      return;
+    }
+
+    const config = resolution.config;
+    const consentConfig = resolveConsentStateConfig(config);
+    if (consentConfig.mode === "off") return;
+
+    postureCache.remember(ctx.deploymentId, {
+      mode: consentConfig.mode,
+      jurisdiction: config.jurisdiction,
+      clinicType: config.clinicType,
+    });
+
+    // 2. Resolve contact (null = pre-contact transient).
+    const contactId = await sessionContactResolver(ctx.sessionId);
+    if (!contactId) return;
+
+    // 3. Stamp jurisdiction intentionally (NOT via disclosure path).
+    try {
+      await consentService.attachToGovernedInteraction(
+        contactId,
+        config.jurisdiction as PdpaJurisdiction,
+      );
+    } catch (err) {
+      if (
+        err instanceof ConsentJurisdictionMismatch ||
+        (err as Error).name === "ConsentJurisdictionMismatch"
+      ) {
+        console.error("[pdpa-consent-gate] jurisdiction mismatch", err);
+        await this.saveVerdict({
+          reasonCode: "jurisdiction_mismatch",
+          action: "allow",
+          auditLevel: "critical",
+          jurisdiction: config.jurisdiction,
+          clinicType: config.clinicType,
+          conversationId: ctx.sessionId,
+          originalText: result.response,
+          details: {
+            event: "jurisdiction_mismatch",
+            stamped: (err as ConsentJurisdictionMismatch).stamped,
+            provided: (err as ConsentJurisdictionMismatch).provided,
+            contactId,
+          },
+          deploymentId: ctx.deploymentId,
+        });
+        return;
+      }
+      throw err;
+    }
+
+    // 4. Read consent state.
+    const consent = await contactConsentReader.read(contactId);
+
+    // 5. Evaluate gate (operational class always in 1c; proactive uses separate call site in 1d).
+    const decision = evaluateConsentGate({
+      contact: {
+        pdpaJurisdiction: consent.pdpaJurisdiction,
+        consentGrantedAt: consent.consentGrantedAt,
+        consentRevokedAt: consent.consentRevokedAt,
+      },
+      messageClass: "operational",
+    });
+
+    if (decision.action === "block") {
+      // Defense-in-depth: revoked-race block (gateway scanner should have caught this already).
+      const originalText = result.response;
+      result.response = renderHandoffTemplate({
+        jurisdiction: config.jurisdiction as "SG" | "MY",
+        reasonCode: "consent_revoked",
+      });
+      await this.saveVerdict({
+        reasonCode: "consent_revoked",
+        action: "block",
+        auditLevel: "critical",
+        jurisdiction: config.jurisdiction,
+        clinicType: config.clinicType,
+        conversationId: ctx.sessionId,
+        originalText,
+        emittedText: result.response,
+        details: { event: "defense_in_depth_revoked_race" },
+        deploymentId: ctx.deploymentId,
+      });
+      try {
+        await this.deps.conversationStore.setConversationStatus(ctx.sessionId, "human_override");
+        await this.deps.handoffStore.save(
+          buildHandoffPackage(ctx.sessionId, ctx.orgId, 0, this.deps.clock),
+        );
+      } catch (e) {
+        console.error("[pdpa-consent-gate] block-side persistence failure", e);
+      }
+      return;
+    }
+
+    // 6. Allow path — disclosure detection. Observe-only: never blocks result.response.
+    const expected = DISCLOSURE_COPY[config.jurisdiction as PdpaJurisdiction];
+    // v1 deterministic heuristic: substring match. Punctuation/whitespace drift will break.
+    const includesDisclosure = result.response.includes(expected.text);
+
+    if (consent.aiDisclosureShownAt === null) {
+      if (includesDisclosure) {
+        await this.deps.consentService.recordDisclosureShown({
+          contactId,
+          jurisdiction: config.jurisdiction as PdpaJurisdiction,
+          version: expected.version,
+          shownAt: this.deps.clock(),
+          actor: "system:skill_runtime",
+        });
+      } else if (consentConfig.mode === "enforce") {
+        await this.saveVerdict({
+          reasonCode: "disclosure_not_shown",
+          action: "allow",
+          auditLevel: "warning",
+          jurisdiction: config.jurisdiction,
+          clinicType: config.clinicType,
+          conversationId: ctx.sessionId,
+          originalText: result.response,
+          details: { expectedVersion: expected.version, sentinelDetected: false },
+          deploymentId: ctx.deploymentId,
+        });
+      }
+    } else if (consent.aiDisclosureVersionShown !== expected.version) {
+      if (includesDisclosure) {
+        await this.deps.consentService.recordDisclosureShown({
+          contactId,
+          jurisdiction: config.jurisdiction as PdpaJurisdiction,
+          version: expected.version,
+          shownAt: this.deps.clock(),
+          actor: "system:skill_runtime",
+        });
+      } else if (consentConfig.mode === "enforce") {
+        await this.saveVerdict({
+          reasonCode: "disclosure_version_outdated",
+          action: "allow",
+          auditLevel: "warning",
+          jurisdiction: config.jurisdiction,
+          clinicType: config.clinicType,
+          conversationId: ctx.sessionId,
+          originalText: result.response,
+          details: {
+            currentVersion: consent.aiDisclosureVersionShown,
+            expectedVersion: expected.version,
+            sentinelDetected: false,
+          },
+          deploymentId: ctx.deploymentId,
+        });
+      }
+    }
+  }
+
+  private async saveVerdict(input: {
+    reasonCode: string;
+    action: "allow" | "block";
+    auditLevel: "info" | "warning" | "critical";
+    jurisdiction: string;
+    clinicType: string;
+    conversationId: string;
+    originalText?: string;
+    emittedText?: string;
+    details: Record<string, unknown>;
+    deploymentId: string;
+  }) {
+    try {
+      // GovernanceVerdictDetails is narrower than custom details shapes; cast justified.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (this.deps.verdictStore.save as any)({
+        deploymentId: input.deploymentId,
+        sourceGuard: "consent_gate",
+        action: input.action,
+        reasonCode: input.reasonCode,
+        jurisdiction: input.jurisdiction,
+        clinicType: input.clinicType,
+        originalText: input.originalText,
+        emittedText: input.emittedText,
+        auditLevel: input.auditLevel,
+        decidedAt: this.deps.clock().toISOString(),
+        conversationId: input.conversationId,
+        details: input.details,
+      });
+    } catch (err) {
+      console.error("[pdpa-consent-gate] verdict persistence failure", err);
+    }
+  }
+}
