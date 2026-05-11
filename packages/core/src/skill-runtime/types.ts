@@ -5,7 +5,7 @@ import type {
   GovernanceDecision,
   GovernanceLogEntry,
 } from "./governance.js";
-import type { ContextRequirement } from "@switchboard/schemas";
+import type { ContextRequirement, ReferenceMetadata } from "@switchboard/schemas";
 import type { ModelSlot } from "../model-router.js";
 import type { ToolResult } from "./tool-result.js";
 
@@ -26,6 +26,14 @@ export interface ResolvedModelProfile {
 // Skill Definition (output of loader)
 // ---------------------------------------------------------------------------
 
+export interface SkillReferenceFile {
+  /** Relative path within skill directory, e.g. "references/markets/sg-medspa.md" */
+  path: string;
+  metadata: ReferenceMetadata;
+  /** Markdown body after frontmatter */
+  body: string;
+}
+
 export interface SkillDefinition {
   name: string;
   slug: string;
@@ -39,6 +47,7 @@ export interface SkillDefinition {
   context: ContextRequirement[];
   minimumModelTier?: ModelSlot;
   intent?: string;
+  references?: SkillReferenceFile[];
 }
 
 export type ParameterType = "string" | "number" | "boolean" | "enum" | "object";
