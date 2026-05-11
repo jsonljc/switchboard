@@ -79,35 +79,31 @@ const BULLETS = [
 
 - [ ] **Step 2: Update the bullet render block to match Alex's pattern.**
 
-Find this block (currently lines 356–366 inside the `<ul>`):
+Find this block (currently lines 356–366 inside the `<ul>` — note this is a JSX expression inline in the parent, so the outer braces in the snippets below are the JSX expression braces, NOT TS/JS block-statement braces; the fences are `text` to prevent prettier from rewriting them):
 
-```tsx
-{
-  BULLETS.map(([head, tail]) => (
-    <li
-      key={head}
-      className="relative pl-[1.05rem] text-[0.95rem] leading-[1.4] text-v6-graphite before:absolute before:left-0 before:top-[0.55rem] before:h-[5px] before:w-[5px] before:rounded-full before:bg-v6-graphite-4 before:content-['']"
-    >
-      <b className="font-medium">{head}</b>
-      {tail}
-    </li>
-  ));
-}
+```text
+{BULLETS.map(([head, tail]) => (
+  <li
+    key={head}
+    className="relative pl-[1.05rem] text-[0.95rem] leading-[1.4] text-v6-graphite before:absolute before:left-0 before:top-[0.55rem] before:h-[5px] before:w-[5px] before:rounded-full before:bg-v6-graphite-4 before:content-['']"
+  >
+    <b className="font-medium">{head}</b>
+    {tail}
+  </li>
+))}
 ```
 
 Replace with:
 
-```tsx
-{
-  BULLETS.map((b, i) => (
-    <li
-      key={i}
-      className="relative pl-[1.05rem] text-[0.95rem] leading-[1.4] text-v6-graphite before:absolute before:left-0 before:top-[0.55rem] before:h-[5px] before:w-[5px] before:rounded-full before:bg-v6-graphite-4 before:content-['']"
-    >
-      {b}
-    </li>
-  ));
-}
+```text
+{BULLETS.map((b, i) => (
+  <li
+    key={i}
+    className="relative pl-[1.05rem] text-[0.95rem] leading-[1.4] text-v6-graphite before:absolute before:left-0 before:top-[0.55rem] before:h-[5px] before:w-[5px] before:rounded-full before:bg-v6-graphite-4 before:content-['']"
+  >
+    {b}
+  </li>
+))}
 ```
 
 This mirrors Alex's render in `apps/dashboard/src/components/landing/v6/beat-alex.tsx` lines 91–98 exactly (Alex uses `(b, i) => …` over plain strings).
