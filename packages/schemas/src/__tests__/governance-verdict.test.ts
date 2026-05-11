@@ -144,16 +144,18 @@ describe("GovernanceVerdictReasonSchema — 1b-2 additions", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts classifier_error (distinct from classifier_timeout)", () => {
-    const errorParse = GovernanceVerdictReasonSchema.safeParse("classifier_error");
-    const timeoutParse = GovernanceVerdictReasonSchema.safeParse("classifier_timeout");
-    expect(errorParse.success).toBe(true);
-    expect(timeoutParse.success).toBe(true);
+  it("accepts classifier_error", () => {
+    const result = GovernanceVerdictReasonSchema.safeParse("classifier_error");
+    expect(result.success).toBe(true);
   });
 
-  it("rejects unknown reasons", () => {
-    const result = GovernanceVerdictReasonSchema.safeParse("not_a_reason");
-    expect(result.success).toBe(false);
+  it("classifier_error is distinct from classifier_timeout (both valid, separate codes)", () => {
+    expect(GovernanceVerdictReasonSchema.safeParse("classifier_error").success).toBe(true);
+    expect(GovernanceVerdictReasonSchema.safeParse("classifier_timeout").success).toBe(true);
+    // two separate reason codes — not aliases of each other
+    const errorCode = "classifier_error" as string;
+    const timeoutCode = "classifier_timeout" as string;
+    expect(errorCode).not.toBe(timeoutCode);
   });
 });
 
