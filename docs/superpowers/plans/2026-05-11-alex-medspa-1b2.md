@@ -21,7 +21,7 @@
 - Model-generated rewrites (deterministic templates only)
 - Per-claim-type mode override (flat `mode` knob in 1b-2)
 - Hard CI gate on `pnpm classifier-eval`
-- Cross-message service-context tracking (single-turn `serviceContext` only)
+- Service-scoped substantiation (no `serviceId` on `ApprovedComplianceClaim`; revisit when a relational `Service` model ships)
 
 ---
 
@@ -35,16 +35,18 @@ These rules apply across all tasks. They are load-bearing for clean execution; r
 - **No `any`.** Resolver, classifier, store, and cache types are all explicitly typed. If TypeScript inference produces `any`, refine the type instead of casting.
 - **Layer rules.** `packages/schemas` (Layer 1) has no `@switchboard/*` imports. `packages/core` (Layer 3) imports schemas + sdk + cartridge-sdk only — never `packages/db`. Prisma store impls live in `packages/db` (Layer 4) and depend on the interface declared in core.
 - **Tests use mocked Prisma.** Per `feedback_api_test_mocked_prisma.md`, db tests mock the Prisma client. Don't require a running PostgreSQL for `pnpm test` to pass.
-- **Anthropic SDK calls are mocked in tests.** Classifier tests never hit the real API. The `AnthropicClaimClassifier` interface is the seam — tests inject a mock implementation. Only `pnpm classifier-eval` (Task 19) hits the real API, gated by `EVAL=1` env flag.
+- **Anthropic SDK calls are mocked in tests.** Classifier tests never hit the real API. The `AnthropicClaimClassifier` interface is the seam — tests inject a mock implementation. Only `pnpm classifier-eval` (Task 18) hits the real API, gated by `EVAL=1` env flag.
 - **`pnpm db:check-drift` requires a running PostgreSQL.** If unreachable in the implementation environment (no Docker / no `DATABASE_URL`), follow 1b-1's pattern: skip locally and document in the PR body. Do not commit a generated migration without ever validating it; at minimum, `pnpm db:generate` must succeed.
-- **Hook order is part of definition-of-done for Task 17.** Spec Section 7 asserts `DeterministicSafetyGateHook` → `ClaimClassifierHook` → `TracePersistenceHook`. 1b-1 Task 14 verified the framework iterates in registration-array order. Task 17 re-asserts that contract still holds via the registration test.
-- **Per-hook posture cache.** Spec Section 6.7 mandates per-hook `GovernancePostureCache` instances (not a shared instance) to prevent fail-closed mode-mixing when hooks are in different modes. Task 17 constructs the second instance.
-- **Service context is fallback-tolerant.** Task 15 wires `serviceContext` for the obvious case (a single service-scoped tool call this turn). The classifier hook MUST function with `serviceContext: null`. Do not block 1b-2 on perfect cross-tool lineage; the substantiation resolver's `serviceId IS NULL` global query is the safe fallback.
+- **Hook order is part of definition-of-done for Task 16.** Spec Section 7 asserts `DeterministicSafetyGateHook` → `ClaimClassifierHook` → `TracePersistenceHook`. 1b-1 Task 14 verified the framework iterates in registration-array order. Task 16 re-asserts that contract still holds via the registration test.
+- **Per-hook posture cache.** Spec Section 6.7 mandates per-hook `GovernancePostureCache` instances (not a shared instance) to prevent fail-closed mode-mixing when hooks are in different modes. Task 16 constructs the second instance.
+- **Service-scoping deferred to a future phase.** Codebase verification at plan-write time found no `Service` Prisma model on `main` or on the 1a parent branch. 1b-2 ships **deployment-global substantiation only** — no `serviceId` column on `ApprovedComplianceClaim`, no `serviceContext` on the resolver, no per-turn tool-call lineage tracking. When a future phase lands a relational `Service` model, `serviceId String?` becomes a clean additive migration.
+- **Hook contract matches the runtime, not the kickoff spec.** The real `SkillHook.afterSkill` signature is `(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void>` — two args, returns void, hook mutates `result.response` in place. `SkillExecutionResult.response` is a **single string**, not a `messages[]` array. Sentence-level rewrites splice the response string via `string.replace(originalSentence, replacement)`.
+- **`SkillHookContext` has no `conversationId`.** The hook uses `ctx.sessionId` as the verdict's `conversationId` (the runtime treats them 1:1 today; same convention as 1b-1's deterministic gate).
 - **Conservative seed tables, not placeholders.** Tasks 8, 9 seed `RegulatoryPublicSource` and rewrite templates with real baseline entries (≥3 per category per jurisdiction for regulatory; ≥1 template per `(claimType, jurisdiction)` for rewrites). The PR includes a follow-up note for Phase 1b-2.5 (or rolled into 1b-1.5).
 - **Reference markdown stays in sync (informally).** When seed tables land, the `skills/alex/references/regulatory/{sg,my}-rules.md` files (1b-1 added "Runtime banned-phrase enforcement" sections; 1b-2 adds "Runtime claim classification" sections) point at the TS file paths. MD is not load-bearing, not parsed.
 - **Verdict persistence policy: match-only on the deterministic gate, classifier-driven only on this hook.** A clean classification (`claimType: "none"`) does NOT persist a verdict. Verdicts are only written when the classifier produces a non-`none` outcome (allow-with-match, rewrite, escalate, timeout, error). Same event-log discipline as 1b-1.
 - **Prompt caching is mandatory on every classifier call.** The Anthropic SDK call must set `cache_control: { type: "ephemeral" }` on both the system text and the last (only) tool definition. A regression test in Task 11 inspects the captured request payload.
-- **Single shared `Anthropic` client across the process.** Task 17 wires the classifier to the same client used by `apps/api`'s existing chat / agent-runtime adapters. Per-call instantiation is wasteful and breaks prompt caching.
+- **Single shared `Anthropic` client across the process.** Task 16 wires the classifier to the same client used by `apps/api`'s existing chat / agent-runtime adapters. Per-call instantiation is wasteful and breaks prompt caching.
 
 ---
 
@@ -674,33 +676,23 @@ model ApprovedComplianceClaim {
   reviewedBy    String
   reviewedAt    DateTime
   validUntil    DateTime?
-  serviceId     String?
   notes         String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   deployment    AgentDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
-  service       Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
   @@index([deploymentId, jurisdiction, claimType])
-  @@index([deploymentId, serviceId])
   @@index([deploymentId, validUntil])
 }
 ```
+
+**No `serviceId` column.** The codebase has no `Service` Prisma model — service-scoping is deferred.
 
 Add the reverse relation on `AgentDeployment` (find the existing relation block):
 
 ```prisma
 model AgentDeployment {
-  // ... existing fields ...
-  approvedComplianceClaims ApprovedComplianceClaim[]
-}
-```
-
-Add the reverse relation on `Service`:
-
-```prisma
-model Service {
   // ... existing fields ...
   approvedComplianceClaims ApprovedComplianceClaim[]
 }
@@ -774,7 +766,6 @@ export interface ApprovedComplianceClaimQuery {
   deploymentId: string;
   jurisdiction: "SG" | "MY";
   claimType: ClaimType;
-  serviceId?: string | null;
 }
 
 export interface ApprovedComplianceClaimRecord {
@@ -786,7 +777,6 @@ export interface ApprovedComplianceClaimRecord {
   reviewedBy: string;
   reviewedAt: string;        // ISO string
   validUntil: string | null;
-  serviceId: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -841,7 +831,6 @@ describe("PrismaApprovedComplianceClaimStore.list", () => {
         reviewedBy: "Dr Lim",
         reviewedAt: new Date("2026-05-01T00:00:00.000Z"),
         validUntil: null,
-        serviceId: null,
         notes: null,
         createdAt: new Date("2026-05-01T00:00:00.000Z"),
         updatedAt: new Date("2026-05-01T00:00:00.000Z"),
@@ -859,34 +848,14 @@ describe("PrismaApprovedComplianceClaimStore.list", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].claimText).toBe("visible slimming");
     expect(rows[0].reviewedAt).toBe("2026-05-01T00:00:00.000Z");
-    expect(prisma.approvedComplianceClaim.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          deploymentId: "dep_1",
-          jurisdiction: "SG",
-          claimType: "efficacy",
-          serviceId: null,
-        }),
-      }),
-    );
-  });
-
-  it("widens to serviceId-scoped OR global when serviceId provided", async () => {
-    const prisma = makePrismaMock([]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createPrismaApprovedComplianceClaimStore(prisma as any);
-    await store.list({
-      deploymentId: "dep_1",
-      jurisdiction: "MY",
-      claimType: "safety-claim",
-      serviceId: "svc_42",
+    expect(prisma.approvedComplianceClaim.findMany).toHaveBeenCalledWith({
+      where: {
+        deploymentId: "dep_1",
+        jurisdiction: "SG",
+        claimType: "efficacy",
+      },
+      orderBy: [{ reviewedAt: "desc" }],
     });
-
-    const callArg = prisma.approvedComplianceClaim.findMany.mock.calls[0][0];
-    expect(callArg.where.OR).toEqual([
-      { serviceId: "svc_42" },
-      { serviceId: null },
-    ]);
   });
 });
 ```
@@ -921,7 +890,6 @@ interface PrismaApprovedComplianceClaimRow {
   reviewedBy: string;
   reviewedAt: Date;
   validUntil: Date | null;
-  serviceId: string | null;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -937,7 +905,6 @@ function toRecord(row: PrismaApprovedComplianceClaimRow): ApprovedComplianceClai
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt.toISOString(),
     validUntil: row.validUntil?.toISOString() ?? null,
-    serviceId: row.serviceId,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -949,19 +916,13 @@ export function createPrismaApprovedComplianceClaimStore(
 ): ApprovedComplianceClaimStore {
   return {
     async list(query: ApprovedComplianceClaimQuery): Promise<ApprovedComplianceClaimRecord[]> {
-      const serviceFilter =
-        query.serviceId == null
-          ? { serviceId: null }
-          : { OR: [{ serviceId: query.serviceId }, { serviceId: null }] };
-
       const rows = await prisma.approvedComplianceClaim.findMany({
         where: {
           deploymentId: query.deploymentId,
           jurisdiction: query.jurisdiction,
           claimType: query.claimType,
-          ...serviceFilter,
         },
-        orderBy: [{ serviceId: "desc" }, { reviewedAt: "desc" }],
+        orderBy: [{ reviewedAt: "desc" }],
       });
 
       return rows.map((row) => toRecord(row as PrismaApprovedComplianceClaimRow));
@@ -970,7 +931,7 @@ export function createPrismaApprovedComplianceClaimStore(
 }
 ```
 
-`orderBy: [{ serviceId: "desc" }]` puts non-null `serviceId` rows first (Postgres NULLS LAST default for `desc`), so the resolver iterates service-scoped rows before global rows — matching the Section 4.3 precedence rule.
+Ordered by `reviewedAt DESC` so the most-recently-reviewed claim wins a substring tie.
 
 - [ ] **Step 6: Re-export from db barrel**
 
@@ -2620,7 +2581,6 @@ function freshClaim(overrides: Partial<ApprovedComplianceClaimRecord> = {}): App
     reviewedBy: "Dr Lim",
     reviewedAt: FRESH_DATE,
     validUntil: null,
-    serviceId: null,
     notes: null,
     createdAt: FRESH_DATE,
     updatedAt: FRESH_DATE,
@@ -2641,7 +2601,6 @@ describe("createSubstantiationResolver", () => {
       claimType: "efficacy",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(res.status).toBe("matched");
     expect(res.sourceType).toBe("approved_compliance_claim");
@@ -2661,7 +2620,6 @@ describe("createSubstantiationResolver", () => {
       claimType: "efficacy",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(res.status).toBe("stale");
   });
@@ -2679,7 +2637,6 @@ describe("createSubstantiationResolver", () => {
       claimType: "efficacy",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(res.status).toBe("stale");
   });
@@ -2696,7 +2653,6 @@ describe("createSubstantiationResolver", () => {
       claimType: "efficacy",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(res.status).toBe("missing");
   });
@@ -2721,7 +2677,6 @@ describe("createSubstantiationResolver", () => {
       claimType: "safety-claim",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(res.status).toBe("matched");
     expect(res.sourceType).toBe("regulatory_public_source");
@@ -2740,7 +2695,6 @@ describe("createSubstantiationResolver", () => {
       claimType: "credentials",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(res.status).toBe("missing");  // no regulatory match, approved-claim path skipped
   });
@@ -2758,7 +2712,6 @@ describe("createSubstantiationResolver", () => {
         claimType: ct,
         jurisdiction: "SG",
         deploymentId: "dep_1",
-        serviceContext: null,
       });
       expect(res.status).toBe("missing");
     }
@@ -2778,14 +2731,12 @@ describe("createSubstantiationResolver", () => {
       claimType: "efficacy",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     await resolver.resolve({
       sentence: "visible slimming",
       claimType: "efficacy",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(list).toHaveBeenCalledTimes(1);  // second call short-circuited via cache
   });
@@ -2802,7 +2753,6 @@ describe("createSubstantiationResolver", () => {
       claimType: "efficacy",
       jurisdiction: "SG",
       deploymentId: "dep_1",
-      serviceContext: null,
     });
     expect(res.status).toBe("missing");
   });
@@ -2854,7 +2804,6 @@ export interface SubstantiationResolverInput {
   claimType: ClaimType;
   jurisdiction: "SG" | "MY";
   deploymentId: string;
-  serviceContext: { serviceId: string } | null;
 }
 
 export interface SubstantiationResolver {
@@ -2964,7 +2913,6 @@ export function createSubstantiationResolver(
               deploymentId: input.deploymentId,
               jurisdiction: input.jurisdiction,
               claimType: input.claimType,
-              serviceId: input.serviceContext?.serviceId ?? null,
             });
           } catch (err) {
             console.error("[substantiation-resolver] approvedClaimStore.list threw", err);
@@ -3010,154 +2958,8 @@ git commit -m "feat(core): substantiation resolver with tier dispatch + stalenes
 
 ---
 
-## Task 15: `AfterSkillContext.serviceContext` extension (fallback-tolerant)
 
-**Files:**
-- Modify: `packages/core/src/skill-runtime/types.ts`
-- Modify: `packages/core/src/skill-runtime/skill-executor.ts` (or wherever `AfterSkillContext` is constructed)
-- Modify: `packages/core/src/skill-runtime/__tests__/skill-executor-routing.test.ts` (or the closest existing executor test)
-
-This task is **scoped as a separate, fallback-tolerant task** per spec Open Question 1. The classifier hook MUST function correctly with `serviceContext: null`. Wiring is best-effort: populate `serviceContext` when a single service-scoped tool call fired this turn; otherwise leave it `null`.
-
-- [ ] **Step 1: Locate the hook context type**
-
-```bash
-grep -n "AfterSkillContext\|afterSkill" packages/core/src/skill-runtime/types.ts
-```
-
-Note the existing interface shape. The 1b-1 `DeterministicSafetyGateHook` consumes the same context — do not break it.
-
-- [ ] **Step 2: Enumerate service-scoped tools in the current runtime**
-
-```bash
-grep -rn "name: \"services" packages/core/src packages/sdk/src
-grep -rn "calendar-book\|services.lookup\|services\\.read" packages/core/src packages/sdk/src
-```
-
-Note the set: typically `services.lookup`, `services.read`, `calendar-book` (may operate on a service). The plan task tolerates discovery — record what's found in the commit message.
-
-- [ ] **Step 3: Write the failing test**
-
-In the closest existing `skill-executor*.test.ts`, append:
-
-```ts
-import { describe, it, expect } from "vitest";
-
-// Pull whatever harness builds an executor — mirror existing test setup.
-// The test asserts AfterSkillContext.serviceContext is populated when a
-// single service-scoped tool call fired this turn, and null otherwise.
-
-describe("AfterSkillContext.serviceContext (1b-2)", () => {
-  it("is null when no service-scoped tool call fired", async () => {
-    // Construct an executor, run a skill turn with no service-scoped tool calls,
-    // capture the AfterSkillContext via a spy hook. Assert serviceContext === null.
-  });
-
-  it("is { serviceId } when a single service-scoped tool call fired", async () => {
-    // Same harness; run a turn where services.lookup({ serviceId: "svc_42" }) was called.
-    // Assert serviceContext === { serviceId: "svc_42" }.
-  });
-
-  it("is null when multiple service-scoped tool calls fired with different serviceIds", async () => {
-    // Ambiguous; fall back to null per the conservative policy.
-  });
-});
-```
-
-The exact harness code mirrors the existing executor tests — copy that file's setup. If the executor test infrastructure does not currently spy hook contexts, add a no-op test hook that captures `ctx` for assertion.
-
-- [ ] **Step 4: Run tests to verify they fail**
-
-```bash
-pnpm --filter @switchboard/core test -- skill-executor
-```
-
-Expected: the three new assertions fail.
-
-- [ ] **Step 5: Add `serviceContext` to the context type**
-
-Edit `packages/core/src/skill-runtime/types.ts`:
-
-```ts
-export interface AfterSkillContext {
-  // ... existing fields (deploymentId, sessionId, conversationId, skillOutput, etc.) ...
-  serviceContext: { serviceId: string } | null;
-}
-```
-
-This is a **required** field (not optional) — every executor that constructs an `AfterSkillContext` must populate it. Defaulting to `null` is acceptable in places that don't yet have the wiring.
-
-- [ ] **Step 6: Populate `serviceContext` in the executor**
-
-In the executor (or wherever `AfterSkillContext` is built — typically `SkillExecutorImpl.execute`), inspect the tool-call log for the just-completed turn:
-
-```ts
-function deriveServiceContext(
-  toolCalls: ReadonlyArray<{ name: string; input: unknown }>,
-): { serviceId: string } | null {
-  const SERVICE_TOOL_NAMES = new Set([
-    "services.lookup",
-    "services.read",
-    "calendar-book",
-    // …append whatever Step 2 enumerated; ESM order-independent
-  ]);
-
-  const serviceIds = new Set<string>();
-  for (const call of toolCalls) {
-    if (!SERVICE_TOOL_NAMES.has(call.name)) continue;
-    const input = call.input as { serviceId?: string } | null;
-    if (input && typeof input.serviceId === "string" && input.serviceId.length > 0) {
-      serviceIds.add(input.serviceId);
-    }
-  }
-
-  if (serviceIds.size === 1) {
-    const [only] = [...serviceIds];
-    return { serviceId: only };
-  }
-  return null;  // zero or ambiguous (multiple distinct service ids) → null fallback
-}
-```
-
-Pass the result to the `AfterSkillContext` constructor:
-
-```ts
-const afterCtx: AfterSkillContext = {
-  // ...existing fields...
-  serviceContext: deriveServiceContext(toolCallsThisTurn),
-};
-```
-
-If the executor does not currently track per-turn tool calls, add a minimal accumulator (a `toolCalls: Array<{ name, input }>` collected during `skill.execute(...)`). This is a small, contained change.
-
-- [ ] **Step 7: Update 1b-1 hook tests if they construct `AfterSkillContext` manually**
-
-```bash
-grep -rn "AfterSkillContext" packages/core/src/skill-runtime/hooks/__tests__/
-```
-
-In any test that builds an `AfterSkillContext` literal, append `serviceContext: null`. This is the no-op shape for 1b-1's hook (it does not consume the field).
-
-- [ ] **Step 8: Run all skill-runtime tests**
-
-```bash
-pnpm --filter @switchboard/core test -- skill-runtime
-pnpm --filter @switchboard/core typecheck
-pnpm --filter @switchboard/core build
-```
-
-Expected: all pass.
-
-- [ ] **Step 9: Commit**
-
-```bash
-git add packages/core/src/skill-runtime/types.ts packages/core/src/skill-runtime/skill-executor.ts packages/core/src/skill-runtime/__tests__/ packages/core/src/skill-runtime/hooks/__tests__/
-git commit -m "feat(core): thread serviceContext through AfterSkillContext (1b-2 fallback-tolerant)"
-```
-
----
-
-## Task 16: `ClaimClassifierHook` (the integrating hook)
+## Task 15: `ClaimClassifierHook` (the integrating hook)
 
 **Files:**
 - Create: `packages/core/src/skill-runtime/hooks/claim-classifier.ts`
@@ -3166,11 +2968,16 @@ git commit -m "feat(core): thread serviceContext through AfterSkillContext (1b-2
 
 This task wires Tasks 6–14 into a single hook. The implementation has the most surface area; tests below cover the mode matrix × outcome matrix exhaustively.
 
+**Hook contract (verified against `packages/core/src/skill-runtime/types.ts:224-233`):**
+- `SkillHook` requires a `name: string` property and an optional `afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void>` method.
+- `SkillHookContext` has `{ deploymentId, orgId, skillSlug, skillVersion, sessionId, trustLevel, trustScore }`. **No `conversationId` field** — the hook uses `ctx.sessionId` as the verdict's `conversationId`.
+- `SkillExecutionResult.response` is a **single string** (not a `messages[]` array). The hook mutates `result.response` in place; there is no replacement return value.
+
 - [ ] **Step 1: Define the dependency surface and outline behavior**
 
 The hook composes:
 - `GovernanceConfigResolver` (existing 1b-1 type)
-- `GovernancePostureCache` (separate instance — see Task 17)
+- `GovernancePostureCache` (separate instance — see Task 16)
 - `AnthropicClaimClassifier` (Task 11)
 - `SubstantiationResolver` (Task 14)
 - `rewriteLoader: (j) => readonly RewriteTemplateEntry[]` (Task 9)
@@ -3179,19 +2986,18 @@ The hook composes:
 - `ConversationStateStore` (existing)
 - `splitSentences` (Task 7)
 - `clock: () => Date`
-- `handoffTemplate: (input: { jurisdiction: "SG" | "MY"; reasonCode: GovernanceVerdictReason }) => string` (1b-1's `renderHandoffTemplate`)
+- `renderHandoff: (input: { jurisdiction; reasonCode }) => string` (1b-1's `renderHandoffTemplate`)
 
 Action per sentence:
 - `none` → allow.
-- `testimonial | medical-advice | diagnosis | credentials` with no substantiation → escalate.
-- `efficacy | safety-claim | superiority | urgency`: resolve substantiation. Matched → allow. Stale/missing → rewrite via template (escalate if no template). Credentials stale → escalate (defensive; should not occur because regulatory has no staleness).
-- `classifier_timeout` → escalate.
-- `classifier_error` → escalate.
+- `testimonial | medical-advice | diagnosis | credentials` (no matching regulatory source) → escalate.
+- `efficacy | safety-claim | superiority | urgency`: resolve substantiation. Matched → allow. Stale/missing → rewrite via template (escalate if no template).
+- `classifier_timeout` / `classifier_error` → escalate.
 
-Whole-message effect (Spec Section 6.6):
-- Any sentence escalates → block the whole message + handoff + `human_override`.
-- All allow + any rewrite → in-place sentence swap; no `human_override`.
-- All allow → pass through unchanged.
+Whole-response effect:
+- Any sentence escalates → replace `result.response` with the handoff template + handoff + `human_override`.
+- All allow + any rewrite → `result.response = result.response.replace(originalSentence, replacement)` for each rewrite; no `human_override`.
+- All allow → leave `result.response` unchanged.
 
 - [ ] **Step 2: Write the failing tests — config + mode matrix**
 
@@ -3200,15 +3006,21 @@ Create `packages/core/src/skill-runtime/hooks/__tests__/claim-classifier.test.ts
 ```ts
 import { describe, it, expect, vi } from "vitest";
 import { ClaimClassifierHook } from "../claim-classifier.js";
-import { createInMemoryLRU } from "../../../governance/classifier/substantiation-cache.js";
 import type { AnthropicClaimClassifier } from "../../../governance/classifier/anthropic-classifier.js";
 import type { SubstantiationResolver } from "../../../governance/classifier/substantiation-resolver.js";
 import type { RewriteTemplateEntry } from "../../../governance/classifier/rewrite-templates/index.js";
 import type { GovernanceConfigResolver } from "../../../governance/governance-config-resolver.js";
 import type { GovernancePostureCache } from "../../../governance/posture-cache.js";
 import type { GovernanceVerdictStore } from "../../../governance/governance-verdict-store/index.js";
+import type {
+  SkillHookContext,
+  SkillExecutionResult,
+} from "../../types.js";
+import type { ClaimType } from "@switchboard/schemas";
 
-function fakeResolver(mode: "off" | "observe" | "enforce" | "missing" | "error"): GovernanceConfigResolver {
+function fakeResolver(
+  mode: "off" | "observe" | "enforce" | "missing" | "error",
+): GovernanceConfigResolver {
   return async () => {
     if (mode === "missing") return { status: "missing" };
     if (mode === "error") return { status: "error", error: new Error("boom") };
@@ -3218,48 +3030,56 @@ function fakeResolver(mode: "off" | "observe" | "enforce" | "missing" | "error")
         jurisdiction: "SG",
         clinicType: "medical",
         deterministicGate: { mode: "off" },
-        claimClassifier: {
-          mode,
-          latencyBudgetMs: 800,
-          model: "claude-haiku-4-5-20251001",
-        },
+        claimClassifier: { mode, latencyBudgetMs: 800, model: "claude-haiku-4-5-20251001" },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     };
   };
 }
 
-function fakePostureCache(initial?: { mode: "off" | "observe" | "enforce" }): GovernancePostureCache {
-  const map = new Map<string, { mode: "off" | "observe" | "enforce"; jurisdiction: "SG" | "MY"; clinicType: "medical" | "nonMedical" }>();
-  if (initial) {
-    map.set("dep_1", { mode: initial.mode, jurisdiction: "SG", clinicType: "medical" });
-  }
+function fakePostureCache(
+  initial?: { mode: "off" | "observe" | "enforce" },
+): GovernancePostureCache {
+  const map = new Map<
+    string,
+    { mode: "off" | "observe" | "enforce"; jurisdiction: "SG" | "MY"; clinicType: "medical" | "nonMedical" }
+  >();
+  if (initial) map.set("dep_1", { mode: initial.mode, jurisdiction: "SG", clinicType: "medical" });
   return {
     remember: (id, posture) => map.set(id, posture),
     lastKnown: (id) => map.get(id),
   };
 }
 
-function fakeClassifier(outcomes: Record<string, "efficacy" | "none">): AnthropicClaimClassifier {
+function fakeClassifier(outcomes: Record<string, ClaimType>): AnthropicClaimClassifier {
   return {
-    classify: async ({ sentence }) => ({
-      result: {
-        sentence,
-        claimType: outcomes[sentence] ?? "none",
-        confidence: 0.9,
-      },
+    classify: async ({ sentence, model }) => ({
+      result: { sentence, claimType: outcomes[sentence] ?? "none", confidence: 0.9 },
       promptVersion: "claim-classifier@1.0.0",
       promptHash: "0123456789abcdef",
       schemaVersion: "1.0.0",
-      model: "claude-haiku-4-5-20251001",
+      model,
     }),
   };
 }
 
-function fakeResolverSubst(status: "matched" | "stale" | "missing"): SubstantiationResolver {
+function throwingClassifier(throwOn: string): AnthropicClaimClassifier {
   return {
-    resolve: async () => ({ status }),
+    classify: async ({ sentence, model }) => {
+      if (sentence === throwOn) throw new Error("api down");
+      return {
+        result: { sentence, claimType: "none" as const, confidence: 0.9 },
+        promptVersion: "claim-classifier@1.0.0",
+        promptHash: "0123456789abcdef",
+        schemaVersion: "1.0.0",
+        model,
+      };
+    },
   };
+}
+
+function fakeResolverSubst(status: "matched" | "stale" | "missing"): SubstantiationResolver {
+  return { resolve: async () => ({ status }) };
 }
 
 const SG_REWRITES: ReadonlyArray<RewriteTemplateEntry> = [
@@ -3278,7 +3098,7 @@ function fakeVerdictStore(): GovernanceVerdictStore & { saved: unknown[] } {
     save: async (v) => {
       saved.push(v);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return { id: "vrd_" + saved.length, ...v, createdAt: new Date().toISOString() } as any;
+      return { id: `vrd_${saved.length}`, ...v, createdAt: new Date().toISOString() } as any;
     },
     listByConversation: async () => [],
     listByDeployment: async () => [],
@@ -3300,12 +3120,14 @@ function fakeConversationStore() {
 
 function makeHook(overrides: Partial<{
   configMode: "off" | "observe" | "enforce" | "missing" | "error";
-  classifierOutcomes: Record<string, "efficacy" | "none">;
+  classifier: AnthropicClaimClassifier;
+  classifierOutcomes: Record<string, ClaimType>;
   substantiation: "matched" | "stale" | "missing";
   posture: { mode: "off" | "observe" | "enforce" } | undefined;
+  rewrites: ReadonlyArray<RewriteTemplateEntry>;
 }> = {}) {
   const mode = overrides.configMode ?? "enforce";
-  const classifier = fakeClassifier(overrides.classifierOutcomes ?? {});
+  const classifier = overrides.classifier ?? fakeClassifier(overrides.classifierOutcomes ?? {});
   const substantiation = fakeResolverSubst(overrides.substantiation ?? "missing");
   const verdictStore = fakeVerdictStore();
   const handoffStore = fakeHandoffStore();
@@ -3316,13 +3138,17 @@ function makeHook(overrides: Partial<{
     postureCache,
     classifier,
     substantiationResolver: substantiation,
-    rewriteLoader: () => SG_REWRITES,
+    rewriteLoader: () => overrides.rewrites ?? SG_REWRITES,
     verdictStore,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     handoffStore: handoffStore as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     conversationStore: conversationStore as any,
-    splitSentences: (text: string) => text.split(". ").filter(Boolean).map((s) => s.trim()),
+    splitSentences: (text: string) =>
+      text
+        .split(/(?<=[.!?])\s+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
     clock: () => new Date("2026-05-11T12:00:00.000Z"),
     renderHandoff: ({ jurisdiction }) =>
       jurisdiction === "SG"
@@ -3332,69 +3158,89 @@ function makeHook(overrides: Partial<{
   return { hook, verdictStore, handoffStore, conversationStore };
 }
 
-function ctx(messages: string[]) {
+const HOOK_CTX: SkillHookContext = {
+  deploymentId: "dep_1",
+  orgId: "org_1",
+  skillSlug: "alex",
+  skillVersion: "1.0.0",
+  sessionId: "sess_1",
+  trustLevel: "supervised",
+  trustScore: 0.8,
+};
+
+function makeResult(response: string): SkillExecutionResult {
   return {
-    deploymentId: "dep_1",
-    sessionId: "sess_1",
-    conversationId: "conv_1",
-    serviceContext: null,
-    skillOutput: {
-      messages: messages.map((text, index) => ({ index, text })),
+    response,
+    toolCalls: [],
+    tokenUsage: { input: 100, output: 50 },
+    trace: {
+      durationMs: 100,
+      turnCount: 1,
+      status: "success",
+      responseSummary: response.slice(0, 80),
+      writeCount: 0,
+      governanceDecisions: [],
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+  };
 }
 
-describe("ClaimClassifierHook — config + mode matrix", () => {
+describe("ClaimClassifierHook — name + config + mode matrix", () => {
+  it("exposes hook name", () => {
+    const { hook } = makeHook({ configMode: "off" });
+    expect(hook.name).toBe("claim-classifier");
+  });
+
   it("passes through when config is missing", async () => {
     const { hook, verdictStore } = makeHook({ configMode: "missing" });
-    const c = ctx(["Most clients see results."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Most clients see results.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(0);
-    expect(c.skillOutput.messages[0].text).toBe("Most clients see results.");
+    expect(result.response).toBe("Most clients see results.");
   });
 
   it("passes through when mode is off", async () => {
     const { hook, verdictStore } = makeHook({ configMode: "off" });
-    const c = ctx(["Most clients see results."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Most clients see results.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(0);
   });
 
-  it("observe mode persists verdicts but does not modify output", async () => {
+  it("observe mode persists verdicts but does not modify response", async () => {
     const { hook, verdictStore, handoffStore } = makeHook({
       configMode: "observe",
       classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
       substantiation: "missing",
     });
-    const c = ctx(["Visible slimming after one session."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(1);
-    expect(c.skillOutput.messages[0].text).toBe("Visible slimming after one session.");
+    expect(result.response).toBe("Visible slimming after one session.");
     expect(handoffStore.saved).toHaveLength(0);
   });
 
   it("fails open in enforce mode when resolver errors with cold cache", async () => {
     const { hook, verdictStore } = makeHook({ configMode: "error", posture: undefined });
-    const c = ctx(["Most clients see results."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Most clients see results.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(0);
-    expect(c.skillOutput.messages[0].text).toBe("Most clients see results.");
+    expect(result.response).toBe("Most clients see results.");
   });
 
-  it("fails closed in enforce mode when last-known posture is enforce", async () => {
+  it("fails closed when last-known posture is enforce", async () => {
     const { hook, verdictStore, handoffStore, conversationStore } = makeHook({
       configMode: "error",
       posture: { mode: "enforce" },
     });
-    const c = ctx(["Most clients see results."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Most clients see results.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(1);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = verdictStore.saved[0] as any;
     expect(v.reasonCode).toBe("governance_unavailable");
+    expect(v.conversationId).toBe("sess_1");
     expect(handoffStore.saved).toHaveLength(1);
     expect(conversationStore.getStatus("sess_1")).toBe("human_override");
+    expect(result.response).toContain("clinic team");
   });
 });
 
@@ -3403,19 +3249,19 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
     const { hook, verdictStore } = makeHook({
       classifierOutcomes: { "Our address is 123 Orchard Road.": "none" },
     });
-    const c = ctx(["Our address is 123 Orchard Road."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Our address is 123 Orchard Road.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(0);
-    expect(c.skillOutput.messages[0].text).toBe("Our address is 123 Orchard Road.");
+    expect(result.response).toBe("Our address is 123 Orchard Road.");
   });
 
-  it("allows when classifier returns rewriteable and substantiation matches", async () => {
+  it("allows when substantiation matches", async () => {
     const { hook, verdictStore } = makeHook({
       classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
       substantiation: "matched",
     });
-    const c = ctx(["Visible slimming after one session."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(0);
   });
 
@@ -3424,82 +3270,99 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
       classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
       substantiation: "missing",
     });
-    const c = ctx(["Visible slimming after one session."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(1);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = verdictStore.saved[0] as any;
     expect(v.action).toBe("rewrite");
     expect(v.reasonCode).toBe("unsupported_claim_rewritten");
+    expect(v.conversationId).toBe("sess_1");
     expect(v.details.promptVersion).toBe("claim-classifier@1.0.0");
     expect(v.details.claimType).toBe("efficacy");
     expect(v.details.originalSentence).toBe("Visible slimming after one session.");
     expect(v.details.rewrittenSentence).toContain("Results vary");
-    expect(c.skillOutput.messages[0].text).toContain("Results vary");
-    expect(c.skillOutput.messages[0].text).not.toContain("Visible slimming");
+    expect(result.response).toContain("Results vary");
+    expect(result.response).not.toContain("Visible slimming");
     expect(handoffStore.saved).toHaveLength(0);
     expect(conversationStore.getStatus("sess_1")).toBeUndefined();
   });
 
-  it("emits claim_substantiation_stale reasonCode when stale", async () => {
+  it("emits claim_substantiation_stale when stale", async () => {
     const { hook, verdictStore } = makeHook({
       classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
       substantiation: "stale",
     });
-    const c = ctx(["Visible slimming after one session."]);
-    await hook.afterSkill(c);
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = verdictStore.saved[0] as any;
     expect(v.reasonCode).toBe("claim_substantiation_stale");
   });
 
-  it("escalates whole message when any sentence is a non-rewriteable claim type", async () => {
+  it("escalates whole response on diagnosis claim type", async () => {
     const { hook, verdictStore, handoffStore, conversationStore } = makeHook({
-      classifierOutcomes: {
-        "We open at 10am.": "none",
-        "I think you have rosacea.": "efficacy",  // proxy via test classifier; will be remapped below
+      classifier: {
+        classify: async ({ sentence, model }) => ({
+          result: {
+            sentence,
+            claimType: sentence.includes("rosacea") ? "diagnosis" : "none",
+            confidence: 0.95,
+          },
+          promptVersion: "claim-classifier@1.0.0",
+          promptHash: "0123456789abcdef",
+          schemaVersion: "1.0.0",
+          model,
+        }),
       },
     });
-    // For this test, the simplest path is to use medical-advice directly.
-    // Build a custom classifier inline:
-    const classifier: AnthropicClaimClassifier = {
-      classify: async ({ sentence }) => ({
-        result: {
-          sentence,
-          claimType: sentence.includes("rosacea") ? "diagnosis" : "none",
-          confidence: 0.95,
-        },
-        promptVersion: "claim-classifier@1.0.0",
-        promptHash: "0123456789abcdef",
-        schemaVersion: "1.0.0",
-        model: "claude-haiku-4-5-20251001",
-      }),
-    };
-    // Re-make hook with the override classifier.
-    // (In practice, makeHook would accept a classifier override; inline construct for clarity.)
-    // Assert: any diagnosis sentence → whole-message block.
+    const result = makeResult("We open at 10am. I think you have rosacea.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = verdictStore.saved[0] as any;
+    expect(v.reasonCode).toBe("unsupported_claim_escalated");
+    expect(v.details.claimType).toBe("diagnosis");
+    expect(handoffStore.saved).toHaveLength(1);
+    expect(conversationStore.getStatus("sess_1")).toBe("human_override");
+    expect(result.response).toContain("clinic team");
+    expect(result.response).not.toContain("rosacea");
+    expect(result.response).not.toContain("10am");
+  });
+
+  it("escalates on classifier_error", async () => {
+    const { hook, verdictStore, conversationStore } = makeHook({
+      classifier: throwingClassifier("This sentence will throw."),
+    });
+    const result = makeResult("This sentence will throw.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = verdictStore.saved[0] as any;
+    expect(v.reasonCode).toBe("classifier_error");
+    expect(v.details.errorKind).toBe("api_error");
+    expect(v.details.errorMessage).toContain("api down");
+    expect(v.details.latencyBudgetMs).toBe(800);
+    expect(conversationStore.getStatus("sess_1")).toBe("human_override");
+  });
+
+  it("falls through to escalate when no rewrite template for the claim type", async () => {
+    const { hook, verdictStore } = makeHook({
+      classifierOutcomes: { "Visible slimming after one session.": "efficacy" },
+      substantiation: "missing",
+      rewrites: [],   // empty templates
+    });
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = verdictStore.saved[0] as any;
+    expect(v.action).toBe("escalate");
+    expect(v.reasonCode).toBe("unsupported_claim_escalated");
   });
 });
 ```
 
-Note: the last test uses an inline classifier override — extend `makeHook` to accept a `classifier` parameter if not already passed through. Add additional cases for `testimonial`, `medical-advice`, `classifier_timeout`, `classifier_error` (force the runner to time out / throw):
-
-```ts
-it("escalates whole message on classifier_timeout", async () => {
-  // Classifier classifies fast for one sentence, slow for another.
-  // Set latencyBudgetMs low; assert verdict.reasonCode === "classifier_timeout"
-  // with details: { originalSentence, errorKind: "timeout", latencyBudgetMs }.
-});
-
-it("escalates whole message on classifier_error", async () => {
-  // Classifier throws non-abort error.
-  // Assert verdict.reasonCode === "classifier_error" with details.errorKind === "api_error".
-});
-
-it("missing rewrite template falls through to escalate", async () => {
-  // Inject empty rewrite list. Assert escalate path.
-});
-```
+Add additional sentence-level cases for `testimonial`, `medical-advice`, `classifier_timeout` (force a timeout by setting `latencyBudgetMs: 0` in the config and using a classifier that defers via `signal`). The structure mirrors the `classifier_error` case.
 
 - [ ] **Step 3: Run tests to verify they fail**
 
@@ -3522,7 +3385,11 @@ import {
   resolveClaimClassifierConfig,
   type ClaimType,
 } from "@switchboard/schemas";
-import type { SkillHook, AfterSkillContext } from "../types.js";
+import type {
+  SkillHook,
+  SkillHookContext,
+  SkillExecutionResult,
+} from "../types.js";
 import type { AnthropicClaimClassifier } from "../../governance/classifier/anthropic-classifier.js";
 import type { SubstantiationResolver } from "../../governance/classifier/substantiation-resolver.js";
 import type { RewriteTemplateEntry } from "../../governance/classifier/rewrite-templates/index.js";
@@ -3546,27 +3413,38 @@ export interface ClaimClassifierHookDeps {
   renderHandoff: (input: { jurisdiction: "SG" | "MY"; reasonCode: GovernanceVerdictReason }) => string;
 }
 
-type SentenceMeta = { messageIndex: number; sentence: string };
-
 type SentenceAction =
   | { kind: "allow" }
-  | { kind: "rewrite"; replacement: string; reasonCode: GovernanceVerdictReason; details: Record<string, unknown> }
-  | { kind: "escalate"; reasonCode: GovernanceVerdictReason; details: Record<string, unknown> };
+  | {
+      kind: "rewrite";
+      originalSentence: string;
+      replacement: string;
+      reasonCode: GovernanceVerdictReason;
+      details: Record<string, unknown>;
+    }
+  | {
+      kind: "escalate";
+      originalSentence: string;
+      reasonCode: GovernanceVerdictReason;
+      details: Record<string, unknown>;
+    };
 
 const REWRITEABLE: ReadonlyArray<ClaimType> = ["efficacy", "safety-claim", "superiority", "urgency"];
 const ESCALATE_ONLY: ReadonlyArray<ClaimType> = ["testimonial", "medical-advice", "diagnosis"];
 
 export class ClaimClassifierHook implements SkillHook {
+  readonly name = "claim-classifier";
+
   constructor(private readonly deps: ClaimClassifierHookDeps) {}
 
-  async afterSkill(ctx: AfterSkillContext): Promise<void> {
+  async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
     const resolution = await this.deps.governanceConfigResolver(ctx.deploymentId);
 
     if (resolution.status === "missing") return;
     if (resolution.status === "error") {
       const cached = this.deps.postureCache.lastKnown(ctx.deploymentId);
       if (cached?.mode === "enforce") {
-        await this.failClosed(ctx, cached.jurisdiction);
+        await this.failClosed(ctx, result, cached.jurisdiction, cached.clinicType);
         return;
       }
       console.error(
@@ -3580,40 +3458,33 @@ export class ClaimClassifierHook implements SkillHook {
     const classifierConfig = resolveClaimClassifierConfig(config);
     if (classifierConfig.mode === "off") return;
 
+    const jurisdiction = (config as unknown as { jurisdiction: "SG" | "MY" }).jurisdiction;
+    const clinicType = (config as unknown as { clinicType: "medical" | "nonMedical" }).clinicType;
+
     this.deps.postureCache.remember(ctx.deploymentId, {
       mode: classifierConfig.mode,
-      jurisdiction: (config as unknown as { jurisdiction: "SG" | "MY" }).jurisdiction,
-      clinicType: (config as unknown as { clinicType: "medical" | "nonMedical" }).clinicType,
+      jurisdiction,
+      clinicType,
     });
 
-    const jurisdiction = (config as unknown as { jurisdiction: "SG" | "MY" }).jurisdiction;
-
-    // Enumerate sentences across all messages.
-    const sentences: SentenceMeta[] = [];
-    for (const m of ctx.skillOutput.messages) {
-      const parts = this.deps.splitSentences(m.text);
-      for (const s of parts) sentences.push({ messageIndex: m.index, sentence: s });
-    }
+    const sentences = this.deps.splitSentences(result.response);
     if (sentences.length === 0) return;
 
-    // Parallel classify within budget.
     const outcomes = await runClassifier({
-      sentences: sentences.map((s) => s.sentence),
+      sentences,
       model: classifierConfig.model,
       latencyBudgetMs: classifierConfig.latencyBudgetMs,
       classifier: this.deps.classifier,
     });
 
-    // Per-sentence action decisions.
     const actions: SentenceAction[] = [];
     for (let i = 0; i < outcomes.length; i++) {
       actions.push(
         await this.decideAction({
           outcome: outcomes[i],
-          meta: sentences[i],
+          sentence: sentences[i],
           jurisdiction,
           deploymentId: ctx.deploymentId,
-          serviceContext: ctx.serviceContext,
           latencyBudgetMs: classifierConfig.latencyBudgetMs,
         }),
       );
@@ -3623,34 +3494,32 @@ export class ClaimClassifierHook implements SkillHook {
     const hasRewrite = actions.some((a) => a.kind === "rewrite");
 
     if (hasEscalate) {
-      await this.applyEscalateAll(ctx, actions, sentences, jurisdiction, classifierConfig.mode);
+      await this.applyEscalate({ ctx, result, actions, jurisdiction, clinicType, mode: classifierConfig.mode });
       return;
     }
 
     if (hasRewrite) {
-      await this.applyRewrites(ctx, actions, sentences, jurisdiction, classifierConfig.mode);
+      await this.applyRewrites({ ctx, result, actions, jurisdiction, clinicType, mode: classifierConfig.mode });
       return;
     }
-
-    // All allow → no-op.
   }
 
   private async decideAction(args: {
     outcome: ClassifierOutcome;
-    meta: SentenceMeta;
+    sentence: string;
     jurisdiction: "SG" | "MY";
     deploymentId: string;
-    serviceContext: { serviceId: string } | null;
     latencyBudgetMs: number;
   }): Promise<SentenceAction> {
-    const { outcome, meta, jurisdiction, deploymentId, serviceContext, latencyBudgetMs } = args;
+    const { outcome, sentence, jurisdiction, deploymentId, latencyBudgetMs } = args;
 
     if (outcome.status === "timeout") {
       return {
         kind: "escalate",
+        originalSentence: sentence,
         reasonCode: "classifier_timeout",
         details: {
-          originalSentence: meta.sentence,
+          originalSentence: sentence,
           errorKind: "timeout",
           latencyBudgetMs,
           schemaVersion: "1.0.0",
@@ -3661,9 +3530,10 @@ export class ClaimClassifierHook implements SkillHook {
     if (outcome.status === "error") {
       return {
         kind: "escalate",
+        originalSentence: sentence,
         reasonCode: "classifier_error",
         details: {
-          originalSentence: meta.sentence,
+          originalSentence: sentence,
           errorKind: "api_error",
           latencyBudgetMs,
           schemaVersion: "1.0.0",
@@ -3680,7 +3550,7 @@ export class ClaimClassifierHook implements SkillHook {
       model,
       claimType: result.claimType,
       confidence: result.confidence,
-      originalSentence: meta.sentence,
+      originalSentence: sentence,
     };
 
     if (result.claimType === "none") return { kind: "allow" };
@@ -3688,18 +3558,17 @@ export class ClaimClassifierHook implements SkillHook {
     if (ESCALATE_ONLY.includes(result.claimType)) {
       return {
         kind: "escalate",
+        originalSentence: sentence,
         reasonCode: "unsupported_claim_escalated",
         details: baseDetails,
       };
     }
 
-    // efficacy | safety-claim | superiority | urgency | credentials → substantiation
     const resolution = await this.deps.substantiationResolver.resolve({
-      sentence: meta.sentence,
+      sentence,
       claimType: result.claimType,
       jurisdiction,
       deploymentId,
-      serviceContext,
     });
 
     if (resolution.status === "matched") return { kind: "allow" };
@@ -3714,6 +3583,7 @@ export class ClaimClassifierHook implements SkillHook {
     if (result.claimType === "credentials") {
       return {
         kind: "escalate",
+        originalSentence: sentence,
         reasonCode:
           resolution.status === "stale" ? "claim_substantiation_stale" : "unsupported_claim_escalated",
         details: detailsWithSource,
@@ -3730,12 +3600,14 @@ export class ClaimClassifierHook implements SkillHook {
         );
         return {
           kind: "escalate",
+          originalSentence: sentence,
           reasonCode: "unsupported_claim_escalated",
           details: detailsWithSource,
         };
       }
       return {
         kind: "rewrite",
+        originalSentence: sentence,
         replacement: template.template,
         reasonCode:
           resolution.status === "stale" ? "claim_substantiation_stale" : "unsupported_claim_rewritten",
@@ -3746,26 +3618,32 @@ export class ClaimClassifierHook implements SkillHook {
     // Unreachable; defensive.
     return {
       kind: "escalate",
+      originalSentence: sentence,
       reasonCode: "unsupported_claim_escalated",
       details: detailsWithSource,
     };
   }
 
-  private async failClosed(ctx: AfterSkillContext, jurisdiction: "SG" | "MY"): Promise<void> {
+  private async failClosed(
+    ctx: SkillHookContext,
+    result: SkillExecutionResult,
+    jurisdiction: "SG" | "MY",
+    clinicType: "medical" | "nonMedical",
+  ): Promise<void> {
     const handoff = this.deps.renderHandoff({ jurisdiction, reasonCode: "governance_unavailable" });
-    const originalText = ctx.skillOutput.messages.map((m) => m.text).join("\n\n");
+    const originalText = result.response;
 
     const verdict: GovernanceVerdict = {
       action: "block",
       reasonCode: "governance_unavailable",
       jurisdiction,
-      clinicType: "medical",  // fail-closed uses cached clinicType in callers; here defensive default
+      clinicType,
       sourceGuard: "claim_classifier",
       originalText,
       emittedText: handoff,
       auditLevel: "critical",
       decidedAt: this.deps.clock().toISOString(),
-      conversationId: ctx.conversationId,
+      conversationId: ctx.sessionId,
     };
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3778,123 +3656,125 @@ export class ClaimClassifierHook implements SkillHook {
         reason: "compliance_concern",
         deploymentId: ctx.deploymentId,
         sessionId: ctx.sessionId,
-        conversationId: ctx.conversationId,
         payload: { sourceGuard: "claim_classifier", reasonCode: "governance_unavailable" },
       });
     } catch (err) {
       console.error("[claim-classifier] handoffStore.save threw on fail-closed", err);
     }
     await this.deps.conversationStore.setConversationStatus(ctx.sessionId, "human_override");
-    ctx.skillOutput.messages = [{ index: 0, text: handoff }];
+    result.response = handoff;
   }
 
-  private async applyEscalateAll(
-    ctx: AfterSkillContext,
-    actions: ReadonlyArray<SentenceAction>,
-    sentences: ReadonlyArray<SentenceMeta>,
-    jurisdiction: "SG" | "MY",
-    mode: "off" | "observe" | "enforce",
-  ): Promise<void> {
+  private async applyEscalate(args: {
+    ctx: SkillHookContext;
+    result: SkillExecutionResult;
+    actions: ReadonlyArray<SentenceAction>;
+    jurisdiction: "SG" | "MY";
+    clinicType: "medical" | "nonMedical";
+    mode: "off" | "observe" | "enforce";
+  }): Promise<void> {
+    const { ctx, result, actions, jurisdiction, clinicType, mode } = args;
     let firstEscalateVerdictId: string | null = null;
     const decidedAt = this.deps.clock().toISOString();
-    const handoff = this.deps.renderHandoff({ jurisdiction, reasonCode: "unsupported_claim_escalated" });
+    const handoff = this.deps.renderHandoff({
+      jurisdiction,
+      reasonCode: "unsupported_claim_escalated",
+    });
 
-    for (let i = 0; i < actions.length; i++) {
-      const a = actions[i];
+    for (const a of actions) {
       if (a.kind !== "escalate") continue;
       const verdict: GovernanceVerdict = {
         action: mode === "observe" ? "allow" : "escalate",
         reasonCode: a.reasonCode,
         jurisdiction,
-        clinicType: "medical",
+        clinicType,
         sourceGuard: "claim_classifier",
-        originalText: sentences[i].sentence,
-        emittedText: mode === "observe" ? sentences[i].sentence : handoff,
+        originalText: a.originalSentence,
+        emittedText: mode === "observe" ? a.originalSentence : handoff,
         auditLevel: mode === "observe" ? "warning" : "critical",
         decidedAt,
-        conversationId: ctx.conversationId,
+        conversationId: ctx.sessionId,
       };
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const saved = (await this.deps.verdictStore.save({ ...verdict, deploymentId: ctx.deploymentId, details: a.details } as any)) as { id?: string };
+        const saved = (await this.deps.verdictStore.save({
+          ...verdict,
+          deploymentId: ctx.deploymentId,
+          details: a.details,
+        } as any)) as { id?: string };
         if (firstEscalateVerdictId === null && saved.id) firstEscalateVerdictId = saved.id;
       } catch (err) {
         console.error("[claim-classifier] verdictStore.save threw on escalate", err);
       }
     }
 
-    if (mode === "observe") return;  // do not modify output
+    if (mode === "observe") return;
 
     try {
       await this.deps.handoffStore.save({
         reason: "compliance_concern",
         deploymentId: ctx.deploymentId,
         sessionId: ctx.sessionId,
-        conversationId: ctx.conversationId,
-        payload: {
-          sourceGuard: "claim_classifier",
-          verdictId: firstEscalateVerdictId,
-        },
+        payload: { sourceGuard: "claim_classifier", verdictId: firstEscalateVerdictId },
       });
     } catch (err) {
       console.error("[claim-classifier] handoffStore.save threw on escalate", err);
     }
     await this.deps.conversationStore.setConversationStatus(ctx.sessionId, "human_override");
-    ctx.skillOutput.messages = [{ index: 0, text: handoff }];
+    result.response = handoff;
   }
 
-  private async applyRewrites(
-    ctx: AfterSkillContext,
-    actions: ReadonlyArray<SentenceAction>,
-    sentences: ReadonlyArray<SentenceMeta>,
-    jurisdiction: "SG" | "MY",
-    mode: "off" | "observe" | "enforce",
-  ): Promise<void> {
+  private async applyRewrites(args: {
+    ctx: SkillHookContext;
+    result: SkillExecutionResult;
+    actions: ReadonlyArray<SentenceAction>;
+    jurisdiction: "SG" | "MY";
+    clinicType: "medical" | "nonMedical";
+    mode: "off" | "observe" | "enforce";
+  }): Promise<void> {
+    const { ctx, result, actions, jurisdiction, clinicType, mode } = args;
     const decidedAt = this.deps.clock().toISOString();
 
-    // Group sentence indices by message for in-place replacement.
-    const replacementsByMessage = new Map<number, Array<{ original: string; replacement: string }>>();
-
-    for (let i = 0; i < actions.length; i++) {
-      const a = actions[i];
+    for (const a of actions) {
       if (a.kind !== "rewrite") continue;
       const verdict: GovernanceVerdict = {
         action: mode === "observe" ? "allow" : "rewrite",
         reasonCode: a.reasonCode,
         jurisdiction,
-        clinicType: "medical",
+        clinicType,
         sourceGuard: "claim_classifier",
-        originalText: sentences[i].sentence,
+        originalText: a.originalSentence,
         emittedText: a.replacement,
         auditLevel: mode === "observe" ? "warning" : "critical",
         decidedAt,
-        conversationId: ctx.conversationId,
+        conversationId: ctx.sessionId,
       };
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await this.deps.verdictStore.save({ ...verdict, deploymentId: ctx.deploymentId, details: a.details } as any);
+        await this.deps.verdictStore.save({
+          ...verdict,
+          deploymentId: ctx.deploymentId,
+          details: a.details,
+        } as any);
       } catch (err) {
         console.error("[claim-classifier] verdictStore.save threw on rewrite", err);
       }
-      const arr = replacementsByMessage.get(sentences[i].messageIndex) ?? [];
-      arr.push({ original: sentences[i].sentence, replacement: a.replacement });
-      replacementsByMessage.set(sentences[i].messageIndex, arr);
     }
 
     if (mode === "observe") return;
 
-    for (const m of ctx.skillOutput.messages) {
-      const replacements = replacementsByMessage.get(m.index);
-      if (!replacements) continue;
-      let text = m.text;
-      for (const r of replacements) {
-        text = text.replace(r.original, r.replacement);
-      }
-      m.text = text;
+    // Splice replacements into result.response in original-occurrence order.
+    let response = result.response;
+    for (const a of actions) {
+      if (a.kind !== "rewrite") continue;
+      response = response.replace(a.originalSentence, a.replacement);
     }
+    result.response = response;
   }
 }
 ```
+
+The class uses `readonly name = "claim-classifier"` to satisfy the `SkillHook.name: string` requirement. `afterSkill` mutates `result.response` in place; there is no return value. `conversationId` on every verdict is sourced from `ctx.sessionId` (1:1 mapping in the current runtime).
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -3930,7 +3810,7 @@ git commit -m "feat(core): ClaimClassifierHook composing Layer 2 + Layer 3 + rew
 
 ---
 
-## Task 17: Bootstrap wiring — register `ClaimClassifierHook` + second posture cache
+## Task 16: Bootstrap wiring — register `ClaimClassifierHook` + second posture cache
 
 **Files:**
 - Modify: `apps/api/src/bootstrap/skill-mode.ts`
@@ -4079,7 +3959,7 @@ git commit -m "feat(api): register ClaimClassifierHook + per-hook posture caches
 
 ---
 
-## Task 18: Reference markdown sync + 1b-2 follow-up doc
+## Task 17: Reference markdown sync + 1b-2 follow-up doc
 
 **Files:**
 - Modify: `skills/alex/references/regulatory/sg-rules.md`
@@ -4179,9 +4059,9 @@ while still observing on efficacy).
 
 ## 6. Cross-message service-context tracking
 
-`AfterSkillContext.serviceContext` reflects only the current turn's
-service-scoped tool calls. Carrying service context across multi-turn
-conversations is deferred.
+Service-scoped substantiation is deferred entirely in 1b-2 — `ApprovedComplianceClaim`
+has no `serviceId` column. Re-introduce when a relational `Service` Prisma model
+ships in 1a (or a future phase).
 
 ## 7. Persistent `GovernancePostureCache`
 
@@ -4199,7 +4079,7 @@ git commit -m "docs(alex): 1b-2 reference markdown sync + follow-ups spec"
 
 ---
 
-## Task 19: Eval harness `pnpm classifier-eval` + golden-set fixture
+## Task 18: Eval harness `pnpm classifier-eval` + golden-set fixture
 
 **Files:**
 - Create: `packages/core/src/governance/classifier/eval/golden-set.ts`
@@ -4595,31 +4475,30 @@ Expected: PR URL returned.
 |---|---|
 | §1.1 Extend `GovernanceVerdictReasonSchema` | Task 1 |
 | §1.2 `ClaimClassifierConfigSchema` + `resolveClaimClassifierConfig` | Task 4 |
-| §1.3 `ApprovedComplianceClaim` Prisma model | Task 5 |
+| §1.3 `ApprovedComplianceClaim` Prisma model (no `serviceId`) | Task 5 |
 | §1.4 `ClaimTypeSchema`, `ClassifierSentenceResultSchema`, `CLASSIFIER_SCHEMA_VERSION` | Task 2 |
 | §1.5 `SubstantiationSourceTypeSchema`, `SubstantiationResolutionSchema` | Task 3 |
 | §2.1 Tier 1 `operator_business_fact` (typed, not consumed in 1b-2) | Task 3 (enum) |
-| §2.2 Tier 2 `approved_compliance_claim` | Tasks 5, 6, 14 |
+| §2.2 Tier 2 `approved_compliance_claim` (deployment-global) | Tasks 5, 6, 14 |
 | §2.3 Tier 3 `regulatory_public_source` | Task 8 |
-| §2.4 Enforcement matrix | Task 14 (dispatch table) + Task 16 (hook action selection) |
+| §2.4 Enforcement matrix | Task 14 (dispatch table) + Task 15 (hook action selection) |
 | §3.1 Classifier prompt artifact | Task 10 |
 | §3.2 Structured-output Anthropic call + prompt caching + strict tool | Task 11 |
 | §3.3 Sentence splitter (extracted shared util) | Task 7 |
 | §3.4 Per-turn budget + parallel calls | Task 12 |
-| §3.5 Classifier-error vs classifier-timeout vs none | Tasks 12, 16 |
+| §3.5 Classifier-error vs classifier-timeout vs none | Tasks 12, 15 |
 | §4 Substantiation resolver | Task 14 |
 | §4.5 LRU cache | Task 13 |
 | §5 Rewrite templates | Task 9 |
-| §6 `ClaimClassifierHook` | Task 16 |
-| §6.2 `serviceContext` extension | Task 15 |
-| §6.5 Verdict-detail stamping (incl. timeout/error details with originalSentence, errorKind, latencyBudgetMs) | Task 16 |
-| §6.6 Whole-message vs sentence-level effects | Task 16 (applyEscalateAll, applyRewrites) |
-| §6.7 Per-hook posture cache | Task 17 (bootstrap construction) + Task 16 (consumer) |
-| §7 Hook registration | Task 17 |
-| §8 Eval harness | Task 19 |
+| §6 `ClaimClassifierHook` (real signature: `afterSkill(ctx, result): Promise<void>`, mutates `result.response`) | Task 15 |
+| §6.2 Service-scoping deferred (no `serviceContext` in 1b-2) | n/a — out of scope |
+| §6.5 Verdict-detail stamping (incl. timeout/error details with originalSentence, errorKind, latencyBudgetMs) | Task 15 |
+| §6.6 Whole-response vs sentence-level effects (single-string mutation) | Task 15 (applyEscalate, applyRewrites) |
+| §6.7 Per-hook posture cache | Task 16 (bootstrap construction) + Task 15 (consumer) |
+| §7 Hook registration | Task 16 |
+| §8 Eval harness | Task 18 |
 | §9 Test fixture coverage | Tests in each implementation task |
-| §10 Operability (markdown sync, reference docs) | Task 18 |
-| Open Question 1 (`serviceContext` fallback-tolerant) | Task 15 |
-| Open Question 2 (`ApprovedComplianceClaim` seed authorship) | Task 18 follow-up doc |
-| Open Question 3 (eval cost discipline EVAL=1) | Task 19 |
-
+| §10 Operability (markdown sync, reference docs) | Task 17 |
+| Open Question 1 (`Service`-scoped substantiation deferred) | n/a — captured in Task 17 follow-ups |
+| Open Question 2 (`ApprovedComplianceClaim` seed authorship) | Task 17 follow-up doc |
+| Open Question 3 (eval cost discipline EVAL=1) | Task 18 |

@@ -27,7 +27,7 @@ Phase 1b-2 ships the semantic layer that sits on top of 1b-1's deterministic gat
 2. **Classifier prompt artifact** — versioned TS module with system prompt, claim-type enum, structured-output schema, and a stable `promptVersion`/`promptHash` exported alongside.
 3. **Per-sentence classification** via the 1b-1 sentence splitter (extracted to a shared utility), parallel Anthropic calls within a per-turn latency budget (default 800 ms).
 4. **Prompt caching** — system prompt + claim-type schema marked as the cache-eligible block on every classifier call.
-5. **`ApprovedComplianceClaim` Prisma model + `ApprovedComplianceClaimStore`** — operator-authored compliance claims with named reviewer, `reviewedAt`, `jurisdiction`, optional `validUntil`, optional `serviceId`. Authored via seed/admin script in 1b-2; UI is Phase 2.
+5. **`ApprovedComplianceClaim` Prisma model + `ApprovedComplianceClaimStore`** — operator-authored compliance claims with named reviewer, `reviewedAt`, `jurisdiction`, optional `validUntil`. Deployment-global only (no `serviceId` in 1b-2 — see Section 6.2). Authored via seed/admin script; UI is Phase 2.
 6. **`RegulatoryPublicSource` reference data** — TS-backed per-jurisdiction tables of approved devices, doctor-credential lookup paths, and clinic-licence registries. Cited curated constants, not live-fetched.
 7. **Substantiation resolver** with per-claim-type tier dispatch, jurisdiction-filtered substring match, staleness check (180 days, mirroring 1a's reference-metadata window), and an in-memory LRU cache (keyed by `(claimText-hash, jurisdiction)`) for match results only.
 8. **Rewrite template registry** — per-`(claimType, jurisdiction)` non-claim phrasing templates as TS modules with `id` and `notes`, same authoring contract as 1b-1 banned-phrase tables.
@@ -86,13 +86,13 @@ The 1b-1 deterministic gate runs first so obvious banned content never reaches t
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Hook placement | New `ClaimClassifierHook`, registered after `DeterministicSafetyGateHook` and before `TracePersistenceHook` | Single-responsibility: deterministic table-matching and probabilistic classification are separable concerns with different blame surfaces. Independent feature-flag, independent verdict-stamping, independent rollout. Layer 1 short-circuit saves classifier latency on obvious blocks. |
+| Hook placement | New `ClaimClassifierHook`, implementing the real `SkillHook` contract: `name: string` + `afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void>`. Registered after `DeterministicSafetyGateHook` and before `TracePersistenceHook`. The hook **mutates `result.response` in place** (the runtime contract is `Promise<void>` — there is no replacement return value). | Single-responsibility: deterministic table-matching and probabilistic classification are separable concerns. Independent feature-flag, independent verdict-stamping, independent rollout. Layer 1 short-circuit saves classifier latency on obvious blocks. Note: `SkillExecutionResult.response` is a SINGLE string, not a `messages[]` array — sentence-level rewrites splice the response string. |
 | Classification granularity | Per-sentence (reusing 1b-1's sentence splitter, extracted to shared util) | Tight blast radius: one unsupported claim is rewritten without tainting the rest of the message. Multiple sentences = parallel calls within one turn budget. |
 | Cheap model | Haiku 4.5 (`claude-haiku-4-5-20251001`) with prompt caching | Cheapest, fastest, sufficient for sentence-level classification. System prompt + claim-type schema is the cache-eligible block; per-turn input is the cache miss. 5-minute TTL amortizes cost across high-traffic conversations. Configurable per-deployment via `governanceConfig.claimClassifier.model` for future upgrade to Sonnet without code change. |
 | Latency budget | Per-turn total (default 800 ms) with parallel `Promise.allSettled` calls; budget exhaustion mid-turn → remaining sentences fall back to `block + escalate` with `reasonCode: "classifier_timeout"` | Long messages don't compound latency. Conservative on incompletion: the design must never silently emit. |
 | Mode vocabulary | Reuse 1b-1's `off | observe | enforce` (`governanceConfig.claimClassifier.mode`) | One vocabulary for operators. `observe` persists verdicts with `action: "allow"` and `auditLevel: "warning"`; `enforce` rewrites/escalates with `auditLevel: "critical"`. Same posture-cache pattern as 1b-1 (shared instance). |
 | Rewrite mechanism | Deterministic per-`(claimType, jurisdiction)` templates in a TS table | Mirrors 1b-1 banned-phrase fat-data pattern. Predictable, cheap, no second model call, auditable in PR review. Bland prose is acceptable — the rewrite IS the safe phrasing. |
-| Substantiation match | Jurisdiction-filtered case-insensitive substring of stored `claimText` in the classified sentence, optional `serviceId` filter when surrounding context references a known service | Deterministic, debuggable, no embedding infra. Operators author conservative `claimText` that mirrors expected prose. Embedding fallback rejected for 1b-2 (Phase 3 if coverage is sparse). |
+| Substantiation match | Jurisdiction-filtered case-insensitive substring of stored `claimText` in the classified sentence. Deployment-global only — no service-scoping in 1b-2 (codebase has no `Service` Prisma model; see Section 6.2). | Deterministic, debuggable, no embedding infra. Operators author conservative `claimText` that mirrors expected prose. Embedding fallback rejected for 1b-2 (Phase 3 if coverage is sparse). |
 | Substantiation cache | In-memory LRU (bounded 5000 entries) keyed by `(sha256(claimText), jurisdiction)`, **match-only** (no non-match caching in 1b-2) | Per-process / per-instance trade-off mirrors 1b-1's `GovernancePostureCache`. Caching non-matches would require invalidation on `ApprovedComplianceClaim.upsert` — deferred. New approved claims take effect on the next lookup. |
 | Claim-type enum (Layer 2 output) | `efficacy | safety-claim | superiority | urgency | testimonial | medical-advice | diagnosis | credentials | none` — extends parent spec by adding `credentials` | Parent spec's enum did not name a category for *"Dr. X is APC-licensed"* or *"this device is HSA-approved"*; `safety-claim` was the loose catch-all. Adding `credentials` lets Layer 3 dispatch credentials claims to `regulatory_public_source` cleanly. The other eight values match the parent spec verbatim. |
 | New `GovernanceVerdictReason` entries | `unsupported_claim_rewritten`, `unsupported_claim_escalated`, `claim_substantiation_stale`, `classifier_error` (`classifier_timeout` already reserved in 1a) | Specific to 1b-2 classifier outcomes. Keeps 1b-1's generic `unsupported_claim` reserved for the deterministic banned-phrase case; classifier-driven outcomes get richer downstream analytics. `classifier_error` is distinct from `classifier_timeout` — the former is API failure, the latter is budget exhaustion. |
@@ -174,23 +174,22 @@ model ApprovedComplianceClaim {
   reviewedBy    String   // free text — reviewer name + role
   reviewedAt    DateTime
   validUntil    DateTime?
-  serviceId     String?  // optional scope to a specific Service
   notes         String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   deployment    AgentDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
-  service       Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
   @@index([deploymentId, jurisdiction, claimType])
-  @@index([deploymentId, serviceId])
   @@index([deploymentId, validUntil])
 }
 ```
 
+**No `serviceId` field in 1b-2.** Codebase verification found no `Service` Prisma model on `main` or on the 1a parent branch. Service-scoping is deferred to a future phase that lands `Service` as a relational entity (see Section 6.2). Operators scope claims by authoring `claimText` that mirrors the service-specific sentence Alex generates.
+
 Migration steps (use `prisma migrate diff --from-url --to-schema-datamodel --script` then `migrate deploy`, per the established TTY-free workflow):
 
-1. `CREATE TABLE "ApprovedComplianceClaim"` with FKs to `AgentDeployment` and `Service`.
+1. `CREATE TABLE "ApprovedComplianceClaim"` with FK to `AgentDeployment` only.
 
 No data backfill. Existing deployments start with zero approved claims; the resolver returns "no source" for every claim until operators (or seeds) populate the table.
 
@@ -259,14 +258,14 @@ Reads from the existing `Service` model (1a-shipped `ServiceSchema` fields). Req
 
 ### 2.2 Tier 2 — `approved_compliance_claim`
 
-New Prisma model (Section 1.3). Operator-authored, jurisdiction-scoped, with named reviewer + `reviewedAt`. Substring-matched against the classifier-flagged sentence (case-insensitive). Optional `serviceId` narrows scope: if the surrounding skill output references a known `Service.id`, the resolver prefers a `serviceId`-scoped claim over a global one for the same `(jurisdiction, claimType)`.
+New Prisma model (Section 1.3). Operator-authored, jurisdiction-scoped, with named reviewer + `reviewedAt`. Substring-matched against the classifier-flagged sentence (case-insensitive).
 
 **Authoring path in 1b-2:** seed file (`packages/db/prisma/seed-approved-compliance-claims.ts`) + a one-off admin script under `scripts/`. UI is Phase 2.
 
 **Resolution policy:**
 
 - For a sentence classified as `efficacy | safety-claim | superiority | urgency`, the resolver looks up rows where `deploymentId` matches the current deployment AND `jurisdiction` matches AND `claimType` matches AND `claimText` is a substring of the sentence (lowercased).
-- `serviceId` filter applies only when the skill output's `serviceContext` (added in 1b-2; see Section 6.4) identifies a specific service. Without service context, the resolver matches global rows (where `serviceId IS NULL`).
+- **No service-scoping in 1b-2.** All matched rows are deployment-global. Service-scoped overrides return when a real `Service` Prisma model lands (see Section 6.2).
 - Staleness: if `validUntil` is set and `< now`, OR `reviewedAt < now - 180 days`, the resolution returns `{ status: "stale" }` and verdict `reasonCode: "claim_substantiation_stale"`. Stale claims are treated as missing for action selection (rewrite or escalate per claim type).
 
 ### 2.3 Tier 3 — `regulatory_public_source`
@@ -572,13 +571,14 @@ export interface SubstantiationResolverInput {
   claimType: ClaimType;
   jurisdiction: "SG" | "MY";
   deploymentId: string;
-  serviceContext: { serviceId: string } | null;
 }
 
 export interface SubstantiationResolver {
   resolve(input: SubstantiationResolverInput): Promise<SubstantiationResolution>;
 }
 ```
+
+**No `serviceContext` field in 1b-2.** Service-scoping is deferred — see Section 6.2.
 
 `SubstantiationResolution` shape from Section 1.5: `{ status: "matched" | "stale" | "missing", sourceType?, sourceId?, matchedText? }`.
 
@@ -611,7 +611,6 @@ export interface ApprovedComplianceClaimQuery {
   deploymentId: string;
   jurisdiction: "SG" | "MY";
   claimType: ClaimType;
-  serviceId?: string | null;
 }
 
 export interface ApprovedComplianceClaimRecord {
@@ -623,7 +622,6 @@ export interface ApprovedComplianceClaimRecord {
   reviewedBy: string;
   reviewedAt: string;
   validUntil: string | null;
-  serviceId: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -636,10 +634,10 @@ export interface ApprovedComplianceClaimStore {
 
 Implementation in `packages/db/src/prisma-approved-compliance-claim-store.ts`. Querying logic:
 
-1. If `query.serviceId` provided, fetch rows where `serviceId === query.serviceId OR serviceId === null` for the given `(deploymentId, jurisdiction, claimType)`. Service-scoped rows take precedence in the resolution loop.
-2. Else, fetch rows where `serviceId IS NULL`.
+1. Fetch all rows where `(deploymentId, jurisdiction, claimType)` matches.
+2. Ordering: `reviewedAt DESC` so the most recently reviewed claim wins on a substring tie.
 
-The resolver iterates returned rows (service-scoped first, then global) and tests `lowercase(sentence).includes(lowercase(claim.claimText))`. First hit wins.
+The resolver iterates returned rows and tests `lowercase(sentence).includes(lowercase(claim.claimText))`. First hit wins.
 
 **Staleness check:** before returning `{ status: "matched" }`, evaluate `claim.validUntil < now` or `claim.reviewedAt < now - 180_DAYS`. If stale, return `{ status: "stale", sourceType, sourceId, matchedText }`. The hook treats stale as missing for action selection but with distinct `reasonCode: "claim_substantiation_stale"`.
 
@@ -697,7 +695,7 @@ export function createSubstantiationResolver(deps: {
 
 Flow:
 
-1. Compute `cacheKey = { claimTextHash: sha256(lower(sentence)).slice(0, 32), jurisdiction, claimType, deploymentId }`.
+1. Compute `cacheKey = { sentenceHash: sha256(lower(sentence)).slice(0, 32), jurisdiction, claimType, deploymentId }`.
 2. `cached = cache.get(cacheKey)` → if present, return.
 3. For each `sourceType` in `SOURCE_TIERS_BY_CLAIM_TYPE[claimType]`:
    - `approved_compliance_claim` → query store, iterate rows, substring-check, evaluate staleness, return first hit.
@@ -755,7 +753,7 @@ MY variants follow the same shape with adjusted register. All eight (4 × 2) see
 
 ## Section 6 — `ClaimClassifierHook`
 
-### 6.1 Dependencies
+### 6.1 Dependencies and contract
 
 `packages/core/src/skill-runtime/hooks/claim-classifier.ts`:
 
@@ -771,83 +769,96 @@ export interface ClaimClassifierHookDeps {
   conversationStore: ConversationStateStore;
   splitSentences: (text: string) => readonly string[];
   clock: () => Date;
+  renderHandoff: (input: { jurisdiction: "SG" | "MY"; reasonCode: GovernanceVerdictReason }) => string;
 }
 
 export class ClaimClassifierHook implements SkillHook {
+  readonly name = "claim-classifier";
   constructor(deps: ClaimClassifierHookDeps);
-  async afterSkill(ctx: AfterSkillContext): Promise<AfterSkillOutcome>;
+  async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void>;
 }
 ```
 
-Shares the `GovernanceConfigResolver` with the 1b-1 deterministic gate (one bootstrap-constructed instance — the resolver itself is stateless and a single DB read warms both gates' decisions). **The `GovernancePostureCache` is NOT shared** — see Decision table and Section 6.7. Each hook receives its own cache instance. Shares `verdictStore`, `handoffStore`, `conversationStore`. Adds `classifier`, `substantiationResolver`, `rewriteLoader`, `splitSentences`.
+**Real hook contract** (verified against `packages/core/src/skill-runtime/types.ts:224-233`):
+- `SkillHook` requires `name: string`. Optional `afterSkill?(ctx, result)`.
+- `SkillHookContext` exposes `{ deploymentId, orgId, skillSlug, skillVersion, sessionId, trustLevel, trustScore }`. **There is no `conversationId` field** — the hook uses `ctx.sessionId` as the verdict's `conversationId` (the runtime treats them 1:1 today; if a future change splits them the mapping moves to a single resolver call).
+- `SkillExecutionResult` is `{ response: string, toolCalls, tokenUsage, trace }`. **`response` is a single string**, not a `messages[]` array. The hook mutates `result.response` in place — block-whole-message replaces it entirely; rewrites splice substrings via `string.replace(originalSentence, replacement)`.
+- `afterSkill` returns `Promise<void>`. There is no `AfterSkillOutcome` — all effects are in-place mutation of `result`.
 
-### 6.2 Service context (`AfterSkillContext` extension)
+Shares the `GovernanceConfigResolver` with the 1b-1 deterministic gate (one bootstrap-constructed instance — the resolver itself is stateless and a single DB read warms both gates' decisions). **The `GovernancePostureCache` is NOT shared** — see Decision table and Section 6.7. Each hook receives its own cache instance. Shares `verdictStore`, `handoffStore`, `conversationStore`. Adds `classifier`, `substantiationResolver`, `rewriteLoader`, `splitSentences`, `renderHandoff`.
 
-The substantiation resolver's `serviceContext` parameter requires the hook to know which `Service` (if any) the skill output references. 1a's `ServiceSchema` is already in place. 1b-2 extends `AfterSkillContext` with an optional `serviceContext: { serviceId: string } | null`.
+### 6.2 Service-scoping deferred
 
-**How `serviceContext` is populated:** the skill runtime is the owner. When the skill invokes a tool that operates on a known `Service` (e.g., `services.lookup`, `calendar-book`), the runtime threads the service id into the context. If no service-scoped tool was invoked this turn, `serviceContext` is `null` and the resolver uses global `serviceId IS NULL` rows only.
+The kickoff prompt and earlier draft of this spec proposed an `AfterSkillContext.serviceContext` field threading `serviceId` from service-scoped tool calls into Layer 3. **Removed in 1b-2.** Codebase verification found no `Service` Prisma model on `main` or on the 1a parent branch — `ServiceSchema` exists as a Zod type, but `BusinessConfig.playbook.services[]` is JSON-embedded, not relational. Adding a `serviceId String?` FK to `ApprovedComplianceClaim` would point at a non-existent table.
 
-This is a small skill-runtime extension. The plan task that touches `skill-runtime/types.ts` adds the field as `serviceContext?: { serviceId: string } | null` and updates the executor to populate it from the last service-scoped tool call's parameters in the turn. Out of scope for 1b-2: cross-message service tracking (carrying `serviceContext` across multiple turns of the same conversation).
+1b-2 ships **global-only substantiation**: `ApprovedComplianceClaimQuery` is keyed by `(deploymentId, jurisdiction, claimType)` with no service-scope filter. Operators authoring an efficacy claim for a specific service do so by tailoring the `claimText` to match the service-specific sentence pattern Alex generates.
+
+Service-scoping returns when 1a (or a later phase) ships a real `Service` Prisma model. At that point, `ApprovedComplianceClaim.serviceId String?` becomes a clean additive migration and the resolver gains the precedence rule (service-scoped beats global). Out of scope here.
+
+Removing service-scoping also removes the per-turn tool-call lineage tracking the earlier draft required. The `SkillHookContext` shape stays unchanged. No `AfterSkillContext` extension needed.
 
 ### 6.3 Flow
 
 ```ts
-async afterSkill(ctx: AfterSkillContext): Promise<AfterSkillOutcome> {
+async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
   // Step 1 — config resolution
   const resolution = await this.deps.governanceConfigResolver(ctx.deploymentId);
-  if (resolution.status === "missing") return passThrough(ctx);
-  if (resolution.status === "error") return this.handleResolverError(ctx);
+  if (resolution.status === "missing") return;
+  if (resolution.status === "error") return this.handleResolverError(ctx, result);
 
   const config = resolution.config;
   const classifierConfig = resolveClaimClassifierConfig(config);
-  if (classifierConfig.mode === "off") return passThrough(ctx);
+  if (classifierConfig.mode === "off") return;
 
   this.deps.postureCache.remember(ctx.deploymentId, {
-    mode: classifierConfig.mode,            // posture cache stores the deterministic-gate mode;
-    jurisdiction: config.jurisdiction,      // see Section 6.7 for the cache-shape nuance
+    mode: classifierConfig.mode,
+    jurisdiction: config.jurisdiction,
     clinicType: config.clinicType,
   });
 
-  // Step 2 — sentence enumeration across all output messages
-  const sentences = ctx.skillOutput.messages.flatMap((m) =>
-    this.deps.splitSentences(m.text).map((s) => ({ messageIndex: m.index, sentence: s }))
-  );
-  if (sentences.length === 0) return passThrough(ctx);
+  // Step 2 — sentence enumeration over the single response string
+  const sentences = this.deps.splitSentences(result.response);
+  if (sentences.length === 0) return;
 
   // Step 3 — parallel classification within latency budget
   const outcomes = await runClassifier({
-    sentences: sentences.map((s) => s.sentence),
+    sentences,
     model: classifierConfig.model,
     latencyBudgetMs: classifierConfig.latencyBudgetMs,
     classifier: this.deps.classifier,
   });
 
-  // Step 4 — collate per-sentence actions
-  const sentenceActions = await Promise.all(
+  // Step 4 — per-sentence action decisions
+  const actions = await Promise.all(
     outcomes.map((outcome, i) =>
-      this.decideSentenceAction({
+      this.decideAction({
         outcome,
-        meta: sentences[i],
-        config,
-        ctx,
-      })
-    )
+        sentence: sentences[i],
+        jurisdiction: config.jurisdiction,
+        clinicType: config.clinicType,
+        deploymentId: ctx.deploymentId,
+        sessionId: ctx.sessionId,
+        latencyBudgetMs: classifierConfig.latencyBudgetMs,
+      }),
+    ),
   );
 
-  // Step 5 — apply actions (rewrite in place / block whole message / allow)
-  // see Section 6.4
+  // Step 5 — apply actions to result.response in place (see Section 6.6)
+  await this.applyActions({ ctx, result, actions, sentences, config, mode: classifierConfig.mode });
 }
 ```
 
+The verdict's `conversationId` is sourced from `ctx.sessionId` — see Section 6.1.
+
 ### 6.4 Per-sentence action decision
 
-`decideSentenceAction` returns one of:
+`decideAction` returns one of:
 
 ```ts
 type SentenceAction =
   | { kind: "allow" }
-  | { kind: "rewrite"; replacement: string; verdict: GovernanceVerdict; details: GovernanceVerdictDetails }
-  | { kind: "escalate"; verdict: GovernanceVerdict; details: GovernanceVerdictDetails };
+  | { kind: "rewrite"; originalSentence: string; replacement: string; reasonCode: GovernanceVerdictReason; details: Record<string, unknown> }
+  | { kind: "escalate"; originalSentence: string; reasonCode: GovernanceVerdictReason; details: Record<string, unknown> };
 ```
 
 Decision logic:
@@ -862,6 +873,8 @@ Decision logic:
    - `missing` → if `credentials`, escalate. Otherwise rewrite with `reasonCode: "unsupported_claim_rewritten"`.
 
 For rewrite actions, the hook calls `rewriteLoader(config.jurisdiction)` and selects the entry matching `claimType`. If no entry exists, the hook escalates instead — a missing template is treated as a definition-of-done failure (logged via `console.error`, reasonCode falls back to `unsupported_claim_escalated`). This last branch must never fire in practice because Section 5.4 requires seed coverage for all four rewriteable types.
+
+The substantiation resolver call passes only `(sentence, claimType, jurisdiction, deploymentId)`. There is no `serviceContext` parameter — see Section 6.2 for the deferral.
 
 ### 6.5 Verdict-detail stamping
 
@@ -897,15 +910,17 @@ Timeout / error verdicts omit `promptVersion`/`promptHash`/`model`/`claimType`/`
 
 Empty `details` is never acceptable. The `errorKind` discriminator lets analytics distinguish budget-exhaustion (a tuning signal) from API failure (an operational signal) from schema-parse failure (a prompt-drift signal).
 
-### 6.6 Whole-message vs sentence-level effects
+### 6.6 Whole-response vs sentence-level effects
 
-A single message may contain a mix of `allow`, `rewrite`, and `escalate` outcomes. Policy:
+`SkillExecutionResult.response` is a single string. A response may contain a mix of `allow`, `rewrite`, and `escalate` per-sentence outcomes. Policy:
 
-- **Any `escalate`** → block the whole message (replace all messages with the 1b-1 handoff template, flip conversation to `human_override`, save handoff). One classifier verdict is persisted per escalating sentence; the handoff payload references the *first* escalating verdict's id.
-- **All `allow` + any `rewrite`** → apply rewrites in place (sentence swap inside the original message text). No `human_override` flip. One verdict per rewrite.
-- **All `allow`** → pass output through unchanged. No verdicts persisted.
+- **Any `escalate`** → replace `result.response` entirely with the 1b-1 handoff template. Flip conversation to `human_override`. Save handoff. One classifier verdict is persisted per escalating sentence; the handoff payload references the *first* escalating verdict's id.
+- **All `allow` + any `rewrite`** → apply each rewrite to `result.response` via `string.replace(originalSentence, replacement)`. No `human_override` flip. One verdict per rewrite. Order is irrelevant because each sentence appears once in the response (the sentence splitter does not synthesize duplicates).
+- **All `allow`** → leave `result.response` unchanged. No verdicts persisted.
 
-**Why "any escalate → block whole message":** mirrors 1b-1's conservative policy. An escalation-class claim (medical advice, diagnosis, testimonial) anywhere in the output signals the model's reasoning is off, not just one sentence. Permissive partial-emission is reachable later if observability shows the policy is too aggressive.
+**Why "any escalate → block whole response":** mirrors 1b-1's conservative policy. An escalation-class claim (medical advice, diagnosis, testimonial) anywhere in the output signals the model's reasoning is off, not just one sentence. Permissive partial-emission is reachable later if observability shows the policy is too aggressive.
+
+**Why `string.replace` is safe for rewrites:** the sentence splitter operates on the original `result.response` and yields the exact substrings the classifier saw. Each substring appears once. `result.response.replace(originalSentence, replacement)` replaces exactly that occurrence. If a future splitter change ever yielded duplicate substrings, the hook MUST switch to index-tracked splicing — captured as a regression test in the splitter's suite.
 
 ### 6.7 Posture-cache scoping (per-hook)
 
@@ -980,19 +995,19 @@ Per the 1a/1b-1 pattern, all runtime assertions go through `GovernanceVerdict` s
 | `ClaimTypeSchema`, `ClassifierSentenceResultSchema`, `CLASSIFIER_SCHEMA_VERSION` | Round-trip for each claim type; rejects unknown; schema-version constant exported |
 | `GovernanceVerdictReasonSchema` extension | Accepts `unsupported_claim_rewritten`, `unsupported_claim_escalated`, `claim_substantiation_stale`, `classifier_error`; existing reasons still parse |
 | `ClaimClassifierConfigSchema` + `resolveClaimClassifierConfig` | Round-trip for each mode; defaults applied when sub-block absent; passthrough preserves unknown sub-blocks |
-| `ApprovedComplianceClaim` Prisma store | Round-trip save → list-by-deployment-jurisdiction-claimType; serviceId-scoped vs global precedence; staleness boundary (`validUntil` and `reviewedAt > 180d`) round-trips |
+| `ApprovedComplianceClaim` Prisma store | Round-trip save → list-by-deployment-jurisdiction-claimType; staleness boundary (`validUntil` and `reviewedAt > 180d`) round-trips; ordering by `reviewedAt DESC` |
 | `RegulatoryPublicSourceEntry` loader | Per jurisdiction: unique-id invariant throws at boot; regex normalization removes `g` flag; deterministic order snapshot of merged loader output |
-| Substantiation resolver | Per claim type: `matched` / `stale` / `missing` for each tier; service-scoped beats global; first-match-wins ordering; staleness boundary; resolver throw → caller-treated-as-missing |
+| Substantiation resolver | Per claim type: `matched` / `stale` / `missing` for each tier; first-match-wins ordering; staleness boundary; resolver throw → caller-treated-as-missing |
 | Substantiation LRU cache | match cached, stale/missing not cached; LRU eviction at `maxEntries`; multi-tenant key isolation (deploymentId in key) |
 | `splitSentences` (extracted util) | 1b-1 test suite migrates verbatim; cross-import test from both gates and classifier hook |
 | `AnthropicClaimClassifier` (mocked SDK) | Successful tool-use response parses; missing `tool_use` block throws; non-tool-use content rejected; cache_control on system+tools verified in request payload (assert against the captured `messages.create` argument); abort signal propagates as `AbortError` |
 | `runClassifier` | All-classified happy path; partial-timeout (3 sentences, 1 timed out); all-error; preserves input order in output |
 | Rewrite template loader | Per jurisdiction: all four rewriteable claim types have a template; unique-id invariant; deterministic order |
 | `ClaimClassifierHook` | Mode matrix (off/observe/enforce) × outcome matrix (none, rewriteable-matched, rewriteable-missing, rewriteable-stale, escalate-class, timeout, error) × jurisdiction (SG, MY). Asserts: verdict shape including all `details` stamps, rewrite-in-place vs whole-message block, `human_override` flip on escalate, handoff save on escalate, parallel dispatch (not serial) |
-| Hook ordering | `ClaimClassifierHook` runs after `DeterministicSafetyGateHook`; classifier never invoked when 1b-1 gate has already blocked (i.e., `ctx.skillOutput` already replaced with handoff template at classifier-hook entry) |
+| Hook ordering | `ClaimClassifierHook` runs after `DeterministicSafetyGateHook`. When 1b-1's gate has already blocked, `result.response` already contains the handoff template at classifier-hook entry — the classifier classifies that handoff text (all-`none`) and no-ops. (1b-1's gate is the structural short-circuit; this test asserts the no-op path is clean and does not waste classifier latency.) |
 | Posture-cache scoping | Each hook reads/writes ONLY its own cache instance; 1b-1's cache is unaffected by classifier-hook writes; classifier's cache is unaffected by 1b-1 writes; resolver-error fail-closed in either hook uses ITS OWN cached `jurisdiction`/`clinicType` for handoff render. Mixed-mode regression test: 1b-1 = observe + classifier = enforce, force resolver error → 1b-1 fails open (correct), classifier fails closed (correct). |
 | Persistence-failure fail-open-of-action | `verdictStore.save` throws after classification → rewrite/escalate still applied; `handoffStore.save` throws → conversation status still flipped |
-| Service-context propagation | Skill runtime threads `serviceId` from service-scoped tool calls into `AfterSkillContext.serviceContext`; null when no service-scoped tool fired; substantiation resolver consumes correctly |
+| `result.response` in-place mutation | Hook mutates `result.response` directly (no replacement return); enforce-mode escalate replaces the whole string with the handoff template; enforce-mode rewrite splices via `string.replace(originalSentence, replacement)`; observe-mode leaves `result.response` unchanged regardless of outcome |
 
 ## Section 10 — Operability
 
@@ -1028,13 +1043,13 @@ Per the 1a/1b-1 pattern, all runtime assertions go through `GovernanceVerdict` s
 - Real "fetch live HSA / MDA / SMC registry" integration (curated TS constants in `RegulatoryPublicSource`)
 - Per-claim-type mode override (`governanceConfig.claimClassifier.mode` is flat in 1b-2)
 - Persistent / cross-instance LRU cache (per-process; same trade-off as 1b-1's posture cache)
-- Cross-message service-context tracking (single-turn `serviceContext` only)
+- Service-scoped substantiation (no `serviceId` on `ApprovedComplianceClaim`; revisit when a relational `Service` model ships)
 - Hard CI gate on `pnpm classifier-eval` (soft only; manual)
 - Phase 1b-2.5 staleness on `RegulatoryPublicSource` (out of scope; entries are static TS in 1b-2)
 
 ## Open questions
 
-1. **`Service` reference resolution from skill output.** Section 6.2 says the runtime threads `serviceId` from service-scoped tool calls into `AfterSkillContext.serviceContext`. The exact list of "service-scoped tools" in the current skill runtime (`services.lookup`, `calendar-book`, others?) needs to be enumerated in the plan task that touches `skill-runtime/types.ts`. If the runtime doesn't currently track tool-call → service-id correlation, the plan must scope this as a **separate, fallback-tolerant task**: populate `serviceContext` when the correlation is obvious (a single service-scoped tool call this turn), otherwise leave it `null`. The classifier hook MUST function correctly with `serviceContext: null` (global-scope-only substantiation lookup). Perfect tool-call lineage is a refinement, not a 1b-2 blocker — the substantiation resolver's `serviceId IS NULL` global query is the safe fallback.
+1. **`Service`-scoped substantiation deferred.** The codebase has no `Service` Prisma model. 1b-2 ships global-only substantiation (no `serviceId` on `ApprovedComplianceClaim`, no `serviceContext` on the resolver, no per-turn tool-call lineage tracking). When a future phase lands a relational `Service` model, `serviceId String?` becomes an additive migration and the resolver gains the precedence rule (service-scoped beats global). Captured in the plan's follow-ups doc (Task 17).
 
 2. **`ApprovedComplianceClaim` seed authorship.** 1b-2 ships an empty store. Operators (or the regulatory reviewer named in 1b-1.5) need to author rows for the pilot tenant. The PR description should call out a follow-up note: target tenant, expected first 10 claims, author. Not blocking 1b-2 merge.
 
