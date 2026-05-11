@@ -13,6 +13,7 @@ import { parseApprovalResponsePayload } from "./approval-response-payload.js";
 import { handleApprovalResponse } from "./handle-approval-response.js";
 import { isOptOutKeyword } from "./opt-out-keywords.js";
 import { runPreInputGate } from "./pre-input-gate.js";
+import { runConsentRevocationGate } from "./consent-revocation-gate.js";
 
 const OPT_OUT_CONFIRMATION =
   "You've been opted out of WhatsApp messages from us. Reply START at any time to opt back in.";
@@ -177,8 +178,49 @@ export class ChannelGateway {
         resolved.organizationId,
         identity.contactId,
       );
+
+      // Phase 1c — also record PDPA revocation when consent gate is configured.
+      // The WhatsApp opt-out path is a channel-layer signal; PDPA revocation is
+      // the data-subject-rights superset. Recording both keeps the audit trail
+      // aligned and ensures enforce-mode consent gates fire on subsequent turns.
+      if (this.config.consentRevocationGate) {
+        const cfg = this.config.consentRevocationGate;
+        const contactId = identity.contactId;
+        try {
+          await cfg.consentService.recordRevocation({
+            contactId,
+            source: "inbound_keyword_revocation",
+            revokedAt: cfg.clock(),
+            actor: "system:whatsapp_opt_out",
+            notes: `WhatsApp opt-out keyword on channel ${message.channel}`,
+            openConversationSessionId: message.sessionId,
+            organizationId: resolved.organizationId,
+            deploymentId: resolved.deploymentId,
+          });
+        } catch (err) {
+          console.error("[channel-gateway] PDPA revocation from WhatsApp opt-out failed", err);
+          // Do not block — the WhatsApp opt-out is the primary signal; PDPA
+          // mirror is best-effort.
+        }
+      }
+
       await replySink.send(OPT_OUT_CONFIRMATION);
       return;
+    }
+
+    // 4e-pre. Pre-input consent revocation gate (Phase 1c). Runs BEFORE the
+    // 1b-1 escalation gate so user revocation takes precedence over medical-
+    // safety/compliance triggers.
+    if (this.config.consentRevocationGate) {
+      const consentOutcome = await runConsentRevocationGate({
+        cfg: this.config.consentRevocationGate,
+        inboundText: message.text,
+        sessionId: message.sessionId,
+        deploymentId: resolved.deploymentId,
+        organizationId: resolved.organizationId,
+        replySink,
+      });
+      if (consentOutcome === "revoked") return;
     }
 
     // 4e. Pre-input deterministic gate — must run before typing signal and submit.

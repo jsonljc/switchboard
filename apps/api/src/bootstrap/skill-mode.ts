@@ -5,12 +5,16 @@ import type {
   SkillDefinition,
   SkillToolFactory,
 } from "@switchboard/core/skill-runtime";
+import type { ConsentService, ContactConsentReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
 
 export interface SkillModeBootstrapResult {
   simulationExecutor: SkillExecutor;
   alexSkill: SkillDefinition;
+  // Phase 1c — exposed so the admin endpoint and gateway bridge can reuse.
+  consentService: ConsentService;
+  contactConsentReader: ContactConsentReader;
 }
 
 interface SkillModeBootstrapDeps {
@@ -31,6 +35,7 @@ export async function bootstrapSkillMode(
     GovernanceHook,
     DeterministicSafetyGateHook,
     ClaimClassifierHook,
+    PdpaConsentGateHook,
     AnthropicToolCallingAdapter,
     BuilderRegistry,
     createCrmQueryTool,
@@ -50,7 +55,8 @@ export async function bootstrapSkillMode(
     renderHandoffTemplate,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
-  const { HandoffPackageAssembler, HandoffNotifier } = await import("@switchboard/core");
+  const { HandoffPackageAssembler, HandoffNotifier, createConsentService } =
+    await import("@switchboard/core");
   const {
     PrismaContactStore,
     PrismaOpportunityStore,
@@ -61,6 +67,8 @@ export async function bootstrapSkillMode(
     PrismaDeploymentStore,
     PrismaGovernanceVerdictStore,
     createPrismaApprovedComplianceClaimStore,
+    createPrismaConsentStore,
+    createPrismaContactConsentReader,
   } = await import("@switchboard/db");
   const { NoopNotifier, TelegramApprovalNotifier, CompositeNotifier } =
     await import("@switchboard/core/notifications");
@@ -321,7 +329,65 @@ export async function bootstrapSkillMode(
     renderHandoff: renderHandoffTemplate,
   });
 
-  const hooks = [new GovernanceHook(toolsMap), safetyGateHook, claimClassifierHook];
+  // ---------------------------------------------------------------------------
+  // PdpaConsentGateHook infrastructure (Phase 1c)
+  // Runs AFTER ClaimClassifierHook. Per spec §7 the posture cache is a distinct
+  // instance — third cache total (1b-1 deterministicGate, 1b-2 claimClassifier,
+  // 1c consentState). Shared with the chat-process gateway revocation gate
+  // when both processes run in the same deployment (each process has its own
+  // in-memory cache — sharing is intra-process only).
+  //
+  // ConsentService construction-time binding to deploymentId/orgId/clinicType
+  // is a v1 limitation: for the pilot envelope (one governed deployment per
+  // tenant) this is acceptable, but Phase 2 should refactor ConsentService to
+  // accept verdict-context per call. Tracked in:
+  // docs/superpowers/plans/2026-05-11-alex-medspa-1c-followups.md
+  // ---------------------------------------------------------------------------
+  const consentStore = createPrismaConsentStore({ prisma: prismaClient });
+  const contactConsentReader = createPrismaContactConsentReader({ prisma: prismaClient });
+  const consentPostureCache = new InMemoryGovernancePostureCache();
+
+  // sessionContactResolver: maps sessionId → contactId via ConversationThread.
+  // Returns null on first-message turns where the thread row hasn't been
+  // written yet. Both consent gates handle null as a graceful no-op.
+  const sessionContactResolver = async (sessionId: string): Promise<string | null> => {
+    const thread = await prismaClient.conversationThread.findFirst({
+      where: { id: sessionId },
+      select: { contactId: true },
+    });
+    return thread?.contactId ?? null;
+  };
+
+  const consentService = createConsentService({
+    store: consentStore,
+    verdictStore: governanceVerdictStore,
+    handoffStore,
+    conversationStore: conversationStatusSetter,
+    clock: () => new Date(),
+    // v1 placeholder bindings — see follow-up doc for Phase 2 refactor.
+    deploymentId: "system:consent-service",
+    orgId: "system",
+    clinicType: "medical",
+  });
+
+  const pdpaConsentGateHook = new PdpaConsentGateHook({
+    governanceConfigResolver,
+    postureCache: consentPostureCache,
+    consentService,
+    contactConsentReader,
+    sessionContactResolver,
+    verdictStore: governanceVerdictStore,
+    handoffStore,
+    conversationStore: conversationStatusSetter,
+    clock: () => new Date(),
+  });
+
+  const hooks = [
+    new GovernanceHook(toolsMap),
+    safetyGateHook,
+    claimClassifierHook,
+    pdpaConsentGateHook,
+  ];
   const skillExecutor = new SkillExecutorImpl(
     adapter,
     toolsMap,
@@ -400,6 +466,10 @@ export async function bootstrapSkillMode(
   if (!claimClassifier) missingGateDeps.push("claimClassifier");
   if (!substantiationResolver) missingGateDeps.push("substantiationResolver");
   if (!claimClassifierPostureCache) missingGateDeps.push("claimClassifierPostureCache");
+  // 1c pdpa-consent-gate deps
+  if (!consentService) missingGateDeps.push("consentService");
+  if (!contactConsentReader) missingGateDeps.push("contactConsentReader");
+  if (!consentPostureCache) missingGateDeps.push("consentPostureCache");
   if (missingGateDeps.length > 0) {
     throw new Error(`SkillMode: gate deps incomplete — missing: ${missingGateDeps.join(", ")}`);
   }
@@ -419,6 +489,7 @@ export async function bootstrapSkillMode(
     new GovernanceHook(toolsMap),
     safetyGateHook,
     claimClassifierHook,
+    pdpaConsentGateHook,
     new SimulationPolicyHook(),
   ];
   const simulationExecutor = new SkillExecutorImpl(
@@ -430,5 +501,5 @@ export async function bootstrapSkillMode(
     toolFactories,
   );
 
-  return { simulationExecutor, alexSkill };
+  return { simulationExecutor, alexSkill, consentService, contactConsentReader };
 }

@@ -1,0 +1,8 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`REVOCATION_ACK > matches frozen snapshots 1`] = `
+{
+  "MY": "Noted — we'll stop messaging you. To opt back in later, please contact the clinic directly.",
+  "SG": "Got it — we won't message you further. If you change your mind, you can let the clinic team know directly.",
+}
+`;

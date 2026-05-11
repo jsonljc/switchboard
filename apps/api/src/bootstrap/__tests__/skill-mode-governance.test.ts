@@ -29,6 +29,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
     .fn()
     .mockImplementation(() => ({ name: "deterministic-safety-gate" })),
   ClaimClassifierHook,
+  PdpaConsentGateHook: vi.fn().mockImplementation(() => ({ name: "pdpa-consent-gate" })),
   SimulationPolicyHook: vi.fn().mockImplementation(() => ({ name: "simulation" })),
   AnthropicToolCallingAdapter: vi.fn().mockImplementation(() => ({})),
   BuilderRegistry: vi.fn().mockImplementation(() => ({
@@ -79,6 +80,14 @@ vi.mock("@switchboard/core/platform", () => ({
 vi.mock("@switchboard/core", () => ({
   HandoffPackageAssembler: vi.fn().mockImplementation(() => ({})),
   HandoffNotifier: vi.fn().mockImplementation(() => ({})),
+  createConsentService: vi.fn(() => ({
+    attachToGovernedInteraction: vi.fn(),
+    recordDisclosureShown: vi.fn(),
+    recordGrant: vi.fn(),
+    recordRevocation: vi.fn(),
+    clearConsent: vi.fn(),
+  })),
+  loadRevocationKeywords: vi.fn(() => []),
 }));
 
 vi.mock("@switchboard/core/notifications", () => ({
@@ -109,6 +118,23 @@ vi.mock("@switchboard/db", () => ({
   })),
   createPrismaApprovedComplianceClaimStore: vi.fn(() => ({
     findApproved: vi.fn(async () => []),
+  })),
+  createPrismaConsentStore: vi.fn(() => ({
+    readOrNull: vi.fn(async () => null),
+    setJurisdictionIfNull: vi.fn(),
+    setDisclosure: vi.fn(),
+    setGrant: vi.fn(),
+    setRevocationIfNotRevoked: vi.fn(async () => ({
+      wasNewlyRevoked: true,
+      existingRevokedAt: null,
+    })),
+    clearConsentTimestamps: vi.fn(async () => ({
+      previousGrantedAt: null,
+      previousRevokedAt: null,
+    })),
+  })),
+  createPrismaContactConsentReader: vi.fn(() => ({
+    read: vi.fn(async () => null),
   })),
 }));
 
@@ -153,6 +179,9 @@ describe("bootstrapSkillMode governance wiring", () => {
       },
       conversationState: {
         updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+      conversationThread: {
+        findFirst: vi.fn(async () => null),
       },
     }) as never;
 

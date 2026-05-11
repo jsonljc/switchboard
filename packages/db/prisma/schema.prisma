@@ -1544,6 +1544,20 @@ model Contact {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // PDPA consent state (Phase 1c). Jurisdiction-tagged data-subject consent.
+  // Distinct from `messagingOptIn` (WhatsApp 24h template-send consent).
+  // pdpaJurisdiction is immutable after first non-null write in v1 — only
+  // ConsentService mutates these; service throws ConsentJurisdictionMismatch
+  // on attempt to write a different jurisdiction.
+  pdpaJurisdiction         String?
+  consentGrantedAt         DateTime?
+  consentRevokedAt         DateTime?
+  consentSource            String?
+  aiDisclosureVersionShown String?
+  aiDisclosureShownAt      DateTime?
+  consentUpdatedBy         String?
+  consentNotes             String?   @db.Text
+
   opportunities Opportunity[]
   revenueEvents LifecycleRevenueEvent[]
   ownerTasks    OwnerTask[]
@@ -1556,6 +1570,8 @@ model Contact {
   @@index([organizationId, lastActivityAt])
   @@index([organizationId, leadgenId])
   @@index([organizationId, sourceType, createdAt])
+  @@index([organizationId, pdpaJurisdiction, consentRevokedAt])
+  @@index([organizationId, pdpaJurisdiction, consentGrantedAt])
 }
 
 model Opportunity {

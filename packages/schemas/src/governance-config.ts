@@ -57,3 +57,26 @@ export function resolveClaimClassifierConfig(
   const raw = (config as unknown as Record<string, unknown> | null)?.claimClassifier;
   return ClaimClassifierConfigSchema.parse(raw ?? {});
 }
+
+/**
+ * Per-deployment configuration for the PDPA consent gate (Phase 1c).
+ * Lives under `governanceConfig.consentState` as a passthrough sub-block —
+ * no Prisma migration of the config column itself; 1b-1's `.passthrough()`
+ * already accepts arbitrary sub-blocks.
+ *
+ * Defaults: mode="off" (pure pass-through; no consent state mutation, no
+ * revocation detection, no verdicts). Promote to "observe" for telemetry-only
+ * rollout, then "enforce" for production behavior.
+ */
+export const ConsentStateConfigSchema = z
+  .object({
+    mode: GovernanceModeSchema.default("off"),
+  })
+  .default({});
+
+export type ConsentStateConfig = z.infer<typeof ConsentStateConfigSchema>;
+
+export function resolveConsentStateConfig(config: GovernanceConfig | null): ConsentStateConfig {
+  const raw = (config as unknown as Record<string, unknown> | null)?.consentState;
+  return ConsentStateConfigSchema.parse(raw ?? {});
+}

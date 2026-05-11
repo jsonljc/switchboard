@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DISCLOSURE_COPY > matches frozen snapshots (prevents accidental copy drift) 1`] = `
+{
+  "MY": {
+    "text": "Hi, I'm Alex — the clinic's AI assistant. To follow up with you and share booking info, the clinic needs your okay to process your details. Reply OK to continue, or STOP at any time to opt out.",
+    "version": "my-disclosure@1.0.0",
+  },
+  "SG": {
+    "text": "Hi, I'm Alex — the clinic's AI assistant. I can help with bookings and general questions, and a clinic team member will step in for anything medical.",
+    "version": "sg-disclosure@1.0.0",
+  },
+}
+`;

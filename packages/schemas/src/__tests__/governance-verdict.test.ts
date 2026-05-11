@@ -159,6 +159,29 @@ describe("GovernanceVerdictReasonSchema — 1b-2 additions", () => {
   });
 });
 
+describe("GovernanceVerdictReasonSchema — Phase 1c additions", () => {
+  it.each([
+    "consent_pending",
+    "consent_revoked",
+    "disclosure_not_shown",
+    "disclosure_version_outdated",
+    "consent_cycle_reset",
+    "jurisdiction_mismatch",
+  ])("accepts %s", (reason) => {
+    expect(GovernanceVerdictReasonSchema.parse(reason)).toBe(reason);
+  });
+
+  it("still accepts pre-1c reasons", () => {
+    expect(GovernanceVerdictReasonSchema.parse("allowed")).toBe("allowed");
+    expect(GovernanceVerdictReasonSchema.parse("banned_phrase")).toBe("banned_phrase");
+    expect(GovernanceVerdictReasonSchema.parse("classifier_timeout")).toBe("classifier_timeout");
+  });
+
+  it("rejects unknown reasons", () => {
+    expect(() => GovernanceVerdictReasonSchema.parse("not_a_reason")).toThrow();
+  });
+});
+
 describe("GovernanceVerdictSourceSchema (1b-1 changes)", () => {
   it("accepts banned_phrase_scanner", () => {
     expect(GovernanceVerdictSourceSchema.safeParse("banned_phrase_scanner").success).toBe(true);

@@ -5,6 +5,8 @@ import {
   resolveGovernanceMode,
   ClaimClassifierConfigSchema,
   resolveClaimClassifierConfig,
+  ConsentStateConfigSchema,
+  resolveConsentStateConfig,
 } from "../governance-config.js";
 
 describe("GovernanceModeSchema", () => {
@@ -147,5 +149,43 @@ describe("resolveClaimClassifierConfig", () => {
     const resolved = resolveClaimClassifierConfig(config);
     expect(resolved.mode).toBe("enforce");
     expect(resolved.latencyBudgetMs).toBe(600);
+  });
+});
+
+describe("ConsentStateConfigSchema", () => {
+  it("defaults mode to off", () => {
+    expect(ConsentStateConfigSchema.parse({})).toEqual({ mode: "off" });
+  });
+
+  it("accepts explicit observe / enforce", () => {
+    expect(ConsentStateConfigSchema.parse({ mode: "observe" })).toEqual({ mode: "observe" });
+    expect(ConsentStateConfigSchema.parse({ mode: "enforce" })).toEqual({ mode: "enforce" });
+  });
+
+  it("rejects unknown modes", () => {
+    expect(() => ConsentStateConfigSchema.parse({ mode: "audit" })).toThrow();
+  });
+});
+
+describe("resolveConsentStateConfig", () => {
+  it("returns default when config is null", () => {
+    expect(resolveConsentStateConfig(null)).toEqual({ mode: "off" });
+  });
+
+  it("returns default when sub-block is absent", () => {
+    const config = GovernanceConfigSchema.parse({
+      jurisdiction: "SG",
+      clinicType: "medical",
+    });
+    expect(resolveConsentStateConfig(config)).toEqual({ mode: "off" });
+  });
+
+  it("reads sub-block via passthrough", () => {
+    const config = GovernanceConfigSchema.parse({
+      jurisdiction: "MY",
+      clinicType: "nonMedical",
+      consentState: { mode: "enforce" },
+    });
+    expect(resolveConsentStateConfig(config)).toEqual({ mode: "enforce" });
   });
 });

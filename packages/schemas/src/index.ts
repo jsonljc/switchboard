@@ -139,3 +139,6 @@ export * from "./claim-classifier.js";
 
 // Substantiation (Layer 3 source types + resolution outcome — Alex medspa governance)
 export * from "./substantiation.js";
+
+// PDPA consent types (per-jurisdiction governance state + canonical gate)
+export * from "./pdpa-consent.js";

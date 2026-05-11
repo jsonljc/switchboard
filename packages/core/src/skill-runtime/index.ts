@@ -4,6 +4,8 @@ export { GovernanceHook } from "./hooks/governance-hook.js";
 export { SimulationPolicyHook } from "./hooks/simulation-policy-hook.js";
 export { DeterministicSafetyGateHook } from "./hooks/deterministic-safety-gate.js";
 export type { DeterministicSafetyGateHookDeps } from "./hooks/deterministic-safety-gate.js";
+export { PdpaConsentGateHook } from "./hooks/pdpa-consent-gate.js";
+export type { PdpaConsentGateHookDeps } from "./hooks/pdpa-consent-gate.js";
 // Governance infrastructure re-exported for bootstrap wiring convenience
 export { createAgentDeploymentGovernanceResolver } from "../governance/governance-config-resolver.js";
 export { InMemoryGovernancePostureCache } from "../governance/posture-cache.js";
