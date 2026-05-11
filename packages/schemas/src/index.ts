@@ -133,3 +133,6 @@ export * from "./recommendations.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";
+
+// Claim classifier (Layer 2 classifier output types — Alex medspa governance)
+export * from "./claim-classifier.js";
