@@ -12,21 +12,48 @@ interface SentenceSpan {
   start: number;
 }
 
-/** Crude sentence splitter — adequate for chat text per spec §4.3. */
+/**
+ * Crude sentence splitter — adequate for chat text per spec §4.3.
+ *
+ * Single-pass O(n) linear scan. The earlier regex-based implementation
+ * (`/([^.!?\n]+(?:[.!?]+|\n+|$))/g`) was flagged by CodeQL as a polynomial
+ * ReDoS — a malicious user could send a crafted string with many spaces to
+ * trigger superlinear backtracking. This loop has no backtracking: each
+ * character is visited exactly once.
+ */
 function splitSentences(text: string): SentenceSpan[] {
   const spans: SentenceSpan[] = [];
-  const re = /([^.!?\n]+(?:[.!?]+|\n+|$))/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const raw = m[0];
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) continue;
-    const firstChar = trimmed[0];
-    if (firstChar === undefined) continue;
-    const start = m.index + raw.indexOf(firstChar);
-    spans.push({ text: trimmed, start });
+  let segmentStart = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
+      pushSpanIfNonEmpty(text, segmentStart, i, spans);
+      segmentStart = i + 1;
+    }
   }
+  pushSpanIfNonEmpty(text, segmentStart, text.length, spans);
   return spans;
+}
+
+function pushSpanIfNonEmpty(
+  text: string,
+  segmentStart: number,
+  segmentEnd: number,
+  spans: SentenceSpan[],
+): void {
+  // Skip leading whitespace to find the trimmed start.
+  let trimmedStart = segmentStart;
+  while (trimmedStart < segmentEnd && /\s/.test(text[trimmedStart]!)) {
+    trimmedStart++;
+  }
+  // Skip trailing whitespace to find the trimmed end.
+  let trimmedEnd = segmentEnd;
+  while (trimmedEnd > trimmedStart && /\s/.test(text[trimmedEnd - 1]!)) {
+    trimmedEnd--;
+  }
+  if (trimmedEnd > trimmedStart) {
+    spans.push({ text: text.slice(trimmedStart, trimmedEnd), start: trimmedStart });
+  }
 }
 
 function patternMatches(
