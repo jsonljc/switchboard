@@ -3,8 +3,15 @@ import {
   runBeforeSkillHooks,
   runBeforeLlmCallHooks,
   runBeforeToolCallHooks,
+  runAfterSkillHooks,
 } from "../hook-runner.js";
-import type { SkillHook, SkillHookContext, LlmCallContext, ToolCallContext } from "../types.js";
+import type {
+  SkillHook,
+  SkillHookContext,
+  LlmCallContext,
+  ToolCallContext,
+  SkillExecutionResult,
+} from "../types.js";
 
 const baseCtx: SkillHookContext = {
   deploymentId: "d1",
@@ -112,6 +119,95 @@ describe("hook-runner", () => {
       };
       const result = await runBeforeToolCallHooks([hook], toolCtx);
       expect(result.proceed).toBe(false);
+    });
+  });
+
+  describe("runAfterSkillHooks — registration-order invariant", () => {
+    /**
+     * Pins the guarantee that hook-runner iterates afterSkill hooks in
+     * registration-array order AND propagates mutations between hooks.
+     *
+     * This is the invariant that ensures GovernanceHook (index 0) runs before
+     * DeterministicSafetyGateHook (index 1) and that any response mutation by
+     * the safety gate is visible to every subsequent hook (e.g. TracePersistenceHook).
+     *
+     * Reversal test confirms the invariant is directional: reversing the array
+     * reverses the observation, proving the runner doesn't execute in parallel.
+     */
+    function makeResult(response: string): SkillExecutionResult {
+      return {
+        response,
+        toolCalls: [],
+        tokenUsage: { input: 0, output: 0 },
+        trace: {
+          durationMs: 0,
+          turnCount: 1,
+          status: "success",
+          responseSummary: response,
+          writeCount: 0,
+          governanceDecisions: [],
+        },
+      };
+    }
+
+    it("gateHook → recordingHook: recording hook sees REDACTED (mutation propagates)", async () => {
+      let observedResponse: string | undefined;
+
+      const gateHook: SkillHook = {
+        name: "gate",
+        afterSkill: async (_ctx, result) => {
+          result.response = "REDACTED";
+        },
+      };
+
+      const recordingHook: SkillHook = {
+        name: "recorder",
+        afterSkill: async (_ctx, result) => {
+          observedResponse = result.response;
+        },
+      };
+
+      const result = makeResult("original response");
+      await runAfterSkillHooks([gateHook, recordingHook], baseCtx, result);
+
+      // Mutation by gateHook propagated to recordingHook
+      expect(observedResponse).toBe("REDACTED");
+      // Final result also reflects mutation
+      expect(result.response).toBe("REDACTED");
+    });
+
+    it("recordingHook → gateHook: recording hook sees original (pre-mutation)", async () => {
+      let observedResponse: string | undefined;
+
+      const gateHook: SkillHook = {
+        name: "gate",
+        afterSkill: async (_ctx, result) => {
+          result.response = "REDACTED";
+        },
+      };
+
+      const recordingHook: SkillHook = {
+        name: "recorder",
+        afterSkill: async (_ctx, result) => {
+          observedResponse = result.response;
+        },
+      };
+
+      const result = makeResult("original response");
+      // Reversed order: recorder runs before gate
+      await runAfterSkillHooks([recordingHook, gateHook], baseCtx, result);
+
+      // recordingHook ran before gateHook — saw the original
+      expect(observedResponse).toBe("original response");
+      // Final result still reflects the gate mutation (gate ran after)
+      expect(result.response).toBe("REDACTED");
+    });
+
+    it("skips hooks without afterSkill", async () => {
+      const noOp: SkillHook = { name: "no-op" };
+      const result = makeResult("unchanged");
+      await expect(runAfterSkillHooks([noOp], baseCtx, result)).resolves.toBeUndefined();
+      expect(result.response).toBe("unchanged");
     });
   });
 });

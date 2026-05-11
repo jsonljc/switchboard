@@ -5,6 +5,7 @@ export * from "./agent-types.js";
 export * from "./risk.js";
 export * from "./governance-profile.js";
 export * from "./governance-verdict.js";
+export * from "./governance-config.js";
 export * from "./identity-spec.js";
 export * from "./role-overlay.js";
 export * from "./policy.js";

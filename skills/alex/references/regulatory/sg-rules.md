@@ -35,3 +35,20 @@ HCSA Advertisement Regulations 2021 (MOH); SMC ECEG 2016; HSA therapeutic produc
 - Efficacy claims: require approved compliance claim
 - Safety claims: require approved compliance claim
 - Doctor credentials / device approvals: require regulatory_public_source
+
+## Runtime banned-phrase enforcement
+
+The deterministic safety gate enforces banned-phrase rules at the
+harness layer. The runtime tables are authoritative; this markdown is
+explanatory.
+
+- Source: `packages/core/src/governance/banned-phrases/{common,sg}.ts`
+- Categories: `superlative`, `guarantee`, `medical_claim`, `urgency`, `testimonial`
+- Each entry maps to a `GovernanceVerdict.reasonCode` (see
+  `REASON_CODE_BY_CATEGORY` in the same package).
+- 1b-1 ships conservative seed entries. Phase 1b-1.5 expands them with
+  HSA / SMC / HCSA / MOH input.
+
+The pre-input escalation-trigger tables for SG live at
+`packages/core/src/governance/escalation-triggers/{common,sg}.ts` with
+the same authoring contract.

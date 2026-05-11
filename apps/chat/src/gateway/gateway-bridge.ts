@@ -5,6 +5,9 @@ import {
   PrismaDeploymentMemoryStore,
   PrismaContactStore,
   PrismaApprovalStore,
+  PrismaHandoffStore,
+  PrismaGovernanceVerdictStore,
+  PrismaDeploymentStore,
 } from "@switchboard/db";
 import { ChannelGateway, ConversationLifecycleTracker } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
@@ -13,8 +16,13 @@ import {
   VoyageEmbeddingAdapter,
   DisabledEmbeddingAdapter,
 } from "@switchboard/core";
-import type { EmbeddingAdapter } from "@switchboard/core";
+import type { ConversationStatusUpsertContext, EmbeddingAdapter } from "@switchboard/core";
 import { PrismaDeploymentResolver } from "@switchboard/core/platform";
+import {
+  createAgentDeploymentGovernanceResolver,
+  InMemoryGovernancePostureCache,
+  loadEscalationTriggers,
+} from "@switchboard/core/skill-runtime";
 import type { SubmitWorkResponse } from "@switchboard/core/platform";
 import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { PrismaGatewayConversationStore } from "./gateway-conversation-store.js";
@@ -93,12 +101,94 @@ export function createGatewayBridge(
   }
   const platformIngress = options.platformIngress;
 
+  // ---------------------------------------------------------------------------
+  // Deterministic gate deps (Task 14)
+  // Shared GovernancePostureCache so warm hits from the pre-output hook (in the
+  // API skill executor) propagate to this pre-input gate on subsequent requests
+  // when both servers share state (single-process dev). In production the cache
+  // is per-process — acceptable because each process warms independently on first
+  // resolve and fails closed from the cache on resolver error.
+  // ---------------------------------------------------------------------------
+  const deploymentStore = new PrismaDeploymentStore(prisma);
+  const gatewayGovernanceResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
+  const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma);
+  const gatewayPostureCache = new InMemoryGovernancePostureCache();
+  const gatewayHandoffStore = new PrismaHandoffStore(prisma);
+  // Adapter: GatewayConversationStatusSetter → upsert when context available,
+  // update-only fallback otherwise.
+  //
+  // When upsertContext is provided (gateway path, which has channel+principalId
+  // in scope), perform a true upsert: create the ConversationState row if it
+  // does not yet exist so that brand-new sessions (first-message path) get the
+  // human_override status immediately. This closes the silent no-op window that
+  // existed when only updateMany was used.
+  //
+  // When upsertContext is omitted (api-side hook path), fall back to updateMany
+  // because the row is guaranteed to exist before skill execution (the chat
+  // lifecycle PrismaConversationStore.save writes it first).
+  //
+  // expiresAt for upserted rows: 30 days from now, matching the outer
+  // conversation TTL convention. The exact value is not meaningful here —
+  // the row exists only to carry human_override status until the human
+  // operator clears it.
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const gatewayConversationStatusSetter = {
+    async setConversationStatus(
+      sessionId: string,
+      status: string,
+      upsertContext?: ConversationStatusUpsertContext,
+    ): Promise<void> {
+      if (upsertContext) {
+        await prisma.conversationState.upsert({
+          where: { threadId: sessionId },
+          update: { status },
+          create: {
+            threadId: sessionId,
+            channel: upsertContext.channel,
+            principalId: upsertContext.principalId,
+            status,
+            expiresAt: new Date(Date.now() + thirtyDaysMs),
+          },
+        });
+        return;
+      }
+      // Fallback: update-only (used by the api-side hook adapter where the
+      // ConversationState row is presumed to exist downstream of conversation
+      // lifecycle code).
+      await prisma.conversationState.updateMany({
+        where: { threadId: sessionId },
+        data: { status },
+      });
+    },
+  };
+
+  // Startup assertion: all six ChannelGateway pre-input gate deps must be present.
+  // Missing deps cause silent gate degradation at runtime — fail fast instead.
+  const missingGatewayDeps: string[] = [];
+  if (!gatewayGovernanceResolver) missingGatewayDeps.push("governanceConfigResolver");
+  if (!loadEscalationTriggers) missingGatewayDeps.push("escalationTriggerLoader");
+  if (!gatewayGovernanceVerdictStore) missingGatewayDeps.push("verdictStore");
+  if (!gatewayPostureCache) missingGatewayDeps.push("postureCache");
+  if (!gatewayHandoffStore) missingGatewayDeps.push("handoffStore");
+  if (!gatewayConversationStatusSetter) missingGatewayDeps.push("conversationStatusSetter");
+  if (missingGatewayDeps.length > 0) {
+    throw new Error(
+      `ChannelGateway: deterministic gate deps incomplete — missing: ${missingGatewayDeps.join(", ")}`,
+    );
+  }
+
   return new ChannelGateway({
     deploymentResolver,
     platformIngress,
     conversationStore: new PrismaGatewayConversationStore(prisma),
     contactStore: new PrismaContactStore(prisma),
     approvalStore: new PrismaApprovalStore(prisma),
+    governanceConfigResolver: gatewayGovernanceResolver,
+    escalationTriggerLoader: loadEscalationTriggers,
+    verdictStore: gatewayGovernanceVerdictStore,
+    postureCache: gatewayPostureCache,
+    handoffStore: gatewayHandoffStore,
+    conversationStatusSetter: gatewayConversationStatusSetter,
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
       lifecycleTracker.recordMessage({

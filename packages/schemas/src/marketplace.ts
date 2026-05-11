@@ -70,6 +70,9 @@ export const AgentDeploymentSchema = z.object({
   status: DeploymentStatus.default("provisioning"),
   inputConfig: z.record(z.unknown()).default({}),
   governanceSettings: z.record(z.unknown()).default({}),
+  /** Per-deployment governance configuration (jurisdiction, clinicType, mode, etc.).
+   * Parsed by GovernanceConfigSchema at runtime via createAgentDeploymentGovernanceResolver. */
+  governanceConfig: z.unknown().optional(),
   outputDestination: z.record(z.unknown()).nullable().optional(),
   connectionIds: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),
