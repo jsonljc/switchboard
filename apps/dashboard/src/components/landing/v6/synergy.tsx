@@ -45,9 +45,9 @@ export function V6Synergy() {
             className="mb-12 font-medium leading-[1.05] tracking-[-0.018em] text-v6-graphite"
             style={{ fontSize: "clamp(2rem, 4.4vw, 3.5rem)" }}
           >
-            They&rsquo;re better{" "}
+            One desk, three voices,{" "}
             <em className="v6-synergy-accent relative inline-block font-semibold not-italic text-v6-coral">
-              together
+              one signal
             </em>
             .
           </Reveal>
