@@ -4,10 +4,7 @@ export function LandingFooter() {
   return (
     <footer style={{ background: "#EDEAE5", borderTop: "1px solid #DDD9D3" }}>
       <div className="page-width" style={{ paddingTop: "3rem", paddingBottom: "3rem" }}>
-        <div
-          style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "2rem" }}
-          className="sm:grid-cols-2"
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "2rem" }}>
           {/* Brand */}
           <div>
             <span
