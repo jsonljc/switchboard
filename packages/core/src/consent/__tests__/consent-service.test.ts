@@ -3,6 +3,7 @@ import {
   createConsentService,
   ConsentJurisdictionMismatch,
   ConsentRevokedCannotRegrant,
+  ContactNotFound,
   type ConsentStateStore,
 } from "../index.js";
 import type { GovernanceVerdictStore } from "../../governance/governance-verdict-store/types.js";
@@ -359,5 +360,69 @@ describe("ConsentService — disclosure ↔ consent orthogonality", () => {
       actor: "system:inbound_keyword_revocation",
     });
     expect(store.setDisclosure).not.toHaveBeenCalled();
+  });
+});
+
+const buildNullStore = (): ConsentStateStore => ({
+  readOrNull: vi.fn().mockResolvedValue(null),
+  setJurisdictionIfNull: vi.fn().mockResolvedValue(undefined),
+  setDisclosure: vi.fn().mockResolvedValue(undefined),
+  setGrant: vi.fn().mockResolvedValue(undefined),
+  setRevocationIfNotRevoked: vi
+    .fn()
+    .mockResolvedValue({ wasNewlyRevoked: true, existingRevokedAt: null }),
+  clearConsentTimestamps: vi
+    .fn()
+    .mockResolvedValue({ previousGrantedAt: null, previousRevokedAt: null }),
+});
+
+describe("ConsentService — ContactNotFound paths", () => {
+  it("recordDisclosureShown throws ContactNotFound on missing contact", async () => {
+    const { service } = ctx({ store: buildNullStore() });
+    await expect(
+      service.recordDisclosureShown({
+        contactId: "missing",
+        jurisdiction: "SG",
+        version: "sg-disclosure@1.0.0",
+        shownAt: new Date(),
+        actor: "system:skill_runtime",
+      }),
+    ).rejects.toBeInstanceOf(ContactNotFound);
+  });
+
+  it("recordGrant throws ContactNotFound on missing contact", async () => {
+    const { service } = ctx({ store: buildNullStore() });
+    await expect(
+      service.recordGrant({
+        contactId: "missing",
+        jurisdiction: "MY",
+        source: "operator_recorded",
+        grantedAt: new Date(),
+        actor: "user_42",
+      }),
+    ).rejects.toBeInstanceOf(ContactNotFound);
+  });
+
+  it("recordRevocation throws ContactNotFound on missing contact", async () => {
+    const { service } = ctx({ store: buildNullStore() });
+    await expect(
+      service.recordRevocation({
+        contactId: "missing",
+        source: "inbound_keyword_revocation",
+        revokedAt: new Date(),
+        actor: "system:inbound_keyword_revocation",
+      }),
+    ).rejects.toBeInstanceOf(ContactNotFound);
+  });
+
+  it("clearConsent throws ContactNotFound on missing contact", async () => {
+    const { service } = ctx({ store: buildNullStore() });
+    await expect(
+      service.clearConsent({
+        contactId: "missing",
+        actor: "user_42",
+        notes: "operator reset",
+      }),
+    ).rejects.toBeInstanceOf(ContactNotFound);
   });
 });
