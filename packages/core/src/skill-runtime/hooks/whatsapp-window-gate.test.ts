@@ -526,4 +526,86 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
       expect.objectContaining({ action: "allow" }),
     );
   });
+
+  it("blocks on threadStore throw", async () => {
+    const deps = makeDeps({
+      threadStore: {
+        getLastWhatsAppInboundAt: vi.fn().mockRejectedValue(new Error("db unreachable")),
+      },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    await hook.afterSkill!(makeCtx(), result);
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "block",
+        reasonCode: "governance_unavailable",
+        details: expect.objectContaining({ reason: "storage_error" }),
+      }),
+    );
+    expect(result.response).toBe(""); // enforce mode is the default in makeDeps
+  });
+
+  it("blocks on contactStore throw", async () => {
+    const farPast = new Date(NOW.getTime() - 25 * 60 * 60 * 1000);
+    const deps = makeDeps({
+      threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
+      contactStore: {
+        getMessagingOptInForThread: vi.fn().mockRejectedValue(new Error("db unreachable")),
+      },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult({ intentClass: "appointment-confirm" });
+    await hook.afterSkill!(makeCtx(), result);
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "block",
+        reasonCode: "governance_unavailable",
+        details: expect.objectContaining({ reason: "storage_error" }),
+      }),
+    );
+  });
+
+  it("blocks on channelTypeResolver throw (before config resolution)", async () => {
+    const deps = makeDeps({
+      channelTypeResolver: { resolve: vi.fn().mockRejectedValue(new Error("dns down")) },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    await hook.afterSkill!(makeCtx(), result);
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "block",
+        reasonCode: "governance_unavailable",
+        details: expect.objectContaining({ reason: "storage_error" }),
+      }),
+    );
+    expect(result.response).toBe("");
+  });
+
+  it("observe mode + storage throw → verdict emitted but response untouched", async () => {
+    const deps = makeDeps({
+      threadStore: {
+        getLastWhatsAppInboundAt: vi.fn().mockRejectedValue(new Error("db unreachable")),
+      },
+      governanceConfigResolver: {
+        resolve: vi.fn().mockResolvedValue({
+          whatsappWindow: {
+            enabled: true,
+            mode: "observe",
+            jurisdiction: "SG",
+            allowMarketingTemplateSubstitution: false,
+          },
+        }),
+      },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+    await hook.afterSkill!(makeCtx(), result);
+    expect(result.response).toBe(before); // observe leaves untouched
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ reasonCode: "governance_unavailable" }),
+    );
+  });
 });

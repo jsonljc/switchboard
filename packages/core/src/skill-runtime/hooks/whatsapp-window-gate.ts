@@ -1,4 +1,4 @@
-import type { IntentClass } from "@switchboard/schemas";
+import type { IntentClass, TemplateCategory } from "@switchboard/schemas";
 import type { SkillExecutionResult, SkillHook, SkillHookContext } from "../types.js";
 import { selectTemplate, type Jurisdiction } from "../templates/whatsapp-registry.js";
 import type { HandoffReason } from "../../handoff/types.js";
@@ -50,7 +50,20 @@ export class WhatsAppWindowGateHook implements SkillHook {
   constructor(private readonly deps: WhatsAppWindowGateDeps) {}
 
   async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
-    const channel = await this.deps.channelTypeResolver.resolve(ctx.sessionId);
+    let channel: string;
+    try {
+      channel = await this.deps.channelTypeResolver.resolve(ctx.sessionId);
+    } catch {
+      // Channel unknown → fail-closed. No config yet, so always hard-block.
+      await this.emitVerdict({
+        ctx,
+        action: "block",
+        reasonCode: "governance_unavailable",
+        details: { reason: "storage_error" },
+      });
+      result.response = "";
+      return;
+    }
     if (channel !== "whatsapp") return;
 
     const config = await this.resolveConfig(ctx.deploymentId);
@@ -67,106 +80,134 @@ export class WhatsAppWindowGateHook implements SkillHook {
     }
     if (!config.enabled) return;
 
-    const lastInbound = await this.deps.threadStore.getLastWhatsAppInboundAt(ctx.sessionId);
-    const now = this.deps.clock().getTime();
-    const windowMs = this.deps.windowMs ?? DEFAULT_WINDOW_MS;
-    const inside = lastInbound !== null && now - lastInbound.getTime() < windowMs;
+    try {
+      const lastInbound = await this.deps.threadStore.getLastWhatsAppInboundAt(ctx.sessionId);
+      const now = this.deps.clock().getTime();
+      const windowMs = this.deps.windowMs ?? DEFAULT_WINDOW_MS;
+      const inside = lastInbound !== null && now - lastInbound.getTime() < windowMs;
 
-    if (inside) {
+      if (inside) {
+        await this.emitVerdict({
+          ctx,
+          action: "allow",
+          reasonCode: "allowed",
+          details: { windowStatus: "inside", lastWhatsAppInboundAt: lastInbound?.toISOString() },
+        });
+        return;
+      }
+
+      const optIn = await this.deps.contactStore.getMessagingOptInForThread(ctx.sessionId);
+      if (!optIn) {
+        await this.handleBlock(ctx, result, config, {
+          subCause: "missing_opt_in",
+          intentClass: result.intentClass ?? null,
+          templateMetadata: null,
+          details: {
+            windowStatus: "outside",
+            optInStatus: "missing_or_false",
+            templateMatch: "not_attempted",
+            intentClass: result.intentClass ?? null,
+          },
+        });
+        return;
+      }
+
+      if (!result.intentClass) {
+        await this.handleBlock(ctx, result, config, {
+          subCause: "missing_intent_class",
+          intentClass: null,
+          templateMetadata: null,
+          details: {
+            windowStatus: "outside",
+            optInStatus: "granted",
+            templateMatch: "skipped_no_intent",
+            intentClass: null,
+          },
+        });
+        return;
+      }
+
+      const template = selectTemplate({
+        intentClass: result.intentClass,
+        jurisdiction: config.jurisdiction,
+      });
+      if (!template) {
+        await this.handleBlock(ctx, result, config, {
+          subCause: "no_template_fit",
+          intentClass: result.intentClass,
+          templateMetadata: null,
+          details: {
+            windowStatus: "outside",
+            optInStatus: "granted",
+            templateMatch: "no_fit",
+            intentClass: result.intentClass,
+          },
+        });
+        return;
+      }
+
+      if (template.approvalStatus !== "approved") {
+        await this.handleBlock(ctx, result, config, {
+          subCause: "template_not_approved",
+          intentClass: result.intentClass,
+          templateMetadata: {
+            templateName: template.name,
+            metaTemplateName: template.metaTemplateName,
+            templateCategory: template.templateCategory,
+          },
+          details: {
+            windowStatus: "outside",
+            optInStatus: "granted",
+            templateMatch: "template_not_approved",
+            intentClass: result.intentClass,
+            templateName: template.name,
+            metaTemplateName: template.metaTemplateName,
+            approvalStatus: template.approvalStatus,
+          },
+        });
+        return;
+      }
+
+      if (template.templateCategory === "marketing" && !config.allowMarketingTemplateSubstitution) {
+        await this.handleBlock(ctx, result, config, {
+          subCause: "marketing_substitution_blocked",
+          intentClass: result.intentClass,
+          templateMetadata: {
+            templateName: template.name,
+            metaTemplateName: template.metaTemplateName,
+            templateCategory: template.templateCategory,
+          },
+          details: {
+            windowStatus: "outside",
+            optInStatus: "granted",
+            templateMatch: "marketing_substitution_blocked",
+            intentClass: result.intentClass,
+            templateName: template.name,
+            metaTemplateName: template.metaTemplateName,
+            templateCategory: template.templateCategory,
+            recipientMarket: config.jurisdiction,
+            costRisk: "paid_template_message",
+            costEstimateStatus: "not_priced_in_1d",
+          },
+        });
+        return;
+      }
+
+      // Happy path: substitute.
+      const originalText = result.response;
+      if (config.mode === "enforce") {
+        result.response = template.body;
+      }
       await this.emitVerdict({
         ctx,
-        action: "allow",
-        reasonCode: "allowed",
-        details: { windowStatus: "inside", lastWhatsAppInboundAt: lastInbound?.toISOString() },
-      });
-      return;
-    }
-
-    const optIn = await this.deps.contactStore.getMessagingOptInForThread(ctx.sessionId);
-    if (!optIn) {
-      await this.handleBlock(ctx, result, config, {
-        subCause: "missing_opt_in",
-        intentClass: result.intentClass ?? null,
-        templateMetadata: null,
-        details: {
-          windowStatus: "outside",
-          optInStatus: "missing_or_false",
-          templateMatch: "not_attempted",
-          intentClass: result.intentClass ?? null,
-        },
-      });
-      return;
-    }
-
-    if (!result.intentClass) {
-      await this.handleBlock(ctx, result, config, {
-        subCause: "missing_intent_class",
-        intentClass: null,
-        templateMetadata: null,
+        action: "substitute",
+        reasonCode: "outside_whatsapp_window",
+        originalText,
+        emittedText: template.body,
         details: {
           windowStatus: "outside",
           optInStatus: "granted",
-          templateMatch: "skipped_no_intent",
-          intentClass: null,
-        },
-      });
-      return;
-    }
-
-    const template = selectTemplate({
-      intentClass: result.intentClass,
-      jurisdiction: config.jurisdiction,
-    });
-    if (!template) {
-      await this.handleBlock(ctx, result, config, {
-        subCause: "no_template_fit",
-        intentClass: result.intentClass,
-        templateMetadata: null,
-        details: {
-          windowStatus: "outside",
-          optInStatus: "granted",
-          templateMatch: "no_fit",
-          intentClass: result.intentClass,
-        },
-      });
-      return;
-    }
-
-    if (template.approvalStatus !== "approved") {
-      await this.handleBlock(ctx, result, config, {
-        subCause: "template_not_approved",
-        intentClass: result.intentClass,
-        templateMetadata: {
-          templateName: template.name,
-          metaTemplateName: template.metaTemplateName,
-          templateCategory: template.templateCategory,
-        },
-        details: {
-          windowStatus: "outside",
-          optInStatus: "granted",
-          templateMatch: "template_not_approved",
-          intentClass: result.intentClass,
-          templateName: template.name,
-          metaTemplateName: template.metaTemplateName,
-          approvalStatus: template.approvalStatus,
-        },
-      });
-      return;
-    }
-
-    if (template.templateCategory === "marketing" && !config.allowMarketingTemplateSubstitution) {
-      await this.handleBlock(ctx, result, config, {
-        subCause: "marketing_substitution_blocked",
-        intentClass: result.intentClass,
-        templateMetadata: {
-          templateName: template.name,
-          metaTemplateName: template.metaTemplateName,
-          templateCategory: template.templateCategory,
-        },
-        details: {
-          windowStatus: "outside",
-          optInStatus: "granted",
-          templateMatch: "marketing_substitution_blocked",
+          templateMatch: "matched",
           intentClass: result.intentClass,
           templateName: template.name,
           metaTemplateName: template.metaTemplateName,
@@ -176,33 +217,17 @@ export class WhatsAppWindowGateHook implements SkillHook {
           costEstimateStatus: "not_priced_in_1d",
         },
       });
-      return;
+    } catch {
+      await this.emitVerdict({
+        ctx,
+        action: "block",
+        reasonCode: "governance_unavailable",
+        details: { reason: "storage_error" },
+      });
+      if (config.mode === "enforce") {
+        result.response = "";
+      }
     }
-
-    // Happy path: substitute.
-    const originalText = result.response;
-    if (config.mode === "enforce") {
-      result.response = template.body;
-    }
-    await this.emitVerdict({
-      ctx,
-      action: "substitute",
-      reasonCode: "outside_whatsapp_window",
-      originalText,
-      emittedText: template.body,
-      details: {
-        windowStatus: "outside",
-        optInStatus: "granted",
-        templateMatch: "matched",
-        intentClass: result.intentClass,
-        templateName: template.name,
-        metaTemplateName: template.metaTemplateName,
-        templateCategory: template.templateCategory,
-        recipientMarket: config.jurisdiction,
-        costRisk: "paid_template_message",
-        costEstimateStatus: "not_priced_in_1d",
-      },
-    });
   }
 
   private async resolveConfig(deploymentId: string): Promise<WhatsAppWindowGateConfig | null> {
@@ -227,7 +252,7 @@ export class WhatsAppWindowGateHook implements SkillHook {
       templateMetadata: {
         templateName: string;
         metaTemplateName: string;
-        templateCategory: "utility" | "marketing" | "authentication";
+        templateCategory: TemplateCategory;
       } | null;
       details: Record<string, unknown>;
     },
