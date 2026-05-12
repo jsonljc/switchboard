@@ -3,6 +3,7 @@ export * from "./errors.js";
 export * from "./constants.js";
 export * from "./precedence.js";
 export * from "./lifecycle-writer.js";
+export * from "./lifecycle-config-resolver.js";
 export * from "./re-engagement-attributor.js";
 export * from "./event-hooks/governance-verdict-escalation-hook.js";
 export * from "./event-hooks/booking-created-hook.js";

@@ -531,6 +531,10 @@ export async function registerInngest(
     registerOperatorTakeoverHook: () => {},
     registerThreadInitHook: () => {},
     registerCron: () => {},
+    // Phase 3b: stubs — this inngest seat only uses writer/history from the bootstrap result.
+    // Real qualificationEvaluationHook wiring lives in app.ts via bootstrapSkillMode.
+    playbookReader: { readForOrganization: async () => null },
+    governanceConfigResolver: { resolve: async () => ({}) },
   });
 
   await app.register(inngestFastify, {
