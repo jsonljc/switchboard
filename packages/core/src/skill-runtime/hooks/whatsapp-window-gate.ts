@@ -57,25 +57,11 @@ export class WhatsAppWindowGateHook implements SkillHook {
   constructor(private readonly deps: WhatsAppWindowGateDeps) {}
 
   async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
-    let channel: string;
-    try {
-      channel = await this.deps.channelTypeResolver.resolve(ctx.sessionId);
-    } catch {
-      // Channel unknown → fail-closed. No config yet, so always hard-block.
-      await this.emitVerdict({
-        ctx,
-        action: "block",
-        reasonCode: "governance_unavailable",
-        jurisdiction: "SG",
-        clinicType: "medical",
-        auditLevel: "critical",
-        details: { reason: "storage_error" },
-      });
-      result.response = "";
-      return;
-    }
-    if (channel !== "whatsapp") return;
-
+    // Resolve config FIRST so the feature-flag check gates everything that follows.
+    // If the resolver fully fails and no cached posture exists, we have no mode signal
+    // and fail-closed (matching 1c precedent). If the flag is off, return immediately
+    // without touching the channel resolver — preserving "default off → zero behavioral
+    // change" even when the channel resolver is transiently unavailable.
     const config = await this.resolveConfig(ctx.deploymentId);
     if (!config) {
       // Fail-closed: governance is unavailable. Match 1c's precedent — block hard.
@@ -92,6 +78,28 @@ export class WhatsAppWindowGateHook implements SkillHook {
       return;
     }
     if (!config.enabled) return;
+
+    // Channel resolution AFTER the flag check. Now that we have config, a throw here
+    // can properly respect config.mode for the blanking decision.
+    let channel: string;
+    try {
+      channel = await this.deps.channelTypeResolver.resolve(ctx.sessionId);
+    } catch {
+      await this.emitVerdict({
+        ctx,
+        action: "block",
+        reasonCode: "governance_unavailable",
+        jurisdiction: config.jurisdiction,
+        clinicType: config.clinicType,
+        auditLevel: "critical",
+        details: { reason: "storage_error" },
+      });
+      if (config.mode === "enforce") {
+        result.response = "";
+      }
+      return;
+    }
+    if (channel !== "whatsapp") return;
 
     try {
       const lastInbound = await this.deps.threadStore.getLastWhatsAppInboundAt(ctx.sessionId);

@@ -531,7 +531,9 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
     );
   });
 
-  it("blocks on channelTypeResolver throw (before config resolution)", async () => {
+  it("blocks + blanks on channelTypeResolver throw in enforce mode", async () => {
+    // Default makeDeps has enabled:true, mode:"enforce". Config resolves first,
+    // then channelTypeResolver throws. Enforce mode → response blanked.
     const deps = makeDeps({
       channelTypeResolver: { resolve: vi.fn().mockRejectedValue(new Error("dns down")) },
     });
@@ -545,6 +547,54 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
       }),
     );
     expect(result.response).toBe("");
+  });
+
+  it("feature flag off + channelTypeResolver throws → passthrough, no verdict, no mutation", async () => {
+    // When the flag is off, afterSkill returns before ever calling the channel resolver.
+    // A transient channel-resolver failure must NOT produce a block verdict.
+    const channelResolverSpy = vi.fn().mockRejectedValue(new Error("dns down"));
+    const deps = makeDeps({
+      governanceConfigResolver: makeGovernanceResolver({
+        enabled: false,
+        mode: "enforce",
+        jurisdiction: "SG",
+        allowMarketingTemplateSubstitution: false,
+      }),
+      channelTypeResolver: { resolve: channelResolverSpy },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+    await hook.afterSkill!(makeCtx(), result);
+    expect(result.response).toBe(before);
+    expect(deps.verdictStore.save).not.toHaveBeenCalled();
+    expect(deps.handoffStore.save).not.toHaveBeenCalled();
+    // Channel resolver must never be called — early return on flag-off.
+    expect(channelResolverSpy).not.toHaveBeenCalled();
+  });
+
+  it("observe mode + channelTypeResolver throws → verdict emitted, response NOT blanked", async () => {
+    // Observe mode: emit verdict for audit trail, but do not blank the response.
+    const deps = makeDeps({
+      governanceConfigResolver: makeGovernanceResolver({
+        enabled: true,
+        mode: "observe",
+        jurisdiction: "SG",
+        allowMarketingTemplateSubstitution: false,
+      }),
+      channelTypeResolver: { resolve: vi.fn().mockRejectedValue(new Error("dns down")) },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+    await hook.afterSkill!(makeCtx(), result);
+    expect(result.response).toBe(before); // observe leaves response untouched
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "block",
+        reasonCode: "governance_unavailable",
+      }),
+    );
   });
 
   it("observe mode + storage throw → verdict emitted but response untouched", async () => {

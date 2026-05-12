@@ -4,6 +4,7 @@ import type {
   SkillExecutor,
   SkillDefinition,
   SkillToolFactory,
+  WhatsAppWindowGateConfig,
 } from "@switchboard/core/skill-runtime";
 import type { ConsentService, ContactConsentReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
@@ -392,28 +393,10 @@ export async function bootstrapSkillMode(
   // ---------------------------------------------------------------------------
   // Per-hook posture cache for WhatsAppWindowGateConfig. Cannot reuse
   // InMemoryGovernancePostureCache — it stores GovernancePosture (a different shape).
-  const whatsAppWindowPostureCacheMap = new Map<
-    string,
-    {
-      enabled: boolean;
-      mode: "observe" | "enforce";
-      jurisdiction: "SG" | "MY";
-      clinicType: "medical" | "nonMedical";
-      allowMarketingTemplateSubstitution: boolean;
-    }
-  >();
+  const whatsAppWindowPostureCacheMap = new Map<string, WhatsAppWindowGateConfig>();
   const whatsAppWindowPostureCache = {
     lastKnown: (deploymentId: string) => whatsAppWindowPostureCacheMap.get(deploymentId),
-    remember: (
-      deploymentId: string,
-      posture: {
-        enabled: boolean;
-        mode: "observe" | "enforce";
-        jurisdiction: "SG" | "MY";
-        clinicType: "medical" | "nonMedical";
-        allowMarketingTemplateSubstitution: boolean;
-      },
-    ) => {
+    remember: (deploymentId: string, posture: WhatsAppWindowGateConfig) => {
       whatsAppWindowPostureCacheMap.set(deploymentId, posture);
     },
   };

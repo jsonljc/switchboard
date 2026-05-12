@@ -7,7 +7,10 @@ export type { DeterministicSafetyGateHookDeps } from "./hooks/deterministic-safe
 export { PdpaConsentGateHook } from "./hooks/pdpa-consent-gate.js";
 export type { PdpaConsentGateHookDeps } from "./hooks/pdpa-consent-gate.js";
 export { WhatsAppWindowGateHook } from "./hooks/whatsapp-window-gate.js";
-export type { WhatsAppWindowGateDeps } from "./hooks/whatsapp-window-gate.js";
+export type {
+  WhatsAppWindowGateDeps,
+  WhatsAppWindowGateConfig,
+} from "./hooks/whatsapp-window-gate.js";
 // Governance infrastructure re-exported for bootstrap wiring convenience
 export { createAgentDeploymentGovernanceResolver } from "../governance/governance-config-resolver.js";
 export { InMemoryGovernancePostureCache } from "../governance/posture-cache.js";
