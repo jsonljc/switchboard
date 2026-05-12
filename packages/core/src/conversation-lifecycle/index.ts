@@ -4,3 +4,4 @@ export * from "./constants.js";
 export * from "./precedence.js";
 export * from "./lifecycle-writer.js";
 export * from "./re-engagement-attributor.js";
+export * from "./event-hooks/governance-verdict-escalation-hook.js";
