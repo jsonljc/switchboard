@@ -4,6 +4,7 @@ import type {
   SkillExecutor,
   SkillDefinition,
   SkillToolFactory,
+  WhatsAppWindowGateConfig,
 } from "@switchboard/core/skill-runtime";
 import type { ConsentService, ContactConsentReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
@@ -36,6 +37,7 @@ export async function bootstrapSkillMode(
     DeterministicSafetyGateHook,
     ClaimClassifierHook,
     PdpaConsentGateHook,
+    WhatsAppWindowGateHook,
     AnthropicToolCallingAdapter,
     BuilderRegistry,
     createCrmQueryTool,
@@ -382,11 +384,64 @@ export async function bootstrapSkillMode(
     clock: () => new Date(),
   });
 
+  // ---------------------------------------------------------------------------
+  // WhatsAppWindowGateHook infrastructure (Phase 1d)
+  // Runs AFTER PdpaConsentGateHook (1c consent must resolve before 1d window
+  // check). Per spec §8 the posture cache is a distinct instance — fourth cache
+  // total (1b-1, 1b-2, 1c, 1d). Feature flag
+  // alexMedspaSgMyGovernanceV1.whatsappWindow.enabled defaults to false.
+  // ---------------------------------------------------------------------------
+  // Per-hook posture cache for WhatsAppWindowGateConfig. Cannot reuse
+  // InMemoryGovernancePostureCache — it stores GovernancePosture (a different shape).
+  const whatsAppWindowPostureCacheMap = new Map<string, WhatsAppWindowGateConfig>();
+  const whatsAppWindowPostureCache = {
+    lastKnown: (deploymentId: string) => whatsAppWindowPostureCacheMap.get(deploymentId),
+    remember: (deploymentId: string, posture: WhatsAppWindowGateConfig) => {
+      whatsAppWindowPostureCacheMap.set(deploymentId, posture);
+    },
+  };
+  const whatsAppWindowGateHook = new WhatsAppWindowGateHook({
+    verdictStore: governanceVerdictStore,
+    handoffStore,
+    governanceConfigResolver,
+    postureCache: whatsAppWindowPostureCache,
+    threadStore: {
+      getLastWhatsAppInboundAt: async (threadId) => {
+        const row = await prismaClient.conversationThread.findUnique({
+          where: { id: threadId },
+          select: { lastWhatsAppInboundAt: true },
+        });
+        return row?.lastWhatsAppInboundAt ?? null;
+      },
+    },
+    contactStore: {
+      getMessagingOptInForThread: async (threadId) => {
+        const thread = await prismaClient.conversationThread.findUnique({
+          where: { id: threadId },
+          select: { lifecycleContact: { select: { messagingOptIn: true } } },
+        });
+        return thread?.lifecycleContact?.messagingOptIn ?? false;
+      },
+    },
+    channelTypeResolver: {
+      resolve: async (sessionId) => {
+        const thread = await prismaClient.conversationThread.findUnique({
+          where: { id: sessionId },
+          select: { agentContext: true },
+        });
+        const ctx = (thread?.agentContext ?? {}) as { channel?: string };
+        return ctx.channel ?? "unknown";
+      },
+    },
+    clock: () => new Date(),
+  });
+
   const hooks = [
     new GovernanceHook(toolsMap),
     safetyGateHook,
     claimClassifierHook,
     pdpaConsentGateHook,
+    whatsAppWindowGateHook,
   ];
   const skillExecutor = new SkillExecutorImpl(
     adapter,
@@ -470,6 +525,8 @@ export async function bootstrapSkillMode(
   if (!consentService) missingGateDeps.push("consentService");
   if (!contactConsentReader) missingGateDeps.push("contactConsentReader");
   if (!consentPostureCache) missingGateDeps.push("consentPostureCache");
+  // 1d whatsapp-window-gate deps
+  if (!whatsAppWindowPostureCache) missingGateDeps.push("whatsAppWindowPostureCache");
   if (missingGateDeps.length > 0) {
     throw new Error(`SkillMode: gate deps incomplete — missing: ${missingGateDeps.join(", ")}`);
   }
@@ -490,6 +547,7 @@ export async function bootstrapSkillMode(
     safetyGateHook,
     claimClassifierHook,
     pdpaConsentGateHook,
+    whatsAppWindowGateHook,
     new SimulationPolicyHook(),
   ];
   const simulationExecutor = new SkillExecutorImpl(

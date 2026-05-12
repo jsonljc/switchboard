@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { SkillExecutorImpl } from "./skill-executor.js";
+import { SkillExecutorImpl, parseIntentTag } from "./skill-executor.js";
 import type { ToolCallingAdapter } from "./tool-calling-adapter.js";
 import type { SkillDefinition, SkillTool } from "./types.js";
 import { SkillParameterError, SkillExecutionBudgetError } from "./types.js";
@@ -441,5 +441,62 @@ describe("SkillExecutorImpl", () => {
     expect(result.trace.writeCount).toBe(1);
     expect(result.trace.governanceDecisions).toHaveLength(1);
     expect(result.trace.governanceDecisions[0]!.tier).toBe("write");
+  });
+});
+
+describe("parseIntentTag", () => {
+  it("0 tags → cleaned text, null intentClass", () => {
+    const r = parseIntentTag("See you at 3pm.");
+    expect(r.text).toBe("See you at 3pm.");
+    expect(r.intentClass).toBeNull();
+  });
+
+  it("1 valid trailing tag → strip + use", () => {
+    const r = parseIntentTag("See you at 3pm. <intent>appointment-confirm</intent>");
+    expect(r.text).toBe("See you at 3pm.");
+    expect(r.intentClass).toBe("appointment-confirm");
+  });
+
+  it("strips the tag even when surrounded by whitespace/newlines", () => {
+    const r = parseIntentTag("See you.\n\n  <intent>aftercare-checkin</intent>  \n");
+    expect(r.text).toBe("See you.");
+    expect(r.intentClass).toBe("aftercare-checkin");
+  });
+
+  it("unknown tag value → strip tag, null intentClass", () => {
+    const r = parseIntentTag("See you. <intent>fooobar</intent>");
+    expect(r.text).toBe("See you.");
+    expect(r.intentClass).toBeNull();
+  });
+
+  it("multiple tags (regardless of validity) → strip ALL tags, null intentClass", () => {
+    const r = parseIntentTag(
+      "Booked. <intent>appointment-confirm</intent> Or maybe <intent>appointment-reminder</intent>",
+    );
+    expect(r.intentClass).toBeNull();
+    expect(r.text).not.toMatch(/<intent>/);
+    expect(r.text).not.toMatch(/<\/intent>/);
+  });
+
+  it("multiple tags with mixed validity → still null + strip all", () => {
+    const r = parseIntentTag(
+      "Hello. <intent>foo</intent> world <intent>appointment-confirm</intent>",
+    );
+    expect(r.intentClass).toBeNull();
+    expect(r.text).not.toMatch(/<\/?intent>/);
+  });
+
+  it("malformed tag (unclosed) is left in place; intentClass null", () => {
+    const r = parseIntentTag("See you. <intent>appointment-confirm");
+    expect(r.intentClass).toBeNull();
+    expect(r.text).toContain("<intent>");
+  });
+
+  it("single tag not at the trailing edge is still recognized as one tag", () => {
+    const r = parseIntentTag("Welcome <intent>consult-followup</intent> back!");
+    expect(r.intentClass).toBe("consult-followup");
+    expect(r.text).not.toMatch(/<\/?intent>/);
+    expect(r.text).toMatch(/Welcome/);
+    expect(r.text).toMatch(/back!/);
   });
 });

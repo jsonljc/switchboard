@@ -35,6 +35,8 @@ function composeHandoffSummary(row: HandoffPackage, contact: Contact | null): st
       return `${who} asked to talk to a human about their consultation.`;
     case "max_turns_exceeded":
       return `${who} has been going back and forth — I think you should take this one.`;
+    case "outside_whatsapp_window":
+      return `${who}'s message couldn't be sent — outside the WhatsApp 24h window with no approved template.`;
     default:
       return `${who} needs a human to take over.`;
   }

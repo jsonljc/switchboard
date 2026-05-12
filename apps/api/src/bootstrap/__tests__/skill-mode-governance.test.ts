@@ -30,6 +30,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
     .mockImplementation(() => ({ name: "deterministic-safety-gate" })),
   ClaimClassifierHook,
   PdpaConsentGateHook: vi.fn().mockImplementation(() => ({ name: "pdpa-consent-gate" })),
+  WhatsAppWindowGateHook: vi.fn().mockImplementation(() => ({ name: "whatsapp-window-gate" })),
   SimulationPolicyHook: vi.fn().mockImplementation(() => ({ name: "simulation" })),
   AnthropicToolCallingAdapter: vi.fn().mockImplementation(() => ({})),
   BuilderRegistry: vi.fn().mockImplementation(() => ({
@@ -182,6 +183,7 @@ describe("bootstrapSkillMode governance wiring", () => {
       },
       conversationThread: {
         findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
       },
     }) as never;
 

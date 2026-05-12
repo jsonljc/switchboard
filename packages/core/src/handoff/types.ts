@@ -10,7 +10,8 @@ export type HandoffReason =
   | "compliance_concern"
   | "booking_failure"
   | "escalation_timeout"
-  | "missing_knowledge";
+  | "missing_knowledge"
+  | "outside_whatsapp_window";
 
 export type HandoffStatus = "pending" | "assigned" | "active" | "released";
 
