@@ -220,6 +220,9 @@ export * from "./operator/index.js";
 // Lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle/index.js";
 
+// Conversation Lifecycle (Phase 3a — snapshot, transitions, precedence)
+export * from "./conversation-lifecycle/index.js";
+
 // Marketplace (Trust Score Engine)
 export * from "./marketplace/index.js";
 
