@@ -142,3 +142,6 @@ export * from "./substantiation.js";
 
 // PDPA consent types (per-jurisdiction governance state + canonical gate)
 export * from "./pdpa-consent.js";
+
+// Conversation Lifecycle (state machine enums + precedence comparator — Alex medspa Phase 3a)
+export * from "./conversation-lifecycle.js";
