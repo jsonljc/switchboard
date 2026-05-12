@@ -123,6 +123,7 @@ export { createInMemoryOrgAgentEnablementStore } from "./stores/in-memory-org-ag
 export { PrismaOrgAgentEnablementStore } from "./stores/prisma-org-agent-enablement-store.js";
 export { PrismaGreetingSignalStore } from "./stores/prisma-greeting-signal-store.js";
 export { PrismaGovernanceVerdictStore } from "./prisma-governance-verdict-store.js";
+export { PrismaConversationLifecycleSnapshotStore } from "./prisma-conversation-lifecycle-snapshot-store.js";
 export { createPrismaApprovedComplianceClaimStore } from "./prisma-approved-compliance-claim-store.js";
 export { createPrismaConsentStore } from "./prisma-consent-store.js";
 export { createPrismaContactConsentReader } from "./prisma-contact-consent-reader.js";
