@@ -1,0 +1,55 @@
+import { describe, expect, it, vi } from "vitest";
+import { PrismaMessageHistoryReader } from "../prisma-message-history-reader.js";
+
+describe("PrismaMessageHistoryReader.read", () => {
+  it("returns null/null when the thread doesn't exist", async () => {
+    const prisma = {
+      conversationThread: { findUnique: vi.fn().mockResolvedValue(null) },
+      conversationMessage: { findFirst: vi.fn() },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reader = new PrismaMessageHistoryReader(prisma as any);
+    const result = await reader.read("thread-1");
+    expect(result.lastOutboundAt).toBeNull();
+    expect(result.lastInboundAt).toBeNull();
+    expect(prisma.conversationMessage.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("looks up thread by id, then filters messages by contactId+orgId+direction", async () => {
+    const earlier = new Date("2026-05-10T09:00:00Z");
+    const later = new Date("2026-05-10T09:05:00Z");
+    const prisma = {
+      conversationThread: {
+        findUnique: vi.fn().mockResolvedValue({ contactId: "contact-1", organizationId: "org-1" }),
+      },
+      conversationMessage: {
+        findFirst: vi.fn().mockImplementation(async (args: { where: { direction: string } }) => {
+          if (args.where.direction === "outbound") return { createdAt: later };
+          if (args.where.direction === "inbound") return { createdAt: earlier };
+          return null;
+        }),
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reader = new PrismaMessageHistoryReader(prisma as any);
+    const result = await reader.read("thread-1");
+    expect(result.lastOutboundAt).toEqual(later);
+    expect(result.lastInboundAt).toEqual(earlier);
+    expect(prisma.conversationThread.findUnique).toHaveBeenCalledWith({
+      where: { id: "thread-1" },
+      select: { contactId: true, organizationId: true },
+    });
+    // The two findFirst calls run in parallel via Promise.all, so we assert on the
+    // call args (each direction queried exactly once) rather than on call order.
+    expect(prisma.conversationMessage.findFirst).toHaveBeenCalledWith({
+      where: { contactId: "contact-1", orgId: "org-1", direction: "outbound" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+    expect(prisma.conversationMessage.findFirst).toHaveBeenCalledWith({
+      where: { contactId: "contact-1", orgId: "org-1", direction: "inbound" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+  });
+});

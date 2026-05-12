@@ -145,3 +145,6 @@ export * from "./pdpa-consent.js";
 
 // Intent class + template category enums (WhatsApp template routing — Alex medspa 1d)
 export * from "./intent-class.js";
+
+// Conversation Lifecycle (state machine enums + precedence comparator — Alex medspa Phase 3a)
+export * from "./conversation-lifecycle.js";
