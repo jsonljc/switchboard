@@ -3,7 +3,7 @@
 **Parent:** [`docs/superpowers/plans/2026-05-12-alex-medspa-phase-3a-mechanical-lifecycle.md`](../plans/2026-05-12-alex-medspa-phase-3a-mechanical-lifecycle.md)
 **Status:** Open. Captured 2026-05-12 from `apps/api/src/bootstrap/lifecycle.ts:14-130`.
 
-Phase 3a landed the mechanical conversation lifecycle layer (writer, attributor, snapshot/transition stores, stalled-sweep cron) plus a complete `bootstrapLifecycle` IoC surface with five `registerXHook` seams. The seams are _invoked_ in bootstrap but no producer fires four of them today; the fifth (5a) has a producer constructor option that no caller passes a real registrar to. The cron (`stalled-sweep`) is the only real producer wired in 3a.
+Phase 3a landed the mechanical conversation lifecycle layer (writer, attributor, snapshot/transition stores, stalled-sweep cron) plus a complete `bootstrapLifecycle` IoC surface with five `registerXHook` seams. The seams are _invoked_ in bootstrap but no producer fires four of them today; the fifth (5a) has a producer constructor option that no caller passes a real registrar to — the producer mechanism exists, only the wiring is missing, but the wiring itself is still a multi-file change (see 5a sketch below). The cron (`stalled-sweep`) is the only real producer wired in 3a.
 
 Each item below is a candidate follow-up PR. The "Why deferred" lines preserve the context that lives in `apps/api/src/bootstrap/lifecycle.ts` so future work doesn't have to re-derive it.
 
@@ -52,7 +52,7 @@ Each item below is a candidate follow-up PR. The "Why deferred" lines preserve t
 1. A schema migration adding `assignedOperatorId` (or equivalent) to `ConversationThread`, plus a dashboard route that flips it; **or**
 2. An explicit "operator took over" event surface (likely in the dashboard approval flow) that emits an `OperatorTakeoverEvent`.
 
-**Smallest viable PR:** option 2 is lighter if the dashboard already has a takeover-style action (e.g., approving an escalated thread for human handling). Audit the approvals UI first.
+**Smallest viable PR:** option 2 is lighter if the dashboard already has a takeover-style action (e.g., approving an escalated thread for human handling). Audit the approvals UI first. If no takeover surface exists there, fall back to option 1 (schema migration) and treat it as a Phase 3b/4 prerequisite rather than a 3a follow-up.
 
 ---
 
@@ -72,3 +72,4 @@ Each item below is a candidate follow-up PR. The "Why deferred" lines preserve t
 - The Phase 3a unit tests already assert that all five registrars are invoked by `bootstrapLifecycle`, so the eventual wiring PRs cannot regress the registration step silently. New tests will be needed on the producer side.
 - The `lifecycleTagging.mechanical` feature flag gates the entire layer (default off). Wiring PRs do not need to flag-gate again at the seat — the flag is read inside each `onX` handler.
 - Ordering: 5a and 5e are the most self-contained (small callback additions). 5b and 5d require cross-cutting design.
+- Revisit trigger: when Phase 3b (qualification signals) lands. 3b promotes the lifecycle layer from "tagging only" to "input into recommendation generation," at which point 5a (verdict-write) and 5c (inbound-message) become materially more valuable and the cost of leaving them deferred grows.
