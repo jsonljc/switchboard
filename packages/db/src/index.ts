@@ -125,6 +125,8 @@ export { PrismaGreetingSignalStore } from "./stores/prisma-greeting-signal-store
 export { PrismaGovernanceVerdictStore } from "./prisma-governance-verdict-store.js";
 export { PrismaConversationLifecycleSnapshotStore } from "./prisma-conversation-lifecycle-snapshot-store.js";
 export { PrismaConversationLifecycleTransitionStore } from "./prisma-conversation-lifecycle-transition-store.js";
+export { PrismaMessageHistoryReader } from "./prisma-message-history-reader.js";
+export { PrismaReEngagementVerdictReader } from "./prisma-re-engagement-verdict-reader.js";
 export { createPrismaApprovedComplianceClaimStore } from "./prisma-approved-compliance-claim-store.js";
 export { createPrismaConsentStore } from "./prisma-consent-store.js";
 export { createPrismaContactConsentReader } from "./prisma-contact-consent-reader.js";
