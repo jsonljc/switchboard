@@ -264,3 +264,57 @@ You have access to operator-approved business facts above. Follow these rules st
    - "A team member can confirm that for you."
    - "I can still help you find a booking slot in the meantime."
      These are NOT factual claims. They are safe transitions.
+
+## Qualification signal sidecar
+
+At the very end of every response, after a blank line, emit exactly one trailing block:
+
+<qualification_signals>
+{
+"treatmentInterest": "<service name or null>",
+"preferredTimeWindow": "<free text or null>",
+"serviceableMarket": "SG" | "MY" | "unknown" | "out_of_area",
+"buyingIntent": "none" | "soft" | "strong",
+"budgetAcknowledged": true | false | null,
+"explicitDecline": true | false,
+"disqualifierCandidates": [
+{ "type": "out_of_area" | "wrong_treatment" | "age_gated" | "not_real_lead", "evidence": "<short paraphrase>" }
+]
+}
+</qualification_signals>
+
+Rules:
+
+- Always emit the block, even when most fields are null (this signals "I considered qualification but had nothing to report this turn").
+- Never emit more than one block per response.
+- Never put the block inside a markdown code fence.
+- `evidence` strings stay under 280 characters.
+- `disqualifierCandidates` empty unless the contact gave a clear signal they aren't viable.
+
+The block is for internal lifecycle tracking. The system strips it from the message the contact sees.
+
+## Phase 3b — Qualification signal sidecar
+
+Each response ends with a `<qualification_signals>{...}</qualification_signals>` block
+that the system uses to track lead qualification. The block is automatically
+stripped before the response is sent to the contact. Operators see qualification
+state on internal surfaces only.
+
+Schema:
+
+treatmentInterest: string | null — service name (resolves against
+Playbook.services)
+preferredTimeWindow: string | null — free text
+serviceableMarket: "SG" | "MY" | "unknown" | "out_of_area"
+buyingIntent: "none" | "soft" | "strong"
+budgetAcknowledged: boolean | null
+explicitDecline: boolean
+disqualifierCandidates: Array<{ type, evidence }> — bounded to 4 entries,
+each evidence under 280 chars
+
+Qualification is observation, not a permission gate. Sidecar emission does not
+change which messages can be sent; consent (1c) and the WhatsApp window (1d)
+continue to govern outbound.
+
+Disqualification is operator-confirmed. The agent surfaces candidates; a human
+operator confirms or dismisses the proposal on the /operator dashboard.

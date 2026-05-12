@@ -97,3 +97,11 @@ Revocation keywords are intentionally narrow. False-positive revoke is worse tha
 ## Phase 3 lifecycle observation
 
 Conversation lifecycle (mechanical states only in Phase 3a) is tracked in `packages/core/src/conversation-lifecycle/`. Operators reviewing Alex behavior may consult `ConversationLifecycleSnapshot` for current state and `ConversationLifecycleTransition` for the path. Lifecycle is observation-only — it does not gate Alex outbounds. Re-engagement requests that lifecycle generates still flow through the 1c PDPA consent gate and the 1d WhatsApp window/template gate.
+
+## Phase 3b lifecycle observation
+
+The qualification sidecar is observational. MY outbound rules (PDPA consent
+state, WhatsApp 24h window, regulated-claim substantiation) are unchanged.
+
+Operator-confirmed disqualification applies in MY identically to SG: agent
+surfaces, operator decides.
