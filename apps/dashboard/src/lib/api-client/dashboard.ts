@@ -173,4 +173,34 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     const qs = params.toString();
     return this.request(`/api/dashboard/automations${qs ? `?${qs}` : ""}`);
   }
+
+  // ── Lifecycle: Disqualifications (Phase 3b) ──
+
+  async listPendingDisqualifications(): Promise<{ items: unknown[] }> {
+    return this.request("/api/dashboard/lifecycle/disqualifications/pending");
+  }
+
+  /**
+   * Confirm or dismiss a proposed disqualification. Uses raw fetch so that
+   * 409 (already-resolved / state conflict) and 404 (not found) survive back
+   * to the proxy without being collapsed into a generic 500.
+   */
+  async resolveDisqualification(
+    threadId: string,
+    action: "confirm" | "dismiss",
+    body: { operatorNote?: string },
+  ): Promise<{ status: number; body: unknown }> {
+    const res = await fetch(
+      `${this.baseUrl}/api/dashboard/lifecycle/disqualifications/${encodeURIComponent(threadId)}/${action}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(body),
+      },
+    );
+    return { status: res.status, body: await res.json().catch(() => ({})) };
+  }
 }
