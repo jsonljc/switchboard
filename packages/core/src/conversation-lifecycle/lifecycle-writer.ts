@@ -1,11 +1,13 @@
 import {
   type ConversationLifecycleSnapshot,
   type ConversationLifecycleTransition,
+  type LifecycleQualificationStatus,
 } from "@switchboard/schemas";
 import type {
   LifecycleSnapshotStore,
   LifecycleTransitionStore,
   RecordTransitionInput,
+  UpdateQualificationInput,
   LifecycleWriteCapability,
 } from "./types.js";
 import { canTransitionLifecycle } from "./precedence.js";
@@ -138,6 +140,64 @@ export class LifecycleWriter {
     return snap;
   }
 
+  /**
+   * Mutates `qualificationStatus` on the snapshot WITHOUT advancing `currentState`.
+   * Used by qualification-evaluation sidecar (system proposes) and
+   * disqualification-resolution hook (operator dismisses).
+   *
+   * Capability violations throw `LifecycleCapabilityDenied` (loud).
+   * Monotonic violations are silently dropped (expected behavior, not bugs).
+   */
+  async updateQualificationStatus(input: UpdateQualificationInput): Promise<void> {
+    const capabilities = await this.deps.resolveCapabilities(input.organizationId);
+    const triggers = allowedTriggersFor(capabilities);
+    if (!triggers.has(input.trigger)) {
+      throw new LifecycleCapabilityDenied(
+        `trigger '${input.trigger}' not allowed by capabilities [${[...capabilities].join(",")}]`,
+      );
+    }
+
+    const occurredAt = input.occurredAt ?? new Date();
+
+    await this.deps.runInTransaction(async (tx) => {
+      const existing = await this.deps.snapshotStore.readInTransaction(
+        tx,
+        input.conversationThreadId,
+      );
+      if (existing === null) {
+        console.warn(
+          `[lifecycle] updateQualificationStatus called on missing snapshot ${input.conversationThreadId}; ignoring`,
+        );
+        return;
+      }
+      if (!isMonotonicQualificationTransition(existing.qualificationStatus, input)) {
+        return; // silent no-op
+      }
+
+      const nextSnapshot: ConversationLifecycleSnapshot = {
+        ...existing,
+        qualificationStatus: input.toQualificationStatus,
+        lastEvaluatedAt: occurredAt,
+        updatedAt: occurredAt,
+      };
+      await this.deps.snapshotStore.upsertInTransaction(tx, nextSnapshot);
+
+      const transition: Omit<ConversationLifecycleTransition, "id"> = {
+        organizationId: input.organizationId,
+        conversationThreadId: input.conversationThreadId,
+        contactId: input.contactId,
+        fromState: existing.currentState,
+        toState: existing.currentState,
+        trigger: input.trigger,
+        evidence: input.evidence,
+        actor: input.actor,
+        workTraceId: input.workTraceId ?? null,
+        occurredAt,
+      };
+      await this.deps.transitionStore.appendInTransaction(tx, transition);
+    });
+  }
+
   private computeDropoffReason(
     input: RecordTransitionInput,
     prior: ConversationLifecycleSnapshot["dropoffReason"],
@@ -147,4 +207,44 @@ export class LifecycleWriter {
     if (input.toState === "active") return null;
     return prior;
   }
+}
+
+function isMonotonicQualificationTransition(
+  current: LifecycleQualificationStatus,
+  input: UpdateQualificationInput,
+): boolean {
+  const target = input.toQualificationStatus;
+  const trigger = input.trigger;
+
+  // Operator-driven paths bypass the monotonic-by-sidecar rules.
+  if (trigger === "operator_dismissed_disqualification") {
+    return current === "proposed_disqualified";
+  }
+  if (trigger === "operator_confirmed_disqualification") {
+    // Handled by recordTransition (advances currentState to disqualified).
+    return false;
+  }
+
+  // System paths from sidecar evaluation:
+  if (current === "proposed_disqualified" && trigger !== "system_proposed_disqualification") {
+    return false; // protected from overwrite by normal sidecars
+  }
+
+  if (target === "proposed_disqualified") {
+    return current !== "proposed_disqualified";
+  }
+
+  if (target === "qualified") {
+    return current === "unknown" || current === "unqualified" || current === "qualified";
+  }
+
+  if (target === "unqualified") {
+    return current === "unknown"; // qualified → unqualified is forbidden
+  }
+
+  if (target === "unknown") {
+    return false; // never regress to unknown
+  }
+
+  return false;
 }

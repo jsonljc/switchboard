@@ -4,6 +4,7 @@ import type {
   ConversationLifecycleState,
   ConversationLifecycleTrigger,
   ConversationLifecycleActor,
+  LifecycleQualificationStatus,
 } from "@switchboard/schemas";
 
 /** Capabilities that unlock additional lifecycle states and triggers. */
@@ -76,6 +77,19 @@ export interface RecordTransitionInput {
   conversationThreadId: string;
   contactId: string;
   toState: ConversationLifecycleState;
+  trigger: ConversationLifecycleTrigger;
+  actor: ConversationLifecycleActor;
+  evidence: Record<string, unknown>;
+  workTraceId?: string | null;
+  occurredAt?: Date;
+}
+
+export interface UpdateQualificationInput {
+  organizationId: string;
+  conversationThreadId: string;
+  contactId: string;
+  /** The target qualificationStatus. currentState is NOT advanced. */
+  toQualificationStatus: LifecycleQualificationStatus;
   trigger: ConversationLifecycleTrigger;
   actor: ConversationLifecycleActor;
   evidence: Record<string, unknown>;
