@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Land the WhatsApp 24h customer-service window gate, the in-repo Meta-approved template registry, and the outbound substitution path behind the `alexMedspaSgMyGovernanceV1.whatsappWindow` feature flag (default off).
+**Goal:** Land the WhatsApp 24h customer-service window gate, the in-repo approval-tagged WhatsApp template registry, and the outbound substitution path behind the `alexMedspaSgMyGovernanceV1.whatsappWindow` feature flag (default off).
 
-**Architecture:** A new `afterSkill` hook (`WhatsAppWindowGateHook`) runs in the skill-runtime hook chain after the 1c PDPA consent gate. For WhatsApp emits outside the 24h window the hook substitutes a Meta-approved template (selected from an in-repo TypeScript registry keyed by `(intentClass, jurisdiction)`) when opt-in is granted, or hard-escalates via `buildHandoffPackage` (new `HandoffReason "outside_whatsapp_window"`) when opt-in is missing, intent class is missing, or no template matches. The Alex skill's system prompt is updated to instruct the LLM to emit `<intent>...</intent>` tags; `skill-executor.ts` parses and strips them, setting `SkillExecutionResult.intentClass`. Substitute verdicts carry cost-awareness metadata (`templateCategory`, `recipientMarket`, `costRisk`, `costEstimateStatus`) so a Phase 2 billing layer can price retroactively.
+**Architecture:** A new `afterSkill` hook (`WhatsAppWindowGateHook`) runs in the skill-runtime hook chain after the 1c PDPA consent gate. For WhatsApp emits outside the 24h window the hook substitutes a Meta-approved template (selected from an in-repo TypeScript registry keyed by `(intentClass, jurisdiction)`) when opt-in is granted AND `template.approvalStatus === "approved"` AND (the template is non-marketing OR `config.allowMarketingTemplateSubstitution === true`); otherwise it hard-escalates via `buildHandoffPackage` (new `HandoffReason "outside_whatsapp_window"`). Five distinct block sub-causes are carried in handoff metadata: `missing_opt_in`, `missing_intent_class`, `no_template_fit`, `template_not_approved`, `marketing_substitution_blocked`. The Alex skill's system prompt is updated to instruct the LLM to emit `<intent>...</intent>` tags; `skill-executor.ts` parses and strips them robustly (0 valid → null; 1 valid → use; 2+ tags OR unknown values → strip all + null), setting `SkillExecutionResult.intentClass`. Substitute verdicts (and `marketing_substitution_blocked` block verdicts) carry the mandatory cost-awareness metadata (`templateCategory`, `recipientMarket`, `metaTemplateName`, `costRisk: "paid_template_message"`, `costEstimateStatus: "not_priced_in_1d"`) for the Phase 2 billing backfill.
 
 **Tech Stack:** TypeScript ESM (pnpm + Turborepo monorepo), Prisma (PostgreSQL), Zod, Vitest. Feature lives in `packages/core`, `packages/schemas`, `packages/db`, `apps/api`, `apps/chat`, and `skills/alex/SKILL.md`.
 
@@ -405,6 +405,12 @@ describe("WHATSAPP_TEMPLATES", () => {
     }
   });
 
+  it("every entry has a populated approvalStatus", () => {
+    for (const t of WHATSAPP_TEMPLATES) {
+      expect(t.approvalStatus, t.name).toMatch(/^(draft|submitted|approved)$/);
+    }
+  });
+
   it("all re-engagement-offer entries are marketing-category", () => {
     const re = WHATSAPP_TEMPLATES.filter((t) => t.intentClass === "re-engagement-offer");
     expect(re.length).toBeGreaterThan(0);
@@ -444,22 +450,38 @@ import type { IntentClass, TemplateCategory } from "@switchboard/schemas";
 export type Jurisdiction = "SG" | "MY";
 
 /**
- * A Meta-approved WhatsApp template entry. Used by the Phase 1d window-gate hook
- * to substitute outbound free-form responses when the conversation is outside the
- * 24h customer-service window.
+ * Where each template sits in the Meta App Review lifecycle.
  *
- * The body must pass the 1b-1 banned-phrase scanner AND the 1b-2 claim classifier
- * — see whatsapp-registry.test.ts for the cross-phase regression test (Task 5).
+ * - "draft"     — authored in-repo, not yet submitted to Meta. Visible to the gate but never substituted.
+ * - "submitted" — submitted to Meta, awaiting review. Visible to the gate but never substituted.
+ * - "approved"  — Meta approved this template under metaTemplateName. Only status that can substitute in enforce mode.
+ *
+ * In enforce mode, the gate substitutes only entries with `approvalStatus === "approved"`.
+ * Draft / submitted entries fall through to block + handoff with sub-cause "template_not_approved".
+ */
+export type TemplateApprovalStatus = "draft" | "submitted" | "approved";
+
+/**
+ * A WhatsApp template entry in the in-repo registry. Used by the Phase 1d window-gate hook
+ * to substitute outbound free-form responses when the conversation is outside the 24h
+ * customer-service window.
+ *
+ * Each body must pass the 1b-1 banned-phrase scanner AND the 1b-2 claim classifier — see
+ * whatsapp-registry.test.ts for the cross-phase regression test (Task 5). The `approvalStatus`
+ * field determines whether the runtime may actually substitute this entry; only Meta-approved
+ * entries (`approvalStatus === "approved"`) are eligible.
  */
 export interface WhatsAppTemplate {
   /** Internal name; also used in audit logs and tests. */
   name: string;
-  /** Meta-approved template name (must match what was submitted to Meta App Review). */
+  /** The template name as submitted to Meta. */
   metaTemplateName: string;
   intentClass: IntentClass;
   jurisdiction: Jurisdiction;
   /** Meta-defined category. Propagated into substitute verdicts for downstream Phase 2 pricing. */
   templateCategory: TemplateCategory;
+  /** Meta approval lifecycle. Only "approved" can substitute in enforce mode. */
+  approvalStatus: TemplateApprovalStatus;
   /** Rendered body used for substitution. */
   body: string;
   /** Variable placeholders, in Meta order. */
@@ -475,6 +497,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "appointment-confirm",
     jurisdiction: "SG",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -484,6 +507,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "appointment-confirm",
     jurisdiction: "MY",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -493,6 +517,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "appointment-reminder",
     jurisdiction: "SG",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -502,6 +527,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "appointment-reminder",
     jurisdiction: "MY",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -511,6 +537,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "aftercare-checkin",
     jurisdiction: "SG",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -520,6 +547,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "aftercare-checkin",
     jurisdiction: "MY",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -529,6 +557,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "consult-followup",
     jurisdiction: "SG",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -538,6 +567,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "consult-followup",
     jurisdiction: "MY",
     templateCategory: "utility",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -547,6 +577,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "re-engagement-offer",
     jurisdiction: "SG",
     templateCategory: "marketing",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -556,6 +587,7 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     intentClass: "re-engagement-offer",
     jurisdiction: "MY",
     templateCategory: "marketing",
+    approvalStatus: "draft",
     body: "STUB",
     variables: [],
   },
@@ -615,6 +647,7 @@ Example (SG appointment-confirm):
   intentClass: "appointment-confirm",
   jurisdiction: "SG",
   templateCategory: "utility",
+  approvalStatus: "draft", // flip to "submitted" then "approved" via PR as Meta confirms each submission
   body:
     "Hi {{lead_name}}, your appointment with {{business_name}} on {{date}} at {{time}} is confirmed. " +
     "Please reply CONFIRM to lock it in, or reply RESCHEDULE if the time no longer works for you.",
@@ -627,7 +660,7 @@ Example (SG appointment-confirm):
 },
 ```
 
-Author the remaining nine following the same shape. Re-engagement offers (marketing) may invite the lead back to book a consultation without promising outcomes — phrase as "we'd love to see you again" not "achieve X results".
+Author the remaining nine following the same shape. Re-engagement offers (marketing) may invite the lead back to book a consultation without promising outcomes — phrase as "we'd love to see you again" not "achieve X results". Leave every entry's `approvalStatus` at `"draft"` until the corresponding Meta App Review submission confirms otherwise — a follow-up PR flips the status field as each template gets reviewed.
 
 - [ ] **Step 2: Add the cross-phase scanner regression test**
 
@@ -738,7 +771,12 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
     handoffStore: { save: vi.fn().mockResolvedValue(undefined) },
     governanceConfigResolver: {
       resolve: vi.fn().mockResolvedValue({
-        whatsappWindow: { enabled: true, mode: "enforce", jurisdiction: "SG" },
+        whatsappWindow: {
+          enabled: true,
+          mode: "enforce",
+          jurisdiction: "SG",
+          allowMarketingTemplateSubstitution: false,
+        },
       }),
     },
     postureCache: { get: vi.fn(), remember: vi.fn() },
@@ -746,7 +784,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(new Date(NOW.getTime() - 60 * 60 * 1000)), // 1h ago
     },
     contactStore: {
-      getMessagingOptIn: vi.fn().mockResolvedValue(true),
+      getMessagingOptInForThread: vi.fn().mockResolvedValue(true),
     },
     channelTypeResolver: {
       resolve: vi.fn().mockResolvedValue("whatsapp"),
@@ -803,6 +841,13 @@ export interface WhatsAppWindowGateConfig {
   enabled: boolean;
   mode: "observe" | "enforce";
   jurisdiction: Jurisdiction;
+  /**
+   * If false (default in 1d), marketing-category templates are blocked + handed off
+   * even when a match exists. Prevents 1d from silently becoming a paid promotional
+   * sender. Phase 2 operator approval queue / budget caps are the natural enablement
+   * layer for flipping this to true per deployment.
+   */
+  allowMarketingTemplateSubstitution: boolean;
 }
 
 export interface WhatsAppWindowGateDeps {
@@ -818,13 +863,18 @@ export interface WhatsAppWindowGateDeps {
     remember: (deploymentId: string, posture: WhatsAppWindowGateConfig) => void;
   };
   threadStore: { getLastWhatsAppInboundAt: (threadId: string) => Promise<Date | null> };
-  contactStore: { getMessagingOptIn: (sessionId: string) => Promise<boolean> };
+  contactStore: { getMessagingOptInForThread: (threadId: string) => Promise<boolean> };
   channelTypeResolver: { resolve: (sessionId: string) => Promise<string> };
   clock: () => Date;
   windowMs?: number;
 }
 
-type BlockSubCause = "missing_opt_in" | "missing_intent_class" | "no_template_fit";
+type BlockSubCause =
+  | "missing_opt_in"
+  | "missing_intent_class"
+  | "no_template_fit"
+  | "template_not_approved"
+  | "marketing_substitution_blocked";
 
 export class WhatsAppWindowGateHook implements SkillHook {
   readonly name = "whatsapp-window-gate";
@@ -864,7 +914,7 @@ export class WhatsAppWindowGateHook implements SkillHook {
       return;
     }
 
-    const optIn = await this.deps.contactStore.getMessagingOptIn(ctx.sessionId);
+    const optIn = await this.deps.contactStore.getMessagingOptInForThread(ctx.sessionId);
     if (!optIn) {
       await this.handleBlock(ctx, result, config, {
         subCause: "missing_opt_in",
@@ -901,11 +951,59 @@ export class WhatsAppWindowGateHook implements SkillHook {
       await this.handleBlock(ctx, result, config, {
         subCause: "no_template_fit",
         intentClass: result.intentClass,
+        templateMetadata: null,
         details: {
           windowStatus: "outside",
           optInStatus: "granted",
           templateMatch: "no_fit",
           intentClass: result.intentClass,
+        },
+      });
+      return;
+    }
+
+    if (template.approvalStatus !== "approved") {
+      await this.handleBlock(ctx, result, config, {
+        subCause: "template_not_approved",
+        intentClass: result.intentClass,
+        templateMetadata: {
+          templateName: template.name,
+          metaTemplateName: template.metaTemplateName,
+          templateCategory: template.templateCategory,
+        },
+        details: {
+          windowStatus: "outside",
+          optInStatus: "granted",
+          templateMatch: "template_not_approved",
+          intentClass: result.intentClass,
+          templateName: template.name,
+          metaTemplateName: template.metaTemplateName,
+          approvalStatus: template.approvalStatus,
+        },
+      });
+      return;
+    }
+
+    if (template.templateCategory === "marketing" && !config.allowMarketingTemplateSubstitution) {
+      await this.handleBlock(ctx, result, config, {
+        subCause: "marketing_substitution_blocked",
+        intentClass: result.intentClass,
+        templateMetadata: {
+          templateName: template.name,
+          metaTemplateName: template.metaTemplateName,
+          templateCategory: template.templateCategory,
+        },
+        details: {
+          windowStatus: "outside",
+          optInStatus: "granted",
+          templateMatch: "marketing_substitution_blocked",
+          intentClass: result.intentClass,
+          templateName: template.name,
+          metaTemplateName: template.metaTemplateName,
+          templateCategory: template.templateCategory,
+          recipientMarket: config.jurisdiction,
+          costRisk: "paid_template_message",
+          costEstimateStatus: "not_priced_in_1d",
         },
       });
       return;
@@ -956,6 +1054,11 @@ export class WhatsAppWindowGateHook implements SkillHook {
     args: {
       subCause: BlockSubCause;
       intentClass: IntentClass | null;
+      templateMetadata: {
+        templateName: string;
+        metaTemplateName: string;
+        templateCategory: "utility" | "marketing" | "authentication";
+      } | null;
       details: Record<string, unknown>;
     },
   ): Promise<void> {
@@ -971,6 +1074,7 @@ export class WhatsAppWindowGateHook implements SkillHook {
           intentClass: args.intentClass,
           blockSubCause: args.subCause,
           jurisdiction: config.jurisdiction,
+          ...(args.templateMetadata ?? {}),
         },
       });
     }
@@ -1052,7 +1156,7 @@ describe("WhatsAppWindowGateHook — outside window", () => {
   it("blocks + handoffs when opt-in missing", async () => {
     const deps = makeDeps({
       threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
-      contactStore: { getMessagingOptIn: vi.fn().mockResolvedValue(false) },
+      contactStore: { getMessagingOptInForThread: vi.fn().mockResolvedValue(false) },
     });
     const hook = new WhatsAppWindowGateHook(deps as never);
     const result = makeResult({ intentClass: "appointment-confirm" });
@@ -1098,7 +1202,12 @@ describe("WhatsAppWindowGateHook — outside window", () => {
       threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
       governanceConfigResolver: {
         resolve: vi.fn().mockResolvedValue({
-          whatsappWindow: { enabled: true, mode: "enforce", jurisdiction: "XX" },
+          whatsappWindow: {
+            enabled: true,
+            mode: "enforce",
+            jurisdiction: "XX",
+            allowMarketingTemplateSubstitution: false,
+          },
         }),
       },
     });
@@ -1113,6 +1222,144 @@ describe("WhatsAppWindowGateHook — outside window", () => {
       }),
     );
   });
+
+  it("blocks + handoffs when the matched template is not approved", async () => {
+    // Test relies on at least one v1 stub registry entry being approvalStatus="draft".
+    // Author's note: the registry initially ships with all entries draft; Meta-approved
+    // entries flip via PR. If by the time this test runs every entry is "approved",
+    // mock selectTemplate to return a synthetic draft template instead.
+    const deps = makeDeps({
+      threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult({ intentClass: "appointment-confirm" });
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    expect(deps.handoffStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "outside_whatsapp_window",
+        metadata: expect.objectContaining({
+          blockSubCause: "template_not_approved",
+          templateName: expect.any(String),
+          metaTemplateName: expect.any(String),
+        }),
+      }),
+    );
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "block",
+        details: expect.objectContaining({
+          templateMatch: "template_not_approved",
+          approvalStatus: "draft",
+        }),
+      }),
+    );
+  });
+
+  it("blocks + handoffs when matched template is marketing-category and flag is off (default)", async () => {
+    // Like the above, this test relies on a re-engagement-offer entry existing AND being
+    // approved (so we exercise the marketing-category check, not the approval check).
+    // Either flip a re-engagement-offer entry to approvalStatus="approved" in a fixture,
+    // or mock selectTemplate to return a synthetic { templateCategory: "marketing",
+    // approvalStatus: "approved" } template for this test.
+    const deps = makeDeps({
+      threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
+      governanceConfigResolver: {
+        resolve: vi.fn().mockResolvedValue({
+          whatsappWindow: {
+            enabled: true,
+            mode: "enforce",
+            jurisdiction: "SG",
+            allowMarketingTemplateSubstitution: false,
+          },
+        }),
+      },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult({ intentClass: "re-engagement-offer" });
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    expect(deps.handoffStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "outside_whatsapp_window",
+        metadata: expect.objectContaining({
+          blockSubCause: "marketing_substitution_blocked",
+          templateCategory: "marketing",
+        }),
+      }),
+    );
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "block",
+        details: expect.objectContaining({
+          templateMatch: "marketing_substitution_blocked",
+          templateCategory: "marketing",
+          recipientMarket: "SG",
+          costRisk: "paid_template_message",
+          costEstimateStatus: "not_priced_in_1d",
+        }),
+      }),
+    );
+  });
+
+  it("substitutes when matched marketing template AND allowMarketingTemplateSubstitution is true", async () => {
+    const deps = makeDeps({
+      threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
+      governanceConfigResolver: {
+        resolve: vi.fn().mockResolvedValue({
+          whatsappWindow: {
+            enabled: true,
+            mode: "enforce",
+            jurisdiction: "SG",
+            allowMarketingTemplateSubstitution: true,
+          },
+        }),
+      },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult({ intentClass: "re-engagement-offer" });
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "substitute",
+        details: expect.objectContaining({ templateCategory: "marketing" }),
+      }),
+    );
+    expect(deps.handoffStore.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("WhatsAppWindowGateHook — cost-annotation contract", () => {
+  const farPast = new Date(NOW.getTime() - 25 * 60 * 60 * 1000);
+
+  it("every substitute verdict carries the five mandatory cost fields", async () => {
+    const deps = makeDeps({
+      threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult({ intentClass: "appointment-confirm" });
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    const substituteCall = (deps.verdictStore.save as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([arg]) => (arg as { action?: string }).action === "substitute",
+    );
+    expect(substituteCall, "expected exactly one substitute verdict").toBeDefined();
+    const verdict = (substituteCall as [{ details: Record<string, unknown> }])[0];
+    expect(verdict.details).toEqual(
+      expect.objectContaining({
+        templateCategory: expect.any(String),
+        recipientMarket: expect.any(String),
+        metaTemplateName: expect.any(String),
+        costRisk: "paid_template_message",
+        costEstimateStatus: "not_priced_in_1d",
+      }),
+    );
+  });
 });
 
 describe("WhatsAppWindowGateHook — mode and flag", () => {
@@ -1123,7 +1370,12 @@ describe("WhatsAppWindowGateHook — mode and flag", () => {
       threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
       governanceConfigResolver: {
         resolve: vi.fn().mockResolvedValue({
-          whatsappWindow: { enabled: true, mode: "observe", jurisdiction: "SG" },
+          whatsappWindow: {
+            enabled: true,
+            mode: "observe",
+            jurisdiction: "SG",
+            allowMarketingTemplateSubstitution: false,
+          },
         }),
       },
     });
@@ -1144,7 +1396,12 @@ describe("WhatsAppWindowGateHook — mode and flag", () => {
     const deps = makeDeps({
       governanceConfigResolver: {
         resolve: vi.fn().mockResolvedValue({
-          whatsappWindow: { enabled: false, mode: "enforce", jurisdiction: "SG" },
+          whatsappWindow: {
+            enabled: false,
+            mode: "enforce",
+            jurisdiction: "SG",
+            allowMarketingTemplateSubstitution: false,
+          },
         }),
       },
     });
@@ -1237,7 +1494,12 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
     const deps = makeDeps({
       governanceConfigResolver: { resolve: vi.fn().mockRejectedValue(new Error("boom")) },
       postureCache: {
-        get: vi.fn().mockReturnValue({ enabled: true, mode: "enforce", jurisdiction: "SG" }),
+        get: vi.fn().mockReturnValue({
+          enabled: true,
+          mode: "enforce",
+          jurisdiction: "SG",
+          allowMarketingTemplateSubstitution: false,
+        }),
         remember: vi.fn(),
       },
     });
@@ -1333,9 +1595,9 @@ const whatsAppWindowGateHook = new WhatsAppWindowGateHook({
     },
   },
   contactStore: {
-    getMessagingOptIn: async (sessionId) => {
+    getMessagingOptInForThread: async (threadId) => {
       const thread = await prismaClient.conversationThread.findUnique({
-        where: { id: sessionId },
+        where: { id: threadId },
         select: { contact: { select: { messagingOptIn: true } } },
       });
       return thread?.contact.messagingOptIn ?? false;
@@ -1540,28 +1802,61 @@ import { describe, expect, it } from "vitest";
 import { parseIntentTag } from "./skill-executor.js"; // export it for testing
 
 describe("parseIntentTag", () => {
-  it("returns cleaned text and intentClass when tag present", () => {
-    const r = parseIntentTag("See you at 3pm. <intent>appointment-confirm</intent>");
-    expect(r.text).toBe("See you at 3pm.");
-    expect(r.intentClass).toBe("appointment-confirm");
-  });
-
-  it("returns null intentClass when no tag", () => {
+  it("0 tags → cleaned text, null intentClass", () => {
     const r = parseIntentTag("See you at 3pm.");
     expect(r.text).toBe("See you at 3pm.");
     expect(r.intentClass).toBeNull();
   });
 
-  it("returns null intentClass when tag value is unknown", () => {
-    const r = parseIntentTag("See you. <intent>fooobar</intent>");
-    expect(r.text).toBe("See you.");
-    expect(r.intentClass).toBeNull();
+  it("1 valid trailing tag → strip + use", () => {
+    const r = parseIntentTag("See you at 3pm. <intent>appointment-confirm</intent>");
+    expect(r.text).toBe("See you at 3pm.");
+    expect(r.intentClass).toBe("appointment-confirm");
   });
 
   it("strips the tag even when surrounded by whitespace/newlines", () => {
     const r = parseIntentTag("See you.\n\n  <intent>aftercare-checkin</intent>  \n");
     expect(r.text).toBe("See you.");
     expect(r.intentClass).toBe("aftercare-checkin");
+  });
+
+  it("unknown tag value → strip tag, null intentClass", () => {
+    const r = parseIntentTag("See you. <intent>fooobar</intent>");
+    expect(r.text).toBe("See you.");
+    expect(r.intentClass).toBeNull();
+  });
+
+  it("multiple tags (regardless of validity) → strip ALL tags, null intentClass", () => {
+    const r = parseIntentTag(
+      "Booked. <intent>appointment-confirm</intent> Or maybe <intent>appointment-reminder</intent>",
+    );
+    // Both tags removed; the model emitted ambiguous intent, so we treat it as no intent.
+    expect(r.intentClass).toBeNull();
+    expect(r.text).not.toMatch(/<intent>/);
+    expect(r.text).not.toMatch(/<\/intent>/);
+  });
+
+  it("multiple tags with mixed validity → still null + strip all", () => {
+    const r = parseIntentTag(
+      "Hello. <intent>foo</intent> world <intent>appointment-confirm</intent>",
+    );
+    expect(r.intentClass).toBeNull();
+    expect(r.text).not.toMatch(/<\/?intent>/);
+  });
+
+  it("malformed tag (unclosed) is left in place; intentClass null", () => {
+    const r = parseIntentTag("See you. <intent>appointment-confirm");
+    expect(r.intentClass).toBeNull();
+    // No closing </intent> means the regex doesn't match; we leave the text as-is (minus trim).
+    expect(r.text).toContain("<intent>");
+  });
+
+  it("single tag not at the trailing edge is still recognized as one tag", () => {
+    const r = parseIntentTag("Welcome <intent>consult-followup</intent> back!");
+    expect(r.intentClass).toBe("consult-followup");
+    expect(r.text).not.toMatch(/<\/?intent>/);
+    expect(r.text).toMatch(/Welcome/);
+    expect(r.text).toMatch(/back!/);
   });
 });
 ```
@@ -1581,15 +1876,40 @@ Open `packages/core/src/skill-runtime/skill-executor.ts`. Near the top, alongsid
 ```ts
 import { IntentClassSchema, type IntentClass } from "@switchboard/schemas";
 
-const INTENT_TAG_RE = /\s*<intent>\s*([a-z-]+)\s*<\/intent>\s*$/i;
+// Global match — captures every <intent>...</intent> occurrence in the response.
+// Whitespace around the inner value is allowed; the tag itself is closed.
+const INTENT_TAG_GLOBAL_RE = /<intent>\s*([a-z-]+)\s*<\/intent>/gi;
 
+/**
+ * Parse + strip `<intent>...</intent>` tags from an LLM response.
+ *
+ * Rules:
+ *   - 0 valid tags                  → text trimmed, intentClass = null
+ *   - 1 valid trailing tag          → strip the tag, intentClass = parsed value
+ *   - 1 unknown-value tag           → strip the tag, intentClass = null
+ *   - 2+ tags (any validity mix)    → strip ALL tags, intentClass = null
+ *   - malformed (unclosed) tag      → left in place, intentClass = null
+ *                                     (treated as if no tag matched)
+ *
+ * Strip + null on ambiguous input prevents the LLM's hidden / internal-looking text
+ * from leaking to the customer and also prevents misclassification when the model
+ * accidentally emits two intents.
+ */
 export function parseIntentTag(text: string): { text: string; intentClass: IntentClass | null } {
-  const match = text.match(INTENT_TAG_RE);
-  if (!match) return { text: text.trim(), intentClass: null };
-  const candidate = match[1];
-  const parsed = IntentClassSchema.safeParse(candidate);
+  const matches = Array.from(text.matchAll(INTENT_TAG_GLOBAL_RE));
+  if (matches.length === 0) {
+    return { text: text.trim(), intentClass: null };
+  }
+
+  const strippedText = text.replace(INTENT_TAG_GLOBAL_RE, "").replace(/\s+/g, " ").trim();
+
+  if (matches.length > 1) {
+    return { text: strippedText, intentClass: null };
+  }
+
+  const parsed = IntentClassSchema.safeParse(matches[0][1]);
   return {
-    text: text.replace(INTENT_TAG_RE, "").trimEnd(),
+    text: strippedText,
     intentClass: parsed.success ? parsed.data : null,
   };
 }
@@ -1643,7 +1963,7 @@ Preserve every existing `trace` field — do not reformat them.
 pnpm --filter @switchboard/core test src/skill-runtime/skill-executor.test.ts -t parseIntentTag
 ```
 
-Expected: PASS (4 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 6: Update `skills/alex/SKILL.md`**
 
