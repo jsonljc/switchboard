@@ -61,3 +61,54 @@ describe("PrismaConversationLifecycleTransitionStore.listForThread", () => {
     });
   });
 });
+
+describe("PrismaConversationLifecycleTransitionStore.findLatestProposal", () => {
+  it("queries with trigger=system_proposed_disqualification ordered by occurredAt desc", async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
+    const prisma = { conversationLifecycleTransition: { findFirst } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new PrismaConversationLifecycleTransitionStore(prisma as any);
+    await store.findLatestProposal("thread-42");
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        conversationThreadId: "thread-42",
+        trigger: "system_proposed_disqualification",
+      },
+      orderBy: { occurredAt: "desc" },
+    });
+  });
+
+  it("returns null when no proposal row exists", async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
+    const prisma = { conversationLifecycleTransition: { findFirst } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new PrismaConversationLifecycleTransitionStore(prisma as any);
+    const result = await store.findLatestProposal("thread-no-proposal");
+    expect(result).toBeNull();
+  });
+
+  it("returns a parsed transition when a proposal row exists", async () => {
+    const now = new Date();
+    const row = {
+      id: "trans-proposal-1",
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      fromState: "active",
+      toState: "active",
+      trigger: "system_proposed_disqualification",
+      evidence: { reason: "price_sensitivity" },
+      actor: "system",
+      workTraceId: null,
+      occurredAt: now,
+    };
+    const findFirst = vi.fn().mockResolvedValue(row);
+    const prisma = { conversationLifecycleTransition: { findFirst } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new PrismaConversationLifecycleTransitionStore(prisma as any);
+    const result = await store.findLatestProposal("thread-1");
+    expect(result?.id).toBe("trans-proposal-1");
+    expect(result?.trigger).toBe("system_proposed_disqualification");
+    expect(result?.evidence).toEqual({ reason: "price_sensitivity" });
+  });
+});

@@ -59,4 +59,19 @@ export class PrismaConversationLifecycleSnapshotStore implements LifecycleSnapsh
       },
     });
   }
+
+  async listPendingDisqualifications(
+    organizationId: string,
+  ): Promise<ConversationLifecycleSnapshot[]> {
+    const rows = await this.prisma.conversationLifecycleSnapshot.findMany({
+      where: {
+        organizationId,
+        qualificationStatus: "proposed_disqualified",
+        currentState: { not: "disqualified" },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+    });
+    return rows.map((r: unknown) => ConversationLifecycleSnapshotSchema.parse(r));
+  }
 }

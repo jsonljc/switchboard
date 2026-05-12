@@ -79,6 +79,7 @@ export interface BootstrapLifecycleResult {
   writer: LifecycleWriter;
   attributor: ReEngagementAttributor;
   snapshotStore: LifecycleSnapshotStore;
+  transitionStore: import("@switchboard/core").LifecycleTransitionStore;
   history: MessageHistoryReader;
   /** Phase 3b: evaluates qualification signals emitted in a sidecar and writes transitions. */
   qualificationEvaluationHook: QualificationEvaluationHook;
@@ -195,6 +196,7 @@ export function bootstrapLifecycle(deps: BootstrapLifecycleDeps): BootstrapLifec
     writer,
     attributor,
     snapshotStore,
+    transitionStore,
     history,
     qualificationEvaluationHook,
     disqualificationHook,

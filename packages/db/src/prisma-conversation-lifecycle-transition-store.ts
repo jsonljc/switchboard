@@ -40,4 +40,17 @@ export class PrismaConversationLifecycleTransitionStore implements LifecycleTran
     });
     return rows.map((r: unknown) => ConversationLifecycleTransitionSchema.parse(r));
   }
+
+  async findLatestProposal(
+    conversationThreadId: string,
+  ): Promise<ConversationLifecycleTransition | null> {
+    const row = await this.prisma.conversationLifecycleTransition.findFirst({
+      where: {
+        conversationThreadId,
+        trigger: "system_proposed_disqualification",
+      },
+      orderBy: { occurredAt: "desc" },
+    });
+    return row ? ConversationLifecycleTransitionSchema.parse(row) : null;
+  }
 }

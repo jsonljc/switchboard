@@ -12,12 +12,14 @@ function makeStores() {
     upsertInTransaction: vi.fn(async (_tx, snap) => {
       snapshots.set(snap.conversationThreadId, snap);
     }),
+    listPendingDisqualifications: vi.fn(async () => []),
   };
   const transitionStore: LifecycleTransitionStore = {
     appendInTransaction: vi.fn(async (_tx, t) => {
       transitions.push({ ...t, id: `t-${transitions.length + 1}` });
     }),
     listForThread: vi.fn(async (id) => transitions.filter((t) => t.conversationThreadId === id)),
+    findLatestProposal: vi.fn(async () => null),
   };
   const runInTransaction = async <T>(fn: (tx: unknown) => Promise<T>) => fn({});
   const resolveCapabilities = async () => new Set(["mechanical"] as const);
