@@ -30,6 +30,45 @@ import {
   runBeforeToolCallHooks,
   runAfterToolCallHooks,
 } from "./hook-runner.js";
+import { IntentClassSchema, type IntentClass } from "@switchboard/schemas";
+
+// Global match — captures every <intent>...</intent> occurrence in the response.
+// Whitespace around the inner value is allowed; the tag itself must be closed.
+const INTENT_TAG_GLOBAL_RE = /<intent>\s*([a-z-]+)\s*<\/intent>/gi;
+
+/**
+ * Parse + strip `<intent>...</intent>` tags from an LLM response.
+ *
+ * Rules:
+ *   - 0 valid tags                  → text trimmed, intentClass = null
+ *   - 1 valid trailing tag          → strip the tag, intentClass = parsed value
+ *   - 1 unknown-value tag           → strip the tag, intentClass = null
+ *   - 2+ tags (any validity mix)    → strip ALL tags, intentClass = null
+ *   - malformed (unclosed) tag      → left in place, intentClass = null
+ *                                     (treated as if no tag matched)
+ *
+ * Strip + null on ambiguous input prevents the LLM's hidden / internal-looking text
+ * from leaking to the customer and also prevents misclassification when the model
+ * accidentally emits two intents.
+ */
+export function parseIntentTag(text: string): { text: string; intentClass: IntentClass | null } {
+  const matches = Array.from(text.matchAll(INTENT_TAG_GLOBAL_RE));
+  if (matches.length === 0) {
+    return { text: text.trim(), intentClass: null };
+  }
+
+  const strippedText = text.replace(INTENT_TAG_GLOBAL_RE, "").replace(/\s+/g, " ").trim();
+
+  if (matches.length > 1) {
+    return { text: strippedText, intentClass: null };
+  }
+
+  const parsed = IntentClassSchema.safeParse(matches[0]?.[1]);
+  return {
+    text: strippedText,
+    intentClass: parsed.success ? parsed.data : null,
+  };
+}
 
 const FALLBACK_READ_OP: SkillToolOperation = {
   description: "",
@@ -207,10 +246,11 @@ export class SkillExecutorImpl implements SkillExecutor {
       });
 
       if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
-        const responseText = response.content
+        const rawResponseText = response.content
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
           .map((b) => b.text)
           .join("");
+        const { text: responseText, intentClass } = parseIntentTag(rawResponseText);
 
         return {
           response: responseText,
@@ -232,6 +272,7 @@ export class SkillExecutorImpl implements SkillExecutor {
             }).length,
             governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
           },
+          ...(intentClass ? { intentClass } : {}),
         };
       }
 
