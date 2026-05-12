@@ -1765,6 +1765,12 @@ model WorkTrace {
   // Observability
   modeMetrics String? @db.Text
 
+  // Phase 3b qualification sidecar (audit lineage only). JSON-encoded
+  // WorkTraceQualificationSignals; operational queues read lifecycle
+  // tables instead. Always populated by SkillExecutor when sidecar is
+  // present, regardless of lifecycleTagging.qualification flag state.
+  qualificationSignals String? @db.Text
+
   // Timestamps
   requestedAt           DateTime
   governanceCompletedAt DateTime

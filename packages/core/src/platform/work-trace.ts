@@ -1,6 +1,7 @@
 import type { ExecutionModeName, WorkOutcome, Trigger, ExecutionError, Actor } from "./types.js";
 import type { ExecutionConstraints } from "./governance-types.js";
 import type { DeploymentContext } from "./deployment-context.js";
+import type { WorkTraceQualificationSignals } from "@switchboard/schemas";
 
 export interface WorkTrace {
   workUnitId: string;
@@ -70,4 +71,11 @@ export interface WorkTrace {
    * sets 1 so original contentHash values continue to verify; new persists set 2.
    */
   hashInputVersion: number;
+  /**
+   * Phase 3b qualification sidecar (audit lineage only). JSON-encoded
+   * WorkTraceQualificationSignals; operational queues read lifecycle tables instead.
+   * Always populated by SkillExecutor when sidecar is present, regardless of
+   * lifecycleTagging.qualification flag state.
+   */
+  qualificationSignals?: WorkTraceQualificationSignals | null;
 }
