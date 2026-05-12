@@ -97,3 +97,7 @@ Runtime enforcement layered atop the prompt-level rules above. **Sources of trut
 The runtime hook detects whether your first outbound includes the disclosure copy verbatim (substring match). If it does not in enforce mode, a `disclosure_not_shown` warning verdict is emitted. The hook NEVER blocks on disclosure validation — this is a tuning signal, not a content gate.
 
 Revocation keywords are intentionally narrow. False-positive revoke is worse than missed revoke (1b-1 escalation triggers catch nuanced complaints). Tighten patterns before broadening.
+
+## Phase 3 lifecycle observation
+
+Conversation lifecycle (mechanical states only in Phase 3a) is tracked in `packages/core/src/conversation-lifecycle/`. Operators reviewing Alex behavior may consult `ConversationLifecycleSnapshot` for current state and `ConversationLifecycleTransition` for the path. Lifecycle is observation-only — it does not gate Alex outbounds. Re-engagement requests that lifecycle generates still flow through the 1c PDPA consent gate and the 1d WhatsApp window/template gate.
