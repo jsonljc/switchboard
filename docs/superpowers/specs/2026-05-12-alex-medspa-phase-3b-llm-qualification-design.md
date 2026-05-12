@@ -266,7 +266,27 @@ Two new hooks register in `apps/api/src/bootstrap/lifecycle.ts` (alongside 3a's 
 | `qualification-evaluation-hook` | `SkillExecutor` completes an Alex turn that produced a validated sidecar (`validationStatus: "ok"`) | Run rule. If `qualified`: `recordTransition({ toState: "qualified", trigger: "qualification_checklist_met" })`. If `disqualifierCandidates` non-empty: `updateQualificationStatus({ to: "proposed_disqualified", trigger: "system_proposed_disqualification", evidence })`. Else: no-op. |
 | `disqualification-resolution-hook` | Operator confirm/dismiss API call | Confirm → `recordTransition({ toState: "disqualified", trigger: "operator_confirmed_disqualification" })`. Dismiss → `updateQualificationStatus({ to: priorStatus, trigger: "operator_dismissed_disqualification" })`. |
 
-The qualification-evaluation-hook fires from `SkillExecutor` post-output handling (single integration point, no scatter across handlers). Behind sub-flag — when `qualification` capability is off for the org, the hook returns without DB access (the parse+persist of WorkTrace.qualificationSignals still runs; only the lifecycle mutation is gated).
+The qualification-evaluation-hook fires from `SkillExecutor` post-output handling (single integration point, no scatter across handlers).
+
+### 7.1 Exactly what the sub-flag gates
+
+The `lifecycleTagging.qualification` flag is **not** a master switch on sidecar handling. It gates only the lifecycle mutation and operator surface. The full breakdown:
+
+| Behavior | Flag off | Flag on |
+|---|---|---|
+| `SkillExecutor` parses `<qualification_signals>` block | **Always** | Always |
+| Sidecar block stripped from user-visible response | **Always** | Always |
+| `WorkTrace.qualificationSignals` audit persistence (raw + validationStatus) | **Always** | Always |
+| Lifecycle evaluator runs (rule, monotonic guard) | No (skipped) | Yes |
+| Snapshot `qualificationStatus` mutated | No | Yes |
+| `ConversationLifecycleTransition` rows written for qualification triggers | No | Yes |
+| `system_proposed_disqualification` transitions written | No | Yes |
+| Operator confirm/dismiss API routes registered | No (return 404) | Yes |
+| `/operator` proposed-disqualifications panel rendered | No (hidden) | Yes |
+
+Why parse/strip always: a flag flip is a config event, not a code deploy. If parsing were gated, then turning the flag on would suddenly start stripping tags from Alex's output — and during the off window, any sidecar tags Alex emitted (because the prompt update is decoupled from the runtime flag) would leak into the customer-facing response. Always-parse-always-strip is the only way to keep the customer surface clean across flag transitions.
+
+Why audit persistence always: WorkTrace is the canonical audit lineage. We want a record of what Alex emitted regardless of whether the lifecycle layer chose to react to it (operationally useful when investigating "why didn't this lead get qualified" after a flag flip).
 
 The disqualification-resolution-hook is invoked synchronously from the Fastify route handler under `apps/api/src/routes/lifecycle-disqualifications.ts`. No async event bus.
 
@@ -280,6 +300,7 @@ GET  /api/dashboard/lifecycle/disqualifications/pending
        → org-scoped; reads ConversationLifecycleSnapshot
          WHERE organizationId = req.org
            AND qualificationStatus = 'proposed_disqualified'
+           AND currentState != 'disqualified'                  -- see §8.1
          JOIN latest 'system_proposed_disqualification' transition for evidence
 
 POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm
@@ -297,6 +318,15 @@ POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss
 Auth: existing dashboard auth + org scoping. Audit: each mutation writes a `WorkTrace` row with `actorType: "operator"`, `intent: "lifecycle.disqualification.confirm" | "lifecycle.disqualification.dismiss"`, and a pointer to the resulting transition id.
 
 Idempotency: confirm endpoint is idempotent — a repeat call against a `disqualified` thread returns 200 with `already_applied: true`. Dismiss is not idempotent (after dismissal, the state has moved on; a second dismiss returns 409 `not_proposed`).
+
+### 8.1 Query doctrine — `currentState` is the source of truth for terminal disqualification
+
+After operator confirm, the snapshot has `currentState = "disqualified"` and `qualificationStatus = "proposed_disqualified"` (per §5.4). This split-state can confuse downstream readers. Two doctrine rules avoid bugs:
+
+- **"Is this thread disqualified?"** → read `currentState == "disqualified"`. **Never** infer disqualification from `qualificationStatus` alone.
+- **"Is there a pending proposal awaiting operator action?"** → read `qualificationStatus == "proposed_disqualified" AND currentState != "disqualified"`. The second clause is load-bearing: without it, the pending queue would continue to include threads the operator has already confirmed.
+
+These rules apply to any consumer — the pending-list API route above, future Recommendations v1 surfaces, ad-hoc analytics queries. The plan should include a small lint comment / helper function (e.g. `isPendingDisqualification(snapshot)`) so consumers don't reimplement the predicate inconsistently.
 
 ## 9. Dashboard UI surface
 
