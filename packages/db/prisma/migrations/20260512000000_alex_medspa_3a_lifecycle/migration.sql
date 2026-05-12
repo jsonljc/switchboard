@@ -35,19 +35,19 @@ CREATE TABLE "ConversationLifecycleTransition" (
 CREATE INDEX "ConversationLifecycleSnapshot_organizationId_currentState_idx" ON "ConversationLifecycleSnapshot"("organizationId", "currentState");
 
 -- CreateIndex
-CREATE INDEX "ConversationLifecycleSnapshot_organizationId_qualificationStatus_bookingStatus_idx" ON "ConversationLifecycleSnapshot"("organizationId", "qualificationStatus", "bookingStatus");
+CREATE INDEX "ConversationLifecycleSnapshot_organizationId_qualificationS_idx" ON "ConversationLifecycleSnapshot"("organizationId", "qualificationStatus", "bookingStatus");
 
 -- CreateIndex
-CREATE INDEX "ConversationLifecycleSnapshot_organizationId_currentState_lastTransitionAt_idx" ON "ConversationLifecycleSnapshot"("organizationId", "currentState", "lastTransitionAt");
+CREATE INDEX "ConversationLifecycleSnapshot_organizationId_currentState_l_idx" ON "ConversationLifecycleSnapshot"("organizationId", "currentState", "lastTransitionAt");
 
 -- CreateIndex
-CREATE INDEX "ConversationLifecycleSnapshot_organizationId_lastEvaluatedAt_idx" ON "ConversationLifecycleSnapshot"("organizationId", "lastEvaluatedAt");
+CREATE INDEX "ConversationLifecycleSnapshot_organizationId_lastEvaluatedA_idx" ON "ConversationLifecycleSnapshot"("organizationId", "lastEvaluatedAt");
 
 -- CreateIndex
-CREATE INDEX "ConversationLifecycleTransition_organizationId_conversationThreadId_occurredAt_idx" ON "ConversationLifecycleTransition"("organizationId", "conversationThreadId", "occurredAt");
+CREATE INDEX "ConversationLifecycleTransition_organizationId_conversation_idx" ON "ConversationLifecycleTransition"("organizationId", "conversationThreadId", "occurredAt");
 
 -- CreateIndex
-CREATE INDEX "ConversationLifecycleTransition_organizationId_toState_occurredAt_idx" ON "ConversationLifecycleTransition"("organizationId", "toState", "occurredAt");
+CREATE INDEX "ConversationLifecycleTransition_organizationId_toState_occu_idx" ON "ConversationLifecycleTransition"("organizationId", "toState", "occurredAt");
 
 -- CreateIndex
-CREATE INDEX "ConversationLifecycleTransition_organizationId_trigger_occurredAt_idx" ON "ConversationLifecycleTransition"("organizationId", "trigger", "occurredAt");
+CREATE INDEX "ConversationLifecycleTransition_organizationId_trigger_occu_idx" ON "ConversationLifecycleTransition"("organizationId", "trigger", "occurredAt");
