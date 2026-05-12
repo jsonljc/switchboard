@@ -7,3 +7,4 @@ export * from "./re-engagement-attributor.js";
 export * from "./event-hooks/governance-verdict-escalation-hook.js";
 export * from "./event-hooks/booking-created-hook.js";
 export * from "./event-hooks/inbound-message-hook.js";
+export * from "./event-hooks/operator-takeover-hook.js";
