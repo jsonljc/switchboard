@@ -142,3 +142,6 @@ export * from "./substantiation.js";
 
 // PDPA consent types (per-jurisdiction governance state + canonical gate)
 export * from "./pdpa-consent.js";
+
+// Intent class + template category enums (WhatsApp template routing — Alex medspa 1d)
+export * from "./intent-class.js";
