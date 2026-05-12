@@ -83,6 +83,7 @@ function makeSuccessResult(): SkillExecutionResult {
       responseSummary: "Processed 3 leads successfully",
       writeCount: 0,
       governanceDecisions: [],
+      qualificationSignals: null,
     },
   };
 }

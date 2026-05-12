@@ -205,6 +205,7 @@ function makeResult(response: string): SkillExecutionResult {
       responseSummary: response.slice(0, 80),
       writeCount: 0,
       governanceDecisions: [],
+      qualificationSignals: null,
     },
   };
 }

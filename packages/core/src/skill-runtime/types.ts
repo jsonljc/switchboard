@@ -5,7 +5,13 @@ import type {
   GovernanceDecision,
   GovernanceLogEntry,
 } from "./governance.js";
-import type { ContextRequirement, IntentClass, ReferenceMetadata } from "@switchboard/schemas";
+import type {
+  ContextRequirement,
+  IntentClass,
+  QualificationSignals,
+  ReferenceMetadata,
+  WorkTraceQualificationSignals,
+} from "@switchboard/schemas";
 import type { ModelSlot } from "../model-router.js";
 import type { ToolResult } from "./tool-result.js";
 
@@ -102,6 +108,16 @@ export interface SkillExecutionResult {
    * when the conversation is outside the WhatsApp 24h customer-service window.
    */
   intentClass?: IntentClass;
+  /**
+   * Phase 3b. Set when the LLM emitted a single valid
+   * <qualification_signals>{...}</qualification_signals> block and it
+   * passed schema validation. Consumed by the
+   * qualification-evaluation-hook to evaluate the deterministic rule
+   * against the latest sidecar. `undefined` means either no sidecar was
+   * emitted or it failed validation (see WorkTrace.qualificationSignals
+   * for the validation status in either case).
+   */
+  qualificationSignals?: QualificationSignals;
 }
 
 export interface ToolCallRecord {
@@ -125,6 +141,12 @@ export interface SkillExecutionTraceData {
   responseSummary: string;
   writeCount: number;
   governanceDecisions: GovernanceLogEntry[];
+  /**
+   * Phase 3b. The parsed sidecar row for WorkTrace persistence. `null` means no
+   * <qualification_signals> block was present. Set regardless of qualification
+   * config — parsing and stripping is always-on (spec §7.1).
+   */
+  qualificationSignals: WorkTraceQualificationSignals | null;
 }
 
 export interface SkillExecutionTrace {

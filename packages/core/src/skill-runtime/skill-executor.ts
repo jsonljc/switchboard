@@ -31,6 +31,7 @@ import {
   runAfterToolCallHooks,
 } from "./hook-runner.js";
 import { IntentClassSchema, type IntentClass } from "@switchboard/schemas";
+import { parseQualificationSidecar } from "./qualification-sidecar-parser.js";
 
 // Global match — captures every <intent>...</intent> occurrence in the response.
 // Whitespace around the inner value is allowed; the tag itself must be closed.
@@ -250,7 +251,13 @@ export class SkillExecutorImpl implements SkillExecutor {
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
           .map((b) => b.text)
           .join("");
-        const { text: responseText, intentClass } = parseIntentTag(rawResponseText);
+
+        // Phase 3b: parse + strip qualification sidecar. Always-on — no flag check.
+        // visibleResponse replaces rawResponseText for ALL downstream consumers.
+        const sidecar = parseQualificationSidecar(rawResponseText);
+        const visibleResponse = sidecar.visibleResponse;
+
+        const { text: responseText, intentClass } = parseIntentTag(visibleResponse);
 
         return {
           response: responseText,
@@ -271,8 +278,12 @@ export class SkillExecutorImpl implements SkillExecutor {
               );
             }).length,
             governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
+            qualificationSignals: sidecar.persisted,
           },
           ...(intentClass ? { intentClass } : {}),
+          ...(sidecar.persisted?.validationStatus === "ok"
+            ? { qualificationSignals: sidecar.persisted.payload }
+            : {}),
         };
       }
 

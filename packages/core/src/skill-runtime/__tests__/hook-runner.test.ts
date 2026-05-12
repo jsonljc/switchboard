@@ -146,6 +146,7 @@ describe("hook-runner", () => {
           responseSummary: response,
           writeCount: 0,
           governanceDecisions: [],
+          qualificationSignals: null,
         },
       };
     }

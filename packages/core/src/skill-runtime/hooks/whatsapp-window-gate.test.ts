@@ -30,6 +30,7 @@ function makeResult(overrides: Partial<SkillExecutionResult> = {}): SkillExecuti
       responseSummary: "",
       writeCount: 0,
       governanceDecisions: [],
+      qualificationSignals: null,
     },
     ...overrides,
   };
