@@ -70,19 +70,30 @@ export class PrismaGatewayConversationStore implements GatewayConversationStore 
       );
     }
 
+    const direction = role === "user" ? "inbound" : "outbound";
+
     await this.prisma.conversationMessage.create({
       data: {
         contactId: info.contactId,
         orgId: info.organizationId,
-        direction: role === "user" ? "inbound" : "outbound",
+        direction,
         content,
         channel: info.channel,
       },
     });
 
+    const threadUpdate: {
+      messageCount: { increment: number };
+      lastWhatsAppInboundAt?: Date;
+    } = { messageCount: { increment: 1 } };
+
+    if (direction === "inbound" && info.channel === "whatsapp") {
+      threadUpdate.lastWhatsAppInboundAt = new Date();
+    }
+
     await this.prisma.conversationThread.update({
       where: { id: conversationId },
-      data: { messageCount: { increment: 1 } },
+      data: threadUpdate,
     });
   }
 
