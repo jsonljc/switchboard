@@ -24,7 +24,7 @@ const NULL_INIT_ALLOWED: ReadonlySet<ConversationLifecycleState> = new Set([
   "escalated",
 ]);
 
-export function canTransition(
+export function canTransitionLifecycle(
   from: ConversationLifecycleState | null,
   to: ConversationLifecycleState,
 ): boolean {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { canTransition } from "../precedence.js";
+import { canTransitionLifecycle as canTransition } from "../precedence.js";
 
-describe("canTransition", () => {
+describe("canTransitionLifecycle", () => {
   it("allows escalated → booked (operator closes booking after takeover)", () => {
     expect(canTransition("escalated", "booked")).toBe(true);
   });
