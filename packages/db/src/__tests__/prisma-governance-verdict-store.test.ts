@@ -91,4 +91,50 @@ describe("PrismaGovernanceVerdictStore", () => {
       }),
     );
   });
+
+  describe("onWrite callback", () => {
+    const buildCreatedRow = () => ({
+      id: "v-onwrite",
+      ...baseInput,
+      decidedAt: new Date(baseInput.decidedAt),
+      createdAt: new Date("2026-05-10T12:00:01.000Z"),
+      modelLatencyMs: null,
+    });
+
+    it("invokes onWrite after successful verdict write with the saved record", async () => {
+      const onWrite = vi.fn().mockResolvedValue(undefined);
+      const prismaWithHook = buildPrismaMock();
+      prismaWithHook.governanceVerdict.create.mockResolvedValue(buildCreatedRow());
+      const storeWithHook = new PrismaGovernanceVerdictStore(prismaWithHook as never, { onWrite });
+
+      const out = await storeWithHook.save(baseInput);
+
+      expect(prismaWithHook.governanceVerdict.create).toHaveBeenCalledTimes(1);
+      expect(onWrite).toHaveBeenCalledTimes(1);
+      // The callback receives the same record that .save() returns.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      expect(onWrite.mock.calls[0]![0]!).toEqual(out);
+      expect(out.id).toBe("v-onwrite");
+    });
+
+    it("propagates callback errors", async () => {
+      const onWrite = vi.fn().mockRejectedValue(new Error("subscriber failed"));
+      const prismaWithHook = buildPrismaMock();
+      prismaWithHook.governanceVerdict.create.mockResolvedValue(buildCreatedRow());
+      const storeWithHook = new PrismaGovernanceVerdictStore(prismaWithHook as never, { onWrite });
+
+      await expect(storeWithHook.save(baseInput)).rejects.toThrow("subscriber failed");
+      expect(onWrite).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not call onWrite when create fails", async () => {
+      const onWrite = vi.fn();
+      const prismaWithHook = buildPrismaMock();
+      prismaWithHook.governanceVerdict.create.mockRejectedValue(new Error("db down"));
+      const storeWithHook = new PrismaGovernanceVerdictStore(prismaWithHook as never, { onWrite });
+
+      await expect(storeWithHook.save(baseInput)).rejects.toThrow("db down");
+      expect(onWrite).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -11,8 +11,12 @@ import {
   PrismaProductIdentityStore,
   PrismaAssetRecordStore,
   PrismaCrmFunnelStore,
+  PrismaConversationLifecycleSnapshotStore,
+  PrismaConversationLifecycleTransitionStore,
+  PrismaMessageHistoryReader,
   decryptCredentials,
 } from "@switchboard/db";
+import { LifecycleWriter } from "@switchboard/core";
 import {
   inngestClient,
   createCreativeJobRunner,
@@ -47,6 +51,7 @@ import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
+import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
 
 function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
   if (!adapter) {
@@ -484,6 +489,25 @@ export async function registerInngest(
     },
   };
 
+  // ---------------------------------------------------------------------------
+  // Phase 3a lifecycle.stalled-sweep cron dependencies
+  // ---------------------------------------------------------------------------
+  // The cron stays inert until a per-org governance flag flips
+  // `lifecycleTagging.mechanical` to "on". Until then `lifecycleReadMode`
+  // returns "off" for every org, so runStalledSweep short-circuits.
+  // TODO: wire `lifecycleReadMode` to the GovernanceConfigResolver +
+  // per-org deployment lookup so the cron honours the operator's
+  // governance config (see GovernanceConfigSchema.lifecycleTagging.mechanical).
+  const lifecycleSnapshotStore = new PrismaConversationLifecycleSnapshotStore(app.prisma);
+  const lifecycleTransitionStore = new PrismaConversationLifecycleTransitionStore(app.prisma);
+  const lifecycleHistory = new PrismaMessageHistoryReader(app.prisma);
+  const lifecycleWriter = new LifecycleWriter({
+    snapshotStore: lifecycleSnapshotStore,
+    transitionStore: lifecycleTransitionStore,
+    runInTransaction: (fn) => app.prisma!.$transaction(fn),
+  });
+  const lifecycleReadMode: (orgId: string) => Promise<"on" | "off"> = async () => "off";
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -515,6 +539,12 @@ export async function registerInngest(
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
+      createLifecycleStalledSweepCron({
+        prisma: app.prisma,
+        writer: lifecycleWriter,
+        history: lifecycleHistory,
+        readMode: lifecycleReadMode,
+      }),
     ],
   });
 

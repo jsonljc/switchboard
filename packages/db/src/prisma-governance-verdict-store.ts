@@ -45,8 +45,26 @@ function toRecord(row: Row): GovernanceVerdictRecord {
   };
 }
 
+export interface PrismaGovernanceVerdictStoreOptions {
+  /**
+   * Optional post-write callback. Fires AFTER a verdict row is successfully
+   * persisted. Used by Phase 3a conversation-lifecycle wiring to escalate
+   * threads on `action: "escalate"` verdicts. Errors propagate to the caller
+   * — the row has already been persisted, but the caller learns the side
+   * effect failed.
+   */
+  onWrite?: (record: GovernanceVerdictRecord) => Promise<void>;
+}
+
 export class PrismaGovernanceVerdictStore implements GovernanceVerdictStore {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly onWrite?: (record: GovernanceVerdictRecord) => Promise<void>;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    options: PrismaGovernanceVerdictStoreOptions = {},
+  ) {
+    this.onWrite = options.onWrite;
+  }
 
   async save(input: SaveGovernanceVerdictInput): Promise<GovernanceVerdictRecord> {
     const row = await this.prisma.governanceVerdict.create({
@@ -66,7 +84,11 @@ export class PrismaGovernanceVerdictStore implements GovernanceVerdictStore {
         details: input.details ? (input.details as object) : Prisma.JsonNull,
       },
     });
-    return toRecord(row as Row);
+    const record = toRecord(row as Row);
+    if (this.onWrite) {
+      await this.onWrite(record);
+    }
+    return record;
   }
 
   async listByConversation(conversationId: string): Promise<GovernanceVerdictRecord[]> {
