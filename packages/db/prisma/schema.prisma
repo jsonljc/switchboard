@@ -876,6 +876,10 @@ model ConversationThread {
   followUpSchedule    Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
   lastOutcomeAt       DateTime?
   messageCount        Int       @default(0)
+  /// Last inbound WhatsApp message timestamp for the WhatsApp 24h customer-service window.
+  /// Per Meta policy, the 24h window is per-channel. Only inbound WhatsApp messages update
+  /// this column; other channels (Telegram, IG, email, web widget) MUST NOT write to it.
+  lastWhatsAppInboundAt DateTime?
   firstAgentMessageAt DateTime?
   threadStatus        String    @default("open")
   opportunityId       String?
@@ -887,6 +891,7 @@ model ConversationThread {
   @@unique([contactId, organizationId])
   @@index([organizationId])
   @@index([stage])
+  @@index([organizationId, lastWhatsAppInboundAt])
 }
 
 model AgentRegistration {
