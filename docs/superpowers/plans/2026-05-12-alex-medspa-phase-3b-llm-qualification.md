@@ -14,10 +14,16 @@
 
 **Prerequisites on `main`:**
 
-- Phase 1a (#409), 1b-1 (#429), 1b-2 (#431), 1c (#435), 1d (when shipped)
+Hard prerequisites (3b will not build/test without these):
+
+- Phase 1a (#409), 1b-1 (#429), 1b-2 (#431), 1c (#435)
 - Phase 3a — mechanical lifecycle (merged 2026-05-12; commits `af521fdd`, `c29d9549`, `61ac7ad0`)
 - Phase 3 design spec + Phase 3a plan — docs PR on its way to main (`worktree-docs+alex-medspa-phase-3-spec`)
 - Phase 3b design spec — docs PR on its way to main (`worktree-docs+alex-medspa-phase-3b-spec`)
+
+Soft prerequisite (only for cross-phase test fixtures):
+
+- Phase 1d — WhatsApp window gate + template registry. **Not** required for 3b's core implementation. 1d only matters for cross-phase re-engagement/template integration tests; 3b's qualification + disqualification surface stands alone on 3a's mechanical lifecycle. If 1d hasn't shipped yet, omit cross-phase 1d fixtures from Task 18 and document this in the PR body.
 
 **Out of scope for Phase 3b (deferred — do not bleed in):**
 
@@ -705,8 +711,71 @@ describe("PrismaWorkTraceStore — qualificationSignals", () => {
     const arg = prisma.workTrace.create.mock.calls[0][0];
     expect(arg.data.qualificationSignals).toBeNull();
   });
+
+  // Read-path round-trip and corruption tolerance.
+
+  it("read path returns the parsed WorkTraceQualificationSignals for valid stored JSON", async () => {
+    const sig: WorkTraceQualificationSignals = {
+      validationStatus: "ok",
+      payload: {
+        treatmentInterest: "HIFU",
+        preferredTimeWindow: null,
+        serviceableMarket: "SG",
+        buyingIntent: "soft",
+        budgetAcknowledged: null,
+        explicitDecline: false,
+        disqualifierCandidates: [],
+      },
+    };
+    const prisma = buildMockPrisma();
+    prisma.workTrace.findUnique.mockResolvedValueOnce({
+      id: "wt_42",
+      workUnitId: "wu_42",
+      // ... other fields the store mapper expects (mirror existing test fixtures) ...
+      qualificationSignals: JSON.stringify(sig),
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new PrismaWorkTraceStore(prisma as any);
+    const row = await store.findByWorkUnitId("wu_42");
+    expect(row?.qualificationSignals).toEqual(sig);
+  });
+
+  it("read path returns null and logs warn when stored JSON is corrupt", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const prisma = buildMockPrisma();
+    prisma.workTrace.findUnique.mockResolvedValueOnce({
+      id: "wt_43",
+      workUnitId: "wu_43",
+      qualificationSignals: "{not json",
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new PrismaWorkTraceStore(prisma as any);
+    const row = await store.findByWorkUnitId("wu_43");
+    expect(row?.qualificationSignals).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("read path returns null and logs warn when stored JSON fails schema validation", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const prisma = buildMockPrisma();
+    prisma.workTrace.findUnique.mockResolvedValueOnce({
+      id: "wt_44",
+      workUnitId: "wu_44",
+      // Valid JSON but not a valid WorkTraceQualificationSignals shape (no validationStatus discriminator)
+      qualificationSignals: JSON.stringify({ foo: "bar" }),
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = new PrismaWorkTraceStore(prisma as any);
+    const row = await store.findByWorkUnitId("wu_44");
+    expect(row?.qualificationSignals).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });
 ```
+
+> Note: the read-path tests assume the store exposes a `findByWorkUnitId` (or equivalently named) read method. Match the method name to whatever exists on the 3a store — the round-trip + corruption behavior is what matters; the method name is incidental. If the store has multiple read entry points (e.g. `findByWorkUnitId`, `listByTraceId`), add a matching parse step to each — the parse is in one helper, called everywhere a row is materialized to a typed object.
 
 - [ ] **Step 6: Run test to verify it fails**
 
@@ -1038,17 +1107,31 @@ export interface SkillExecutionResult {
 }
 ```
 
+- [ ] **Step 1.5: Discover the existing SkillExecutor test harness — MANDATORY before writing any test code**
+
+```bash
+ls packages/core/src/skill-runtime/__tests__/
+grep -l "SkillExecutor\|new SkillExecutor\|buildSkillExecutor\|makeExecutor" packages/core/src/skill-runtime/__tests__/*.ts
+```
+
+Open the most recent / most representative existing test (e.g. `skill-executor.test.ts`). **Reuse its factory / mock construction helper verbatim.** Do not invent a new constructor shape — the illustrative test below shows the *behavior to assert*, not the *construction pattern to copy*. If the existing tests use a factory like `buildExecutorForTest({ ... })` or import a shared fixture module, the 3b test must use the same factory; the only deltas are:
+
+- The `llm.invoke` mock's `response` field needs to be controllable per test (so tests can vary the raw LLM output).
+- The `workTraceStore.create` mock needs to be assertable for the `qualificationSignals` argument.
+
+If the existing test pattern doesn't already support those two deltas, extend the shared factory (smallest possible extension; preserve all existing test-call sites) — don't create a parallel factory.
+
+Document the chosen factory in this step's commit (one-line comment at the top of the new test file: `// Reuses buildExecutorForTest() from skill-executor.test.ts — see comment block there for construction details.`).
+
 - [ ] **Step 2: Write the failing executor test**
 
 ```ts
 // packages/core/src/skill-runtime/__tests__/skill-executor-qualification.test.ts
+// Reuses the SkillExecutor test factory established by skill-executor.test.ts.
+// The shape below is illustrative — see Step 1.5; replace `makeExecutorWithMocks`
+// with the factory name + signature actually used by the existing tests.
 import { describe, expect, it, vi } from "vitest";
 import { SkillExecutor } from "../skill-executor.js";
-
-// NOTE: This test exercises the parser + WorkTrace persistence integration
-// only — the executor's broader machinery is mocked. Adapt the test harness
-// to whatever construction pattern existing SkillExecutor tests use; this
-// shape is illustrative.
 
 function makeExecutorWithMocks(rawLlmResponse: string) {
   const workTraceCreate = vi.fn().mockResolvedValue({ id: "wt_1" });
@@ -2317,10 +2400,36 @@ describe("DisqualificationResolver.confirm", () => {
     );
   });
 
-  it("returns already_applied (idempotent) when thread is already disqualified", async () => {
+  it("returns already_applied (idempotent) when thread is already disqualified AND has proposal lineage", async () => {
+    // Default setup helper seeds a single system_proposed_disqualification transition,
+    // so the lineage check passes.
     const { resolver, writer } = setup({ ...baseSnapshot, currentState: "disqualified" });
     const out = await resolver.confirm({ organizationId: "o", conversationThreadId: "t", operatorId: "op_1" });
     expect(out).toEqual({ result: "already_applied" });
+    expect(writer.recordTransition).not.toHaveBeenCalled();
+  });
+
+  it("returns conflict already_disqualified when thread is disqualified but no proposal lineage exists", async () => {
+    // Forward-compatible guard: future phases may introduce other paths to terminal
+    // disqualified (auto-spam, mass-disqualify). In that case, this endpoint must
+    // not silently rubber-stamp the prior decision.
+    const snapshotStore = { read: vi.fn().mockResolvedValue({ ...baseSnapshot, currentState: "disqualified" }) };
+    const transitionStore = { listForThread: vi.fn().mockResolvedValue([]) }; // no proposal lineage
+    const writer = {
+      recordTransition: vi.fn().mockResolvedValue(undefined),
+      updateQualificationStatus: vi.fn().mockResolvedValue(undefined),
+    };
+    const resolver = new DisqualificationResolver({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      snapshotStore: snapshotStore as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      transitionStore: transitionStore as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      writer: writer as any,
+    });
+
+    const out = await resolver.confirm({ organizationId: "o", conversationThreadId: "t", operatorId: "op_1" });
+    expect(out).toEqual({ result: "conflict", reason: "already_disqualified" });
     expect(writer.recordTransition).not.toHaveBeenCalled();
   });
 
@@ -2409,7 +2518,7 @@ export type ConfirmResult =
   | { result: "confirmed" }
   | { result: "already_applied" }
   | { result: "not_found" }
-  | { result: "conflict"; reason: "already_booked" | "not_proposed" };
+  | { result: "conflict"; reason: "already_booked" | "not_proposed" | "already_disqualified" };
 
 export type DismissResult =
   | { result: "dismissed"; restoredStatus: LifecycleQualificationStatus }
@@ -2429,7 +2538,19 @@ export class DisqualificationResolver {
   async confirm(input: ResolveInput): Promise<ConfirmResult> {
     const snapshot = await this.deps.snapshotStore.read(input.conversationThreadId);
     if (snapshot === null) return { result: "not_found" };
-    if (snapshot.currentState === "disqualified") return { result: "already_applied" };
+
+    if (snapshot.currentState === "disqualified") {
+      // Lineage-gated idempotency: only return already_applied when this thread's
+      // history contains a system_proposed_disqualification. Otherwise the thread
+      // reached `disqualified` via some other path (future phase) and this endpoint
+      // must not silently approve it.
+      const proposalLineageId = await this.findLatestProposalTransitionId(
+        input.conversationThreadId,
+      );
+      if (proposalLineageId !== null) return { result: "already_applied" };
+      return { result: "conflict", reason: "already_disqualified" };
+    }
+
     if (snapshot.currentState === "booked") {
       return { result: "conflict", reason: "already_booked" };
     }
@@ -3415,6 +3536,40 @@ describe("GET /api/dashboard/lifecycle/disqualifications/pending", () => {
     const body = res.json();
     expect(body.items).toHaveLength(1);
     expect(body.items[0].conversationThreadId).toBe("t1");
+
+    // Explicit doctrine assertion (spec §8.1): a thread with
+    // qualificationStatus=proposed_disqualified AND currentState=disqualified
+    // (operator already confirmed) MUST be excluded from the pending list.
+    // The fixture above seeds t2 in that exact state. Asserting on
+    // conversationThreadId values is a stronger form than length checks:
+    expect(body.items.map((i: { conversationThreadId: string }) => i.conversationThreadId))
+      .not.toContain("t2");
+  });
+
+  it("excludes confirmed disqualified threads (qualificationStatus=proposed_disqualified AND currentState=disqualified)", async () => {
+    // Doctrine-bug regression test (spec §8.1). After operator confirm, the
+    // snapshot retains qualificationStatus=proposed_disqualified while
+    // currentState moves to disqualified. Without the predicate
+    // `currentState != 'disqualified'`, the pending list would forever
+    // include already-confirmed threads.
+    const { server, seed } = await buildTestServer({
+      lifecycleSnapshots: [
+        {
+          conversationThreadId: "t_confirmed",
+          organizationId: "o1",
+          qualificationStatus: "proposed_disqualified",
+          currentState: "disqualified",
+        },
+      ],
+      lifecycleTagging: { mechanical: { mode: "on" }, qualification: { mode: "on" } },
+    });
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/dashboard/lifecycle/disqualifications/pending",
+      headers: seed.authHeaders("o1"),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items).toEqual([]);
   });
 
   it("returns empty list when qualification capability is off", async () => {
@@ -3462,7 +3617,7 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm", ()
     expect(res.json().result).toBe("confirmed");
   });
 
-  it("returns 200 already_applied (idempotent) when thread is already disqualified", async () => {
+  it("returns 200 already_applied (idempotent) when thread is already disqualified WITH proposal lineage", async () => {
     const { server, seed } = await buildTestServer({
       lifecycleSnapshots: [
         {
@@ -3470,6 +3625,14 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm", ()
           organizationId: "o1",
           qualificationStatus: "proposed_disqualified",
           currentState: "disqualified",
+        },
+      ],
+      lifecycleTransitions: [
+        {
+          conversationThreadId: "t1",
+          organizationId: "o1",
+          trigger: "system_proposed_disqualification",
+          evidence: { priorQualificationStatus: "unknown" },
         },
       ],
       lifecycleTagging: { mechanical: { mode: "on" }, qualification: { mode: "on" } },
@@ -3482,6 +3645,33 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm", ()
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ result: "confirmed", alreadyApplied: true });
+  });
+
+  it("returns 409 already_disqualified when thread is disqualified WITHOUT proposal lineage", async () => {
+    // Forward-compatible: if a future phase introduces another path to
+    // currentState=disqualified (auto-spam, mass-disqualify), confirm must
+    // not silently approve it. In 3b this case shouldn't occur in production
+    // — every disqualified thread has lineage — but the guard exists.
+    const { server, seed } = await buildTestServer({
+      lifecycleSnapshots: [
+        {
+          conversationThreadId: "t_nolineage",
+          organizationId: "o1",
+          qualificationStatus: "unknown", // notice: not proposed_disqualified
+          currentState: "disqualified",
+        },
+      ],
+      lifecycleTransitions: [], // no proposal transition
+      lifecycleTagging: { mechanical: { mode: "on" }, qualification: { mode: "on" } },
+    });
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/dashboard/lifecycle/disqualifications/t_nolineage/confirm",
+      headers: seed.authHeaders("o1"),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().reason).toBe("already_disqualified");
   });
 
   it("returns 409 already_booked when thread is booked", async () => {
@@ -3620,7 +3810,7 @@ export interface LifecycleDisqualificationsRouteDeps {
       | { result: "confirmed" }
       | { result: "already_applied" }
       | { result: "not_found" }
-      | { result: "conflict"; reason: "already_booked" | "not_proposed" }
+      | { result: "conflict"; reason: "already_booked" | "not_proposed" | "already_disqualified" }
       | { result: "capability_disabled" }
     >;
     dismiss: (input: {
@@ -3689,6 +3879,7 @@ export async function registerLifecycleDisqualificationsRoutes(
     if (out.result === "not_found") return reply.code(404).send({ reason: "not_found" });
     if (out.result === "capability_disabled")
       return reply.code(404).send({ reason: "not_found" });
+    // out.result === "conflict" — reasons: already_booked | not_proposed | already_disqualified
     return reply.code(409).send({ reason: out.reason });
   });
 

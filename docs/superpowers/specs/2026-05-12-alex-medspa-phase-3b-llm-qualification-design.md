@@ -79,6 +79,15 @@ The parser is part of `SkillExecutor` post-LLM-output handling. Rules applied in
 
 The user-visible response never contains the sidecar block, regardless of validation outcome (the block is always stripped if a `<qualification_signals>` opening tag is found — incomplete/malformed blocks still get cut from the visible response, so contacts never see protocol leakage).
 
+### 4.2.1 "Partial" sidecar — what counts
+
+The spec uses "partial sidecar" in §5.2's non-trivial-sidecar rule. To avoid ambiguity:
+
+- **Partial-but-valid**: every *required* key is present, with values that may be `null` (where the schema allows), `"unknown"`, `"none"`, `false`, or an empty list. This passes Zod validation and proceeds to the monotonic-guard / rule-evaluation path. Example: `{ treatmentInterest: null, preferredTimeWindow: null, serviceableMarket: "unknown", buyingIntent: "none", budgetAcknowledged: null, explicitDecline: false, disqualifierCandidates: [] }`.
+- **Missing required keys**: any required field absent from the object → `validationStatus: "schema_mismatch"`. Example: `{ treatmentInterest: "HIFU" }` fails (every other required key is missing).
+
+Only the first shape ever reaches the lifecycle evaluator. The second shape is persisted with validation error details on `WorkTrace` and never invoked downstream.
+
 ### 4.3 `QualificationSignals` Zod schema
 
 ```ts
@@ -317,7 +326,11 @@ POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss
 
 Auth: existing dashboard auth + org scoping. Audit: each mutation writes a `WorkTrace` row with `actorType: "operator"`, `intent: "lifecycle.disqualification.confirm" | "lifecycle.disqualification.dismiss"`, and a pointer to the resulting transition id.
 
-Idempotency: confirm endpoint is idempotent — a repeat call against a `disqualified` thread returns 200 with `already_applied: true`. Dismiss is not idempotent (after dismissal, the state has moved on; a second dismiss returns 409 `not_proposed`).
+Idempotency (tightened): confirm endpoint is idempotent **only when the thread's terminal `disqualified` state has a proposal lineage** — i.e. its history contains a `system_proposed_disqualification` transition. Then a repeat confirm returns 200 with `already_applied: true`. If `currentState == "disqualified"` but no `system_proposed_disqualification` transition exists in the thread's history (theoretically possible if a future phase introduces another path to terminal disqualified — auto-spam, mass-disqualify, etc.), confirm returns 409 with `reason: "already_disqualified"` instead. This avoids letting an operator silently "approve" a disqualification that was applied for an unrelated reason.
+
+In 3b's own surface, every path to `currentState = disqualified` is the `operator_confirmed_disqualification` path, which requires a prior `system_proposed_disqualification` — so all 3b-disqualified threads have proposal lineage and repeat confirms return `already_applied`. The lineage gate is forward-compatible armour for later phases.
+
+Dismiss is not idempotent (after dismissal, the state has moved on; a second dismiss returns 409 `not_proposed`).
 
 ### 8.1 Query doctrine — `currentState` is the source of truth for terminal disqualification
 
