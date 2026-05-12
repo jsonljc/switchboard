@@ -59,6 +59,23 @@ describe("PrismaReEngagementVerdictReader.findReEngagementVerdict", () => {
     expect(callArg.where.conversationId).toBe("thread-1");
   });
 
+  it("falls back to threadId as conversationId when agentContext.sessionId is an empty string", async () => {
+    const inboundAt = new Date("2026-05-12T09:00:00Z");
+    const prisma = {
+      conversationThread: {
+        findUnique: vi.fn().mockResolvedValue({ agentContext: { sessionId: "" } }),
+      },
+      governanceVerdict: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reader = new PrismaReEngagementVerdictReader(prisma as any);
+    await reader.findReEngagementVerdict("thread-1", inboundAt, 7);
+    const callArg = prisma.governanceVerdict.findFirst.mock.calls[0]?.[0] as {
+      where: { conversationId: string };
+    };
+    expect(callArg.where.conversationId).toBe("thread-1");
+  });
+
   it("returns null when no matching verdict exists", async () => {
     const prisma = {
       conversationThread: {

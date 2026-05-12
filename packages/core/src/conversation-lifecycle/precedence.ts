@@ -4,6 +4,11 @@ import {
   compareLifecyclePrecedence,
 } from "@switchboard/schemas";
 
+// `LIFECYCLE_STATE_PRECEDENCE` is a static ordering for UI/report display and
+// for breaking ties when summarising a thread's "highest" reached state. It is
+// NOT the runtime transition rule — runtime transitions are governed by
+// `canTransitionLifecycle` below, which encodes the spec §4.3 special cases
+// (notably the `escalated → booked` allowance after operator takeover).
 export { LIFECYCLE_STATE_PRECEDENCE, compareLifecyclePrecedence };
 
 /**

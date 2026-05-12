@@ -3,7 +3,7 @@ import { z } from "zod";
 // `disqualified` is forward-compatible — defined here for schema stability
 // across 3a → 3b → 3c. **3a code paths MUST NOT emit `disqualified`.**
 // See `LifecycleWriter`'s 3a allowlist guard (Task 7) and the
-// `THREE_A_ALLOWED_*` constants in `packages/core/src/lifecycle/constants.ts`.
+// `THREE_A_ALLOWED_*` constants in `packages/core/src/conversation-lifecycle/constants.ts`.
 export const ConversationLifecycleStateSchema = z.enum([
   "active",
   "qualified",
