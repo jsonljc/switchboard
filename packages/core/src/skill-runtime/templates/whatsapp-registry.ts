@@ -37,13 +37,26 @@ export interface WhatsAppTemplate {
   approvalStatus: TemplateApprovalStatus;
   /** Rendered body used for substitution. */
   body: string;
-  /** Variable placeholders, in Meta order. */
+  /**
+   * Variable placeholders, in Meta order. The order of this array MUST match the
+   * `{{var_name}}` order in `body` — Meta substitutes by position ({{1}}, {{2}}, ...)
+   * at send time. Use named placeholders in `body` for in-code readability.
+   */
   variables: ReadonlyArray<{ name: string; description: string }>;
 }
 
 export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
-  // 10 entries (5 intent classes × 2 jurisdictions). Body authoring + Meta submission
-  // happen in Task 5. Stubs here so the structural tests pass.
+  // Editing this array? Each entry is a Meta-submitted unit. To add or change a template:
+  //  1. `name` must be unique (used in audit logs and tests).
+  //  2. `metaTemplateName` must match the name submitted to Meta; updating it here without
+  //     a corresponding Meta re-submission breaks substitution in production.
+  //  3. Add or update the matching test case in whatsapp-registry.test.ts.
+  //  4. The body MUST pass the 1b-1 banned-phrase scanner; the test file enforces this.
+  //  5. Variables are indexed by position — the order of the array matches {{1}}, {{2}}, ...
+  //     in Meta's template definition (we use named placeholders for in-code readability;
+  //     Meta substitutes them by position at send time).
+  //  6. Keep `approvalStatus: "draft"` until Meta approves; flip to "submitted" on submission
+  //     and "approved" once Meta returns approval.
   {
     name: "appointment_confirm_sg_v1",
     metaTemplateName: "alex_appointment_confirm_sg_v1",
@@ -51,8 +64,15 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "SG",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, your appointment with {{business_name}} on {{date}} at {{time}} is confirmed. " +
+      "Please reply CONFIRM to lock it in, or reply RESCHEDULE if the time no longer works for you.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+      { name: "date", description: "Date of appointment (e.g. 12 May 2026)." },
+      { name: "time", description: "Time of appointment (e.g. 3:00 PM)." },
+    ],
   },
   {
     name: "appointment_confirm_my_v1",
@@ -61,8 +81,15 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "MY",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, your appointment with {{business_name}} on {{date}} at {{time}} is confirmed. " +
+      "Please reply CONFIRM to lock it in, or reply RESCHEDULE if the time no longer works for you.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+      { name: "date", description: "Date of appointment (e.g. 12 May 2026)." },
+      { name: "time", description: "Time of appointment (e.g. 3:00 PM)." },
+    ],
   },
   {
     name: "appointment_reminder_sg_v1",
@@ -71,8 +98,15 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "SG",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, a reminder that your appointment at {{business_name}} is tomorrow, {{date}} at {{time}}. " +
+      "Reply CONFIRM to keep it or RESCHEDULE if you need to change.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+      { name: "date", description: "Date of appointment (e.g. 13 May 2026)." },
+      { name: "time", description: "Time of appointment (e.g. 10:00 AM)." },
+    ],
   },
   {
     name: "appointment_reminder_my_v1",
@@ -81,8 +115,15 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "MY",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, a reminder that your appointment at {{business_name}} is tomorrow, {{date}} at {{time}}. " +
+      "Reply CONFIRM to keep it or RESCHEDULE if you need to change.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+      { name: "date", description: "Date of appointment (e.g. 13 May 2026)." },
+      { name: "time", description: "Time of appointment (e.g. 10:00 AM)." },
+    ],
   },
   {
     name: "aftercare_checkin_sg_v1",
@@ -91,8 +132,13 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "SG",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, the team at {{business_name}} would like to check in after your recent visit. " +
+      "How are you feeling? Please let us know if you have any questions or concerns.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+    ],
   },
   {
     name: "aftercare_checkin_my_v1",
@@ -101,8 +147,13 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "MY",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, the team at {{business_name}} would like to check in after your recent visit. " +
+      "How are you feeling? Please let us know if you have any questions or concerns.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+    ],
   },
   {
     name: "consult_followup_sg_v1",
@@ -111,8 +162,13 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "SG",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, following up on your recent consultation at {{business_name}}. " +
+      "Let us know if you are ready to book your next appointment or if you have any questions.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+    ],
   },
   {
     name: "consult_followup_my_v1",
@@ -121,8 +177,13 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "MY",
     templateCategory: "utility",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, following up on your recent consultation at {{business_name}}. " +
+      "Let us know if you are ready to book your next appointment or if you have any questions.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+    ],
   },
   {
     name: "re_engagement_offer_sg_v1",
@@ -131,8 +192,13 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "SG",
     templateCategory: "marketing",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, it has been a while since we last connected — we would love to see you at {{business_name}} again. " +
+      "Reply BOOK to schedule a consultation, or STOP to opt out.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+    ],
   },
   {
     name: "re_engagement_offer_my_v1",
@@ -141,8 +207,13 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
     jurisdiction: "MY",
     templateCategory: "marketing",
     approvalStatus: "draft",
-    body: "STUB",
-    variables: [],
+    body:
+      "Hi {{lead_name}}, it has been a while since we last connected — we would love to see you at {{business_name}} again. " +
+      "Reply BOOK to schedule a consultation, or STOP to opt out.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name." },
+    ],
   },
 ];
 
