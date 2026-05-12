@@ -26,7 +26,15 @@ The Alex SG/MY skill currently emits free-form responses from `SkillExecutionRes
 
 ### 1.1 Cost reality (paid-messaging path)
 
-Outside-window template substitution is **not free**. Since 2025-07-01 Meta's WhatsApp Business Platform charges per delivered template message; the price is set by recipient market and template category. Inside-window service replies remain free; utility templates sent in response to user-initiated conversations can be free in certain markets; marketing-category templates are paid.
+Outside-window template substitution is **not free**. Since 2025-07-01 Meta's WhatsApp Business Platform charges per delivered template message; rates vary by template category and the recipient phone number's country calling code. The free / paid distinction is **window-driven**, not market-driven:
+
+| Template category | Inside 24h customer-service window | Outside the window          |
+| ----------------- | ---------------------------------- | --------------------------- |
+| Utility           | **Free**                           | Paid (volume-discount tier) |
+| Authentication    | Paid (volume-discount tier)        | Paid (volume-discount tier) |
+| Marketing         | **Paid**                           | Paid                        |
+
+**Implication for 1d:** the gate substitutes only **outside** the window, so every `substitute` verdict represents a paid send regardless of template category. There is no free-fallback path through 1d. Inside-window emits pass through as free-form (also free, but they are not templates and never run the substitution branch).
 
 1d's job is **compliance-first**, not cost control. The gate decides allow / substitute / handoff based on window, opt-in, intent class, and template fit — same as if every send were free. But every `substitute` verdict must carry enough metadata for a downstream Phase 2 billing layer to price the send retroactively. Concretely the substitute verdict includes `templateCategory`, `recipientMarket`, `metaTemplateName`, `costRisk: "paid_template_message"`, and `costEstimateStatus: "not_priced_in_1d"`. Budget caps, operator approval thresholds for marketing templates, daily/monthly cost dashboards, and per-tenant fee accounting are explicitly Phase 2 (see §3 Non-goals).
 
@@ -489,3 +497,4 @@ Per CLAUDE.md branch doctrine:
 - `project_blocker3_deferred_template_wiring.md` — Blocker 3 (calendar-book template wiring) was deferred until Meta approves templates. 1d revives portions of that wiring conceptually (template dispatch path), but the implementation here is the gate, not the calendar-book skill itself.
 - `project_launch_readiness_state.md` — critical-path gate is Meta-side (Business Verification + App Review = 2–4 weeks). 1d code ships behind feature flag before Meta approves templates; flip to enforce when Meta approves the in-repo template entries.
 - `feedback_subagent_worktree_drift.md` — when subagents implement 1d, the prompt must include explicit `cd /Users/jasonli/switchboard/.worktrees/<branch>` and `test "$(git branch --show-current)" = "<branch>"` guards.
+- **Cloud API direct access — no BSP / Tech Provider status required for 1d.** Each tenant's WABA connects to Meta's WhatsApp Business Platform Cloud API directly; Switchboard does not need to register as a Meta Tech Provider (the modern name for what used to be called a "BSP" / Solution Partner) for 1d to function. Meta deprecated the on-premise API on 2025-10-23, so Cloud API is in practice the only path for new integrations. Tech Provider / Solution Partner status would be relevant only for ergonomics layers Switchboard may want **later** — Embedded Signup (one-click tenant onboarding without each tenant creating their own Meta Business Manager), consolidated billing across tenants, listing in Meta's Partner Directory — none of which are 1d code blockers. The `metaTemplateName` field on `WhatsAppTemplate` assumes per-tenant template names are stable across the tenant fleet; if a tenant's Meta review renames a template, the in-repo entry's `metaTemplateName` must be updated (or 1d gains per-tenant name overrides — Phase 2).
