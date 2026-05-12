@@ -89,7 +89,7 @@ skill emits SkillExecutionResult { response, intentClass?, … }
        ├─ template.approvalStatus !== "approved"              → block + handoff (template_not_approved)
        ├─ template.templateCategory === "marketing"
        │    && !config.allowMarketingTemplateSubstitution     → block + handoff (marketing_substitution_blocked)
-       └─ otherwise                                            → substitute result.response (verdict: substitute)
+       └─ otherwise                                            → substitute result.response (verdict action: template_required)
   ↓
 trace persistence → adapter dispatch
 ```
@@ -320,7 +320,7 @@ Every path emits exactly one `GovernanceVerdict`. The primary `reasonCode` is `o
 ```ts
 {
   sourceGuard: "whatsapp_window",
-  action: "substitute",
+  action: "template_required",
   reasonCode: "outside_whatsapp_window",
   originalText: <original skill response>,
   emittedText: <template body>,
@@ -342,7 +342,9 @@ Every path emits exactly one `GovernanceVerdict`. The primary `reasonCode` is `o
 
 **Why these fields:** Phase 2 will price each substitute retroactively. `templateCategory` + `recipientMarket` are the two inputs to Meta's per-message pricing table; `metaTemplateName` is the join key to Meta's billing exports; `costRisk: "paid_template_message"` is a coarse static tag so audit queries can `WHERE details->>'costRisk' = 'paid_template_message'` without inspecting Meta's rate card; `costEstimateStatus: "not_priced_in_1d"` is the explicit "this verdict has not been priced" signal so a Phase 2 backfill job can find unpriced rows. **1d never estimates a cost.**
 
-**Contract — these five fields are mandatory on every `substitute` verdict.** Test coverage (§6) asserts presence and non-null. Phase 2's pricing backfill is allowed to assume the contract.
+**Contract — these five fields are mandatory on every `template_required` verdict** (the runtime's substitute action — see `GovernanceVerdictActionSchema` in `packages/schemas/src/governance-verdict.ts`). Test coverage (§6) asserts presence and non-null. Phase 2's pricing backfill is allowed to assume the contract.
+
+**Naming note:** prose throughout this spec uses "substitute" / "substitution" to describe the runtime behavior (replacing a free-form response with a Meta-approved template). The corresponding `GovernanceVerdict.action` enum value is `"template_required"`. The enum was reserved in Phase 1a (#409) for this gate; 1d is its first emitter.
 
 **Outside-window block — opt-in missing:**
 
@@ -545,7 +547,7 @@ Required by parent spec §Operability:
    - `sourceGuard === "whatsapp_window"` (already reserved since 1a — first emitter is 1d)
    - `reasonCode === "outside_whatsapp_window"` (already reserved since 1a — first emitter is 1d)
    - `details.windowStatus`, `details.optInStatus`, `details.templateMatch` are present on every block/substitute verdict and uniquely identify the sub-cause
-   - **Cost annotation contract** on `action: "substitute"` verdicts: `details.templateCategory`, `details.recipientMarket`, `details.metaTemplateName`, `details.costRisk === "paid_template_message"`, `details.costEstimateStatus === "not_priced_in_1d"` — all present and non-null. Phase 2's pricing backfill depends on this contract. **Hard assertion**: write a single dedicated test that exercises the substitute happy-path and uses `expect.objectContaining(...)` on these exact five keys.
+   - **Cost annotation contract** on `action: "template_required"` verdicts: `details.templateCategory`, `details.recipientMarket`, `details.metaTemplateName`, `details.costRisk === "paid_template_message"`, `details.costEstimateStatus === "not_priced_in_1d"` — all present and non-null. Phase 2's pricing backfill depends on this contract. **Hard assertion**: write a single dedicated test that exercises the substitute happy-path and uses `expect.objectContaining(...)` on these exact five keys.
    - **Cost annotation contract** on `details.templateMatch === "marketing_substitution_blocked"` verdicts: same five cost fields present even though no send happened (verdict captures what would have cost money if the flag were on).
 5. **Handoff package shape**
    - `HandoffReason === "outside_whatsapp_window"` for all five block sub-causes
