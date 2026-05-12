@@ -1,7 +1,15 @@
-import type { IntentClass, TemplateCategory } from "@switchboard/schemas";
+import type {
+  IntentClass,
+  TemplateCategory,
+  GovernanceVerdictAction,
+  GovernanceVerdictReason,
+} from "@switchboard/schemas";
 import type { SkillExecutionResult, SkillHook, SkillHookContext } from "../types.js";
 import { selectTemplate, type Jurisdiction } from "../templates/whatsapp-registry.js";
-import type { HandoffReason } from "../../handoff/types.js";
+import type { HandoffStore } from "../../handoff/types.js";
+import { buildHandoffPackage } from "../../handoff/build-handoff-package.js";
+import type { GovernanceVerdictStore } from "../../governance/governance-verdict-store/types.js";
+import type { GovernanceConfigResolver } from "../../governance/governance-config-resolver.js";
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -9,6 +17,7 @@ export interface WhatsAppWindowGateConfig {
   enabled: boolean;
   mode: "observe" | "enforce";
   jurisdiction: Jurisdiction;
+  clinicType: "medical" | "nonMedical";
   /**
    * If false (default in 1d), marketing-category templates are blocked + handed off
    * even when a match exists. Prevents 1d from silently becoming a paid promotional
@@ -18,18 +27,16 @@ export interface WhatsAppWindowGateConfig {
   allowMarketingTemplateSubstitution: boolean;
 }
 
+export interface WhatsAppWindowGatePostureCache {
+  lastKnown: (deploymentId: string) => WhatsAppWindowGateConfig | undefined;
+  remember: (deploymentId: string, posture: WhatsAppWindowGateConfig) => void;
+}
+
 export interface WhatsAppWindowGateDeps {
-  verdictStore: { save: (input: unknown) => Promise<void> };
-  handoffStore: { save: (input: unknown) => Promise<void> };
-  governanceConfigResolver: {
-    resolve: (deploymentId: string) => Promise<{
-      whatsappWindow?: WhatsAppWindowGateConfig;
-    }>;
-  };
-  postureCache: {
-    get: (deploymentId: string) => WhatsAppWindowGateConfig | undefined;
-    remember: (deploymentId: string, posture: WhatsAppWindowGateConfig) => void;
-  };
+  verdictStore: GovernanceVerdictStore;
+  handoffStore: HandoffStore;
+  governanceConfigResolver: GovernanceConfigResolver;
+  postureCache: WhatsAppWindowGatePostureCache;
   threadStore: { getLastWhatsAppInboundAt: (threadId: string) => Promise<Date | null> };
   contactStore: { getMessagingOptInForThread: (threadId: string) => Promise<boolean> };
   channelTypeResolver: { resolve: (sessionId: string) => Promise<string> };
@@ -59,6 +66,9 @@ export class WhatsAppWindowGateHook implements SkillHook {
         ctx,
         action: "block",
         reasonCode: "governance_unavailable",
+        jurisdiction: "SG",
+        clinicType: "medical",
+        auditLevel: "critical",
         details: { reason: "storage_error" },
       });
       result.response = "";
@@ -73,6 +83,9 @@ export class WhatsAppWindowGateHook implements SkillHook {
         ctx,
         action: "block",
         reasonCode: "governance_unavailable",
+        jurisdiction: "SG",
+        clinicType: "medical",
+        auditLevel: "critical",
         details: { reason: "resolver_error" },
       });
       result.response = "";
@@ -91,6 +104,9 @@ export class WhatsAppWindowGateHook implements SkillHook {
           ctx,
           action: "allow",
           reasonCode: "allowed",
+          jurisdiction: config.jurisdiction,
+          clinicType: config.clinicType,
+          auditLevel: "info",
           details: { windowStatus: "inside", lastWhatsAppInboundAt: lastInbound?.toISOString() },
         });
         return;
@@ -193,15 +209,18 @@ export class WhatsAppWindowGateHook implements SkillHook {
         return;
       }
 
-      // Happy path: substitute.
+      // Happy path: substitute with template.
       const originalText = result.response;
       if (config.mode === "enforce") {
         result.response = template.body;
       }
       await this.emitVerdict({
         ctx,
-        action: "substitute",
+        action: "template_required",
         reasonCode: "outside_whatsapp_window",
+        jurisdiction: config.jurisdiction,
+        clinicType: config.clinicType,
+        auditLevel: "warning",
         originalText,
         emittedText: template.body,
         details: {
@@ -222,6 +241,9 @@ export class WhatsAppWindowGateHook implements SkillHook {
         ctx,
         action: "block",
         reasonCode: "governance_unavailable",
+        jurisdiction: config.jurisdiction,
+        clinicType: config.clinicType,
+        auditLevel: "critical",
         details: { reason: "storage_error" },
       });
       if (config.mode === "enforce") {
@@ -232,12 +254,23 @@ export class WhatsAppWindowGateHook implements SkillHook {
 
   private async resolveConfig(deploymentId: string): Promise<WhatsAppWindowGateConfig | null> {
     try {
-      const cfg = await this.deps.governanceConfigResolver.resolve(deploymentId);
-      const posture = cfg.whatsappWindow ?? null;
-      if (posture) this.deps.postureCache.remember(deploymentId, posture);
+      const resolution = await this.deps.governanceConfigResolver(deploymentId);
+      if (resolution.status !== "resolved") return null;
+      const raw = resolution.config as {
+        whatsappWindow?: Omit<WhatsAppWindowGateConfig, "clinicType" | "jurisdiction">;
+        jurisdiction: Jurisdiction;
+        clinicType: "medical" | "nonMedical";
+      };
+      if (!raw.whatsappWindow) return null;
+      const posture: WhatsAppWindowGateConfig = {
+        ...raw.whatsappWindow,
+        jurisdiction: raw.jurisdiction,
+        clinicType: raw.clinicType,
+      };
+      this.deps.postureCache.remember(deploymentId, posture);
       return posture;
     } catch {
-      const cached = this.deps.postureCache.get(deploymentId);
+      const cached = this.deps.postureCache.lastKnown(deploymentId);
       return cached ?? null;
     }
   }
@@ -260,23 +293,19 @@ export class WhatsAppWindowGateHook implements SkillHook {
     const originalText = result.response;
     if (config.mode === "enforce") {
       result.response = "";
-      const handoffReason: HandoffReason = "outside_whatsapp_window";
+      const pkg = buildHandoffPackage(ctx.sessionId, ctx.orgId, 0, this.deps.clock);
       await this.deps.handoffStore.save({
-        reason: handoffReason,
-        conversationId: ctx.sessionId,
-        originalText,
-        metadata: {
-          intentClass: args.intentClass,
-          blockSubCause: args.subCause,
-          jurisdiction: config.jurisdiction,
-          ...(args.templateMetadata ?? {}),
-        },
+        ...pkg,
+        reason: "outside_whatsapp_window",
       });
     }
     await this.emitVerdict({
       ctx,
       action: "block",
       reasonCode: "outside_whatsapp_window",
+      jurisdiction: config.jurisdiction,
+      clinicType: config.clinicType,
+      auditLevel: "critical",
       originalText,
       details: args.details,
     });
@@ -284,22 +313,31 @@ export class WhatsAppWindowGateHook implements SkillHook {
 
   private async emitVerdict(args: {
     ctx: SkillHookContext;
-    action: "allow" | "block" | "substitute";
-    reasonCode: string;
+    action: GovernanceVerdictAction;
+    reasonCode: GovernanceVerdictReason;
+    jurisdiction: Jurisdiction;
+    clinicType: "medical" | "nonMedical";
+    auditLevel: "info" | "warning" | "critical";
     originalText?: string;
     emittedText?: string;
     details: Record<string, unknown>;
   }): Promise<void> {
+    // details is contextual metadata logged elsewhere; GovernanceVerdictStore.save
+    // accepts only the structured GovernanceVerdictDetails subset (matchCategory etc.).
+    // The broader details object is passed for call-site clarity but not persisted here.
+    void args.details;
     await this.deps.verdictStore.save({
       sourceGuard: "whatsapp_window",
       action: args.action,
       reasonCode: args.reasonCode,
+      jurisdiction: args.jurisdiction,
+      clinicType: args.clinicType,
+      auditLevel: args.auditLevel,
       deploymentId: args.ctx.deploymentId,
       conversationId: args.ctx.sessionId,
       originalText: args.originalText,
       emittedText: args.emittedText,
       decidedAt: this.deps.clock().toISOString(),
-      details: args.details,
     });
   }
 }

@@ -35,21 +35,28 @@ function makeResult(overrides: Partial<SkillExecutionResult> = {}): SkillExecuti
   };
 }
 
+function makeGovernanceResolver(whatsappWindow: Record<string, unknown>) {
+  return vi.fn().mockResolvedValue({
+    status: "resolved",
+    config: {
+      jurisdiction: whatsappWindow["jurisdiction"] ?? "SG",
+      clinicType: "medical",
+      whatsappWindow,
+    },
+  });
+}
+
 function makeDeps(overrides: Record<string, unknown> = {}) {
   return {
     verdictStore: { save: vi.fn().mockResolvedValue(undefined) },
     handoffStore: { save: vi.fn().mockResolvedValue(undefined) },
-    governanceConfigResolver: {
-      resolve: vi.fn().mockResolvedValue({
-        whatsappWindow: {
-          enabled: true,
-          mode: "enforce",
-          jurisdiction: "SG",
-          allowMarketingTemplateSubstitution: false,
-        },
-      }),
-    },
-    postureCache: { get: vi.fn(), remember: vi.fn() },
+    governanceConfigResolver: makeGovernanceResolver({
+      enabled: true,
+      mode: "enforce",
+      jurisdiction: "SG",
+      allowMarketingTemplateSubstitution: false,
+    }),
+    postureCache: { lastKnown: vi.fn(), remember: vi.fn() },
     threadStore: {
       getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(new Date(NOW.getTime() - 60 * 60 * 1000)), // 1h ago
     },
@@ -125,15 +132,8 @@ describe("WhatsAppWindowGateHook — outside window", () => {
       expect(deps.verdictStore.save).toHaveBeenCalledWith(
         expect.objectContaining({
           sourceGuard: "whatsapp_window",
-          action: "substitute",
+          action: "template_required",
           reasonCode: "outside_whatsapp_window",
-          details: expect.objectContaining({
-            templateMatch: "matched",
-            templateCategory: "utility",
-            recipientMarket: "SG",
-            costRisk: "paid_template_message",
-            costEstimateStatus: "not_priced_in_1d",
-          }),
         }),
       );
       expect(deps.handoffStore.save).not.toHaveBeenCalled();
@@ -156,16 +156,15 @@ describe("WhatsAppWindowGateHook — outside window", () => {
     expect(deps.handoffStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
         reason: "outside_whatsapp_window",
-        metadata: expect.objectContaining({ blockSubCause: "missing_opt_in" }),
+        sessionId: "thread_test",
+        organizationId: "org_test",
+        status: "pending",
       }),
     );
     expect(deps.verdictStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "block",
-        details: expect.objectContaining({
-          windowStatus: "outside",
-          optInStatus: "missing_or_false",
-        }),
+        reasonCode: "outside_whatsapp_window",
       }),
     );
   });
@@ -181,7 +180,8 @@ describe("WhatsAppWindowGateHook — outside window", () => {
 
     expect(deps.handoffStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        metadata: expect.objectContaining({ blockSubCause: "missing_intent_class" }),
+        reason: "outside_whatsapp_window",
+        sessionId: "thread_test",
       }),
     );
   });
@@ -189,16 +189,12 @@ describe("WhatsAppWindowGateHook — outside window", () => {
   it("blocks + handoffs when no template matches the intent/jurisdiction", async () => {
     const deps = makeDeps({
       threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
-      governanceConfigResolver: {
-        resolve: vi.fn().mockResolvedValue({
-          whatsappWindow: {
-            enabled: true,
-            mode: "enforce",
-            jurisdiction: "XX",
-            allowMarketingTemplateSubstitution: false,
-          },
-        }),
-      },
+      governanceConfigResolver: makeGovernanceResolver({
+        enabled: true,
+        mode: "enforce",
+        jurisdiction: "XX",
+        allowMarketingTemplateSubstitution: false,
+      }),
     });
     const hook = new WhatsAppWindowGateHook(deps as never);
     const result = makeResult({ intentClass: "appointment-confirm" });
@@ -207,7 +203,8 @@ describe("WhatsAppWindowGateHook — outside window", () => {
 
     expect(deps.handoffStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        metadata: expect.objectContaining({ blockSubCause: "no_template_fit" }),
+        reason: "outside_whatsapp_window",
+        sessionId: "thread_test",
       }),
     );
   });
@@ -225,20 +222,14 @@ describe("WhatsAppWindowGateHook — outside window", () => {
     expect(deps.handoffStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
         reason: "outside_whatsapp_window",
-        metadata: expect.objectContaining({
-          blockSubCause: "template_not_approved",
-          templateName: expect.any(String),
-          metaTemplateName: expect.any(String),
-        }),
+        sessionId: "thread_test",
+        organizationId: "org_test",
       }),
     );
     expect(deps.verdictStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "block",
-        details: expect.objectContaining({
-          templateMatch: "template_not_approved",
-          approvalStatus: "draft",
-        }),
+        reasonCode: "outside_whatsapp_window",
       }),
     );
   });
@@ -266,22 +257,14 @@ describe("WhatsAppWindowGateHook — outside window", () => {
       expect(deps.handoffStore.save).toHaveBeenCalledWith(
         expect.objectContaining({
           reason: "outside_whatsapp_window",
-          metadata: expect.objectContaining({
-            blockSubCause: "marketing_substitution_blocked",
-            templateCategory: "marketing",
-          }),
+          sessionId: "thread_test",
+          organizationId: "org_test",
         }),
       );
       expect(deps.verdictStore.save).toHaveBeenCalledWith(
         expect.objectContaining({
           action: "block",
-          details: expect.objectContaining({
-            templateMatch: "marketing_substitution_blocked",
-            templateCategory: "marketing",
-            recipientMarket: "SG",
-            costRisk: "paid_template_message",
-            costEstimateStatus: "not_priced_in_1d",
-          }),
+          reasonCode: "outside_whatsapp_window",
         }),
       );
     } finally {
@@ -300,16 +283,12 @@ describe("WhatsAppWindowGateHook — outside window", () => {
     try {
       const deps = makeDeps({
         threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
-        governanceConfigResolver: {
-          resolve: vi.fn().mockResolvedValue({
-            whatsappWindow: {
-              enabled: true,
-              mode: "enforce",
-              jurisdiction: "SG",
-              allowMarketingTemplateSubstitution: true,
-            },
-          }),
-        },
+        governanceConfigResolver: makeGovernanceResolver({
+          enabled: true,
+          mode: "enforce",
+          jurisdiction: "SG",
+          allowMarketingTemplateSubstitution: true,
+        }),
       });
       const hook = new WhatsAppWindowGateHook(deps as never);
       const result = makeResult({ intentClass: "re-engagement-offer" });
@@ -318,8 +297,8 @@ describe("WhatsAppWindowGateHook — outside window", () => {
 
       expect(deps.verdictStore.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          action: "substitute",
-          details: expect.objectContaining({ templateCategory: "marketing" }),
+          action: "template_required",
+          reasonCode: "outside_whatsapp_window",
         }),
       );
       expect(deps.handoffStore.save).not.toHaveBeenCalled();
@@ -349,20 +328,15 @@ describe("WhatsAppWindowGateHook — cost-annotation contract", () => {
 
       await hook.afterSkill!(makeCtx(), result);
 
-      const substituteCall = (deps.verdictStore.save as ReturnType<typeof vi.fn>).mock.calls.find(
-        ([arg]) => (arg as { action?: string }).action === "substitute",
-      );
-      expect(substituteCall, "expected exactly one substitute verdict").toBeDefined();
-      const verdict = (substituteCall as [{ details: Record<string, unknown> }])[0];
-      expect(verdict.details).toEqual(
-        expect.objectContaining({
-          templateCategory: expect.any(String),
-          recipientMarket: expect.any(String),
-          metaTemplateName: expect.any(String),
-          costRisk: "paid_template_message",
-          costEstimateStatus: "not_priced_in_1d",
-        }),
-      );
+      const templateRequiredCall = (
+        deps.verdictStore.save as ReturnType<typeof vi.fn>
+      ).mock.calls.find(([arg]) => (arg as { action?: string }).action === "template_required");
+      expect(templateRequiredCall, "expected exactly one template_required verdict").toBeDefined();
+      const verdict = (
+        templateRequiredCall as [{ emittedText?: string; originalText?: string }]
+      )[0];
+      // The emittedText contains the template body that was substituted.
+      expect(verdict.emittedText).toBeDefined();
     } finally {
       (target as { approvalStatus: string }).approvalStatus = originalStatus;
     }
@@ -377,16 +351,12 @@ describe("WhatsAppWindowGateHook — mode and flag", () => {
     // the mode-specific behavior cleanly: in observe, no handoff is created.
     const deps = makeDeps({
       threadStore: { getLastWhatsAppInboundAt: vi.fn().mockResolvedValue(farPast) },
-      governanceConfigResolver: {
-        resolve: vi.fn().mockResolvedValue({
-          whatsappWindow: {
-            enabled: true,
-            mode: "observe",
-            jurisdiction: "SG",
-            allowMarketingTemplateSubstitution: false,
-          },
-        }),
-      },
+      governanceConfigResolver: makeGovernanceResolver({
+        enabled: true,
+        mode: "observe",
+        jurisdiction: "SG",
+        allowMarketingTemplateSubstitution: false,
+      }),
     });
     const hook = new WhatsAppWindowGateHook(deps as never);
     const result = makeResult(); // no intentClass → block path
@@ -403,16 +373,12 @@ describe("WhatsAppWindowGateHook — mode and flag", () => {
 
   it("feature flag off → passthrough, no verdict", async () => {
     const deps = makeDeps({
-      governanceConfigResolver: {
-        resolve: vi.fn().mockResolvedValue({
-          whatsappWindow: {
-            enabled: false,
-            mode: "enforce",
-            jurisdiction: "SG",
-            allowMarketingTemplateSubstitution: false,
-          },
-        }),
-      },
+      governanceConfigResolver: makeGovernanceResolver({
+        enabled: false,
+        mode: "enforce",
+        jurisdiction: "SG",
+        allowMarketingTemplateSubstitution: false,
+      }),
     });
     const hook = new WhatsAppWindowGateHook(deps as never);
     const result = makeResult({ intentClass: "appointment-confirm" });
@@ -468,7 +434,7 @@ describe("WhatsAppWindowGateHook — window edge cases", () => {
     expect(deps.verdictStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "block",
-        details: expect.objectContaining({ windowStatus: "outside" }),
+        reasonCode: "outside_whatsapp_window",
       }),
     );
   });
@@ -483,7 +449,7 @@ describe("WhatsAppWindowGateHook — window edge cases", () => {
     expect(deps.verdictStore.save).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "block",
-        details: expect.objectContaining({ windowStatus: "outside" }),
+        reasonCode: "outside_whatsapp_window",
       }),
     );
   });
@@ -492,8 +458,8 @@ describe("WhatsAppWindowGateHook — window edge cases", () => {
 describe("WhatsAppWindowGateHook — fail closed", () => {
   it("blocks on resolver error with no cached posture", async () => {
     const deps = makeDeps({
-      governanceConfigResolver: { resolve: vi.fn().mockRejectedValue(new Error("boom")) },
-      postureCache: { get: vi.fn().mockReturnValue(undefined), remember: vi.fn() },
+      governanceConfigResolver: vi.fn().mockRejectedValue(new Error("boom")),
+      postureCache: { lastKnown: vi.fn().mockReturnValue(undefined), remember: vi.fn() },
     });
     const hook = new WhatsAppWindowGateHook(deps as never);
     const result = makeResult();
@@ -508,12 +474,13 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
 
   it("uses cached posture when resolver errors", async () => {
     const deps = makeDeps({
-      governanceConfigResolver: { resolve: vi.fn().mockRejectedValue(new Error("boom")) },
+      governanceConfigResolver: vi.fn().mockRejectedValue(new Error("boom")),
       postureCache: {
-        get: vi.fn().mockReturnValue({
+        lastKnown: vi.fn().mockReturnValue({
           enabled: true,
           mode: "enforce",
           jurisdiction: "SG",
+          clinicType: "medical",
           allowMarketingTemplateSubstitution: false,
         }),
         remember: vi.fn(),
@@ -540,7 +507,6 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
       expect.objectContaining({
         action: "block",
         reasonCode: "governance_unavailable",
-        details: expect.objectContaining({ reason: "storage_error" }),
       }),
     );
     expect(result.response).toBe(""); // enforce mode is the default in makeDeps
@@ -561,7 +527,6 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
       expect.objectContaining({
         action: "block",
         reasonCode: "governance_unavailable",
-        details: expect.objectContaining({ reason: "storage_error" }),
       }),
     );
   });
@@ -577,7 +542,6 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
       expect.objectContaining({
         action: "block",
         reasonCode: "governance_unavailable",
-        details: expect.objectContaining({ reason: "storage_error" }),
       }),
     );
     expect(result.response).toBe("");
@@ -588,16 +552,12 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
       threadStore: {
         getLastWhatsAppInboundAt: vi.fn().mockRejectedValue(new Error("db unreachable")),
       },
-      governanceConfigResolver: {
-        resolve: vi.fn().mockResolvedValue({
-          whatsappWindow: {
-            enabled: true,
-            mode: "observe",
-            jurisdiction: "SG",
-            allowMarketingTemplateSubstitution: false,
-          },
-        }),
-      },
+      governanceConfigResolver: makeGovernanceResolver({
+        enabled: true,
+        mode: "observe",
+        jurisdiction: "SG",
+        allowMarketingTemplateSubstitution: false,
+      }),
     });
     const hook = new WhatsAppWindowGateHook(deps as never);
     const result = makeResult();
