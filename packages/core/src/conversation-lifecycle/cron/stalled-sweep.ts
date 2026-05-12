@@ -28,6 +28,8 @@ export async function runStalledSweep(deps: StalledSweepDeps): Promise<void> {
 
   // Per-org mode cache so each org pays one readMode call per sweep regardless
   // of candidate count.
+  // Cache per-sweep so a 1000-candidate run hits the flag store at most once per
+  // org, accepting that a mid-sweep flag flip won't take effect until the next sweep.
   const seenOrgModes = new Map<string, "on" | "off">();
   const modeFor = async (orgId: string): Promise<"on" | "off"> => {
     const cached = seenOrgModes.get(orgId);
@@ -41,10 +43,10 @@ export async function runStalledSweep(deps: StalledSweepDeps): Promise<void> {
     if (!SWEEPABLE_STATES.has(c.currentState)) continue;
     const m = await modeFor(c.organizationId);
     if (m !== "on") continue;
-    const { lastAlexOutboundAt, lastInboundAt } = await deps.history.read(c.conversationThreadId);
-    if (!lastAlexOutboundAt) continue;
-    if (lastInboundAt && lastInboundAt > lastAlexOutboundAt) continue;
-    const hoursSince = (deps.now.getTime() - lastAlexOutboundAt.getTime()) / (60 * 60 * 1000);
+    const { lastOutboundAt, lastInboundAt } = await deps.history.read(c.conversationThreadId);
+    if (!lastOutboundAt) continue;
+    if (lastInboundAt && lastInboundAt > lastOutboundAt) continue;
+    const hoursSince = (deps.now.getTime() - lastOutboundAt.getTime()) / (60 * 60 * 1000);
     if (hoursSince < STALLED_THRESHOLD_HOURS) continue;
     await deps.writer.recordTransition({
       organizationId: c.organizationId,
@@ -54,7 +56,7 @@ export async function runStalledSweep(deps: StalledSweepDeps): Promise<void> {
       trigger: "timer_24h_no_inbound",
       actor: "system",
       evidence: {
-        last_outbound_at: lastAlexOutboundAt.toISOString(),
+        last_outbound_at: lastOutboundAt.toISOString(),
         last_inbound_at: lastInboundAt?.toISOString() ?? null,
         hours_since_outbound: Math.round(hoursSince),
       },

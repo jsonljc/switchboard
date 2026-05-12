@@ -10,20 +10,25 @@ export class PrismaMessageHistoryReader implements MessageHistoryReader {
       select: { contactId: true, organizationId: true },
     });
     if (!thread) {
-      return { lastAlexOutboundAt: null, lastInboundAt: null };
+      return { lastOutboundAt: null, lastInboundAt: null };
     }
-    const lastOutbound = await this.prisma.conversationMessage.findFirst({
-      where: { contactId: thread.contactId, orgId: thread.organizationId, direction: "outbound" },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    });
-    const lastInbound = await this.prisma.conversationMessage.findFirst({
-      where: { contactId: thread.contactId, orgId: thread.organizationId, direction: "inbound" },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    });
+    // The two reads are non-transactional by design. If an inbound arrives between
+    // the queries, returning the newer inbound is the correct outcome — the thread
+    // is reactivating and the cron will not mark it stalled.
+    const [lastOutbound, lastInbound] = await Promise.all([
+      this.prisma.conversationMessage.findFirst({
+        where: { contactId: thread.contactId, orgId: thread.organizationId, direction: "outbound" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      }),
+      this.prisma.conversationMessage.findFirst({
+        where: { contactId: thread.contactId, orgId: thread.organizationId, direction: "inbound" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      }),
+    ]);
     return {
-      lastAlexOutboundAt: lastOutbound?.createdAt ?? null,
+      lastOutboundAt: lastOutbound?.createdAt ?? null,
       lastInboundAt: lastInbound?.createdAt ?? null,
     };
   }

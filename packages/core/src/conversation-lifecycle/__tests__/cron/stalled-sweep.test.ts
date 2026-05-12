@@ -17,7 +17,7 @@ describe("runStalledSweep", () => {
     ]);
     const history = {
       read: vi.fn().mockResolvedValue({
-        lastAlexOutboundAt: new Date("2026-05-11T09:00:00Z"), // ~27h before now
+        lastOutboundAt: new Date("2026-05-11T09:00:00Z"), // ~27h before now
         lastInboundAt: new Date("2026-05-11T08:55:00Z"),
       }),
     };
@@ -52,7 +52,7 @@ describe("runStalledSweep", () => {
     ]);
     const history = {
       read: vi.fn().mockResolvedValue({
-        lastAlexOutboundAt: new Date("2026-05-11T09:00:00Z"),
+        lastOutboundAt: new Date("2026-05-11T09:00:00Z"),
         lastInboundAt: new Date("2026-05-11T10:00:00Z"),
       }),
     };
@@ -82,7 +82,7 @@ describe("runStalledSweep", () => {
     ]);
     const history = {
       read: vi.fn().mockResolvedValue({
-        lastAlexOutboundAt: new Date("2026-05-11T09:00:00Z"),
+        lastOutboundAt: new Date("2026-05-11T09:00:00Z"),
         lastInboundAt: null,
       }),
     };

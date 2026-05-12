@@ -31,9 +31,16 @@ export interface LifecycleTransitionStore {
 }
 
 export interface MessageHistoryReader {
-  /** Returns timestamps of last Alex outbound and last contact inbound for a thread. */
+  /**
+   * Returns timestamps of the last outbound and last inbound message for a thread.
+   *
+   * `lastOutboundAt` is the most recent outbound message regardless of sender — the
+   * `ConversationMessage` schema has no actor column. For Phase 3a this is acceptable
+   * because only `active` threads are swept and operators are blocked from `active`
+   * (they trigger the `escalated` state).
+   */
   read(threadId: string): Promise<{
-    lastAlexOutboundAt: Date | null;
+    lastOutboundAt: Date | null;
     lastInboundAt: Date | null;
   }>;
 }

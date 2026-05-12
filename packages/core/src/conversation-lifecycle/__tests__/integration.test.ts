@@ -92,7 +92,7 @@ describe("end-to-end mechanical lifecycle", () => {
     });
 
     history.read.mockResolvedValue({
-      lastAlexOutboundAt: new Date("2026-05-10T09:05:00Z"),
+      lastOutboundAt: new Date("2026-05-10T09:05:00Z"),
       lastInboundAt: new Date("2026-05-10T09:00:00Z"),
     });
     await runStalledSweep({

@@ -26,6 +26,7 @@ describe("bootstrapLifecycle", () => {
     expect(result.writer).toBeDefined();
     expect(result.attributor).toBeDefined();
     expect(result.snapshotStore).toBeDefined();
+    expect(result.history).toBeDefined();
     expect(registrars.registerVerdictWriteHook).toHaveBeenCalledTimes(1);
     expect(registrars.registerBookingCreateHook).toHaveBeenCalledTimes(1);
     expect(registrars.registerInboundMessageHook).toHaveBeenCalledTimes(1);

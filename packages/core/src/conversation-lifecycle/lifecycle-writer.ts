@@ -85,19 +85,6 @@ export class LifecycleWriter {
     });
   }
 
-  /** Re-evaluate a thread without writing a transition; updates `lastEvaluatedAt` only. */
-  async touchEvaluation(threadId: string, evaluatedAt: Date = new Date()): Promise<void> {
-    await this.deps.runInTransaction(async (tx) => {
-      const existing = await this.deps.snapshotStore.read(threadId);
-      if (!existing) return;
-      await this.deps.snapshotStore.upsertInTransaction(tx, {
-        ...existing,
-        lastEvaluatedAt: evaluatedAt,
-        updatedAt: evaluatedAt,
-      });
-    });
-  }
-
   /** Recover the snapshot by replaying the transition log. */
   async rebuildSnapshotFromTransitions(
     threadId: string,
