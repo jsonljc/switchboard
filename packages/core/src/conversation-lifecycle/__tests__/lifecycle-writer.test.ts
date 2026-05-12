@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { LifecycleWriter } from "../lifecycle-writer.js";
+import { LifecycleCapabilityDenied } from "../errors.js";
 import type { LifecycleSnapshotStore, LifecycleTransitionStore } from "../types.js";
 
 function makeStores() {
@@ -19,7 +20,15 @@ function makeStores() {
     listForThread: vi.fn(async (id) => transitions.filter((t) => t.conversationThreadId === id)),
   };
   const runInTransaction = async <T>(fn: (tx: unknown) => Promise<T>) => fn({});
-  return { snapshotStore, transitionStore, runInTransaction, snapshots, transitions };
+  const resolveCapabilities = async () => new Set(["mechanical"] as const);
+  return {
+    snapshotStore,
+    transitionStore,
+    runInTransaction,
+    resolveCapabilities,
+    snapshots,
+    transitions,
+  };
 }
 
 describe("LifecycleWriter.recordTransition", () => {
@@ -27,9 +36,20 @@ describe("LifecycleWriter.recordTransition", () => {
     // Plan said `null → stalled`, but Task-6 precedence forbids null → stalled
     // (thread-init seeds via onThreadFirstObservation → 'active' before the cron
     // can ever fire). Use an allowed null-init state instead.
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -46,9 +66,20 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("precedence blocks null → stalled (cron cannot invent a stalled snapshot)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -63,8 +94,14 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("respects precedence — does not overwrite booked with stalled", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
     const now = new Date();
     snapshots.set("thread-1", {
       conversationThreadId: "thread-1",
@@ -78,7 +115,12 @@ describe("LifecycleWriter.recordTransition", () => {
       lastEvaluatedAt: now,
       updatedAt: now,
     });
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -93,8 +135,14 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("allows escalated → booked (operator closes booking)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
     const now = new Date();
     snapshots.set("thread-1", {
       conversationThreadId: "thread-1",
@@ -108,7 +156,12 @@ describe("LifecycleWriter.recordTransition", () => {
       lastEvaluatedAt: now,
       updatedAt: now,
     });
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -125,8 +178,13 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("rejects 3b-only toState (disqualified) with a runtime error", async () => {
-    const { snapshotStore, transitionStore, runInTransaction } = makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await expect(
       writer.recordTransition({
         organizationId: "org-1",
@@ -139,12 +197,17 @@ describe("LifecycleWriter.recordTransition", () => {
         actor: "operator",
         evidence: {},
       }),
-    ).rejects.toThrow(/THREE_A_ALLOWED_STATES/);
+    ).rejects.toThrow(LifecycleCapabilityDenied);
   });
 
   it("rejects 3b-only trigger (qualification_checklist_met) with a runtime error", async () => {
-    const { snapshotStore, transitionStore, runInTransaction } = makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await expect(
       writer.recordTransition({
         organizationId: "org-1",
@@ -156,12 +219,18 @@ describe("LifecycleWriter.recordTransition", () => {
         actor: "system",
         evidence: {},
       }),
-    ).rejects.toThrow(/THREE_A_ALLOWED_TRIGGERS/);
+    ).rejects.toThrow(LifecycleCapabilityDenied);
   });
 
   it("rebuilds snapshot from transition log (round-trip)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots } = makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities, snapshots } =
+      makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",

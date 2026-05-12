@@ -82,6 +82,7 @@ export function bootstrapLifecycle(deps: BootstrapLifecycleDeps): BootstrapLifec
     snapshotStore,
     transitionStore,
     runInTransaction: (fn) => deps.prisma.$transaction(fn),
+    resolveCapabilities: async (_orgId) => new Set(["mechanical"] as const),
   });
   const attributor = new ReEngagementAttributor(verdictReader);
 

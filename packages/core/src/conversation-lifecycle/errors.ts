@@ -21,3 +21,10 @@ export class LifecycleConfigError extends Error {
     this.name = "LifecycleConfigError";
   }
 }
+
+export class LifecycleCapabilityDenied extends Error {
+  constructor(message: string) {
+    super(`LifecycleWriter: ${message}`);
+    this.name = "LifecycleCapabilityDenied";
+  }
+}

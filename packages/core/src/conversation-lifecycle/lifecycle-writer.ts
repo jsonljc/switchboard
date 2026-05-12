@@ -6,9 +6,11 @@ import type {
   LifecycleSnapshotStore,
   LifecycleTransitionStore,
   RecordTransitionInput,
+  LifecycleWriteCapability,
 } from "./types.js";
 import { canTransitionLifecycle } from "./precedence.js";
-import { THREE_A_ALLOWED_STATES, THREE_A_ALLOWED_TRIGGERS } from "./constants.js";
+import { allowedStatesFor, allowedTriggersFor } from "./constants.js";
+import { LifecycleCapabilityDenied } from "./errors.js";
 
 export type RunInTransaction = <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 
@@ -16,24 +18,31 @@ export interface LifecycleWriterDeps {
   snapshotStore: LifecycleSnapshotStore;
   transitionStore: LifecycleTransitionStore;
   runInTransaction: RunInTransaction;
+  /** Resolves the writer's enabled capabilities for the given org. */
+  resolveCapabilities: (organizationId: string) => Promise<ReadonlySet<LifecycleWriteCapability>>;
 }
 
 export class LifecycleWriter {
   constructor(private readonly deps: LifecycleWriterDeps) {}
 
   async recordTransition(input: RecordTransitionInput): Promise<void> {
-    // 3a runtime allowlist guard. Schema permits the full Phase 3 enum for
-    // forward compatibility, but 3a code paths must only emit mechanical states
-    // and 3a triggers. Throw — never silently drop — so that any 3a caller
-    // accidentally reaching for a 3b value fails loudly in test/dev.
-    if (!THREE_A_ALLOWED_STATES.has(input.toState)) {
-      throw new Error(
-        `LifecycleWriter (3a): toState '${input.toState}' is not in THREE_A_ALLOWED_STATES`,
+    // Capability-aware allowlist guard. The schema permits the full Phase 3 enum
+    // for forward compatibility; the caller's resolved capability set determines
+    // which states and triggers are actually permitted. Throw — never silently
+    // drop — so that any caller accidentally reaching for an out-of-capability
+    // value fails loudly in test/dev.
+    const caps = await this.deps.resolveCapabilities(input.organizationId);
+    const states = allowedStatesFor(caps);
+    const triggers = allowedTriggersFor(caps);
+
+    if (!states.has(input.toState)) {
+      throw new LifecycleCapabilityDenied(
+        `toState '${input.toState}' is not permitted by current capabilities`,
       );
     }
-    if (!THREE_A_ALLOWED_TRIGGERS.has(input.trigger)) {
-      throw new Error(
-        `LifecycleWriter (3a): trigger '${input.trigger}' is not in THREE_A_ALLOWED_TRIGGERS`,
+    if (!triggers.has(input.trigger)) {
+      throw new LifecycleCapabilityDenied(
+        `trigger '${input.trigger}' is not permitted by current capabilities`,
       );
     }
 

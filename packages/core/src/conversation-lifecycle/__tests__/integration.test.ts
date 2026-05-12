@@ -25,19 +25,34 @@ function makeInMemoryStores() {
     listForThread: async (id: string) => transitions.filter((t) => t.conversationThreadId === id),
   };
   const runInTransaction = async <T>(fn: (tx: unknown) => Promise<T>) => fn({});
-  return { snapshotStore, transitionStore, runInTransaction, snapshots, transitions };
+  const resolveCapabilities = async () => new Set(["mechanical"] as const);
+  return {
+    snapshotStore,
+    transitionStore,
+    runInTransaction,
+    resolveCapabilities,
+    snapshots,
+    transitions,
+  };
 }
 
 describe("end-to-end mechanical lifecycle", () => {
   it("active → escalated (governance) → booked (operator closes booking)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeInMemoryStores();
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeInMemoryStores();
     const writer = new LifecycleWriter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       snapshotStore: snapshotStore as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transitionStore: transitionStore as any,
       runInTransaction,
+      resolveCapabilities,
     });
     const readMode = async () => "on" as const;
 
@@ -65,14 +80,21 @@ describe("end-to-end mechanical lifecycle", () => {
   });
 
   it("active → stalled (cron) → active (re-engagement attribution) → booked", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeInMemoryStores();
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeInMemoryStores();
     const writer = new LifecycleWriter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       snapshotStore: snapshotStore as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transitionStore: transitionStore as any,
       runInTransaction,
+      resolveCapabilities,
     });
     const readMode = async () => "on" as const;
     const history = { read: vi.fn() };
@@ -151,13 +173,15 @@ describe("end-to-end mechanical lifecycle", () => {
   });
 
   it("THREE_A_ALLOWED_STATES enforcement — no 3a hook ever produces disqualified", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, transitions } = makeInMemoryStores();
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities, transitions } =
+      makeInMemoryStores();
     const writer = new LifecycleWriter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       snapshotStore: snapshotStore as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transitionStore: transitionStore as any,
       runInTransaction,
+      resolveCapabilities,
     });
     const readMode = async () => "on" as const;
 
@@ -193,13 +217,15 @@ describe("end-to-end mechanical lifecycle", () => {
   });
 
   it("operator takeover → escalated, then booking closes → booked (attribution preserved)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots } = makeInMemoryStores();
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities, snapshots } =
+      makeInMemoryStores();
     const writer = new LifecycleWriter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       snapshotStore: snapshotStore as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transitionStore: transitionStore as any,
       runInTransaction,
+      resolveCapabilities,
     });
     const readMode = async () => "on" as const;
 

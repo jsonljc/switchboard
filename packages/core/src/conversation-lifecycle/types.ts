@@ -6,6 +6,9 @@ import type {
   ConversationLifecycleActor,
 } from "@switchboard/schemas";
 
+/** Capabilities that unlock additional lifecycle states and triggers. */
+export type LifecycleWriteCapability = "mechanical" | "qualification";
+
 export interface LifecycleSnapshotStore {
   /** Read outside any transaction — used by event hooks for short-circuit checks
    *  (e.g. inbound-message hook checks `currentState !== 'stalled'` before opening
