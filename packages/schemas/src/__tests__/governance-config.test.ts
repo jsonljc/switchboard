@@ -7,6 +7,8 @@ import {
   resolveClaimClassifierConfig,
   ConsentStateConfigSchema,
   resolveConsentStateConfig,
+  LifecycleTaggingMechanicalConfigSchema,
+  resolveLifecycleTaggingMechanicalConfig,
 } from "../governance-config.js";
 
 describe("GovernanceModeSchema", () => {
@@ -187,5 +189,36 @@ describe("resolveConsentStateConfig", () => {
       consentState: { mode: "enforce" },
     });
     expect(resolveConsentStateConfig(config)).toEqual({ mode: "enforce" });
+  });
+});
+
+describe("LifecycleTaggingMechanicalConfigSchema", () => {
+  it("defaults mode to off when absent", () => {
+    expect(LifecycleTaggingMechanicalConfigSchema.parse({}).mode).toBe("off");
+  });
+
+  it("accepts mode='on'", () => {
+    expect(LifecycleTaggingMechanicalConfigSchema.parse({ mode: "on" }).mode).toBe("on");
+  });
+
+  it("rejects unknown modes", () => {
+    expect(() => LifecycleTaggingMechanicalConfigSchema.parse({ mode: "observe" })).toThrow();
+  });
+});
+
+describe("resolveLifecycleTaggingMechanicalConfig", () => {
+  it("returns mode=off when the sub-block is absent (and when config is null)", () => {
+    expect(resolveLifecycleTaggingMechanicalConfig(null).mode).toBe("off");
+    const cfg = GovernanceConfigSchema.parse({ jurisdiction: "SG", clinicType: "medical" });
+    expect(resolveLifecycleTaggingMechanicalConfig(cfg).mode).toBe("off");
+  });
+
+  it("returns mode=on when set under lifecycleTagging.mechanical", () => {
+    const cfg = GovernanceConfigSchema.parse({
+      jurisdiction: "SG",
+      clinicType: "medical",
+      lifecycleTagging: { mechanical: { mode: "on" } },
+    });
+    expect(resolveLifecycleTaggingMechanicalConfig(cfg).mode).toBe("on");
   });
 });

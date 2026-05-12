@@ -80,3 +80,39 @@ export function resolveConsentStateConfig(config: GovernanceConfig | null): Cons
   const raw = (config as unknown as Record<string, unknown> | null)?.consentState;
   return ConsentStateConfigSchema.parse(raw ?? {});
 }
+
+/**
+ * Per-deployment configuration for the Phase 3a mechanical lifecycle tagging
+ * layer. Lives under `governanceConfig.lifecycleTagging.mechanical` as a
+ * passthrough sub-block — the parent schema uses `.passthrough()`, no Prisma
+ * migration required.
+ *
+ * Defaults: mode="off" (no lifecycle DB writes, no transitions, no cron sweep
+ * for the org). Promote to "on" once the tenant is ready to record mechanical
+ * lifecycle state. Phase 3b and 3c will add sibling sub-blocks under
+ * `lifecycleTagging` (e.g., `lifecycleTagging.qualification`,
+ * `lifecycleTagging.recommendations`).
+ *
+ * Note: this config uses a binary on/off rather than the off/observe/enforce
+ * pattern of `deterministicGate`/`claimClassifier`/`consentState`. Lifecycle
+ * tagging has no in-flight side effects to gate — either we are recording
+ * transitions or we are not.
+ */
+export const LifecycleTaggingMechanicalConfigSchema = z
+  .object({
+    mode: z.enum(["off", "on"]).default("off"),
+  })
+  .default({});
+
+export type LifecycleTaggingMechanicalConfig = z.infer<
+  typeof LifecycleTaggingMechanicalConfigSchema
+>;
+
+export function resolveLifecycleTaggingMechanicalConfig(
+  config: GovernanceConfig | null,
+): LifecycleTaggingMechanicalConfig {
+  const lifecycleTagging = (config as unknown as Record<string, unknown> | null)
+    ?.lifecycleTagging as Record<string, unknown> | undefined;
+  const raw = lifecycleTagging?.mechanical;
+  return LifecycleTaggingMechanicalConfigSchema.parse(raw ?? {});
+}

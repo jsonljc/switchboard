@@ -14,6 +14,11 @@ import {
   decryptCredentials,
 } from "@switchboard/db";
 import {
+  GovernanceConfigSchema,
+  resolveLifecycleTaggingMechanicalConfig,
+} from "@switchboard/schemas";
+import { bootstrapLifecycle } from "./lifecycle.js";
+import {
   inngestClient,
   createCreativeJobRunner,
   createModeDispatcher,
@@ -47,6 +52,7 @@ import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
+import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
 
 function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
   if (!adapter) {
@@ -484,6 +490,49 @@ export async function registerInngest(
     },
   };
 
+  // ---------------------------------------------------------------------------
+  // Phase 3a lifecycle.stalled-sweep cron dependencies
+  // ---------------------------------------------------------------------------
+  // The cron stays inert until a per-org governance flag flips
+  // `lifecycleTagging.mechanical` to "on". This closure resolves the flag by
+  // looking up any active deployment for the org and parsing its
+  // `governanceConfig` JSON via GovernanceConfigSchema. Returns "off" when no
+  // deployment exists, the config is null/invalid, or the flag is "off".
+  // The cron caches readMode per-org per-sweep (see runStalledSweep), so this
+  // hits the DB at most once per org per hour.
+  const lifecycleReadMode: (orgId: string) => Promise<"on" | "off"> = async (orgId) => {
+    try {
+      const deployment = await app.prisma!.agentDeployment.findFirst({
+        where: { organizationId: orgId },
+        select: { governanceConfig: true },
+      });
+      if (!deployment?.governanceConfig) return "off";
+      const parsed = GovernanceConfigSchema.safeParse(deployment.governanceConfig);
+      if (!parsed.success) return "off";
+      return resolveLifecycleTaggingMechanicalConfig(parsed.data).mode;
+    } catch {
+      return "off";
+    }
+  };
+
+  // bootstrapLifecycle is the single source of truth for Phase 3a wiring. It
+  // constructs the writer + attributor + snapshotStore + history reader and
+  // invokes the five registrar callbacks. The registrars here are no-op
+  // because the producer-side wiring is DEFERRED — see the DEFERRED comments
+  // in apps/api/src/bootstrap/lifecycle.ts for each seat. The returned
+  // `{ writer, history }` are used to register the stalled-sweep Inngest cron
+  // alongside the other crons below.
+  const { writer: lifecycleWriter, history: lifecycleHistory } = bootstrapLifecycle({
+    prisma: app.prisma,
+    readMode: lifecycleReadMode,
+    registerVerdictWriteHook: () => {},
+    registerBookingCreateHook: () => {},
+    registerInboundMessageHook: () => {},
+    registerOperatorTakeoverHook: () => {},
+    registerThreadInitHook: () => {},
+    registerCron: () => {},
+  });
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -515,6 +564,12 @@ export async function registerInngest(
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
+      createLifecycleStalledSweepCron({
+        prisma: app.prisma,
+        writer: lifecycleWriter,
+        history: lifecycleHistory,
+        readMode: lifecycleReadMode,
+      }),
     ],
   });
 

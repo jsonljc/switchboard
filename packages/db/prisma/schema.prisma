@@ -448,7 +448,7 @@ model OrganizationConfig {
 model OrgAgentEnablement {
   id        String   @id @default(uuid())
   orgId     String
-  agentKey  String   // "alex" | "riley" | "mira"
+  agentKey  String // "alex" | "riley" | "mira"
   status    String   @default("enabled") // enabled | coming_soon | disabled
   enabledAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -894,6 +894,42 @@ model ConversationThread {
   @@index([organizationId, lastWhatsAppInboundAt])
 }
 
+model ConversationLifecycleSnapshot {
+  conversationThreadId String   @id
+  organizationId       String
+  contactId            String
+  currentState         String // ConversationLifecycleState — schema-bound on read
+  qualificationStatus  String   @default("unknown")
+  bookingStatus        String   @default("not_booked")
+  dropoffReason        String?
+  lastTransitionAt     DateTime
+  lastEvaluatedAt      DateTime
+  updatedAt            DateTime @updatedAt
+
+  @@index([organizationId, currentState])
+  @@index([organizationId, qualificationStatus, bookingStatus])
+  @@index([organizationId, currentState, lastTransitionAt])
+  @@index([organizationId, lastEvaluatedAt])
+}
+
+model ConversationLifecycleTransition {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  conversationThreadId String
+  contactId            String
+  fromState            String?
+  toState              String
+  trigger              String
+  evidence             Json
+  actor                String
+  workTraceId          String?
+  occurredAt           DateTime @default(now())
+
+  @@index([organizationId, conversationThreadId, occurredAt])
+  @@index([organizationId, toState, occurredAt])
+  @@index([organizationId, trigger, occurredAt])
+}
+
 model AgentRegistration {
   id            String   @id @default(uuid())
   orgId         String
@@ -964,12 +1000,12 @@ model AgentDeployment {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
-  listing               AgentListing           @relation(fields: [listingId], references: [id])
-  tasks                 AgentTask[]
-  actionRequests        ActionRequest[]
-  deploymentStates      DeploymentState[]
-  deploymentConnections DeploymentConnection[]
-  governanceVerdicts    GovernanceVerdict[]
+  listing                  AgentListing              @relation(fields: [listingId], references: [id])
+  tasks                    AgentTask[]
+  actionRequests           ActionRequest[]
+  deploymentStates         DeploymentState[]
+  deploymentConnections    DeploymentConnection[]
+  governanceVerdicts       GovernanceVerdict[]
   approvedComplianceClaims ApprovedComplianceClaim[]
 
   @@unique([organizationId, listingId])
@@ -978,23 +1014,23 @@ model AgentDeployment {
 }
 
 model GovernanceVerdict {
-  id              String   @id @default(cuid())
-  deploymentId    String
-  conversationId  String
-  action          String
-  reasonCode      String
-  jurisdiction    String
-  clinicType      String
-  sourceGuard     String
-  originalText    String?  @db.Text
-  emittedText     String?  @db.Text
-  auditLevel      String
-  decidedAt       DateTime
-  modelLatencyMs  Int?
-  details         Json?
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  deploymentId   String
+  conversationId String
+  action         String
+  reasonCode     String
+  jurisdiction   String
+  clinicType     String
+  sourceGuard    String
+  originalText   String?  @db.Text
+  emittedText    String?  @db.Text
+  auditLevel     String
+  decidedAt      DateTime
+  modelLatencyMs Int?
+  details        Json?
+  createdAt      DateTime @default(now())
 
-  deployment      AgentDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
 
   @@index([deploymentId, decidedAt])
   @@index([conversationId, decidedAt])
@@ -1002,19 +1038,19 @@ model GovernanceVerdict {
 }
 
 model ApprovedComplianceClaim {
-  id            String   @id @default(cuid())
-  deploymentId  String
-  jurisdiction  String   // "SG" | "MY"
-  claimType     String   // matches ClaimTypeSchema enum
-  claimText     String   @db.Text
-  reviewedBy    String
-  reviewedAt    DateTime
-  validUntil    DateTime?
-  notes         String?  @db.Text
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String    @id @default(cuid())
+  deploymentId String
+  jurisdiction String // "SG" | "MY"
+  claimType    String // matches ClaimTypeSchema enum
+  claimText    String    @db.Text
+  reviewedBy   String
+  reviewedAt   DateTime
+  validUntil   DateTime?
+  notes        String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  deployment    AgentDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
 
   @@index([deploymentId, jurisdiction, claimType])
   @@index([deploymentId, validUntil])
@@ -1402,8 +1438,8 @@ model PendingActionRecord {
   sourceAgent          String
   sourceWorkflow       String?
   organizationId       String
-  surface              String    @default("queue")  // queue | shadow_action — recommendations only
-  undoableUntil        DateTime?                    // recommendations.shadow_action only
+  surface              String    @default("queue") // queue | shadow_action — recommendations only
+  undoableUntil        DateTime? // recommendations.shadow_action only
   createdAt            DateTime  @default(now())
   expiresAt            DateTime?
   resolvedAt           DateTime?
@@ -1523,31 +1559,31 @@ model OperatorChannelBinding {
 }
 
 model Contact {
-  id                String   @id @default(uuid())
-  organizationId    String
-  name              String?
-  phone             String?
-  email             String?
-  primaryChannel    String   @default("whatsapp")
-  firstTouchChannel String?
-  stage             String   @default("new")
-  source            String?
-  sourceType        String? // "ctwa" | "instant_form" | "organic" | "web"
-  attribution       Json?
-  qualificationData Json?
-  roles             String[] @default(["lead"])
-  leadgenId         String?
-  idempotencyKey    String?
+  id                   String    @id @default(uuid())
+  organizationId       String
+  name                 String?
+  phone                String?
+  email                String?
+  primaryChannel       String    @default("whatsapp")
+  firstTouchChannel    String?
+  stage                String    @default("new")
+  source               String?
+  sourceType           String? // "ctwa" | "instant_form" | "organic" | "web"
+  attribution          Json?
+  qualificationData    Json?
+  roles                String[]  @default(["lead"])
+  leadgenId            String?
+  idempotencyKey       String?
   // WhatsApp Business API messaging consent (separate from creative-pipeline ConsentRecord).
   // Required for proactive template sends outside the 24hr conversation window.
   messagingOptIn       Boolean   @default(false)
   messagingOptInAt     DateTime?
   messagingOptInSource String? // "ctwa" | "organic_inbound" | "web_form" | "manual"
   messagingOptOutAt    DateTime?
-  firstContactAt    DateTime @default(now())
-  lastActivityAt    DateTime @default(now())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  firstContactAt       DateTime  @default(now())
+  lastActivityAt       DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   // PDPA consent state (Phase 1c). Jurisdiction-tagged data-subject consent.
   // Distinct from `messagingOptIn` (WhatsApp 24h template-send consent).
@@ -1737,8 +1773,8 @@ model WorkTrace {
   lockedAt              DateTime?
   contentHash           String?
   traceVersion          Int       @default(0)
-  ingressPath      String @default("platform_ingress")
-  hashInputVersion Int    @default(1)
+  ingressPath           String    @default("platform_ingress")
+  hashInputVersion      Int       @default(1)
 
   @@index([organizationId, intent])
   @@index([traceId])
@@ -2008,8 +2044,8 @@ model PcdIdentitySnapshot {
 model ReportCache {
   id             String   @id @default(uuid())
   organizationId String
-  window         String   // "THIS_WEEK" | "THIS_MONTH" | "THIS_QUARTER"
-  payload        Json     // serialized ReportDataV1
+  window         String // "THIS_WEEK" | "THIS_MONTH" | "THIS_QUARTER"
+  payload        Json // serialized ReportDataV1
   computedAt     DateTime @default(now())
   expiresAt      DateTime
 
@@ -2032,8 +2068,8 @@ model PdfCache {
 model PreSwitchboardBaseline {
   id             String   @id @default(uuid())
   organizationId String
-  dimension      String   // "ads" | "conversations"
-  metric         String   // "spend" | "leads" | "revenue" | "roas" | "reply_minutes" | "lead_conversion_rate"
+  dimension      String // "ads" | "conversations"
+  metric         String // "spend" | "leads" | "revenue" | "roas" | "reply_minutes" | "lead_conversion_rate"
   value          Float
   periodStart    DateTime
   periodEnd      DateTime
