@@ -5,7 +5,7 @@ import type {
   GovernanceDecision,
   GovernanceLogEntry,
 } from "./governance.js";
-import type { ContextRequirement, ReferenceMetadata } from "@switchboard/schemas";
+import type { ContextRequirement, IntentClass, ReferenceMetadata } from "@switchboard/schemas";
 import type { ModelSlot } from "../model-router.js";
 import type { ToolResult } from "./tool-result.js";
 
@@ -95,6 +95,13 @@ export interface SkillExecutionResult {
   toolCalls: ToolCallRecord[];
   tokenUsage: { input: number; output: number };
   trace: SkillExecutionTraceData;
+  /**
+   * OPTIONAL. When set, indicates the LLM declared this outbound serves a specific
+   * intent (parsed from an `<intent>...</intent>` tag in the response by skill-executor.ts).
+   * Consumed by the Phase 1d WhatsAppWindowGateHook to select a substitute template
+   * when the conversation is outside the WhatsApp 24h customer-service window.
+   */
+  intentClass?: IntentClass;
 }
 
 export interface ToolCallRecord {
