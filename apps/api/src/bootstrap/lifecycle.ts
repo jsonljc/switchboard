@@ -87,7 +87,7 @@ export function bootstrapLifecycle(deps: BootstrapLifecycleDeps): BootstrapLifec
 
   // 5a — verdict-write subscription. DEFERRED wiring.
   // The PrismaGovernanceVerdictStore exposes an `onWrite` constructor option
-  // and is instantiated at apps/api/src/bootstrap/skill-mode.ts:105. No caller
+  // and is instantiated at apps/api/src/bootstrap/skill-mode.ts:107. No caller
   // currently passes a real registrar from app.ts → skill-mode bootstrap; the
   // registrar below is invoked but no producer fires it yet.
   deps.registerVerdictWriteHook((event) =>

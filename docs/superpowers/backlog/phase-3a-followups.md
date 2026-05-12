@@ -12,7 +12,7 @@ Each item below is a candidate follow-up PR. The "Why deferred" lines preserve t
 ## 5a — verdict-write subscription
 
 **Seat:** `apps/api/src/bootstrap/lifecycle.ts:88-96`
-**Wiring target:** `apps/api/src/bootstrap/skill-mode.ts:105`, `apps/chat/src/gateway/gateway-bridge.ts:120`
+**Wiring target:** `apps/api/src/bootstrap/skill-mode.ts:107` (`new PrismaGovernanceVerdictStore(...)`), `apps/chat/src/gateway/gateway-bridge.ts:120`
 
 **Why deferred:** `PrismaGovernanceVerdictStore` already exposes an `onWrite` constructor option, but no caller (skill-mode bootstrap or chat gateway bridge) currently passes a real registrar from `app.ts` down to the store constructor. The handler is registered; the producer call site is missing.
 
