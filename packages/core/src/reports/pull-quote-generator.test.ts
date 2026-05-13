@@ -65,9 +65,9 @@ describe("createPullQuoteGenerator — null client path", () => {
 
     expect(result).toEqual({
       pre: "This month, your team generated",
-      value: "$18,433",
+      value: "S$18,433",
       mid: "in revenue, with Switchboard costing",
-      cost: "$499",
+      cost: "S$499",
       post: "versus a traditional stack.",
     });
   });
@@ -128,9 +128,9 @@ describe("createPullQuoteGenerator — LLM happy path", () => {
 
     expect(result).toEqual({
       pre: "In April, the team converted leads",
-      value: "$18,433",
+      value: "S$18,433",
       mid: "in revenue against a Switchboard fee of",
-      cost: "$499",
+      cost: "S$499",
       post: "well below traditional staffing costs.",
     });
     expect(warnSpy).not.toHaveBeenCalled();
@@ -148,8 +148,8 @@ describe("createPullQuoteGenerator — LLM happy path", () => {
     const [system, user] = call as unknown as [string, string];
     expect(system).toMatch(/JSON/);
     expect(user).toContain("this quarter");
-    expect(user).toContain("$18,433");
-    expect(user).toContain("$499");
+    expect(user).toContain("S$18,433");
+    expect(user).toContain("S$499");
   });
 });
 
@@ -167,7 +167,7 @@ describe("createPullQuoteGenerator — fallback paths", () => {
     const result = await generator(makeInput());
 
     expect(result.pre).toBe("This month, your team generated");
-    expect(result.value).toBe("$18,433");
+    expect(result.value).toBe("S$18,433");
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toMatchObject({
       kind: "llm-error",

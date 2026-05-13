@@ -4,6 +4,7 @@ import {
   windowToRange,
   priorPeriodRange,
   formatCurrencyUSD,
+  formatCurrencySGD,
   formatDateFolio,
 } from "./period-helpers.js";
 
@@ -103,5 +104,26 @@ describe("formatDateFolio", () => {
       window: "THIS WEEK" as const,
     };
     expect(formatDateFolio(r)).toBe("APR 27 — MAY 3");
+  });
+});
+
+describe("formatCurrencySGD", () => {
+  it("formats whole dollars without decimals when >= 1000", () => {
+    expect(formatCurrencySGD(14700)).toBe("S$14,700");
+  });
+  it("formats sub-dollar with cents when under 1000 and fractional", () => {
+    expect(formatCurrencySGD(447.75)).toBe("S$447.75");
+  });
+  it("formats integer under 1000 without cents", () => {
+    expect(formatCurrencySGD(500)).toBe("S$500");
+  });
+  it("formats zero as S$0", () => {
+    expect(formatCurrencySGD(0)).toBe("S$0");
+  });
+  it("formats negative numbers with a leading -", () => {
+    expect(formatCurrencySGD(-200)).toBe("-S$200");
+  });
+  it("uses en-SG grouping for very large numbers", () => {
+    expect(formatCurrencySGD(1234567)).toBe("S$1,234,567");
   });
 });

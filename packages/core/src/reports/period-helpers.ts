@@ -94,6 +94,20 @@ export function formatCurrencyUSD(value: number): string {
   return `${sign}$${abs.toFixed(2)}`;
 }
 
+export function formatCurrencySGD(value: number): string {
+  if (value === 0) return "S$0";
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  if (abs >= 1000) {
+    const whole = Math.round(abs);
+    return `${sign}S$${whole.toLocaleString("en-SG")}`;
+  }
+  if (Number.isInteger(abs)) {
+    return `${sign}S$${abs.toLocaleString("en-SG")}`;
+  }
+  return `${sign}S$${abs.toFixed(2)}`;
+}
+
 export function formatDateFolio(range: PeriodRange): string {
   const startMonth = MONTH_NAMES[range.start.getUTCMonth()];
   const startDay = range.start.getUTCDate();
