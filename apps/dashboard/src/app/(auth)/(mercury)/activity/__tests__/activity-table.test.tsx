@@ -79,4 +79,32 @@ describe("ActivityTable", () => {
     await user.click(screen.getByRole("button", { name: /view previous/i }));
     expect(scrollSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("'view previous ↓' flashes the target row briefly via the data-rowid attribute", async () => {
+    // Per spec §5.3, the target row gets a 1.6s amber-paper flash after scroll.
+    // The flash is gated by an internal targetId state that gets set on
+    // scrollToRow and cleared via setTimeout. We assert the class is applied
+    // immediately after click; the class auto-clears after TARGET_FLASH_MS.
+    const user = userEvent.setup();
+    const target = makeRow({ id: "audit_target", entryHash: "0xtargethash" });
+    const child = makeRow({
+      id: "audit_child",
+      entryHash: "0xchildhash",
+      previousEntryHash: "0xtargethash",
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+    const { container } = render(
+      <ActivityTable
+        rows={[target, child]}
+        expandedId="audit_child"
+        onToggle={() => {}}
+        now={NOW_MS}
+      />,
+    );
+    const targetRow = container.querySelector("[data-rowid='audit_target']");
+    expect(targetRow?.className).not.toMatch(/arowTarget/);
+    await user.click(screen.getByRole("button", { name: /view previous/i }));
+    // After click, the target row should carry the flash class.
+    expect(targetRow?.className).toMatch(/arowTarget/);
+  });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
 import { ActivityRow } from "./activity-row";
@@ -12,31 +12,40 @@ export interface ActivityTableProps {
   onToggle: (id: string) => void;
   /** Wall-clock anchor in ms for row relative-time. */
   now: number;
-  /** Row id to flash after a scroll, if any (1.6s amber-paper). */
-  targetId?: string | null;
   orgTimezone?: string;
 }
+
+const TARGET_FLASH_MS = 1600;
 
 /**
  * Div-grid table for /activity rows. Explicit ARIA grid roles per spec §5.3.
  *
  * Owns the row-ref map and exposes a scrollToRow function to the drawer for
- * "view previous ↓".
+ * "view previous ↓". On scroll, the target row receives a 1.6s amber-paper
+ * flash via the `.arowTarget` class (CSS keyframe `targetFlash`) so operators
+ * register that the page jumped.
  */
 export function ActivityTable({
   rows,
   expandedId,
   onToggle,
   now,
-  targetId,
   orgTimezone,
 }: ActivityTableProps) {
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [targetId, setTargetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (targetId === null) return undefined;
+    const t = setTimeout(() => setTargetId(null), TARGET_FLASH_MS);
+    return () => clearTimeout(t);
+  }, [targetId]);
 
   function scrollToRow(id: string) {
     const el = rowRefs.current[id];
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTargetId(id);
   }
 
   return (
