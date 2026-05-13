@@ -227,4 +227,10 @@ export const scopedKeys = (orgId: string) => ({
         },
       ] as const,
   },
+  whatsappManagement: {
+    all: () => [orgId, "whatsappManagement"] as const,
+    account: () => [orgId, "whatsappManagement", "account"] as const,
+    phoneNumbers: () => [orgId, "whatsappManagement", "phoneNumbers"] as const,
+    templates: () => [orgId, "whatsappManagement", "templates"] as const,
+  },
 });

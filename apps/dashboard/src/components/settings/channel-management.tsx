@@ -14,9 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useManagedChannels, useProvision, useDeleteChannel } from "@/hooks/use-managed-channels";
+import { useWhatsAppPhoneNumbers } from "@/hooks/use-whatsapp-management";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { useToast } from "@/components/ui/use-toast";
 import { Trash2, Plus, Loader2 } from "lucide-react";
+import Link from "next/link";
 
 const ALL_CHANNELS = ["telegram", "slack", "whatsapp"] as const;
 
@@ -51,6 +53,7 @@ function relativeTime(iso: string | null) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// eslint-disable-next-line complexity
 export function ChannelManagement() {
   const { data: orgData, isLoading: orgLoading } = useOrgConfig();
   const { data: channelsData, isLoading: channelsLoading } = useManagedChannels();
@@ -67,6 +70,13 @@ export function ChannelManagement() {
   const [waPhoneNumberId, setWaPhoneNumberId] = useState("");
   const [waAppSecret, setWaAppSecret] = useState("");
   const [waVerifyToken, setWaVerifyToken] = useState("");
+
+  const hasWhatsApp = (channelsData?.channels ?? []).some(
+    (c) => c.channel === "whatsapp" && (c.status === "active" || c.status === "error"),
+  );
+  const waPhones = useWhatsAppPhoneNumbers(hasWhatsApp);
+  const primaryQuality =
+    waPhones.data?.phoneNumbers.find((p) => p.isPrimaryForSwitchboard)?.qualityBadge ?? "unknown";
 
   const config = orgData?.config;
   const channels = channelsData?.channels ?? [];
@@ -213,6 +223,19 @@ export function ChannelManagement() {
               <div className="flex items-center gap-2">
                 <span className="font-medium capitalize">{ch.channel}</span>
                 {statusBadge(ch.status)}
+                {ch.channel === "whatsapp" && (
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      {
+                        good: "bg-green-500",
+                        warning: "bg-yellow-500",
+                        bad: "bg-red-500",
+                        unknown: "bg-gray-400",
+                      }[primaryQuality]
+                    }`}
+                    title={`Quality: ${primaryQuality}`}
+                  />
+                )}
               </div>
               {ch.botUsername && <p className="text-xs text-muted-foreground">{ch.botUsername}</p>}
               <p className="text-xs text-muted-foreground">
@@ -222,19 +245,28 @@ export function ChannelManagement() {
                 <p className="text-xs text-destructive">{ch.statusDetail}</p>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-destructive"
-              disabled={deleteChannel.isPending}
-              onClick={() => handleDelete(ch.id, ch.channel)}
-            >
-              {deleteChannel.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
+            <div className="flex items-center gap-2">
+              {ch.channel === "whatsapp" && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/settings/channels/whatsapp" className="text-muted-foreground">
+                    Manage
+                  </Link>
+                </Button>
               )}
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive"
+                disabled={deleteChannel.isPending}
+                onClick={() => handleDelete(ch.id, ch.channel)}
+              >
+                {deleteChannel.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         ))}
 
