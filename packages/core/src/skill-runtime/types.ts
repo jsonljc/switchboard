@@ -4,7 +4,7 @@ import type {
   TrustLevel,
   GovernanceDecision,
   GovernanceLogEntry,
-} from "./governance.js";
+} from "./governance-types.js";
 import type {
   ContextRequirement,
   IntentClass,

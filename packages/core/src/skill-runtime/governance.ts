@@ -1,42 +1,26 @@
 import type { SkillToolOperation } from "./types.js";
+import type {
+  EffectCategory,
+  TrustLevel,
+  GovernanceDecision,
+  GovernanceOutcome,
+} from "./governance-types.js";
 
-export type EffectCategory =
-  | "read"
-  | "propose"
-  | "simulate"
-  | "write"
-  | "external_send"
-  | "external_mutation"
-  | "irreversible";
-
-/** @deprecated Use `EffectCategory` instead. Kept as alias during migration. */
-export type GovernanceTier = EffectCategory;
-
-export type TrustLevel = "supervised" | "guided" | "autonomous";
-export type GovernanceDecision = "auto-approve" | "require-approval" | "deny";
-export type GovernanceOutcome = "auto-approved" | "require-approval" | "denied";
+// Re-export all types so existing consumers of governance.ts don't break
+export type {
+  EffectCategory,
+  GovernanceTier,
+  TrustLevel,
+  GovernanceDecision,
+  GovernanceOutcome,
+  GovernanceLogEntry,
+} from "./governance-types.js";
 
 export const GOVERNANCE_POLICY: Record<EffectCategory, Record<TrustLevel, GovernanceDecision>> = {
-  read: {
-    supervised: "auto-approve",
-    guided: "auto-approve",
-    autonomous: "auto-approve",
-  },
-  propose: {
-    supervised: "auto-approve",
-    guided: "auto-approve",
-    autonomous: "auto-approve",
-  },
-  simulate: {
-    supervised: "auto-approve",
-    guided: "auto-approve",
-    autonomous: "auto-approve",
-  },
-  write: {
-    supervised: "require-approval",
-    guided: "auto-approve",
-    autonomous: "auto-approve",
-  },
+  read: { supervised: "auto-approve", guided: "auto-approve", autonomous: "auto-approve" },
+  propose: { supervised: "auto-approve", guided: "auto-approve", autonomous: "auto-approve" },
+  simulate: { supervised: "auto-approve", guided: "auto-approve", autonomous: "auto-approve" },
+  write: { supervised: "require-approval", guided: "auto-approve", autonomous: "auto-approve" },
   external_send: {
     supervised: "require-approval",
     guided: "require-approval",
@@ -47,11 +31,7 @@ export const GOVERNANCE_POLICY: Record<EffectCategory, Record<TrustLevel, Govern
     guided: "require-approval",
     autonomous: "auto-approve",
   },
-  irreversible: {
-    supervised: "deny",
-    guided: "require-approval",
-    autonomous: "require-approval",
-  },
+  irreversible: { supervised: "deny", guided: "require-approval", autonomous: "require-approval" },
 };
 
 export function getToolGovernanceDecision(
@@ -73,13 +53,4 @@ export function mapDecisionToOutcome(decision: GovernanceDecision): GovernanceOu
     case "deny":
       return "denied";
   }
-}
-
-export interface GovernanceLogEntry {
-  operationId: string;
-  tier: EffectCategory;
-  trustLevel: TrustLevel;
-  decision: GovernanceDecision;
-  overridden: boolean;
-  timestamp: string;
 }
