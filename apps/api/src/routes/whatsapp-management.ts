@@ -11,23 +11,21 @@ interface WhatsAppCredentials {
   [key: string]: unknown;
 }
 
-type ReadinessStatus = "ready" | "needs_attention";
-
-interface ReadinessReason {
-  step: string;
-  message: string;
-}
+type ReadinessStatus = "ready" | "needs_attention" | "incomplete" | "not_connected";
 
 type QualityBadge = "good" | "warning" | "bad" | "unknown";
 
 interface PhoneNumber {
   id: string;
-  displayPhoneNumber: string;
-  verifiedName: string;
-  codeVerificationStatus: string;
-  qualityRating: string;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  qualityRating: string | null;
   qualityBadge: QualityBadge;
-  messagingLimit: string;
+  messagingLimitTier: string | null;
+  status: string | null;
+  platformType: string | null;
+  codeVerificationStatus: string | null;
+  isOfficialBusinessAccount: boolean | null;
   isPrimaryForSwitchboard: boolean;
 }
 
@@ -39,12 +37,13 @@ interface Template {
   category: string;
   hasBody: boolean;
   hasButtons: boolean;
-  components: unknown[];
+  rejectedReason: string | null;
 }
 
 interface WabaAccount {
   id: string;
   name: string;
+  currency: string;
   timezone_id: string;
   message_template_namespace: string;
   account_review_status?: string;
@@ -69,30 +68,30 @@ function isUsablePhoneNumberStatus(status: string): boolean {
   return status === "CONNECTED";
 }
 
-/** Classifies Graph API errors into typed error codes */
+/** Classifies Graph API errors into typed error codes + appropriate HTTP status */
 function classifyGraphError(
   res: Response,
   body: { error?: { code?: number; message?: string } },
-): string {
+): { code: string; httpStatus: number } {
   const errorCode = body.error?.code;
 
   // Token invalid (code 190 or 401 status)
   if (errorCode === 190 || res.status === 401) {
-    return "WHATSAPP_TOKEN_INVALID";
+    return { code: "WHATSAPP_TOKEN_INVALID", httpStatus: 502 };
   }
 
   // Permission denied (code 200/10 or 403 status)
   if (errorCode === 200 || errorCode === 10 || res.status === 403) {
-    return "WHATSAPP_GRAPH_PERMISSION_DENIED";
+    return { code: "WHATSAPP_GRAPH_PERMISSION_DENIED", httpStatus: 403 };
   }
 
   // Rate limited (429 status or codes 4/80007)
   if (res.status === 429 || errorCode === 4 || errorCode === 80007) {
-    return "WHATSAPP_RATE_LIMITED";
+    return { code: "WHATSAPP_RATE_LIMITED", httpStatus: 429 };
   }
 
   // Default upstream error
-  return "WHATSAPP_UPSTREAM_ERROR";
+  return { code: "WHATSAPP_UPSTREAM_ERROR", httpStatus: 502 };
 }
 
 /** Fetches from Graph API with timeout and error handling */
@@ -100,7 +99,9 @@ async function graphGet(
   path: string,
   token: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true; data: unknown } | { ok: false; code: string; message: string }> {
+): Promise<
+  { ok: true; data: unknown } | { ok: false; code: string; message: string; httpStatus: number }
+> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
 
@@ -117,9 +118,11 @@ async function graphGet(
     const body = (await res.json()) as { error?: { code?: number; message?: string } };
 
     if (!res.ok) {
+      const classified = classifyGraphError(res, body);
       return {
         ok: false,
-        code: classifyGraphError(res, body),
+        code: classified.code,
+        httpStatus: classified.httpStatus,
         message: body.error?.message ?? `HTTP ${res.status}`,
       };
     }
@@ -128,11 +131,17 @@ async function graphGet(
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof Error && err.name === "AbortError") {
-      return { ok: false, code: "WHATSAPP_UPSTREAM_ERROR", message: "Request timeout" };
+      return {
+        ok: false,
+        code: "WHATSAPP_UPSTREAM_ERROR",
+        httpStatus: 502,
+        message: "Request timeout",
+      };
     }
     return {
       ok: false,
       code: "WHATSAPP_UPSTREAM_ERROR",
+      httpStatus: 502,
       message: err instanceof Error ? err.message : "Unknown error",
     };
   }
@@ -144,13 +153,15 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
 ) => {
   const fetchImpl = opts.graphApiFetch ?? fetch;
   const metaSystemUserToken = process.env.META_SYSTEM_USER_TOKEN ?? "";
-  const apiVersion = "v21.0";
-  const graphBase = `https://graph.facebook.com/${apiVersion}`;
+  const META_GRAPH_VERSION = process.env.META_GRAPH_VERSION ?? "v21.0";
+  const graphBase = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 
   app.get("/account", async (request, reply) => {
     const organizationId = request.organizationIdFromAuth;
     if (!organizationId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({
+        error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false },
+      });
     }
 
     // Step 1: Look up WhatsApp Connection
@@ -162,25 +173,34 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
     });
 
     if (!connection) {
-      return reply.code(404).send({
-        error: "WHATSAPP_NOT_CONNECTED",
-        message: "No WhatsApp connection found for this organization",
+      return reply.code(200).send({
+        connection: {
+          status: "not_connected" as const,
+          externalAccountId: null,
+          primaryPhoneNumberId: null,
+          connectedAt: null,
+        },
+        account: {
+          id: null,
+          name: null,
+          currency: null,
+          timezoneId: null,
+          reviewStatus: null,
+          templateNamespace: null,
+        },
+        readiness: {
+          status: "not_connected" as ReadinessStatus,
+          reasons: ["No WhatsApp connection found for this organization"],
+        },
       });
     }
 
     // Step 2: Check externalAccountId (wabaId)
     const wabaId = connection.externalAccountId;
-    if (!wabaId) {
-      return reply.code(409).send({
-        error: "WHATSAPP_CONNECTION_INCOMPLETE",
-        message: "WhatsApp connection is missing WABA ID",
-      });
-    }
 
     // Step 3: Decrypt credentials and check primaryPhoneNumberId
     let primaryPhoneNumberId: string | null = null;
     try {
-      // Try to parse as JSON first (for tests), then decrypt (for production)
       let creds: WhatsAppCredentials;
       const credString =
         typeof connection.credentials === "string"
@@ -193,126 +213,133 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
       }
       primaryPhoneNumberId = creds.primaryPhoneNumberId ?? null;
     } catch {
-      // If both fail, treat as missing primaryPhoneNumberId
       primaryPhoneNumberId = null;
     }
 
-    if (!primaryPhoneNumberId) {
-      return reply.code(409).send({
-        error: "WHATSAPP_CONNECTION_INCOMPLETE",
-        message: "WhatsApp connection is missing primary phone number ID",
+    const connectedAt =
+      (connection as Record<string, unknown>).connectedAt != null
+        ? String((connection as Record<string, unknown>).connectedAt)
+        : null;
+
+    if (!wabaId || !primaryPhoneNumberId) {
+      return reply.code(200).send({
+        connection: {
+          status: "incomplete" as const,
+          externalAccountId: wabaId ?? null,
+          primaryPhoneNumberId,
+          connectedAt,
+        },
+        account: {
+          id: null,
+          name: null,
+          currency: null,
+          timezoneId: null,
+          reviewStatus: null,
+          templateNamespace: null,
+        },
+        readiness: {
+          status: "incomplete" as ReadinessStatus,
+          reasons: [
+            ...(!wabaId ? ["WhatsApp connection is missing WABA ID"] : []),
+            ...(!primaryPhoneNumberId
+              ? ["WhatsApp connection is missing primary phone number ID"]
+              : []),
+          ],
+        },
       });
     }
 
-    const reasons: ReadinessReason[] = [];
+    const reasons: string[] = [];
 
     // Step 4: Fetch WABA info from Graph API
-    const wabaPath = `${graphBase}/${wabaId}?fields=id,name,timezone_id,message_template_namespace,account_review_status`;
+    const wabaPath = `${graphBase}/${wabaId}?fields=id,name,currency,timezone_id,message_template_namespace,account_review_status`;
     const wabaResult = await graphGet(wabaPath, metaSystemUserToken, fetchImpl);
 
     if (!wabaResult.ok) {
       return reply.code(200).send({
-        readiness: "needs_attention" as ReadinessStatus,
-        reasons: [
-          {
-            step: "waba_access",
-            message: "Cannot access WABA information from Meta",
-          },
-        ],
         connection: {
-          id: connection.id,
-          wabaId,
+          status: "needs_attention" as const,
+          externalAccountId: wabaId,
           primaryPhoneNumberId,
+          connectedAt,
+        },
+        account: {
+          id: null,
+          name: null,
+          currency: null,
+          timezoneId: null,
+          reviewStatus: null,
+          templateNamespace: null,
+        },
+        readiness: {
+          status: "needs_attention" as ReadinessStatus,
+          reasons: ["Cannot access WABA information from Meta"],
         },
       });
     }
 
     const wabaAccount = wabaResult.data as WabaAccount;
 
-    // Step 5: Fetch phone numbers from Graph API
-    const phonePath = `${graphBase}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating,messaging_limit_tier`;
+    // Step 5: Fetch phone numbers from Graph API (lightweight query for readiness only)
+    const phonePath = `${graphBase}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,status,messaging_limit_tier`;
     const phoneResult = await graphGet(phonePath, metaSystemUserToken, fetchImpl);
 
+    let phoneNumbers: unknown[] = [];
     if (!phoneResult.ok) {
-      return reply.code(200).send({
-        readiness: "needs_attention" as ReadinessStatus,
-        reasons: [
-          {
-            step: "phone_numbers_access",
-            message: "Cannot read phone numbers from Meta",
-          },
-        ],
-        connection: {
-          id: connection.id,
-          wabaId,
-          primaryPhoneNumberId,
-        },
-        account: {
-          id: wabaAccount.id,
-          name: wabaAccount.name,
-          timezone: wabaAccount.timezone_id,
-          namespace: wabaAccount.message_template_namespace,
-          reviewStatus: wabaAccount.account_review_status ?? "UNKNOWN",
-        },
-      });
+      // I4: accumulate reason but don't short-circuit — step 6 only needs WABA data
+      reasons.push("Cannot read phone numbers from Meta");
+    } else {
+      const phoneData = phoneResult.data as { data?: unknown[] };
+      phoneNumbers = phoneData.data ?? [];
     }
 
-    const phoneData = phoneResult.data as { data?: unknown[] };
-    const phoneNumbers = phoneData.data ?? [];
-
-    // Step 6: Check WABA review status
+    // Step 6: Check WABA review status (runs even if step 5 failed)
     const reviewStatus = wabaAccount.account_review_status ?? "UNKNOWN";
     if (reviewStatus !== "APPROVED") {
-      reasons.push({
-        step: "waba_review",
-        message: `WABA review status is ${reviewStatus}, not APPROVED`,
-      });
+      reasons.push(`WABA review status is ${reviewStatus}, not APPROVED`);
     }
 
-    // Step 7: Check if primary phone exists in Graph response
-    const primaryPhone = phoneNumbers.find((p: any) => p.id === primaryPhoneNumberId);
-    if (!primaryPhone) {
-      reasons.push({
-        step: "primary_phone_missing",
-        message: "Primary phone number not found in WABA phone numbers",
-      });
-    } else {
-      // Step 8: Check primary phone status
-      const phoneStatus = (primaryPhone as any).code_verification_status;
-      if (!isUsablePhoneNumberStatus(phoneStatus)) {
-        reasons.push({
-          step: "primary_phone_status",
-          message: `Primary phone number status is ${phoneStatus}, not CONNECTED`,
-        });
-      }
+    // Step 7: Check if primary phone exists in Graph response (skip if step 5 failed)
+    if (phoneNumbers.length > 0 || phoneResult.ok) {
+      const primaryPhone = phoneNumbers.find((p: any) => p.id === primaryPhoneNumberId);
+      if (!primaryPhone) {
+        reasons.push("Primary phone number not found in WABA phone numbers");
+      } else {
+        // Step 8: Check primary phone status — C2: check `status` not `code_verification_status`
+        const phoneStatus = (primaryPhone as any).status;
+        if (!isUsablePhoneNumberStatus(phoneStatus ?? "")) {
+          reasons.push(`Primary phone number status is ${phoneStatus ?? "UNKNOWN"}, not CONNECTED`);
+        }
 
-      // Step 9: Check primary phone quality
-      const quality = (primaryPhone as any).quality_rating;
-      if (quality === "RED") {
-        reasons.push({
-          step: "primary_phone_quality",
-          message: "Phone number quality is low (RED rating)",
-        });
+        // Step 9: Check primary phone quality
+        const quality = (primaryPhone as any).quality_rating;
+        if (quality === "RED") {
+          reasons.push("Phone number quality is low (RED rating)");
+        }
       }
     }
 
     // Step 10: Determine readiness
-    const readiness: ReadinessStatus = reasons.length === 0 ? "ready" : "needs_attention";
+    const readinessStatus: ReadinessStatus = reasons.length === 0 ? "ready" : "needs_attention";
 
     return reply.code(200).send({
-      readiness,
-      reasons,
       connection: {
-        id: connection.id,
-        wabaId,
+        status: "connected" as const,
+        externalAccountId: wabaId,
         primaryPhoneNumberId,
+        connectedAt,
       },
       account: {
-        id: wabaAccount.id,
-        name: wabaAccount.name,
-        timezone: wabaAccount.timezone_id,
-        namespace: wabaAccount.message_template_namespace,
+        id: wabaAccount.id ?? null,
+        name: wabaAccount.name ?? null,
+        currency: wabaAccount.currency ?? null,
+        timezoneId: wabaAccount.timezone_id ?? null,
         reviewStatus,
+        templateNamespace: wabaAccount.message_template_namespace ?? null,
+      },
+      readiness: {
+        status: readinessStatus,
+        reasons,
       },
     });
   });
@@ -320,7 +347,9 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
   app.get("/phone-numbers", async (request, reply) => {
     const organizationId = request.organizationIdFromAuth;
     if (!organizationId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({
+        error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false },
+      });
     }
 
     const connection = await app.prisma!.connection.findFirst({
@@ -332,15 +361,17 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
 
     if (!connection || !connection.externalAccountId) {
       return reply.code(404).send({
-        error: "WHATSAPP_NOT_CONNECTED",
-        message: "No WhatsApp connection found",
+        error: {
+          code: "WHATSAPP_NOT_CONNECTED",
+          message: "No WhatsApp connection found",
+          retryable: false,
+        },
       });
     }
 
     const wabaId = connection.externalAccountId;
     let primaryPhoneNumberId: string | null = null;
     try {
-      // Try to parse as JSON first (for tests), then decrypt (for production)
       let creds: WhatsAppCredentials;
       const credString =
         typeof connection.credentials === "string"
@@ -356,25 +387,31 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
       // Continue without primary phone number
     }
 
-    const phonePath = `${graphBase}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating,messaging_limit_tier`;
+    const phonePath = `${graphBase}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,platform_type,code_verification_status,is_official_business_account,status,messaging_limit_tier`;
     const phoneResult = await graphGet(phonePath, metaSystemUserToken, fetchImpl);
 
     if (!phoneResult.ok) {
-      return reply.code(502).send({
-        error: phoneResult.code,
-        message: phoneResult.message,
+      return reply.code(phoneResult.httpStatus).send({
+        error: {
+          code: phoneResult.code,
+          message: phoneResult.message,
+          retryable: phoneResult.code === "WHATSAPP_RATE_LIMITED",
+        },
       });
     }
 
     const phoneData = phoneResult.data as { data?: any[] };
     const phoneNumbers: PhoneNumber[] = (phoneData.data ?? []).map((p: any) => ({
       id: p.id,
-      displayPhoneNumber: p.display_phone_number ?? "",
-      verifiedName: p.verified_name ?? "",
-      codeVerificationStatus: p.code_verification_status ?? "UNKNOWN",
-      qualityRating: p.quality_rating ?? "UNKNOWN",
+      displayPhoneNumber: (p.display_phone_number as string) ?? null,
+      verifiedName: (p.verified_name as string) ?? null,
+      qualityRating: (p.quality_rating as string) ?? null,
       qualityBadge: qualityBadge(p.quality_rating ?? ""),
-      messagingLimit: p.messaging_limit_tier ?? "UNKNOWN",
+      messagingLimitTier: (p.messaging_limit_tier as string) ?? null,
+      status: (p.status as string) ?? null,
+      platformType: (p.platform_type as string) ?? null,
+      codeVerificationStatus: (p.code_verification_status as string) ?? null,
+      isOfficialBusinessAccount: (p.is_official_business_account as boolean) ?? null,
       isPrimaryForSwitchboard: p.id === primaryPhoneNumberId,
     }));
 
@@ -384,7 +421,9 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
   app.get("/templates", async (request, reply) => {
     const organizationId = request.organizationIdFromAuth;
     if (!organizationId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({
+        error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false },
+      });
     }
 
     const connection = await app.prisma!.connection.findFirst({
@@ -396,19 +435,25 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
 
     if (!connection || !connection.externalAccountId) {
       return reply.code(404).send({
-        error: "WHATSAPP_NOT_CONNECTED",
-        message: "No WhatsApp connection found",
+        error: {
+          code: "WHATSAPP_NOT_CONNECTED",
+          message: "No WhatsApp connection found",
+          retryable: false,
+        },
       });
     }
 
     const wabaId = connection.externalAccountId;
-    const templatePath = `${graphBase}/${wabaId}/message_templates?fields=id,name,language,status,category,components`;
+    const templatePath = `${graphBase}/${wabaId}/message_templates?fields=id,name,status,category,language,components,rejected_reason&limit=100`;
     const templateResult = await graphGet(templatePath, metaSystemUserToken, fetchImpl);
 
     if (!templateResult.ok) {
-      return reply.code(502).send({
-        error: templateResult.code,
-        message: templateResult.message,
+      return reply.code(templateResult.httpStatus).send({
+        error: {
+          code: templateResult.code,
+          message: templateResult.message,
+          retryable: templateResult.code === "WHATSAPP_RATE_LIMITED",
+        },
       });
     }
 
@@ -426,7 +471,7 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
         category: t.category ?? "",
         hasBody,
         hasButtons,
-        components: t.components ?? [],
+        rejectedReason: (t.rejected_reason as string) ?? null,
       };
     });
 

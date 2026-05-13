@@ -223,19 +223,21 @@ export function ChannelManagement() {
               <div className="flex items-center gap-2">
                 <span className="font-medium capitalize">{ch.channel}</span>
                 {statusBadge(ch.status)}
-                {ch.channel === "whatsapp" && (
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full ${
-                      {
-                        good: "bg-green-500",
-                        warning: "bg-yellow-500",
-                        bad: "bg-red-500",
-                        unknown: "bg-gray-400",
-                      }[primaryQuality]
-                    }`}
-                    title={`Quality: ${primaryQuality}`}
-                  />
-                )}
+                {ch.channel === "whatsapp" &&
+                  hasWhatsApp &&
+                  (ch.status === "active" || ch.status === "error") && (
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${
+                        {
+                          good: "bg-green-500",
+                          warning: "bg-yellow-500",
+                          bad: "bg-red-500",
+                          unknown: "bg-gray-400",
+                        }[primaryQuality]
+                      }`}
+                      title={`Quality: ${primaryQuality}`}
+                    />
+                  )}
               </div>
               {ch.botUsername && <p className="text-xs text-muted-foreground">{ch.botUsername}</p>}
               <p className="text-xs text-muted-foreground">

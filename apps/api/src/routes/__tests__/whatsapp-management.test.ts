@@ -42,7 +42,7 @@ describe("WhatsApp management routes", () => {
   });
 
   describe("GET /account", () => {
-    it("returns 404 when no connection exists", async () => {
+    it("returns not_connected when no connection exists", async () => {
       mockFindFirst.mockResolvedValueOnce(null);
 
       const response = await app.inject({
@@ -50,12 +50,14 @@ describe("WhatsApp management routes", () => {
         url: "/account",
       });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.error).toBe("WHATSAPP_NOT_CONNECTED");
+      expect(body.connection.status).toBe("not_connected");
+      expect(body.readiness.status).toBe("not_connected");
+      expect(body.readiness.reasons).toHaveLength(1);
     });
 
-    it("returns 409 when connection exists but no externalAccountId", async () => {
+    it("returns incomplete when connection exists but no externalAccountId", async () => {
       mockFindFirst.mockResolvedValueOnce({
         id: "conn_1",
         organizationId: "org_test",
@@ -69,13 +71,14 @@ describe("WhatsApp management routes", () => {
         url: "/account",
       });
 
-      expect(response.statusCode).toBe(409);
+      expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.error).toBe("WHATSAPP_CONNECTION_INCOMPLETE");
-      expect(body.message).toContain("WABA ID");
+      expect(body.connection.status).toBe("incomplete");
+      expect(body.readiness.status).toBe("incomplete");
+      expect(body.readiness.reasons.some((r: string) => r.includes("WABA ID"))).toBe(true);
     });
 
-    it("returns 409 when connection exists but no primaryPhoneNumberId in credentials", async () => {
+    it("returns incomplete when connection exists but no primaryPhoneNumberId in credentials", async () => {
       mockFindFirst.mockResolvedValueOnce({
         id: "conn_1",
         organizationId: "org_test",
@@ -89,10 +92,13 @@ describe("WhatsApp management routes", () => {
         url: "/account",
       });
 
-      expect(response.statusCode).toBe(409);
+      expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.error).toBe("WHATSAPP_CONNECTION_INCOMPLETE");
-      expect(body.message).toContain("primary phone number ID");
+      expect(body.connection.status).toBe("incomplete");
+      expect(body.readiness.status).toBe("incomplete");
+      expect(
+        body.readiness.reasons.some((r: string) => r.includes("primary phone number ID")),
+      ).toBe(true);
     });
 
     it("returns needs_attention when WABA Graph fails with permission error", async () => {
@@ -117,12 +123,12 @@ describe("WhatsApp management routes", () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.readiness).toBe("needs_attention");
-      expect(body.reasons).toHaveLength(1);
-      expect(body.reasons[0].message).toContain("Cannot access WABA");
+      expect(body.readiness.status).toBe("needs_attention");
+      expect(body.readiness.reasons).toHaveLength(1);
+      expect(body.readiness.reasons[0]).toContain("Cannot access WABA");
     });
 
-    it("returns needs_attention when WABA succeeds but phone_numbers Graph fails", async () => {
+    it("accumulates phone failure reason and still checks WABA review when phone_numbers Graph fails", async () => {
       mockFindFirst.mockResolvedValueOnce({
         id: "conn_1",
         organizationId: "org_test",
@@ -131,16 +137,17 @@ describe("WhatsApp management routes", () => {
         credentials: JSON.stringify({ primaryPhoneNumberId: "phone_123" }),
       });
 
-      // WABA call succeeds
+      // WABA call succeeds with PENDING review
       mockGraphFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => ({
           id: "waba_123",
           name: "Test Business",
+          currency: "USD",
           timezone_id: "America/Los_Angeles",
           message_template_namespace: "ns_123",
-          account_review_status: "APPROVED",
+          account_review_status: "PENDING",
         }),
       });
 
@@ -158,10 +165,16 @@ describe("WhatsApp management routes", () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.readiness).toBe("needs_attention");
-      expect(body.reasons).toHaveLength(1);
-      expect(body.reasons[0].message).toContain("Cannot read phone numbers");
+      expect(body.readiness.status).toBe("needs_attention");
+      // I4: both phone failure AND WABA review reasons should be accumulated
+      expect(
+        body.readiness.reasons.some((r: string) => r.includes("Cannot read phone numbers")),
+      ).toBe(true);
+      expect(body.readiness.reasons.some((r: string) => r.includes("PENDING"))).toBe(true);
       expect(body.account.name).toBe("Test Business");
+      expect(body.account.currency).toBe("USD");
+      expect(body.account.timezoneId).toBe("America/Los_Angeles");
+      expect(body.account.templateNamespace).toBe("ns_123");
     });
 
     it("returns needs_attention when WABA review status is PENDING", async () => {
@@ -179,6 +192,7 @@ describe("WhatsApp management routes", () => {
         json: async () => ({
           id: "waba_123",
           name: "Test Business",
+          currency: "USD",
           timezone_id: "America/Los_Angeles",
           message_template_namespace: "ns_123",
           account_review_status: "PENDING",
@@ -194,7 +208,7 @@ describe("WhatsApp management routes", () => {
               id: "phone_123",
               display_phone_number: "+15551234567",
               verified_name: "Test",
-              code_verification_status: "CONNECTED",
+              status: "CONNECTED",
               quality_rating: "GREEN",
               messaging_limit_tier: "TIER_1K",
             },
@@ -209,9 +223,8 @@ describe("WhatsApp management routes", () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.readiness).toBe("needs_attention");
-      expect(body.reasons.some((r: any) => r.step === "waba_review")).toBe(true);
-      expect(body.reasons.some((r: any) => r.message.includes("PENDING"))).toBe(true);
+      expect(body.readiness.status).toBe("needs_attention");
+      expect(body.readiness.reasons.some((r: string) => r.includes("PENDING"))).toBe(true);
     });
 
     it("returns needs_attention when primary phone quality is RED", async () => {
@@ -229,6 +242,7 @@ describe("WhatsApp management routes", () => {
         json: async () => ({
           id: "waba_123",
           name: "Test Business",
+          currency: "USD",
           timezone_id: "America/Los_Angeles",
           message_template_namespace: "ns_123",
           account_review_status: "APPROVED",
@@ -244,7 +258,7 @@ describe("WhatsApp management routes", () => {
               id: "phone_123",
               display_phone_number: "+15551234567",
               verified_name: "Test",
-              code_verification_status: "CONNECTED",
+              status: "CONNECTED",
               quality_rating: "RED",
               messaging_limit_tier: "TIER_1K",
             },
@@ -259,8 +273,8 @@ describe("WhatsApp management routes", () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.readiness).toBe("needs_attention");
-      expect(body.reasons.some((r: any) => r.message.includes("quality is low"))).toBe(true);
+      expect(body.readiness.status).toBe("needs_attention");
+      expect(body.readiness.reasons.some((r: string) => r.includes("quality is low"))).toBe(true);
     });
 
     it("returns needs_attention when primary phone is missing from Graph response", async () => {
@@ -278,6 +292,7 @@ describe("WhatsApp management routes", () => {
         json: async () => ({
           id: "waba_123",
           name: "Test Business",
+          currency: "USD",
           timezone_id: "America/Los_Angeles",
           message_template_namespace: "ns_123",
           account_review_status: "APPROVED",
@@ -293,7 +308,7 @@ describe("WhatsApp management routes", () => {
               id: "phone_123",
               display_phone_number: "+15551234567",
               verified_name: "Test",
-              code_verification_status: "CONNECTED",
+              status: "CONNECTED",
               quality_rating: "GREEN",
               messaging_limit_tier: "TIER_1K",
             },
@@ -308,11 +323,11 @@ describe("WhatsApp management routes", () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.readiness).toBe("needs_attention");
-      expect(body.reasons.some((r: any) => r.message.includes("not found"))).toBe(true);
+      expect(body.readiness.status).toBe("needs_attention");
+      expect(body.readiness.reasons.some((r: string) => r.includes("not found"))).toBe(true);
     });
 
-    it("returns needs_attention when primary phone status is not CONNECTED", async () => {
+    it("returns needs_attention when primary phone status is not CONNECTED (checks status field)", async () => {
       mockFindFirst.mockResolvedValueOnce({
         id: "conn_1",
         organizationId: "org_test",
@@ -327,6 +342,7 @@ describe("WhatsApp management routes", () => {
         json: async () => ({
           id: "waba_123",
           name: "Test Business",
+          currency: "USD",
           timezone_id: "America/Los_Angeles",
           message_template_namespace: "ns_123",
           account_review_status: "APPROVED",
@@ -342,7 +358,8 @@ describe("WhatsApp management routes", () => {
               id: "phone_123",
               display_phone_number: "+15551234567",
               verified_name: "Test",
-              code_verification_status: "PENDING",
+              status: "PENDING",
+              code_verification_status: "VERIFIED",
               quality_rating: "GREEN",
               messaging_limit_tier: "TIER_1K",
             },
@@ -357,11 +374,11 @@ describe("WhatsApp management routes", () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.readiness).toBe("needs_attention");
-      expect(body.reasons.some((r: any) => r.message.includes("PENDING"))).toBe(true);
+      expect(body.readiness.status).toBe("needs_attention");
+      expect(body.readiness.reasons.some((r: string) => r.includes("PENDING"))).toBe(true);
     });
 
-    it("returns ready when all checks pass", async () => {
+    it("returns ready with correct response shape when all checks pass", async () => {
       mockFindFirst.mockResolvedValueOnce({
         id: "conn_1",
         organizationId: "org_test",
@@ -376,6 +393,7 @@ describe("WhatsApp management routes", () => {
         json: async () => ({
           id: "waba_123",
           name: "Test Business",
+          currency: "USD",
           timezone_id: "America/Los_Angeles",
           message_template_namespace: "ns_123",
           account_review_status: "APPROVED",
@@ -391,7 +409,7 @@ describe("WhatsApp management routes", () => {
               id: "phone_123",
               display_phone_number: "+15551234567",
               verified_name: "Test",
-              code_verification_status: "CONNECTED",
+              status: "CONNECTED",
               quality_rating: "GREEN",
               messaging_limit_tier: "TIER_1K",
             },
@@ -406,10 +424,17 @@ describe("WhatsApp management routes", () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.readiness).toBe("ready");
-      expect(body.reasons).toHaveLength(0);
+      expect(body.readiness.status).toBe("ready");
+      expect(body.readiness.reasons).toHaveLength(0);
+      // C1: verify response shape matches frontend WhatsAppAccountData
+      expect(body.connection.status).toBe("connected");
+      expect(body.connection.externalAccountId).toBe("waba_123");
+      expect(body.connection.primaryPhoneNumberId).toBe("phone_123");
       expect(body.account.name).toBe("Test Business");
-      expect(body.connection.wabaId).toBe("waba_123");
+      expect(body.account.currency).toBe("USD");
+      expect(body.account.timezoneId).toBe("America/Los_Angeles");
+      expect(body.account.templateNamespace).toBe("ns_123");
+      expect(body.account.reviewStatus).toBe("APPROVED");
     });
 
     it("handles unknown Graph enum values without crashing", async () => {
@@ -427,6 +452,7 @@ describe("WhatsApp management routes", () => {
         json: async () => ({
           id: "waba_123",
           name: "Test Business",
+          currency: "USD",
           timezone_id: "America/Los_Angeles",
           message_template_namespace: "ns_123",
           account_review_status: "FUTURE_STATUS_NOT_YET_KNOWN",
@@ -442,7 +468,7 @@ describe("WhatsApp management routes", () => {
               id: "phone_123",
               display_phone_number: "+15551234567",
               verified_name: "Test",
-              code_verification_status: "CONNECTED",
+              status: "CONNECTED",
               quality_rating: "UNKNOWN_RATING",
               messaging_limit_tier: "TIER_1K",
             },
@@ -462,7 +488,7 @@ describe("WhatsApp management routes", () => {
   });
 
   describe("GET /phone-numbers", () => {
-    it("returns phone numbers with qualityBadge and isPrimaryForSwitchboard", async () => {
+    it("returns phone numbers with all fields matching frontend type", async () => {
       mockFindFirst.mockResolvedValueOnce({
         id: "conn_1",
         organizationId: "org_test",
@@ -480,17 +506,23 @@ describe("WhatsApp management routes", () => {
               id: "phone_123",
               display_phone_number: "+15551234567",
               verified_name: "Primary Phone",
-              code_verification_status: "CONNECTED",
+              code_verification_status: "VERIFIED",
               quality_rating: "GREEN",
               messaging_limit_tier: "TIER_1K",
+              status: "CONNECTED",
+              platform_type: "CLOUD_API",
+              is_official_business_account: true,
             },
             {
               id: "phone_456",
               display_phone_number: "+15559999999",
               verified_name: "Secondary Phone",
-              code_verification_status: "CONNECTED",
+              code_verification_status: "NOT_VERIFIED",
               quality_rating: "YELLOW",
               messaging_limit_tier: "TIER_100",
+              status: "PENDING",
+              platform_type: "CLOUD_API",
+              is_official_business_account: false,
             },
           ],
         }),
@@ -508,15 +540,76 @@ describe("WhatsApp management routes", () => {
       const primary = body.phoneNumbers.find((p: any) => p.id === "phone_123");
       expect(primary.isPrimaryForSwitchboard).toBe(true);
       expect(primary.qualityBadge).toBe("good");
+      // C3: messagingLimitTier not messagingLimit
+      expect(primary.messagingLimitTier).toBe("TIER_1K");
+      // C4: new fields from Graph API
+      expect(primary.status).toBe("CONNECTED");
+      expect(primary.platformType).toBe("CLOUD_API");
+      expect(primary.codeVerificationStatus).toBe("VERIFIED");
+      expect(primary.isOfficialBusinessAccount).toBe(true);
 
       const secondary = body.phoneNumbers.find((p: any) => p.id === "phone_456");
       expect(secondary.isPrimaryForSwitchboard).toBe(false);
       expect(secondary.qualityBadge).toBe("warning");
     });
+
+    it("returns 403 for permission errors, not 502", async () => {
+      mockFindFirst.mockResolvedValueOnce({
+        id: "conn_1",
+        organizationId: "org_test",
+        serviceId: "whatsapp",
+        externalAccountId: "waba_123",
+        credentials: JSON.stringify({ primaryPhoneNumberId: "phone_123" }),
+      });
+
+      mockGraphFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: { code: 10, message: "Permission denied" } }),
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/phone-numbers",
+      });
+
+      // I5: 403 not blanket 502
+      expect(response.statusCode).toBe(403);
+      const body = response.json();
+      // I1: error shape is { error: { code, message, retryable } }
+      expect(body.error.code).toBe("WHATSAPP_GRAPH_PERMISSION_DENIED");
+      expect(body.error.retryable).toBe(false);
+    });
+
+    it("returns 429 for rate limit errors", async () => {
+      mockFindFirst.mockResolvedValueOnce({
+        id: "conn_1",
+        organizationId: "org_test",
+        serviceId: "whatsapp",
+        externalAccountId: "waba_123",
+        credentials: JSON.stringify({ primaryPhoneNumberId: "phone_123" }),
+      });
+
+      mockGraphFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 4, message: "Rate limited" } }),
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/phone-numbers",
+      });
+
+      expect(response.statusCode).toBe(429);
+      const body = response.json();
+      expect(body.error.code).toBe("WHATSAPP_RATE_LIMITED");
+      expect(body.error.retryable).toBe(true);
+    });
   });
 
   describe("GET /templates", () => {
-    it("returns templates with hasBody and hasButtons derived from components", async () => {
+    it("returns templates with hasBody, hasButtons, rejectedReason and no components leak", async () => {
       mockFindFirst.mockResolvedValueOnce({
         id: "conn_1",
         organizationId: "org_test",
@@ -536,6 +629,7 @@ describe("WhatsApp management routes", () => {
               language: "en",
               status: "APPROVED",
               category: "MARKETING",
+              rejected_reason: null,
               components: [
                 { type: "HEADER" },
                 { type: "BODY", text: "Welcome {{1}}!" },
@@ -552,11 +646,12 @@ describe("WhatsApp management routes", () => {
             },
             {
               id: "tmpl_3",
-              name: "header_only",
+              name: "rejected_one",
               language: "en",
-              status: "APPROVED",
-              category: "UTILITY",
-              components: [{ type: "HEADER" }],
+              status: "REJECTED",
+              category: "MARKETING",
+              rejected_reason: "ABUSIVE_CONTENT",
+              components: [{ type: "BODY", text: "Bad content" }],
             },
           ],
         }),
@@ -574,14 +669,18 @@ describe("WhatsApp management routes", () => {
       const welcome = body.templates.find((t: any) => t.name === "welcome");
       expect(welcome.hasBody).toBe(true);
       expect(welcome.hasButtons).toBe(true);
+      // I3: no components leak
+      expect(welcome.components).toBeUndefined();
+      // I2: rejectedReason present
+      expect(welcome.rejectedReason).toBeNull();
 
       const simple = body.templates.find((t: any) => t.name === "simple");
       expect(simple.hasBody).toBe(true);
       expect(simple.hasButtons).toBe(false);
 
-      const headerOnly = body.templates.find((t: any) => t.name === "header_only");
-      expect(headerOnly.hasBody).toBe(false);
-      expect(headerOnly.hasButtons).toBe(false);
+      const rejected = body.templates.find((t: any) => t.name === "rejected_one");
+      expect(rejected.rejectedReason).toBe("ABUSIVE_CONTENT");
+      expect(rejected.status).toBe("REJECTED");
     });
   });
 });
