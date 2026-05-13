@@ -1,7 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ToolsOverflow } from "../tools-overflow";
+import { ToolsOverflow, TOOLS_NAV_ITEMS } from "../tools-overflow";
+
+describe("TOOLS_NAV_ITEMS", () => {
+  it("includes an Approvals entry", () => {
+    const approvals = TOOLS_NAV_ITEMS.find((i) => i.id === "approvals");
+    expect(approvals).toEqual({
+      id: "approvals",
+      label: "Approvals",
+      href: "/approvals",
+    });
+  });
+});
 
 // Mock next/navigation. Each test sets the return value via mockReturnValue.
 const mockUsePathname = vi.fn(() => "/");
@@ -14,6 +25,7 @@ function setAllToolsLive(value: boolean) {
   vi.stubEnv("NEXT_PUBLIC_AUTOMATIONS_LIVE", value ? "true" : "");
   vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", value ? "true" : "");
   vi.stubEnv("NEXT_PUBLIC_REPORTS_LIVE", value ? "true" : "");
+  vi.stubEnv("NEXT_PUBLIC_APPROVALS_LIVE", value ? "true" : "");
 }
 
 async function openMenu() {
@@ -40,7 +52,7 @@ describe("ToolsOverflow", () => {
   });
 
   // Case 2
-  it("opens the menu and lists all four Tools items + Settings with separator", async () => {
+  it("opens the menu and lists all five Tools items + Settings with separator", async () => {
     setAllToolsLive(true);
     render(<ToolsOverflow />);
     await openMenu();
@@ -51,18 +63,20 @@ describe("ToolsOverflow", () => {
       "Automations",
       "Activity",
       "Reports",
+      "Approvals",
       "Settings",
     ]);
-    // Separator between Reports and Settings.
+    // Separator between Approvals and Settings.
     expect(within(menu).getByRole("separator")).toBeInTheDocument();
   });
 
   // Case 3
-  it("hides one route when its flag is false", async () => {
+  it("hides Automations when its flag is false; the other four Tools items remain visible", async () => {
     vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "true");
     vi.stubEnv("NEXT_PUBLIC_AUTOMATIONS_LIVE", "");
     vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
     vi.stubEnv("NEXT_PUBLIC_REPORTS_LIVE", "true");
+    vi.stubEnv("NEXT_PUBLIC_APPROVALS_LIVE", "true");
     render(<ToolsOverflow />);
     await openMenu();
     const menu = await screen.findByRole("menu");
@@ -70,10 +84,11 @@ describe("ToolsOverflow", () => {
     expect(within(menu).getByText("Contacts")).toBeInTheDocument();
     expect(within(menu).getByText("Activity")).toBeInTheDocument();
     expect(within(menu).getByText("Reports")).toBeInTheDocument();
+    expect(within(menu).getByText("Approvals")).toBeInTheDocument();
   });
 
   // Case 4
-  it("hides the entire trigger when all four flags are off", () => {
+  it("hides the entire trigger when all five flags are off", () => {
     setAllToolsLive(false);
     const { container } = render(<ToolsOverflow />);
     expect(container).toBeEmptyDOMElement();
@@ -88,6 +103,8 @@ describe("ToolsOverflow", () => {
     ["/automations/xyz"],
     ["/activity"],
     ["/reports"],
+    ["/approvals"],
+    ["/approvals/abc"],
   ])("trigger has data-on-tools when pathname is %s", (pathname) => {
     setAllToolsLive(true);
     mockUsePathname.mockReturnValue(pathname);
@@ -161,6 +178,7 @@ describe("ToolsOverflow", () => {
     ["/automations", "Automations"],
     ["/activity", "Activity"],
     ["/reports", "Reports"],
+    ["/approvals", "Approvals"],
   ])("%s item is active+aria-current when pathname matches", async (pathname, label) => {
     setAllToolsLive(true);
     mockUsePathname.mockReturnValue(pathname);
