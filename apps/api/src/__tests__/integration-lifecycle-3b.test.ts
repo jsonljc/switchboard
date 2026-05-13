@@ -195,7 +195,7 @@ describe("case 1: active → qualified via sidecar with resolved treatment", () 
 
     const snap = snapshots.get("thread-1");
     expect(snap?.currentState).toBe("qualified");
-    expect(snap?.qualificationStatus).toBe("unknown"); // qualificationStatus is NOT advanced by recordTransition
+    expect(snap?.qualificationStatus).toBe("qualified");
     // Verify transition appended
     const qualTransition = transitions.find((t) => t.toState === "qualified");
     expect(qualTransition).toBeDefined();

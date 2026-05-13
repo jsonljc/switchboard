@@ -62,12 +62,29 @@ export class LifecycleWriter {
         return;
       }
 
+      // Spec §5.2 monotonic table: recordTransition advances qualificationStatus on
+      // rule-pass triggers. Mechanical triggers carry the existing status across unchanged.
+      const qualificationStatusForTransition = ((): LifecycleQualificationStatus => {
+        if (input.trigger === "qualification_checklist_met") {
+          // unknown/unqualified → qualified (re-affirm on qualified is idempotent).
+          return "qualified";
+        }
+        if (input.trigger === "qualification_checklist_failed") {
+          // §5.2: only unknown → unqualified is permitted; qualified must never regress.
+          return existing?.qualificationStatus === "unknown"
+            ? "unqualified"
+            : (existing?.qualificationStatus ?? "unknown");
+        }
+        // All other triggers (mechanical): carry the existing status unchanged.
+        return existing?.qualificationStatus ?? "unknown";
+      })();
+
       const nextSnapshot: ConversationLifecycleSnapshot = {
         conversationThreadId: input.conversationThreadId,
         organizationId: input.organizationId,
         contactId: input.contactId,
         currentState: input.toState,
-        qualificationStatus: existing?.qualificationStatus ?? "unknown",
+        qualificationStatus: qualificationStatusForTransition,
         bookingStatus:
           input.toState === "booked" ? "booked" : (existing?.bookingStatus ?? "not_booked"),
         dropoffReason: this.computeDropoffReason(input, existing?.dropoffReason ?? null),

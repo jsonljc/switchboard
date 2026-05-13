@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { LifecycleWriter } from "../lifecycle-writer.js";
 import { LifecycleCapabilityDenied } from "../errors.js";
 import type { LifecycleSnapshotStore, LifecycleTransitionStore } from "../types.js";
+import type { ConversationLifecycleSnapshot } from "@switchboard/schemas";
 
-function makeStores() {
-  const snapshots = new Map<string, any>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeStores(initial?: ConversationLifecycleSnapshot) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const snapshots = new Map<string, any>(initial ? [[initial.conversationThreadId, initial]] : []);
   const transitions: any[] = [];
   const snapshotStore: LifecycleSnapshotStore = {
     read: vi.fn(async (id) => snapshots.get(id) ?? null),
@@ -255,5 +258,99 @@ describe("LifecycleWriter.recordTransition", () => {
     snapshots.delete("thread-1");
     const rebuilt = await writer.rebuildSnapshotFromTransitions("thread-1");
     expect(rebuilt?.currentState).toBe(liveCurrent);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spec §5.2 monotonic table: recordTransition qualificationStatus advancement
+// ---------------------------------------------------------------------------
+
+const baseSnap: ConversationLifecycleSnapshot = {
+  conversationThreadId: "thread-1",
+  organizationId: "org-1",
+  contactId: "contact-1",
+  currentState: "active",
+  qualificationStatus: "unknown",
+  bookingStatus: "not_booked",
+  dropoffReason: null,
+  lastTransitionAt: new Date("2026-05-12T00:00:00Z"),
+  lastEvaluatedAt: new Date("2026-05-12T00:00:00Z"),
+  updatedAt: new Date("2026-05-12T00:00:00Z"),
+};
+
+function makeQualWriter(existingQualStatus: ConversationLifecycleSnapshot["qualificationStatus"]) {
+  const existing: ConversationLifecycleSnapshot = {
+    ...baseSnap,
+    qualificationStatus: existingQualStatus,
+  };
+  const { snapshotStore, transitionStore, runInTransaction, snapshots } = makeStores(existing);
+  const writer = new LifecycleWriter({
+    snapshotStore,
+    transitionStore,
+    runInTransaction,
+    resolveCapabilities: async () => new Set(["mechanical", "qualification"] as const),
+  });
+  return { writer, snapshots };
+}
+
+describe("LifecycleWriter.recordTransition — qualificationStatus monotonic table (§5.2)", () => {
+  it("qualification_checklist_met on unknown → qualificationStatus=qualified", async () => {
+    const { writer, snapshots } = makeQualWriter("unknown");
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "qualified",
+      trigger: "qualification_checklist_met",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("qualified");
+  });
+
+  it("qualification_checklist_met when already qualified → qualificationStatus=qualified (idempotent)", async () => {
+    const { writer, snapshots } = makeQualWriter("qualified");
+    // qualified → qualified is allowed by precedence (same state)
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "qualified",
+      trigger: "qualification_checklist_met",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("qualified");
+  });
+
+  it("qualification_checklist_failed on unknown → qualificationStatus=unqualified", async () => {
+    // NOTE: qualification_checklist_failed is not yet emitted by any live path
+    // (deferred to 3c). We exercise the §5.2 rule directly for spec completeness.
+    // Use active → active (allowed by precedence) with this trigger.
+    const { writer, snapshots } = makeQualWriter("unknown");
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "active",
+      trigger: "qualification_checklist_failed",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("unqualified");
+  });
+
+  it("qualification_checklist_failed on qualified → qualificationStatus stays qualified (§5.2 forbids regression)", async () => {
+    const { writer, snapshots } = makeQualWriter("qualified");
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "active",
+      trigger: "qualification_checklist_failed",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("qualified");
   });
 });
