@@ -132,10 +132,10 @@ export async function registerLifecycleDisqualificationsRoutes(
           operatorNote: request.body?.operatorNote,
         });
       } catch (err) {
-        console.warn(
-          `[lifecycle] disqualification confirm threw unexpectedly for thread ${request.params.threadId}:`,
-          err instanceof Error ? err.message : String(err),
-        );
+        console.warn("[lifecycle] disqualification confirm threw unexpectedly", {
+          threadId: request.params.threadId,
+          error: err instanceof Error ? err.message : String(err),
+        });
         return reply.code(404).send({ reason: "not_found" });
       }
 
@@ -199,10 +199,10 @@ export async function registerLifecycleDisqualificationsRoutes(
           operatorNote: request.body?.operatorNote,
         });
       } catch (err) {
-        console.warn(
-          `[lifecycle] disqualification dismiss threw unexpectedly for thread ${request.params.threadId}:`,
-          err instanceof Error ? err.message : String(err),
-        );
+        console.warn("[lifecycle] disqualification dismiss threw unexpectedly", {
+          threadId: request.params.threadId,
+          error: err instanceof Error ? err.message : String(err),
+        });
         return reply.code(404).send({ reason: "not_found" });
       }
 
