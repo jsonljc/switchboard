@@ -9,11 +9,10 @@ import {
   REJECT_SUCCESS_MSG,
   APPROVAL_EXECUTION_ERROR_MSG,
   APPROVAL_LOOKUP_ERROR_MSG,
-  type HandleApprovalResponseConfig,
 } from "../handle-approval-response.js";
 import { StaleVersionError } from "../../approval/state-machine.js";
 import type { ApprovalStore, IdentityStore } from "../../storage/interfaces.js";
-import type { ReplySink } from "../types.js";
+import type { ReplySink, HandleApprovalResponseConfig } from "../types.js";
 import type { ParsedApprovalResponsePayload } from "../approval-response-payload.js";
 import type { OperatorChannelBindingStore } from "../operator-channel-binding-store.js";
 import type { Principal } from "@switchboard/schemas";

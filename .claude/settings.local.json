@@ -119,7 +119,9 @@
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm test 2>&1 | grep -E \"\\(Test Files|Tests |FAIL|Tasks:\\)\")",
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm typecheck 2>&1 | grep -E \"\\(Tasks:|error\\)\")",
       "WebFetch(domain:github.com)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(mkdir -p /Users/jasonljc/switchboard/.claude/memory)",
+      "Bash(cp /Users/jasonljc/.claude/projects/-Users-jasonljc-switchboard/memory/*.md /Users/jasonljc/switchboard/.claude/memory/)"
     ]
   }
 }

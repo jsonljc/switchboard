@@ -2,7 +2,6 @@ import type { DeploymentResolver } from "../platform/deployment-resolver.js";
 import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
 import type { ApprovalStore } from "../storage/interfaces.js";
-import type { HandleApprovalResponseConfig } from "./handle-approval-response.js";
 import type { GovernanceConfigResolver } from "../governance/governance-config-resolver.js";
 import type { EscalationTriggerEntry } from "../governance/escalation-triggers/types.js";
 import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
@@ -11,6 +10,9 @@ import type { HandoffStore } from "../handoff/types.js";
 import type { ConsentService } from "../consent/consent-service.js";
 import type { RevocationKeywordEntry } from "../consent/revocation-keywords/types.js";
 import type { PdpaJurisdiction } from "@switchboard/schemas";
+import type { OperatorChannelBindingStore } from "./operator-channel-binding-store.js";
+import type { IdentityStore } from "../storage/interfaces.js";
+import type { RespondToApprovalDeps } from "../approval/respond-to-approval.js";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -59,6 +61,19 @@ export interface GatewayConversationStatusSetter {
     status: string,
     upsertContext?: ConversationStatusUpsertContext,
   ): Promise<void>;
+}
+
+/**
+ * Configuration to enable chat approval execution. When provided, hash-match success
+ * triggers an OperatorChannelBinding lookup → role check → shared respondToApproval call,
+ * mutating the approval lifecycle the same way the API route does. When omitted (e.g.,
+ * tests, misconfiguration), hash-match succeeds but the response is "not authorized" —
+ * we MUST NOT execute on hash match alone (channel-possession ≠ authority).
+ */
+export interface HandleApprovalResponseConfig {
+  bindingStore: OperatorChannelBindingStore;
+  identityStore: IdentityStore;
+  respondDeps: RespondToApprovalDeps;
 }
 
 export interface ChannelGatewayConfig {
