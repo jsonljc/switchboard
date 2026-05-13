@@ -79,7 +79,265 @@ apps/dashboard/src/app/(auth)/(mercury)/approvals/
 
 ---
 
-## Phase 0 — PR-A1a: Route, gate, fixtures, queue (no live behavior)
+## Implementation amendments (REVIEW EDITS — these supersede the body below)
+
+Read these before executing any task. Where an amendment conflicts with the per-task code below, the amendment wins.
+
+### A. Commit cadence — squash per logical group, not per task
+
+The per-task `**Step 5: Commit**` blocks below are **annotations of staging boundaries**, not commit boundaries. **Run `git add` per task, but only run `git commit` at the end of each logical group within a PR.** Each PR should produce ~3–5 commits, not 10+.
+
+Recommended group commits per PR:
+
+- **PR-A1a (Phase 0):**
+  1. `chore(approvals): add route gate + Tools nav entry` — covers Tasks 0.1–0.3.
+  2. `feat(approvals): types, fixtures, sort, agent-display` — covers Tasks 0.4–0.7.
+  3. `feat(approvals): pending hook + queue UI + header` — covers Tasks 0.8–0.10.
+  4. `feat(approvals): page orchestrator + route entry` — covers Task 0.11.
+- **PR-A1b (Phase 1):**
+  1. `feat(approvals): formatRemaining, useNow, refetchOnWindowFocus` — Tasks 1.1–1.2 + use-approvals refetch tweak.
+  2. `feat(approvals): live timer in queue rows + critical-pinned sort` — Tasks 1.3–1.4.
+  3. `feat(approvals): filter strip wired to page` — Tasks 1.5–1.6.
+- **PR-A2 (Phase 2):**
+  1. `feat(approvals): shortHash, actionDisplay, useApprovalDetail` — Tasks 2.1–2.3.
+  2. `feat(approvals): detail header + confirmation code + empty placeholder` — Tasks 2.4–2.6.
+  3. `feat(approvals): wire detail pane + URL ?id sync` — Task 2.7.
+- **PR-A3 (Phase 3):**
+  1. `feat(approvals): useSessionPrincipal helper + respond mutation` — Task 3.0 (new — see amendment H) + Task 3.1.
+  2. `feat(approvals): reject-confirm + approve-block (risk-graded)` — Tasks 3.2–3.3.
+  3. `feat(approvals): action drawer + dispatch banner + detail wiring` — Tasks 3.4–3.6.
+  4. `test(approvals): copy-language denylist + contrast smoke` — Tasks 3.7–3.8.
+- **PR-A4 (Phase 4):** one squashed commit per task is fine here — 3 tasks total.
+- **PR-A5 (Phase 5):** one commit per task is fine — 4 tasks.
+- **PR-A2b (Phase 6):** Task 6.0 is its own commit (backend payload check yields a schema/route change); Tasks 6.1 is the UI commit.
+
+Operationally: when a task's Step 5 says "Commit", **stage only** (`git add ...`). When the group's final task completes, run a single `git commit` with the group message above. The task-level commit messages in the body are descriptive (tells you what landed) — the actual commit subject is the group message.
+
+### B. `setActiveId` must NOT be called during render
+
+The body of this plan shows a render-time `setActiveId` in Task 0.11. **Do not ship that pattern.** Always do it inside `useEffect`:
+
+```tsx
+useEffect(() => {
+  if (items.length === 0) {
+    if (activeId !== null) setActiveId(null);
+    return;
+  }
+  if (!activeId || !items.some((r) => r.id === activeId)) {
+    setActiveId(items[0].id);
+  }
+}, [activeId, items]);
+```
+
+This is the only correct shape — it auto-seeds the first row, recovers when the active row falls out of the filtered set, and clears selection when the list is empty. Use it everywhere the plan does selection seeding (Task 0.11, Task 1.6, Task 2.7). The body of Task 0.11 is patched below; the others are textually correct but verify on read.
+
+### C. Data-shape boundary — `PendingApproval` (queue) vs `ApprovalDetail` (right pane)
+
+The wire shape from `GET /api/approvals/pending` does **not** include `request.parametersSnapshot`, `approvers`, `approvalsRequired`, `approvalHashes`, `recovery`, or `patchProposal`. Those come from `GET /api/approvals/:id`. The fixture file is rich for fidelity, but the live page must respect the boundary.
+
+**Concrete rules:**
+
+1. The queue consumes the `PendingApproval` shape only (`@/lib/api-client-types` line 29). The queue component (`queue.tsx`) must not read any field outside that shape.
+2. The detail components consume the `ApprovalDetail`-derived shape (with optional extensions for the fixture-only fields).
+3. In `usePendingApprovals`, the fixture-mode response must be **projected** to the pending shape, not returned in its enriched form:
+
+```ts
+// hooks/use-approvals.ts — fixture mode for usePendingApprovals
+const FIXTURE_RESPONSE = {
+  approvals: APPROVALS_FIXTURES.map((row) => ({
+    id: row.id,
+    summary: row.summary,
+    riskCategory: row.riskCategory,
+    status: row.status,
+    envelopeId: row.envelopeId,
+    expiresAt: row.expiresAt,
+    bindingHash: row.bindingHash,
+    createdAt: row.createdAt,
+  })),
+};
+```
+
+4. In `useApprovalDetail`, fixture mode returns the **full** `ApprovalRow` from the fixtures file (the rich one).
+5. Types split: rename `types.ts` to expose two:
+
+```ts
+// MODULE_ROOT/types.ts
+import type { PendingApproval } from "@/lib/api-client-types";
+export type PendingRow = PendingApproval;          // queue / list — wire-truthful
+
+// Detail row — extends with optional fields seen only on the detail call or in fixtures.
+export interface DetailRow extends PendingApproval {
+  agent?: string;
+  requestedBy?: string;
+  request?: {
+    action?: string;
+    parametersSnapshot?: Record<string, unknown>;
+    approvers?: string[];
+    approvalsRequired?: number;
+  };
+  state?: {
+    approvalHashes?: string[];
+    respondedBy?: string | null;
+    respondedAt?: string | null;
+  };
+  recovery?: { reason?: string; proposedFix?: string; lastAttemptAt?: string };
+  patchProposal?: { proposedBy?: string; proposedAt?: string; diff?: Record<string, unknown> };
+}
+
+export type RiskCategory = PendingApproval["riskCategory"];
+export type LifecycleStatus = PendingApproval["status"];
+```
+
+6. `ApprovalsQueue` props use `readonly PendingRow[]`. The detail components use `DetailRow`.
+
+The body of this plan uses a single `ApprovalRow` everywhere — read it as "use `PendingRow` in queue contexts and `DetailRow` in detail contexts". Patch each task accordingly when implementing.
+
+### D. Header eyebrow copy
+
+The body shows `Mercury Tools · /approvals`. Replace with the operator-language variant: **`Approvals queue`** (or `Mercury Tools · Approvals` if matching the existing /reports/activity convention is more important to you — pick one and stick to it). **Never the raw route path.**
+
+### E. Header sub copy
+
+The body's header sub-line says `…carries a confirmation code that locks in the details — sign only if they match what you want.` Replace with:
+
+> Every agent-proposed action waits here until you say yes. Each card carries a confirmation code that locks in the details — **approve only when the details match what you want.**
+
+Bolded for emphasis; otherwise inline.
+
+### F. Queue row accessible labels
+
+Replace the unscoped `expect(screen.getAllByRole("button"))` checks with role-and-name queries. The queue row gets an explicit `aria-label`:
+
+```tsx
+<button
+  type="button"
+  id={`row-${req.id}`}
+  aria-label={`Open approval: ${req.summary}`}
+  ...
+>
+```
+
+Tests then use:
+
+```tsx
+expect(screen.getAllByRole("button", { name: /^Open approval:/ })).toHaveLength(APPROVALS_FIXTURES.length);
+```
+
+Apply across Task 0.10 (queue.tsx + test) and any later test that counts queue rows by role.
+
+### G. Denylist must scan visible text only
+
+The `visibleText()` helper in Task 3.7 is canonical. Promote it to a shared test utility and have every per-component "no engineering vocabulary" assertion use it:
+
+```ts
+// MODULE_ROOT/__tests__/visible-text.ts
+export function visibleText(): string {
+  const clone = document.body.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll('[aria-hidden="true"], script, style, [data-testid="confirmation-code-value"]')
+    .forEach((el) => el.remove());
+  return clone.textContent ?? "";
+}
+```
+
+Replace `document.body.textContent ?? ""` in `header.test.tsx`, `queue.test.tsx`, and `dispatch-banner.test.tsx` with `visibleText()`. Add an explicit import:
+
+```ts
+import { visibleText } from "./visible-text";
+```
+
+### H. Single `useSessionPrincipal` helper — no scattered casts
+
+Add a new Task 3.0 before Task 3.1:
+
+**Files:**
+- Create: `apps/dashboard/src/app/(auth)/(mercury)/approvals/hooks/use-session-principal.ts`
+- Test: `apps/dashboard/src/app/(auth)/(mercury)/approvals/__tests__/use-session-principal.test.tsx`
+
+Implementation:
+
+```ts
+// MODULE_ROOT/hooks/use-session-principal.ts
+"use client";
+
+import { useSession } from "next-auth/react";
+
+interface PrincipalSession {
+  principalId?: string;
+  organizationId?: string;
+}
+
+/**
+ * Returns the authenticated principal id from the next-auth session, or null
+ * when no session is present. Encapsulates the `as unknown as` cast that the
+ * dashboard's session typing currently requires, so it lives in one place
+ * instead of being scattered across components.
+ */
+export function useSessionPrincipal(): string | null {
+  const { data } = useSession();
+  return (data as unknown as PrincipalSession | null)?.principalId ?? null;
+}
+```
+
+Test it once, then in **every later task** (3.1 mutation, 3.5 action drawer, detail/index.tsx) replace ad-hoc `useSession` + cast blocks with `const principalId = useSessionPrincipal();`. The body of Tasks 3.1, 3.5, and 3.6 below shows the cast inline — read those occurrences as "use the helper from Task 3.0 instead".
+
+### I. Acceptance criterion #20 (decisions invalidation) — make it a hard test
+
+In `use-respond.test.tsx` (Task 3.1), add a test that mocks `queryClient.invalidateQueries` and asserts both `keys.approvals.all()` and `keys.decisions.all()` were invalidated on success. Don't rely on inspection. Example:
+
+```ts
+import { useQueryClient } from "@tanstack/react-query";
+// in a separate test:
+it("invalidates approvals AND decisions caches on success", async () => {
+  fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+  const invalidate = vi.fn();
+  // ... render with a QueryClient whose invalidateQueries is spied
+  // ... call mutate, await success
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: expect.arrayContaining(["approvals"]) });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: expect.arrayContaining(["decisions"]) });
+});
+```
+
+Implementation detail: wrap a real `QueryClient`, spy `invalidateQueries` via `vi.spyOn(qc, "invalidateQueries")`, then assert.
+
+### J. Dispatch banner: test each shape explicitly
+
+In `dispatch-banner.test.tsx` (Task 3.4), assert these four explicitly:
+
+1. Single approver → `**Approved.**` (no "Signed").
+2. Quorum incomplete → `**Signed.** Waiting on N more teammate(s).` (no "Approved.").
+3. Rejected → `**Rejected.** The card is closed; the agent has been told to stand down.`
+4. Patched → `**Approved with changes.**`
+
+The component branches are already correct; the tests must lock them in.
+
+### K. Live countdown refetch on visibility return
+
+The body's `useNow` hook pauses on `visibilitychange` and resets `now` on resume — good. Additionally, when `document.hidden` flips back to false, the page must refetch `/pending` so `expiresAt` values are fresh, not just the local clock.
+
+Wire this in `approvals-page.tsx` by adding a sibling `useEffect`:
+
+```tsx
+import { useQueryClient } from "@tanstack/react-query";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+// ...
+const queryClient = useQueryClient();
+const keys = useScopedQueryKeys();
+useEffect(() => {
+  if (typeof document === "undefined") return;
+  const handler = () => {
+    if (!document.hidden && keys) {
+      queryClient.invalidateQueries({ queryKey: keys.approvals.pending() });
+    }
+  };
+  document.addEventListener("visibilitychange", handler);
+  return () => document.removeEventListener("visibilitychange", handler);
+}, [queryClient, keys]);
+```
+
+Add this in Task 1.6 (alongside the filter wiring) since that's where the page's live behavior crystallizes.
+
+---
 
 **Outcome:** A `/approvals` route appears in the Tools ▾ overflow when `NEXT_PUBLIC_APPROVALS_LIVE=true`. The page renders a header, a queue of 12 fixture rows sorted expiring-soonest, skeleton + empty states. No detail pane, no live countdown, no filter strip, no actions.
 
@@ -273,15 +531,24 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ```ts
 // MODULE_ROOT/types.ts
-import type { PendingApproval as WirePendingApproval } from "@/lib/api-client-types";
+import type { PendingApproval } from "@/lib/api-client-types";
 
 /**
- * The wire shape is normative. Fixture rows extend it with optional
- * fields the API may not return yet (e.g. recovery, patchProposal,
- * agent metadata). All extensions are `?:` so live data stays valid.
+ * The wire shape from GET /api/approvals/pending. Used by the QUEUE only.
+ * Do not read fields outside this shape in queue contexts (amendment C).
  */
-export interface ApprovalRow extends WirePendingApproval {
-  agent?: string; // internal agent id, e.g. "billing-agent"
+export type PendingRow = PendingApproval;
+
+/**
+ * The wire shape from GET /api/approvals/:id, plus optional extensions for
+ * fields seen in fixtures or the future quorum/recovery payload (gated in
+ * PR-A2b). All extensions are `?:` so live data stays valid even if the
+ * backend hasn't started returning them yet.
+ *
+ * Used by the DETAIL pane only.
+ */
+export interface DetailRow extends PendingApproval {
+  agent?: string;
   requestedBy?: string;
   request?: {
     action?: string;
@@ -294,21 +561,22 @@ export interface ApprovalRow extends WirePendingApproval {
     respondedBy?: string | null;
     respondedAt?: string | null;
   };
-  recovery?: {
-    reason?: string;
-    proposedFix?: string;
-    lastAttemptAt?: string;
-  };
-  patchProposal?: {
-    proposedBy?: string;
-    proposedAt?: string;
-    diff?: Record<string, unknown>;
-  };
+  recovery?: { reason?: string; proposedFix?: string; lastAttemptAt?: string };
+  patchProposal?: { proposedBy?: string; proposedAt?: string; diff?: Record<string, unknown> };
 }
 
-export type RiskCategory = WirePendingApproval["riskCategory"];
-export type LifecycleStatus = WirePendingApproval["status"];
+/**
+ * Convenience alias for code paths that legitimately work with both shapes
+ * (e.g. a sort that only reads PendingRow fields). Prefer the specific
+ * type at the consumer.
+ */
+export type ApprovalRow = PendingRow;
+
+export type RiskCategory = PendingApproval["riskCategory"];
+export type LifecycleStatus = PendingApproval["status"];
 ```
+
+> **Amendment C reminder:** later tasks refer to `ApprovalRow` as a single type. Treat that name as `PendingRow` in queue contexts and `DetailRow` in detail contexts. `DetailRow` extends `PendingRow`, so anywhere the body uses `ApprovalRow` for detail components, swap to `DetailRow` to unlock the optional fields cleanly.
 
 - [ ] **Step 2: Typecheck**
 
@@ -940,15 +1208,32 @@ import { useQuery } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { isMercuryToolLive } from "@/lib/route-availability";
 import { APPROVALS_FIXTURES } from "../fixtures";
-import type { ApprovalRow } from "../types";
+import type { PendingRow } from "../types";
 
 const isLive = (): boolean => isMercuryToolLive("approvals");
 
 interface PendingResponse {
-  approvals: ApprovalRow[];
+  approvals: PendingRow[];
 }
 
-const FIXTURE_RESPONSE: PendingResponse = { approvals: APPROVALS_FIXTURES };
+/**
+ * Project the rich fixture rows down to the wire-truthful PendingApproval shape.
+ * The detail call (useApprovalDetail) is the only place rich fields appear.
+ * Mirroring this boundary in fixture mode prevents "looks great in dev, breaks
+ * in prod when /pending returns less than the UI assumed" (amendment C).
+ */
+const FIXTURE_RESPONSE: PendingResponse = {
+  approvals: APPROVALS_FIXTURES.map((row) => ({
+    id: row.id,
+    summary: row.summary,
+    riskCategory: row.riskCategory,
+    status: row.status,
+    envelopeId: row.envelopeId,
+    expiresAt: row.expiresAt,
+    bindingHash: row.bindingHash,
+    createdAt: row.createdAt,
+  })),
+};
 
 export function usePendingApprovals() {
   const keys = useScopedQueryKeys();
@@ -964,6 +1249,7 @@ export function usePendingApprovals() {
     },
     enabled: !live || !!keys,
     staleTime: live ? 30_000 : Infinity,
+    refetchOnWindowFocus: live,
     // NO refetchInterval — live countdown is client-side; refetch is event-driven.
   });
 }
@@ -1048,11 +1334,11 @@ export function ApprovalsHeader({ pendingCount, expiringSoonCount }: ApprovalsHe
   return (
     <header className={styles.pageHead}>
       <div className={styles.lead}>
-        <span className={styles.eyebrow}>Mercury Tools · /approvals</span>
+        <span className={styles.eyebrow}>Approvals queue</span>
         <h1 className={styles.pageTitle}>Approvals</h1>
         <p className={styles.pageSub}>
           Every agent-proposed action waits here until you say yes. Each card carries a confirmation
-          code that locks in the details — sign only if they match what you want.
+          code that locks in the details — approve only when the details match what you want.
         </p>
       </div>
       <div className={styles.pageMeta}>
@@ -1204,7 +1490,8 @@ import { APPROVALS_FIXTURES } from "../fixtures";
 describe("ApprovalsQueue", () => {
   it("renders one row per approval", () => {
     render(<ApprovalsQueue items={APPROVALS_FIXTURES} activeId={null} onSelect={() => {}} />);
-    expect(screen.getAllByRole("button")).toHaveLength(APPROVALS_FIXTURES.length);
+    // Scope by accessible label so extra page chrome doesn't false-positive (amendment F).
+    expect(screen.getAllByRole("button", { name: /^Open approval:/ })).toHaveLength(APPROVALS_FIXTURES.length);
   });
 
   it("renders the summary text", () => {
@@ -1212,9 +1499,11 @@ describe("ApprovalsQueue", () => {
     expect(screen.getByText(/Refund SGD 4,820/)).toBeInTheDocument();
   });
 
-  it("renders the agent display name not the raw id", () => {
+  it("does not render an agent label in queue rows (agent moves to detail per amendment C)", () => {
     render(<ApprovalsQueue items={APPROVALS_FIXTURES.slice(0, 1)} activeId={null} onSelect={() => {}} />);
-    expect(screen.getByText(/Alex/)).toBeInTheDocument();
+    // The pending wire shape does not include `agent`; queue rows don't display it.
+    // Agent display surfaces in DetailHeader (Task 2.5) where the detail-row shape lives.
+    expect(screen.queryByText(/Alex/)).not.toBeInTheDocument();
     expect(screen.queryByText(/billing-agent/)).not.toBeInTheDocument();
   });
 
@@ -1261,15 +1550,21 @@ pnpm --filter @switchboard/dashboard test approvals/queue
 "use client";
 
 import styles from "../approvals.module.css";
-import { agentDisplay } from "../hooks/use-agent-display";
-import type { ApprovalRow } from "../types";
+import type { PendingRow } from "../types";
 
 export interface ApprovalsQueueProps {
-  items: readonly ApprovalRow[];
+  items: readonly PendingRow[];
   activeId: string | null;
   onSelect: (id: string) => void;
   loading?: boolean;
 }
+
+// NOTE (amendment C): the queue reads ONLY PendingApproval-shape fields.
+// `agentDisplay` is called with `(req as DetailRow).agent` ONLY when the
+// row was hydrated from the detail call. In fixture mode, the projection
+// in usePendingApprovals strips `.agent`, so the agent label here will
+// resolve to "an agent" — that is correct queue-list behavior. Agent
+// display surfaces in the detail pane (Task 2.5) where the rich shape lives.
 
 export function ApprovalsQueue({ items, activeId, onSelect, loading }: ApprovalsQueueProps) {
   if (loading) {
@@ -1315,14 +1610,15 @@ function QueueRow({
   active,
   onSelect,
 }: {
-  req: ApprovalRow;
+  req: PendingRow;
   active: boolean;
   onSelect: (id: string) => void;
 }) {
-  const agent = agentDisplay(req.agent);
   return (
     <button
       type="button"
+      id={`row-${req.id}`}
+      aria-label={`Open approval: ${req.summary}`}
       className={`${styles.queueRow} ${active ? styles.queueRowActive : ""}`}
       data-risk={req.riskCategory}
       data-status={req.status}
@@ -1332,12 +1628,8 @@ function QueueRow({
       <div className={styles.queueRowRisk}>{req.riskCategory.toUpperCase()}</div>
       <div className={styles.queueRowBody}>
         <div className={styles.queueRowSummary}>{req.summary}</div>
-        <div className={styles.queueRowMeta}>
-          <span>
-            <b>{agent.name}</b>
-            {agent.role ? ` · ${agent.role}` : ""}
-          </span>
-        </div>
+        {/* Agent display surfaces in DetailHeader (Task 2.5), not in queue rows —
+            the wire shape of /api/approvals/pending does not include `agent`. */}
       </div>
     </button>
   );
@@ -1551,7 +1843,7 @@ describe("ApprovalsPage", () => {
 // MODULE_ROOT/approvals-page.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "./approvals.module.css";
 import { ApprovalsHeader } from "./components/header";
 import { ApprovalsQueue } from "./components/queue";
@@ -1564,12 +1856,17 @@ export function ApprovalsPage() {
 
   const items = useMemo(() => sortApprovals(data?.approvals ?? []), [data]);
 
-  // Auto-select first row when nothing selected.
-  if (!activeId && items.length > 0) {
-    // Defer to a state update — direct call during render is fine because
-    // setState on first render is the canonical pattern for derived state seed.
-    setActiveId(items[0].id);
-  }
+  // Auto-select first row, recover when selection falls out, clear when list empties.
+  // MUST be useEffect — setState during render causes React warnings + re-renders.
+  useEffect(() => {
+    if (items.length === 0) {
+      if (activeId !== null) setActiveId(null);
+      return;
+    }
+    if (!activeId || !items.some((r) => r.id === activeId)) {
+      setActiveId(items[0].id);
+    }
+  }, [activeId, items]);
 
   const expiringSoonCount = items.filter(
     (r) => new Date(r.expiresAt).getTime() - Date.now() < 60 * 60_000,
