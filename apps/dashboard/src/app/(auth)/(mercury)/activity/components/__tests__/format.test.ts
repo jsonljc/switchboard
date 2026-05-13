@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatCell, formatDrawer, truncate, hashPrefix } from "../format.js";
+import {
+  formatCell,
+  formatDrawer,
+  truncate,
+  hashPrefix,
+  fmtClock,
+  fmtRel,
+  fmtFullISO,
+  eventBand,
+} from "../format.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -170,5 +179,87 @@ describe("hashPrefix", () => {
     // from fixtures.ts entryHash of first row
     const h = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b";
     expect(hashPrefix(h)).toBe("HASH:1a2b3c4d");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fmtClock (v2 row TIME column)
+// ---------------------------------------------------------------------------
+
+describe("fmtClock", () => {
+  it("renders HH:MM:SS in the resolved tz", () => {
+    expect(fmtClock("2026-05-10T06:23:11.000Z", "UTC")).toBe("06:23:11");
+  });
+
+  it("returns '—' for invalid input", () => {
+    expect(fmtClock("not-a-date")).toBe("—");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fmtRel (v2 row relative-time + stale pill)
+// ---------------------------------------------------------------------------
+
+describe("fmtRel", () => {
+  it.each([
+    [0, "0s ago"],
+    [500, "0s ago"],
+    [5_000, "5s ago"],
+    [60_000, "1m ago"],
+    [60 * 60 * 1000, "1h ago"],
+    [24 * 60 * 60 * 1000, "1d ago"],
+    [3 * 24 * 60 * 60 * 1000, "3d ago"],
+  ])("renders %s ms as %s", (deltaMs, expected) => {
+    expect(fmtRel(deltaMs)).toBe(expected);
+  });
+
+  it("clamps negative deltas to '0s ago'", () => {
+    expect(fmtRel(-1000)).toBe("0s ago");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fmtFullISO (v2 drawer Timestamp section)
+// ---------------------------------------------------------------------------
+
+describe("fmtFullISO", () => {
+  it("returns {date, time, tz} components in the resolved tz", () => {
+    const r = fmtFullISO("2026-05-10T06:23:11.420Z", "UTC");
+    expect(r.date).toBe("2026-05-10");
+    expect(r.time).toBe("06:23:11.420");
+    expect(r.tz).toBe("+00:00");
+  });
+
+  it("returns dashes for invalid input", () => {
+    const r = fmtFullISO("not-a-date");
+    expect(r.date).toBe("—");
+    expect(r.time).toBe("—");
+    expect(r.tz).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// eventBand (v2 event-type badge dot color)
+// ---------------------------------------------------------------------------
+
+describe("eventBand", () => {
+  it.each([
+    ["action.proposed", "action"],
+    ["action.executed", "action"],
+    ["identity.created", "identity"],
+    ["overlay.activated", "identity"],
+    ["policy.updated", "identity"],
+    ["connection.revoked", "identity"],
+    ["competence.promoted", "identity"],
+    ["delegation.chain_resolved", "identity"],
+    ["entity.linked", "identity"],
+    ["event.published", "event"],
+    ["event.reaction.triggered", "event"],
+    ["agent.activated", "agent"],
+    ["agent.emergency-halted", "agent"],
+    ["work_trace.persisted", "agent"],
+    ["work_trace.integrity_override", "agent"],
+  ])("classifies %s as band %s", (eventType, band) => {
+    expect(eventBand(eventType)).toBe(band);
   });
 });
