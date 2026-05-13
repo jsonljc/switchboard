@@ -1,421 +1,326 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import { ActivityRowDrawer } from "../components/activity-row-drawer.js";
 
-// ---------------------------------------------------------------------------
-// Fixture factory
-// ---------------------------------------------------------------------------
-
 const makeRow = (overrides: Partial<AuditEntryBrowseRow> = {}): AuditEntryBrowseRow => ({
-  id: "audit_ax8f2k1z",
-  eventType: "action.executed",
-  timestamp: "2026-05-10T14:23:51.420Z",
-  actorType: "agent",
-  actorId: "agent_alex_001",
-  entityType: "calendar_event",
-  entityId: "cal_evt_9921",
-  riskCategory: "low",
+  id: "audit_test_001",
+  eventType: "action.approved",
+  timestamp: "2026-05-10T06:23:11.420Z",
+  actorType: "user",
+  actorId: "user_kim_principal",
+  entityType: "approval_envelope",
+  entityId: "env_2f1a08c4",
+  riskCategory: "critical",
   visibilityLevel: "org",
-  summary:
-    "Booked appointment for contact CTC:abcd1234 in calendar 'Operations' at 2026-05-10 09:00 PT",
-  snapshotKeys: ["actionType", "decisionId", "targetEntityType", "targetEntityId"],
-  redactedKeyCount: 3,
-  evidencePointers: [
-    {
-      type: "pointer",
-      hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-      hashPrefix: "a1b2c3d4e5f6a1b2",
-    },
-  ],
+  summary: "Operator signed refund of SGD 4,820 to client #SG-44120",
+  snapshotKeys: ["actionType", "approvalId", "decisionId", "envelopeId", "correlationId"],
+  redactedKeyCount: 5,
+  evidencePointers: [],
   entryHash: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
-  previousEntryHash: "0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1",
-  envelopeId: "env_cal_001",
-  traceId: "trace_ax8f2k1z",
+  previousEntryHash: "0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a",
+  envelopeId: null,
+  traceId: null,
   ...overrides,
 });
 
-const DRAW_ID = "activity-drawer-test";
-
-// ---------------------------------------------------------------------------
-// Clipboard mock helpers
-// ---------------------------------------------------------------------------
-
-function mockClipboard() {
-  const writeText = vi.fn().mockResolvedValue(undefined);
-  Object.defineProperty(navigator, "clipboard", {
-    value: { writeText },
-    writable: true,
-    configurable: true,
-  });
-  return writeText;
-}
-
-function removeClipboard() {
+afterEach(() => {
   Object.defineProperty(navigator, "clipboard", {
     value: undefined,
     writable: true,
     configurable: true,
   });
-}
+});
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-describe("ActivityRowDrawer", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+describe("ActivityRowDrawer — Timestamp section", () => {
+  it("renders the full ISO date, time, and tz", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
+    );
+    expect(screen.getByText("2026-05-10")).toBeInTheDocument();
+    expect(screen.getByText("06:23:11.420")).toBeInTheDocument();
+    expect(screen.getByText("+00:00")).toBeInTheDocument();
   });
 
-  // -------------------------------------------------------------------------
-  // Required fields
-  // -------------------------------------------------------------------------
+  it("carries the local-tz prose note", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
+    );
+    expect(screen.getByText(/stored as ISO-8601 UTC on the entry/i)).toBeInTheDocument();
+  });
+});
 
-  it("renders all required labels: EVENT, ID, TIMESTAMP, ACTOR, ENTITY, RISK, VISIBILITY, SUMMARY, SNAPSHOT, EVIDENCE, TRACE, ENVELOPE, HASH, PREV HASH", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    for (const label of [
-      "EVENT",
-      "ID",
-      "TIMESTAMP",
-      "ACTOR",
-      "ENTITY",
-      "RISK",
-      "VISIBILITY",
-      "SUMMARY",
-      "SNAPSHOT",
-      "EVIDENCE",
-      "TRACE",
-      "ENVELOPE",
-      "HASH",
-      "PREV HASH",
-    ]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+describe("ActivityRowDrawer — Visibility · classification section", () => {
+  it("renders visibility, risk, and eventType inline", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
+    );
+    expect(screen.getByText("org")).toBeInTheDocument();
+    expect(screen.getByText("critical")).toBeInTheDocument();
+    expect(screen.getByText("action.approved")).toBeInTheDocument();
+  });
+
+  it("carries the server-filtered visibility prose note", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
+    );
+    expect(screen.getByText(/visibilityLevel is server-filtered/i)).toBeInTheDocument();
+  });
+});
+
+describe("ActivityRowDrawer — Snapshot keys section", () => {
+  it("renders one chip per snapshot key", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
+    );
+    for (const key of ["actionType", "approvalId", "decisionId", "envelopeId", "correlationId"]) {
+      expect(screen.getByText(key)).toBeInTheDocument();
     }
   });
 
-  it("renders EVENT value as the eventType string", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText("action.executed")).toBeInTheDocument();
-  });
-
-  it("renders ACTOR as actorType · full actorId", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText(/agent/)).toBeInTheDocument();
-    expect(screen.getByText(/agent_alex_001/)).toBeInTheDocument();
-  });
-
-  it("renders ENTITY as entityType · full entityId", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText(/calendar_event/)).toBeInTheDocument();
-    expect(screen.getByText(/cal_evt_9921/)).toBeInTheDocument();
-  });
-
-  it("renders RISK value", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText("low")).toBeInTheDocument();
-  });
-
-  it("renders VISIBILITY value", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText("org")).toBeInTheDocument();
-  });
-
-  it("renders full SUMMARY text", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText(/Booked appointment for contact CTC:abcd1234/)).toBeInTheDocument();
-  });
-
-  it("renders TRACE value when present", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText("trace_ax8f2k1z")).toBeInTheDocument();
-  });
-
-  it("renders em-dash for TRACE when traceId is null", () => {
-    const { container } = render(
-      <ActivityRowDrawer row={makeRow({ traceId: null })} drawerId={DRAW_ID} />,
+  it("renders the +N redacted pill when redactedKeyCount > 0", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
     );
-    // The TRACE label must exist
-    expect(screen.getByText("TRACE")).toBeInTheDocument();
-    // A dash appears in the drawer
-    expect(container.textContent).toContain("—");
+    expect(screen.getByText(/\+5 redacted/i)).toBeInTheDocument();
   });
 
-  it("renders ENVELOPE value when present", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText("env_cal_001")).toBeInTheDocument();
-  });
-
-  it("renders em-dash for ENVELOPE when envelopeId is null", () => {
-    const { container } = render(
-      <ActivityRowDrawer row={makeRow({ envelopeId: null })} drawerId={DRAW_ID} />,
-    );
-    expect(screen.getByText("ENVELOPE")).toBeInTheDocument();
-    expect(container.textContent).toContain("—");
-  });
-
-  // -------------------------------------------------------------------------
-  // Snapshot keys + redacted count
-  // -------------------------------------------------------------------------
-
-  it("renders allowlisted snapshot key names comma-separated", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    // snapshotKeys: ["actionType", "decisionId", "targetEntityType", "targetEntityId"]
-    expect(screen.getByText(/actionType/)).toBeInTheDocument();
-    expect(screen.getByText(/decisionId/)).toBeInTheDocument();
-  });
-
-  it("shows (N keys redacted) when redactedKeyCount > 0", () => {
-    render(<ActivityRowDrawer row={makeRow({ redactedKeyCount: 4 })} drawerId={DRAW_ID} />);
-    expect(screen.getByText("(4 keys redacted)")).toBeInTheDocument();
-  });
-
-  it("hides the redacted-count line when redactedKeyCount === 0", () => {
-    render(<ActivityRowDrawer row={makeRow({ redactedKeyCount: 0 })} drawerId={DRAW_ID} />);
-    expect(screen.queryByText(/keys redacted/)).toBeNull();
-  });
-
-  it("renders a dash for SNAPSHOT when snapshotKeys is empty", () => {
-    const { container } = render(
+  it("renders 'no snapshot keys recorded' when snapshotKeys is empty", () => {
+    render(
       <ActivityRowDrawer
         row={makeRow({ snapshotKeys: [], redactedKeyCount: 0 })}
-        drawerId={DRAW_ID}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
       />,
     );
-    expect(container.textContent).toContain("—");
+    expect(screen.getByText(/no snapshot keys recorded/i)).toBeInTheDocument();
   });
 
-  // -------------------------------------------------------------------------
-  // Evidence pointers
-  // -------------------------------------------------------------------------
-
-  it("renders evidence pointer count and per-pointer type + hashPrefix", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(screen.getByText(/1 pointer/)).toBeInTheDocument();
-    // The hashPrefix should be visible
-    expect(screen.getByText(/a1b2c3d4e5f6a1b2/)).toBeInTheDocument();
-  });
-
-  it("renders '—' in evidence section when evidencePointers is empty", () => {
+  it("H3: snapshot VALUES are never rendered", () => {
+    // The fixture intentionally carries a key name "envelopeId" but no value.
+    // The drawer must render only the *name* "envelopeId" as a chip, never an id.
     const { container } = render(
-      <ActivityRowDrawer row={makeRow({ evidencePointers: [] })} drawerId={DRAW_ID} />,
+      <ActivityRowDrawer
+        row={makeRow({ snapshotKeys: ["envelopeId", "approvalId"], envelopeId: null })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
     );
-    // EVIDENCE label still present
-    expect(screen.getByText("EVIDENCE")).toBeInTheDocument();
-    expect(container.textContent).toContain("—");
+    // The drawer should not contain any obviously-id-shaped text in the
+    // snapshot section beyond the key names themselves.
+    const snapshotSection = container.querySelector("[data-section='snapshot']");
+    expect(snapshotSection).toBeInTheDocument();
+    expect(snapshotSection?.textContent).not.toMatch(/env_/);
+    expect(snapshotSection?.textContent).not.toMatch(/SGD/);
   });
 
-  it("renders the plural 'pointers' when count > 1", () => {
-    const row = makeRow({
+  it("H2: storageRef is never rendered, even if injected into the row", () => {
+    // AuditEntryBrowseRow doesn't carry storageRef, but defense-in-depth:
+    // hand-craft a row that ALSO has a storageRef field on its evidence
+    // pointers (extra TS-cast) and verify the drawer never renders it.
+    const tainted = {
+      ...makeRow(),
       evidencePointers: [
-        { type: "pointer", hash: "aaa".repeat(20), hashPrefix: "aaaaaaaaaaaaaaaa" },
-        { type: "inline", hash: "bbb".repeat(20), hashPrefix: "bbbbbbbbbbbbbbbb" },
+        {
+          type: "pointer" as const,
+          hash: "abc",
+          hashPrefix: "abc",
+          storageRef: "s3://buckets/super-secret/path",
+        },
       ],
-    });
-    render(<ActivityRowDrawer row={row} drawerId={DRAW_ID} />);
-    expect(screen.getByText(/2 pointers/)).toBeInTheDocument();
-  });
-
-  // -------------------------------------------------------------------------
-  // Hash chain rendering
-  // -------------------------------------------------------------------------
-
-  it("renders HASH as a truncated prefix (8 chars) with '…'", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    // entryHash starts with "1a2b3c4d"
-    expect(screen.getByText(/HASH:1a2b3c4d…/)).toBeInTheDocument();
-  });
-
-  it("renders PREV HASH as a truncated prefix with '…'", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    // previousEntryHash starts with "0f1a2b3c"
-    expect(screen.getByText(/HASH:0f1a2b3c…/)).toBeInTheDocument();
-  });
-
-  it("renders '—' for PREV HASH when previousEntryHash is null", () => {
+    } as unknown as AuditEntryBrowseRow;
     const { container } = render(
-      <ActivityRowDrawer row={makeRow({ previousEntryHash: null })} drawerId={DRAW_ID} />,
+      <ActivityRowDrawer row={tainted} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
     );
-    expect(screen.getByText("PREV HASH")).toBeInTheDocument();
-    // em-dash appears in container
-    expect(container.textContent).toContain("—");
+    expect(container.textContent).not.toContain("s3://");
+    expect(container.textContent).not.toContain("super-secret");
   });
+});
 
-  // -------------------------------------------------------------------------
-  // Copy buttons
-  // -------------------------------------------------------------------------
-
-  it("renders [copy] buttons for ID and ENTITY", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    const copyButtons = screen.getAllByRole("button", { name: /copy/i });
-    // At minimum: ID [copy], ENTITY [copy], HASH [copy full], PREV HASH [copy full]
-    expect(copyButtons.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("renders [copy full] buttons for HASH and PREV HASH", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    const copyFullButtons = screen.getAllByRole("button", { name: /copy full/i });
-    expect(copyFullButtons.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("clicking [copy full] on HASH calls navigator.clipboard.writeText with the full hash", async () => {
-    const user = userEvent.setup();
-    const writeText = mockClipboard();
-
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-
-    const copyFullButtons = screen.getAllByRole("button", { name: /copy full/i });
-    // First [copy full] button is for HASH
-    await user.click(copyFullButtons[0]);
-
-    expect(writeText).toHaveBeenCalledWith(
-      "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+describe("ActivityRowDrawer — Evidence pointers section", () => {
+  it("renders one evidence row per pointer with hash prefix highlighted", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({
+          evidencePointers: [
+            {
+              type: "pointer",
+              hash: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+              hashPrefix: "abcdef0123456789",
+            },
+            {
+              type: "inline",
+              hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              hashPrefix: "0123456789abcdef",
+            },
+          ],
+        })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
     );
+    expect(screen.getByText("pointer")).toBeInTheDocument();
+    expect(screen.getByText("inline")).toBeInTheDocument();
+    expect(screen.getAllByText(/copy hash/i)).toHaveLength(2);
   });
 
-  it("clipboard error path doesn't crash when navigator.clipboard is undefined", async () => {
-    const user = userEvent.setup();
-    removeClipboard();
-
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    const copyFullButtons = screen.getAllByRole("button", { name: /copy full/i });
-
-    // Should not throw
-    await expect(user.click(copyFullButtons[0])).resolves.not.toThrow();
+  it("renders the absence note for storageRef", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
+    );
+    expect(screen.getByText(/storageRef.*intentionally absent/i)).toBeInTheDocument();
   });
 
-  it("clipboard error path doesn't crash when writeText rejects", async () => {
+  it("renders 'no evidence pointers attached' when list is empty", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ evidencePointers: [] })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText(/no evidence pointers attached/i)).toBeInTheDocument();
+  });
+
+  it("H4: copy hash button does not throw when clipboard is unavailable", async () => {
     const user = userEvent.setup();
     Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: vi.fn().mockRejectedValue(new Error("Permission denied")) },
+      value: undefined,
       writable: true,
       configurable: true,
     });
-
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    const copyFullButtons = screen.getAllByRole("button", { name: /copy full/i });
-
-    // Should not throw or cause unhandled rejection
-    await expect(user.click(copyFullButtons[0])).resolves.not.toThrow();
-  });
-
-  // -------------------------------------------------------------------------
-  // Accessibility
-  // -------------------------------------------------------------------------
-
-  it("renders as a region with aria-label for screen readers", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(
-      screen.getByRole("region", { name: /Details for audit entry audit_ax8f2k1z/ }),
-    ).toBeInTheDocument();
-  });
-
-  it("drawer has the drawerId as its id attribute", () => {
-    render(<ActivityRowDrawer row={makeRow()} drawerId={DRAW_ID} />);
-    expect(document.getElementById(DRAW_ID)).toBeInTheDocument();
-  });
-
-  // -------------------------------------------------------------------------
-  // XSS regression: summary is rendered as text, never HTML
-  // -------------------------------------------------------------------------
-
-  it("XSS regression: summary with <script> tag is rendered as literal text, not executed", () => {
-    const { container } = render(
+    render(
       <ActivityRowDrawer
-        row={makeRow({ summary: "<script>alert(1)</script>" })}
-        drawerId={DRAW_ID}
+        row={makeRow({
+          evidencePointers: [
+            {
+              type: "pointer",
+              hash: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+              hashPrefix: "abcdef0123456789",
+            },
+          ],
+        })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
       />,
     );
-    // The literal text must appear
-    expect(container.textContent).toContain("<script>alert(1)</script>");
-    // No actual <script> element must be present
-    expect(container.querySelectorAll("script")).toHaveLength(0);
+    const btn = screen.getByRole("button", { name: /copy hash/i });
+    await expect(user.click(btn)).resolves.not.toThrow();
+  });
+});
+
+describe("ActivityRowDrawer — Hash chain section", () => {
+  it("renders entryHash and previousEntryHash in full", () => {
+    const row = makeRow();
+    render(<ActivityRowDrawer row={row} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />);
+    expect(screen.getByText(row.entryHash)).toBeInTheDocument();
+    expect(screen.getByText(row.previousEntryHash as string)).toBeInTheDocument();
   });
 
-  // -------------------------------------------------------------------------
-  // Snapshot-value regression: drawer never renders snapshot values
-  // -------------------------------------------------------------------------
-
-  it("regression: drawer never renders snapshot values — only key names", () => {
-    // Build a row where snapshotKeys are present.
-    // Since AuditEntryBrowseRow.snapshotKeys is string[] (key names only, no values),
-    // the drawer can only render the names. We include a sentinel in the summary to
-    // prove the DOM doesn't leak hidden values.
-    const sentinelValue = "__NEVER_RENDER_SENTINEL__";
-    const row = makeRow({
-      snapshotKeys: ["actionType", "decisionId"],
-      redactedKeyCount: 4,
-      summary: "Normal summary text",
-    });
-
-    const { container } = render(<ActivityRowDrawer row={row} drawerId={DRAW_ID} />);
-
-    // The sentinel value must NOT appear in the DOM
-    expect(container.textContent).not.toContain(sentinelValue);
-    // The word "value" in JSON-stringified form must not appear (no {key: value} patterns)
-    expect(container.textContent).not.toContain('"value":');
-    // The key names are present
-    expect(container.textContent).toContain("actionType");
-    expect(container.textContent).toContain("decisionId");
+  it("renders genesis tag when previousEntryHash is null", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ previousEntryHash: null })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText(/genesis \(no predecessor\)/i)).toBeInTheDocument();
   });
 
-  // -------------------------------------------------------------------------
-  // storageRef regression: drawer never renders evidencePointers[].storageRef
-  // -------------------------------------------------------------------------
-
-  it("regression: drawer never renders storageRef — only type and hashPrefix", () => {
-    // AuditEntryBrowseRow.evidencePointers has { type, hash, hashPrefix } only —
-    // no storageRef field. This test confirms the rendered DOM doesn't contain
-    // any storageRef-shaped content (defense-in-depth against schema drift).
-    //
-    // We inject a sentinel in hashPrefix (which IS rendered) to prove the test
-    // correctly observes rendered output, then assert storageRef-shaped content
-    // is absent.
-    const row: AuditEntryBrowseRow = makeRow({
-      evidencePointers: [
-        {
-          type: "pointer",
-          hash: "a".repeat(64),
-          // hashPrefix is what the drawer renders — a 16-char display string
-          hashPrefix: "aaaaaaaaaaaaaaaa",
-        },
-      ],
+  it("renders 'view previous ↓' when predecessor row is on the page, off-page tag otherwise", () => {
+    const target = makeRow({
+      id: "audit_target",
+      entryHash: "previoushash_target",
     });
+    const child = makeRow({
+      id: "audit_child",
+      previousEntryHash: "previoushash_target",
+    });
+    const { rerender } = render(
+      <ActivityRowDrawer
+        row={child}
+        allRows={[target, child]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByRole("button", { name: /view previous/i })).toBeInTheDocument();
 
-    const { container } = render(<ActivityRowDrawer row={row} drawerId={DRAW_ID} />);
-
-    // hashPrefix IS rendered (proves the component rendered the pointer at all)
-    expect(container.textContent).toContain("aaaaaaaaaaaaaaaa");
-
-    // storageRef content must never appear — the type doesn't carry it
-    expect(container.textContent).not.toContain("storageRef");
-    expect(container.textContent).not.toContain("s3://");
-    expect(container.textContent).not.toContain("__SENTINEL__");
+    rerender(
+      <ActivityRowDrawer
+        row={child}
+        allRows={[child]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /view previous/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/off-page/i)).toBeInTheDocument();
   });
 
-  it("regression: storageRef sentinel pattern does not appear when using a sentinel hashPrefix", () => {
-    // Construct a fixture with a sentinel that would only appear if storageRef leaked
-    const storageRefSentinel = "s3://__SENTINEL__";
-    const row: AuditEntryBrowseRow = makeRow({
-      evidencePointers: [
-        {
-          type: "pointer",
-          hash: storageRefSentinel.padEnd(64, "x"),
-          // NOTE: hash is stored but the drawer never renders the raw hash (only hashPrefix
-          // for display and the full hash is only sent to clipboard, not rendered in DOM)
-          hashPrefix: "sentinel_display",
-        },
-      ],
-    });
+  it("clicking 'view previous ↓' calls onScrollToRow with the predecessor's id", async () => {
+    const user = userEvent.setup();
+    const onScrollToRow = vi.fn();
+    const target = makeRow({ id: "audit_target", entryHash: "previoushash_target" });
+    const child = makeRow({ id: "audit_child", previousEntryHash: "previoushash_target" });
+    render(
+      <ActivityRowDrawer
+        row={child}
+        allRows={[target, child]}
+        onScrollToRow={onScrollToRow}
+        orgTimezone="UTC"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /view previous/i }));
+    expect(onScrollToRow).toHaveBeenCalledWith("audit_target");
+  });
+});
 
-    const { container } = render(<ActivityRowDrawer row={row} drawerId={DRAW_ID} />);
+describe("ActivityRowDrawer — References section", () => {
+  it("renders envelope id with copy + open link when set", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ envelopeId: "env_xyz_123" })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText("env_xyz_123")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /open ↗/i });
+    expect(link).toHaveAttribute("href", "/approvals/env_xyz_123");
+  });
 
-    // The hashPrefix IS rendered as display text
-    expect(container.textContent).toContain("sentinel_display");
+  it("renders 'no approval envelope' italic when envelopeId is null", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ envelopeId: null })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText(/no approval envelope/i)).toBeInTheDocument();
+  });
 
-    // The raw hash (which contains the sentinel) must not appear in the DOM text
-    // (it's only used for the clipboard copy, not rendered inline)
-    expect(container.textContent).not.toContain(storageRefSentinel);
+  it("renders trace id with /traces/ link when set", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ traceId: "trace_abc_456" })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    const link = screen.getByRole("link", { name: /open ↗/i });
+    expect(link).toHaveAttribute("href", "/traces/trace_abc_456");
   });
 });

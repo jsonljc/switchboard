@@ -90,10 +90,10 @@ describe("ActivityPage", () => {
   it("gate-off: renders fixtures without NEXT_PUBLIC_ACTIVITY_LIVE", () => {
     render(<ActivityPage />);
     // "Operational" scope: event.published (non-operational) is excluded.
-    // The first operational fixture has summary starting with "Booked appointment".
-    expect(screen.getByText(/Booked appointment for contact/)).toBeInTheDocument();
+    // The first operational fixture (v2 distribution) has summary starting "Booked HydraFacial".
+    expect(screen.getByText(/Booked HydraFacial consult for contact/)).toBeInTheDocument();
     // Non-operational row should NOT appear under the default operational scope.
-    expect(screen.queryByText(/Event order.completed published to subscribers/)).toBeNull();
+    expect(screen.queryByText(/Event order\.completed published to 4 subscribers/)).toBeNull();
   });
 
   // ── 2. Gate-on renders rows from hook ─────────────────────────────────────
@@ -335,19 +335,21 @@ describe("ActivityPage", () => {
 
   // ── Additional coverage ───────────────────────────────────────────────────
 
-  it("renders the page title 'Activity'", () => {
+  it("renders the page title 'Audit log'", () => {
     render(<ActivityPage />);
-    expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Audit log" })).toBeInTheDocument();
   });
 
   it("gate-off: 'All events' chip shows non-operational fixtures", async () => {
     render(<ActivityPage />);
     // Default scope: event.published row is hidden.
-    expect(screen.queryByText(/Event order.completed published to subscribers/)).toBeNull();
+    expect(screen.queryByText(/Event order\.completed published to 4 subscribers/)).toBeNull();
     // Toggle to "All events".
     await userEvent.setup().click(screen.getByRole("button", { name: "All events" }));
     // Non-operational row should now appear.
-    expect(screen.getByText(/Event order.completed published to subscribers/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Event order\.completed published to 4 subscribers/),
+    ).toBeInTheDocument();
   });
 
   it("threads scope and narrowing params from URL into the hook query", () => {

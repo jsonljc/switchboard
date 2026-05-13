@@ -1,187 +1,285 @@
 "use client";
 
+import { useMemo } from "react";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { formatDrawer } from "./format";
+import { fmtFullISO } from "./format";
+import { useCopier } from "./use-copier";
 
 export interface ActivityRowDrawerProps {
   row: AuditEntryBrowseRow;
-  /** Must match the aria-controls on the chevron button and the drawer's id attribute. */
-  drawerId: string;
+  /** All currently-rendered rows — used by the chain-anchor "view previous ↓"
+   *  affordance to find the predecessor row on the same page. */
+  allRows: AuditEntryBrowseRow[];
+  onScrollToRow: (id: string) => void;
   orgTimezone?: string;
 }
 
-/**
- * Inline drawer for an /activity row. Renders the full entry detail per spec §6.4.
- *
- * Hard invariants (tested):
- * - Never renders snapshot values — only allowlisted key NAMES.
- * - Never renders evidencePointers[].storageRef — only type + hashPrefix.
- * - [copy] and [copy full] use navigator.clipboard; wrapped in try/catch — must
- *   not throw if clipboard API is unavailable.
- */
-
-/** Copy text to clipboard; no-op on error. */
-async function copyToClipboard(text: string): Promise<void> {
-  try {
-    await navigator?.clipboard?.writeText(text);
-  } catch {
-    // Clipboard unavailable or permission denied — silently no-op.
-  }
-}
-
-interface LabeledFieldProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-function LabeledField({ label, children }: LabeledFieldProps) {
-  return (
-    <div className={styles.drawerField}>
-      <span className={`${styles.drawerLabel} ${styles.sectionLabel}`}>{label}</span>
-      <span className={styles.drawerValue}>{children}</span>
-    </div>
-  );
-}
-
-interface CopyButtonProps {
-  value: string;
+function CopyBtn({
+  copyKey,
+  text,
+  label = "copy",
+}: {
+  copyKey: string;
+  text: string;
   label?: string;
-}
-
-function CopyButton({ value, label = "copy" }: CopyButtonProps) {
+}) {
+  const [copied, copy] = useCopier();
   return (
     <button
       type="button"
-      className={styles.copyButton}
-      onClick={() => void copyToClipboard(value)}
-      aria-label={`Copy ${label}`}
+      className={`${styles.copybtn} ${copied === copyKey ? styles.copybtnCopied : ""}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        copy(copyKey, text);
+      }}
     >
-      [{label}]
+      {copied === copyKey ? "copied" : label}
     </button>
   );
 }
 
-export function ActivityRowDrawer({ row, drawerId, orgTimezone }: ActivityRowDrawerProps) {
-  const entryHashDisplay = row.entryHash.slice(0, 8);
-  const prevHashDisplay = row.previousEntryHash ? row.previousEntryHash.slice(0, 8) : null;
-  const timestampDisplay = formatDrawer(row.timestamp, orgTimezone);
+function EvidenceRow({
+  pointer,
+  index,
+}: {
+  pointer: { type: "inline" | "pointer"; hash: string; hashPrefix: string };
+  index: number;
+}) {
+  const rest = pointer.hash.slice(16);
+  return (
+    <div className={styles.evrow}>
+      <span className={styles.evtype}>{pointer.type}</span>
+      <span className={styles.evhash} title={pointer.hash}>
+        <span className={styles.evhashPrefix}>{pointer.hashPrefix}</span>
+        <span className={styles.evhashRest}>{rest}</span>
+      </span>
+      <CopyBtn copyKey={`ev${index}`} text={pointer.hash} label="copy hash" />
+    </div>
+  );
+}
+
+function ChainBlock({
+  row,
+  allRows,
+  onScrollToRow,
+}: {
+  row: AuditEntryBrowseRow;
+  allRows: AuditEntryBrowseRow[];
+  onScrollToRow: (id: string) => void;
+}) {
+  const prev = useMemo(
+    () =>
+      row.previousEntryHash
+        ? (allRows.find((r) => r.entryHash === row.previousEntryHash) ?? null)
+        : null,
+    [row.previousEntryHash, allRows],
+  );
+
+  return (
+    <div className={styles.chain}>
+      <div className={styles.chainRow}>
+        <span className={styles.dsectionLabel}>Entry hash</span>
+        <span className={styles.chainHash}>{row.entryHash}</span>
+        <CopyBtn copyKey="eh" text={row.entryHash} />
+      </div>
+      <div
+        className={`${styles.chainRow} ${row.previousEntryHash === null ? styles.chainAnchor : ""}`}
+      >
+        <span className={styles.dsectionLabel}>Previous</span>
+        <span className={styles.chainHash}>
+          {row.previousEntryHash ?? "— genesis (no predecessor) —"}
+        </span>
+        <span className={styles.chainActions}>
+          {row.previousEntryHash && (
+            <>
+              <CopyBtn copyKey="ph" text={row.previousEntryHash} />
+              {prev ? (
+                <button
+                  type="button"
+                  className={`${styles.copybtn} ${styles.copybtnPrimary}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onScrollToRow(prev.id);
+                  }}
+                >
+                  view previous ↓
+                </button>
+              ) : (
+                <span className={styles.evnone}>off-page</span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function RefRow({
+  label,
+  value,
+  copyKey,
+  hrefBase,
+  emptyLabel,
+}: {
+  label: string;
+  value: string | null;
+  copyKey: string;
+  hrefBase: string;
+  emptyLabel: string;
+}) {
+  return (
+    <div className={`${styles.linkrow} ${value === null ? styles.linkrowEmpty : ""}`}>
+      <span className={styles.dsectionLabel}>{label}</span>
+      <span className={styles.linkrowVal}>{value ?? emptyLabel}</span>
+      {value !== null && (
+        <>
+          <CopyBtn copyKey={copyKey} text={value} />
+          <a
+            className={styles.openlink}
+            href={`${hrefBase}${value}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            open ↗
+          </a>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Inline drawer for an /activity row.
+ *
+ * Hard invariants from spec §12:
+ *  H2: never renders evidencePointers[].storageRef.
+ *  H3: never renders snapshot VALUES — only allowlisted key NAMES.
+ *  H4: copy buttons never throw (handled in useCopier).
+ */
+export function ActivityRowDrawer({
+  row,
+  allRows,
+  onScrollToRow,
+  orgTimezone,
+}: ActivityRowDrawerProps) {
+  const iso = fmtFullISO(row.timestamp, orgTimezone);
 
   return (
     <div
-      id={drawerId}
+      id={`activity-drawer-${row.id}`}
       role="region"
-      aria-label={`Details for audit entry ${row.id}`}
+      aria-label={`Audit entry detail for ${row.id}`}
       className={styles.drawer}
     >
-      <div className={styles.drawerGrid}>
-        {/* Identity fields */}
-        <LabeledField label="EVENT">{row.eventType}</LabeledField>
-
-        <LabeledField label="ID">
-          <span className={styles.cellMono}>{row.id}</span>
-          <CopyButton value={row.id} label="copy" />
-        </LabeledField>
-
-        <LabeledField label="TIMESTAMP">
-          <span className={styles.tabular}>{timestampDisplay}</span>
-        </LabeledField>
-
-        <LabeledField label="ACTOR">
-          <span className={styles.cellMono}>
-            {row.actorType}
-            <span aria-hidden="true"> · </span>
-            {row.actorId}
+      <div className={styles.drawerInner}>
+        {/* Section 1: Timestamp */}
+        <div className={styles.dsection}>
+          <span className={styles.dsectionLabel}>Timestamp</span>
+          <span className={styles.dsectionFullIso}>
+            <span>{iso.date}</span> <span className={styles.dsectionTz}>·</span>{" "}
+            <span>{iso.time}</span> <span className={styles.dsectionTz}>{iso.tz}</span>
           </span>
-        </LabeledField>
-
-        <LabeledField label="ENTITY">
-          <span className={styles.cellMono}>
-            {row.entityType}
-            <span aria-hidden="true"> · </span>
-            {row.entityId}
+          <span className={styles.dsectionNote}>
+            stored as ISO-8601 UTC on the entry; rendered in your browser&apos;s local timezone.
           </span>
-          <CopyButton value={row.entityId} label="copy" />
-        </LabeledField>
+        </div>
 
-        <LabeledField label="RISK">{row.riskCategory}</LabeledField>
-
-        <LabeledField label="VISIBILITY">{row.visibilityLevel}</LabeledField>
-
-        {/* Summary — full text, multi-line, plain text (never HTML) */}
-        <LabeledField label="SUMMARY">
-          <span className={styles.drawerSummary}>{row.summary}</span>
-        </LabeledField>
-
-        {/* Snapshot — allowlisted key names only, never values */}
-        <LabeledField label="SNAPSHOT">
-          <span className={styles.drawerSnapshotKeys}>
-            {row.snapshotKeys.length > 0 ? row.snapshotKeys.join(", ") : "—"}
+        {/* Section 2: Visibility · classification */}
+        <div className={styles.dsection}>
+          <span className={styles.dsectionLabel}>Visibility · classification</span>
+          <span className={styles.dsectionFullIso}>
+            visibility:&nbsp;<b>{row.visibilityLevel}</b>
+            &nbsp;<span className={styles.dsectionTz}>·</span>&nbsp; risk:&nbsp;
+            <b>{row.riskCategory}</b>
+            &nbsp;<span className={styles.dsectionTz}>·</span>&nbsp; event:&nbsp;
+            <b>{row.eventType}</b>
           </span>
-          {row.redactedKeyCount > 0 && (
-            <span className={styles.drawerRedacted}>({row.redactedKeyCount} keys redacted)</span>
-          )}
-        </LabeledField>
+          <span className={styles.dsectionNote}>
+            visibilityLevel is server-filtered; the client only ever sees rows it&apos;s authorized
+            to read.
+          </span>
+        </div>
 
-        {/* Evidence pointers — type + hashPrefix only, never storageRef */}
-        <LabeledField label="EVIDENCE">
+        {/* Section 3: Snapshot keys */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`} data-section="snapshot">
+          <span className={styles.dsectionLabel}>
+            Snapshot keys{" "}
+            <span className={styles.dsectionLabelDim}>(allowlist · values redacted)</span>
+          </span>
+          <div className={styles.snapKeys}>
+            {row.snapshotKeys.length === 0 ? (
+              <span className={styles.evnone}>no snapshot keys recorded</span>
+            ) : (
+              row.snapshotKeys.map((k) => (
+                <span key={k} className={styles.snapKey}>
+                  {k}
+                </span>
+              ))
+            )}
+            {row.redactedKeyCount > 0 && (
+              <span className={styles.snapRedacted}>+{row.redactedKeyCount} redacted</span>
+            )}
+          </div>
+          <span className={styles.dsectionNote}>
+            Full snapshot values stay on the server. Only allowlisted key <em>names</em> appear here
+            (
+            <span className={styles.dsectionMono}>
+              id, kind, source, actionType, decisionId, recommendationId, approvalId, envelopeId,
+              agentKey, targetEntityType, targetEntityId, correlationId, traceId
+            </span>
+            ); everything else is rolled into the redacted count.
+          </span>
+        </div>
+
+        {/* Section 4: Evidence pointers */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`}>
+          <span className={styles.dsectionLabel}>Evidence pointers</span>
           {row.evidencePointers.length === 0 ? (
-            <span className={styles.isMuted}>—</span>
+            <span className={styles.evnone}>no evidence pointers attached</span>
           ) : (
-            <div className={styles.drawerEvidenceWrap}>
-              <span className={styles.drawerEvidenceCount}>
-                {row.evidencePointers.length} pointer{row.evidencePointers.length !== 1 ? "s" : ""}
-              </span>
-              <ul className={styles.drawerEvidenceList}>
-                {row.evidencePointers.map((ptr, idx) => (
-                  <li key={idx} className={styles.drawerEvidenceItem}>
-                    <span className={styles.cellMono}>
-                      <span className={styles.drawerEvidenceType}>{ptr.type}</span>
-                      {"  "}
-                      {ptr.hashPrefix}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            <div className={styles.evlist}>
+              {row.evidencePointers.map((e, i) => (
+                <EvidenceRow key={i} index={i} pointer={e} />
+              ))}
             </div>
           )}
-        </LabeledField>
+          <div className={styles.absenceNote}>
+            <span>
+              storageRef intentionally absent — evidence reference is held server-side. Surface the
+              absence, not a redacted placeholder; clients fetch evidence via authenticated{" "}
+            </span>
+            <span className={styles.dsectionMono}>/api/evidence/:hash</span>
+            <span>.</span>
+          </div>
+        </div>
 
-        {/* References */}
-        <LabeledField label="TRACE">
-          {row.traceId ? (
-            <span className={styles.cellMono}>{row.traceId}</span>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
-        </LabeledField>
+        {/* Section 5: Hash chain */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`}>
+          <span className={styles.dsectionLabel}>Hash chain · integrity anchor</span>
+          <ChainBlock row={row} allRows={allRows} onScrollToRow={onScrollToRow} />
+        </div>
 
-        <LabeledField label="ENVELOPE">
-          {row.envelopeId ? (
-            <span className={styles.cellMono}>{row.envelopeId}</span>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
-        </LabeledField>
-
-        {/* Hash chain — display prefix, copy full */}
-        <LabeledField label="HASH">
-          <span className={styles.cellMono}>HASH:{entryHashDisplay}…</span>
-          <CopyButton value={row.entryHash} label="copy full" />
-        </LabeledField>
-
-        <LabeledField label="PREV HASH">
-          {prevHashDisplay ? (
-            <>
-              <span className={styles.cellMono}>HASH:{prevHashDisplay}…</span>
-              {row.previousEntryHash && (
-                <CopyButton value={row.previousEntryHash} label="copy full" />
-              )}
-            </>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
-        </LabeledField>
+        {/* Section 6: References */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`}>
+          <span className={styles.dsectionLabel}>References</span>
+          <div className={styles.linkpair}>
+            <RefRow
+              label="Envelope"
+              value={row.envelopeId}
+              copyKey="env"
+              hrefBase="/approvals/"
+              emptyLabel="no approval envelope"
+            />
+            <RefRow
+              label="Trace"
+              value={row.traceId}
+              copyKey="tr"
+              hrefBase="/traces/"
+              emptyLabel="no correlation trace"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

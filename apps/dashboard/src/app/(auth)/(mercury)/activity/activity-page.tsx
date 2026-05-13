@@ -82,7 +82,7 @@ export function ActivityPage() {
   const [scope, setScope] = useState<ActivityScope>(scopeFromUrl);
   const [cursor, setCursor] = useState<string | null>(null);
   const [prevCursorStack, setPrevCursorStack] = useState<string[]>([]);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // ---- Filter-change invariant ----
   // Any change to scope (local) OR narrowing URL params MUST clear the cursor
@@ -110,7 +110,7 @@ export function ActivityPage() {
     // When filter signature changes, reset all cursor/drawer state.
     setCursor(null);
     setPrevCursorStack([]);
-    setExpandedRowId(null);
+    setExpandedId(null);
   }, [filterSignature]);
 
   // Sync local scope from URL when it changes externally (back/forward nav).
@@ -205,11 +205,6 @@ export function ActivityPage() {
     });
   }, []);
 
-  // ---- Drawer toggle ----
-  const onToggleRow = useCallback((rowId: string) => {
-    setExpandedRowId((current) => (current === rowId ? null : rowId));
-  }, []);
-
   // ---- Empty-state variant ----
   const hasFilters = hasNarrowingParams(narrowing);
   const emptyVariant = hasFilters ? "filtered" : "zero";
@@ -220,13 +215,9 @@ export function ActivityPage() {
 
   return (
     <div className={styles.activityPage}>
-      <ActivityHeader />
+      <ActivityHeader lastLedgerEntryIso={rows[0]?.timestamp ?? null} />
 
       <section className={`${styles.section} ${styles.page}`}>
-        <div className={styles.titleRow}>
-          <h1 className={styles.pageTitle}>Activity</h1>
-        </div>
-
         <div className={styles.toolbar}>
           <FilterChips
             scope={effectiveScope}
@@ -246,7 +237,12 @@ export function ActivityPage() {
         ) : rows.length === 0 ? (
           <EmptyState variant={emptyVariant} onClear={hasFilters ? onResetToDefault : undefined} />
         ) : (
-          <ActivityTable rows={rows} expandedRowId={expandedRowId} onToggleRow={onToggleRow} />
+          <ActivityTable
+            rows={rows}
+            expandedId={expandedId}
+            onToggle={(id) => setExpandedId((cur) => (cur === id ? null : id))}
+            now={Date.now()}
+          />
         )}
 
         {showPagination && (
