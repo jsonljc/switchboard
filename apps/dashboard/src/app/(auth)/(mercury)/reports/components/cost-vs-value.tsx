@@ -1,43 +1,40 @@
-import type { CostBreakdown } from "../fixtures";
-import { fmtMoney } from "./format";
+import type { CostBreakdown } from "@switchboard/schemas";
 import styles from "../reports.module.css";
+import { fmtSGD } from "./format";
 
-interface CostVsValueProps {
-  cost: CostBreakdown;
-  narrative: string;
-}
+export function CostVsValue({ cost, narrative }: { cost: CostBreakdown; narrative: string }) {
+  const savingDollars = Math.round(cost.saving).toLocaleString("en-SG");
 
-export function CostVsValue({ cost, narrative }: CostVsValueProps) {
   return (
-    <>
-      <div className={styles.folio}>
-        <span className={styles.folioL}>What this would cost otherwise</span>
-        <span className={styles.folioR} />
+    <section className={styles.section}>
+      <div className={styles.sectionHead}>
+        <span className={styles.eyebrow}>Cost vs. value</span>
+        <span className={styles.right}>the renewal arithmetic</span>
       </div>
-      <div className={styles.costRow}>
-        <div className={styles.costCell}>
-          <span className={`${styles.costNum} ${styles.fadeIn}`} key={cost.paid}>
-            {fmtMoney(cost.paid, { cents: true })}/month
-          </span>
-          <span className={styles.costSub}>what you pay</span>
+
+      <div className={styles.costBlock}>
+        <div className={styles.costThree}>
+          <div className={`${styles.costCell} ${styles.paid}`}>
+            <span className={styles.label}>You pay</span>
+            <span className={styles.v}>{fmtSGD(cost.paid)}</span>
+            <span className={styles.sub}>Switchboard subscription, this period</span>
+          </div>
+          <div className={`${styles.costCell} ${styles.alt}`}>
+            <span className={styles.label}>Salesperson + ad agency</span>
+            <span className={styles.v}>{fmtSGD(cost.alt, { withCents: "never" })}</span>
+            <span className={styles.sub}>market-rate equivalent</span>
+          </div>
+          <div className={`${styles.costCell} ${styles.saving}`}>
+            <span className={styles.label}>Monthly saving</span>
+            <span className={styles.v}>
+              <span className={styles.sgd}>S$</span>
+              {savingDollars}
+            </span>
+            <span className={styles.sub}>net to your P&amp;L</span>
+          </div>
         </div>
-        <div className={styles.costCell}>
-          <span className={`${styles.costNum} ${styles.fadeIn}`} key={cost.alt}>
-            {fmtMoney(cost.alt)}/month
-          </span>
-          <span className={styles.costSub}>SDR + ad agency</span>
-        </div>
-        <div className={styles.costCell}>
-          <span
-            className={`${styles.costNum} ${styles.isAccent} ${styles.fadeIn}`}
-            key={cost.saving}
-          >
-            Saving {fmtMoney(cost.saving)}/month
-          </span>
-          <span className={styles.costSub}>every month</span>
-        </div>
+        <p className={styles.costNarrative}>{narrative}</p>
       </div>
-      <p className={styles.costNarrative}>{narrative}</p>
-    </>
+    </section>
   );
 }

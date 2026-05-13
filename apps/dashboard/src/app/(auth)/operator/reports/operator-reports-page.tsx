@@ -34,10 +34,10 @@ export function OperatorReportsPage() {
         <PullQuote q={fx.pullquote} />
       </section>
       <section className={`${styles.section} ${styles.page}`}>
-        <Attribution data={fx.attribution} period={fx.period} />
+        <Attribution data={fx.attribution} />
       </section>
       <section className={`${styles.section} ${styles.page}`}>
-        <Funnel data={fx.funnel} narrative={fx.funnelNarrative} period={fx.period} />
+        <Funnel rows={fx.funnel} narrative={fx.funnelNarrative} />
       </section>
       {fx.managedComparison && (
         <section className={`${styles.section} ${styles.page}`}>
@@ -45,7 +45,7 @@ export function OperatorReportsPage() {
         </section>
       )}
       <section className={`${styles.section} ${styles.page}`}>
-        <Campaigns data={fx.campaigns} period={fx.period} />
+        <Campaigns campaigns={fx.campaigns} />
       </section>
       <section className={`${styles.section} ${styles.page}`}>
         <CostVsValue cost={fx.cost} narrative={fx.costNarrative} />
