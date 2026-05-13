@@ -1,3 +1,11 @@
+/* eslint-disable max-lines -- bootstrap module: composes SkillExecutor + tool
+   registry + governance gate + consent service + hook chain + Phase 3b
+   QualificationEvaluationHook + LifecycleConfigResolver + LifecycleWriter wiring.
+   Crossed the 600-line guideline at Phase 3b when the qualification hook
+   construction was added (PR #444). Splitting (e.g. a separate
+   `bootstrap/skill-mode-lifecycle.ts` for the 3b wiring) is tracked as a
+   follow-up — better done when the broader bootstrap-module pattern is
+   consolidated across this directory. */
 import type { PrismaClient } from "@switchboard/db";
 import type { IntentRegistry, ExecutionModeRegistry } from "@switchboard/core/platform";
 import type {
