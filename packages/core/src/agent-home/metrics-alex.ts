@@ -5,7 +5,7 @@ import type {
   ProseSegment,
   SparkPoint,
   StatCell,
-} from "./metrics.js";
+} from "./metrics-types.js";
 
 const ALEX_VOICE = {
   up: (prev: number) => `Up from ${prev} last week.`,
