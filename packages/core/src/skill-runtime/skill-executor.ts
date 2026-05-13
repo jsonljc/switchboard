@@ -276,7 +276,11 @@ export class SkillExecutorImpl implements SkillExecutor {
               organizationId: params.orgId,
               conversationThreadId: requestCtx.sessionId,
               signals: sidecar.persisted.payload,
-              workTraceId: requestCtx.sessionId,
+              // TODO(3c): plumb the real WorkTrace.id here. The WorkTrace row is
+              // persisted by PlatformIngress after execute() returns, so its id is
+              // not available inside the executor. Passing null is better than
+              // passing sessionId (which is a chat session identifier, not a trace row id).
+              workTraceId: null,
             })
             .catch((err: unknown) => {
               console.warn(

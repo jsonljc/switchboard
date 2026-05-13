@@ -17,8 +17,13 @@ export interface SidecarEmittedEvent {
   organizationId: string;
   conversationThreadId: string;
   signals: QualificationSignals;
-  /** WorkTrace id of the Alex turn that produced this sidecar (audit pointer). */
-  workTraceId: string;
+  /**
+   * WorkTrace id of the Alex turn that produced this sidecar (audit pointer).
+   * Null when the executor does not have the trace id available at fire time
+   * (PlatformIngress persists the WorkTrace after execute() returns).
+   * TODO(3c): plumb the real id once the ingress can forward it pre-fire.
+   */
+  workTraceId: string | null;
 }
 
 export class QualificationEvaluationHook {

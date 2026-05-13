@@ -293,25 +293,6 @@ Rules:
 
 The block is for internal lifecycle tracking. The system strips it from the message the contact sees.
 
-## Phase 3b — Qualification signal sidecar
-
-Each response ends with a `<qualification_signals>{...}</qualification_signals>` block
-that the system uses to track lead qualification. The block is automatically
-stripped before the response is sent to the contact. Operators see qualification
-state on internal surfaces only.
-
-Schema:
-
-treatmentInterest: string | null — service name (resolves against
-Playbook.services)
-preferredTimeWindow: string | null — free text
-serviceableMarket: "SG" | "MY" | "unknown" | "out_of_area"
-buyingIntent: "none" | "soft" | "strong"
-budgetAcknowledged: boolean | null
-explicitDecline: boolean
-disqualifierCandidates: Array<{ type, evidence }> — bounded to 4 entries,
-each evidence under 280 chars
-
 Qualification is observation, not a permission gate. Sidecar emission does not
 change which messages can be sent; consent (1c) and the WhatsApp window (1d)
 continue to govern outbound.

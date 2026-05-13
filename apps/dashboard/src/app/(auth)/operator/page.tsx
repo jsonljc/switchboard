@@ -12,6 +12,10 @@ export default function OperatorPage() {
           Review and action items that require operator input.
         </p>
       </section>
+      {/* TODO(3c): hide panel when qualification flag is off (spec §7.1 polish).
+           Today the panel renders an empty state ("No proposals pending") when the
+           capability is disabled — functionally correct but a phantom affordance.
+           Hiding requires a server-side capability fetch; deferred to 3c. */}
       <ProposedDisqualificationsPanel />
     </div>
   );
