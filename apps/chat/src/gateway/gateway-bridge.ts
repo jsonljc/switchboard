@@ -3,6 +3,7 @@ import {
   PrismaAgentTaskStore,
   PrismaInteractionSummaryStore,
   PrismaDeploymentMemoryStore,
+  PrismaKnowledgeStore,
   PrismaContactStore,
   PrismaApprovalStore,
   PrismaHandoffStore,
@@ -93,6 +94,8 @@ export function createGatewayBridge(
     embeddingAdapter,
     interactionSummaryStore: new PrismaInteractionSummaryStore(prisma),
     deploymentMemoryStore: new PrismaDeploymentMemoryStore(prisma),
+    knowledgeStore: new PrismaKnowledgeStore(prisma),
+    agentId: "alex",
   });
 
   const lifecycleTracker = new ConversationLifecycleTracker({
