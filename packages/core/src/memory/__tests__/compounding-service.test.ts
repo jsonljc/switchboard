@@ -268,7 +268,10 @@ describe("ConversationCompoundingService", () => {
     expect(Math.abs(storeCall.draftExpiresAt.getTime() - expectedExpiry)).toBeLessThan(60_000);
   });
 
-  it("promotes FAQ to learned KnowledgeChunk when knowledgeStore is wired", async () => {
+  // spec: assert learned chunks remain draft/pending under the "alex" agent wiring (PR-1 design spec)
+  // Pre-existing test above already covers sourceType/draftStatus/72h expiry under a generic
+  // agentId; this test pins the canonical "alex" agentId path end-to-end.
+  it("promotes FAQ to learned KnowledgeChunk under canonical alex agentId", async () => {
     const knowledgeStore = { store: vi.fn().mockResolvedValue(undefined) };
     const localDeps = createMockDeps();
     // Pre-existing FAQ entry at 2 observations (one below threshold)
@@ -322,44 +325,17 @@ describe("ConversationCompoundingService", () => {
     localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
     primeFaqExtractionLlm(localDeps, "What is your cancellation policy?");
 
-    // No knowledgeStore provided — should not throw
+    // No knowledgeStore provided — assert the FAQ-tracking path completes (incrementConfidence
+    // was reached) and the top-level try/catch in processConversationEnd did NOT swallow an
+    // error (console.error not called). .resolves.not.toThrow() alone would be a false-green
+    // because the production code wraps the body in try { ... } catch (err) { console.error(...) }.
     const localService = new ConversationCompoundingService(localDeps);
-
-    await expect(localService.processConversationEnd(createEvent())).resolves.not.toThrow();
-  });
-
-  it("created learned chunks have draftStatus=pending, not null", async () => {
-    const knowledgeStore = { store: vi.fn().mockResolvedValue(undefined) };
-    const localDeps = createMockDeps();
-    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
-      {
-        id: "faq-1",
-        content: "Do you accept walk-ins?",
-        category: "faq",
-        sourceCount: 2,
-        confidence: 0.6,
-      },
-    ]);
-    localDeps.deploymentMemoryStore.incrementConfidence.mockResolvedValue({
-      id: "faq-1",
-      sourceCount: 3,
-    });
-    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
-    primeFaqExtractionLlm(localDeps, "Do you accept walk-ins?");
-
-    const localService = new ConversationCompoundingService({
-      ...localDeps,
-      knowledgeStore,
-      agentId: "alex",
-    });
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await localService.processConversationEnd(createEvent());
 
-    const stored = knowledgeStore.store.mock.calls[0]![0];
-    expect(stored.draftStatus).toBe("pending");
-    expect(stored.draftExpiresAt!.getTime()).toBeGreaterThan(Date.now());
-    // 72 hours ± ~1 minute tolerance (precision -4 rounds to nearest 10s of seconds)
-    const expectedExpiry = Date.now() + 72 * 60 * 60 * 1000;
-    expect(stored.draftExpiresAt!.getTime()).toBeCloseTo(expectedExpiry, -4);
+    expect(localDeps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });
