@@ -10,7 +10,7 @@ import { Funnel } from "../../(mercury)/reports/components/funnel";
 import { Campaigns } from "../../(mercury)/reports/components/campaigns";
 import { CostVsValue } from "../../(mercury)/reports/components/cost-vs-value";
 import { Colophon } from "../../(mercury)/reports/components/colophon";
-import { ManagedComparison } from "./components/managed-comparison";
+import { ManagedComparison } from "../../(mercury)/reports/components/managed-comparison";
 import styles from "../../(mercury)/reports/reports.module.css";
 
 const ORG = "Aurora Aesthetics";
@@ -36,7 +36,7 @@ export function OperatorReportsPage() {
       <Funnel rows={fx.funnel} narrative={fx.funnelNarrative} />
       <Campaigns campaigns={fx.campaigns} />
       <CostVsValue cost={fx.cost} narrative={fx.costNarrative} />
-      {fx.managedComparison && <ManagedComparison data={fx.managedComparison} period={fx.period} />}
+      {fx.managedComparison && <ManagedComparison data={fx.managedComparison} />}
       <Colophon period={fx.period} org={ORG} generatedAt={new Date()} liveMode={false} />
     </div>
   );

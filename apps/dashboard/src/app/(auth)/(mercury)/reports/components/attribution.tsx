@@ -32,7 +32,7 @@ export function Attribution({ data }: { data: AttributionData }) {
         </div>
 
         <div className={styles.attrSplit}>
-          <div className={`${styles.attrCard} ${styles.riley}`}>
+          <div className={styles.attrCard}>
             <div className={styles.who}>
               <span className={styles.whoGlyph}>R</span>
               <span className={styles.whoName}>Riley</span>

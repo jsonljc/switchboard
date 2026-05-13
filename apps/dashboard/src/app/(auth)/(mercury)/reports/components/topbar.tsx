@@ -16,9 +16,10 @@ export function Topbar({ org, currentUser, liveMode }: TopbarProps) {
     return () => clearInterval(t);
   }, []);
 
-  const time = new Date(now).toLocaleTimeString([], {
+  const time = new Date(now).toLocaleTimeString("en-SG", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Singapore",
   });
 
   return (
