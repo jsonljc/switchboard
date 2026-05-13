@@ -733,10 +733,51 @@ export async function buildServer() {
   // --- Inngest serve handler (creative pipeline orchestration) ---
   await registerInngest(app, { instantFormAdapter });
 
+  // --- Phase 3b: lifecycle disqualification route deps ---
+  // bootstrapLifecycle creates the full IoC tree; here we only need the stores
+  // and hook that back the disqualification API. The inngest bootstrap (above)
+  // has its own separate bootstrapLifecycle call used only for writer/history.
+  let lifecycleDisqualificationsDeps:
+    | import("./routes/lifecycle-disqualifications.js").LifecycleDisqualificationsRouteDeps
+    | undefined;
+  if (prismaClient) {
+    try {
+      const { bootstrapLifecycle } = await import("./bootstrap/lifecycle.js");
+      const { createLifecycleGovernanceConfigResolver } =
+        await import("./bootstrap/governance-resolver-adapter.js");
+      const {
+        snapshotStore: lsSnapshotStore,
+        transitionStore: lsTransitionStore,
+        disqualificationHook: lsDisqualificationHook,
+      } = bootstrapLifecycle({
+        prisma: prismaClient,
+        readMode: async () => "off" as const,
+        registerVerdictWriteHook: () => {},
+        registerBookingCreateHook: () => {},
+        registerInboundMessageHook: () => {},
+        registerOperatorTakeoverHook: () => {},
+        registerThreadInitHook: () => {},
+        registerCron: () => {},
+        playbookReader: { readForOrganization: async () => null },
+        governanceConfigResolver: createLifecycleGovernanceConfigResolver(prismaClient),
+      });
+      lifecycleDisqualificationsDeps = {
+        snapshotStore: lsSnapshotStore,
+        transitionStore: lsTransitionStore,
+        disqualificationHook: lsDisqualificationHook,
+      };
+    } catch (err) {
+      app.log.error(
+        `Failed to bootstrap lifecycle disqualification routes: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // --- Register all API routes ---
   await registerRoutes(app, {
     consentService: skillModeConsentService ?? undefined,
     consentReader: skillModeContactConsentReader ?? undefined,
+    lifecycleDisqualifications: lifecycleDisqualificationsDeps,
   });
 
   return app;

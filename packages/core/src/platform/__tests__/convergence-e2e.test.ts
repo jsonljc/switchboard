@@ -61,6 +61,7 @@ function makeSuccessResult(): SkillExecutionResult {
       responseSummary: "Success",
       writeCount: 0,
       governanceDecisions: [],
+      qualificationSignals: null,
     },
   };
 }

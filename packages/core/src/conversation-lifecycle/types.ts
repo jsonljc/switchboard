@@ -4,7 +4,11 @@ import type {
   ConversationLifecycleState,
   ConversationLifecycleTrigger,
   ConversationLifecycleActor,
+  LifecycleQualificationStatus,
 } from "@switchboard/schemas";
+
+/** Capabilities that unlock additional lifecycle states and triggers. */
+export type LifecycleWriteCapability = "mechanical" | "qualification";
 
 export interface LifecycleSnapshotStore {
   /** Read outside any transaction — used by event hooks for short-circuit checks
@@ -19,6 +23,12 @@ export interface LifecycleSnapshotStore {
   readInTransaction(tx: unknown, threadId: string): Promise<ConversationLifecycleSnapshot | null>;
   /** Upsert called only from inside `LifecycleWriter.recordTransition`'s transaction. */
   upsertInTransaction(tx: unknown, snapshot: ConversationLifecycleSnapshot): Promise<void>;
+  /**
+   * List all snapshots for an org where qualificationStatus is 'proposed_disqualified'
+   * and currentState is not 'disqualified' (§8.1 doctrine predicate).
+   * Used by the operator-facing pending-disqualifications API (Task 15).
+   */
+  listPendingDisqualifications(organizationId: string): Promise<ConversationLifecycleSnapshot[]>;
 }
 
 export interface LifecycleTransitionStore {
@@ -28,6 +38,12 @@ export interface LifecycleTransitionStore {
     transition: Omit<ConversationLifecycleTransition, "id">,
   ): Promise<void>;
   listForThread(threadId: string): Promise<ConversationLifecycleTransition[]>;
+  /**
+   * Return the most recent transition for a thread with
+   * trigger='system_proposed_disqualification', or null if none.
+   * Used by the pending-list API to surface the proposal evidence.
+   */
+  findLatestProposal(conversationThreadId: string): Promise<ConversationLifecycleTransition | null>;
 }
 
 export interface MessageHistoryReader {
@@ -73,6 +89,19 @@ export interface RecordTransitionInput {
   conversationThreadId: string;
   contactId: string;
   toState: ConversationLifecycleState;
+  trigger: ConversationLifecycleTrigger;
+  actor: ConversationLifecycleActor;
+  evidence: Record<string, unknown>;
+  workTraceId?: string | null;
+  occurredAt?: Date;
+}
+
+export interface UpdateQualificationInput {
+  organizationId: string;
+  conversationThreadId: string;
+  contactId: string;
+  /** The target qualificationStatus. currentState is NOT advanced. */
+  toQualificationStatus: LifecycleQualificationStatus;
   trigger: ConversationLifecycleTrigger;
   actor: ConversationLifecycleActor;
   evidence: Record<string, unknown>;

@@ -116,3 +116,32 @@ export function resolveLifecycleTaggingMechanicalConfig(
   const raw = lifecycleTagging?.mechanical;
   return LifecycleTaggingMechanicalConfigSchema.parse(raw ?? {});
 }
+
+/**
+ * Per-deployment configuration for the Phase 3b qualification lifecycle tagging
+ * layer. Lives under `governanceConfig.lifecycleTagging.qualification` as a
+ * passthrough sub-block — the parent schema uses `.passthrough()`, no Prisma
+ * migration required.
+ *
+ * Defaults: mode="off" (no qualification signal recording). Sibling to
+ * `lifecycleTagging.mechanical`; both can be enabled independently per org.
+ * Binary on/off — either we are recording qualification transitions or we are not.
+ */
+export const LifecycleTaggingQualificationConfigSchema = z
+  .object({
+    mode: z.enum(["off", "on"]).default("off"),
+  })
+  .default({});
+
+export type LifecycleTaggingQualificationConfig = z.infer<
+  typeof LifecycleTaggingQualificationConfigSchema
+>;
+
+export function resolveLifecycleQualificationConfig(
+  config: GovernanceConfig | null,
+): LifecycleTaggingQualificationConfig {
+  const lifecycleTagging = (config as unknown as Record<string, unknown> | null)
+    ?.lifecycleTagging as Record<string, unknown> | undefined;
+  const raw = lifecycleTagging?.qualification;
+  return LifecycleTaggingQualificationConfigSchema.parse(raw ?? {});
+}

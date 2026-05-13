@@ -151,6 +151,7 @@ function makeCtxAndResult(
       responseSummary: text.slice(0, 500),
       writeCount: 0,
       governanceDecisions: [],
+      qualificationSignals: null,
     },
   };
 

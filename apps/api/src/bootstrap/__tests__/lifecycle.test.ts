@@ -20,6 +20,8 @@ describe("bootstrapLifecycle", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       prisma: {} as any,
       readMode: async () => "off",
+      playbookReader: { readForOrganization: async () => null },
+      governanceConfigResolver: { resolve: async () => ({}) },
       ...registrars,
       onHookRegister: (name: string) => registered.push(name),
     });

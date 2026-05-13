@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { LifecycleWriter } from "../lifecycle-writer.js";
+import { LifecycleCapabilityDenied } from "../errors.js";
 import type { LifecycleSnapshotStore, LifecycleTransitionStore } from "../types.js";
+import type { ConversationLifecycleSnapshot } from "@switchboard/schemas";
 
-function makeStores() {
-  const snapshots = new Map<string, any>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeStores(initial?: ConversationLifecycleSnapshot) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const snapshots = new Map<string, any>(initial ? [[initial.conversationThreadId, initial]] : []);
   const transitions: any[] = [];
   const snapshotStore: LifecycleSnapshotStore = {
     read: vi.fn(async (id) => snapshots.get(id) ?? null),
@@ -11,15 +15,25 @@ function makeStores() {
     upsertInTransaction: vi.fn(async (_tx, snap) => {
       snapshots.set(snap.conversationThreadId, snap);
     }),
+    listPendingDisqualifications: vi.fn(async () => []),
   };
   const transitionStore: LifecycleTransitionStore = {
     appendInTransaction: vi.fn(async (_tx, t) => {
       transitions.push({ ...t, id: `t-${transitions.length + 1}` });
     }),
     listForThread: vi.fn(async (id) => transitions.filter((t) => t.conversationThreadId === id)),
+    findLatestProposal: vi.fn(async () => null),
   };
   const runInTransaction = async <T>(fn: (tx: unknown) => Promise<T>) => fn({});
-  return { snapshotStore, transitionStore, runInTransaction, snapshots, transitions };
+  const resolveCapabilities = async () => new Set(["mechanical"] as const);
+  return {
+    snapshotStore,
+    transitionStore,
+    runInTransaction,
+    resolveCapabilities,
+    snapshots,
+    transitions,
+  };
 }
 
 describe("LifecycleWriter.recordTransition", () => {
@@ -27,9 +41,20 @@ describe("LifecycleWriter.recordTransition", () => {
     // Plan said `null → stalled`, but Task-6 precedence forbids null → stalled
     // (thread-init seeds via onThreadFirstObservation → 'active' before the cron
     // can ever fire). Use an allowed null-init state instead.
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -46,9 +71,20 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("precedence blocks null → stalled (cron cannot invent a stalled snapshot)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -63,8 +99,14 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("respects precedence — does not overwrite booked with stalled", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
     const now = new Date();
     snapshots.set("thread-1", {
       conversationThreadId: "thread-1",
@@ -78,7 +120,12 @@ describe("LifecycleWriter.recordTransition", () => {
       lastEvaluatedAt: now,
       updatedAt: now,
     });
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -93,8 +140,14 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("allows escalated → booked (operator closes booking)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots, transitions } =
-      makeStores();
+    const {
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+      snapshots,
+      transitions,
+    } = makeStores();
     const now = new Date();
     snapshots.set("thread-1", {
       conversationThreadId: "thread-1",
@@ -108,7 +161,12 @@ describe("LifecycleWriter.recordTransition", () => {
       lastEvaluatedAt: now,
       updatedAt: now,
     });
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -125,8 +183,13 @@ describe("LifecycleWriter.recordTransition", () => {
   });
 
   it("rejects 3b-only toState (disqualified) with a runtime error", async () => {
-    const { snapshotStore, transitionStore, runInTransaction } = makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await expect(
       writer.recordTransition({
         organizationId: "org-1",
@@ -139,12 +202,17 @@ describe("LifecycleWriter.recordTransition", () => {
         actor: "operator",
         evidence: {},
       }),
-    ).rejects.toThrow(/THREE_A_ALLOWED_STATES/);
+    ).rejects.toThrow(LifecycleCapabilityDenied);
   });
 
   it("rejects 3b-only trigger (qualification_checklist_met) with a runtime error", async () => {
-    const { snapshotStore, transitionStore, runInTransaction } = makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities } = makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await expect(
       writer.recordTransition({
         organizationId: "org-1",
@@ -156,12 +224,18 @@ describe("LifecycleWriter.recordTransition", () => {
         actor: "system",
         evidence: {},
       }),
-    ).rejects.toThrow(/THREE_A_ALLOWED_TRIGGERS/);
+    ).rejects.toThrow(LifecycleCapabilityDenied);
   });
 
   it("rebuilds snapshot from transition log (round-trip)", async () => {
-    const { snapshotStore, transitionStore, runInTransaction, snapshots } = makeStores();
-    const writer = new LifecycleWriter({ snapshotStore, transitionStore, runInTransaction });
+    const { snapshotStore, transitionStore, runInTransaction, resolveCapabilities, snapshots } =
+      makeStores();
+    const writer = new LifecycleWriter({
+      snapshotStore,
+      transitionStore,
+      runInTransaction,
+      resolveCapabilities,
+    });
     await writer.recordTransition({
       organizationId: "org-1",
       conversationThreadId: "thread-1",
@@ -184,5 +258,99 @@ describe("LifecycleWriter.recordTransition", () => {
     snapshots.delete("thread-1");
     const rebuilt = await writer.rebuildSnapshotFromTransitions("thread-1");
     expect(rebuilt?.currentState).toBe(liveCurrent);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spec §5.2 monotonic table: recordTransition qualificationStatus advancement
+// ---------------------------------------------------------------------------
+
+const baseSnap: ConversationLifecycleSnapshot = {
+  conversationThreadId: "thread-1",
+  organizationId: "org-1",
+  contactId: "contact-1",
+  currentState: "active",
+  qualificationStatus: "unknown",
+  bookingStatus: "not_booked",
+  dropoffReason: null,
+  lastTransitionAt: new Date("2026-05-12T00:00:00Z"),
+  lastEvaluatedAt: new Date("2026-05-12T00:00:00Z"),
+  updatedAt: new Date("2026-05-12T00:00:00Z"),
+};
+
+function makeQualWriter(existingQualStatus: ConversationLifecycleSnapshot["qualificationStatus"]) {
+  const existing: ConversationLifecycleSnapshot = {
+    ...baseSnap,
+    qualificationStatus: existingQualStatus,
+  };
+  const { snapshotStore, transitionStore, runInTransaction, snapshots } = makeStores(existing);
+  const writer = new LifecycleWriter({
+    snapshotStore,
+    transitionStore,
+    runInTransaction,
+    resolveCapabilities: async () => new Set(["mechanical", "qualification"] as const),
+  });
+  return { writer, snapshots };
+}
+
+describe("LifecycleWriter.recordTransition — qualificationStatus monotonic table (§5.2)", () => {
+  it("qualification_checklist_met on unknown → qualificationStatus=qualified", async () => {
+    const { writer, snapshots } = makeQualWriter("unknown");
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "qualified",
+      trigger: "qualification_checklist_met",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("qualified");
+  });
+
+  it("qualification_checklist_met when already qualified → qualificationStatus=qualified (idempotent)", async () => {
+    const { writer, snapshots } = makeQualWriter("qualified");
+    // qualified → qualified is allowed by precedence (same state)
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "qualified",
+      trigger: "qualification_checklist_met",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("qualified");
+  });
+
+  it("qualification_checklist_failed on unknown → qualificationStatus=unqualified", async () => {
+    // NOTE: qualification_checklist_failed is not yet emitted by any live path
+    // (deferred to 3c). We exercise the §5.2 rule directly for spec completeness.
+    // Use active → active (allowed by precedence) with this trigger.
+    const { writer, snapshots } = makeQualWriter("unknown");
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "active",
+      trigger: "qualification_checklist_failed",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("unqualified");
+  });
+
+  it("qualification_checklist_failed on qualified → qualificationStatus stays qualified (§5.2 forbids regression)", async () => {
+    const { writer, snapshots } = makeQualWriter("qualified");
+    await writer.recordTransition({
+      organizationId: "org-1",
+      conversationThreadId: "thread-1",
+      contactId: "contact-1",
+      toState: "active",
+      trigger: "qualification_checklist_failed",
+      actor: "alex",
+      evidence: {},
+    });
+    expect(snapshots.get("thread-1")?.qualificationStatus).toBe("qualified");
   });
 });

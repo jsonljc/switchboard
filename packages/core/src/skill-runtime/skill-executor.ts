@@ -31,6 +31,8 @@ import {
   runAfterToolCallHooks,
 } from "./hook-runner.js";
 import { IntentClassSchema, type IntentClass } from "@switchboard/schemas";
+import { parseQualificationSidecar } from "./qualification-sidecar-parser.js";
+import type { QualificationEvaluationHook } from "../conversation-lifecycle/event-hooks/qualification-evaluation-hook.js";
 
 // Global match — captures every <intent>...</intent> occurrence in the response.
 // Whitespace around the inner value is allowed; the tag itself must be closed.
@@ -99,6 +101,13 @@ export class SkillExecutorImpl implements SkillExecutor {
      * and for tools with no per-request trust context.
      */
     private toolFactories: Map<string, SkillToolFactory> = new Map(),
+    /**
+     * Phase 3b: optional qualification evaluation hook. When provided, the
+     * executor fires `onSidecarEmitted` after the parser yields a validated
+     * qualification payload. Hook failures are log-and-swallow — must not
+     * break the response path. When omitted the executor skips the hook call.
+     */
+    private qualificationEvaluationHook?: QualificationEvaluationHook,
   ) {}
 
   /**
@@ -250,7 +259,38 @@ export class SkillExecutorImpl implements SkillExecutor {
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
           .map((b) => b.text)
           .join("");
-        const { text: responseText, intentClass } = parseIntentTag(rawResponseText);
+
+        // Phase 3b: parse + strip qualification sidecar. Always-on — no flag check.
+        // visibleResponse replaces rawResponseText for ALL downstream consumers.
+        const sidecar = parseQualificationSidecar(rawResponseText);
+        const visibleResponse = sidecar.visibleResponse;
+
+        // Phase 3b: fire qualification evaluation hook when a valid sidecar is present.
+        // Hook failures are log-and-swallow — must not interrupt the response path.
+        if (
+          this.qualificationEvaluationHook !== undefined &&
+          sidecar.persisted?.validationStatus === "ok"
+        ) {
+          this.qualificationEvaluationHook
+            .onSidecarEmitted({
+              organizationId: params.orgId,
+              conversationThreadId: requestCtx.sessionId,
+              signals: sidecar.persisted.payload,
+              // TODO(3c): plumb the real WorkTrace.id here. The WorkTrace row is
+              // persisted by PlatformIngress after execute() returns, so its id is
+              // not available inside the executor. Passing null is better than
+              // passing sessionId (which is a chat session identifier, not a trace row id).
+              workTraceId: null,
+            })
+            .catch((err: unknown) => {
+              console.warn(
+                "[SkillExecutor] qualification-evaluation-hook failed (swallowed):",
+                err instanceof Error ? err.message : String(err),
+              );
+            });
+        }
+
+        const { text: responseText, intentClass } = parseIntentTag(visibleResponse);
 
         return {
           response: responseText,
@@ -271,8 +311,12 @@ export class SkillExecutorImpl implements SkillExecutor {
               );
             }).length,
             governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
+            qualificationSignals: sidecar.persisted,
           },
           ...(intentClass ? { intentClass } : {}),
+          ...(sidecar.persisted?.validationStatus === "ok"
+            ? { qualificationSignals: sidecar.persisted.payload }
+            : {}),
         };
       }
 

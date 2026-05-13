@@ -61,10 +61,14 @@ import { dashboardActivityRoutes } from "../routes/dashboard-activity.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
+import { registerLifecycleDisqualificationsRoutes } from "../routes/lifecycle-disqualifications.js";
+import type { LifecycleDisqualificationsRouteDeps } from "../routes/lifecycle-disqualifications.js";
 
 export interface RegisterRoutesDeps {
   consentService?: ConsentService;
   consentReader?: ContactConsentReader;
+  /** Phase 3b: lifecycle disqualification API deps. Only wired when Prisma is available. */
+  lifecycleDisqualifications?: LifecycleDisqualificationsRouteDeps;
 }
 
 export async function registerRoutes(
@@ -167,6 +171,12 @@ export async function registerRoutes(
   await app.register(playbookRoutes);
   await app.register(simulateRoutes);
   await app.register(websiteScanRoutes);
+
+  // Phase 3b — lifecycle disqualifications API.
+  // Only registered when Prisma-backed lifecycle deps are wired.
+  if (deps?.lifecycleDisqualifications) {
+    await registerLifecycleDisqualificationsRoutes(app, deps.lifecycleDisqualifications);
+  }
 
   // Phase 1c — admin consent endpoint.
   // Only registered when consent deps are wired (SkillMode bootstrap succeeded).

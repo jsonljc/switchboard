@@ -14,6 +14,10 @@ import {
   verifyWorkTraceIntegrity,
   WORK_TRACE_HASH_VERSION_LATEST,
 } from "@switchboard/core/platform";
+import {
+  WorkTraceQualificationSignalsSchema,
+  type WorkTraceQualificationSignals,
+} from "@switchboard/schemas";
 import type { AuditLedger, OperatorAlerter } from "@switchboard/core";
 import { buildInfrastructureFailureAuditParams, safeAlert } from "@switchboard/core";
 import type { InfrastructureFailureAlert } from "@switchboard/core";
@@ -196,6 +200,9 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
 
       modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
+      qualificationSignals: trace.qualificationSignals
+        ? JSON.stringify(trace.qualificationSignals)
+        : null,
       requestedAt: new Date(trace.requestedAt),
       governanceCompletedAt: new Date(trace.governanceCompletedAt),
       executionStartedAt: trace.executionStartedAt ? new Date(trace.executionStartedAt) : null,
@@ -306,6 +313,31 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
     };
   }
 
+  private parseQualificationSignals(
+    raw: string | null,
+    workUnitId: string,
+  ): WorkTraceQualificationSignals | null {
+    if (!raw) return null;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      console.warn(
+        `[PrismaWorkTraceStore] qualificationSignals JSON.parse failed for workUnitId=${workUnitId} — returning null`,
+      );
+      return null;
+    }
+    const result = WorkTraceQualificationSignalsSchema.safeParse(parsed);
+    if (!result.success) {
+      console.warn(
+        `[PrismaWorkTraceStore] qualificationSignals schema validation failed for workUnitId=${workUnitId} — returning null`,
+        result.error.issues,
+      );
+      return null;
+    }
+    return result.data;
+  }
+
   private mapRowToTrace(
     row: NonNullable<Awaited<ReturnType<typeof this.prisma.workTrace.findUnique>>>,
   ): WorkTrace {
@@ -367,6 +399,10 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       // (LATEST) and break round-trip integrity for those rows.
       ingressPath: (row.ingressPath ?? "platform_ingress") as WorkTrace["ingressPath"],
       hashInputVersion: row.hashInputVersion ?? 1,
+      qualificationSignals: this.parseQualificationSignals(
+        row.qualificationSignals ?? null,
+        row.workUnitId,
+      ),
     };
   }
 

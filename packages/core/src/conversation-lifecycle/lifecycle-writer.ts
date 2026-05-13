@@ -1,14 +1,18 @@
 import {
   type ConversationLifecycleSnapshot,
   type ConversationLifecycleTransition,
+  type LifecycleQualificationStatus,
 } from "@switchboard/schemas";
 import type {
   LifecycleSnapshotStore,
   LifecycleTransitionStore,
   RecordTransitionInput,
+  UpdateQualificationInput,
+  LifecycleWriteCapability,
 } from "./types.js";
 import { canTransitionLifecycle } from "./precedence.js";
-import { THREE_A_ALLOWED_STATES, THREE_A_ALLOWED_TRIGGERS } from "./constants.js";
+import { allowedStatesFor, allowedTriggersFor } from "./constants.js";
+import { LifecycleCapabilityDenied } from "./errors.js";
 
 export type RunInTransaction = <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 
@@ -16,24 +20,31 @@ export interface LifecycleWriterDeps {
   snapshotStore: LifecycleSnapshotStore;
   transitionStore: LifecycleTransitionStore;
   runInTransaction: RunInTransaction;
+  /** Resolves the writer's enabled capabilities for the given org. */
+  resolveCapabilities: (organizationId: string) => Promise<ReadonlySet<LifecycleWriteCapability>>;
 }
 
 export class LifecycleWriter {
   constructor(private readonly deps: LifecycleWriterDeps) {}
 
   async recordTransition(input: RecordTransitionInput): Promise<void> {
-    // 3a runtime allowlist guard. Schema permits the full Phase 3 enum for
-    // forward compatibility, but 3a code paths must only emit mechanical states
-    // and 3a triggers. Throw — never silently drop — so that any 3a caller
-    // accidentally reaching for a 3b value fails loudly in test/dev.
-    if (!THREE_A_ALLOWED_STATES.has(input.toState)) {
-      throw new Error(
-        `LifecycleWriter (3a): toState '${input.toState}' is not in THREE_A_ALLOWED_STATES`,
+    // Capability-aware allowlist guard. The schema permits the full Phase 3 enum
+    // for forward compatibility; the caller's resolved capability set determines
+    // which states and triggers are actually permitted. Throw — never silently
+    // drop — so that any caller accidentally reaching for an out-of-capability
+    // value fails loudly in test/dev.
+    const caps = await this.deps.resolveCapabilities(input.organizationId);
+    const states = allowedStatesFor(caps);
+    const triggers = allowedTriggersFor(caps);
+
+    if (!states.has(input.toState)) {
+      throw new LifecycleCapabilityDenied(
+        `toState '${input.toState}' is not permitted by current capabilities`,
       );
     }
-    if (!THREE_A_ALLOWED_TRIGGERS.has(input.trigger)) {
-      throw new Error(
-        `LifecycleWriter (3a): trigger '${input.trigger}' is not in THREE_A_ALLOWED_TRIGGERS`,
+    if (!triggers.has(input.trigger)) {
+      throw new LifecycleCapabilityDenied(
+        `trigger '${input.trigger}' is not permitted by current capabilities`,
       );
     }
 
@@ -51,12 +62,29 @@ export class LifecycleWriter {
         return;
       }
 
+      // Spec §5.2 monotonic table: recordTransition advances qualificationStatus on
+      // rule-pass triggers. Mechanical triggers carry the existing status across unchanged.
+      const qualificationStatusForTransition = ((): LifecycleQualificationStatus => {
+        if (input.trigger === "qualification_checklist_met") {
+          // unknown/unqualified → qualified (re-affirm on qualified is idempotent).
+          return "qualified";
+        }
+        if (input.trigger === "qualification_checklist_failed") {
+          // §5.2: only unknown → unqualified is permitted; qualified must never regress.
+          return existing?.qualificationStatus === "unknown"
+            ? "unqualified"
+            : (existing?.qualificationStatus ?? "unknown");
+        }
+        // All other triggers (mechanical): carry the existing status unchanged.
+        return existing?.qualificationStatus ?? "unknown";
+      })();
+
       const nextSnapshot: ConversationLifecycleSnapshot = {
         conversationThreadId: input.conversationThreadId,
         organizationId: input.organizationId,
         contactId: input.contactId,
         currentState: input.toState,
-        qualificationStatus: existing?.qualificationStatus ?? "unknown",
+        qualificationStatus: qualificationStatusForTransition,
         bookingStatus:
           input.toState === "booked" ? "booked" : (existing?.bookingStatus ?? "not_booked"),
         dropoffReason: this.computeDropoffReason(input, existing?.dropoffReason ?? null),
@@ -129,6 +157,64 @@ export class LifecycleWriter {
     return snap;
   }
 
+  /**
+   * Mutates `qualificationStatus` on the snapshot WITHOUT advancing `currentState`.
+   * Used by qualification-evaluation sidecar (system proposes) and
+   * disqualification-resolution hook (operator dismisses).
+   *
+   * Capability violations throw `LifecycleCapabilityDenied` (loud).
+   * Monotonic violations are silently dropped (expected behavior, not bugs).
+   */
+  async updateQualificationStatus(input: UpdateQualificationInput): Promise<void> {
+    const capabilities = await this.deps.resolveCapabilities(input.organizationId);
+    const triggers = allowedTriggersFor(capabilities);
+    if (!triggers.has(input.trigger)) {
+      throw new LifecycleCapabilityDenied(
+        `trigger '${input.trigger}' not allowed by capabilities [${[...capabilities].join(",")}]`,
+      );
+    }
+
+    const occurredAt = input.occurredAt ?? new Date();
+
+    await this.deps.runInTransaction(async (tx) => {
+      const existing = await this.deps.snapshotStore.readInTransaction(
+        tx,
+        input.conversationThreadId,
+      );
+      if (existing === null) {
+        console.warn(
+          `[lifecycle] updateQualificationStatus called on missing snapshot ${input.conversationThreadId}; ignoring`,
+        );
+        return;
+      }
+      if (!isMonotonicQualificationTransition(existing.qualificationStatus, input)) {
+        return; // silent no-op
+      }
+
+      const nextSnapshot: ConversationLifecycleSnapshot = {
+        ...existing,
+        qualificationStatus: input.toQualificationStatus,
+        lastEvaluatedAt: occurredAt,
+        updatedAt: occurredAt,
+      };
+      await this.deps.snapshotStore.upsertInTransaction(tx, nextSnapshot);
+
+      const transition: Omit<ConversationLifecycleTransition, "id"> = {
+        organizationId: input.organizationId,
+        conversationThreadId: input.conversationThreadId,
+        contactId: input.contactId,
+        fromState: existing.currentState,
+        toState: existing.currentState,
+        trigger: input.trigger,
+        evidence: input.evidence,
+        actor: input.actor,
+        workTraceId: input.workTraceId ?? null,
+        occurredAt,
+      };
+      await this.deps.transitionStore.appendInTransaction(tx, transition);
+    });
+  }
+
   private computeDropoffReason(
     input: RecordTransitionInput,
     prior: ConversationLifecycleSnapshot["dropoffReason"],
@@ -138,4 +224,44 @@ export class LifecycleWriter {
     if (input.toState === "active") return null;
     return prior;
   }
+}
+
+function isMonotonicQualificationTransition(
+  current: LifecycleQualificationStatus,
+  input: UpdateQualificationInput,
+): boolean {
+  const target = input.toQualificationStatus;
+  const trigger = input.trigger;
+
+  // Operator-driven paths bypass the monotonic-by-sidecar rules.
+  if (trigger === "operator_dismissed_disqualification") {
+    return current === "proposed_disqualified";
+  }
+  if (trigger === "operator_confirmed_disqualification") {
+    // Handled by recordTransition (advances currentState to disqualified).
+    return false;
+  }
+
+  // System paths from sidecar evaluation:
+  if (current === "proposed_disqualified" && trigger !== "system_proposed_disqualification") {
+    return false; // protected from overwrite by normal sidecars
+  }
+
+  if (target === "proposed_disqualified") {
+    return current !== "proposed_disqualified";
+  }
+
+  if (target === "qualified") {
+    return current === "unknown" || current === "unqualified" || current === "qualified";
+  }
+
+  if (target === "unqualified") {
+    return current === "unknown"; // qualified → unqualified is forbidden
+  }
+
+  if (target === "unknown") {
+    return false; // never regress to unknown
+  }
+
+  return false;
 }

@@ -1,3 +1,11 @@
+/* eslint-disable max-lines -- bootstrap module: composes SkillExecutor + tool
+   registry + governance gate + consent service + hook chain + Phase 3b
+   QualificationEvaluationHook + LifecycleConfigResolver + LifecycleWriter wiring.
+   Crossed the 600-line guideline at Phase 3b when the qualification hook
+   construction was added (PR #444). Splitting (e.g. a separate
+   `bootstrap/skill-mode-lifecycle.ts` for the 3b wiring) is tracked as a
+   follow-up — better done when the broader bootstrap-module pattern is
+   consolidated across this directory. */
 import type { PrismaClient } from "@switchboard/db";
 import type { IntentRegistry, ExecutionModeRegistry } from "@switchboard/core/platform";
 import type {
@@ -6,7 +14,7 @@ import type {
   SkillToolFactory,
   WhatsAppWindowGateConfig,
 } from "@switchboard/core/skill-runtime";
-import type { ConsentService, ContactConsentReader } from "@switchboard/core";
+import type { ConsentService, ContactConsentReader, PlaybookReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
 
@@ -23,6 +31,12 @@ interface SkillModeBootstrapDeps {
   intentRegistry: IntentRegistry;
   modeRegistry: ExecutionModeRegistry;
   logger: { info(msg: string): void; error(msg: string): void };
+  /**
+   * Phase 3b: optional. When provided, the executor fires the qualification
+   * evaluation hook after a valid sidecar is parsed. If omitted, qualification
+   * hook wiring is skipped (e.g. in test or environments without a playbook store).
+   */
+  playbookReader?: PlaybookReader;
 }
 
 export async function bootstrapSkillMode(
@@ -436,6 +450,49 @@ export async function bootstrapSkillMode(
     clock: () => new Date(),
   });
 
+  // ---------------------------------------------------------------------------
+  // Phase 3b: qualification evaluation hook (optional — only wired when a
+  // playbookReader is supplied by the caller).
+  // ---------------------------------------------------------------------------
+  let qualificationEvaluationHook:
+    | import("@switchboard/core").QualificationEvaluationHook
+    | undefined;
+  if (deps.playbookReader) {
+    const { LifecycleConfigResolver, LifecycleWriter, QualificationEvaluationHook } =
+      await import("@switchboard/core");
+    const { PrismaConversationLifecycleSnapshotStore, PrismaConversationLifecycleTransitionStore } =
+      await import("@switchboard/db");
+    const qSnapshotStore = new PrismaConversationLifecycleSnapshotStore(prismaClient);
+    const qTransitionStore = new PrismaConversationLifecycleTransitionStore(prismaClient);
+    // Adapt GovernanceConfigResolver (function) → { resolve } object.
+    // LifecycleConfigResolver expects `{ resolve(orgId): Promise<unknown> }` while
+    // GovernanceConfigResolver is a plain function `(deploymentId) => Promise<Resolution>`.
+    // We use orgId as the resolution key (pilot: one deployment per org).
+    const qConfigResolverAdapter = {
+      resolve: async (orgId: string): Promise<unknown> => {
+        const resolution = await governanceConfigResolver(orgId);
+        if (resolution.status === "resolved") return resolution.config;
+        return null;
+      },
+    };
+    const qConfigResolver = new LifecycleConfigResolver({
+      governanceConfigResolver: qConfigResolverAdapter,
+    });
+    const qWriter = new LifecycleWriter({
+      snapshotStore: qSnapshotStore,
+      transitionStore: qTransitionStore,
+      runInTransaction: (fn) => prismaClient.$transaction(fn),
+      resolveCapabilities: (orgId) => qConfigResolver.resolveCapabilities(orgId),
+    });
+    qualificationEvaluationHook = new QualificationEvaluationHook({
+      writer: qWriter,
+      snapshotStore: qSnapshotStore,
+      playbookReader: deps.playbookReader,
+      configResolver: qConfigResolver,
+    });
+    logger.info("Phase 3b: QualificationEvaluationHook wired to SkillExecutor");
+  }
+
   const hooks = [
     new GovernanceHook(toolsMap),
     safetyGateHook,
@@ -450,6 +507,7 @@ export async function bootstrapSkillMode(
     hooks,
     undefined,
     toolFactories,
+    qualificationEvaluationHook,
   );
 
   const builderRegistry = new BuilderRegistry();

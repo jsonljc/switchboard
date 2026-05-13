@@ -531,6 +531,12 @@ export async function registerInngest(
     registerOperatorTakeoverHook: () => {},
     registerThreadInitHook: () => {},
     registerCron: () => {},
+    // Phase 3b: this inngest seat only consumes writer/history from the bootstrap result.
+    // governanceConfigResolver is intentionally stubbed here: no qualification capability
+    // check runs through this inngest path — the real hook wiring lives in bootstrapSkillMode
+    // (apps/api/src/bootstrap/skill-mode.ts) which uses createLifecycleGovernanceConfigResolver.
+    playbookReader: { readForOrganization: async () => null },
+    governanceConfigResolver: { resolve: async () => null },
   });
 
   await app.register(inngestFastify, {

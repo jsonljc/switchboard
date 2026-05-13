@@ -29,7 +29,11 @@
 
 import {
   LifecycleWriter,
+  LifecycleConfigResolver,
   ReEngagementAttributor,
+  QualificationEvaluationHook,
+  DisqualificationResolver,
+  DisqualificationResolutionHook,
   onGovernanceVerdictWritten,
   onBookingCreated,
   onInboundMessage,
@@ -42,6 +46,7 @@ import {
   type InboundMessageEvent,
   type OperatorTakeoverEvent,
   type ThreadFirstObservationEvent,
+  type PlaybookReader,
 } from "@switchboard/core";
 import {
   PrismaConversationLifecycleSnapshotStore,
@@ -62,6 +67,10 @@ export interface BootstrapLifecycleDeps {
   registerOperatorTakeoverHook: (cb: (event: OperatorTakeoverEvent) => Promise<void>) => void;
   registerThreadInitHook: (cb: (event: ThreadFirstObservationEvent) => Promise<void>) => void;
   registerCron: (name: string, schedule: string, fn: () => Promise<void>) => void;
+  /** Phase 3b: reads per-org playbook for qualification treatment resolution. */
+  playbookReader: PlaybookReader;
+  /** Phase 3b: resolves governance config for an org (used to build LifecycleConfigResolver). */
+  governanceConfigResolver: { resolve(organizationId: string): Promise<unknown> };
   /** Test hook: invoked after each registrar fires so the unit test can assert the order/set. */
   onHookRegister?: (name: string) => void;
 }
@@ -70,7 +79,14 @@ export interface BootstrapLifecycleResult {
   writer: LifecycleWriter;
   attributor: ReEngagementAttributor;
   snapshotStore: LifecycleSnapshotStore;
+  transitionStore: import("@switchboard/core").LifecycleTransitionStore;
   history: MessageHistoryReader;
+  /** Phase 3b: evaluates qualification signals emitted in a sidecar and writes transitions. */
+  qualificationEvaluationHook: QualificationEvaluationHook;
+  /** Phase 3b: operator-facing hook for confirming/dismissing proposed disqualifications. */
+  disqualificationHook: DisqualificationResolutionHook;
+  /** Phase 3b: underlying resolver exposed for direct use by API route handlers (Task 15). */
+  disqualificationResolver: DisqualificationResolver;
 }
 
 export function bootstrapLifecycle(deps: BootstrapLifecycleDeps): BootstrapLifecycleResult {
@@ -78,10 +94,18 @@ export function bootstrapLifecycle(deps: BootstrapLifecycleDeps): BootstrapLifec
   const transitionStore = new PrismaConversationLifecycleTransitionStore(deps.prisma);
   const verdictReader = new PrismaReEngagementVerdictReader(deps.prisma);
   const history = new PrismaMessageHistoryReader(deps.prisma);
+
+  // Phase 3b: config resolver reads mechanical + qualification flags per org.
+  // Replaces the hardcoded `new Set(["mechanical"])` from Phase 3a.
+  const configResolver = new LifecycleConfigResolver({
+    governanceConfigResolver: deps.governanceConfigResolver,
+  });
+
   const writer = new LifecycleWriter({
     snapshotStore,
     transitionStore,
     runInTransaction: (fn) => deps.prisma.$transaction(fn),
+    resolveCapabilities: (orgId) => configResolver.resolveCapabilities(orgId),
   });
   const attributor = new ReEngagementAttributor(verdictReader);
 
@@ -149,5 +173,33 @@ export function bootstrapLifecycle(deps: BootstrapLifecycleDeps): BootstrapLifec
   });
   deps.onHookRegister?.("stalled-sweep-cron");
 
-  return { writer, attributor, snapshotStore, history };
+  // Phase 3b — qualification hooks.
+  const qualificationEvaluationHook = new QualificationEvaluationHook({
+    writer,
+    snapshotStore,
+    playbookReader: deps.playbookReader,
+    configResolver,
+  });
+
+  const disqualificationResolver = new DisqualificationResolver({
+    snapshotStore,
+    transitionStore,
+    writer,
+  });
+
+  const disqualificationHook = new DisqualificationResolutionHook({
+    resolver: disqualificationResolver,
+    configResolver,
+  });
+
+  return {
+    writer,
+    attributor,
+    snapshotStore,
+    transitionStore,
+    history,
+    qualificationEvaluationHook,
+    disqualificationHook,
+    disqualificationResolver,
+  };
 }
