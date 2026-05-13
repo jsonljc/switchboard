@@ -10,12 +10,13 @@
 
 Ship in dependency order. PR-1 and PR-2 are mechanical (no design decisions). PR-3 and PR-4 involve real decisions and are scoped conservatively.
 
-| PR   | Title                                                   | Depends on | Risk          |
-| ---- | ------------------------------------------------------- | ---------- | ------------- |
-| PR-1 | Wire knowledgeStore into ConversationCompoundingService | None       | Low-to-medium |
-| PR-2 | Parallel safe tool calls in skill executor              | None       | Medium        |
-| PR-3 | Outcome-informed context injection                      | PR-1       | Medium        |
-| PR-4 | Provider-agnostic tool-calling adapter boundary         | None       | Medium        |
+| PR    | Title                                                                                  | Depends on | Risk          |
+| ----- | -------------------------------------------------------------------------------------- | ---------- | ------------- |
+| PR-1  | Wire knowledgeStore into ConversationCompoundingService                                | None       | Low-to-medium |
+| PR-2  | Parallel safe tool calls in skill executor                                             | None       | Medium        |
+| PR-3  | Outcome-informed context injection (write + read sides)                                | PR-1       | Medium        |
+| PR-4  | Provider-agnostic tool-calling adapter boundary (type boundary only — no fallback)     | None       | Low-to-medium |
+| PR-4B | Fallback router + retryable-error consumption + agent-runtime adapter migration (deferred) | PR-4   | Medium        |
 
 ---
 
@@ -108,10 +109,13 @@ Use successful conversation outcomes to give Alex better context in future conve
 
 ### What changes
 
-- When a conversation ends in `booked`, extract high-confidence booked-outcome patterns.
-- Store patterns in `DeploymentMemory` or equivalent outcome memory.
+- When a conversation ends in `booked`, extract pattern candidates from the existing `processConversationEnd` LLM extraction call (no second LLM call) and upsert them into `DeploymentMemory` with `category: "pattern"`. Reuse the existing `sourceCount`/`confidence` accumulation path so promotion thresholds match the rest of the memory system.
 - At skill execution time, inject only high-confidence, relevant patterns into Alex's context with provenance, confidence, and freshness metadata.
 - Keep the injected context advisory, not mandatory.
+- `ContextBuilder` is a stateful service, not a per-call store. Inject it through a new `SkillServices` slot, separate from `SkillStores`. Do not place it on the `stores` map.
+- The Alex builder always provides `OUTCOME_PATTERNS` as a string parameter (empty string when no patterns surface). The current `interpolate()` template engine only supports plain `{{PARAM}}` substitution — do not introduce Mustache section syntax. The builder owns escaping pattern text so attacker-controlled pattern content cannot inject prompt directives.
+
+The write path is the missing half of the memory loop. Without it, the `category: "pattern"` filter in `ContextBuilder` returns the empty set and the entire PR is a runtime no-op.
 
 ### Examples of injected patterns
 
@@ -152,15 +156,21 @@ Use the existing `DeploymentMemory` confidence formula: `min(0.95, 0.5 + 0.15 * 
 
 Medium. The main risk is overfitting from weak signals, so only patterns that cross the existing confidence threshold should be surfaced.
 
+### Freshness contract
+
+`ContextBuilderDeploymentMemoryStore.listHighConfidence` must return `lastSeenAt` on every entry. Ordering of the returned list must remain the same as today (confidence/sourceCount-based); adding the field must not change sort order. Synthesizing `lastSeenAt = new Date()` at read time is not acceptable — freshness signals must reflect the actual `DeploymentMemory.lastSeenAt` column already populated by the existing memory write path.
+
 ### Tests
 
-- Booked conversations generate booked-outcome patterns.
-- Non-booked / disqualified conversations do not generate booked-outcome patterns.
+- Booked conversations write pattern-category memories; non-booked / lost / escalated conversations do not.
+- Repeated booked observations increment `sourceCount` via the existing memory upsert path; they do not create duplicate entries.
 - Low-confidence patterns are not injected.
 - Injected patterns are relevant to the current treatment / service context.
-- Stale outcome patterns are not injected if newer contradictory business facts exist.
+- Stale outcome patterns are not injected if newer contradictory business facts exist (uses real `lastSeenAt`, not synthesized).
 - Outcome patterns never override explicit operator corrections.
 - Alex still respects policy, business facts, and operator corrections above outcome patterns.
+- Builder renders `OUTCOME_PATTERNS: ""` cleanly when no patterns surface (template does not leak unrendered placeholders).
+- `listHighConfidence` returns the same ordering as before `lastSeenAt` was added.
 
 ### Future (not this PR)
 
@@ -172,7 +182,7 @@ PR-3B: outcome-weighted retrieval, behind a feature flag. Only after inspecting 
 
 ### Goal
 
-Make Alex resilient to Anthropic outages by decoupling the skill executor from Anthropic-specific types, without migrating production traffic.
+Decouple the skill executor from Anthropic-specific types by introducing a provider-neutral adapter boundary. **No behavior change.** Fallback routing is explicitly deferred to PR-4B.
 
 ### What changes
 
@@ -184,33 +194,33 @@ Make Alex resilient to Anthropic outages by decoupling the skill executor from A
   - Tool results
   - Stop reasons
   - Usage/cost metadata
-  - Retryable vs non-retryable errors
+  - Retryable vs non-retryable errors (the type is defined; fallback routing that consumes it is PR-4B)
 - Separate Anthropic-specific message/tool types from the core skill executor.
-- Keep Anthropic as the primary provider.
-- Add fallback routing logic, disabled by default (feature flag).
-- Add one minimal concrete adapter or test double to prove the abstraction works.
-- Do not migrate production traffic yet.
+- Keep Anthropic as the only wired provider. Production traffic stays on Anthropic via the new adapter.
+- Add one Anthropic concrete adapter and one test double adapter to prove the abstraction works.
+- The skill-runtime adapter at `packages/core/src/skill-runtime/tool-calling-adapter.ts` keeps backward-compatible re-exports so existing callers don't break.
 
-### Fallback triggers
+### Unknown-shape handling
 
-- Provider timeout
-- Provider 5xx
-- Provider rate-limit
-- Provider unavailable
-- Explicit feature-flagged test mode
+Unknown stop reasons and unknown content block types must surface as **typed adapter errors at the adapter boundary**, not be silently coerced to text, empty text, or a "default" case. This keeps provider mismatches visible to the executor instead of hiding them in downstream logic.
+
+### Explicitly out of scope (deferred to PR-4B)
+
+- Fallback router that switches providers on failure.
+- Feature flag gating fallback behavior.
+- Runtime consumption of `isRetryableError` / `LLMError` shapes.
+- Migration of `packages/core/src/agent-runtime/anthropic-adapter.ts` (the chat-reply path adapter, used by `ConversationCompoundingService`). PR-4 only touches the skill-runtime tool-calling path. The agent-runtime adapter remains Anthropic-coupled until PR-4B.
 
 ### What should NOT happen
 
-- Do not fallback on policy failures.
-- Do not fallback on business logic failures.
-- Do not fallback just because Alex gave a weak answer.
 - Do not silently change tool behavior between providers.
 - Do not expose provider-specific response shapes beyond the adapter boundary.
 - Do not assume all providers support identical tool-call semantics, streaming chunks, stop reasons, or tool result formats.
+- Do not coerce unknown stop reasons or unknown content blocks into safe defaults — throw a typed adapter error so the executor sees the mismatch.
 
 ### Scope guard
 
-This PR does not optimize for model cost, change model selection behavior, or route live production conversations to a second provider by default.
+This PR introduces the type boundary only. It does not optimize for model cost, change model selection behavior, route conversations to a second provider, or implement fallback routing.
 
 ### Risk
 
@@ -218,14 +228,15 @@ Medium. The main risk is creating a shallow abstraction that renames Anthropic c
 
 ### Tests
 
-- Anthropic remains default.
-- Tool-calling adapter interface can run through a provider-neutral executor path.
-- Fallback is not used unless enabled.
-- Provider failure triggers fallback only for eligible failure types.
-- Tool result formatting remains stable across adapter boundary.
-- Existing Anthropic behavior is unchanged.
-- Type-level or contract test proving the skill executor imports no Anthropic SDK types.
+- Anthropic remains the only wired provider.
+- Tool-calling adapter interface runs through the provider-neutral executor path.
+- Tool-use block translation round-trips faithfully (not just text-only responses).
+- Tool result formatting remains stable across the adapter boundary.
+- Unknown stop reasons surface as a typed adapter error, not silent default.
+- Unknown content block types surface as a typed adapter error, not silent empty text.
+- Existing Anthropic behavior is unchanged end-to-end.
+- Contract test proving the skill executor imports no Anthropic SDK types.
 
 ### Future (not this PR)
 
-PR-4B: wire first real fallback provider (likely OpenAI for tool-calling quality).
+PR-4B (deferred): wire fallback router that consumes `isRetryableError`, gate it behind a feature flag, define fallback triggers (timeout, 5xx, rate-limit, unavailable), and migrate `agent-runtime/anthropic-adapter.ts` to share the same neutral boundary. PR-4B picks a first real fallback provider (likely OpenAI for tool-calling quality).

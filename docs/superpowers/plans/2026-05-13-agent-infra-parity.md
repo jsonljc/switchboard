@@ -4,7 +4,7 @@
 
 **Goal:** Close four agent infrastructure gaps identified in Switchboard-vs-Meta-BizAI analysis: activate dormant FAQ auto-promotion, parallelize safe tool calls, inject outcome-informed context, and decouple the skill executor from Anthropic-specific types.
 
-**Architecture:** Four independent PRs shipped in dependency order. PR-1 wires a missing dependency. PR-2 introduces a concurrency-aware tool call scheduler. PR-3 wires the existing `ContextBuilder` into skill execution to surface booked-outcome patterns. PR-4 extracts a provider-neutral adapter boundary from the Anthropic-coupled tool-calling path.
+**Architecture:** Four independent PRs shipped in dependency order. PR-1 wires a missing dependency. PR-2 introduces a single-use, concurrency-aware tool call scheduler. PR-3 closes the memory loop end-to-end: it adds the booked-outcome write path in `compounding-service.ts`, surfaces real `lastSeenAt` from `listHighConfidence`, and threads outcome patterns through `ContextBuilder` into Alex via a new `SkillServices` slot. PR-4 extracts a provider-neutral adapter boundary from the Anthropic-coupled tool-calling path — type boundary only, no behavior change. Fallback routing is explicitly deferred to PR-4B.
 
 **Tech Stack:** TypeScript, Vitest, Prisma, Anthropic SDK, pgvector, Zod
 
@@ -303,8 +303,21 @@ Expected: FAIL — module not found
 
 ```typescript
 // packages/core/src/skill-runtime/tool-call-scheduler.ts
+//
+// Concurrency-aware scheduler for one batch of tool calls returned by an LLM
+// in a single turn. Construct a fresh instance per turn — schedulers are
+// SINGLE-USE. Reusing an instance after `execute()` returns throws
+// SchedulerAlreadyUsedError, by design: lifecycle mistakes should fail loudly
+// rather than silently double-count budget or corrupt audit ordering.
 import type { EffectCategory } from "./governance-types.js";
 import { SkillExecutionBudgetError } from "./types.js";
+
+export class SchedulerAlreadyUsedError extends Error {
+  constructor() {
+    super("ToolCallScheduler is single-use; construct a fresh instance per LLM turn");
+    this.name = "SchedulerAlreadyUsedError";
+  }
+}
 
 export interface ScheduledToolCall {
   id: string;
@@ -331,20 +344,22 @@ const READ_ONLY_CATEGORIES: Set<EffectCategory> = new Set(["read", "propose", "s
 
 export class ToolCallScheduler {
   private readonly maxBudget: number;
-  private reserved = 0;
+  private used = false;
 
   constructor(config: ToolCallSchedulerConfig) {
     this.maxBudget = config.maxBudget;
   }
 
   async execute(calls: ScheduledToolCall[]): Promise<ToolCallSchedulerResult[]> {
+    if (this.used) throw new SchedulerAlreadyUsedError();
+    this.used = true;
+
     if (calls.length === 0) return [];
 
-    // Reserve budget upfront for all calls before any execution starts
-    if (this.reserved + calls.length > this.maxBudget) {
+    // Reserve budget upfront for the whole batch before any execution starts.
+    if (calls.length > this.maxBudget) {
       throw new SkillExecutionBudgetError(`Exceeded maximum tool calls (${this.maxBudget})`);
     }
-    this.reserved += calls.length;
 
     // Partition into read-only and mutating batches, preserving order
     const batches = this.partition(calls);
@@ -650,12 +665,77 @@ it("failed tool call does not drop successful sibling results", async () => {
 });
 ```
 
-- [ ] **Step 7: Run all scheduler tests**
+- [ ] **Step 7: Write test — scheduler is single-use**
+
+```typescript
+it("throws SchedulerAlreadyUsedError on second execute()", async () => {
+  const scheduler = new ToolCallScheduler({ maxBudget: 10 });
+  const calls: ScheduledToolCall[] = [
+    {
+      id: "only",
+      effectCategory: "read",
+      execute: async () => ({ status: "ok" as const, data: "x" }),
+    },
+  ];
+
+  await scheduler.execute(calls);
+  await expect(scheduler.execute(calls)).rejects.toThrow(/single-use/);
+});
+```
+
+This pins the per-turn lifecycle: a scheduler cannot accidentally be reused across LLM turns. Failing loudly here is by design — silent reset would let lifecycle mistakes corrupt budget accounting or audit ordering.
+
+- [ ] **Step 8: Write test — hook ordering preserved across parallel reads**
+
+```typescript
+it("audit-relevant side effects appear in original call order, not completion order", async () => {
+  const auditLog: string[] = [];
+
+  const calls: ScheduledToolCall[] = [
+    {
+      id: "first-slow",
+      effectCategory: "read",
+      execute: async () => {
+        await delay(60);
+        auditLog.push("first-slow");
+        return { status: "ok" as const, data: 1 };
+      },
+    },
+    {
+      id: "second-fast",
+      effectCategory: "read",
+      execute: async () => {
+        await delay(10);
+        auditLog.push("second-fast");
+        return { status: "ok" as const, data: 2 };
+      },
+    },
+  ];
+
+  const scheduler = new ToolCallScheduler({ maxBudget: 10 });
+  const results = await scheduler.execute(calls);
+
+  // Results are returned in original positional order.
+  expect(results.map((r) => r.id)).toEqual(["first-slow", "second-fast"]);
+
+  // Note on audit ordering under parallelism:
+  // Side effects performed *inside* the per-call `execute()` body run in
+  // completion order, not call order — that's intentional and unavoidable for
+  // parallel reads. Callers that need ordered audit emission must perform the
+  // audit write OUTSIDE the parallel closure, using the scheduler result array
+  // (which IS in original order). This test pins the result-array contract.
+  expect(auditLog).toEqual(["second-fast", "first-slow"]);
+});
+```
+
+This documents the seam: parallel reads complete in non-deterministic order, so any audit logging that must preserve call order has to happen against the returned `ToolCallSchedulerResult[]`, not inside the `execute()` callback. The scheduler integration in Task 5 must respect this.
+
+- [ ] **Step 9: Run all scheduler tests**
 
 Run: `pnpm --filter @switchboard/core test -- --grep "ToolCallScheduler"`
 Expected: All PASS
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add packages/core/src/skill-runtime/__tests__/tool-call-scheduler.test.ts
@@ -663,7 +743,9 @@ git commit -m "$(cat <<'EOF'
 test(skill-runtime): comprehensive scheduler tests
 
 Covers: positional ordering, mutating serialization, mixed batches,
-budget reservation, single call regression, and failed sibling isolation.
+budget reservation, single call regression, failed sibling isolation,
+single-use lifecycle enforcement, and ordering contract for audit
+side effects under parallel reads.
 EOF
 )"
 ```
@@ -929,13 +1011,18 @@ EOF
 
 ### File Map
 
-- Create: `packages/core/src/memory/outcome-pattern-extractor.ts` — extract booked-outcome patterns
+- Create: `packages/core/src/memory/outcome-pattern-extractor.ts` — pure helpers (Task 6)
 - Create: `packages/core/src/memory/__tests__/outcome-pattern-extractor.test.ts`
-- Modify: `packages/core/src/memory/compounding-service.ts` — tag outcome on extracted facts
-- Modify: `packages/core/src/memory/context-builder.ts` — filter + format outcome patterns for injection
-- Modify: `packages/core/src/memory/__tests__/context-builder.test.ts` — tests for outcome filtering
-- Modify: `packages/core/src/skill-runtime/builders/alex.ts` — inject outcome context into params
-- Modify: `packages/core/src/memory/__tests__/compounding-service.test.ts` — outcome tagging tests
+- Modify: `packages/core/src/memory/compounding-service.ts` — write booked-outcome patterns to `DeploymentMemory.category="pattern"` (Task 6a)
+- Modify: `packages/core/src/memory/extraction-prompts.ts` — extend existing extraction response with `patterns: string[]` (Task 6a)
+- Modify: `packages/core/src/memory/__tests__/compounding-service.test.ts` — outcome write-path tests (Task 6a)
+- Modify: `packages/core/src/memory/context-builder.ts` — extend `listHighConfidence` to return `lastSeenAt`, filter + format outcome patterns (Task 7)
+- Modify: `packages/db/src/stores/prisma-deployment-memory-store.ts` — surface `lastSeenAt` column (Task 7)
+- Modify: `packages/db/src/stores/__tests__/prisma-deployment-memory-store.test.ts` — ordering regression (Task 7)
+- Modify: `packages/core/src/memory/__tests__/context-builder.test.ts` — outcome filtering tests (Task 7)
+- Modify: `packages/core/src/skill-runtime/parameter-builder.ts` — add `SkillServices` slot for stateful composition deps (Task 8)
+- Modify: `packages/core/src/skill-runtime/builders/alex.ts` — resolve `OUTCOME_PATTERNS` via `services.contextBuilder` (Task 8)
+- Modify: `skills/alex/SKILL.md` — declare `OUTCOME_PATTERNS` parameter, plain `{{OUTCOME_PATTERNS}}` substitution (Task 8)
 
 ---
 
@@ -1126,6 +1213,143 @@ EOF
 
 ---
 
+### Task 6a: Wire outcome-pattern writes in compounding-service
+
+**Why this task exists:** without writing booked-conversation patterns into `DeploymentMemory` with `category: "pattern"`, the `category === "pattern"` filter in Task 7's `ContextBuilder` always returns the empty set and the entire PR is a runtime no-op. The previous plan omitted this task; the spec ("What changes" first bullet) requires it.
+
+**Constraint:** reuse the existing LLM extraction call in `processConversationEnd`. Do not add a second LLM call for pattern extraction — pull pattern candidates from the same extraction response that already produces `extractedFacts` and `questionsAsked`.
+
+**Files:**
+
+- Modify: `packages/core/src/memory/compounding-service.ts`
+- Modify: `packages/core/src/memory/__tests__/compounding-service.test.ts`
+- Modify: `packages/core/src/memory/extraction-prompts.ts` — add pattern candidates to the existing extraction response shape (if not already present)
+
+- [ ] **Step 1: Write the failing test — booked event writes pattern memories**
+
+```typescript
+it("writes pattern-category memories when outcome is booked", async () => {
+  const deps = createMockDeps();
+  deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+  deps.deploymentMemoryStore.upsert = vi.fn().mockResolvedValue({
+    id: "p-1",
+    sourceCount: 1,
+  });
+  primeFaqExtractionLlm(deps, undefined, {
+    patterns: ["Customers ask about downtime before booking laser treatment"],
+  });
+  deps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+  const service = new ConversationCompoundingService(deps);
+  await service.processConversationEnd({ ...baseEvent, outcome: "booked" });
+
+  expect(deps.deploymentMemoryStore.upsert).toHaveBeenCalledWith(
+    expect.objectContaining({
+      category: "pattern",
+      content: "Customers ask about downtime before booking laser treatment",
+    }),
+  );
+});
+```
+
+- [ ] **Step 2: Write the failing test — non-booked outcomes skip pattern writes**
+
+```typescript
+it("does not write pattern-category memories for non-booked outcomes", async () => {
+  for (const outcome of ["lost", "qualified", "info_request", "escalated"] as const) {
+    const deps = createMockDeps();
+    deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+    deps.deploymentMemoryStore.upsert = vi.fn().mockResolvedValue({ id: "p", sourceCount: 1 });
+    primeFaqExtractionLlm(deps, undefined, {
+      patterns: ["irrelevant since outcome is not booked"],
+    });
+    deps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+    const service = new ConversationCompoundingService(deps);
+    await service.processConversationEnd({ ...baseEvent, outcome });
+
+    const patternCalls = deps.deploymentMemoryStore.upsert.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCalls).toHaveLength(0);
+  }
+});
+```
+
+- [ ] **Step 3: Write the failing test — repeated booked observations increment sourceCount via existing path**
+
+```typescript
+it("increments sourceCount on existing pattern entries instead of creating duplicates", async () => {
+  const deps = createMockDeps();
+  deps.deploymentMemoryStore.findByCategory.mockResolvedValue([
+    {
+      id: "p-existing",
+      content: "Customers ask about downtime before booking laser treatment",
+      category: "pattern",
+      sourceCount: 2,
+      confidence: 0.6,
+      lastSeenAt: new Date(),
+    },
+  ]);
+  deps.deploymentMemoryStore.incrementConfidence = vi.fn().mockResolvedValue({
+    id: "p-existing",
+    sourceCount: 3,
+  });
+  primeFaqExtractionLlm(deps, undefined, {
+    patterns: ["Customers ask about downtime before booking laser treatment"],
+  });
+  deps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+  const service = new ConversationCompoundingService(deps);
+  await service.processConversationEnd({ ...baseEvent, outcome: "booked" });
+
+  // Existing path increments rather than inserting a duplicate
+  expect(deps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+    "p-existing",
+    expect.any(Object),
+  );
+});
+```
+
+- [ ] **Step 4: Implement the pattern-write path**
+
+Extend `processConversationEnd` (after the FAQ tracking block, before the function returns) to call a new private method `trackPattern(extracted.patterns[])` when `event.outcome === "booked"`. `trackPattern` should mirror the existing `trackQuestion` shape:
+
+1. `findByCategory(orgId, deploymentId, "pattern")` to load existing pattern memories.
+2. Use the existing similarity helper (embedding cosine, threshold matching the FAQ path) to decide insert-vs-increment.
+3. If a near-duplicate exists, call `incrementConfidence(id, ...)` — confidence formula is the existing `computeConfidenceScore`.
+4. Otherwise, call `upsert({ category: "pattern", content, confidence, sourceCount: 1, lastSeenAt: new Date(), ... })`.
+5. Update `extractionResponseSchema` in `extraction-prompts.ts` to include a `patterns: string[]` array, parsed from the existing extraction LLM response. Do not add a second LLM call — extend the existing prompt and parsing.
+
+**Constraint:** the pattern detection prompt should only ask the LLM for patterns when the conversation outcome is `booked`. For non-booked outcomes, `patterns: []` is passed through.
+
+- [ ] **Step 5: Run all compounding tests**
+
+Run: `pnpm --filter @switchboard/core test -- --run -t "CompoundingService"`
+Expected: All PASS, including the 3 new tests above.
+
+- [ ] **Step 6: Run typecheck**
+
+Run: `pnpm typecheck`
+Expected: No errors.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add packages/core/src/memory/compounding-service.ts packages/core/src/memory/extraction-prompts.ts packages/core/src/memory/__tests__/compounding-service.test.ts
+git commit -m "$(cat <<'EOF'
+feat(memory): write booked-outcome patterns into DeploymentMemory
+
+When processConversationEnd sees outcome=booked, pattern candidates from
+the existing extraction LLM call are upserted with category=pattern.
+Repeated booked observations increment sourceCount via the existing
+similarity-and-increment path used by FAQ tracking. No second LLM call.
+EOF
+)"
+```
+
+---
+
 ### Task 7: Wire outcome patterns into ContextBuilder
 
 **Files:**
@@ -1168,7 +1392,50 @@ it("includes formatted outcome patterns in built context", async () => {
 Run: `pnpm --filter @switchboard/core test -- --grep "outcome patterns in built context"`
 Expected: FAIL — `outcomePatternContext` not a property of `BuiltContext`
 
-- [ ] **Step 3: Add outcomePatternContext to BuiltContext and wire formatting**
+- [ ] **Step 3: Extend `listHighConfidence` to return `lastSeenAt`**
+
+Real freshness data must come from `DeploymentMemory.lastSeenAt`, not be synthesized at read time. Update the store interface and implementation:
+
+In `packages/core/src/memory/context-builder.ts`, change `ContextBuilderDeploymentMemoryStore`:
+
+```typescript
+export interface ContextBuilderDeploymentMemoryStore {
+  listHighConfidence(
+    organizationId: string,
+    deploymentId: string,
+    minConfidence: number,
+    minSourceCount: number,
+  ): Promise<
+    Array<{
+      id: string;
+      content: string;
+      category: string;
+      confidence: number;
+      sourceCount: number;
+      lastSeenAt: Date;
+    }>
+  >;
+}
+```
+
+Then update `packages/db/src/stores/prisma-deployment-memory-store.ts` `listHighConfidence` to `select` the `lastSeenAt` column.
+
+**Ordering contract:** the returned list ordering must remain identical to today (confidence/sourceCount-based). Adding `lastSeenAt` to the projection must not change the `orderBy` clause. Add a regression test in the same task to pin this.
+
+- [ ] **Step 4: Add ordering regression test**
+
+```typescript
+it("listHighConfidence ordering is unchanged after adding lastSeenAt projection", async () => {
+  // Seed two memories with same confidence and sourceCount but different lastSeenAt.
+  // The pre-existing ordering rule (confidence desc, then sourceCount desc) should
+  // still hold; lastSeenAt must NOT become a tiebreaker.
+  // ...assertion that pre-existing first-result remains first
+});
+```
+
+This test goes in the `PrismaDeploymentMemoryStore` test file (or its integration test if mocked Prisma can't assert ordering). The point is: surfacing a new column from a query is the most common silent-ordering-change bug, and we want the test to catch it.
+
+- [ ] **Step 5: Add outcomePatternContext to BuiltContext and wire formatting**
 
 In `packages/core/src/memory/context-builder.ts`, add the import and field:
 
@@ -1195,7 +1462,8 @@ export interface BuiltContext {
 At the end of the `build()` method, after populating `learnedFacts`, add:
 
 ```typescript
-// Build outcome pattern context from high-confidence pattern-category memories
+// Build outcome pattern context from high-confidence pattern-category memories.
+// lastSeenAt comes from the store — do NOT synthesize it.
 const outcomePatterns: OutcomePattern[] = memories
   .filter((m) => m.category === "pattern")
   .map((m) => ({
@@ -1203,7 +1471,7 @@ const outcomePatterns: OutcomePattern[] = memories
     category: m.category as OutcomePattern["category"],
     confidence: m.confidence,
     sourceCount: m.sourceCount,
-    lastSeenAt: new Date(), // listHighConfidence doesn't return lastSeenAt; use now
+    lastSeenAt: m.lastSeenAt,
   }));
 const surfaceable = filterSurfaceablePatterns(outcomePatterns);
 const outcomePatternContext = formatOutcomePatternsForContext(surfaceable);
@@ -1217,12 +1485,12 @@ return {
 };
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 6: Run test to verify it passes**
 
 Run: `pnpm --filter @switchboard/core test -- --grep "outcome patterns in built context"`
 Expected: PASS
 
-- [ ] **Step 5: Write test — low-confidence patterns excluded**
+- [ ] **Step 7: Write test — low-confidence patterns excluded**
 
 ```typescript
 it("excludes low-confidence patterns from outcomePatternContext", async () => {
@@ -1233,6 +1501,7 @@ it("excludes low-confidence patterns from outcomePatternContext", async () => {
       category: "pattern",
       confidence: 0.67,
       sourceCount: 2, // below SURFACING_THRESHOLD.minSourceCount (3)
+      lastSeenAt: new Date(),
     },
   ]);
 
@@ -1247,21 +1516,23 @@ it("excludes low-confidence patterns from outcomePatternContext", async () => {
 });
 ```
 
-- [ ] **Step 6: Run all ContextBuilder tests**
+- [ ] **Step 8: Run all ContextBuilder tests**
 
 Run: `pnpm --filter @switchboard/core test -- --grep "ContextBuilder"`
 Expected: All PASS
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add packages/core/src/memory/context-builder.ts packages/core/src/memory/__tests__/context-builder.test.ts
+git add packages/core/src/memory/context-builder.ts packages/core/src/memory/__tests__/context-builder.test.ts packages/db/src/stores/prisma-deployment-memory-store.ts packages/db/src/stores/__tests__/prisma-deployment-memory-store.test.ts
 git commit -m "$(cat <<'EOF'
 feat(memory): wire outcome patterns into ContextBuilder
 
 High-confidence pattern-category memories are filtered through
 SURFACING_THRESHOLD and formatted as advisory context with provenance
-metadata. Added to BuiltContext as outcomePatternContext.
+metadata. Added to BuiltContext as outcomePatternContext. lastSeenAt
+is sourced from the DeploymentMemory row, not synthesized. Ordering
+of listHighConfidence is preserved via a regression test.
 EOF
 )"
 ```
@@ -1272,52 +1543,102 @@ EOF
 
 **Files:**
 
+- Modify: `packages/core/src/skill-runtime/parameter-builder.ts` — add `SkillServices` slot
 - Modify: `packages/core/src/skill-runtime/builders/alex.ts`
+- Modify: `skills/alex/SKILL.md`
 
-- [ ] **Step 1: Add outcomePatternContext to Alex's parameters**
+**Architectural note:** `ContextBuilder` is a stateful service, not a per-call store. The existing `SkillStores` interface (lines 3-39 of `parameter-builder.ts`) holds thin repository-shaped objects (`opportunityStore`, `contactStore`, etc.) — adding a stateful composition service alongside them would muddle the abstraction. Instead, add a new `services` parameter to the `ParameterBuilder` signature alongside `stores`. This keeps the existing store contract clean and gives builders a typed place for orchestration dependencies.
 
-This task depends on the `ContextBuilder` being wired as a dependency of the alex builder. Since the alex builder currently receives `stores` via `ParameterBuilder`, add a `contextBuilder` field to the stores interface and inject `outcomePatternContext` as a parameter.
+- [ ] **Step 1: Add `SkillServices` slot to ParameterBuilder**
 
-In `alex.ts`, after `BUSINESS_FACTS` is set, add:
+In `parameter-builder.ts`, add:
 
 ```typescript
-// Outcome-informed context (advisory, priority 4 — below business facts and operator corrections)
-if (stores.contextBuilder) {
-  const builtCtx = await stores.contextBuilder.build({
+import type { ContextBuilder } from "../memory/context-builder.js";
+
+export interface SkillServices {
+  contextBuilder?: ContextBuilder;
+}
+
+export type ParameterBuilder = (
+  ctx: AgentContext,
+  config: {
+    deploymentId: string;
+    orgId: string;
+    contactId: string;
+    phone?: string;
+    channel?: string;
+  },
+  stores: SkillStores,
+  services?: SkillServices,
+) => Promise<Record<string, unknown>>;
+```
+
+Update all existing callers (parameter-resolution sites, test harnesses) to pass `services` (or `undefined` for now). Existing builders that don't use services keep their current signatures because `services` is optional.
+
+- [ ] **Step 2: Wire `ContextBuilder` into the Alex builder dispatch path**
+
+Find the call site that invokes `alexBuilder(ctx, config, stores)` and update it to pass `services: { contextBuilder }` where `contextBuilder` is constructed once at composition root (likely `gateway-bridge.ts`, alongside the existing `ConversationCompoundingService` construction PR-1 added). Reuse the same `knowledgeRetriever`, `deploymentMemoryStore`, and `interactionSummaryStore` instances; they are already wired.
+
+- [ ] **Step 3: Add OUTCOME_PATTERNS resolution to alex builder**
+
+In `packages/core/src/skill-runtime/builders/alex.ts`, after `BUSINESS_FACTS` is set, add:
+
+```typescript
+// Outcome-informed context (advisory, priority 4 — below business facts and operator corrections).
+// Builder ALWAYS supplies OUTCOME_PATTERNS as a string so the template interpolation cannot
+// leak an unrendered placeholder. Empty string when no patterns surface.
+let OUTCOME_PATTERNS = "";
+if (services?.contextBuilder) {
+  const builtCtx = await services.contextBuilder.build({
     organizationId: config.orgId,
     agentId: "alex",
     deploymentId: config.deploymentId,
     query: (ctx.workUnit.parameters.message as string) ?? "",
     contactId: ctx.workUnit.parameters.contactId as string | undefined,
   });
-  if (builtCtx.outcomePatternContext) {
-    params.OUTCOME_PATTERNS = builtCtx.outcomePatternContext;
-  }
+  OUTCOME_PATTERNS = builtCtx.outcomePatternContext;
 }
 ```
 
-In the Alex skill markdown (`skills/alex/SKILL.md`), add an optional parameter `OUTCOME_PATTERNS` and reference it in the prompt body where advisory context belongs — after business facts and operator corrections, before generic instructions:
+Add `OUTCOME_PATTERNS` to the returned parameters object. The builder owns rendering: patterns are already formatted as plain prompt text by `formatOutcomePatternsForContext`. Do not introduce any conditional template syntax.
+
+- [ ] **Step 4: Add OUTCOME_PATTERNS placeholder in the Alex skill markdown**
+
+In `skills/alex/SKILL.md`, declare `OUTCOME_PATTERNS` as an optional parameter and reference it inline:
 
 ```
-{{#OUTCOME_PATTERNS}}
-{{{OUTCOME_PATTERNS}}}
-{{/OUTCOME_PATTERNS}}
+{{OUTCOME_PATTERNS}}
 ```
 
-- [ ] **Step 2: Run typecheck**
+placed after business facts and operator corrections, before generic instructions.
+
+**Do not use Mustache section syntax** (`{{#...}}...{{/...}}`). The existing `interpolate()` template engine (`packages/core/src/skill-runtime/template-engine.ts`) only supports `{{PARAM}}` and `{{PARAM.field}}` replacement via a single regex — section markers would leak into the prompt as literal text. The "render nothing when empty" semantics come from the builder always passing an empty string when there's nothing to surface.
+
+- [ ] **Step 5: Write the contract test — empty OUTCOME_PATTERNS renders cleanly**
+
+```typescript
+it("renders without unresolved placeholders when OUTCOME_PATTERNS is empty", async () => {
+  const params = await alexBuilder(ctx, config, stores /* no services */);
+  expect(params.OUTCOME_PATTERNS).toBe("");
+  // ...assert downstream interpolate() emits no literal "{{OUTCOME_PATTERNS}}" or section markers
+});
+```
+
+- [ ] **Step 6: Run typecheck**
 
 Run: `pnpm typecheck`
 Expected: No errors
 
-- [ ] **Step 3: Run tests**
+- [ ] **Step 7: Run tests**
 
 Run: `pnpm test`
 Expected: All PASS
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add packages/core/src/skill-runtime/builders/alex.ts skills/alex/SKILL.md
+git add packages/core/src/skill-runtime/parameter-builder.ts packages/core/src/skill-runtime/builders/alex.ts skills/alex/SKILL.md packages/core/src/skill-runtime/builders/alex.test.ts
 git commit -m "$(cat <<'EOF'
 feat(alex): inject outcome-informed patterns into skill context
 
@@ -1325,6 +1646,12 @@ Booked-outcome patterns are surfaced as advisory context at priority 4
 (below safety, business facts, operator corrections, and customer
 preferences). Patterns include provenance, confidence, and observation
 count. No retrieval re-ranking or behavior forcing.
+
+Adds SkillServices slot to ParameterBuilder for stateful composition
+services (ContextBuilder), kept separate from per-call SkillStores.
+Builder always supplies OUTCOME_PATTERNS as a string (empty when no
+patterns surface) so plain {{OUTCOME_PATTERNS}} substitution renders
+cleanly without Mustache section syntax.
 EOF
 )"
 ```
@@ -1434,6 +1761,8 @@ export interface LLMError {
   provider: string;
 }
 
+// LLMError is consumed by PR-4B's fallback router. PR-4 only defines the
+// shape and proves the boundary; no runtime path consumes `retryable` yet.
 export function isRetryableError(err: unknown): err is LLMError {
   return (
     typeof err === "object" &&
@@ -1441,6 +1770,20 @@ export function isRetryableError(err: unknown): err is LLMError {
     "retryable" in err &&
     (err as LLMError).retryable === true
   );
+}
+
+// Thrown by adapter implementations when the provider returns a shape the
+// adapter cannot translate (unknown stop reason, unknown content block type,
+// etc). Surfaces the mismatch at the boundary instead of silently coercing.
+export class LLMAdapterShapeMismatchError extends Error {
+  constructor(
+    public readonly provider: string,
+    public readonly kind: "stop_reason" | "content_block",
+    public readonly observed: string,
+  ) {
+    super(`[${provider}] unknown ${kind}: ${observed}`);
+    this.name = "LLMAdapterShapeMismatchError";
+  }
 }
 
 export interface ToolCallingLLMAdapter {
@@ -1527,16 +1870,29 @@ Expected: FAIL — module not found
 ```typescript
 // packages/core/src/skill-runtime/adapters/anthropic-tool-adapter.ts
 import type Anthropic from "@anthropic-ai/sdk";
-import type {
-  ToolCallingLLMAdapter,
-  LLMMessage,
-  LLMToolDefinition,
-  LLMResponse,
-  LLMContentBlock,
+import {
+  LLMAdapterShapeMismatchError,
+  type ToolCallingLLMAdapter,
+  type LLMMessage,
+  type LLMToolDefinition,
+  type LLMResponse,
+  type LLMContentBlock,
+  type LLMStopReason,
 } from "../llm-types.js";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
+// Track current Anthropic model defaults centrally. Do not propagate the
+// pre-existing stale `claude-sonnet-4-5-20250514` literal from
+// tool-calling-adapter.ts into this new adapter — updating that legacy file's
+// default is a separate cleanup outside PR-4 scope.
+const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
+const PROVIDER = "anthropic";
+
+const KNOWN_STOP_REASONS: ReadonlySet<LLMStopReason> = new Set([
+  "end_turn",
+  "tool_use",
+  "max_tokens",
+]);
 
 export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
   constructor(private client: Anthropic) {}
@@ -1573,6 +1929,8 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
       }),
     });
 
+    // Translate content blocks. Unknown block types MUST surface as a typed
+    // adapter error — silent coercion to empty text hides provider mismatches.
     const content: LLMContentBlock[] = response.content.map((block) => {
       if (block.type === "text") {
         return { type: "text" as const, text: block.text };
@@ -1585,12 +1943,23 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
           input: block.input,
         };
       }
-      return { type: "text" as const, text: "" };
+      throw new LLMAdapterShapeMismatchError(PROVIDER, "content_block", String(block.type));
     });
+
+    // Translate stop_reason. Unknown reasons MUST surface — Anthropic adds
+    // new ones (`refusal`, `pause_turn`, etc.) and silent coercion to "end_turn"
+    // would hide premature stops.
+    if (!KNOWN_STOP_REASONS.has(response.stop_reason as LLMStopReason)) {
+      throw new LLMAdapterShapeMismatchError(
+        PROVIDER,
+        "stop_reason",
+        String(response.stop_reason),
+      );
+    }
 
     return {
       content,
-      stopReason: response.stop_reason as LLMResponse["stopReason"],
+      stopReason: response.stop_reason as LLMStopReason,
       usage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
@@ -1605,7 +1974,102 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
 Run: `pnpm --filter @switchboard/core test -- --grep "translates Anthropic response"`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Add tool_use translation round-trip test**
+
+The first test only covered a text-only response. The adapter's main job is translating `tool_use` blocks — pin that round-trip explicitly:
+
+```typescript
+it("round-trips tool_use blocks through provider-neutral types", async () => {
+  const mockClient = {
+    messages: {
+      create: vi.fn().mockResolvedValue({
+        content: [
+          { type: "text", text: "Let me check that." },
+          {
+            type: "tool_use",
+            id: "tu_abc123",
+            name: "calendar.search",
+            input: { date: "2026-05-20" },
+          },
+        ],
+        stop_reason: "tool_use",
+        usage: { input_tokens: 200, output_tokens: 75 },
+      }),
+    },
+  };
+
+  const adapter = new AnthropicToolAdapter(mockClient as never);
+  const result = await adapter.chatWithTools({
+    system: "You are helpful.",
+    messages: [{ role: "user", content: "Find me a slot" }],
+    tools: [
+      {
+        name: "calendar.search",
+        description: "Search calendar",
+        input_schema: { type: "object", properties: { date: { type: "string" } } },
+      },
+    ],
+  });
+
+  expect(result.stopReason).toBe("tool_use");
+  expect(result.content).toHaveLength(2);
+  expect(result.content[0]!.type).toBe("text");
+  const toolUse = result.content[1]!;
+  expect(toolUse.type).toBe("tool_use");
+  if (toolUse.type === "tool_use") {
+    expect(toolUse.id).toBe("tu_abc123");
+    expect(toolUse.name).toBe("calendar.search");
+    expect(toolUse.input).toEqual({ date: "2026-05-20" });
+  }
+});
+```
+
+- [ ] **Step 6: Add shape-mismatch error tests**
+
+Both error paths must throw `LLMAdapterShapeMismatchError`, not coerce silently:
+
+```typescript
+it("throws LLMAdapterShapeMismatchError on unknown stop_reason", async () => {
+  const mockClient = {
+    messages: {
+      create: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "x" }],
+        stop_reason: "refusal", // unknown — Anthropic may add new reasons
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    },
+  };
+
+  const adapter = new AnthropicToolAdapter(mockClient as never);
+  await expect(
+    adapter.chatWithTools({ system: "s", messages: [{ role: "user", content: "x" }], tools: [] }),
+  ).rejects.toThrow(/unknown stop_reason: refusal/);
+});
+
+it("throws LLMAdapterShapeMismatchError on unknown content block type", async () => {
+  const mockClient = {
+    messages: {
+      create: vi.fn().mockResolvedValue({
+        content: [{ type: "server_thinking", text: "internal" }], // unknown
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    },
+  };
+
+  const adapter = new AnthropicToolAdapter(mockClient as never);
+  await expect(
+    adapter.chatWithTools({ system: "s", messages: [{ role: "user", content: "x" }], tools: [] }),
+  ).rejects.toThrow(/unknown content_block: server_thinking/);
+});
+```
+
+- [ ] **Step 7: Run all adapter tests**
+
+Run: `pnpm --filter @switchboard/core test -- --grep "AnthropicToolAdapter"`
+Expected: All PASS (4 tests: text-only, tool_use round-trip, unknown stop_reason, unknown content_block)
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add packages/core/src/skill-runtime/adapters/anthropic-tool-adapter.ts packages/core/src/skill-runtime/__tests__/anthropic-tool-adapter.test.ts
@@ -1615,6 +2079,10 @@ feat(skill-runtime): Anthropic adapter implementing neutral types
 AnthropicToolAdapter translates between Anthropic SDK types and
 provider-neutral LLMResponse/LLMMessage/LLMToolDefinition.
 Anthropic SDK is imported only in this file.
+
+Unknown stop reasons and unknown content block types throw a typed
+LLMAdapterShapeMismatchError instead of being silently coerced — this
+keeps provider mismatches visible to the executor.
 EOF
 )"
 ```
@@ -1882,3 +2350,19 @@ adapters/anthropic-tool-adapter.ts for backward compatibility.
 EOF
 )"
 ```
+
+---
+
+## PR-4B preview (deferred — separate brainstorm)
+
+Out of scope for this plan. PR-4 stops at the type boundary; PR-4B picks up the runtime work needed to actually deliver Anthropic-outage resilience. Listed here so reviewers know which scope was cut and where it goes.
+
+PR-4B work (high-level — not task-decomposed yet):
+
+- Fallback router that consumes `isRetryableError` / `LLMError` and switches providers on eligible failures (timeout, 5xx, rate-limit, unavailable).
+- Feature flag gating fallback (off by default, enable per-deployment).
+- Pick a first real fallback provider (likely OpenAI for tool-calling parity) and ship a concrete adapter.
+- Migrate `packages/core/src/agent-runtime/anthropic-adapter.ts` (chat-reply path, used by `ConversationCompoundingService`) to share the same neutral boundary so resilience covers both paths, not just skill-runtime tool calls.
+- Clean up the legacy `claude-sonnet-4-5-20250514` literal in `packages/core/src/skill-runtime/tool-calling-adapter.ts` (which is now a backward-compat shim per PR-4 Task 13) and any other stragglers.
+
+PR-4B should get its own design spec + plan before implementation. Do not extend this plan with PR-4B tasks.
