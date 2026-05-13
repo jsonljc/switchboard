@@ -20,9 +20,10 @@ This is the typographic / layout pass only. The backend schema at `packages/sche
 
 - **No schema changes.** Don't add fields, don't change `ReportDataV1`, don't widen `ManagedComparisonData`.
 - **No new endpoints, no new server computations.** If a mockup detail implies a missing field, design without it and flag in §10.
+- **No schema, endpoint, or rollup-logic changes.** A small backend formatting swap from USD to SGD **is** in scope — without it the pull quote and cost narrative would emit `$` while the rest of the page emits `S$` — see §6 and §10.2.
 - **No chart library.** Funnel + share bars + ROAS depth are CSS / inline SVG only.
 - **No PDF or export work.** Print stylesheet is out of scope.
-- **No new design tokens.** All colors, fonts, spacing values are reused from the mockup's `styles.css` or the existing dashboard globals. Cross-surface decisions go to `docs/design-prompts/shared-conventions.md` (wave 1.5) — flagged in §10, not introduced here.
+- **No new _global_ design tokens.** Module-local aliases and shade extensions (e.g., `--ink-5`, `--paper-warm`, `--accent-soft`) are allowed inside `reports.module.css`. Promotion to globals is a shared-conventions decision — flagged in §10, not introduced here.
 - **No copy rewrites for backend-generated strings.** `pullquote.{pre,mid,post}`, `funnelNarrative.text`, `costNarrative`, `emptyMessage` come from the backend; design renders them as-is. (Eyebrow and column-header copy is in-scope — see §4.)
 
 ## 3. Layered inputs and their authority
@@ -78,7 +79,16 @@ The mockup renders a sticky topbar with brand cluster + breadcrumb + live pip + 
 
 **Mockup anchor:** `app.jsx` lines 147–156, CSS `.banner-noconn`.
 
-Render when `liveMode === true` AND the org has no connected Meta Ads `Connection`. **Do not infer from funnel data** — a connected account with paused campaigns this period would falsely trigger an inferred banner. Instead, read connection status from the existing dashboard connections context (`useManagedChannels()` or the connections API; see existing usage in `apps/dashboard/src/hooks/use-managed-channels.ts`). If a connections hook for Meta Ads specifically isn't already exposed, add a thin `useMetaConnectionStatus()` hook that reads from the existing API surface — no new endpoint.
+Render when `liveMode === true` AND the org has no connected Meta Ads `Connection`. **Do not infer from funnel data** — a connected account with paused campaigns this period would falsely trigger an inferred banner.
+
+**Implementation order (hard instruction):**
+
+1. **Search first.** Look for an existing Meta-connection-status hook or context in `apps/dashboard/src/hooks/`, `apps/dashboard/src/lib/`, and `apps/dashboard/src/providers/`. `useManagedChannels()` (`apps/dashboard/src/hooks/use-managed-channels.ts`) is the most likely existing source; check whether its return value already discriminates Meta connection state.
+2. **If existing hook covers it, use it.** No new code.
+3. **If not, add the thinnest possible read-only hook** (e.g., `useMetaConnectionStatus()`) over the existing connections API surface. The new hook is a 10–20 LOC wrapper around an existing fetch path.
+4. **Do not add a new endpoint.** The API at `/api/dashboard/connections` (or whatever the existing equivalent is) already exposes connection state. If it doesn't, stop and escalate — adding a new connections endpoint is out of scope for this spec.
+
+Fixture mode renders the banner only when the spec is being exercised by the (out-of-scope) tweaks panel — i.e., never in normal fixture flow. See acceptance criterion in §12.
 
 Layout: three-column grid: eyebrow + italic Source Serif 4 message + mono "Connect under Settings" CTA → links to `/settings/connections`.
 
@@ -345,7 +355,30 @@ These are decisions the spec will not make unilaterally — they belong in `docs
 
 8. **Funnel "Landing visits" hide-when-zero.** Schema docstring at v1.ts:8-11 says client may hide; this spec keeps all five stages visible (avoids discontinuous bar-proportion shifts when a Meta connection lands). Recommend: pin the row visibly and render at 0% width with numeric label `—`. The shared-conventions doc should ratify whether structural rows ever disappear.
 
-9. **Accent color: muted operator amber vs. bright editorial accent.** Globals expose both: `--char-accent: hsl(30 55% 46%)` (muted, used by character system on `/`) and `--editorial-accent: hsl(20 90% 55%)` (bright, used by `/activity`, `/mission`, `/alex-home`). The mockup picked the muted operator amber; sibling Mercury surfaces use the bright editorial accent. **Recommendation: this surface uses the muted accent.** A renewal-checkpoint statement reads as a quiet printed document; the bright orange reads consumer-app and undercuts the register. The shared-conventions doc should ratify either (a) per-surface accent choice, or (b) a unified Mercury accent (in which case this surface adopts whichever wins).
+9. **Accent color: muted operator amber vs. bright editorial accent.** Globals expose both: `--char-accent: hsl(30 55% 46%)` (muted, used by character system on `/`) and `--editorial-accent: hsl(20 90% 55%)` (bright, used by `/activity`, `/mission`, `/alex-home`). The mockup picked the muted operator amber; sibling Mercury surfaces use the bright editorial accent. **Recommendation: this surface uses the muted accent.** A renewal-checkpoint statement reads as a quiet printed document; the bright orange reads consumer-app and undercuts the register. **This is an intentional exception because `/reports` is a renewal statement, not an operational action surface — future review should not "normalize" it back to the bright accent without revisiting the register.** The shared-conventions doc should ratify either (a) per-surface accent choice, or (b) a unified Mercury accent (in which case this surface adopts whichever wins).
+
+## 10b. Implementation sequencing
+
+The work spans currency reconciliation, fixture rewrite, format helper rewrite, backend formatter swap, no-connection hook, responsive table/card behavior, managed comparison, and refresh state. **Two viable shapes** — pick one at implementation-plan time:
+
+**Option A — one PR, in order.** If the existing `/reports` code surface is small enough (verified: ~10 component files, ~600 LOC of CSS), keep it as a single focused PR. Implement strictly in this order so each step has a working visual checkpoint:
+
+1. Backend `formatCurrencySGD` swap (lands first so subsequent UI work renders correct currency throughout).
+2. Frontend `fmtSGD` + `format.ts` rewrite + fixture rewrite.
+3. Page shell: `topbar.tsx`, `page-head.tsx` (without refresh state yet), `colophon.tsx`.
+4. Hero sections: `pull-quote.tsx`, `attribution.tsx`, `cost-vs-value.tsx`.
+5. Dense sections: `funnel.tsx`, `campaigns.tsx`, `managed-comparison.tsx`.
+6. Responsive polish: funnel mobile breakpoint, campaigns mobile cards.
+7. Refresh state machine + window-switch-during-refresh handling.
+8. `no-connection-banner.tsx` (search existing hooks first per §4.3).
+9. Tests for §12 acceptance criteria.
+
+**Option B — split into PR-R7a + PR-R7b.**
+
+- **PR-R7a — currency + shell:** backend `formatCurrencySGD`, frontend `fmtSGD`, updated fixtures, topbar, page-head (without refresh state), pull-quote, attribution, cost-vs-value, colophon. Ships a renderable page with correct currency and the renewal hero/punchline; funnel + campaigns + managed comparison still on v1.
+- **PR-R7b — dense sections + interactive polish:** funnel (with mobile breakpoint), campaigns (table + mobile cards), managed comparison, no-connection banner, refresh state machine, full test suite for §12.
+
+Recommendation: **start with Option A**. If PR review feedback or scope creep pushes the diff past ~2,500 LOC or ~25 changed files, split to Option B at that boundary — PR-R7a's commits will already form a clean cut-point.
 
 ## 11. Risks and open questions
 
@@ -357,16 +390,44 @@ These are decisions the spec will not make unilaterally — they belong in `docs
 
 ## 12. Definition of done
 
+**Visual / structural:**
+
 - [ ] All sections in §4 render correctly against `goodFixture`, `quietFixture`, `problemFixture` (incl. updated fixtures with populated `managedComparison`).
 - [ ] No `$` outside `S$` in rendered DOM (test in §7).
 - [ ] No green / red colors anywhere in `reports.module.css`.
-- [ ] Mobile (`< 760px`) renders campaigns as cards; funnel rows stack at `< 520px`.
-- [ ] `NEXT_PUBLIC_REPORTS_LIVE=false` shows fixture data; `=true` triggers fetch.
+- [ ] Mobile (`< 760px`) renders campaigns as cards; funnel rows stack at `< 520px`. Mobile renders **either** the table cards **or** the table scroll — never both.
+- [ ] Colophon does not render `schema · reports/v1` — verified by a test that asserts the string is absent from customer-facing DOM.
+
+**Currency:**
+
 - [ ] Backend currency formatter swap landed: `formatCurrencySGD` added to `period-helpers.ts`, swapped at the two call sites in `pull-quote-generator.ts` and `cost-vs-value-rule.ts`.
+- [ ] Backend-generated `pullquote.value`, `pullquote.cost`, and `costNarrative` all render with `S$`, never `$`, against fresh live data.
+- [ ] `fmtSGD(447.75, { withCents: "always" })` → `"S$447.75"`.
+- [ ] `fmtSGD(14720, { withCents: "never" })` → `"S$14,720"`.
+- [ ] `fmtSGD` returns `"—"` (em-dash) for `null` / `undefined`; never `"S$NaN"`.
+
+**Live / fixture / error behavior:**
+
+- [ ] `NEXT_PUBLIC_REPORTS_LIVE=false` shows fixture data with no fetch; `=true` triggers fetch.
+- [ ] Live-mode error (`error !== null`) still renders the topbar, page head, and window selector — only the section beneath is replaced by the error banner.
+- [ ] No-connection banner reads from connections context, **never** from funnel data, and **never** appears in fixture mode (`liveMode === false`).
 - [ ] Refresh button label transitions: `Refresh` → `Refreshing…` → `Still loading…` at ≥3s.
-- [ ] No-connection banner reads from connections context, not inferred from funnel data.
-- [ ] Colophon does not render `schema · reports/v1`.
+- [ ] During an in-flight refresh, window-selector buttons are either disabled or handle the switch safely (cancel the in-flight refetch, start a new one keyed to the new window; do not commit stale data to the new window).
+
+**Data edge cases:**
+
+- [ ] `managedComparison.ads === null && conversations !== null` renders a single comparison column cleanly (no empty placeholder for the null side).
+- [ ] Symmetric: `conversations === null && ads !== null` renders only the Ads column.
+- [ ] Both pairs null + `emptyMessage` populated renders only the eyebrow + emptyMessage; both pairs null + no `emptyMessage` hides the whole section.
+- [ ] Campaign totals row handles `null` `costPerInlineLinkClick` and `null` `cpl` without producing `NaN` or `"S$NaN"` — the totals cell shows `—` when no rows contribute a non-null value.
+- [ ] Dead campaign rows (clicks === 0 OR (roas === 0 AND leads === 0)) render with the ink-4 muted treatment, not red.
+
+**Copy:**
+
 - [ ] Eyebrow / column copy uses operator-friendly phrasing (no "Attributed pipeline", no "SDR + agency alt.", no "cohort comparison · same-period", no "Recompute").
+
+**Build / type / lint:**
+
 - [ ] Coverage holds at core thresholds (65/65/70/65) — unaffected since rollups unchanged.
 - [ ] `pnpm --filter @switchboard/dashboard build` passes locally (per memory: `next build` is not in CI).
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test` pass.
