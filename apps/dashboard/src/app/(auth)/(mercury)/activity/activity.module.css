@@ -904,3 +904,8 @@
 .copybtn { font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 10px; border: 1px solid rgba(14,12,10,0.16); border-radius: 2px; background: transparent; cursor: pointer; }
 .copybtnCopied { background: hsl(30 55% 46%); color: #FFF; border-color: hsl(30 55% 46%); }
 .copybtnPrimary { border-color: #0E0C0A; }
+
+/* Activity v2 table shell */
+.tableWrap { max-width: 74rem; margin: 0 auto; padding: 22px 28px 16px; }
+.tableHead { display: grid; grid-template-columns: 96px minmax(180px,220px) minmax(150px,180px) minmax(150px,180px) 1fr 24px; gap: 14px; align-items: end; padding: 0 12px 10px 14px; border-bottom: 1px solid #0E0C0A; }
+.tableHeadCol { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }

@@ -1,110 +1,130 @@
 "use client";
 
+import { useRef } from "react";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { ActivityRow } from "./activity-row";
-import { ActivityRowDrawer } from "./activity-row-drawer";
+import { ActivityRow } from "./activity-row.js";
+import { ActivityRowDrawer } from "./activity-row-drawer.js";
 
 export interface ActivityTableProps {
   rows: AuditEntryBrowseRow[];
-  expandedRowId: string | null;
-  onToggleRow: (rowId: string) => void;
-  orgTimezone?: string;
-}
-
-interface ActivityRowFragmentProps {
-  row: AuditEntryBrowseRow;
-  isExpanded: boolean;
-  drawerId: string;
-  onToggle: () => void;
-  colSpan: number;
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  /** Wall-clock anchor in ms for row relative-time. */
+  now: number;
+  /** Row id to flash after a scroll, if any (1.6s amber-paper). */
+  targetId?: string | null;
   orgTimezone?: string;
 }
 
 /**
- * Renders an ActivityRow plus its optional inline drawer as a pair of <tr>
- * elements. The Fragment trick is used here so that the keyed element is the
- * Fragment (one key for the row+drawer pair), which avoids the React "each
- * child in a list must have a unique key" warning.
+ * Div-grid table for /activity rows. Explicit ARIA grid roles per spec §5.3.
+ *
+ * Owns the row-ref map and exposes a scrollToRow function to the drawer for
+ * "view previous ↓".
  */
-function ActivityRowFragment({
-  row,
-  isExpanded,
-  drawerId,
+export function ActivityTable({
+  rows,
+  expandedId,
   onToggle,
-  colSpan,
+  now,
+  targetId,
   orgTimezone,
-}: ActivityRowFragmentProps) {
+}: ActivityTableProps) {
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  function scrollToRow(id: string) {
+    const el = rowRefs.current[id];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  return (
+    <div role="table" aria-label="Activity entries" className={styles.tableWrap}>
+      <div role="rowgroup">
+        <div role="row" className={styles.tableHead}>
+          <span role="columnheader" className={styles.tableHeadCol}>
+            Time
+          </span>
+          <span role="columnheader" className={styles.tableHeadCol}>
+            Event
+          </span>
+          <span role="columnheader" className={styles.tableHeadCol}>
+            Actor
+          </span>
+          <span role="columnheader" className={styles.tableHeadCol}>
+            Entity
+          </span>
+          <span role="columnheader" className={styles.tableHeadCol}>
+            Summary
+          </span>
+          <span role="columnheader" className={styles.tableHeadCol} aria-hidden="true">
+            ·
+          </span>
+        </div>
+      </div>
+      <div role="rowgroup">
+        {rows.map((row) => (
+          <RowAndDrawer
+            key={row.id}
+            row={row}
+            rows={rows}
+            isOpen={expandedId === row.id}
+            isTarget={targetId === row.id}
+            onToggle={onToggle}
+            onScrollToRow={scrollToRow}
+            now={now}
+            rowRef={(el) => {
+              rowRefs.current[row.id] = el;
+            }}
+            orgTimezone={orgTimezone}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RowAndDrawer({
+  row,
+  rows,
+  isOpen,
+  isTarget,
+  onToggle,
+  onScrollToRow,
+  now,
+  rowRef,
+  orgTimezone,
+}: {
+  row: AuditEntryBrowseRow;
+  rows: AuditEntryBrowseRow[];
+  isOpen: boolean;
+  isTarget: boolean;
+  onToggle: (id: string) => void;
+  onScrollToRow: (id: string) => void;
+  now: number;
+  rowRef: (el: HTMLDivElement | null) => void;
+  orgTimezone?: string;
+}) {
   return (
     <>
       <ActivityRow
         row={row}
-        isExpanded={isExpanded}
+        isOpen={isOpen}
+        isTarget={isTarget}
         onToggle={onToggle}
-        drawerId={drawerId}
+        now={now}
+        rowRef={rowRef}
         orgTimezone={orgTimezone}
       />
-      {isExpanded && (
-        <tr className={styles.drawerRow}>
-          <td colSpan={colSpan} className={styles.drawerCell}>
-            <ActivityRowDrawer row={row} drawerId={drawerId} orgTimezone={orgTimezone} />
-          </td>
-        </tr>
+      {isOpen && (
+        <ActivityRowDrawer
+          row={row}
+          allRows={rows}
+          onScrollToRow={onScrollToRow}
+          orgTimezone={orgTimezone}
+        />
       )}
     </>
-  );
-}
-
-const COLUMNS = [
-  { key: "timestamp", label: "TIMESTAMP" },
-  { key: "event", label: "EVENT" },
-  { key: "actor", label: "ACTOR" },
-  { key: "entity", label: "ENTITY" },
-  { key: "summary", label: "SUMMARY" },
-  { key: "chevron", label: "" },
-] as const;
-
-export function ActivityTable({
-  rows,
-  expandedRowId,
-  onToggleRow,
-  orgTimezone,
-}: ActivityTableProps) {
-  return (
-    <div className={styles.tableWrap}>
-      <table className={styles.activity}>
-        <thead>
-          <tr>
-            {COLUMNS.map((col) => (
-              <th
-                key={col.key}
-                scope="col"
-                className={col.key === "timestamp" ? styles.stickyCol : undefined}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const drawerId = `activity-drawer-${row.id}`;
-            const isExpanded = expandedRowId === row.id;
-
-            return (
-              <ActivityRowFragment
-                key={row.id}
-                row={row}
-                isExpanded={isExpanded}
-                drawerId={drawerId}
-                onToggle={() => onToggleRow(row.id)}
-                colSpan={COLUMNS.length}
-                orgTimezone={orgTimezone}
-              />
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
   );
 }
