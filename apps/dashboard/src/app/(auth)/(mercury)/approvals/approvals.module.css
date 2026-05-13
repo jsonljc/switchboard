@@ -205,3 +205,27 @@
 @media (prefers-reduced-motion: reduce) {
   .skelBar { animation: none; }
 }
+
+.split {
+  max-width: 1480px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(420px, 480px) minmax(0, 1fr);
+  /* 240px = approx. editorial top bar (60px) + page head (140px) + breathing room.
+     Tuned visually; revisit if the header height changes. */
+  min-height: calc(100vh - 240px);
+}
+@media (max-width: 1080px) {
+  .split { grid-template-columns: 1fr; }
+}
+.splitLeft { border-right: 1px solid var(--hair); background: var(--cream); }
+.splitRight { background: var(--cream); position: relative; }
+.detailPlaceholder {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 48px 32px;
+  align-items: center;
+  text-align: center;
+  color: var(--ink-3);
+}
