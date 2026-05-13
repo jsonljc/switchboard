@@ -6,26 +6,46 @@
 **Wave:** wave-1 (parallel with /mission, /activity, /reports, agent-home redesigns)
 **Implementation track:** focused PR(s) on a feature branch consuming this spec from `main`
 **Surface:** Mercury Tools, route `/approvals` (new), under `(auth)/(mercury)/` shell
-**Locked design:** `docs/design-prompts/locked/switchboard/project/approvals-v2/`
+**Locked design:** `docs/design-prompts/locked/switchboard/project/approvals-v2/` (visual reference; copy + token mapping in this spec **override** the locked CSS for operator-language and codebase-alignment reasons — see "Adapting the locked design" below)
 **Backend prompt:** `docs/design-prompts/2026-05-13-approvals.md`
 
 ---
 
 ## Goal
 
-Ship the dashboard surface for the single cross-agent approvals queue. Every mutating action proposed by an agent waits here until the operator signs it (approve), modifies it (patch & approve), or blocks it (reject). The page is the **integrity contract** between the operator and the system: the operator authorizes the cryptographic `bindingHash`, not the button.
+Ship the dashboard surface for the single cross-agent approvals queue. Every mutating action proposed by an agent waits here until the operator signs it (approve) or blocks it (reject). The page is the **integrity contract** between the operator and the system: the operator authorizes a stable, cryptographically-bound confirmation code, not a button.
 
 Greenfield UI on a stable backend. The data contract is fixed (6 lifecycle statuses, 5 risk categories, 3 response actions — see Domain). Do not invent new statuses, categories, or hash semantics.
 
+**The end customer is a medspa operator, not a security engineer.** The locked design's cryptographic vocabulary ("binding hash", "envelope", "executable work unit") must be translated to operator language without weakening the integrity guarantee. Specifics in "Adapting the locked design" and the copy-rewrite tables throughout.
+
 ## Non-Goals
 
-- Bulk actions ("approve all", multi-select). Each approval is one decision. The locked design is emphatic on this; do not introduce.
-- A history / cleared-approvals tab. The "last cleared 13m ago" footer is the only nod to history; the full lifecycle history surface is `/activity`, not here.
+- Bulk actions ("approve all", multi-select). Each approval is one decision.
+- A history / cleared-approvals tab. Cleared lifecycle history lives at `/activity`.
 - New approval statuses, new risk categories, new response actions. The contract is fixed.
-- An audit-log / full-lifecycle drill-in. The locked design notes a quiet footer link to `/lifecycle/:id` _would_ live here, but that route does not exist yet. Out of scope.
-- A real-time WebSocket transport. Polling is fine for v1; the live countdown is a client-side `setInterval`, not a stream.
-- Mobile-first composition. Desktop two-pane is the design target; mobile is a graceful stack, not a redesign.
-- New design tokens. Mirror the tokens already in the locked HTML/JSX (which themselves match `agent-home-v3/Pipeline` + Alex Home v2 editorial register).
+- An audit-log / full-lifecycle drill-in. Out of scope until `/lifecycle/:id` exists.
+- A real-time WebSocket transport. The live countdown is a client-side tick; refresh is on focus + manual.
+- Structured per-field parameter editing in v1. Patch is **hidden behind a "View JSON (advanced)" toggle** for v1 (see "Patch flow" below). A structured key-value editor is a follow-up.
+- New global design tokens. Page-local aliases on top of existing `--mercury-*` tokens only.
+
+## Adapting the locked design
+
+The locked HTML/JSX at `docs/design-prompts/locked/switchboard/project/approvals-v2/` is the **visual contract** — composition, hierarchy, the queue/detail split, the bracketed confirmation-code section, the risk-aware row chrome, the action-drawer order. **It is not the copy contract** and **not the token contract**.
+
+Where this spec and the locked design conflict, this spec wins. The conflicts are:
+
+1. **Tokens.** The locked CSS introduces a fresh `--paper`/`--ink`/`--amber` palette that does not exist in the dashboard. The actual Mercury register uses `--mercury-cream`/`--mercury-ink`/`--mercury-accent` (per `apps/dashboard/src/app/globals.css` + `apps/dashboard/src/app/(auth)/(mercury)/reports/reports.module.css:13–30`). See "Tokens" below.
+2. **Display font.** Locked CSS uses Cormorant Garamond. The dashboard loads Source Serif 4 (via next/font in `apps/dashboard/src/app/layout.tsx:2`). Cormorant Garamond is not loaded; loading it adds a new font payload for no gain. Use `var(--serif)`.
+3. **Amber hue.** Locked `hsl(30 55% 46%)` is the marketing-site `--sw-accent`, not the dashboard's Mercury accent (`hsl(20 90% 55%)`). Use `var(--accent)`.
+4. **Copy.** The locked design speaks in cryptography. Operators speak in actions. Every customer-facing string is rewritten in "Operator-language copy" below; engineering vocabulary stays only in developer-facing surfaces (`/activity`, error messages, log lines).
+5. **Patch UI.** The locked design treats a JSON textarea as first-class. For a medspa operator that's unusable. Patch is gated behind a "View JSON (advanced)" toggle in v1.
+6. **Confirmation gating.** The locked design forces a 3-step confirmation (statement-of-intent line + ack checkbox + click CTA) for every approval. v1 **grades confirmation by risk** (see "Responding (hot path)").
+7. **Sort.** Locked default is risk-rank-then-expiry. v1 default is **expiring-soonest, with critical-and-<5min pinned to the top**.
+8. **Quorum stamps.** Locked design shows other approvers as `kira.l · 0xK1RA`. v1 shows them as name + role + relative timestamp.
+9. **Agent labels.** Locked design uses internal agent ids (`billing-agent`, `ops-agent`). v1 displays canonical agent display names (Alex / Riley / Mira), with a fallback for unknown ids.
+
+These adaptations preserve the integrity contract — the binding hash is still visible, still bound to the parameters, still echoed on the CTA, still required for approve/patch — while making the page usable by a medspa owner.
 
 ## Domain (fixed contract)
 
@@ -66,7 +86,7 @@ Anchored to `packages/schemas/src/approval-lifecycle.ts`, `packages/schemas/src/
     expiresAt: string;
     respondedBy?: string;
     respondedAt?: string;
-    // approvalHashes[] when quorum > 1 (see Quorum section).
+    // approvalHashes[] when quorum > 1 (see Quorum prereq below).
   };
   envelopeId: string;
 }
@@ -83,11 +103,15 @@ Anchored to `packages/schemas/src/approval-lifecycle.ts`, `packages/schemas/src/
 }
 ```
 
+There is **no `reason` field** on the body. v1 captures the reject reason locally for the dispatch banner only; **the value is not sent and is not persisted**. Flag in "Shared-conventions input".
+
 Returns `{ envelope, approvalState, executionResult, resumeWarning? }` on 200. Conflict-on-stale yields `409`.
 
-**Risk categories** — `none | low | medium | high | critical`. The locked design treats `none` and `low` identically at the row level (1px hairline) but the filter strip still surfaces `low/medium/high/critical` as the four chip toggles. `none` rows fall into the "all" view and visually read as `low` (no separate hairline weight). This is intentional; see "Filter strip" below.
+**`respondedBy` source.** Dashboard pulls the principal id from the next-auth session: `const { data: session } = useSession(); respondedBy = session?.principalId`. The field is exposed at `apps/dashboard/src/lib/session.ts:11`, `lib/dev-auth.ts:8`, and `lib/auth.ts:51`. Block submission when `principalId` is null (render an inline "sign in again" banner — should never happen inside a `(auth)` route group).
 
-**Lifecycle statuses** — `pending` is the queue-resident state. `approved | rejected | expired | superseded` are terminal and not returned by `/api/approvals/pending` (the route filters by `state.expiresAt > now`, and other terminal states are filtered by `listPending`). `recovery_required` is a special non-terminal state that _is_ returned by `/pending` and needs distinct UI (see "Recovery state").
+**Risk categories** — `none | low | medium | high | critical`. `none` rows are extremely rare in practice and visually collapse into `low` at the row level. The filter strip surfaces only the four chips (low/medium/high/critical) plus "all"; `none` rows aggregate into "all".
+
+**Lifecycle statuses** — `pending` is the queue-resident state. `approved | rejected | expired | superseded` are terminal and not returned by `/api/approvals/pending` (the route filters by `state.expiresAt > now`; the underlying `approvals.listPending` filters by status). `recovery_required` is a special non-terminal state that _is_ returned by `/pending` and needs distinct UI (see "Recovery state").
 
 ## Architecture
 
@@ -95,8 +119,12 @@ Returns `{ envelope, approvalState, executionResult, resumeWarning? }` on 200. C
 
 - New route: `apps/dashboard/src/app/(auth)/(mercury)/approvals/page.tsx` + `approvals-page.tsx` (client component).
 - Wrapped by the existing `(mercury)/layout.tsx` (`EditorialAuthShell`).
-- Gated identically to other Tools: an `NEXT_PUBLIC_APPROVALS_LIVE` flag, wired via `isMercuryToolLive("approvals")`. Until the flag is true, the page renders a fixtures-only mode and the Tools ▾ overflow entry is hidden — same pattern `/contacts`, `/activity`, `/automations`, `/reports` already use (`apps/dashboard/src/lib/route-availability.ts`).
-- Added to `TOOLS_NAV_ITEMS` in `apps/dashboard/src/components/layout/tools-overflow.tsx` (id `"approvals"`, href `/approvals`). New `ToolsNavId` member is the only non-additive change to that file.
+- Gated via a new `NEXT_PUBLIC_APPROVALS_LIVE` env var, wired through `isMercuryToolLive("approvals")`. Until the flag is true, the page renders a fixtures-only mode and the Tools ▾ overflow entry is hidden — same pattern `/contacts`, `/activity`, `/automations`, `/reports` already use (`apps/dashboard/src/lib/route-availability.ts`).
+- Code-level work for the gate (PR-A1 responsibilities):
+  - Extend the `ToolsNavId` union in `apps/dashboard/src/lib/route-availability.ts` with `"approvals"`.
+  - Add `approvals: "NEXT_PUBLIC_APPROVALS_LIVE"` to `TOOLS_LIVE_ENV` in the same file.
+  - Append `{ id: "approvals", label: "Approvals", href: "/approvals" }` to `TOOLS_NAV_ITEMS` in `apps/dashboard/src/components/layout/tools-overflow.tsx`.
+  - Add `NEXT_PUBLIC_APPROVALS_LIVE=false` to `.env.example`.
 
 ### Data layer
 
@@ -110,7 +138,7 @@ The Next.js proxy `apps/dashboard/src/app/api/dashboard/approvals/route.ts` alre
 
 Hooks (new file `apps/dashboard/src/hooks/use-approvals.ts`):
 
-- `usePendingApprovals()` — `useQuery` on `keys.approvals.pending()`. Polls every **15 s** (sufficient for a live countdown to stay roughly synced; the countdown itself ticks every 1 s client-side from `expiresAt`). `staleTime: 0`.
+- `usePendingApprovals()` — `useQuery` on `keys.approvals.pending()`. **No `refetchInterval`** — mirrors the convention set by `use-activity-list.ts:60` ("NO refetchInterval — paginated lists with polling break cursor stability"). Settings: `staleTime: live ? 30_000 : Infinity`, `refetchOnWindowFocus: true`. The live countdown is a separate client-side 1-second tick (see "Live countdown") and does not depend on refetching.
 - `useApprovalDetail(id)` — `useQuery` on `keys.approvals.detail(id)`. Enabled iff `id` is set. `staleTime: 5_000` so rapid selection toggles don't refetch.
 - `useRespondToApproval()` — `useMutation`. On success, invalidate `keys.approvals.all()`. On `409`, surface as a typed conflict so the page can prompt the operator that someone else acted.
 
@@ -121,21 +149,21 @@ Query keys already exist at `apps/dashboard/src/lib/query-keys.ts:19–23`. No a
 ```
 approvals-page.tsx
 ├── ApprovalsHeader        — eyebrow + title + 3 stat tiles (pending / <1h to expiry / last cleared)
-├── ApprovalsFilterStrip   — risk chips (all/low/medium/high/critical), "expiring < 60m", sort hint
+├── ApprovalsFilterStrip   — risk chips (all/low/medium/high/critical) + sort hint; "expiring < 60m" demoted to secondary
 ├── ApprovalsSplit
 │   ├── ApprovalsQueue (left)
-│   │   ├── QueueRow × N    — risk hairline edge, summary, meta line, timer
+│   │   ├── QueueRow × N    — risk hairline edge (decorative), textual risk label (primary), summary, meta line, timer
 │   │   └── QueueEmpty | QueueSkeleton
 │   └── ApprovalsDetail (right)
 │       ├── DetailHeader        — risk pill, id, live timer, summary, dh-foot meta, parametersSnapshot grid
-│       ├── HashCard            — block 2; eyebrow "INTEGRITY CHECK · BINDING HASH", full hash mono, copy button, envelope-id foot
-│       ├── ApproversBlock      — quorum only (required > 1); n-of-m, per-approver state
-│       ├── RecoveryBanner      — recovery_required only; striped paper, reason, proposedFix
-│       ├── ActionDrawer        — idle | patch | reject modes; expired and recovery short-circuits
-│       │   ├── ApproveCommit      — "I confirm hash 0x… and authorize <action>" + ack checkbox + amber CTA
-│       │   ├── PatchRow           — opens PatchEditor (side-by-side diff)
-│       │   └── RejectRow          — opens RejectDialog (optional reason)
-│       └── DispatchBanner      — post-respond confirmation (green-left rule, mono workunit id)
+│       ├── ConfirmationCode    — block 2; eyebrow "CONFIRMATION CODE · LOCKS IN THE DETAILS ABOVE", full hash mono, copy button, foot
+│       ├── ApproversBlock      — quorum only (required > 1); n-of-m, per-approver state (name + role + timestamp)
+│       ├── RecoveryNotice      — recovery_required only; operator-language copy, Dismiss-only
+│       ├── ActionDrawer        — idle | reject modes; expired + recovery short-circuits; risk-graded approve gating
+│       │   ├── ApproveBlock        — risk-graded: low/medium = amber CTA only; high/critical = statement + ack checkbox + CTA
+│       │   ├── AdvancedJsonToggle  — "View JSON (advanced) ▾" — when expanded, reveals the patch editor
+│       │   └── RejectRow           — opens RejectDialog (optional reason, local-only)
+│       └── DispatchBanner      — post-respond confirmation; operator-language copy
 └── ApprovalsEmptyDetail   — placeholder when no row selected
 ```
 
@@ -149,314 +177,437 @@ app/(auth)/(mercury)/approvals/
   fixtures.ts                       — 12-row Aurora medspa fixture set (see below)
   hooks/
     use-approvals.ts                — usePendingApprovals, useApprovalDetail, useRespondToApproval
+    use-now.ts                      — net-new 1s tick + visibility-pause; page-local for v1
+    use-agent-display.ts            — maps agent id → display name (see "Agent display names")
   components/
     header.tsx
     filter-strip.tsx
-    queue.tsx                       — Queue, QueueRow, RiskPips, QueueSkeleton, QueueEmpty
+    queue.tsx                       — Queue, QueueRow, QueueSkeleton, QueueEmpty
     detail/
       index.tsx                     — Detail orchestrator
       header.tsx                    — DetailHeader (incl. ParamsSnapshot dl)
-      hash-card.tsx                 — HashCard + copy
-      approvers.tsx                 — ApproversBlock (quorum)
-      recovery-banner.tsx
-      action-drawer.tsx             — ActionDrawer, ApproveCommit, PatchRow, RejectRow
-      patch-editor.tsx              — PatchEditor (JSON textarea + diff renderer)
+      confirmation-code.tsx         — ConfirmationCode (formerly HashCard) + copy
+      approvers.tsx                 — ApproversBlock (quorum); displays name+role
+      recovery-notice.tsx           — operator-language recovery copy
+      action-drawer.tsx             — ActionDrawer, ApproveBlock, AdvancedJsonToggle, RejectRow
+      patch-editor.tsx              — PatchEditor (JSON textarea + diff renderer; gated behind advanced toggle)
       reject-dialog.tsx
-      dispatch-banner.tsx
+      dispatch-banner.tsx           — operator-language post-respond copy
       empty.tsx
   __tests__/
     queue.test.tsx
-    hash-card.test.tsx
+    confirmation-code.test.tsx
     patch-editor.test.tsx
     action-drawer.test.tsx
     approvers.test.tsx
     approvals-page.test.tsx         — integration (fixtures mode)
 ```
 
-File-size budget: 400-line warn / 600-line error. The locked `detail.jsx` is ~530 lines — split into the components above so no single file exceeds the warn line.
+File-size budget: 400-line warn / 600-line error. Locked `detail.jsx` is ~530 lines; split as above so nothing exceeds the warn.
 
 ### Live countdown
 
-`expiresAt` countdown ticks every **1 s**. Implementation: a single `useNow()` hook at page level returns `now: number`, updated by `setInterval(setNow, 1000)`, cleared on unmount. Queue rows and the detail header consume it as a prop (do not start an interval per row).
+`expiresAt` countdown ticks every **1 s**. Implementation: a new page-local `useNow()` hook returns `now: number`, updated by `setInterval(setNow, 1000)`, cleared on unmount. Queue rows and the detail header consume `now` as a prop (no per-row intervals).
 
-When the page is in the background (`document.hidden`), pause the interval — saves cycles and prevents drift fights with the visibility timer. Resume on `visibilitychange`. Re-query `/pending` on visibilitychange-to-visible.
+When the page is hidden (`document.hidden`), pause the interval. Resume on `visibilitychange`, and on the same event re-query `/pending` to refresh `expiresAt` values that may have shifted.
+
+This pattern is **net-new** to the dashboard (only `ambient-cream.tsx` uses `setInterval` at 60s). Keep `useNow` page-local for v1; promote to a shared hook if /mission or other surfaces adopt the same pattern (flagged in "Shared-conventions input").
 
 ### Selection & URL state
 
 - `?id=apr_…` query parameter holds the active selection. Deep-linkable; back-button works.
-- On first load with no `?id`, auto-select the **first row of the sorted filtered queue** (sort = risk-rank-then-expiry, matching `app.jsx:90–96`).
+- On first load with no `?id`, auto-select the first row of the sorted filtered queue (see "Sort" below).
 - When the selected row falls out of the filtered set (filter change, dismissal, expiry-during-view), auto-select the new first row. If the queue is empty, render `ApprovalsEmptyDetail`.
-- Filter chips are local state; only sort and id round-trip the URL.
+- Filter chips are local state; only `id` round-trips the URL.
+
+### Sort
+
+Default sort = **expiring-soonest ascending**, with **critical-and-<5-min rows pinned at the top** in expiry order. Rationale: the operator's primary question is "what's about to time out?", not "what's risky?". Critical-near-expiry combines both — they float. The locked design's risk-rank-then-expiry remains accessible if needed, but is not the default.
+
+Tertiary tiebreak: `createdAt` ascending (older first).
 
 ### Responding (the hot path)
 
-When the operator clicks **Approve & sign**:
+When the operator clicks **Approve**:
 
-1. Confirm the ack checkbox is ticked (button disabled otherwise).
+1. For **high** or **critical** risk: confirm the ack checkbox is ticked (button disabled otherwise). For **low**, **medium**, or **none**: no ack required — the amber CTA fires on click.
 2. Call `useRespondToApproval().mutate({ id, action: "approve", bindingHash, respondedBy })`.
-3. On success: optimistic-remove the row from the pending list, render `DispatchBanner` in place of the action drawer, do not auto-navigate. Operator can move to the next row at their pace.
-4. On `409` (stale-version): show inline "This approval was acted on by someone else" with a "Refresh" button that re-fetches `/pending` and re-selects the next row.
-5. On network/5xx: inline error banner inside the action drawer ("POST /api/approvals/:id/respond failed — your envelope is unsigned; retry is safe.") with a Retry button. Mirrors the locked design's `errorMode` tweak.
+3. On success: optimistic-remove the row from the pending list, render `DispatchBanner` in place of the action drawer, do not auto-navigate. The operator decides when to move on.
+4. On `409` (stale-version): show inline "This was already decided by a teammate — refreshing your view" with a "Refresh" button that re-fetches `/pending` and re-selects the next row.
+5. On network/5xx: inline error banner inside the action drawer ("Couldn't send your approval — your decision wasn't recorded. Safe to try again.") with a Retry button.
 
-**Patch flow**: same as approve, but `action: "patch"` and `patchValue: <parsed JSON object>`. Server applies patch → re-signs → approves; the dashboard treats this as a single mutation.
+**Risk-graded confirmation rationale.** Operators triple-confirm 10+ times a day on routine $80 fee approvals; the friction transfers to high-risk decisions where it actually matters (a $4,820 refund). Scaling friction with risk keeps the integrity contract where it matters and removes alarm fatigue from routine ops. The confirmation code is **always visible** for every risk level — only the *additional ack* (statement-of-intent + checkbox) varies.
 
-**Reject flow**: `action: "reject"`. `bindingHash` is optional (backend only requires it for approve/patch). Reason is captured locally as part of the optimistic dispatch banner ("rejected — '<reason>'") but is **not sent** to the API today — the existing schema has no field for it. Flag in shared-conventions input (see below).
+**Patch flow** (v1, advanced-only): a "View JSON (advanced) ▾" toggle inside the action drawer reveals the PatchEditor. The flow is then identical to the locked design: side-by-side diff against `parametersSnapshot`, JSON textarea, size budget readout, "Apply patch & approve" CTA. The mutation is `action: "patch"` and `patchValue: <parsed JSON object>`. Server applies patch → re-signs → approves; the dashboard treats this as a single mutation. The advanced toggle is closed by default and remembers per-session preference (`sessionStorage`). If the operator prefers structured editing, they Reject and the agent re-proposes — a structured editor lands in a follow-up.
+
+**Reject flow**: `action: "reject"`. `bindingHash` is omitted. Reason textarea is captured locally for the dispatch banner ("Rejected — '<reason>'") but **is not sent**. Be explicit in the dialog copy so the operator isn't misled: "Optional note (visible only to you on this screen — not saved)".
 
 ### Quorum
 
-For approvals where `request.approvalsRequired > 1`:
+For approvals where `approvalsRequired > 1`:
 
 - The detail panel renders the `ApproversBlock` (suppressed otherwise — single-approver noise).
 - The block reads `request.approvalsRequired`, `request.approvers[]`, `state.approvalHashes[]`.
-- Operator-self detection: an approver id matches the authenticated principal id (from session). The locked design uses `"you"`; in the dashboard this is the session principal, not a hard-coded string.
-- After local `respond`, the operator's row in the list flips to "signed (just now)" but the server-side quorum count is not re-queried until either the mutation success refetch lands or polling refreshes. The block must visibly reconcile when the refetch arrives (avoid flicker by keying off `approvalHashes.length + (localSigned ? 1 : 0)`).
-- The Approve commit sub-line changes from "signing dispatches the action immediately" to `signing adds your envelope hash to the quorum (n+1 of N after signing)` when `approvalsRequired > 1` (per locked `detail.jsx:393–397`).
+- Operator-self detection: an approver id matches `session.principalId`.
+- Per-approver row shows **name + role + relative timestamp** ("Kira Lim · Manager · signed 2m ago"), not a truncated mono hash. The hash belongs in the audit log, not in human-to-human UI.
+- For non-operator approvers, name and role come from a reverse-lookup against the existing team roster (PR-A2 must confirm the lookup endpoint; if unavailable, fall back to the bare principal id with a "Teammate" role tag).
+- After local respond, the operator's row flips to "signed just now" but the server-side quorum count is not re-queried until the mutation success refetch or polling. Reconcile keyed off `approvalHashes.length + (localSigned ? 1 : 0)` to avoid flicker.
+- The approve-block sub-line changes from "Sends this action to be processed" (single approver) to "Adds your signature to the quorum (n+1 of N after this)" when `approvalsRequired > 1`.
 
-The backend rejects duplicate approvers; the UI does not need a separate guard, but on `400` with that specific error, surface "You've already signed this approval" inline rather than the generic error banner.
+The backend rejects duplicate approvers; on a `400` matching that case, surface "You've already approved this — waiting on others" inline rather than the generic error.
+
+**Quorum payload prerequisite.** `request.approvalsRequired` and `state.approvalHashes[]` are **not** in today's `ApprovalDetail` TypeScript type (`apps/dashboard/src/lib/api-client-types.ts:40–56`) and the Zod schema in `packages/schemas/src/approval-lifecycle.ts` doesn't declare them either. The Fastify route at `apps/api/src/routes/approvals.ts:170–175` passes `approval.request` and `approval.state` through verbatim, so the fields **may** be on the wire depending on what the underlying store returns. **PR-A2 must confirm runtime shape against a quorum lifecycle and either** (a) extend `ApprovalDetail` + the Zod schema to declare the fields if they exist, or (b) extend the Fastify response to add them. If neither path is open within PR-A2, render single-approver-only and defer the Quorum block to a follow-up. Do not ship UI that assumes fields the wire doesn't return.
 
 ### Recovery state
 
 Rows with `status === "recovery_required"`:
 
-- Queue row: dashed `recovery` tag in the meta line; left-edge is a dashed (not solid) hairline (`styles.css:329–334`).
-- Detail panel: shows the `RecoveryBanner` between Approvers and ActionDrawer (paper-warm striped background, italic Cormorant message, reason + proposedFix + lastAttemptAt mono foot).
-- ActionDrawer is **blocked** (no Approve, no Patch). A "Reject lifecycle" button is offered as the only action, matching `detail.jsx:356–370`. Rationale: re-running the upstream cartridge is the upstream owner's job; the operator can't proceed from this hash because the binding is invalid until a fresh `parametersSnapshot` is captured.
+- Queue row: a small "Needs retry" tag in the meta line; left-edge is a dashed hairline.
+- Detail panel: shows the `RecoveryNotice` block between Approvers and ActionDrawer. Copy: "**This action couldn't be prepared.** The agent ran into a problem and needs to try again. Dismiss this card; a new one will appear when the agent retries." No engineering-vocabulary fields. The locked-fixture `reason / proposedFix / lastAttemptAt` payload is **not** in today's `ApprovalDetail` wire and is not synthesized in v1.
+- ActionDrawer is replaced with a single quiet **"Dismiss"** button. Clicking Dismiss calls `action: "reject"` with no reason (the rejection just marks the lifecycle so the agent can retry).
 
-The locked fixtures supply `recovery.reason / proposedFix / lastAttemptAt` fields. **These are not in today's `ApprovalDetail` wire shape.** They must be either:
+**No "Reject lifecycle" label, no "Trigger re-run from the lifecycle" copy.** That's developer language. The operator's mental model is "this card is broken, get rid of it".
 
-1. Added to the backend response in a passthrough manner (zero-risk additive change to `apps/api/src/routes/approvals.ts:170–175` and `ApprovalDetail` type), or
-2. Synthesized client-side from a generic recovery copy until backend lands them.
-
-Pick option (2) for v1 — generic copy ("This approval cannot proceed until an upstream issue is resolved. The agent will re-propose with a fresh binding hash.") and **flag** option (1) in shared-conventions input as a follow-up. Do not synthesize fake `lastAttemptAt` timestamps.
+If/when the backend adds the recovery payload fields, surface them in a follow-up (flagged in Shared-conventions input). v1 ships with the generic copy above.
 
 ### Expired-during-view
 
 If `now >= expiresAt` for the active row (live countdown clears it):
 
-- The row dims (`qrow-timer.expired` strike-through) but stays in the list **until the next refetch** (do not optimistically remove — refetch is the source of truth and the server already filters expired rows from `/pending`).
-- The detail panel switches to the expired short-circuit in `ActionDrawer` ("expired N ago · no action available · agent must re-propose").
-- The expired state is non-actionable. No buttons.
+- The row dims (timer strike-through) but stays in the list **until the next refetch** (do not optimistically remove — refetch is the source of truth and the server filters expired rows from `/pending`).
+- The detail panel switches to the expired short-circuit in `ActionDrawer`: "This expired N ago. The agent will re-propose if it's still needed." No buttons.
 
 ### Loading / empty / error coverage
 
-- **Loading (no prior data):** queue renders 6 `SkeletonRow`s. Detail pane renders the `ApprovalsEmptyDetail` placeholder. No spinners anywhere.
-- **Loading (refetch while data shown):** show subtle, dignified — a 1px progress hairline at the top of the queue or stat-tile shimmer; no spinner-over-content.
-- **Empty queue:** `QueueEmpty` editorial panel — `"Nothing waiting."` in Cormorant, with sub copy ("When an agent proposes a mutating action that needs your sign-off, it'll appear here with full evidence and a binding hash.") and a "last cleared 13m ago" mono foot. Detail pane: `ApprovalsEmptyDetail`. The "last cleared" timestamp comes from an additional API field that **does not exist today** (`/pending` returns only active rows). Synthesize from `Math.min(client-side last-seen approved/rejected mutation timestamp)`; if no history is available this session, omit the line entirely. Flag in shared-conventions input.
-- **Filter narrows to zero:** same `QueueEmpty` chrome but with copy "No approvals in this filter." + a quiet "Clear filters" button.
-- **Inline error (`/pending` 5xx):** top-of-page inline banner ("`/api/approvals/pending` failed — last loaded N ago. Retry."), not a full-page replace. Keep stale rows visible.
+- **Loading (no prior data):** queue renders 6 skeleton rows. Detail pane renders the empty placeholder. No spinners.
+- **Loading (refetch while data shown):** a 1px progress hairline at the top of the queue; no spinner-over-content.
+- **Empty queue:** editorial panel — `"Nothing waiting."` in `var(--serif)`, sub copy: "When an agent proposes an action that needs your sign-off, it'll appear here with the full details and a confirmation code." Optional "last cleared N ago" footer is rendered only when a client-side last-decided timestamp exists from the current session; if none, omit. Backend doesn't yet supply this; flagged in Shared-conventions input.
+- **Filter narrows to zero:** same chrome, copy "No approvals match this filter." + a quiet "Clear filters" button.
+- **Inline error (`/pending` 5xx):** top-of-page inline banner ("Couldn't refresh — last loaded N ago. Retry."), not a full-page replace. Keep stale rows visible.
 - **Detail-fetch error:** same banner shape inside the detail pane only.
+
+### Mobile composition
+
+Desktop is the target. Mobile (≤768px) collapses the split:
+
+- Header + filter strip stack as today.
+- Queue rendered full-width; the **active row's detail pane is inlined below the row** (accordion-like expansion), not stacked at page bottom. Tapping a different row collapses the current and expands the new. Rationale: keeps "context → action" together in a single eye-line on a phone.
+- The action drawer remains at the bottom of the expanded detail, with the amber CTA full-width.
+- The Patch advanced toggle is hidden entirely on mobile (≤768px). Operators on mobile either Approve or Reject; structured editing belongs on desktop.
+- Filter strip wraps to two rows on narrow viewports; "expiring < 60m" wraps to the second row.
+- No fixed/sticky CTA — the action drawer is reachable by scroll. Prevents thumb-zone confusion.
+
+This is "functional mobile", not redesign. Operators at the spa front desk should be able to triage on a phone; deeper investigation is for desktop.
+
+### Decision-feed reconciliation
+
+Alex Home's `useDecisionFeed` (`apps/dashboard/src/hooks/use-decision-feed.ts`) and `components/decisions/decision-card.tsx` surface a cross-kind feed that today includes recommendations and handoffs. Whether/when it also surfaces approvals is an open product question (referenced by the `dispatchDecisionAction` comment in `decision-card.tsx`); this spec does not resolve it.
+
+For v1: **`/approvals` is the single source of truth for the approval queue.** If/when the decision feed starts including approvals, the contract is:
+
+1. The decision card on Alex Home links to `/approvals?id=<id>` and does **not** offer in-line approve/reject.
+2. State invalidation: any mutation through `useRespondToApproval` invalidates both `keys.approvals.all()` and `keys.decisions.all()`. PR-A3 will wire both invalidations defensively even before the decision feed surfaces approvals, so we don't ship a stale-state bug later.
+3. The /approvals page is the only place the confirmation-code + ack + risk-graded gating exists. Decision-card mini-CTAs would re-introduce the same integrity surface in a smaller space — explicitly prohibited.
+
+### Agent display names
+
+The locked fixtures use internal ids (`billing-agent`, `ops-agent`, `compliance-agent`, etc.). The customer-facing names in this codebase are **Alex / Riley / Mira** (per memory `project_canonical_agent_names`). Add `apps/dashboard/src/app/(auth)/(mercury)/approvals/hooks/use-agent-display.ts`:
+
+- A static map from known agent ids → display name + role (`billing-agent` → `{ display: "Alex", role: "Billing & Bookings" }`, `growth-agent` → `{ display: "Riley", role: "Growth" }`, etc.).
+- Unknown ids fall back to "an agent" with no role tag. Never render the raw id in customer-facing UI.
+- The map is the source of truth for /approvals and is intended to migrate to a shared util when other Mercury surfaces need it (flag in Shared-conventions input).
 
 ## Visual design
 
-The locked HTML/JSX (`approvals-v2/`) IS the visual contract. Mirror it. Specifics worth calling out:
+The locked HTML/JSX (`approvals-v2/`) carries the composition and hierarchy. Tokens and copy follow this spec.
 
-### Tokens (mirror from locked `styles.css`; do not invent)
+### Tokens
+
+Mirror the local-alias pattern used by `reports.module.css:13–30` and `activity.module.css:11–26`:
 
 ```css
---paper: hsl(45 25% 98%);
---paper-warm: hsl(42 32% 95%);
---paper-raised: #ffffff;
---paper-deep: hsl(40 22% 93%);
---ink: #0e0c0a;
---ink-2: #3a332b;
---ink-3: #6b6052;
---ink-4: #a39786;
---ink-5: #c8beae;
---hair: rgba(14, 12, 10, 0.08);
---hair-soft: rgba(14, 12, 10, 0.04);
---hair-strong: rgba(14, 12, 10, 0.16);
---amber: hsl(30 55% 46%);
---amber-deep: hsl(30 60% 32%);
---amber-soft: hsl(38 70% 86%);
---amber-paper: hsl(42 70% 92%);
---risk-low: var(--ink-5);
---risk-med: hsl(34 35% 64%);
---risk-high: hsl(28 40% 48%);
---risk-crit: var(--ink);
---font-display: "Cormorant Garamond", Georgia, serif;
---font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
---font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
---duration-default: 280ms;
---ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+.approvalsPage {
+  /* Local aliases against the existing Mercury tokens. */
+  --cream: var(--mercury-cream);
+  --ink: var(--mercury-ink);
+  --ink-2: var(--mercury-ink-2);
+  --ink-3: var(--mercury-ink-3);
+  --ink-4: var(--mercury-ink-4);
+  --accent: var(--mercury-accent);
+  --accent-soft: var(--mercury-accent-soft);
+  --hair: var(--mercury-hairline);
+  --hair-soft: var(--mercury-hairline-soft);
+  --row-hover: var(--mercury-row-hover);
+  --serif: var(--font-serif-mercury);
+  --mono: var(--font-mono-mercury);
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--sans);
+}
 ```
 
-These overlap heavily with the existing `apps/dashboard/src/app/globals.css` tokens (`--sw-base`, `--sw-accent`, etc.). Where the locked design uses `--paper`/`--ink`/`--amber` and the globals use `--sw-base`/`--sw-text-primary`/`--sw-accent`, **use the dashboard's existing `--sw-*` tokens** at the page boundary and only introduce locally-scoped `--paper`/`--ink` aliases inside `approvals.module.css` if it makes the CSS readable. Do not add new globals.
+Page-local additions (named to match the locked design selectors so the rest of the CSS reads cleanly, but **scoped to `.approvalsPage`**):
 
-The mapping is:
+```css
+.approvalsPage {
+  /* Approvals-only extensions. Promote to globals via wave-1.5 if any other surface needs them. */
+  --paper-warm: hsl(40 28% 92%); /* approve-drawer background, hairline striped recovery panel */
+  --paper-raised: hsl(40 25% 96%); /* patch-editor canvas */
+  --hair-strong: hsl(40 15% 78%); /* binding-code top/bottom rule */
+  --accent-paper: hsl(20 70% 92%); /* high-risk pill fill */
+  --risk-low: var(--ink-4);
+  --risk-med: hsl(34 30% 56%);
+  --risk-high: hsl(20 70% 48%); /* derived from --mercury-accent, deeper */
+  --risk-crit: var(--ink);
+}
+```
 
-- `--paper` ≡ `--sw-base`
-- `--paper-warm` ≡ a new local alias (close to `--sw-surface`)
-- `--ink` ≡ `--sw-text-primary`
-- `--ink-3` ≡ `--sw-text-secondary`
-- `--ink-4` ≡ `--sw-text-muted`
-- `--amber` ≡ `--sw-accent`
-
-The other paper/ink/amber/risk derivatives are page-local aliases inside `approvals.module.css`. Flag in shared-conventions input: if other wave-1 surfaces also introduce `paper-warm` / `amber-deep` / `risk-med` etc., promote them to globals in a wave-1.5 cleanup PR.
+**Do not** introduce `--paper` / `--ink-5` / `--amber` / `--amber-deep` / `--amber-soft` / `--amber-paper` from the locked CSS into globals. They duplicate `--mercury-*`. Flag in Shared-conventions input if any other wave-1 surface independently introduces them — promote to globals in wave-1.5.
 
 ### Fonts
 
-Cormorant Garamond + Inter + JetBrains Mono are already loaded for the editorial register (Pipeline, Alex Home v2). No new font wiring needed; ensure the page's `font-family` rules resolve to the existing CSS variables.
+- Display: `var(--serif)` → Source Serif 4 (loaded via next/font in `app/layout.tsx`).
+- Body: `Inter` (existing).
+- Mono: `var(--mono)` → JetBrains Mono via next/font.
+
+**Do not** load Cormorant Garamond. The locked CSS uses it as a designer choice; the dashboard's editorial register is Source Serif 4. Loading a new font is unnecessary payload and inconsistent with /reports, /activity, agent-home.
 
 ### Risk visual vocabulary
 
-- **Row left edge:** hairline at 1px / 2px / 2px / 3px for low / medium / high / critical (no hue change; weight + amber depth communicates risk). Recovery is a dashed 2px edge.
-- **Risk pips (row meta):** 4 dots, `low=1 on`, `medium=2`, `high=3`, `critical=4`. Off-pips use `var(--ink-5)`. On-pips use `currentColor` of the parent `.qrow-risk` label (low=ink-4, medium=ink-3, high=amber-deep, critical=ink). No red/green.
-- **Detail risk pill (`.dh-pill[data-risk=…]`):** low/medium hollow with hairline border; high gets `amber-paper` fill; critical inverts to filled ink (paper text). This is the **only** place the pill flips to filled, and only at `critical`.
-- **Filter chips:** chip bullet dot uses the `--risk-*` token by category. `none` rows are not surfaced in the filter strip (the four chips are low/medium/high/critical); `none`-category rows aggregate into "all" and visually read as low.
+Risk is communicated in **three layers**, with explicit precedence:
 
-### Integrity-check card (the non-negotiable)
+1. **Primary: textual label.** Each row shows `LOW`, `MEDIUM`, `HIGH`, or `CRITICAL` in the risk column, mono, uppercase, tracked. This is the operator's actual signal.
+2. **Secondary: left-edge hairline weight.** 1px / 2px / 2px / 3px for low / medium / high / critical. Decorative reinforcement; not a primary signal. Recovery is a dashed 2px edge.
+3. **Tertiary: detail-pane risk pill.** Low/medium are hollow with a hairline border. High gets `--accent-paper` fill. Critical inverts to filled `--ink` (cream text). This is the only place the pill flips to filled, and only at critical.
 
-The `HashCard` block:
+The locked design's **risk pips** (4-dot count) are removed. They were an arbitrary visual code competing with the textual label. The textual label carries the meaning; the hairline provides quiet reinforcement; no pips.
+
+**Filter chips:** chip bullet dot uses the `--risk-*` token by category. The `none` category isn't surfaced (chips are low/medium/high/critical + all); `none` rows aggregate into "all".
+
+### Confirmation-code section (the non-negotiable)
+
+(Formerly "binding hash card" in the locked design.)
+
+The block:
 
 - Position: directly under `DetailHeader`, before Approvers, before ActionDrawer. **Cannot be hidden, collapsed, or behind an accordion.**
-- Layout: top + bottom 1px `var(--ink)` rules (not a "card" with chrome — a _bracketed_ region of the page).
-- Eyebrow: `INTEGRITY CHECK · BINDING HASH` (11px / 700 / 0.18em tracking, color `var(--ink)` not muted).
-- Hash value: full 32-hex string in JetBrains Mono 18px / weight 600 / letter-spacing 0.04em / word-break: break-all. Selectable.
-- Copy button: outline button to the right of the hash. Click → `navigator.clipboard.writeText(bindingHash)` → 1.4 s "copied" amber fill state.
-- Foot line: `envelope <envelopeId> · signed by switchboard-prod · signing this hash binds ONLY the parameters shown above`. Mono, 11px, ink-4 with ink-2 on the envelope id.
+- Layout: top + bottom 1px `var(--hair-strong)` rules — a bracketed region of the page, not a card with chrome.
+- Eyebrow: **`CONFIRMATION CODE · LOCKS IN THE DETAILS ABOVE`** (11px / weight 700 / 0.16em tracking, color `var(--ink)`).
+- Code value: full 32-hex string in `var(--mono)` 18px / weight 600 / letter-spacing 0.04em / word-break: break-all. Selectable.
+- Copy button: outline button to the right of the code. Click → `navigator.clipboard.writeText(bindingHash)` → 1.4 s "Copied" `--accent` fill state.
+- Foot line: **"This code matches the exact details above. If any detail changes, the code changes. Share it with a teammate if something looks off."** Mono, 11px, `var(--ink-4)`. Below that, a smaller line: `Reference: <envelopeId>` (mono, 10px, `var(--ink-4)`) — kept for support-conversation traceability without using the word "envelope" in the primary copy.
 
-### Approve commit (the second non-negotiable)
+**No "INTEGRITY CHECK", no "BINDING HASH", no "sha256 · 32 hex · envelope-scoped", no "signed by switchboard-prod".** Those phrases stay in `/activity` and developer-facing surfaces, never on this page.
 
-Inline inside the action drawer. **Required** before the amber CTA enables:
+### Approve block (the second non-negotiable, risk-graded)
 
-- Cormorant 22px statement-of-intent line: `I confirm hash <0x1a2b…2f5> and authorize <action.name>.` The hash and action are visually emphasized: the hash chunk is in a hairline-bordered mono pill (`.ic`); the action name is in amber italic Cormorant (`.actv`).
-- Sub-line: `signing dispatches the action immediately` (single approver) or `signing adds your envelope hash to the quorum (n+1 of N after signing)`.
-- Ack checkbox: `I have read the parameters and the hash <0x1a2b…2f5> matches what I intend to approve.` Default unchecked.
-- Amber CTA `Approve & sign` with the short hash as a second line on the button. Disabled until the ack checkbox is ticked.
-- The short-hash chunk (`shortHash`) is `bindingHash.slice(0,10) + "…" + bindingHash.slice(-4)`. Mirror exactly — operators pattern-match the same chunk in the card, the line, the checkbox, and the button.
+Inside the action drawer. The block has **two shapes** depending on risk:
 
-### Anti-patterns (re-stated from doctrine)
+**Shape A — low / medium / none risk** (the common case):
 
-- No red/green status traffic lights. Risk uses hairline weight + amber depth + filled-vs-hollow pill at critical only.
+- Brief context line: "Approving sends this to be processed by **Alex** (or whichever agent)." `var(--sans)` 13px, `var(--ink-3)`.
+- Quorum sub-line if applicable: "Adds your signature to the quorum (n+1 of N after this)."
+- Amber CTA `Approve` with the short-code chunk as a second line: `Code <ab12…2f5>`. No ack checkbox.
+
+**Shape B — high / critical risk**:
+
+- Statement-of-intent line in `var(--serif)` 20px: **"I've checked the details above. Approve this <action.displayName>."** No "I confirm hash 0x…" framing; the operator authorizes the action, not the hash. The short code chunk appears as a hairline-bordered mono pill at the end of the line.
+- Ack checkbox: "I've read the details and the confirmation code `<ab12…2f5>` matches what I want to approve." Default unchecked.
+- Quorum sub-line as in Shape A.
+- Amber CTA `Approve & sign` with the short-code as a second line. Disabled until the ack checkbox is ticked.
+
+`shortHash(bindingHash) = bindingHash.slice(0, 6) + "…" + bindingHash.slice(-3)` (slightly shorter than the locked design's 10/4 — easier to skim at a glance; the full code is in the section above for verification).
+
+`action.displayName` is a human label derived from the action id (`billing.refund.issue` → "refund", `comms.sms.broadcast` → "SMS broadcast", etc.). PR-A3 includes a small mapper alongside `use-agent-display.ts`. Unknown actions fall back to a tidied version of the id ("billing.refund.issue" → "billing refund issue").
+
+### Dispatch banner copy
+
+Post-respond. Operator-language:
+
+- **Approved (single)**: "**Approved.** Alex is processing this now — check **Activity** in a moment to see the result." Includes a quiet "View in Activity" link.
+- **Approved (quorum, your signature added but quorum not yet complete)**: "**Signed.** Waiting on N more teammate(s). You'll get an in-app notification once everyone's approved."
+- **Patched & approved**: "**Approved with changes.** Alex is processing the updated version now."
+- **Rejected**: "**Rejected.** The card is closed; the agent has been told to stand down." If a reason was entered: "Your note: '<reason>'" (italic).
+
+**No "ExecutableWorkUnit", no "Frozen for 12h", no "idempotency guaranteed by envelope", no `wu_99102` ids in the primary copy.** Those facts live in `/activity` and the audit log. The dispatch banner is reassurance, not telemetry.
+
+### Anti-patterns
+
+- No red/green status traffic lights. Risk uses textual label (primary) + hairline weight (secondary) + filled pill at critical (tertiary).
 - No "approve all" mega-button. No multi-select. No bulk operations.
-- The binding hash is **never** behind a click, a tooltip, an accordion, a "View details" toggle, or a hover-only reveal.
-- Patch is **not** a hidden option behind "More" — it is a first-class row in the action drawer, second only to Approve.
-- No Material/Fluent SaaS chrome. Editorial-utilitarian: thin rules, generous whitespace, mono+serif tension.
+- The confirmation code is **never** behind a click, a tooltip, an accordion, a "View details" toggle, or a hover-only reveal.
+- The JSON patch editor **is** behind an "advanced" toggle in v1 — this is deliberate. Non-technical operators must not encounter a JSON textarea by default.
+- No cryptography vocabulary in customer-facing copy. "Confirmation code", not "binding hash". "Signed", not "envelope hash". "Processed", not "dispatched".
+- No raw agent ids in customer-facing copy. Always go through `use-agent-display`.
+
+## Operator-language copy (rewrite reference)
+
+Locked → operator-facing:
+
+| Surface                          | Locked copy                                                                                  | Operator copy                                                                                                          |
+| -------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Hash-card eyebrow                | `INTEGRITY CHECK · BINDING HASH`                                                             | `CONFIRMATION CODE · LOCKS IN THE DETAILS ABOVE`                                                                       |
+| Hash-card foot                   | `sha256 · 32 hex · envelope-scoped`                                                          | (removed; replaced by the foot paragraph above)                                                                        |
+| Hash-card meta                   | `envelope <id> · signed by switchboard-prod · signing this hash binds ONLY the params above` | `This code matches the exact details above. If any detail changes, the code changes.` + `Reference: <id>` (line below) |
+| Approve commit line              | `I confirm hash 0x1a2b…2f5 and authorize <action>.`                                          | `I've checked the details above. Approve this <action.displayName>.`                                                   |
+| Ack checkbox                     | `I have read the parameters and the hash <…> matches what I intend to approve.`              | `I've read the details and the confirmation code <…> matches what I want to approve.`                                  |
+| Approve sub (single)             | `signing dispatches the action immediately`                                                  | `Approving sends this to be processed by <Alex>.`                                                                      |
+| Approve sub (quorum)             | `signing adds your envelope hash to the quorum (n+1 of N after signing)`                     | `Adds your signature to the quorum (n+1 of N after this).`                                                             |
+| Patch row                        | `Modify parameters before approving · opens a JSON editor · diff against parametersSnapshot` | `View JSON (advanced) ▾` (toggle revealing the same editor)                                                            |
+| Patch button                     | `Apply patch & approve`                                                                      | `Apply changes & approve`                                                                                              |
+| Reject sub                       | `no hash echo required. recorded against the lifecycle.`                                     | `Optional note (visible only to you on this screen — not saved).`                                                      |
+| Recovery banner                  | `Approval cannot proceed until upstream recovery completes. Trigger re-run from lifecycle.`  | `This action couldn't be prepared. The agent ran into a problem and needs to try again.`                               |
+| Recovery button                  | `Reject lifecycle`                                                                           | `Dismiss`                                                                                                              |
+| Dispatch banner                  | `ExecutableWorkUnit captured against binding 0x… Frozen for 12h; idempotency by envelope.`   | `Approved. <Alex> is processing this now — check Activity in a moment to see the result.`                              |
+| Quorum approver stamp            | `kira.l · 0xK1RA`                                                                            | `Kira Lim · Manager · signed 2m ago`                                                                                   |
+| Queue meta — agent               | `agent: billing-agent`                                                                       | `Alex · Billing & Bookings`                                                                                            |
+| Expired action                   | `expired N ago · no action available · agent must re-propose`                                | `This expired N ago. The agent will re-propose if it's still needed.`                                                  |
+| Network-error inside drawer      | `POST /api/approvals/respond timed out after 8s. Your envelope is unsigned; retry is safe.`  | `Couldn't send your approval — your decision wasn't recorded. Safe to try again.`                                      |
+| 409 conflict                     | (locked design didn't cover)                                                                 | `This was already decided by a teammate — refreshing your view.`                                                       |
+| Empty-state pending sub          | `When an agent proposes a mutating action that needs your sign-off, it'll appear here with full evidence and a binding hash.` | `When an agent proposes an action that needs your sign-off, it'll appear here with the full details and a confirmation code.` |
 
 ## Accessibility
 
-- Each `QueueRow` is a `<button>` with full keyboard support: ↑/↓ navigate within the list when focus is on the queue, Enter selects.
-- The `HashCard` `<output>` for the copy state uses `aria-live="polite"` so screen readers announce "copied".
-- The ack checkbox label is fully bound; checking via keyboard must work.
-- Amber-on-amber color contrast: verify the `Approve & sign` button label hits WCAG AA at 14px+ weight 600 against `--amber` background. The locked design uses `#fff` text on `hsl(30 55% 46%)` — contrast ratio 4.6:1, passes AA for normal text. Document in component test.
-- `RiskPips` are decorative (`aria-hidden`); the textual risk label on the row carries the semantic.
-- The patch editor `<textarea>` is reachable by keyboard; the side-by-side diff renders the snapshot as semantic text (not an image).
-- Live countdown: do not announce every second. Use a polite live region only when crossing thresholds (e.g. crossing into <5 minutes) to avoid SR spam.
-- Respect `prefers-reduced-motion`: disable the skeleton shimmer animation and the copy-button transition when set.
+- Each queue row is a `<button>` with full keyboard support: ↑/↓ navigate within the list when focus is on the queue, Enter selects.
+- The ConfirmationCode "Copied" state uses an `aria-live="polite"` region.
+- The ack checkbox (Shape B) is fully label-bound; keyboard checking must work.
+- Amber-on-amber color contrast for the CTA label: verify against `--mercury-accent` (`hsl(20 90% 55%)`). White text on that hue is ~4.4:1 — borderline AA at 14px+ weight 600. PR-A3 must measure with a real contrast tool and adjust the label weight or background depth if needed (e.g. shift to `--mercury-accent-soft` at `hsl(20 60% 50%)` if AA fails). Document the measurement in the component test.
+- Risk hairline is decorative (`aria-hidden`); the textual risk label carries the semantic.
+- Patch `<textarea>` (when revealed) is reachable by keyboard; the side-by-side diff renders the snapshot as semantic text (not an image).
+- Live countdown: do not announce every second. A polite live-region announcement fires only when crossing into <5 minutes for the active row.
+- Respect `prefers-reduced-motion`: disable skeleton shimmer and the copy-button transition.
+- Mobile accordion expansion uses `aria-expanded` on the row and `role="region"` with an `aria-labelledby` on the inlined detail.
 
 ## Fixtures
 
-Inline `approvals-v2/data.js` (12 rows, Aurora Aesthetics medspa context) verbatim into `fixtures.ts` as the gate-off mode dataset. The fixtures already cover every required scenario:
+Inline `approvals-v2/data.js` (12 rows, Aurora Aesthetics medspa context) into `fixtures.ts` as the gate-off dataset, with these mandatory adaptations:
 
-- 1 critical within 5 min of expiry (`apr_2f1a08`, refund)
-- 2 quorum (`apr_9b73c1` at 2/3, `apr_4e082a` at 1/2)
-- 1 patch worked example (`apr_d77c20`, discount 10% → 25%)
-- 1 recovery_required (`apr_e0c4a5`, GDPR export)
-- Mix of low/medium/high risk across 12 rows
-
-Convert the JS to typed TS — every fixture must satisfy the `PendingApproval` + `ApprovalDetail` shapes (extended with the optional `recovery` and `patchProposal` decorations the live API doesn't yet return; type these as `?:` extensions).
-
-`Date.now()`-relative timestamps in the locked fixtures must convert to ISO strings at the boundary, since the API ships ISO. Compute them at module load (`new Date(Date.now() + 4 * 60_000).toISOString()`).
-
-The dispatched / responded UI also needs a worked example — when the operator approves a fixture row, the `DispatchBanner` renders a synthesized `wu_99102`-style id. This is purely client-side feedback in fixture mode.
+- `Date.now()`-relative timestamps → ISO strings at module load.
+- Agent ids stay as wire-faithful internals (`billing-agent` etc.) so the `use-agent-display` mapper has something to map. The mapper produces the customer-facing names.
+- Fixtures cover every required scenario: 1 critical <5min from expiry (`apr_2f1a08`), 2 quorum (`apr_9b73c1` at 2/3, `apr_4e082a` at 1/2), 1 patch worked example (`apr_d77c20`, 10% → 25% — used to test the advanced JSON toggle integration), 1 recovery_required (`apr_e0c4a5`), and a mix of low/medium/high.
+- Convert to typed TS — every fixture must satisfy `PendingApproval` + `ApprovalDetail`, with optional `recovery` and `patchProposal` decorations typed as `?:` extensions. These extensions are **fixture-only** and not part of the wire contract.
+- In fixture mode, the `DispatchBanner` after a fake-approve renders a synthesized id (`wu_99102`-style) but that id appears **only as a "View in Activity" link target**, never as primary copy.
 
 ## Telemetry
 
-Minimum events (mirror existing dashboard convention; emit via the existing client-side audit-event helper if one exists, otherwise via `useTelemetry` if available; otherwise defer):
+Events to emit (via the existing dashboard event helper; if none exists yet, defer to a small follow-up — do not block PR-A1..A5 on this):
 
-- `approvals.viewed` — page mount, with pending count + filter state
+- `approvals.viewed` — page mount, with pending count
 - `approvals.row_selected` — row click, with id + riskCategory
-- `approvals.hash_copied` — copy button click
-- `approvals.approve_clicked` — with id + quorum present?
-- `approvals.patch_opened` — patch editor opened
-- `approvals.patch_submitted` — with changed-key list (NOT the patch value itself; PII risk)
-- `approvals.reject_clicked` — with optional reason length
+- `approvals.code_copied` — copy button click (renamed from `hash_copied`)
+- `approvals.approve_clicked` — id + riskCategory + quorum?
+- `approvals.advanced_json_opened` — when the operator opens the advanced toggle (signal for whether to invest in a structured editor)
+- `approvals.patch_submitted` — changed-key **names** only (no values; PII risk)
+- `approvals.reject_clicked` — reason length (not the text)
 - `approvals.expired_during_view` — when the live countdown crosses zero on the active row
 - `approvals.conflict_409` — when the mutation returns 409
 
-Do not emit hashes themselves (they are envelope-scoped, not secret, but they're not useful in telemetry and they're verbose). Emit `id` only.
+Do not emit the confirmation code (verbose; not useful in telemetry). Emit `id` only.
 
 ## Test plan
 
-Component tests (Vitest + React Testing Library, matching `(mercury)/activity/__tests__/` patterns):
+Component tests (Vitest + React Testing Library, matching `(mercury)/activity/__tests__/`):
 
-- **`hash-card.test.tsx`**: full hash visible at mount (not behind click); copy button writes to `navigator.clipboard`; envelope id renders.
-- **`approvers.test.tsx`**: hidden when `approvalsRequired === 1`; renders n-of-m when ≥ 2; non-operator approvers map onto `approvalHashes` by their position in the non-you slice (regression for the bug fixed in chat12 round 2); operator-self detection by session principal.
-- **`patch-editor.test.tsx`**: invalid JSON disables submit; size >100KB disables submit and shows the budget readout; diff highlights changed keys; cancel returns to idle mode without losing seeded patch.
-- **`action-drawer.test.tsx`**: ack checkbox gates the approve button; expired short-circuits to read-only; recovery short-circuits to "Reject lifecycle" only; responded state renders dispatch banner.
-- **`queue.test.tsx`**: skeleton on loading; empty state on zero rows; filter-narrowed-to-zero copy distinct from empty-queue copy; selection click bubbles up.
-- **`approvals-page.test.tsx`** (integration, fixture mode): full page renders, selecting a row updates the URL `?id`, filter chip toggle re-sorts the queue, "expiring < 60m" toggle narrows correctly, deep-link with `?id=apr_…` selects that row on first paint, a `recovery_required` row blocks Approve+Patch, the 5-min-from-expiry row's timer reads `critical`-class.
+- **`confirmation-code.test.tsx`**: full code visible at mount (not behind click); copy button writes `bindingHash` verbatim to `navigator.clipboard`; reference id renders; no "binding"/"hash"/"envelope" strings appear in the rendered DOM.
+- **`approvers.test.tsx`**: hidden when `approvalsRequired === 1`; renders n-of-m when ≥ 2; non-operator approvers map onto `approvalHashes` by their position in the non-you slice; operator-self detection by `session.principalId`; each row renders name + role + timestamp, never a raw hash.
+- **`patch-editor.test.tsx`**: hidden by default (advanced toggle closed); when open, invalid JSON disables submit; size >100KB disables submit and shows the budget readout; diff highlights changed keys; cancel returns to idle without losing seeded patch.
+- **`action-drawer.test.tsx`**: low/medium/none → no ack checkbox, CTA enabled on render; high/critical → ack required, CTA disabled until ticked; expired short-circuits to read-only; recovery short-circuits to "Dismiss" only; responded state renders DispatchBanner; advanced JSON toggle remembers per-session state.
+- **`queue.test.tsx`**: skeleton on loading; empty state copy distinct from filter-narrowed-to-zero copy; selection click bubbles up; no risk-pips render anywhere.
+- **`approvals-page.test.tsx`** (integration, fixture mode): full page renders; selecting a row updates URL `?id`; filter chip toggle re-sorts; deep-link with `?id=apr_…` selects on first paint; a `recovery_required` row offers only Dismiss; the 5-min-from-expiry critical row floats to the top of the sort; agent ids render as canonical display names (Alex / Riley / Mira).
 
 Behavioral tests (jsdom + mock fetch):
 
-- 409 on `/respond` triggers the inline conflict copy and refetches `/pending`.
-- 5xx on `/respond` shows retryable inline error inside the action drawer.
-- 5xx on `/pending` shows top-of-page banner without clearing the stale rows.
+- 409 on `/respond` triggers operator-language conflict copy and refetches `/pending`.
+- 5xx on `/respond` shows retryable operator-language error inside the drawer.
+- 5xx on `/pending` shows top-of-page banner without clearing stale rows.
+- Mutation success invalidates both `keys.approvals.all()` and `keys.decisions.all()` (regression for the decision-feed reconciliation case).
+- Copy-language audit: render the page in every state (idle / approving / patching / rejecting / recovery / expired / dispatched) and assert the rendered DOM contains zero engineering-vocabulary strings (a denylist: `binding`, `envelope`, `sha256`, `hash` outside the mono code itself, `lifecycle`, `dispatch`, `idempotency`, `executable work unit`, `frozen for`, `cartridge`).
 
-Visual regression: out of scope for v1; the locked HTML is the visual reference.
+Accessibility tests:
+
+- ConfirmationCode "Copied" state announces via aria-live.
+- Mobile detail expansion uses `aria-expanded` and is keyboard-operable.
+- Approve CTA label contrast (Shape A and Shape B) hits AA at 14px+ weight 600.
+
+Visual regression: out of scope for v1.
 
 ## Sequencing
 
-Suggested implementation slices (each ~1 PR, all on a feature branch consuming this spec from `main`):
+Suggested implementation slices (each ~1 PR, on a feature branch consuming this spec from `main`):
 
-1. **PR-A1 — Route shell + fixtures + queue**
-   Files: `page.tsx`, `approvals-page.tsx`, `fixtures.ts`, `header.tsx`, `filter-strip.tsx`, `queue.tsx`, `approvals.module.css` (queue/header/filter sections), `use-approvals.ts` (list-only), Tools overflow wiring + `route-availability.ts` + tests. Gate-off via `NEXT_PUBLIC_APPROVALS_LIVE`. Selection + URL plumbing. No respond actions yet.
+1. **PR-A1 — Route shell + fixtures + queue + gate**
+   Files: `page.tsx`, `approvals-page.tsx`, `fixtures.ts`, `header.tsx`, `filter-strip.tsx`, `queue.tsx`, `approvals.module.css` (queue/header/filter), `use-approvals.ts` (list-only), `use-now.ts`, `use-agent-display.ts`, Tools overflow wiring, `route-availability.ts` + `ToolsNavId` + `TOOLS_LIVE_ENV` updates, `.env.example` addition for `NEXT_PUBLIC_APPROVALS_LIVE`, and tests. No respond actions. Sort = expiring-soonest with critical-and-<5min pinned.
 
-2. **PR-A2 — Detail pane: header, hash card, params, quorum**
-   `detail/index.tsx`, `detail/header.tsx`, `detail/hash-card.tsx`, `detail/approvers.tsx`, `detail/empty.tsx`. Live countdown hook. No action drawer yet; render a "coming next" placeholder where the drawer will be.
+2. **PR-A2 — Detail pane: header, confirmation-code, params, quorum (with payload check)**
+   `detail/index.tsx`, `detail/header.tsx`, `detail/confirmation-code.tsx`, `detail/approvers.tsx`, `detail/empty.tsx`. Live countdown wired. **Prerequisite check**: confirm `approvalsRequired` + `approvalHashes` runtime shape from the API for a quorum lifecycle and either extend `ApprovalDetail` + Zod schema or extend the Fastify response in the same PR. If neither path is open, scope to single-approver only and defer the quorum block to a follow-up. No action drawer yet; render a "coming next" placeholder.
 
-3. **PR-A3 — Action drawer: approve + reject**
-   `detail/action-drawer.tsx`, `detail/reject-dialog.tsx`, `detail/dispatch-banner.tsx`. Wire the `useRespondToApproval` mutation for approve+reject. Hash-echo. Ack-checkbox gate. 409 + 5xx handling.
+3. **PR-A3 — Action drawer: approve (risk-graded) + reject + dispatch banner**
+   `detail/action-drawer.tsx`, `detail/reject-dialog.tsx`, `detail/dispatch-banner.tsx`. Wire `useRespondToApproval` for approve and reject. Risk-graded gating (Shape A vs B). Operator-language copy throughout. 409 + 5xx handling. Defensive invalidation of `keys.decisions.all()` alongside `keys.approvals.all()`. Contrast verification for the amber CTA label.
 
-4. **PR-A4 — Patch flow**
-   `detail/patch-editor.tsx`. JSON diff, size budget, apply-patch-and-approve. The locked design's worked example (`apr_d77c20` 10% → 25%) should be the integration test fixture.
+4. **PR-A4 — Patch flow (gated behind advanced toggle)**
+   `detail/patch-editor.tsx`. The `AdvancedJsonToggle` lives inside the action drawer (added in PR-A3 as a placeholder, wired in PR-A4). Editor is closed by default; `sessionStorage` remembers preference. Hidden entirely on mobile (≤768px). Worked example: `apr_d77c20` (10% → 25%).
 
-5. **PR-A5 — Recovery + expired-during-view + polish**
-   `detail/recovery-banner.tsx`, expired short-circuit, visibility-pause for the interval, polish pass, all telemetry events, finalize fixtures-vs-live parity.
+5. **PR-A5 — Recovery + expired-during-view + polish + telemetry**
+   `detail/recovery-notice.tsx`, expired short-circuit, visibility-pause for the interval, telemetry events, mobile accordion polish, copy-language denylist test, finalize fixtures-vs-live parity.
 
 6. **(Optional, post-launch) PR-A6 — Flag flip**
-   Set `NEXT_PUBLIC_APPROVALS_LIVE=true`, add it to deploy env documentation, confirm live API behavior matches fixture mode for at least the 1-of-N single-approver case.
+   Set `NEXT_PUBLIC_APPROVALS_LIVE=true`, add to deploy env documentation, verify live API behavior matches fixture mode end-to-end for the single-approver case.
 
-Each PR carries its own tests. PR-A1 is the gating PR for Tools-overflow visibility; until PR-A5 lands, the flag must stay false in any non-dev env.
+PR-A1 is the gating PR for Tools-overflow visibility; the flag stays false in any non-dev env until PR-A5 lands.
 
 ## Shared-conventions input
 
-Wave 1.5 (`docs/design-prompts/shared-conventions.md`) is being authored in parallel. From this surface, flag the following cross-surface decisions for that doc:
+Wave 1.5 (`docs/design-prompts/shared-conventions.md`) is being authored in parallel. Decisions to flag for that doc:
 
-- **Mercury Tools surface chrome** — the editorial topbar / brand cluster / `eyebrow + display title + stat-tile row` header pattern in the locked design IS the Mercury Tools page-head template. /reports and /activity already use a close variant. Confirm one canonical implementation (e.g. a shared `MercuryToolsHeader` component) versus per-surface copies. This spec assumes per-surface for now and flags the duplication.
-- **Risk vocabulary** — hairline-weight + amber-depth + filled-only-at-critical is a Switchboard-wide risk vocabulary (it will also apply to /recommendations queue, /agent-home pipeline, and other surfaces that surface `RiskCategory`). The tokens `--risk-low/med/high/crit` should be promoted from page-local to global if any other wave-1 surface introduces them.
-- **Amber CTA reservation** — `--amber` is the operator's signature color. Confirm the rule across surfaces: amber is reserved for **mutating-action commit CTAs only** (Approve & sign, Confirm execute, etc.), never for navigation, never for filter "on" states, never for informational badges.
-- **Live-clock pattern** — the `useNow(1000)` + visibility-pause pattern will appear on /mission, /activity (if we surface real-time), and /approvals. Standardize.
-- **Integrity-hash display** — if other surfaces ever need to display a `bindingHash` (e.g. /activity detail drawer), the HashCard component should be promoted to a shared component, not re-implemented. Don't promote in v1; flag for wave 1.5.
-- **Empty-state "last cleared N ago" footer** — the timestamp source isn't in today's `/pending` wire. Either backend adds `lastClearedAt` to the `/pending` response or each surface synthesizes from session-local state. Pick one convention.
-- **Reject reason field** — `POST /api/approvals/:id/respond` accepts no `reason` parameter today. Decide whether to add `reason: string` to `ApprovalRespondBodySchema` (backend change) and capture it persistently, or drop the optional reason textarea from the locked design (UI change). This spec captures locally for the dispatch banner but does not persist. Flag in shared-conventions.
-- **Recovery payload** — the locked design renders `recovery.reason / proposedFix / lastAttemptAt` on recovery rows. None of those fields are in today's `ApprovalDetail` wire. Decide whether to add them to the backend response or fall back to a generic recovery copy (this spec picks generic copy as v1).
-- **Quorum payload** — `request.approvalsRequired` and `state.approvalHashes[]` are referenced by the locked design and used by the Quorum block, but they are not in today's `ApprovalDetail` TypeScript type (`apps/dashboard/src/lib/api-client-types.ts:40–56`). The Fastify route passes `approval.request` and `approval.state` through verbatim, so the fields may be on the wire depending on what `approvals.getById` returns. Action item: confirm the runtime shape from the API for a quorum lifecycle, then either (a) add the fields to `ApprovalDetail` if they exist, or (b) extend the backend response. This spec assumes the fields exist on the wire and treats their absence as "single-approver" (gracefully hide the Quorum block when `approvalsRequired === 1` or missing).
+- **Mercury Tools surface chrome** — the editorial topbar / brand cluster / `eyebrow + display title + stat-tile row` header is now used by /reports, /activity, and /approvals. Promote to a shared `MercuryToolsHeader` component in wave-1.5.
+- **Risk vocabulary** — textual label + hairline weight + filled-only-at-critical is Switchboard-wide for any surface that exposes `RiskCategory`. The page-local `--risk-low/med/high/crit` tokens should be promoted to globals if any other wave-1 surface introduces them.
+- **Amber CTA reservation** — `--mercury-accent` is reserved for **mutating-action commit CTAs only** (Approve, Confirm execute, etc.), never for navigation, filter "on" states, or informational badges. Confirm across surfaces.
+- **Live-clock pattern** — the `useNow(1000)` + visibility-pause pattern is net-new in /approvals and will likely appear on /mission and other real-time surfaces. Promote `use-now.ts` to a shared hook in wave-1.5.
+- **Confirmation-code display** — if other surfaces (e.g. /activity detail drawer) ever need to display a `bindingHash`, the ConfirmationCode component should be promoted to a shared component, not re-implemented. Hold for wave-1.5.
+- **Empty-state "last cleared N ago"** — backend doesn't supply this. Either add `lastClearedAt` to `/api/approvals/pending` or each surface synthesizes from session-local state. Pick one convention.
+- **Reject reason persistence** — `ApprovalRespondBodySchema` has no `reason` field. Decide whether to add `reason: string` (backend change → also surfaces in `/activity`) or drop the reason field from the UI. v1 captures locally only and is explicit about it in the dialog.
+- **Recovery payload** — `recovery.reason / proposedFix / lastAttemptAt` aren't on the wire. Decide whether to add them or keep operator-language generic copy (v1 picks generic).
+- **Quorum payload** — `approvalsRequired` and `approvalHashes` aren't in `ApprovalDetail` types or Zod schema. PR-A2 confirms runtime shape and extends type/schema/response as needed.
+- **Agent id → display name mapper** — `use-agent-display.ts` is page-local. Promote to `lib/agent-display.ts` (or similar) once other surfaces (`/activity`, recommendations) need the same map.
+- **Decision-feed × approval surface** — `/approvals` is the source of truth. If `dispatchDecisionAction` later surfaces approvals on Alex Home, decision cards link to `/approvals?id=`, never approve inline. Pin this rule in shared-conventions.
 
 ## Risks
 
-- **Spec drift if shared-conventions.md lands first and contradicts.** This spec mirrors the locked HTML/JSX exactly, so any conflict will be resolved in favor of shared-conventions; document a synchronization checkpoint before PR-A1 merges.
-- **Wire-shape additions for recovery/last-cleared.** v1 ships with synthesized fallback copy. The schemas are not blocked, but if the backend adds those fields later, a small follow-up adjusts the UI; flagging here so it doesn't surprise.
-- **Live-countdown drift on long-lived tabs.** The `useNow` interval can drift from server time. Mitigation: the page refetches `/pending` on visibilitychange-to-visible, which carries fresh `expiresAt` values; the local countdown reconciles on each refetch.
-- **Optimistic dispatch banner without server confirmation.** If the operator approves and immediately navigates away, the banner does not persist. Acceptable for v1 (the audit log persists); if pain emerges, add a session-level "recently dispatched" toast queue in a follow-up.
-- **Patch JSON editing is unforgiving.** A 100-line `parametersSnapshot` is hard to patch in a raw textarea. v1 ships the textarea; if telemetry shows long abandon rates on the patch flow, upgrade to a structured editor in a follow-up. Out of scope here.
+- **Customer-language copy drift over time.** As engineers iterate, "binding hash" creeps back in. Mitigation: the test suite includes a copy-language denylist that fails any PR that re-introduces banned vocabulary in the rendered DOM (see "Test plan").
+- **Risk-graded confirmation undertested.** Operators might still click through high/critical without reading. Mitigation: telemetry on `approvals.approve_clicked` with riskCategory + ack-checkbox-tick-to-click latency. If <500ms consistently for critical, the ack isn't doing its job — re-tighten in a follow-up.
+- **JSON patch hidden behind advanced toggle = surprising for power users.** Mitigation: the toggle is one click away, labeled "View JSON (advanced)"; once opened it remembers per session.
+- **Quorum payload prerequisite blocks PR-A2.** If neither extending the Zod schema nor extending the Fastify response is achievable inside PR-A2, scope reduction (single-approver-only) is the explicit fallback rather than shipping speculative UI.
+- **Spec drift vs shared-conventions.md if it lands first.** Synchronization checkpoint before PR-A1 merges.
+- **Live-countdown drift on long-lived tabs.** The 1s tick can drift from server time. Mitigation: refetch `/pending` on `visibilitychange-to-visible` and `refetchOnWindowFocus`.
+- **Optimistic dispatch banner without server confirmation.** If the operator approves and navigates away, the banner doesn't persist. Acceptable for v1 (the action is recorded in `/activity` regardless).
+- **Mobile accordion expansion vs deep-link.** A `?id=apr_…` deep-link must auto-expand the corresponding row on mobile. Covered in PR-A1 selection logic.
 
 ## Acceptance criteria
 
 A reviewer should be able to verify, against this spec and the locked HTML, that:
 
 1. The page renders at `/approvals` under the Mercury editorial shell, gated by `NEXT_PUBLIC_APPROVALS_LIVE`, and appears in the Tools ▾ overflow when the flag is true.
-2. The queue's risk-rank-then-expiry sort matches the locked design (`app.jsx:90–96`).
-3. The full binding hash is visible (not behind a click) inside the `HashCard` for the active row.
-4. The `Approve & sign` button is disabled until the ack checkbox is ticked; the short hash chunk on the line, the checkbox, and the button all match `shortHash(bindingHash)`.
-5. Quorum approvals render the `ApproversBlock`; single-approver approvals do not.
-6. The patch flow opens a side-by-side diff against `parametersSnapshot`, validates JSON, enforces ≤100KB, and submits via `action: "patch"` with the `patchValue` payload.
-7. Reject opens the optional-reason dialog; submitting calls `action: "reject"` without `bindingHash`.
-8. `recovery_required` rows block Approve and Patch and offer only "Reject lifecycle".
-9. The expired-during-view case dims the row, switches the detail panel to read-only, and keeps the row visible until the next refetch.
-10. The empty queue shows the editorial "Nothing waiting" panel; filter-narrowed-to-zero shows the distinct "No approvals in this filter" copy.
-11. No new design tokens are introduced at the globals level; the visual register matches Pipeline / Alex Home v2 editorial tier.
-12. No red/green status colors anywhere in the UI.
+2. The default queue sort is expiring-soonest, with critical-and-<5min pinned at the top.
+3. The full confirmation code (bindingHash) is visible — not behind a click — inside the ConfirmationCode block for the active row.
+4. **Risk-graded approve gating:** low/medium/none rows enable the amber CTA on render; high/critical rows require ticking the ack checkbox first.
+5. The short-code chunk on the approve line, the checkbox (when shown), and the button all match `bindingHash.slice(0,6) + "…" + bindingHash.slice(-3)`.
+6. Quorum approvals render the ApproversBlock with name + role + relative timestamp per approver; never raw hashes or raw ids. Single-approver approvals don't render the block.
+7. Patch is **hidden behind a "View JSON (advanced) ▾" toggle**, closed by default, remembered per session, and hidden entirely on mobile. When open, it submits via `action: "patch"` with `patchValue`, validates JSON, enforces ≤100KB.
+8. Reject dialog labels the reason field as "visible only to you on this screen — not saved"; submitting calls `action: "reject"` without `bindingHash`.
+9. `recovery_required` rows show operator-language copy ("This action couldn't be prepared…") and offer **only a "Dismiss" button**, no "Reject lifecycle".
+10. Expired rows dim with operator-language copy ("This expired N ago…") and keep the row visible until the next refetch.
+11. Empty queue shows "Nothing waiting." in `var(--serif)`; filter-narrowed-to-zero shows "No approvals match this filter."
+12. No engineering vocabulary in rendered customer-facing copy: zero occurrences of `binding`, `envelope`, `sha256`, `lifecycle`, `dispatch`, `executable work unit`, `frozen for`, `idempotency`, `cartridge` (audited by a test).
+13. Agent ids never render raw; they go through `use-agent-display` and surface as canonical names (Alex / Riley / Mira) with roles.
+14. No new global tokens are introduced; the page uses Mercury tokens locally aliased.
+15. Display font is Source Serif 4 (via `var(--serif)`); Cormorant Garamond is not loaded.
+16. No red/green status colors anywhere.
+17. The risk-pip 4-dot count from the locked design is **not** rendered.
+18. Mobile (≤768px) collapses to a single-column queue with inline accordion expansion of the active row.
+19. Successful mutations invalidate both `keys.approvals.all()` and `keys.decisions.all()`.
+20. The amber CTA label hits WCAG AA contrast at the chosen background (verified in component tests).
 
 ---
 
