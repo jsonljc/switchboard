@@ -123,12 +123,21 @@ export async function registerLifecycleDisqualificationsRoutes(
         });
       }
 
-      const out = await deps.disqualificationHook.confirm({
-        organizationId: orgId,
-        conversationThreadId: request.params.threadId,
-        operatorId,
-        operatorNote: request.body?.operatorNote,
-      });
+      let out;
+      try {
+        out = await deps.disqualificationHook.confirm({
+          organizationId: orgId,
+          conversationThreadId: request.params.threadId,
+          operatorId,
+          operatorNote: request.body?.operatorNote,
+        });
+      } catch (err) {
+        console.warn(
+          `[lifecycle] disqualification confirm threw unexpectedly for thread ${request.params.threadId}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+        return reply.code(404).send({ reason: "not_found" });
+      }
 
       if (out.result === "confirmed") {
         return reply.code(200).send({ result: "confirmed" });
@@ -181,12 +190,21 @@ export async function registerLifecycleDisqualificationsRoutes(
         });
       }
 
-      const out = await deps.disqualificationHook.dismiss({
-        organizationId: orgId,
-        conversationThreadId: request.params.threadId,
-        operatorId,
-        operatorNote: request.body?.operatorNote,
-      });
+      let out;
+      try {
+        out = await deps.disqualificationHook.dismiss({
+          organizationId: orgId,
+          conversationThreadId: request.params.threadId,
+          operatorId,
+          operatorNote: request.body?.operatorNote,
+        });
+      } catch (err) {
+        console.warn(
+          `[lifecycle] disqualification dismiss threw unexpectedly for thread ${request.params.threadId}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+        return reply.code(404).send({ reason: "not_found" });
+      }
 
       if (out.result === "dismissed") {
         return reply.code(200).send({ result: "dismissed", restoredStatus: out.restoredStatus });

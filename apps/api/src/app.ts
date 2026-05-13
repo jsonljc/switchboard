@@ -743,6 +743,8 @@ export async function buildServer() {
   if (prismaClient) {
     try {
       const { bootstrapLifecycle } = await import("./bootstrap/lifecycle.js");
+      const { createLifecycleGovernanceConfigResolver } =
+        await import("./bootstrap/governance-resolver-adapter.js");
       const {
         snapshotStore: lsSnapshotStore,
         transitionStore: lsTransitionStore,
@@ -757,7 +759,7 @@ export async function buildServer() {
         registerThreadInitHook: () => {},
         registerCron: () => {},
         playbookReader: { readForOrganization: async () => null },
-        governanceConfigResolver: { resolve: async () => ({}) },
+        governanceConfigResolver: createLifecycleGovernanceConfigResolver(prismaClient),
       });
       lifecycleDisqualificationsDeps = {
         snapshotStore: lsSnapshotStore,
