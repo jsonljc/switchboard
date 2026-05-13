@@ -13,6 +13,7 @@ import type { PdpaJurisdiction } from "@switchboard/schemas";
 import type { OperatorChannelBindingStore } from "./operator-channel-binding-store.js";
 import type { IdentityStore } from "../storage/interfaces.js";
 import type { RespondToApprovalDeps } from "../approval/respond-to-approval.js";
+import type { ConversationStatusUpsertContext } from "./conversation-status-types.js";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -28,20 +29,7 @@ export interface GatewayContactStore {
   recordMessagingOptOut?(orgId: string, contactId: string): Promise<void>;
 }
 
-/**
- * Context required to upsert a ConversationState row when none exists yet.
- * Passed by the gateway (which has channel + principalId in scope) so that
- * a brand-new session's status flip does not silently no-op on first message.
- *
- * Defined here (channel-gateway/types.ts) and re-exported from the skill-
- * runtime hook so that a single adapter implementation can satisfy both
- * GatewayConversationStatusSetter and ConversationStatusSetter without a
- * circular import.
- */
-export interface ConversationStatusUpsertContext {
-  channel: string;
-  principalId: string;
-}
+export type { ConversationStatusUpsertContext };
 
 /**
  * Minimal interface for marking a session as requiring human intervention
