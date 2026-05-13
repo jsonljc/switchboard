@@ -1,7 +1,7 @@
 import type { DeploymentResolver } from "../platform/deployment-resolver.js";
 import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
-import type { ApprovalStore } from "../storage/interfaces.js";
+import type { ApprovalStore, IdentityStore } from "../storage/interfaces.js";
 import type { GovernanceConfigResolver } from "../governance/governance-config-resolver.js";
 import type { EscalationTriggerEntry } from "../governance/escalation-triggers/types.js";
 import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
@@ -11,7 +11,6 @@ import type { ConsentService } from "../consent/consent-service.js";
 import type { RevocationKeywordEntry } from "../consent/revocation-keywords/types.js";
 import type { PdpaJurisdiction } from "@switchboard/schemas";
 import type { OperatorChannelBindingStore } from "./operator-channel-binding-store.js";
-import type { IdentityStore } from "../storage/interfaces.js";
 import type { RespondToApprovalDeps } from "../approval/respond-to-approval.js";
 import type { ConversationStatusUpsertContext } from "./conversation-status-types.js";
 

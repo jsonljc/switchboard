@@ -1,4 +1,5 @@
-import type { ActionEnvelope, ActionPlan } from "@switchboard/schemas";
+import type { ActionEnvelope, ActionPlan, ApprovalRequest } from "@switchboard/schemas";
+import type { ProposeResult, ApprovalResponse } from "./orchestrator-types.js";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { AuditLedger } from "../audit/ledger.js";
@@ -104,7 +105,7 @@ export class LifecycleOrchestrator {
     traceId?: string;
     emergencyOverride?: boolean;
     idempotencyKey?: string;
-  }): Promise<import("./orchestrator-types.js").ProposeResult> {
+  }): Promise<ProposeResult> {
     return this.proposePipeline.propose(params);
   }
 
@@ -119,9 +120,9 @@ export class LifecycleOrchestrator {
     }>,
   ): Promise<{
     planDecision: "allow" | "deny" | "partial";
-    results: import("./orchestrator-types.js").ProposeResult[];
+    results: ProposeResult[];
     explanation: string;
-    planApprovalRequest?: import("@switchboard/schemas").ApprovalRequest;
+    planApprovalRequest?: ApprovalRequest;
     planEnvelope?: ActionEnvelope;
   }> {
     return this.proposePipeline.proposePlan(plan, proposals, (envelopeId) =>
@@ -140,7 +141,7 @@ export class LifecycleOrchestrator {
     bindingHash: string;
     patchValue?: Record<string, unknown>;
     approvalHash?: string;
-  }): Promise<import("./orchestrator-types.js").ApprovalResponse> {
+  }): Promise<ApprovalResponse> {
     throw new Error("Approval responses go through the API server's PlatformLifecycle");
   }
 
@@ -172,7 +173,7 @@ export class LifecycleOrchestrator {
     return this.executionManager.executePlan(plan, context);
   }
 
-  async requestUndo(envelopeId: string): Promise<import("./orchestrator-types.js").ProposeResult> {
+  async requestUndo(envelopeId: string): Promise<ProposeResult> {
     return this.executionManager.requestUndo(envelopeId, this.proposePipeline);
   }
 
@@ -198,7 +199,7 @@ export class LifecycleOrchestrator {
     emergencyOverride?: boolean;
     idempotencyKey?: string;
   }): Promise<
-    | import("./orchestrator-types.js").ProposeResult
+    | ProposeResult
     | { needsClarification: true; question: string }
     | { notFound: true; explanation: string }
   > {

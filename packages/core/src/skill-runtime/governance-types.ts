@@ -1,4 +1,3 @@
-// packages/core/src/skill-runtime/governance-types.ts
 export type EffectCategory =
   | "read"
   | "propose"

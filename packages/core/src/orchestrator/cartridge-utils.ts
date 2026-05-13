@@ -1,3 +1,9 @@
+/**
+ * Infer cartridge ID from action type prefix by matching against
+ * registered cartridge IDs. Falls back to null if no match found.
+ * e.g. "ads.campaign.pause" -> matches cartridge "ads-spend" if its
+ * manifest declares an action with that type.
+ */
 export function inferCartridgeId(
   actionType: string,
   registry?: import("../storage/interfaces.js").CartridgeRegistry,
