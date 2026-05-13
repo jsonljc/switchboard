@@ -31,7 +31,7 @@ import { getMetrics } from "../telemetry/metrics.js";
 
 import type { SharedContext } from "./shared-context.js";
 import { buildCartridgeContext } from "./shared-context.js";
-import type { ProposeResult } from "./lifecycle.js";
+import type { ProposeResult } from "./orchestrator-types.js";
 import {
   hydrateGuardrailState,
   extractQuorumFromPolicies,

@@ -1,5 +1,5 @@
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
-import type { ProposeResult, ApprovalResponse } from "./lifecycle.js";
+import type { ProposeResult, ApprovalResponse } from "./orchestrator-types.js";
 
 /**
  * Narrow interface for the 4 orchestrator methods that ChatRuntime (and other

@@ -14,8 +14,8 @@ import { getMetrics } from "../telemetry/metrics.js";
 
 import type { SharedContext } from "./shared-context.js";
 import { buildCartridgeContext } from "./shared-context.js";
-import type { ProposeResult } from "./lifecycle.js";
-import { inferCartridgeId } from "./lifecycle.js";
+import type { ProposeResult } from "./orchestrator-types.js";
+import { inferCartridgeId } from "./cartridge-utils.js";
 import type { ProposePipeline } from "./propose-pipeline.js";
 import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
 
