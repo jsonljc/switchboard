@@ -13,7 +13,9 @@
 
 ## Goal
 
-Ship the dashboard surface for the single cross-agent approvals queue. Every mutating action proposed by an agent waits here until the operator signs it (approve) or blocks it (reject). The page is the **integrity contract** between the operator and the system: the operator authorizes a stable, cryptographically-bound confirmation code, not a button.
+Ship the dashboard surface for the single cross-agent approvals queue. Every mutating action proposed by an agent waits here until the operator approves or rejects it.
+
+**The operator approves a specific action with specific details. The confirmation code proves those details have not changed.** The code is the integrity guarantee; the action is the thing being approved. The UI should make the operator feel they are saying "yes, do this exact thing", not "yes, sign this cryptographic artifact".
 
 Greenfield UI on a stable backend. The data contract is fixed (6 lifecycle statuses, 5 risk categories, 3 response actions — see Domain). Do not invent new statuses, categories, or hash semantics.
 
@@ -103,7 +105,7 @@ Anchored to `packages/schemas/src/approval-lifecycle.ts`, `packages/schemas/src/
 }
 ```
 
-There is **no `reason` field** on the body. v1 captures the reject reason locally for the dispatch banner only; **the value is not sent and is not persisted**. Flag in "Shared-conventions input".
+There is **no `reason` field** on the body. v1 does not expose a reject-reason field in the UI either — a non-persisted textarea would mislead operators into thinking their note is saved. Reject is a single-step action; if a reason needs persistence later, the backend adds the field first. Flag in "Shared-conventions input".
 
 Returns `{ envelope, approvalState, executionResult, resumeWarning? }` on 200. Conflict-on-stale yields `409`.
 
@@ -159,10 +161,10 @@ approvals-page.tsx
 │       ├── ConfirmationCode    — block 2; eyebrow "CONFIRMATION CODE · LOCKS IN THE DETAILS ABOVE", full hash mono, copy button, foot
 │       ├── ApproversBlock      — quorum only (required > 1); n-of-m, per-approver state (name + role + timestamp)
 │       ├── RecoveryNotice      — recovery_required only; operator-language copy, Dismiss-only
-│       ├── ActionDrawer        — idle | reject modes; expired + recovery short-circuits; risk-graded approve gating
+│       ├── ActionDrawer        — idle | reject-confirm modes; expired + recovery short-circuits; risk-graded approve gating
 │       │   ├── ApproveBlock        — risk-graded: low/medium = amber CTA only; high/critical = statement + ack checkbox + CTA
 │       │   ├── AdvancedJsonToggle  — "View JSON (advanced) ▾" — when expanded, reveals the patch editor
-│       │   └── RejectRow           — opens RejectDialog (optional reason, local-only)
+│       │   └── RejectRow           — outline button → confirm-reject inline step (no reason field)
 │       └── DispatchBanner      — post-respond confirmation; operator-language copy
 └── ApprovalsEmptyDetail   — placeholder when no row selected
 ```
@@ -191,7 +193,7 @@ app/(auth)/(mercury)/approvals/
       recovery-notice.tsx           — operator-language recovery copy
       action-drawer.tsx             — ActionDrawer, ApproveBlock, AdvancedJsonToggle, RejectRow
       patch-editor.tsx              — PatchEditor (JSON textarea + diff renderer; gated behind advanced toggle)
-      reject-dialog.tsx
+      reject-confirm.tsx            — inline two-step "Reject" → "Confirm reject" (no reason textarea)
       dispatch-banner.tsx           — operator-language post-respond copy
       empty.tsx
   __tests__/
@@ -240,7 +242,7 @@ When the operator clicks **Approve**:
 
 **Patch flow** (v1, advanced-only): a "View JSON (advanced) ▾" toggle inside the action drawer reveals the PatchEditor. The flow is then identical to the locked design: side-by-side diff against `parametersSnapshot`, JSON textarea, size budget readout, "Apply patch & approve" CTA. The mutation is `action: "patch"` and `patchValue: <parsed JSON object>`. Server applies patch → re-signs → approves; the dashboard treats this as a single mutation. The advanced toggle is closed by default and remembers per-session preference (`sessionStorage`). If the operator prefers structured editing, they Reject and the agent re-proposes — a structured editor lands in a follow-up.
 
-**Reject flow**: `action: "reject"`. `bindingHash` is omitted. Reason textarea is captured locally for the dispatch banner ("Rejected — '<reason>'") but **is not sent**. Be explicit in the dialog copy so the operator isn't misled: "Optional note (visible only to you on this screen — not saved)".
+**Reject flow**: `action: "reject"`. `bindingHash` is omitted. The flow is a two-step inline confirmation — clicking the outline `Reject` button replaces the row with `Confirm reject` (amber outline) + `Cancel`. No reason textarea in v1 — see the Domain note. If reason persistence is added to the backend later, this is the place to surface it.
 
 ### Quorum
 
@@ -397,7 +399,7 @@ The block:
 - Eyebrow: **`CONFIRMATION CODE · LOCKS IN THE DETAILS ABOVE`** (11px / weight 700 / 0.16em tracking, color `var(--ink)`).
 - Code value: full 32-hex string in `var(--mono)` 18px / weight 600 / letter-spacing 0.04em / word-break: break-all. Selectable.
 - Copy button: outline button to the right of the code. Click → `navigator.clipboard.writeText(bindingHash)` → 1.4 s "Copied" `--accent` fill state.
-- Foot line: **"This code matches the exact details above. If any detail changes, the code changes. Share it with a teammate if something looks off."** Mono, 11px, `var(--ink-4)`. Below that, a smaller line: `Reference: <envelopeId>` (mono, 10px, `var(--ink-4)`) — kept for support-conversation traceability without using the word "envelope" in the primary copy.
+- Foot line: **"This code matches the exact details above. If any detail changes, the code changes. If something looks off, reject this and the agent can propose a corrected version."** Mono, 11px, `var(--ink-4)`. Below that, a smaller line: `Reference: <envelopeId>` (mono, 10px, `var(--ink-4)`) — kept for support-conversation traceability without using the word "envelope" in the primary copy.
 
 **No "INTEGRITY CHECK", no "BINDING HASH", no "sha256 · 32 hex · envelope-scoped", no "signed by switchboard-prod".** Those phrases stay in `/activity` and developer-facing surfaces, never on this page.
 
@@ -408,6 +410,7 @@ Inside the action drawer. The block has **two shapes** depending on risk:
 **Shape A — low / medium / none risk** (the common case):
 
 - Brief context line: "Approving sends this to be processed by **Alex** (or whichever agent)." `var(--sans)` 13px, `var(--ink-3)`.
+- Code-anchor sub-line (always rendered, so the confirmation code never reads as decorative): **"The confirmation code above locks these details before approval."** `var(--sans)` 12px italic, `var(--ink-4)`.
 - Quorum sub-line if applicable: "Adds your signature to the quorum (n+1 of N after this)."
 - Amber CTA `Approve` with the short-code chunk as a second line: `Code <ab12…2f5>`. No ack checkbox.
 
@@ -429,7 +432,7 @@ Post-respond. Operator-language:
 - **Approved (single)**: "**Approved.** Alex is processing this now — check **Activity** in a moment to see the result." Includes a quiet "View in Activity" link.
 - **Approved (quorum, your signature added but quorum not yet complete)**: "**Signed.** Waiting on N more teammate(s). You'll get an in-app notification once everyone's approved."
 - **Patched & approved**: "**Approved with changes.** Alex is processing the updated version now."
-- **Rejected**: "**Rejected.** The card is closed; the agent has been told to stand down." If a reason was entered: "Your note: '<reason>'" (italic).
+- **Rejected**: "**Rejected.** The card is closed; the agent has been told to stand down."
 
 **No "ExecutableWorkUnit", no "Frozen for 12h", no "idempotency guaranteed by envelope", no `wu_99102` ids in the primary copy.** Those facts live in `/activity` and the audit log. The dispatch banner is reassurance, not telemetry.
 
@@ -457,7 +460,7 @@ Locked → operator-facing:
 | Approve sub (quorum)             | `signing adds your envelope hash to the quorum (n+1 of N after signing)`                     | `Adds your signature to the quorum (n+1 of N after this).`                                                             |
 | Patch row                        | `Modify parameters before approving · opens a JSON editor · diff against parametersSnapshot` | `View JSON (advanced) ▾` (toggle revealing the same editor)                                                            |
 | Patch button                     | `Apply patch & approve`                                                                      | `Apply changes & approve`                                                                                              |
-| Reject sub                       | `no hash echo required. recorded against the lifecycle.`                                     | `Optional note (visible only to you on this screen — not saved).`                                                      |
+| Reject confirm                   | `no hash echo required. recorded against the lifecycle.`                                     | (no copy — two-step inline `Reject` → `Confirm reject`, no reason field in v1)                                         |
 | Recovery banner                  | `Approval cannot proceed until upstream recovery completes. Trigger re-run from lifecycle.`  | `This action couldn't be prepared. The agent ran into a problem and needs to try again.`                               |
 | Recovery button                  | `Reject lifecycle`                                                                           | `Dismiss`                                                                                                              |
 | Dispatch banner                  | `ExecutableWorkUnit captured against binding 0x… Frozen for 12h; idempotency by envelope.`   | `Approved. <Alex> is processing this now — check Activity in a moment to see the result.`                              |
@@ -510,10 +513,10 @@ Do not emit the confirmation code (verbose; not useful in telemetry). Emit `id` 
 
 Component tests (Vitest + React Testing Library, matching `(mercury)/activity/__tests__/`):
 
-- **`confirmation-code.test.tsx`**: full code visible at mount (not behind click); copy button writes `bindingHash` verbatim to `navigator.clipboard`; reference id renders; no "binding"/"hash"/"envelope" strings appear in the rendered DOM.
+- **`confirmation-code.test.tsx`**: full code visible at mount (not behind click); code value is selectable text (has no `user-select: none`); copy button writes `bindingHash` verbatim to `navigator.clipboard`; **clipboard-write rejection** (mock `navigator.clipboard.writeText` to throw) renders the fallback "Couldn't copy" message and does not throw past the boundary; reference id renders; no "binding"/"envelope" strings appear in the rendered visible text.
 - **`approvers.test.tsx`**: hidden when `approvalsRequired === 1`; renders n-of-m when ≥ 2; non-operator approvers map onto `approvalHashes` by their position in the non-you slice; operator-self detection by `session.principalId`; each row renders name + role + timestamp, never a raw hash.
 - **`patch-editor.test.tsx`**: hidden by default (advanced toggle closed); when open, invalid JSON disables submit; size >100KB disables submit and shows the budget readout; diff highlights changed keys; cancel returns to idle without losing seeded patch.
-- **`action-drawer.test.tsx`**: low/medium/none → no ack checkbox, CTA enabled on render; high/critical → ack required, CTA disabled until ticked; expired short-circuits to read-only; recovery short-circuits to "Dismiss" only; responded state renders DispatchBanner; advanced JSON toggle remembers per-session state.
+- **`action-drawer.test.tsx`**: low/medium/none → no ack checkbox, CTA enabled on render, code-anchor sub-line present; high/critical → ack required, CTA disabled until ticked, **pressing Enter on the form does not submit** until the box is ticked; expired short-circuits to read-only; recovery short-circuits to "Dismiss" only; responded state renders DispatchBanner; advanced JSON toggle remembers per-session state but is hidden on mobile regardless of stored preference; Reject is two-step inline with no reason field; Reject submission does **not** include `bindingHash`; Patch submission **does** include `bindingHash`; missing `session.principalId` shows the "Sign in again" notice and blocks all three actions.
 - **`queue.test.tsx`**: skeleton on loading; empty state copy distinct from filter-narrowed-to-zero copy; selection click bubbles up; no risk-pips render anywhere.
 - **`approvals-page.test.tsx`** (integration, fixture mode): full page renders; selecting a row updates URL `?id`; filter chip toggle re-sorts; deep-link with `?id=apr_…` selects on first paint; a `recovery_required` row offers only Dismiss; the 5-min-from-expiry critical row floats to the top of the sort; agent ids render as canonical display names (Alex / Riley / Mira).
 
@@ -523,7 +526,7 @@ Behavioral tests (jsdom + mock fetch):
 - 5xx on `/respond` shows retryable operator-language error inside the drawer.
 - 5xx on `/pending` shows top-of-page banner without clearing stale rows.
 - Mutation success invalidates both `keys.approvals.all()` and `keys.decisions.all()` (regression for the decision-feed reconciliation case).
-- Copy-language audit: render the page in every state (idle / approving / patching / rejecting / recovery / expired / dispatched) and assert the rendered DOM contains zero engineering-vocabulary strings (a denylist: `binding`, `envelope`, `sha256`, `hash` outside the mono code itself, `lifecycle`, `dispatch`, `idempotency`, `executable work unit`, `frozen for`, `cartridge`).
+- Copy-language audit: render the page in every state (idle / approving / patching / rejecting / recovery / expired / dispatched) and walk the **visible text** (Testing Library's `screen.queryByText` over `document.body.textContent`, after excluding `[aria-hidden="true"]`, `<script>`, `<style>`, and elements with `[data-testid="confirmation-code-value"]`) and assert it contains zero engineering-vocabulary strings (denylist: `binding`, `envelope`, `sha256`, `lifecycle`, `dispatch`, `idempotency`, `executable work unit`, `frozen for`, `cartridge`). The `confirmation-code-value` exclusion is so the actual 32-hex code (which happens to **be** a hash) doesn't false-positive a substring match. Data attributes, test ids, ARIA labels on non-visible nodes, and API payload field names are **not** audited — they're developer-facing and may use the internal vocabulary.
 
 Accessibility tests:
 
@@ -535,27 +538,33 @@ Visual regression: out of scope for v1.
 
 ## Sequencing
 
-Suggested implementation slices (each ~1 PR, on a feature branch consuming this spec from `main`):
+Suggested implementation slices (each ~1 PR, on a feature branch consuming this spec from `main`). The sequencing prioritizes small, reviewable PRs and keeps speculative-UI risk low by deferring quorum until the wire shape is confirmed.
 
-1. **PR-A1 — Route shell + fixtures + queue + gate**
-   Files: `page.tsx`, `approvals-page.tsx`, `fixtures.ts`, `header.tsx`, `filter-strip.tsx`, `queue.tsx`, `approvals.module.css` (queue/header/filter), `use-approvals.ts` (list-only), `use-now.ts`, `use-agent-display.ts`, Tools overflow wiring, `route-availability.ts` + `ToolsNavId` + `TOOLS_LIVE_ENV` updates, `.env.example` addition for `NEXT_PUBLIC_APPROVALS_LIVE`, and tests. No respond actions. Sort = expiring-soonest with critical-and-<5min pinned.
+1. **PR-A1a — Route, gate, fixtures, queue (no live behavior)**
+   Files: `page.tsx`, `approvals-page.tsx`, `fixtures.ts`, `header.tsx`, `queue.tsx`, `approvals.module.css` (queue/header sections), `use-approvals.ts` (list-only), `use-agent-display.ts`, Tools overflow wiring, `route-availability.ts` + `ToolsNavId` + `TOOLS_LIVE_ENV` updates, `.env.example` addition for `NEXT_PUBLIC_APPROVALS_LIVE`, queue/empty/skeleton tests. **No** filter strip yet, **no** live countdown, **no** detail pane. Sort = expiring-soonest. Static timestamps (no second-by-second tick). This PR is small enough to merge cleanly even if everything downstream slips.
 
-2. **PR-A2 — Detail pane: header, confirmation-code, params, quorum (with payload check)**
-   `detail/index.tsx`, `detail/header.tsx`, `detail/confirmation-code.tsx`, `detail/approvers.tsx`, `detail/empty.tsx`. Live countdown wired. **Prerequisite check**: confirm `approvalsRequired` + `approvalHashes` runtime shape from the API for a quorum lifecycle and either extend `ApprovalDetail` + Zod schema or extend the Fastify response in the same PR. If neither path is open, scope to single-approver only and defer the quorum block to a follow-up. No action drawer yet; render a "coming next" placeholder.
+2. **PR-A1b — Filter strip + live countdown + sort behavior**
+   `filter-strip.tsx`, `use-now.ts` (page-local 1s tick with visibility-pause), `approvals.module.css` (filter section), `refetchOnWindowFocus` wiring. Includes the critical-and-<5min pinned-to-top sort tweak (since "pinned" only matters once the timer is live). Tests for filter chip toggle, expiring-soonest order, critical-pinning behavior, visibility-pause.
 
-3. **PR-A3 — Action drawer: approve (risk-graded) + reject + dispatch banner**
-   `detail/action-drawer.tsx`, `detail/reject-dialog.tsx`, `detail/dispatch-banner.tsx`. Wire `useRespondToApproval` for approve and reject. Risk-graded gating (Shape A vs B). Operator-language copy throughout. 409 + 5xx handling. Defensive invalidation of `keys.decisions.all()` alongside `keys.approvals.all()`. Contrast verification for the amber CTA label.
+3. **PR-A2 — Detail pane: header, confirmation-code, params (single-approver only)**
+   `detail/index.tsx`, `detail/header.tsx`, `detail/confirmation-code.tsx`, `detail/empty.tsx`. **No quorum block in this PR.** The page renders single-approver detail; if the wire returns a quorum row, the page treats it as single-approver until A2b lands (acceptable: the Approve action still works against the wire). Live countdown consumed in `detail/header.tsx`. No action drawer yet; "coming next" placeholder.
 
-4. **PR-A4 — Patch flow (gated behind advanced toggle)**
-   `detail/patch-editor.tsx`. The `AdvancedJsonToggle` lives inside the action drawer (added in PR-A3 as a placeholder, wired in PR-A4). Editor is closed by default; `sessionStorage` remembers preference. Hidden entirely on mobile (≤768px). Worked example: `apr_d77c20` (10% → 25%).
+4. **PR-A2b — Quorum block (gated on backend payload confirmation)**
+   **Prerequisite, must be done at the start of this PR:** confirm `approvalsRequired` + `approvalHashes` runtime shape from the API against a real quorum lifecycle. Then either (a) extend `ApprovalDetail` + the Zod schema in `packages/schemas/src/approval-lifecycle.ts`, or (b) extend the Fastify response in `apps/api/src/routes/approvals.ts`. **Do not write UI against fixture-only assumptions.** Once the runtime shape is proven, ship `detail/approvers.tsx`. If neither path is open, this PR doesn't ship and quorum stays deferred.
 
-5. **PR-A5 — Recovery + expired-during-view + polish + telemetry**
-   `detail/recovery-notice.tsx`, expired short-circuit, visibility-pause for the interval, telemetry events, mobile accordion polish, copy-language denylist test, finalize fixtures-vs-live parity.
+5. **PR-A3 — Action drawer: approve (risk-graded) + reject + dispatch banner**
+   `detail/action-drawer.tsx`, `detail/reject-confirm.tsx`, `detail/dispatch-banner.tsx`. Wire `useRespondToApproval` for approve and reject. Risk-graded gating (Shape A vs B). Two-step inline reject (no reason field). Operator-language copy throughout. 409 + 5xx handling. Defensive invalidation of `keys.decisions.all()` alongside `keys.approvals.all()`. Contrast verification for the amber CTA label.
 
-6. **(Optional, post-launch) PR-A6 — Flag flip**
-   Set `NEXT_PUBLIC_APPROVALS_LIVE=true`, add to deploy env documentation, verify live API behavior matches fixture mode end-to-end for the single-approver case.
+6. **PR-A4 — Patch flow (gated behind advanced toggle)**
+   `detail/patch-editor.tsx`. The `AdvancedJsonToggle` lives inside the action drawer (added in PR-A3 as a placeholder, wired in PR-A4). Editor closed by default; `sessionStorage` remembers preference. **Hidden entirely on mobile (≤768px)** — even if `sessionStorage` says it was previously open, the mobile breakpoint takes precedence. Worked example: `apr_d77c20` (10% → 25%).
 
-PR-A1 is the gating PR for Tools-overflow visibility; the flag stays false in any non-dev env until PR-A5 lands.
+7. **PR-A5 — Recovery + expired-during-view + polish + telemetry**
+   `detail/recovery-notice.tsx`, expired short-circuit, telemetry events, mobile accordion polish, copy-language denylist test, finalize fixtures-vs-live parity.
+
+8. **(Optional, post-launch) PR-A6 — Flag flip**
+   Set `NEXT_PUBLIC_APPROVALS_LIVE=true`, add to deploy env documentation, verify live API behavior matches fixture mode end-to-end for the single-approver case. If A2b shipped, also verify quorum.
+
+PR-A1a is the gating PR for Tools-overflow visibility; the flag stays false in any non-dev env until PR-A5 lands. PR-A2b is independently optional: a working single-approver experience is the v1 floor.
 
 ## Shared-conventions input
 
@@ -577,8 +586,9 @@ Wave 1.5 (`docs/design-prompts/shared-conventions.md`) is being authored in para
 
 - **Customer-language copy drift over time.** As engineers iterate, "binding hash" creeps back in. Mitigation: the test suite includes a copy-language denylist that fails any PR that re-introduces banned vocabulary in the rendered DOM (see "Test plan").
 - **Risk-graded confirmation undertested.** Operators might still click through high/critical without reading. Mitigation: telemetry on `approvals.approve_clicked` with riskCategory + ack-checkbox-tick-to-click latency. If <500ms consistently for critical, the ack isn't doing its job — re-tighten in a follow-up.
-- **JSON patch hidden behind advanced toggle = surprising for power users.** Mitigation: the toggle is one click away, labeled "View JSON (advanced)"; once opened it remembers per session.
-- **Quorum payload prerequisite blocks PR-A2.** If neither extending the Zod schema nor extending the Fastify response is achievable inside PR-A2, scope reduction (single-approver-only) is the explicit fallback rather than shipping speculative UI.
+- **JSON patch hidden behind advanced toggle = surprising for power users.** Mitigation: the toggle is one click away, labeled "View JSON (advanced)"; once opened it remembers per session. Telemetry on `approvals.advanced_json_opened` will reveal whether power users find it.
+- **Quorum payload prerequisite blocks PR-A2b.** PR-A2 ships single-approver-only by design, so PR-A2 is not blocked. If neither extending the Zod schema nor extending the Fastify response is achievable in PR-A2b, the quorum block stays deferred — no speculative UI ships.
+- **Operators may not read the code-anchor sub-line.** The low/medium approve path has no hard gate beyond the amber CTA. Mitigation: the sub-line is always rendered (never decoration); if telemetry shows code copies trending to zero on low/medium approvals while high/critical stay healthy, that's a signal the sub-line is being skipped — re-evaluate gating in a follow-up.
 - **Spec drift vs shared-conventions.md if it lands first.** Synchronization checkpoint before PR-A1 merges.
 - **Live-countdown drift on long-lived tabs.** The 1s tick can drift from server time. Mitigation: refetch `/pending` on `visibilitychange-to-visible` and `refetchOnWindowFocus`.
 - **Optimistic dispatch banner without server confirmation.** If the operator approves and navigates away, the banner doesn't persist. Acceptable for v1 (the action is recorded in `/activity` regardless).
@@ -591,23 +601,29 @@ A reviewer should be able to verify, against this spec and the locked HTML, that
 1. The page renders at `/approvals` under the Mercury editorial shell, gated by `NEXT_PUBLIC_APPROVALS_LIVE`, and appears in the Tools ▾ overflow when the flag is true.
 2. The default queue sort is expiring-soonest, with critical-and-<5min pinned at the top.
 3. The full confirmation code (bindingHash) is visible — not behind a click — inside the ConfirmationCode block for the active row.
-4. **Risk-graded approve gating:** low/medium/none rows enable the amber CTA on render; high/critical rows require ticking the ack checkbox first.
+4. **Risk-graded approve gating:** low/medium/none rows enable the amber CTA on render; high/critical rows require ticking the ack checkbox first. A low-risk approval can be completed **without ever interacting with a checkbox** because no checkbox is rendered.
 5. The short-code chunk on the approve line, the checkbox (when shown), and the button all match `bindingHash.slice(0,6) + "…" + bindingHash.slice(-3)`.
-6. Quorum approvals render the ApproversBlock with name + role + relative timestamp per approver; never raw hashes or raw ids. Single-approver approvals don't render the block.
-7. Patch is **hidden behind a "View JSON (advanced) ▾" toggle**, closed by default, remembered per session, and hidden entirely on mobile. When open, it submits via `action: "patch"` with `patchValue`, validates JSON, enforces ≤100KB.
-8. Reject dialog labels the reason field as "visible only to you on this screen — not saved"; submitting calls `action: "reject"` without `bindingHash`.
-9. `recovery_required` rows show operator-language copy ("This action couldn't be prepared…") and offer **only a "Dismiss" button**, no "Reject lifecycle".
-10. Expired rows dim with operator-language copy ("This expired N ago…") and keep the row visible until the next refetch.
-11. Empty queue shows "Nothing waiting." in `var(--serif)`; filter-narrowed-to-zero shows "No approvals match this filter."
-12. No engineering vocabulary in rendered customer-facing copy: zero occurrences of `binding`, `envelope`, `sha256`, `lifecycle`, `dispatch`, `executable work unit`, `frozen for`, `idempotency`, `cartridge` (audited by a test).
-13. Agent ids never render raw; they go through `use-agent-display` and surface as canonical names (Alex / Riley / Mira) with roles.
-14. No new global tokens are introduced; the page uses Mercury tokens locally aliased.
-15. Display font is Source Serif 4 (via `var(--serif)`); Cormorant Garamond is not loaded.
-16. No red/green status colors anywhere.
-17. The risk-pip 4-dot count from the locked design is **not** rendered.
-18. Mobile (≤768px) collapses to a single-column queue with inline accordion expansion of the active row.
-19. Successful mutations invalidate both `keys.approvals.all()` and `keys.decisions.all()`.
-20. The amber CTA label hits WCAG AA contrast at the chosen background (verified in component tests).
+6. Low/medium approve blocks render the code-anchor sub-line ("The confirmation code above locks these details before approval.") — the code is never visually decorative.
+7. High-risk approvals **cannot be submitted by pressing Enter** unless the ack checkbox is ticked (Enter on the form submits the CTA, which is `disabled` until then).
+8. Quorum approvals — when shipped (PR-A2b) — render the ApproversBlock with name + role + relative timestamp per approver; never raw hashes or raw ids. Single-approver approvals don't render the block. Prior to PR-A2b, the page renders single-approver UI even for quorum rows and the Approve action still posts correctly.
+9. Patch is hidden behind a "View JSON (advanced) ▾" toggle, closed by default, remembered per session, and **hidden entirely on mobile** (≤768px) — even if `sessionStorage` says it was previously open, the mobile breakpoint takes precedence.
+10. Reject is a two-step inline confirmation (`Reject` → `Confirm reject`) with **no reason field** in v1. Submitting calls `action: "reject"` and **does not** send `bindingHash`.
+11. Patch **does** send `bindingHash` alongside `patchValue` (backend requires it for both approve and patch).
+12. `recovery_required` rows show operator-language copy ("This action couldn't be prepared…") and offer **only a "Dismiss" button**, no "Reject lifecycle".
+13. Expired rows dim with operator-language copy ("This expired N ago…") and keep the row visible until the next refetch.
+14. Empty queue shows "Nothing waiting." in `var(--serif)`; filter-narrowed-to-zero shows "No approvals match this filter."
+15. No engineering vocabulary in rendered customer-facing copy (per the denylist test's scope rules: visible text only, excluding the confirmation-code value).
+16. Agent ids never render raw in queue rows or detail meta; they go through `use-agent-display` and surface as canonical names (Alex / Riley / Mira) with roles.
+17. The confirmation code value is **selectable text** (user can drag-select and copy via system shortcut).
+18. The "Copy code" button's clipboard write failure (e.g. permissions-denied in some browsers) **does not break the page** — the button shows a transient "Couldn't copy — select and copy manually" message; the rest of the UI is unaffected.
+19. If `session.principalId` is missing, approve / reject / patch are blocked with a "Sign in again" inline notice; this state should never occur inside the `(auth)` group but the guard exists.
+20. Successful mutations invalidate both `keys.approvals.all()` and `keys.decisions.all()` — verified by an explicit test even though the decision feed does not yet surface approvals.
+21. Mobile (≤768px) collapses to a single-column queue with inline accordion expansion of the active row; `?id=apr_…` deep-links auto-expand the corresponding row on mobile.
+22. No new global tokens are introduced; the page uses Mercury tokens locally aliased.
+23. Display font is Source Serif 4 (via `var(--serif)`); Cormorant Garamond is not loaded.
+24. No red/green status colors anywhere.
+25. The risk-pip 4-dot count from the locked design is **not** rendered.
+26. The amber CTA label hits WCAG AA contrast at the chosen background (verified in component tests).
 
 ---
 
