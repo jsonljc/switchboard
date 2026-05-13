@@ -8,7 +8,8 @@
 // that both bootstrap paths (skill-mode + disqualifications in app.ts) share the
 // same implementation and cannot drift.
 // ---------------------------------------------------------------------------
-import { createAgentDeploymentGovernanceResolver, PrismaDeploymentStore } from "@switchboard/db";
+import { createAgentDeploymentGovernanceResolver } from "@switchboard/core/skill-runtime";
+import { PrismaDeploymentStore } from "@switchboard/db";
 import type { PrismaClient } from "@switchboard/db";
 
 /**
