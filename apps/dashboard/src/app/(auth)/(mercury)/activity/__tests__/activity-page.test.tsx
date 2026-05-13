@@ -335,9 +335,9 @@ describe("ActivityPage", () => {
 
   // ── Additional coverage ───────────────────────────────────────────────────
 
-  it("renders the page title 'Activity'", () => {
+  it("renders the page title 'Audit log'", () => {
     render(<ActivityPage />);
-    expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Audit log" })).toBeInTheDocument();
   });
 
   it("gate-off: 'All events' chip shows non-operational fixtures", async () => {

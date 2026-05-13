@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "../activity.module.css";
-import { fmtRel } from "./format.js";
+import { fmtRel } from "./format";
 
 export interface ActivityHeaderProps {
   /** ISO timestamp of the most recent ledger entry available to the page (typically rows[0].timestamp).

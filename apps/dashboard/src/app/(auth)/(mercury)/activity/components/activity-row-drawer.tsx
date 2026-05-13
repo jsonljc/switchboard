@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { fmtFullISO } from "./format.js";
-import { useCopier } from "./use-copier.js";
+import { fmtFullISO } from "./format";
+import { useCopier } from "./use-copier";
 
 export interface ActivityRowDrawerProps {
   row: AuditEntryBrowseRow;

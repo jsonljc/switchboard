@@ -2,7 +2,7 @@
 
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { fmtClock, fmtRel, eventBand } from "./format.js";
+import { fmtClock, fmtRel, eventBand } from "./format";
 
 const ACTOR_GLYPH: Record<AuditEntryBrowseRow["actorType"], string> = {
   user: "USR",
