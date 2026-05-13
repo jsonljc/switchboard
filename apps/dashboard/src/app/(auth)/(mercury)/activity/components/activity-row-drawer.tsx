@@ -1,16 +1,152 @@
 "use client";
 
+import { useMemo } from "react";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
 import { fmtFullISO } from "./format.js";
+import { useCopier } from "./use-copier.js";
 
 export interface ActivityRowDrawerProps {
   row: AuditEntryBrowseRow;
   /** All currently-rendered rows — used by the chain-anchor "view previous ↓"
-   *  affordance (Task 6) to find the predecessor row on the same page. */
+   *  affordance to find the predecessor row on the same page. */
   allRows: AuditEntryBrowseRow[];
   onScrollToRow: (id: string) => void;
   orgTimezone?: string;
+}
+
+function CopyBtn({
+  copyKey,
+  text,
+  label = "copy",
+}: {
+  copyKey: string;
+  text: string;
+  label?: string;
+}) {
+  const [copied, copy] = useCopier();
+  return (
+    <button
+      type="button"
+      className={`${styles.copybtn} ${copied === copyKey ? styles.copybtnCopied : ""}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        copy(copyKey, text);
+      }}
+    >
+      {copied === copyKey ? "copied" : label}
+    </button>
+  );
+}
+
+function EvidenceRow({
+  pointer,
+  index,
+}: {
+  pointer: { type: "inline" | "pointer"; hash: string; hashPrefix: string };
+  index: number;
+}) {
+  const rest = pointer.hash.slice(16);
+  return (
+    <div className={styles.evrow}>
+      <span className={styles.evtype}>{pointer.type}</span>
+      <span className={styles.evhash} title={pointer.hash}>
+        <span className={styles.evhashPrefix}>{pointer.hashPrefix}</span>
+        <span className={styles.evhashRest}>{rest}</span>
+      </span>
+      <CopyBtn copyKey={`ev${index}`} text={pointer.hash} label="copy hash" />
+    </div>
+  );
+}
+
+function ChainBlock({
+  row,
+  allRows,
+  onScrollToRow,
+}: {
+  row: AuditEntryBrowseRow;
+  allRows: AuditEntryBrowseRow[];
+  onScrollToRow: (id: string) => void;
+}) {
+  const prev = useMemo(
+    () =>
+      row.previousEntryHash
+        ? (allRows.find((r) => r.entryHash === row.previousEntryHash) ?? null)
+        : null,
+    [row.previousEntryHash, allRows],
+  );
+
+  return (
+    <div className={styles.chain}>
+      <div className={styles.chainRow}>
+        <span className={styles.dsectionLabel}>Entry hash</span>
+        <span className={styles.chainHash}>{row.entryHash}</span>
+        <CopyBtn copyKey="eh" text={row.entryHash} />
+      </div>
+      <div
+        className={`${styles.chainRow} ${row.previousEntryHash === null ? styles.chainAnchor : ""}`}
+      >
+        <span className={styles.dsectionLabel}>Previous</span>
+        <span className={styles.chainHash}>
+          {row.previousEntryHash ?? "— genesis (no predecessor) —"}
+        </span>
+        <span className={styles.chainActions}>
+          {row.previousEntryHash && (
+            <>
+              <CopyBtn copyKey="ph" text={row.previousEntryHash} />
+              {prev ? (
+                <button
+                  type="button"
+                  className={`${styles.copybtn} ${styles.copybtnPrimary}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onScrollToRow(prev.id);
+                  }}
+                >
+                  view previous ↓
+                </button>
+              ) : (
+                <span className={styles.evnone}>off-page</span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function RefRow({
+  label,
+  value,
+  copyKey,
+  hrefBase,
+  emptyLabel,
+}: {
+  label: string;
+  value: string | null;
+  copyKey: string;
+  hrefBase: string;
+  emptyLabel: string;
+}) {
+  return (
+    <div className={`${styles.linkrow} ${value === null ? styles.linkrowEmpty : ""}`}>
+      <span className={styles.dsectionLabel}>{label}</span>
+      <span className={styles.linkrowVal}>{value ?? emptyLabel}</span>
+      {value !== null && (
+        <>
+          <CopyBtn copyKey={copyKey} text={value} />
+          <a
+            className={styles.openlink}
+            href={`${hrefBase}${value}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            open ↗
+          </a>
+        </>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -27,10 +163,6 @@ export function ActivityRowDrawer({
   onScrollToRow,
   orgTimezone,
 }: ActivityRowDrawerProps) {
-  // Suppress unused-var lint until Task 6 wires these into the chain section.
-  void allRows;
-  void onScrollToRow;
-
   const iso = fmtFullISO(row.timestamp, orgTimezone);
 
   return (
@@ -100,7 +232,54 @@ export function ActivityRowDrawer({
           </span>
         </div>
 
-        {/* Sections 4–6 (Evidence, Hash chain, References) land in Task 6 */}
+        {/* Section 4: Evidence pointers */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`}>
+          <span className={styles.dsectionLabel}>Evidence pointers</span>
+          {row.evidencePointers.length === 0 ? (
+            <span className={styles.evnone}>no evidence pointers attached</span>
+          ) : (
+            <div className={styles.evlist}>
+              {row.evidencePointers.map((e, i) => (
+                <EvidenceRow key={i} index={i} pointer={e} />
+              ))}
+            </div>
+          )}
+          <div className={styles.absenceNote}>
+            <span>
+              storageRef intentionally absent — evidence reference is held server-side. Surface the
+              absence, not a redacted placeholder; clients fetch evidence via authenticated{" "}
+            </span>
+            <span className={styles.dsectionMono}>/api/evidence/:hash</span>
+            <span>.</span>
+          </div>
+        </div>
+
+        {/* Section 5: Hash chain */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`}>
+          <span className={styles.dsectionLabel}>Hash chain · integrity anchor</span>
+          <ChainBlock row={row} allRows={allRows} onScrollToRow={onScrollToRow} />
+        </div>
+
+        {/* Section 6: References */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`}>
+          <span className={styles.dsectionLabel}>References</span>
+          <div className={styles.linkpair}>
+            <RefRow
+              label="Envelope"
+              value={row.envelopeId}
+              copyKey="env"
+              hrefBase="/approvals/"
+              emptyLabel="no approval envelope"
+            />
+            <RefRow
+              label="Trace"
+              value={row.traceId}
+              copyKey="tr"
+              hrefBase="/traces/"
+              emptyLabel="no correlation trace"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

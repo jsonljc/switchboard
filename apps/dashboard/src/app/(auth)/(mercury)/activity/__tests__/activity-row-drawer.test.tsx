@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import { ActivityRowDrawer } from "../components/activity-row-drawer.js";
 
@@ -136,5 +137,190 @@ describe("ActivityRowDrawer — Snapshot keys section", () => {
     );
     expect(container.textContent).not.toContain("s3://");
     expect(container.textContent).not.toContain("super-secret");
+  });
+});
+
+describe("ActivityRowDrawer — Evidence pointers section", () => {
+  it("renders one evidence row per pointer with hash prefix highlighted", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({
+          evidencePointers: [
+            {
+              type: "pointer",
+              hash: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+              hashPrefix: "abcdef0123456789",
+            },
+            {
+              type: "inline",
+              hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              hashPrefix: "0123456789abcdef",
+            },
+          ],
+        })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText("pointer")).toBeInTheDocument();
+    expect(screen.getByText("inline")).toBeInTheDocument();
+    expect(screen.getAllByText(/copy hash/i)).toHaveLength(2);
+  });
+
+  it("renders the absence note for storageRef", () => {
+    render(
+      <ActivityRowDrawer row={makeRow()} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />,
+    );
+    expect(screen.getByText(/storageRef.*intentionally absent/i)).toBeInTheDocument();
+  });
+
+  it("renders 'no evidence pointers attached' when list is empty", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ evidencePointers: [] })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText(/no evidence pointers attached/i)).toBeInTheDocument();
+  });
+
+  it("H4: copy hash button does not throw when clipboard is unavailable", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    render(
+      <ActivityRowDrawer
+        row={makeRow({
+          evidencePointers: [
+            {
+              type: "pointer",
+              hash: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+              hashPrefix: "abcdef0123456789",
+            },
+          ],
+        })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    const btn = screen.getByRole("button", { name: /copy hash/i });
+    await expect(user.click(btn)).resolves.not.toThrow();
+  });
+});
+
+describe("ActivityRowDrawer — Hash chain section", () => {
+  it("renders entryHash and previousEntryHash in full", () => {
+    const row = makeRow();
+    render(<ActivityRowDrawer row={row} allRows={[]} onScrollToRow={() => {}} orgTimezone="UTC" />);
+    expect(screen.getByText(row.entryHash)).toBeInTheDocument();
+    expect(screen.getByText(row.previousEntryHash as string)).toBeInTheDocument();
+  });
+
+  it("renders genesis tag when previousEntryHash is null", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ previousEntryHash: null })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText(/genesis \(no predecessor\)/i)).toBeInTheDocument();
+  });
+
+  it("renders 'view previous ↓' when predecessor row is on the page, off-page tag otherwise", () => {
+    const target = makeRow({
+      id: "audit_target",
+      entryHash: "previoushash_target",
+    });
+    const child = makeRow({
+      id: "audit_child",
+      previousEntryHash: "previoushash_target",
+    });
+    const { rerender } = render(
+      <ActivityRowDrawer
+        row={child}
+        allRows={[target, child]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByRole("button", { name: /view previous/i })).toBeInTheDocument();
+
+    rerender(
+      <ActivityRowDrawer
+        row={child}
+        allRows={[child]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /view previous/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/off-page/i)).toBeInTheDocument();
+  });
+
+  it("clicking 'view previous ↓' calls onScrollToRow with the predecessor's id", async () => {
+    const user = userEvent.setup();
+    const onScrollToRow = vi.fn();
+    const target = makeRow({ id: "audit_target", entryHash: "previoushash_target" });
+    const child = makeRow({ id: "audit_child", previousEntryHash: "previoushash_target" });
+    render(
+      <ActivityRowDrawer
+        row={child}
+        allRows={[target, child]}
+        onScrollToRow={onScrollToRow}
+        orgTimezone="UTC"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /view previous/i }));
+    expect(onScrollToRow).toHaveBeenCalledWith("audit_target");
+  });
+});
+
+describe("ActivityRowDrawer — References section", () => {
+  it("renders envelope id with copy + open link when set", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ envelopeId: "env_xyz_123" })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText("env_xyz_123")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /open ↗/i });
+    expect(link).toHaveAttribute("href", "/approvals/env_xyz_123");
+  });
+
+  it("renders 'no approval envelope' italic when envelopeId is null", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ envelopeId: null })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    expect(screen.getByText(/no approval envelope/i)).toBeInTheDocument();
+  });
+
+  it("renders trace id with /traces/ link when set", () => {
+    render(
+      <ActivityRowDrawer
+        row={makeRow({ traceId: "trace_abc_456" })}
+        allRows={[]}
+        onScrollToRow={() => {}}
+        orgTimezone="UTC"
+      />,
+    );
+    const link = screen.getByRole("link", { name: /open ↗/i });
+    expect(link).toHaveAttribute("href", "/traces/trace_abc_456");
   });
 });
