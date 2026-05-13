@@ -261,6 +261,26 @@ git commit -m "feat(schemas): add PipelineBoardOpportunity + PipelineBoardRespon
 
 **Why now:** Pure functions, no deps on later work. Used by cards, drawer, header tiles, column headers.
 
+- [ ] **Step 0 (binding, per spec §6.6): Verify currency storage unit**
+
+The parameter type below is named `value`, not `cents`, on purpose. Before writing the formatter body, verify whether `Opportunity.estimatedValue` and `Opportunity.revenueTotal` are stored as cents or as whole dollars. Do this by:
+
+```bash
+# Inspect the seed and any pre-existing Opportunity rows.
+grep -rn "estimatedValue\|revenueTotal" packages/db/prisma/seed* packages/db/src/stores/prisma-opportunity-store.ts apps/api/src/routes 2>/dev/null | grep -v test | head -30
+```
+
+Look for any literal that pins the unit — e.g., a seed row writing `estimatedValue: 28000` with a comment "cents" or a service that multiplies/divides by 100. If you find no signal, run a one-off query against the staging db (or the dev seed) and inspect the magnitude of a real row: a Hydrafacial single-session priced around S$280 would be `28000` if cents, `280` if dollars.
+
+Record what you found in a comment at the top of `format.ts`:
+
+```ts
+// Unit: Opportunity.estimatedValue + .revenueTotal are stored in <cents|dollars>.
+// Verified <date> by <method — seed inspection / staging query / etc.>.
+```
+
+The mockup fixture in Task 3 must use the same unit. **Misalignment renders every value 100× wrong.**
+
 - [ ] **Step 1: Write failing tests**
 
 Create `apps/dashboard/src/app/(auth)/(mercury)/contacts/components/__tests__/format.test.ts`:
@@ -269,6 +289,8 @@ Create `apps/dashboard/src/app/(auth)/(mercury)/contacts/components/__tests__/fo
 import { describe, expect, it } from "vitest";
 import { formatSGD, formatSGDCompact, relTime, pluralize } from "../format";
 
+// NOTE: the numeric inputs below ASSUME cents storage. If Step 0 found dollars,
+// divide every input below by 100 before running the tests.
 describe("formatSGD", () => {
   it("formats whole-dollar SGD with thousands separator", () => {
     expect(formatSGD(168000)).toBe("S$1,680");
@@ -365,21 +387,25 @@ Expected: FAIL — exports `formatSGD`, `formatSGDCompact`, `relTime`, `pluraliz
 Open `apps/dashboard/src/app/(auth)/(mercury)/contacts/components/format.ts` and append (keep the existing `relativeAge`, `stageLabel`, `channelLabel` for now — they'll be deleted in Task 18 alongside the old contact-row consumer):
 
 ```ts
-/** Formats integer cents as `S$1,234` SGD. Em-dash for null. By default,
+// Unit: Opportunity.estimatedValue + .revenueTotal are stored in <cents|dollars>.
+// Verified <date> by <method>. (Fill in from Step 0.)
+// If dollars: drop the `/ 100` conversion below.
+
+/** Formats an integer SGD value as `S$1,234`. Em-dash for null. By default,
  *  also em-dash for zero (typical pipeline display rule). Pass `forceZero`
  *  to render `S$0` explicitly (used by terminal columns). */
-export function formatSGD(cents: number | null, opts: { forceZero?: boolean } = {}): string {
-  if (cents == null) return "—";
-  if (cents === 0 && !opts.forceZero) return "—";
-  const dollars = Math.round(cents / 100);
+export function formatSGD(value: number | null, opts: { forceZero?: boolean } = {}): string {
+  if (value == null) return "—";
+  if (value === 0 && !opts.forceZero) return "—";
+  const dollars = Math.round(value / 100); // <-- drop `/ 100` if storage is dollars
   return `S$${dollars.toLocaleString()}`;
 }
 
 /** Compact SGD: `S$1.2k` at >= S$10k, full digits otherwise. Returns `null`
  *  for null input so callers can decide between rendering em-dash or hiding. */
-export function formatSGDCompact(cents: number | null): string | null {
-  if (cents == null) return null;
-  const dollars = cents / 100;
+export function formatSGDCompact(value: number | null): string | null {
+  if (value == null) return null;
+  const dollars = value / 100; // <-- drop `/ 100` if storage is dollars
   if (dollars >= 10000) {
     const k = dollars / 1000;
     return `S$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
@@ -1640,7 +1666,6 @@ import type {
 import { formatSGD, relTime } from "./format";
 import styles from "../pipeline.module.css";
 
-const TERMINAL = new Set<OpportunityStage>(["won", "lost"]);
 const ACCENT = new Set<OpportunityStage>(["quoted", "booked", "showed"]);
 
 export type OpportunityCardProps = {
@@ -1652,6 +1677,28 @@ export type OpportunityCardProps = {
   onOpen: (opp: PipelineBoardOpportunity) => void;
 };
 
+/** Stage-aware value source. Per spec §5.4.1:
+ *   - non-terminal + nurturing → estimatedValue (plain pill)
+ *   - won → revenueTotal if > 0, else hide the pill (drawer shows the hint)
+ *   - lost → estimatedValue (muted; no pill background)
+ */
+function deriveValueDisplay(opp: PipelineBoardOpportunity): {
+  text: string | null;
+  variant: "neutral" | "accent" | "won" | "lost-muted";
+} {
+  if (opp.stage === "won") {
+    if (!opp.revenueTotal || opp.revenueTotal === 0) return { text: null, variant: "won" };
+    return { text: formatSGD(opp.revenueTotal, { forceZero: false }), variant: "won" };
+  }
+  if (opp.stage === "lost") {
+    return { text: formatSGD(opp.estimatedValue, { forceZero: false }), variant: "lost-muted" };
+  }
+  return {
+    text: formatSGD(opp.estimatedValue, { forceZero: false }),
+    variant: ACCENT.has(opp.stage) ? "accent" : "neutral",
+  };
+}
+
 export function OpportunityCard({
   opportunity,
   now,
@@ -1661,11 +1708,10 @@ export function OpportunityCard({
   onOpen,
 }: OpportunityCardProps) {
   const [hover, setHover] = useState(false);
-  const muted = TERMINAL.has(opportunity.stage);
   const accent = ACCENT.has(opportunity.stage);
+  const isClosed = opportunity.stage === "won" || opportunity.stage === "lost";
   const unresolvedObjections = opportunity.objections.filter((o) => !o.resolvedAt).length;
-  const valueCents = muted ? opportunity.revenueTotal : opportunity.estimatedValue;
-  const valueText = formatSGD(valueCents, { forceZero: false });
+  const value = deriveValueDisplay(opportunity);
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     const isModified =
@@ -1687,7 +1733,7 @@ export function OpportunityCard({
       prefetch={false}
       className={styles.card}
       data-dragging={dragging || undefined}
-      data-stage-tone={accent ? "accent" : muted ? "muted" : "neutral"}
+      data-stage-tone={accent ? "accent" : isClosed ? "muted" : "neutral"}
       draggable
       onClick={handleClick}
       onDragStart={handleDragStart}
@@ -1697,13 +1743,13 @@ export function OpportunityCard({
     >
       <div className={styles.cardRow1}>
         <span className={styles.cardServiceName}>{opportunity.serviceName}</span>
-        {valueText !== "—" && (
+        {value.text && value.text !== "—" && (
           <span
             className={styles.cardValue}
-            data-tone={accent ? "accent" : opportunity.stage === "won" ? "won" : "neutral"}
+            data-tone={value.variant}
             data-tabular
           >
-            {valueText}
+            {value.text}
           </span>
         )}
       </div>
@@ -2645,11 +2691,12 @@ Create `apps/dashboard/src/app/(auth)/(mercury)/contacts/pipeline.module.css`:
   gap: 0 28px;
 }
 .pageTitle {
+  /* Per spec §2.1: Source Serif 4 via --font-serif-mercury, NOT Cormorant. */
   margin: 8px 0 0;
-  font-family: var(--font-display), "Cormorant Garamond", "Times New Roman", serif;
+  font-family: var(--font-serif-mercury), "Source Serif 4", "Iowan Old Style", Georgia, serif;
   font-weight: 500;
-  font-size: 38px;
-  line-height: 1.05;
+  font-size: 36px;
+  line-height: 1.1;
   letter-spacing: -0.01em;
   color: var(--mercury-ink);
 }
@@ -2930,9 +2977,9 @@ Create `apps/dashboard/src/app/(auth)/(mercury)/contacts/pipeline.module.css`:
   text-align: center;
 }
 .wholeBoardEmptyTitle {
-  font-family: var(--font-display), "Cormorant Garamond", serif;
+  font-family: var(--font-serif-mercury), "Source Serif 4", "Iowan Old Style", Georgia, serif;
   font-weight: 500;
-  font-size: 28px;
+  font-size: 26px;
   color: var(--mercury-ink);
   margin: 0;
 }
@@ -2984,6 +3031,14 @@ Create `apps/dashboard/src/app/(auth)/(mercury)/contacts/pipeline.module.css`:
 .cardValue[data-tone="won"] {
   background: color-mix(in srgb, var(--mercury-pos) 12%, transparent);
   color: var(--mercury-pos);
+}
+/* Lost stage: muted estimated value, no pill background or border.
+   Per spec §5.4.1 — pipeline-leakage visible, no implied revenue. */
+.cardValue[data-tone="lost-muted"] {
+  background: transparent;
+  color: var(--mercury-ink-4);
+  opacity: 0.6;
+  padding: 2px 0;
 }
 .cardRow2 { margin-top: 6px; display: flex; align-items: center; gap: 8px; }
 .cardContactName {
@@ -3330,6 +3385,35 @@ describe("PipelinePage (fixture mode)", () => {
     await user.click(screen.getByText("Clear filters"));
     expect(screen.getByText(/showing 20 of 20/i)).toBeInTheDocument();
   });
+
+  it("shows per-column empty states (not whole-board empty) when all rows are filtered out", async () => {
+    // Acceptance criterion §13.10: whole-board empty uses ORG rows, not filtered.
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Opportunity pipeline");
+
+    // Pick a filter that removes everything: 24h + qualified-only leaves few/zero.
+    // Then verify the page still shows the board scaffolding (the filter strip, the
+    // 8 column headers) and per-column empty placeholders — NOT the whole-board copy.
+    await user.click(screen.getByText("24h"));
+    await user.click(screen.getByLabelText(/Qualified only/i));
+
+    expect(screen.getByText("Interested")).toBeInTheDocument();
+    expect(screen.queryByText(/No deals in your pipeline yet/i)).not.toBeInTheDocument();
+  });
+
+  it("renders lost-stage cards with muted value (no pill, no won/lost revenueTotal)", async () => {
+    // Acceptance criterion §13.8: lost shows estimatedValue muted.
+    renderPage();
+    const lostCard = await screen.findByText("CoolSculpting · abdomen");
+    const card = lostCard.closest("a")!;
+    // Either the value reads from estimatedValue (S$3,200 for opp_017's 320000) and
+    // the data-tone attribute is "lost-muted", or the implementation chose to hide
+    // the value entirely. Either is acceptable per §5.4.1; we just assert it is NOT
+    // displaying revenue (which is 0 — would be em-dash). Specifically: the won pill
+    // must not appear.
+    expect(card.querySelector('[data-tone="won"]')).toBeNull();
+  });
 });
 ```
 
@@ -3483,6 +3567,17 @@ describe("DetailDrawer", () => {
     await user.click(card);
     const openContact = await screen.findByText("Open contact →");
     expect(openContact.closest("a")).toHaveAttribute("href", "/contacts/c_001");
+  });
+
+  it("changes a card's stage via the drawer <select> with no mouse drag", async () => {
+    // Acceptance criterion §13.6: drawer select is the reliable mutation path.
+    const user = userEvent.setup();
+    renderPage();
+    const card = await screen.findByText("Hydrafacial · single session");
+    await user.click(card);
+    const select = await screen.findByLabelText(/Change stage/i);
+    await user.selectOptions(select, "qualified");
+    await waitFor(() => expect(screen.getByText(/Moved Jia to Qualified\./)).toBeInTheDocument());
   });
 });
 ```
