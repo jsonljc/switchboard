@@ -14,6 +14,303 @@
 
 ---
 
+## Plan revisions (post-review, 2026-05-13)
+
+The plan was reviewed before execution. The eight corrections below override anything that contradicts them later in the document. **Implementer subagents must read this section before starting work.**
+
+### R1. Commit shape: six logical commits, not twenty
+
+Tasks within a phase **do not commit individually**. Tests run, typecheck runs, but the working tree stays dirty until a phase boundary. Each phase ends with a single squash commit covering all the work in the phase.
+
+| Phase | Tasks | Commit message |
+| ----- | ----- | -------------- |
+| P1 — Foundation | 1 | `feat(reports): swap report copy formatter from USD to SGD` |
+| P2 — Frontend formatters + fixtures | 2, 3 | `feat(reports): SGD frontend formatters and editorial fixture rewrite` |
+| P3 — CSS module + shared primitives + page chrome | 4, 5, 6, 7, 8, 9 | `feat(reports): editorial CSS module + shared primitives + page chrome` |
+| P4 — Section components | 10, 11, 12, 13, 14, 15 | `feat(reports): editorial section components — pull quote, attribution, funnel, campaigns, cost/value, managed comparison` |
+| P5 — Page integration | 16, 17, 18 | `feat(reports): wire editorial page shell, refresh state, no-connection banner` |
+| P6 — Tests + cleanup | 19, 20 | `feat(reports): full-page acceptance sweep and remove v1 components` |
+
+Each "Step X.N: Commit" instruction in the task bodies is **stale**. Replace with: `Run tests/typecheck; leave changes uncommitted. The phase-commit task at the end of this phase squashes everything.` At the end of each phase, the controller runs:
+
+```bash
+git rev-parse --show-toplevel && git branch --show-current && git status --short
+git add -A apps/dashboard/src/app/\(auth\)/\(mercury\)/reports/ packages/core/src/reports/ apps/dashboard/src/lib/ apps/dashboard/src/hooks/
+git commit -m "<phase message from table above>"
+```
+
+### R2. Currency-threshold alignment between backend and frontend
+
+The plan as drafted had a subtle mismatch: backend used `>= 1000` for the cents/no-cents cutoff, frontend used `< 100`. That would cause `paid: 612` to render `S$612` in the cost-vs-value cell but `S$612.00` in the pull quote. **Fix:** both helpers match the existing `formatCurrencyUSD` behavior at `packages/core/src/reports/period-helpers.ts:83-95`:
+
+- `abs >= 1000` → whole rounded (`S$14,720`)
+- `abs < 1000 && Number.isInteger(abs)` → integer (`S$500`)
+- `abs < 1000 && fractional` → two decimals (`S$447.75`)
+
+**Task 1 (backend `formatCurrencySGD`) implementation stays as drafted** — it already matches this rule.
+
+**Task 2 (frontend `fmtSGD`) implementation must change:**
+
+```ts
+// Replace the body of fmtSGD with this rule set:
+if (value == null) return "—";
+const { withCents = "auto", compact = false } = opts;
+const sign = value < 0 ? "-" : "";
+const abs = Math.abs(value);
+
+if (compact && abs >= 1_000_000) {
+  const m = abs / 1_000_000;
+  return `${sign}S$${m.toFixed(1).replace(/\.0$/, "")}m`;
+}
+if (compact && abs >= 10_000) {
+  return `${sign}S$${Math.round(abs / 1_000)}k`;
+}
+
+let showCents: boolean;
+if (withCents === "always") showCents = true;
+else if (withCents === "never") showCents = false;
+else if (abs >= 1000) showCents = false;
+else showCents = !Number.isInteger(abs);
+
+return `${sign}S$${abs.toLocaleString("en-SG", {
+  minimumFractionDigits: showCents ? 2 : 0,
+  maximumFractionDigits: showCents ? 2 : 0,
+})}`;
+```
+
+**Task 2 test updates:**
+
+```ts
+// Replace the auto-mode tests with these:
+it("auto: no cents when abs >= 1000", () => {
+  expect(fmtSGD(14720)).toBe("S$14,720");
+  expect(fmtSGD(1000)).toBe("S$1,000");
+});
+it("auto: no cents when abs < 1000 but integer", () => {
+  expect(fmtSGD(500)).toBe("S$500");
+  expect(fmtSGD(612)).toBe("S$612");
+});
+it("auto: cents when abs < 1000 and fractional", () => {
+  expect(fmtSGD(447.75)).toBe("S$447.75");
+  expect(fmtSGD(47.5)).toBe("S$47.50");
+});
+```
+
+**Task 12 (CostVsValue):** change `cost.paid < 100` → `cost.paid < 1000` in the `withCents` conditional. Actually simpler: drop the explicit conditional entirely and use auto (`fmtSGD(cost.paid)`) — the new auto rule handles it.
+
+**Task 14 (Campaigns):** change every `< 100` threshold to `< 1000` in CPL/CPC formatting — or, simpler, switch those cells to `withCents: "auto"` (the new auto rule already gives the right answer).
+
+### R3. Active-state tests use `aria-pressed`, not className substrings
+
+Class-name assertions like `expect(mo.className).toMatch(/on/)` are brittle against CSS Modules. **Fix:** add `aria-pressed` to the window-selector buttons and assert on the semantic attribute.
+
+**Task 8 (PageHead) component update:**
+
+```tsx
+// In the WINDOWS.map block, add aria-pressed:
+<button
+  key={w}
+  type="button"
+  className={activeWindow === w ? styles.on : ""}
+  aria-pressed={activeWindow === w}
+  onClick={() => onSelectWindow(w)}
+>
+  {w}
+</button>
+```
+
+**Task 8 test update:**
+
+```ts
+// Replace the "marks the active one" test:
+it("marks the active window with aria-pressed=true", () => {
+  render(<PageHead {...baseProps} />);
+  expect(screen.getByRole("button", { name: "THIS MONTH" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "THIS WEEK" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "THIS QUARTER" })).toHaveAttribute("aria-pressed", "false");
+});
+```
+
+### R4. Red/green rule scoped to performance deltas; live-status pip allowed
+
+The spec's "no red/green" rule applies to **performance signaling** (deltas, dead campaigns, the no-connection banner). The colophon and topbar **may use a green dot for live-data status** — that's status, not delta. Tests must not block the live pip.
+
+**Drop from Task 20 full-page test** the broad `expect(container.innerHTML).not.toMatch(/\b(red|green)\b/i)` assertion — it's overly broad and will false-positive on any future status component.
+
+**Add to Task 4 (CSS module)** a CSS-scoped test that scans `reports.module.css` for forbidden performance-color tokens:
+
+```ts
+// apps/dashboard/src/app/(auth)/(mercury)/reports/__tests__/css-no-perf-red-green.test.ts
+import { describe, it, expect } from "vitest";
+import { readFile } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+describe("reports.module.css forbids red/green for performance signaling", () => {
+  it("uses no performance-red or performance-green color tokens", async () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const cssPath = resolve(here, "../reports.module.css");
+    const css = await readFile(cssPath, "utf-8");
+
+    // Forbidden: any usage of literal "red" / "crimson" / "salmon" as color values.
+    // Status-green (hsl(150 ...)) for the live pip is allowed and lives in a single
+    // .live class — assert that class is the ONLY green-ish hsl in the file.
+    expect(css).not.toMatch(/:\s*red\b/i);
+    expect(css).not.toMatch(/#(f|F){2}0+\b/);   // #f00 / #ff0000
+    expect(css).not.toMatch(/#0+(f|F){2}0+\b/); // #0f0 / #00ff00 (performance green)
+    // Green-ish hsl is restricted to status; count occurrences ≤ 2 (paper-pip + live-pip).
+    const greenHsl = css.match(/hsl\(\s*1[34][0-9]\s+\d+%\s+\d+%/g) ?? [];
+    expect(greenHsl.length).toBeLessThanOrEqual(2);
+  });
+});
+```
+
+The performance-color tests inside `delta-badge.test.tsx` and `campaigns.test.tsx` already scope their `red|#f00|#ff0000` scans to the rendered component — keep those.
+
+### R5. CSS class integrity check after Task 4
+
+After the CSS module port (Task 4), add a single test that asserts every class name referenced by the planned components actually exists in the module. This is the cheapest insurance against camelCase typos and missing selectors.
+
+**New Task 4.5: Class integrity test (add immediately after Step 4.5 commit instruction is dropped per R1).**
+
+```ts
+// apps/dashboard/src/app/(auth)/(mercury)/reports/__tests__/css-class-integrity.test.ts
+import { describe, it, expect } from "vitest";
+import styles from "../reports.module.css";
+
+const REQUIRED_CLASSES = [
+  "reportsPage",
+  // topbar
+  "topbar", "topbarRow", "brandCluster", "brandMark", "brandOrg", "brandSep",
+  "brandPage", "topbarRight", "livePip", "fixture", "topbarUser", "me",
+  // page head
+  "pageHead", "lead", "eyebrow", "pageTitle", "accent", "pageSub", "right",
+  "dateFolio", "windowSeg", "on", "recompute", "btn", "spinner", "spinning",
+  // banner
+  "bannerNoconn", "msg", "cta",
+  // section frame
+  "section", "sectionHead",
+  // pull quote
+  "pullquoteWrap", "pullquote", "em", "fadeIn",
+  // attribution
+  "attrBlock", "attrHero", "attrNum", "sgd", "attrAside", "label", "desc",
+  "attrSplit", "attrCard", "alex", "riley", "who", "whoGlyph", "whoName",
+  "whoRole", "val", "cap", "shareLine", "shareBar", "sharePct",
+  // delta badge
+  "deltaBadge", "pos", "neg", "flat", "arrow",
+  // funnel
+  "funnel", "funnelTable", "funnelStage", "funnelBar", "fill", "funnelNum",
+  "funnelDelta", "funnelByline", "marker", "text",
+  // campaigns
+  "tblWrap", "tblScroll", "tbl", "sortable", "active", "asc", "submetric",
+  "name", "muted", "roasCell", "v", "dead", "tblCards", "campCard", "top", "grid",
+  // cost vs value
+  "costBlock", "costThree", "costCell", "paid", "alt", "saving", "costNarrative",
+  "sub",
+  // managed comparison
+  "mcWrap", "mcGrid", "mcCol", "colEyebrow", "mcMetric", "mcSide",
+  "managed", "unmanaged", "delta", "emptyMessage",
+  // colophon
+  "colophon", "period", "caveat", "mode", "live", "dot",
+] as const;
+
+describe("reports.module.css class integrity", () => {
+  it("exports every class referenced by planned components", () => {
+    const missing = REQUIRED_CLASSES.filter((k) => !(k in styles));
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing CSS module class exports: ${missing.join(", ")}. ` +
+          "Either the CSS module is incomplete, or camelCase keys drifted from kebab-case selectors.",
+      );
+    }
+    expect(missing).toEqual([]);
+  });
+});
+```
+
+Run it as part of Task 4 verification before the phase commit. **Do not proceed to Task 5 until this test passes.**
+
+### R6. Window-switch behavior during refresh: keep buttons enabled
+
+The plan as drafted disabled window-selector buttons during in-flight refetch. **Fix:** keep them enabled — disabling navigation because a background refresh is running feels heavy.
+
+Switching window during a refresh is safe because React Query's `useQuery` is keyed by window: a window switch starts a new query (or returns cached data for the other window). The previous query for the old window remains in cache; if it completes, its data is stored against the old key and doesn't pollute the new window's render.
+
+**Task 17 component update:**
+
+```tsx
+// In the WINDOWS.map block, REMOVE `disabled={inFlight}` from window buttons:
+<button
+  key={w}
+  type="button"
+  className={activeWindow === w ? styles.on : ""}
+  aria-pressed={activeWindow === w}
+  onClick={() => onSelectWindow(w)}
+>
+  {w}
+</button>
+```
+
+(Refresh **button** itself is still disabled while in-flight — that's about preventing duplicate POSTs to `/refresh`, not navigation.)
+
+**Task 17 test update:** replace "window-selector buttons are either disabled or handle the switch safely" with:
+
+```ts
+it("window-selector buttons stay enabled during refresh", () => {
+  render(<PageHead {...baseProps} refreshState="refreshing" cacheAge={0} />);
+  expect(screen.getByRole("button", { name: "THIS WEEK" })).not.toBeDisabled();
+  expect(screen.getByRole("button", { name: "THIS MONTH" })).not.toBeDisabled();
+  expect(screen.getByRole("button", { name: "THIS QUARTER" })).not.toBeDisabled();
+});
+
+it("refresh button is disabled during refresh", () => {
+  render(<PageHead {...baseProps} refreshState="refreshing" cacheAge={0} />);
+  expect(screen.getByRole("button", { name: /Refreshing…/i })).toBeDisabled();
+});
+```
+
+### R7. No-connection banner non-blocking fallback
+
+Task 18 starts with a hook search. The plan as drafted hand-waves what happens if the search comes up empty.
+
+**Decision (binding):** if no existing Meta-connection-status hook AND no existing API endpoint with a usable shape is found, **stop Task 18, file the banner as a follow-up, and proceed to Task 19**. The remainder of the redesign ships without the banner. Acceptable because:
+
+- Fixture mode (`NEXT_PUBLIC_REPORTS_LIVE=false`) is the launch default per spec §5 and project memory.
+- The launch-flip to live mode requires a Meta connection anyway, at which point the banner UX is moot.
+- Adding a new connections endpoint is out of scope for this spec.
+
+**Task 18 Step 18.1.5 (new, between 18.1 and 18.2):**
+
+```
+After the search in Step 18.1:
+  - If you found an existing accessor that returns Meta connection state → continue to Step 18.2.
+  - If you found NO accessor AND NO existing endpoint with a usable shape:
+      1. STOP Task 18 here. Do not create no-connection-banner.tsx.
+      2. Add a follow-up note to the spec's §13 "Out of scope" list:
+         "- No-connection banner (deferred): needs a Meta connection-status
+            accessor that doesn't exist today; ship after connections-API
+            surface stabilizes."
+      3. Skip remaining steps in Task 18 and proceed to Task 19.
+      4. In Task 20 acceptance test, leave the "never shows the no-connection
+         banner in fixture mode" assertion in place — it still holds.
+```
+
+### R8. SwitchboardMark test is low-value — drop
+
+The SVG component is a static render of two circles and a path. Asserting `getAttribute("width")` and `querySelectorAll("circle").length === 2` adds noise without protecting product behavior.
+
+**Task 6: remove the entire test file.** Keep the component (it's used by Topbar). The full-page integration test in Task 20 will catch a regression where the component fails to mount.
+
+Replace Task 6 with a smaller scope:
+
+```
+Step 6.1: Create components/switchboard-mark.tsx with the SVG content
+          from the mockup app.jsx:7-16. Do NOT create a test file.
+Step 6.2: Typecheck passes (pnpm typecheck).
+```
+
+---
+
 ## Codebase context (read before Task 1)
 
 - **Worktree:** `/Users/jasonli/switchboard/.worktrees/reports-editorial`. Verify with `git rev-parse --show-toplevel` before any commit.
@@ -278,7 +575,13 @@ apps/dashboard/src/app/(auth)/(mercury)/reports/
       expect(fmtSGD(14720)).toBe("S$14,720");
     });
 
-    it("formats with cents when value < 100 (auto)", () => {
+    it("auto: no cents when abs < 1000 but integer", () => {
+      expect(fmtSGD(500)).toBe("S$500");
+      expect(fmtSGD(612)).toBe("S$612");
+    });
+
+    it("auto: cents when abs < 1000 and fractional", () => {
+      expect(fmtSGD(447.75)).toBe("S$447.75");
       expect(fmtSGD(47.5)).toBe("S$47.50");
     });
 
@@ -372,8 +675,11 @@ apps/dashboard/src/app/(auth)/(mercury)/reports/
       return `${sign}S$${Math.round(abs / 1_000)}k`;
     }
 
-    const showCents =
-      withCents === "always" ? true : withCents === "never" ? false : abs < 100;
+    let showCents: boolean;
+    if (withCents === "always") showCents = true;
+    else if (withCents === "never") showCents = false;
+    else if (abs >= 1000) showCents = false;
+    else showCents = !Number.isInteger(abs);
 
     return `${sign}S$${abs.toLocaleString("en-SG", {
       minimumFractionDigits: showCents ? 2 : 0,
@@ -758,18 +1064,29 @@ This is a near-mechanical port of `docs/design-prompts/locked/switchboard/projec
 
   **Important:** the old `reports-page.tsx` and old components still reference v1 class names. After this commit, the live page will render with missing styles until Tasks 5-16 land. This is expected in TDD-style sequencing.
 
-- [ ] **Step 4.5: Commit.**
+- [ ] **Step 4.5: Add the CSS class integrity test (per R5).** Create `apps/dashboard/src/app/(auth)/(mercury)/reports/__tests__/css-class-integrity.test.ts` with the exact body shown in plan revision §R5. Run it:
 
   ```bash
-  git add apps/dashboard/src/app/\(auth\)/\(mercury\)/reports/reports.module.css
-  git commit -m "feat(reports): port mockup styles.css to reports.module.css
-
-  Editorial register with Source Serif 4 display and JetBrains Mono
-  numerals via existing Mercury aliases. Topbar rendered non-sticky.
-  Funnel mobile breakpoint added at <=520px. Reports-only shade
-  extensions (--paper-warm, --paper-deep, --hair-strong, --ink-5,
-  --accent-soft/paper) scoped via .reportsPage to avoid leaking."
+  pnpm --filter @switchboard/dashboard test apps/dashboard/src/app/\(auth\)/\(mercury\)/reports/__tests__/css-class-integrity.test.ts
   ```
+
+  Expected: PASS. If anything is missing, **fix `reports.module.css`** to export that class. Do not proceed to Task 5 until the test passes — this is the hard checkpoint per R5.
+
+- [ ] **Step 4.6: Add the CSS performance-color test (per R4).** Create `apps/dashboard/src/app/(auth)/(mercury)/reports/__tests__/css-no-perf-red-green.test.ts` with the exact body shown in plan revision §R4. Run it:
+
+  ```bash
+  pnpm --filter @switchboard/dashboard test apps/dashboard/src/app/\(auth\)/\(mercury\)/reports/__tests__/css-no-perf-red-green.test.ts
+  ```
+
+  Expected: PASS. If it fails because the live-pip green appears more than twice, refactor so the green hsl lives in a single `.live .dot` class (and optionally the `.livePip::before` declaration) — there should be at most two declaration sites.
+
+- [ ] **Step 4.7: Typecheck.**
+
+  ```bash
+  pnpm typecheck
+  ```
+
+  Per R1: no commit at task boundary — phase commit at end of P3.
 
 ---
 
@@ -857,30 +1174,10 @@ This is a near-mechanical port of `docs/design-prompts/locked/switchboard/projec
 
 **Files:**
 - Create: `apps/dashboard/src/app/(auth)/(mercury)/reports/components/switchboard-mark.tsx`
-- Create: `apps/dashboard/src/app/(auth)/(mercury)/reports/components/__tests__/switchboard-mark.test.tsx`
 
-- [ ] **Step 6.1: Failing test:**
+Per R8: no co-located test (low-value snapshot). The full-page integration test in Task 20 catches any regression where this component fails to mount.
 
-  ```tsx
-  import { describe, it, expect } from "vitest";
-  import { render } from "@testing-library/react";
-  import { SwitchboardMark } from "../switchboard-mark";
-
-  describe("SwitchboardMark", () => {
-    it("renders a 20x20 svg with two eye circles", () => {
-      const { container } = render(<SwitchboardMark />);
-      const svg = container.querySelector("svg");
-      expect(svg).toBeTruthy();
-      expect(svg?.getAttribute("width")).toBe("20");
-      expect(svg?.getAttribute("height")).toBe("20");
-      expect(container.querySelectorAll("circle").length).toBe(2);
-    });
-  });
-  ```
-
-- [ ] **Step 6.2: Run, expect FAIL.**
-
-- [ ] **Step 6.3: Implement** (ported verbatim from mockup `app.jsx:7-16`):
+- [ ] **Step 6.1: Implement** (ported verbatim from mockup `app.jsx:7-16`):
 
   ```tsx
   // switchboard-mark.tsx
@@ -902,15 +1199,13 @@ This is a near-mechanical port of `docs/design-prompts/locked/switchboard/projec
   }
   ```
 
-- [ ] **Step 6.4: Run test, expect PASS.**
-
-- [ ] **Step 6.5: Commit.**
+- [ ] **Step 6.2: Verify typecheck passes:**
 
   ```bash
-  git add apps/dashboard/src/app/\(auth\)/\(mercury\)/reports/components/switchboard-mark.tsx \
-          apps/dashboard/src/app/\(auth\)/\(mercury\)/reports/components/__tests__/switchboard-mark.test.tsx
-  git commit -m "feat(reports): add inline SwitchboardMark SVG"
+  pnpm typecheck
   ```
+
+  Per R1: no commit at task boundary — phase commit at end of P3.
 
 ---
 
@@ -1071,14 +1366,11 @@ Refresh-state machine (label transitions, in-flight handling) lands in Task 17. 
       expect(screen.getByTestId("dateFolio")).toHaveTextContent("—");
     });
 
-    it("renders three window buttons and marks the active one", () => {
+    it("marks the active window with aria-pressed=true (per R3)", () => {
       render(<PageHead {...baseProps} />);
-      const wk = screen.getByRole("button", { name: "THIS WEEK" });
-      const mo = screen.getByRole("button", { name: "THIS MONTH" });
-      const qr = screen.getByRole("button", { name: "THIS QUARTER" });
-      expect(mo.className).toMatch(/on/);
-      expect(wk.className).not.toMatch(/on/);
-      expect(qr.className).not.toMatch(/on/);
+      expect(screen.getByRole("button", { name: "THIS MONTH" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "THIS WEEK" })).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByRole("button", { name: "THIS QUARTER" })).toHaveAttribute("aria-pressed", "false");
     });
 
     it("fires onSelectWindow when a window button is clicked", () => {
@@ -1142,7 +1434,9 @@ Refresh-state machine (label transitions, in-flight handling) lands in Task 17. 
             {WINDOWS.map((w) => (
               <button
                 key={w}
+                type="button"
                 className={activeWindow === w ? styles.on : ""}
+                aria-pressed={activeWindow === w}
                 onClick={() => onSelectWindow(w)}
               >
                 {w}
@@ -1150,7 +1444,7 @@ Refresh-state machine (label transitions, in-flight handling) lands in Task 17. 
             ))}
           </div>
           <div className={styles.recompute}>
-            <button className={styles.btn} onClick={onRefresh}>
+            <button type="button" className={styles.btn} onClick={onRefresh}>
               Refresh
             </button>
           </div>
@@ -1591,9 +1885,7 @@ Refresh-state machine (label transitions, in-flight handling) lands in Task 17. 
           <div className={styles.costThree}>
             <div className={`${styles.costCell} ${styles.paid}`}>
               <span className={styles.label}>You pay</span>
-              <span className={styles.v}>
-                {fmtSGD(cost.paid, { withCents: cost.paid < 100 ? "always" : "never" })}
-              </span>
+              <span className={styles.v}>{fmtSGD(cost.paid)}</span>
               <span className={styles.sub}>Switchboard subscription, this period</span>
             </div>
             <div className={`${styles.costCell} ${styles.alt}`}>
@@ -1972,9 +2264,7 @@ Refresh-state machine (label transitions, in-flight handling) lands in Task 17. 
                         <span className={styles.submetric}>{fmtPct(c.clickToLeadRate, 1)}</span>
                       </td>
                       <td className={c.cpl == null ? styles.muted : ""}>
-                        {c.cpl == null
-                          ? "—"
-                          : fmtSGD(c.cpl, { withCents: c.cpl < 100 ? "always" : "never" })}
+                        {c.cpl == null ? "—" : fmtSGD(c.cpl)}
                       </td>
                       <td>{c.revenue > 0 ? fmtSGD(c.revenue, { withCents: "never" }) : "—"}</td>
                       <td>
@@ -2005,7 +2295,7 @@ Refresh-state machine (label transitions, in-flight handling) lands in Task 17. 
                     {fmtInt(tot.leads)}
                     <span className={styles.submetric}>{fmtPct(totC2L, 1)}</span>
                   </td>
-                  <td>{totCpl == null ? "—" : fmtSGD(totCpl, { withCents: totCpl < 100 ? "always" : "never" })}</td>
+                  <td>{totCpl == null ? "—" : fmtSGD(totCpl)}</td>
                   <td>{fmtSGD(tot.revenue, { withCents: "never" })}</td>
                   <td>
                     <span className={styles.roasCell}>
@@ -2057,7 +2347,7 @@ Refresh-state machine (label transitions, in-flight handling) lands in Task 17. 
                   <div>
                     <label>Leads · CPL</label>
                     <span className={styles.v}>
-                      {fmtInt(c.leads)} · {c.cpl == null ? "—" : fmtSGD(c.cpl, { withCents: "always" })}
+                      {fmtInt(c.leads)} · {c.cpl == null ? "—" : fmtSGD(c.cpl)}
                     </span>
                   </div>
                 </div>
@@ -2433,36 +2723,25 @@ After this commit the live page renders the new design. Refresh state and no-con
   import { act, waitFor } from "@testing-library/react";
 
   it("button label flips to 'Refreshing…' while in-flight", () => {
-    render(
-      <PageHead
-        {...baseProps}
-        refreshState="refreshing"
-        cacheAge={0}
-      />,
-    );
+    render(<PageHead {...baseProps} refreshState="refreshing" cacheAge={0} />);
     expect(screen.getByRole("button", { name: /Refreshing…/i })).toBeInTheDocument();
   });
 
   it("button label flips to 'Still loading…' at 3s threshold", () => {
-    render(
-      <PageHead
-        {...baseProps}
-        refreshState="still-loading"
-        cacheAge={0}
-      />,
-    );
+    render(<PageHead {...baseProps} refreshState="still-loading" cacheAge={0} />);
     expect(screen.getByRole("button", { name: /Still loading…/i })).toBeInTheDocument();
   });
 
   it("refresh button is disabled while refreshing", () => {
-    render(
-      <PageHead
-        {...baseProps}
-        refreshState="refreshing"
-        cacheAge={0}
-      />,
-    );
+    render(<PageHead {...baseProps} refreshState="refreshing" cacheAge={0} />);
     expect(screen.getByRole("button", { name: /Refreshing…/i })).toBeDisabled();
+  });
+
+  it("window-selector buttons stay enabled during refresh (per R6)", () => {
+    render(<PageHead {...baseProps} refreshState="refreshing" cacheAge={0} />);
+    expect(screen.getByRole("button", { name: "THIS WEEK" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "THIS MONTH" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "THIS QUARTER" })).not.toBeDisabled();
   });
 
   it("renders 'cached just now' when cacheAge is 0", () => {
@@ -2544,9 +2823,10 @@ After this commit the live page renders the new design. Refresh state and no-con
             {WINDOWS.map((w) => (
               <button
                 key={w}
+                type="button"
                 className={activeWindow === w ? styles.on : ""}
+                aria-pressed={activeWindow === w}
                 onClick={() => onSelectWindow(w)}
-                disabled={inFlight}
               >
                 {w}
               </button>
@@ -2554,6 +2834,7 @@ After this commit the live page renders the new design. Refresh state and no-con
           </div>
           <div className={styles.recompute}>
             <button
+              type="button"
               className={`${styles.btn} ${inFlight ? styles.spinning : ""}`}
               onClick={onRefresh}
               disabled={inFlight}
@@ -2918,11 +3199,9 @@ This single test file exercises every §12 acceptance criterion that wasn't cove
       expect(screen.getByText("Conversations")).toBeInTheDocument();
     });
 
-    it("uses no red or green color words in rendered DOM", () => {
-      const { container } = renderWithQuery(<ReportsPage />);
-      // Class-name based green/red would show up in className attrs serialized to innerHTML
-      expect(container.innerHTML).not.toMatch(/\b(red|green)\b/i);
-    });
+    // Note: the broad DOM scan for /red|green/ was dropped per R4 — too brittle and
+    // would false-positive on any future status component. The targeted CSS-scoped
+    // check lives in `__tests__/css-no-perf-red-green.test.ts` (added in Task 4).
   });
   ```
 
