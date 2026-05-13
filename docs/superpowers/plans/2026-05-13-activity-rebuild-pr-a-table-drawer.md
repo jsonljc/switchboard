@@ -87,7 +87,7 @@ Append to a new file `apps/dashboard/src/app/(auth)/(mercury)/activity/__tests__
 ```typescript
 import { describe, it, expect } from "vitest";
 import { AuditEntryBrowseRowSchema, OPERATIONAL_AUDIT_EVENT_TYPES } from "@switchboard/schemas";
-import { ACTIVITY_FIXTURES } from "../fixtures";
+import { ACTIVITY_FIXTURES } from "../fixtures.js";
 
 describe("ACTIVITY_FIXTURES (v2 distribution)", () => {
   it("contains exactly 30 rows", () => {
@@ -198,7 +198,9 @@ git commit -m "test(dashboard): activity fixtures v2 distribution (30 rows, full
 - Modify: `apps/dashboard/src/app/(auth)/(mercury)/activity/components/format.ts`
 - Modify: `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/format.test.ts`
 
-The existing `formatCell` / `formatDrawer` stay (still used by anything not yet rewritten). Add four new pure functions for the v2 row + drawer: `fmtClock(iso, tz?)`, `fmtRel(deltaMs)`, `fmtFullISO(iso, tz?)`, `eventBand(eventType)`.
+Add four new pure functions for the v2 row + drawer: `fmtClock(iso, tz?)`, `fmtRel(deltaMs)`, `fmtFullISO(iso, tz?)`, `eventBand(eventType)`.
+
+**Orphaning note:** the existing `formatCell` and `formatDrawer` are consumed only by the v1 row + drawer that Tasks 4–6 will rewrite. After PR-A lands, both become orphaned (and `truncate` / `hashPrefix` likely too, if nothing else outside `/activity` imports them). Leave them in `format.ts` for this task — deletion lands in PR-C's cleanup pass once we've confirmed no other surface imports them.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -206,7 +208,7 @@ Append to `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__
 
 ```typescript
 import { describe, it, expect } from "vitest";
-import { fmtClock, fmtRel, fmtFullISO, eventBand } from "../format";
+import { fmtClock, fmtRel, fmtFullISO, eventBand } from "../format.js";
 
 describe("fmtClock", () => {
   it("renders HH:MM:SS in the resolved tz", () => {
@@ -418,7 +420,7 @@ Create `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/us
 ```typescript
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useCopier } from "../use-copier";
+import { useCopier } from "../use-copier.js";
 
 describe("useCopier", () => {
   beforeEach(() => {
@@ -579,6 +581,8 @@ git commit -m "feat(dashboard): useCopier hook — clipboard write with 1.1s fla
 
 The row carries no `onClick` on its body (H1). The chevron is a real `<button>` that toggles the drawer. The row body renders five cells: time, event badge, actor glyph + id, entity stack, summary with `+N redacted`. Risk indication is via `data-risk` and pseudo-elements styled in the CSS module.
 
+**Behavior change vs v1:** the v1 row displays a truncated `actorType:actorId.slice(0, 8)` (e.g. `agent:agent_al`). The v2 row displays the full `actorId` (e.g. `agent_alex_001`) with CSS `text-overflow: ellipsis` handling overflow. Same for entity. Tests in Step 1 expect the full id text. Likewise, the v2 row's `onToggle` signature changes from `() => void` to `(id: string) => void` — the row calls `onToggle(row.id)` directly instead of relying on the parent to wrap.
+
 - [ ] **Step 1: Write the failing tests**
 
 Create `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/activity-row.test.tsx`:
@@ -588,7 +592,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
-import { ActivityRow } from "../activity-row";
+import { ActivityRow } from "../activity-row.js";
 
 const baseRow: AuditEntryBrowseRow = {
   id: "audit_test_001",
@@ -777,7 +781,7 @@ Replace the entire file with:
 
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { fmtClock, fmtRel, eventBand } from "./format";
+import { fmtClock, fmtRel, eventBand } from "./format.js";
 
 const ACTOR_GLYPH: Record<AuditEntryBrowseRow["actorType"], string> = {
   user: "USR",
@@ -1159,7 +1163,7 @@ Replace `apps/dashboard/src/app/(auth)/(mercury)/activity/components/activity-ro
 
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { fmtFullISO } from "./format";
+import { fmtFullISO } from "./format.js";
 
 export interface ActivityRowDrawerProps {
   row: AuditEntryBrowseRow;
@@ -1564,7 +1568,7 @@ Then add three helper components above the `ActivityRowDrawer` function in the s
 
 ```tsx
 import { useMemo } from "react";
-import { useCopier } from "./use-copier";
+import { useCopier } from "./use-copier.js";
 
 function CopyBtn({
   copyKey,
@@ -1865,8 +1869,8 @@ Replace the entire file with:
 import { useRef } from "react";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { ActivityRow } from "./activity-row";
-import { ActivityRowDrawer } from "./activity-row-drawer";
+import { ActivityRow } from "./activity-row.js";
+import { ActivityRowDrawer } from "./activity-row-drawer.js";
 
 export interface ActivityTableProps {
   rows: AuditEntryBrowseRow[];
@@ -2037,7 +2041,7 @@ Create `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/he
 ```typescript
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ActivityHeader } from "../header";
+import { ActivityHeader } from "../header.js";
 
 describe("ActivityHeader", () => {
   it("renders the page title as plain 'Audit log' (no italic accent)", () => {
@@ -2092,7 +2096,7 @@ Replace the entire file with:
 "use client";
 
 import styles from "../activity.module.css";
-import { fmtRel } from "./format";
+import { fmtRel } from "./format.js";
 
 export interface ActivityHeaderProps {
   /** ISO timestamp of the most recent ledger entry available to the page (typically rows[0].timestamp).
@@ -2376,16 +2380,17 @@ git commit -m "style(dashboard): activity v2 — editorial paper tokens (scoped,
 **Files:**
 - None (verification + PR open).
 
-- [ ] **Step 1: Lint, typecheck, test, build (all in one sweep)**
+- [ ] **Step 1: Typecheck, test, build (real gates — `pnpm lint` is stubbed for dashboard)**
+
+The dashboard's `lint` script is a stub that echoes a deprecation message and exits 0 (see `apps/dashboard/package.json:scripts.lint` — Next 16 deprecated `next lint`). It is not a real gate. The three commands below are the real gates:
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm --filter @switchboard/dashboard test
-pnpm --filter @switchboard/dashboard build
+pnpm typecheck                              # schemas + db build then tsc --noEmit
+pnpm --filter @switchboard/dashboard test   # vitest run, all dashboard tests
+pnpm --filter @switchboard/dashboard build  # next build — NOT in CI, must run locally
 ```
 
-Expected: all four succeed. If any fail, fix in place and add the fix as an additional commit (do not amend).
+Expected: all three succeed. If any fail, fix in place and add the fix as an additional commit (do not amend). The `build` step is the canonical guard against `.js`-extension regressions (per `memory/feedback_dashboard_build_not_in_ci.md`).
 
 - [ ] **Step 2: Verify hard invariants by manual UI walk**
 
