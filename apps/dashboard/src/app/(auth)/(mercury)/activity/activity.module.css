@@ -828,3 +828,32 @@
     transform: translateY(0);
   }
 }
+
+/* Activity v2 row scaffolding — visual rewrite lands in Task 7 */
+.arow { display: grid; grid-template-columns: 96px minmax(180px, 220px) minmax(150px, 180px) minmax(150px, 180px) 1fr 24px; gap: 14px; align-items: center; padding: 12px 12px 12px 14px; }
+.arowOpen { background: #FAF4E8; }
+.arowTarget { animation: targetFlash 1.6s ease; }
+@keyframes targetFlash { 0%, 30% { background: #FAF4E8; } 100% { background: transparent; } }
+.colTime { display: flex; flex-direction: column; gap: 2px; }
+.colTimeClock { font-family: var(--font-mono, ui-monospace, monospace); }
+.colTimeRel { font-family: var(--font-mono, ui-monospace, monospace); opacity: 0.6; }
+.colEvent { min-width: 0; }
+.evtBadge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 9px; border: 1px solid rgba(14,12,10,0.16); border-radius: 2px; }
+.evtBand { width: 5px; height: 5px; border-radius: 50%; background: #C8BEAE; flex-shrink: 0; }
+.evtBadge[data-band="action"] .evtBand { background: hsl(30 55% 46%); }
+.evtBadge[data-band="identity"] .evtBand { background: #6B6052; }
+.evtBadge[data-band="event"] .evtBand { background: #C8BEAE; }
+.evtBadge[data-band="agent"] .evtBand { background: #0E0C0A; }
+.evtText { font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
+.colActor { display: flex; align-items: center; gap: 9px; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); }
+.actorGlyph { width: 28px; height: 18px; border: 1px solid rgba(14,12,10,0.16); border-radius: 1px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; }
+.colActorId { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colEntity { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); }
+.colEntityType { font-size: 10px; text-transform: uppercase; opacity: 0.6; }
+.colEntityId { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colSummary { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.redactedBadge { display: inline-block; margin-left: 8px; padding: 1px 6px; border: 1px dashed rgba(14,12,10,0.4); border-radius: 999px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; }
+.colChevron { display: inline-flex; align-items: center; justify-content: center; }
+.chevronButton { background: transparent; border: none; padding: 0; cursor: pointer; }
+.chevron { display: inline-block; }
+.chevronOpen { display: inline-block; transform: rotate(90deg); }

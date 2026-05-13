@@ -2,79 +2,120 @@
 
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { formatCell, truncate } from "./format";
+import { fmtClock, fmtRel, eventBand } from "./format.js";
+
+const ACTOR_GLYPH: Record<AuditEntryBrowseRow["actorType"], string> = {
+  user: "USR",
+  agent: "AGT",
+  system: "SYS",
+  service_account: "SVC",
+};
+
+const ACTOR_LABEL: Record<AuditEntryBrowseRow["actorType"], string> = {
+  user: "User",
+  agent: "Agent",
+  system: "System",
+  service_account: "Service",
+};
 
 export interface ActivityRowProps {
   row: AuditEntryBrowseRow;
-  isExpanded: boolean;
-  onToggle: () => void;
-  /** Used for aria-controls on the chevron button — matches the drawer's id. */
-  drawerId: string;
+  isOpen: boolean;
+  isTarget: boolean;
+  onToggle: (id: string) => void;
+  /** Wall-clock "now" anchor in ms used to compute the relative-time string. */
+  now: number;
+  /** Optional ref for the row's outermost element — used for scrollToRow(id). */
+  rowRef?: (el: HTMLDivElement | null) => void;
   orgTimezone?: string;
 }
 
 /**
- * Single row in the /activity table.
+ * One row in the /activity div-grid table.
  *
- * CRITICAL UX INVARIANT: The row body is NON-INTERACTIVE. The `summary` cell
- * is plain selectable text. The only interactive element is the chevron
- * <button> at the trailing edge, which toggles the inline drawer.
- *
- * DO NOT add onClick to <tr> or any <td>. DO NOT use cursor:pointer on the row.
+ * H1 (spec §12): the row body has NO onClick, NO role="button", NO tabIndex.
+ * The chevron is the only interactive element — operators must be able to
+ * select identifiers out of the summary cell without collapsing the row.
  */
 export function ActivityRow({
   row,
-  isExpanded,
+  isOpen,
+  isTarget,
   onToggle,
-  drawerId,
+  now,
+  rowRef,
   orgTimezone,
 }: ActivityRowProps) {
-  const actorLabel = `${row.actorType}:${row.actorId.slice(0, 8)}`;
-  const entityLabel = `${row.entityType}:${row.entityId.slice(0, 8)}`;
-  const summaryTruncated = truncate(row.summary, 80);
-  const timestampCell = formatCell(row.timestamp, orgTimezone);
+  const ts = new Date(row.timestamp).getTime();
+  const band = eventBand(row.eventType);
+  const glyph = ACTOR_GLYPH[row.actorType];
+  const label = ACTOR_LABEL[row.actorType];
+  const rowClass = [styles.arow, isOpen ? styles.arowOpen : "", isTarget ? styles.arowTarget : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <tr className={`${styles.activityRow} ${isExpanded ? styles.isExpanded : ""}`}>
-      {/* TIMESTAMP — sticky first column, mono, tabular numerals */}
-      <td className={`${styles.cellTimestamp} ${styles.tabular}`}>{timestampCell}</td>
+    <div
+      ref={rowRef}
+      role="row"
+      data-rowid={row.id}
+      data-risk={row.riskCategory}
+      className={rowClass}
+    >
+      <div role="cell" className={styles.colTime}>
+        <span className={styles.colTimeClock}>{fmtClock(row.timestamp, orgTimezone)}</span>
+        <span className={styles.colTimeRel}>{fmtRel(now - ts)}</span>
+      </div>
 
-      {/* EVENT — mono caps dotted form */}
-      <td className={styles.cellEvent}>
-        <span className={styles.cellMono}>{row.eventType}</span>
-      </td>
+      <div role="cell" className={styles.colEvent}>
+        <span className={styles.evtBadge} data-band={band}>
+          <span className={styles.evtBand} aria-hidden="true" />
+          <span className={styles.evtText}>{row.eventType}</span>
+        </span>
+      </div>
 
-      {/* ACTOR — mono prefix */}
-      <td className={styles.cellActor}>
-        <span className={styles.cellMono}>{actorLabel}</span>
-      </td>
+      <div role="cell" className={styles.colActor}>
+        <span
+          className={styles.actorGlyph}
+          data-actor={row.actorType}
+          title={label}
+          aria-label={label}
+        >
+          {glyph}
+        </span>
+        <span className={styles.colActorId} title={row.actorId}>
+          {row.actorId}
+        </span>
+      </div>
 
-      {/* ENTITY — mono prefix */}
-      <td className={styles.cellEntity}>
-        <span className={styles.cellMono}>{entityLabel}</span>
-      </td>
+      <div role="cell" className={styles.colEntity}>
+        <span className={styles.colEntityType}>{row.entityType}</span>
+        <span className={styles.colEntityId} title={row.entityId}>
+          {row.entityId}
+        </span>
+      </div>
 
-      {/* SUMMARY — plain text, truncated to 80 chars, selectable */}
-      <td className={styles.cellSummary}>{summaryTruncated}</td>
+      <div role="cell" className={styles.colSummary} title={row.summary}>
+        {row.summary}
+        {row.redactedKeyCount > 0 && (
+          <span className={styles.redactedBadge}>+{row.redactedKeyCount} redacted</span>
+        )}
+      </div>
 
-      {/* CHEVRON toggle button — the ONLY interactive element in this row */}
-      <td className={styles.cellChevron}>
+      <div role="cell" className={styles.colChevron}>
         <button
           type="button"
           className={styles.chevronButton}
-          aria-expanded={isExpanded}
-          aria-controls={drawerId}
+          aria-expanded={isOpen}
+          aria-controls={`activity-drawer-${row.id}`}
           aria-label={`Toggle details for entry ${row.id}`}
-          onClick={onToggle}
+          onClick={() => onToggle(row.id)}
         >
-          <span
-            aria-hidden="true"
-            className={`${styles.chevronIcon} ${isExpanded ? styles.chevronUp : ""}`}
-          >
+          <span aria-hidden="true" className={isOpen ? styles.chevronOpen : styles.chevron}>
             ›
           </span>
         </button>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
