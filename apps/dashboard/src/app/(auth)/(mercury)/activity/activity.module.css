@@ -857,3 +857,20 @@
 .chevronButton { background: transparent; border: none; padding: 0; cursor: pointer; }
 .chevron { display: inline-block; }
 .chevronOpen { display: inline-block; transform: rotate(90deg); }
+
+/* Activity v2 drawer scaffolding — visual rewrite lands in Task 7 */
+.drawer { background: #F9F4E8; border-top: 1px solid rgba(14,12,10,0.08); border-bottom: 1px solid rgba(14,12,10,0.08); }
+.drawerInner { padding: 22px 18px 26px 28px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 28px 36px; }
+@media (max-width: 980px) { .drawerInner { grid-template-columns: 1fr; gap: 26px; } }
+.dsection { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dsectionFull { grid-column: 1 / -1; }
+.dsectionLabel { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
+.dsectionLabelDim { opacity: 0.55; font-weight: 600; }
+.dsectionFullIso { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; }
+.dsectionTz { opacity: 0.5; }
+.dsectionNote { font-size: 12px; opacity: 0.7; font-style: italic; margin-top: 2px; }
+.dsectionMono { font-family: var(--font-mono, ui-monospace, monospace); font-style: normal; }
+.snapKeys { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.snapKey { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; padding: 3px 8px; background: #FFF; border: 1px solid rgba(14,12,10,0.08); border-radius: 2px; }
+.snapRedacted { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 8px; border: 1px dashed rgba(14,12,10,0.4); border-radius: 2px; opacity: 0.7; }
+.evnone { font-size: 12.5px; opacity: 0.6; font-style: italic; }

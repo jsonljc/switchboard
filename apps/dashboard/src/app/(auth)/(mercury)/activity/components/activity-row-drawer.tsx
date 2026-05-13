@@ -2,186 +2,105 @@
 
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
 import styles from "../activity.module.css";
-import { formatDrawer } from "./format";
+import { fmtFullISO } from "./format.js";
 
 export interface ActivityRowDrawerProps {
   row: AuditEntryBrowseRow;
-  /** Must match the aria-controls on the chevron button and the drawer's id attribute. */
-  drawerId: string;
+  /** All currently-rendered rows — used by the chain-anchor "view previous ↓"
+   *  affordance (Task 6) to find the predecessor row on the same page. */
+  allRows: AuditEntryBrowseRow[];
+  onScrollToRow: (id: string) => void;
   orgTimezone?: string;
 }
 
 /**
- * Inline drawer for an /activity row. Renders the full entry detail per spec §6.4.
+ * Inline drawer for an /activity row.
  *
- * Hard invariants (tested):
- * - Never renders snapshot values — only allowlisted key NAMES.
- * - Never renders evidencePointers[].storageRef — only type + hashPrefix.
- * - [copy] and [copy full] use navigator.clipboard; wrapped in try/catch — must
- *   not throw if clipboard API is unavailable.
+ * Hard invariants from spec §12:
+ *  H2: never renders evidencePointers[].storageRef.
+ *  H3: never renders snapshot VALUES — only allowlisted key NAMES.
+ *  H4: copy buttons never throw (handled in useCopier).
  */
+export function ActivityRowDrawer({
+  row,
+  allRows,
+  onScrollToRow,
+  orgTimezone,
+}: ActivityRowDrawerProps) {
+  // Suppress unused-var lint until Task 6 wires these into the chain section.
+  void allRows;
+  void onScrollToRow;
 
-/** Copy text to clipboard; no-op on error. */
-async function copyToClipboard(text: string): Promise<void> {
-  try {
-    await navigator?.clipboard?.writeText(text);
-  } catch {
-    // Clipboard unavailable or permission denied — silently no-op.
-  }
-}
-
-interface LabeledFieldProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-function LabeledField({ label, children }: LabeledFieldProps) {
-  return (
-    <div className={styles.drawerField}>
-      <span className={`${styles.drawerLabel} ${styles.sectionLabel}`}>{label}</span>
-      <span className={styles.drawerValue}>{children}</span>
-    </div>
-  );
-}
-
-interface CopyButtonProps {
-  value: string;
-  label?: string;
-}
-
-function CopyButton({ value, label = "copy" }: CopyButtonProps) {
-  return (
-    <button
-      type="button"
-      className={styles.copyButton}
-      onClick={() => void copyToClipboard(value)}
-      aria-label={`Copy ${label}`}
-    >
-      [{label}]
-    </button>
-  );
-}
-
-export function ActivityRowDrawer({ row, drawerId, orgTimezone }: ActivityRowDrawerProps) {
-  const entryHashDisplay = row.entryHash.slice(0, 8);
-  const prevHashDisplay = row.previousEntryHash ? row.previousEntryHash.slice(0, 8) : null;
-  const timestampDisplay = formatDrawer(row.timestamp, orgTimezone);
+  const iso = fmtFullISO(row.timestamp, orgTimezone);
 
   return (
     <div
-      id={drawerId}
+      id={`activity-drawer-${row.id}`}
       role="region"
-      aria-label={`Details for audit entry ${row.id}`}
+      aria-label={`Audit entry detail for ${row.id}`}
       className={styles.drawer}
     >
-      <div className={styles.drawerGrid}>
-        {/* Identity fields */}
-        <LabeledField label="EVENT">{row.eventType}</LabeledField>
-
-        <LabeledField label="ID">
-          <span className={styles.cellMono}>{row.id}</span>
-          <CopyButton value={row.id} label="copy" />
-        </LabeledField>
-
-        <LabeledField label="TIMESTAMP">
-          <span className={styles.tabular}>{timestampDisplay}</span>
-        </LabeledField>
-
-        <LabeledField label="ACTOR">
-          <span className={styles.cellMono}>
-            {row.actorType}
-            <span aria-hidden="true"> · </span>
-            {row.actorId}
+      <div className={styles.drawerInner}>
+        {/* Section 1: Timestamp */}
+        <div className={styles.dsection}>
+          <span className={styles.dsectionLabel}>Timestamp</span>
+          <span className={styles.dsectionFullIso}>
+            <span>{iso.date}</span> <span className={styles.dsectionTz}>·</span>{" "}
+            <span>{iso.time}</span> <span className={styles.dsectionTz}>{iso.tz}</span>
           </span>
-        </LabeledField>
-
-        <LabeledField label="ENTITY">
-          <span className={styles.cellMono}>
-            {row.entityType}
-            <span aria-hidden="true"> · </span>
-            {row.entityId}
+          <span className={styles.dsectionNote}>
+            stored as ISO-8601 UTC on the entry; rendered in your browser&apos;s local timezone.
           </span>
-          <CopyButton value={row.entityId} label="copy" />
-        </LabeledField>
+        </div>
 
-        <LabeledField label="RISK">{row.riskCategory}</LabeledField>
-
-        <LabeledField label="VISIBILITY">{row.visibilityLevel}</LabeledField>
-
-        {/* Summary — full text, multi-line, plain text (never HTML) */}
-        <LabeledField label="SUMMARY">
-          <span className={styles.drawerSummary}>{row.summary}</span>
-        </LabeledField>
-
-        {/* Snapshot — allowlisted key names only, never values */}
-        <LabeledField label="SNAPSHOT">
-          <span className={styles.drawerSnapshotKeys}>
-            {row.snapshotKeys.length > 0 ? row.snapshotKeys.join(", ") : "—"}
+        {/* Section 2: Visibility · classification */}
+        <div className={styles.dsection}>
+          <span className={styles.dsectionLabel}>Visibility · classification</span>
+          <span className={styles.dsectionFullIso}>
+            visibility:&nbsp;<b>{row.visibilityLevel}</b>
+            &nbsp;<span className={styles.dsectionTz}>·</span>&nbsp; risk:&nbsp;
+            <b>{row.riskCategory}</b>
+            &nbsp;<span className={styles.dsectionTz}>·</span>&nbsp; event:&nbsp;
+            <b>{row.eventType}</b>
           </span>
-          {row.redactedKeyCount > 0 && (
-            <span className={styles.drawerRedacted}>({row.redactedKeyCount} keys redacted)</span>
-          )}
-        </LabeledField>
+          <span className={styles.dsectionNote}>
+            visibilityLevel is server-filtered; the client only ever sees rows it&apos;s authorized
+            to read.
+          </span>
+        </div>
 
-        {/* Evidence pointers — type + hashPrefix only, never storageRef */}
-        <LabeledField label="EVIDENCE">
-          {row.evidencePointers.length === 0 ? (
-            <span className={styles.isMuted}>—</span>
-          ) : (
-            <div className={styles.drawerEvidenceWrap}>
-              <span className={styles.drawerEvidenceCount}>
-                {row.evidencePointers.length} pointer{row.evidencePointers.length !== 1 ? "s" : ""}
-              </span>
-              <ul className={styles.drawerEvidenceList}>
-                {row.evidencePointers.map((ptr, idx) => (
-                  <li key={idx} className={styles.drawerEvidenceItem}>
-                    <span className={styles.cellMono}>
-                      <span className={styles.drawerEvidenceType}>{ptr.type}</span>
-                      {"  "}
-                      {ptr.hashPrefix}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </LabeledField>
+        {/* Section 3: Snapshot keys */}
+        <div className={`${styles.dsection} ${styles.dsectionFull}`} data-section="snapshot">
+          <span className={styles.dsectionLabel}>
+            Snapshot keys{" "}
+            <span className={styles.dsectionLabelDim}>(allowlist · values redacted)</span>
+          </span>
+          <div className={styles.snapKeys}>
+            {row.snapshotKeys.length === 0 ? (
+              <span className={styles.evnone}>no snapshot keys recorded</span>
+            ) : (
+              row.snapshotKeys.map((k) => (
+                <span key={k} className={styles.snapKey}>
+                  {k}
+                </span>
+              ))
+            )}
+            {row.redactedKeyCount > 0 && (
+              <span className={styles.snapRedacted}>+{row.redactedKeyCount} redacted</span>
+            )}
+          </div>
+          <span className={styles.dsectionNote}>
+            Full snapshot values stay on the server. Only allowlisted key <em>names</em> appear here
+            (
+            <span className={styles.dsectionMono}>
+              id, kind, source, actionType, decisionId, recommendationId, approvalId, envelopeId,
+              agentKey, targetEntityType, targetEntityId, correlationId, traceId
+            </span>
+            ); everything else is rolled into the redacted count.
+          </span>
+        </div>
 
-        {/* References */}
-        <LabeledField label="TRACE">
-          {row.traceId ? (
-            <span className={styles.cellMono}>{row.traceId}</span>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
-        </LabeledField>
-
-        <LabeledField label="ENVELOPE">
-          {row.envelopeId ? (
-            <span className={styles.cellMono}>{row.envelopeId}</span>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
-        </LabeledField>
-
-        {/* Hash chain — display prefix, copy full */}
-        <LabeledField label="HASH">
-          <span className={styles.cellMono}>HASH:{entryHashDisplay}…</span>
-          <CopyButton value={row.entryHash} label="copy full" />
-        </LabeledField>
-
-        <LabeledField label="PREV HASH">
-          {prevHashDisplay ? (
-            <>
-              <span className={styles.cellMono}>HASH:{prevHashDisplay}…</span>
-              {row.previousEntryHash && (
-                <CopyButton value={row.previousEntryHash} label="copy full" />
-              )}
-            </>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
-        </LabeledField>
+        {/* Sections 4–6 (Evidence, Hash chain, References) land in Task 6 */}
       </div>
     </div>
   );
