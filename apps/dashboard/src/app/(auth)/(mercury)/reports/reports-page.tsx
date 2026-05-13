@@ -1,62 +1,101 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useReportWindow } from "./hooks/use-report-window";
 import { useReportData } from "./hooks/use-report-data";
-import { ReportsHeader } from "./components/header";
-import { TitleControls } from "./components/title-controls";
+import { useConnections } from "@/hooks/use-connections";
+import { isMercuryToolLive } from "@/lib/route-availability";
+import { Topbar } from "./components/topbar";
+import { PageHead, type RefreshState } from "./components/page-head";
+import { NoConnectionBanner } from "./components/no-connection-banner";
 import { PullQuote } from "./components/pull-quote";
 import { Attribution } from "./components/attribution";
 import { Funnel } from "./components/funnel";
 import { Campaigns } from "./components/campaigns";
 import { CostVsValue } from "./components/cost-vs-value";
-import { ReportFooter } from "./components/report-footer";
-import { Disclosure } from "./components/disclosure";
+import { ManagedComparison } from "./components/managed-comparison";
+import { Colophon } from "./components/colophon";
 import styles from "./reports.module.css";
+
+// Org and current-user wiring. These are placeholders until session/org context
+// resolution lands (spec §10.7) — keeps the page presentational while the rest
+// of the redesign goes through review.
+const ORG_PLACEHOLDER = "Aurora Aesthetics";
+const USER_PLACEHOLDER = { display: "Operator", initials: "OP" };
 
 export function ReportsPage() {
   const { window: activeWindow, setWindow } = useReportWindow();
-  const { data: fx } = useReportData(activeWindow);
+  const { data: fx, isFetching, refresh } = useReportData(activeWindow);
+  const liveMode = isMercuryToolLive("reports");
 
-  if (!fx) return null;
+  // Refresh state machine (per spec §4.2 + plan revision R6):
+  // Refresh → Refreshing… → Still loading… at 3s.
+  // Window buttons stay enabled during refresh; React Query keys cleanly
+  // separate per-window state.
+  const [stillLoading, setStillLoading] = useState(false);
+  const [cacheAge, setCacheAge] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isFetching) {
+      setStillLoading(false);
+      setCacheAge(0);
+      return;
+    }
+    const t = setTimeout(() => setStillLoading(true), 3000);
+    return () => clearTimeout(t);
+  }, [isFetching]);
+
+  useEffect(() => {
+    if (cacheAge == null) return;
+    const t = setInterval(() => setCacheAge((a) => (a == null ? null : a + 1)), 60_000);
+    return () => clearInterval(t);
+  }, [cacheAge]);
+
+  const refreshState: RefreshState = isFetching
+    ? stillLoading
+      ? "still-loading"
+      : "refreshing"
+    : "idle";
+
+  // No-connection banner (per spec §4.3 + plan revision R7):
+  // Reads from existing useConnections — never inferred from funnel data.
+  // Banner appears ONLY when liveMode AND a meta-ads connection is missing
+  // or not in 'connected' state. Never appears in fixture mode.
+  const { data: connectionsData } = useConnections();
+  const metaConn = connectionsData?.connections.find((c) => c.serviceId === "meta-ads");
+  const showNoConnBanner = liveMode && (!metaConn || metaConn.status !== "connected");
 
   return (
     <div className={styles.reportsPage}>
-      <ReportsHeader />
+      <Topbar org={ORG_PLACEHOLDER} currentUser={USER_PLACEHOLDER} liveMode={liveMode} />
 
-      <section className={`${styles.section} ${styles.page}`}>
-        <TitleControls
-          dateFolio={fx.dateFolio}
-          activeWindow={activeWindow}
-          onSelectWindow={setWindow}
-        />
-      </section>
+      <PageHead
+        dateFolio={fx?.dateFolio ?? null}
+        activeWindow={activeWindow}
+        onSelectWindow={setWindow}
+        onRefresh={() => void refresh()}
+        refreshState={refreshState}
+        cacheAge={cacheAge}
+      />
 
-      <section className={`${styles.section} ${styles.page}`}>
-        <PullQuote q={fx.pullquote} />
-      </section>
+      {showNoConnBanner && <NoConnectionBanner />}
 
-      <section className={`${styles.section} ${styles.page}`}>
-        <Attribution data={fx.attribution} />
-      </section>
-
-      <section className={`${styles.section} ${styles.page}`}>
-        <Funnel rows={fx.funnel} narrative={fx.funnelNarrative} />
-      </section>
-
-      <section className={`${styles.section} ${styles.page}`}>
-        <Campaigns campaigns={fx.campaigns} />
-      </section>
-
-      <section className={`${styles.section} ${styles.page}`}>
-        <CostVsValue cost={fx.cost} narrative={fx.costNarrative} />
-        <ReportFooter activeWindow={activeWindow} cost={fx.cost} />
-      </section>
-
-      {/* Page-level colophon — sits below all sections so future spacing
-          edits to cost-vs-value can't drag it along. */}
-      <section className={`${styles.section} ${styles.page}`}>
-        <Disclosure />
-      </section>
+      {fx && (
+        <>
+          <PullQuote q={fx.pullquote} />
+          <Attribution data={fx.attribution} />
+          <Funnel rows={fx.funnel} narrative={fx.funnelNarrative} />
+          <Campaigns campaigns={fx.campaigns} />
+          <CostVsValue cost={fx.cost} narrative={fx.costNarrative} />
+          {fx.managedComparison && <ManagedComparison data={fx.managedComparison} />}
+          <Colophon
+            period={fx.period}
+            org={ORG_PLACEHOLDER}
+            generatedAt={new Date()}
+            liveMode={liveMode}
+          />
+        </>
+      )}
     </div>
   );
 }
