@@ -45,16 +45,3 @@ export function fmtPct(value: number | null | undefined, digits = 2): string {
   if (value == null) return "—";
   return `${(value * 100).toFixed(digits)}%`;
 }
-
-/**
- * @deprecated Used by v1 components (header/title-controls/report-footer/disclosure/
- * attribution/campaigns/cost-vs-value). Removed in Task 19 when those components are
- * deleted. New code uses fmtSGD.
- */
-export function fmtMoney(n: number, opts: { cents?: boolean } = {}): string {
-  const { cents = false } = opts;
-  if (cents) {
-    return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  return "$" + Math.round(n).toLocaleString("en-US");
-}
