@@ -1,16 +1,11 @@
-import type {
-  ActionEnvelope,
-  ActionPlan,
-  ApprovalRequest,
-  DecisionTrace,
-} from "@switchboard/schemas";
+import type { ActionEnvelope, ActionPlan, ApprovalRequest } from "@switchboard/schemas";
+import type { ProposeResult, ApprovalResponse } from "./orchestrator-types.js";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { AuditLedger } from "../audit/ledger.js";
 import type { GuardrailState } from "../engine/policy-engine.js";
 import type { ApprovalRoutingConfig } from "../approval/router.js";
 import type { RiskScoringConfig } from "../engine/risk-scorer.js";
-import type { ApprovalState } from "../approval/state-machine.js";
 import type { SimulationResult } from "../engine/simulator.js";
 import type { GuardrailStateStore } from "../guardrail-state/store.js";
 import type { RiskPostureStore } from "../engine/risk-posture.js";
@@ -25,6 +20,10 @@ import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import type { SharedContext } from "./shared-context.js";
 import { ProposePipeline } from "./propose-pipeline.js";
 import { ExecutionManager } from "./execution-manager.js";
+
+// Re-export for backward compat with external consumers (test files, execution-service)
+export type { ProposeResult, ApprovalResponse } from "./orchestrator-types.js";
+export { inferCartridgeId } from "./cartridge-utils.js";
 
 export type ExecutionMode = "inline" | "queue";
 
@@ -52,22 +51,6 @@ export interface OrchestratorConfig {
   circuitBreaker?: CartridgeCircuitBreakerWrapper;
   /** Idempotency guard for orchestrator-level deduplication of proposals. */
   idempotencyGuard?: import("../idempotency/guard.js").IdempotencyGuard;
-}
-
-export interface ProposeResult {
-  envelope: ActionEnvelope;
-  decisionTrace: DecisionTrace;
-  approvalRequest: ApprovalRequest | null;
-  denied: boolean;
-  explanation: string;
-  /** Set when observe mode or emergency override auto-approved the action. */
-  governanceNote?: string;
-}
-
-export interface ApprovalResponse {
-  envelope: ActionEnvelope;
-  approvalState: ApprovalState;
-  executionResult: ExecuteResult | null;
 }
 
 /**
@@ -222,38 +205,4 @@ export class LifecycleOrchestrator {
   > {
     return this.proposePipeline.resolveAndPropose(params);
   }
-}
-
-/**
- * Infer cartridge ID from action type prefix by matching against
- * registered cartridge IDs. Falls back to null if no match found.
- * e.g. "ads.campaign.pause" -> matches cartridge "ads-spend" if its
- * manifest declares an action with that type.
- */
-export function inferCartridgeId(
-  actionType: string,
-  registry?: import("../storage/interfaces.js").CartridgeRegistry,
-): string | null {
-  if (!registry) return null;
-
-  const prefix = actionType.split(".")[0];
-  if (!prefix) return null;
-
-  for (const cartridgeId of registry.list()) {
-    const cartridge = registry.get(cartridgeId);
-    if (!cartridge) continue;
-
-    // Match by manifest actions: check if cartridge declares this action type
-    const manifest = cartridge.manifest;
-    if (manifest.actions) {
-      for (const action of manifest.actions) {
-        if (actionType === action.actionType) return cartridgeId;
-        // Also match by shared prefix (e.g. "ads." prefix)
-        const actionPrefix = action.actionType.split(".")[0];
-        if (actionPrefix && actionPrefix === prefix) return cartridgeId;
-      }
-    }
-  }
-
-  return null;
 }

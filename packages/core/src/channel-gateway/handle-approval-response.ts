@@ -1,13 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
-import type { ApprovalStore, IdentityStore } from "../storage/interfaces.js";
+import type { ApprovalStore } from "../storage/interfaces.js";
 import type { Principal } from "@switchboard/schemas";
-import type { ReplySink } from "./types.js";
+import type { ReplySink, HandleApprovalResponseConfig } from "./types.js";
 import type { ParsedApprovalResponsePayload } from "./approval-response-payload.js";
-import type { OperatorChannelBindingStore } from "./operator-channel-binding-store.js";
-import type {
-  RespondToApprovalDeps,
-  RespondToApprovalResult,
-} from "../approval/respond-to-approval.js";
+import type { RespondToApprovalResult } from "../approval/respond-to-approval.js";
 import { respondToApproval } from "../approval/respond-to-approval.js";
 import { StaleVersionError } from "../approval/state-machine.js";
 
@@ -45,19 +41,6 @@ export const APPROVER_ROLES = ["approver", "operator", "admin"] as const;
 
 function principalHasApproverRole(principal: Principal): boolean {
   return principal.roles.some((r) => (APPROVER_ROLES as readonly string[]).includes(r));
-}
-
-/**
- * Configuration to enable chat approval execution. When provided, hash-match success
- * triggers an OperatorChannelBinding lookup → role check → shared respondToApproval call,
- * mutating the approval lifecycle the same way the API route does. When omitted (e.g.,
- * tests, misconfiguration), hash-match succeeds but the response is "not authorized" —
- * we MUST NOT execute on hash match alone (channel-possession ≠ authority).
- */
-export interface HandleApprovalResponseConfig {
-  bindingStore: OperatorChannelBindingStore;
-  identityStore: IdentityStore;
-  respondDeps: RespondToApprovalDeps;
 }
 
 export async function handleApprovalResponse(params: {

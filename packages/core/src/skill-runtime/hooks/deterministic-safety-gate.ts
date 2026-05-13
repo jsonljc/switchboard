@@ -12,7 +12,7 @@ import type { GovernancePostureCache } from "../../governance/posture-cache.js";
 import type { HandoffStore } from "../../handoff/types.js";
 import { buildHandoffPackage } from "../../handoff/build-handoff-package.js";
 import { resolveGovernanceMode } from "@switchboard/schemas";
-import type { ConversationStatusUpsertContext } from "../../channel-gateway/types.js";
+import type { ConversationStatusUpsertContext } from "../../channel-gateway/conversation-status-types.js";
 
 // Re-export so callers can import from one place.
 export type { ConversationStatusUpsertContext };

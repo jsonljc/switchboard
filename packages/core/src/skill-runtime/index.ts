@@ -115,7 +115,7 @@ export type {
   GovernanceDecision,
   GovernanceOutcome,
   GovernanceLogEntry,
-} from "./governance.js";
+} from "./governance-types.js";
 export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 export { BuilderRegistry } from "./builder-registry.js";
 export { BookingFailureHandler } from "./tools/booking-failure-handler.js";

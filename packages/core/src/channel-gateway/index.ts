@@ -18,7 +18,7 @@ export type {
   OperatorChannelBindingStore,
   OperatorChannelBindingRecord,
 } from "./operator-channel-binding-store.js";
-export type { HandleApprovalResponseConfig } from "./handle-approval-response.js";
+export type { HandleApprovalResponseConfig } from "./types.js";
 export { APPROVER_ROLES } from "./handle-approval-response.js";
 export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
 export type {

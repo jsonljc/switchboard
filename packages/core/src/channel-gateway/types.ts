@@ -1,8 +1,7 @@
 import type { DeploymentResolver } from "../platform/deployment-resolver.js";
 import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
-import type { ApprovalStore } from "../storage/interfaces.js";
-import type { HandleApprovalResponseConfig } from "./handle-approval-response.js";
+import type { ApprovalStore, IdentityStore } from "../storage/interfaces.js";
 import type { GovernanceConfigResolver } from "../governance/governance-config-resolver.js";
 import type { EscalationTriggerEntry } from "../governance/escalation-triggers/types.js";
 import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
@@ -11,6 +10,9 @@ import type { HandoffStore } from "../handoff/types.js";
 import type { ConsentService } from "../consent/consent-service.js";
 import type { RevocationKeywordEntry } from "../consent/revocation-keywords/types.js";
 import type { PdpaJurisdiction } from "@switchboard/schemas";
+import type { OperatorChannelBindingStore } from "./operator-channel-binding-store.js";
+import type { RespondToApprovalDeps } from "../approval/respond-to-approval.js";
+import type { ConversationStatusUpsertContext } from "./conversation-status-types.js";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -26,20 +28,7 @@ export interface GatewayContactStore {
   recordMessagingOptOut?(orgId: string, contactId: string): Promise<void>;
 }
 
-/**
- * Context required to upsert a ConversationState row when none exists yet.
- * Passed by the gateway (which has channel + principalId in scope) so that
- * a brand-new session's status flip does not silently no-op on first message.
- *
- * Defined here (channel-gateway/types.ts) and re-exported from the skill-
- * runtime hook so that a single adapter implementation can satisfy both
- * GatewayConversationStatusSetter and ConversationStatusSetter without a
- * circular import.
- */
-export interface ConversationStatusUpsertContext {
-  channel: string;
-  principalId: string;
-}
+export type { ConversationStatusUpsertContext };
 
 /**
  * Minimal interface for marking a session as requiring human intervention
@@ -59,6 +48,19 @@ export interface GatewayConversationStatusSetter {
     status: string,
     upsertContext?: ConversationStatusUpsertContext,
   ): Promise<void>;
+}
+
+/**
+ * Configuration to enable chat approval execution. When provided, hash-match success
+ * triggers an OperatorChannelBinding lookup → role check → shared respondToApproval call,
+ * mutating the approval lifecycle the same way the API route does. When omitted (e.g.,
+ * tests, misconfiguration), hash-match succeeds but the response is "not authorized" —
+ * we MUST NOT execute on hash match alone (channel-possession ≠ authority).
+ */
+export interface HandleApprovalResponseConfig {
+  bindingStore: OperatorChannelBindingStore;
+  identityStore: IdentityStore;
+  respondDeps: RespondToApprovalDeps;
 }
 
 export interface ChannelGatewayConfig {

@@ -5,7 +5,7 @@ import type {
   ProseSegment,
   SparkPoint,
   StatCell,
-} from "./metrics.js";
+} from "./metrics-types.js";
 
 const RILEY_VOICE = {
   up: (delta: number) => `+${delta} from last week.`,

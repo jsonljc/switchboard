@@ -13,7 +13,7 @@ import { createApprovalState } from "../approval/state-machine.js";
 import { buildApprovalNotification } from "../notifications/notifier.js";
 
 import type { SharedContext } from "./shared-context.js";
-import type { ProposeResult } from "./lifecycle.js";
+import type { ProposeResult } from "./orchestrator-types.js";
 import type { ProposePipeline } from "./propose-pipeline.js";
 
 function generateEnvelopeId(): string {

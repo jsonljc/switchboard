@@ -44,14 +44,13 @@ export {
 } from "./pipeline.js";
 
 // Metrics (PR-S5)
-export {
-  projectMetrics,
-  type ProjectMetricsInput,
-  type MetricsSignalStore,
-  type MetricsViewModel,
-  type HeroMetric,
-  type MetricComparator,
-  type SparkPoint,
-  type StatCell,
-} from "./metrics.js";
+export { projectMetrics, type ProjectMetricsInput } from "./metrics.js";
+export type {
+  MetricsSignalStore,
+  MetricsViewModel,
+  HeroMetric,
+  MetricComparator,
+  SparkPoint,
+  StatCell,
+} from "./metrics-types.js";
 export { buildWeekContext, type WeekContext } from "./metrics-buckets.js";
