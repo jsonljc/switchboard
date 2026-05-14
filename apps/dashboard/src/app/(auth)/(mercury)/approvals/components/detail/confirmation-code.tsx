@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "../../approvals.module.css";
+import detailStyles from "../../detail.module.css";
 
 export interface ConfirmationCodeProps {
   bindingHash: string;
@@ -34,22 +35,22 @@ export function ConfirmationCode({ bindingHash, envelopeId }: ConfirmationCodePr
   }
 
   return (
-    <div className={styles.codeBlock}>
-      <div className={styles.codeHead}>
+    <div className={detailStyles.codeBlock}>
+      <div className={detailStyles.codeHead}>
         <span className={styles.eyebrow}>Confirmation code · locks in the details above</span>
       </div>
-      <div className={styles.codeRow}>
-        <span className={styles.codeValue} data-testid="confirmation-code-value">
+      <div className={detailStyles.codeRow}>
+        <span className={detailStyles.codeValue} data-testid="confirmation-code-value">
           {bindingHash}
         </span>
-        <button type="button" className={styles.codeCopyBtn} onClick={copy}>
+        <button type="button" className={detailStyles.codeCopyBtn} onClick={copy}>
           {status === "copied"
             ? "Copied"
             : status === "failed"
               ? "Couldn't copy — select and copy manually"
               : "Copy code"}
         </button>
-        <span className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
+        <span className={detailStyles.srOnly} role="status" aria-live="polite" aria-atomic="true">
           {status === "copied"
             ? "Confirmation code copied."
             : status === "failed"
@@ -57,12 +58,12 @@ export function ConfirmationCode({ bindingHash, envelopeId }: ConfirmationCodePr
               : ""}
         </span>
       </div>
-      <div className={styles.codeFoot}>
+      <div className={detailStyles.codeFoot}>
         This code matches the exact details above. If any detail changes, the code changes. If
         something looks off, reject this and the agent can propose a corrected version.
       </div>
-      <div className={styles.codeRef}>
-        Reference: <span className={styles.codeRefId}>{envelopeId}</span>
+      <div className={detailStyles.codeRef}>
+        Reference: <span className={detailStyles.codeRefId}>{envelopeId}</span>
       </div>
     </div>
   );

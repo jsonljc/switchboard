@@ -1,6 +1,7 @@
 "use client";
 
 import styles from "../../approvals.module.css";
+import detailStyles from "../../detail.module.css";
 import { formatRemaining, timerLevel } from "../../format";
 import { agentDisplay } from "../../hooks/use-agent-display";
 import { actionDisplay } from "../../action-display";
@@ -29,43 +30,43 @@ export function DetailHeader({ row, now }: DetailHeaderProps) {
 
   const levelClass =
     level === "warn"
-      ? styles.dhTimer_warn
+      ? detailStyles.dhTimer_warn
       : level === "critical"
-        ? styles.dhTimer_critical
+        ? detailStyles.dhTimer_critical
         : level === "expired"
-          ? styles.dhTimer_expired
+          ? detailStyles.dhTimer_expired
           : "";
 
   return (
-    <div className={styles.dblock}>
-      <div className={styles.detailHead}>
-        <div className={styles.dhRow}>
-          <span className={styles.dhPill} data-risk={row.riskCategory}>
+    <div className={detailStyles.dblock}>
+      <div className={detailStyles.detailHead}>
+        <div className={detailStyles.dhRow}>
+          <span className={detailStyles.dhPill} data-risk={row.riskCategory}>
             {row.riskCategory}
           </span>
-          <span className={`${styles.dhTimer} ${levelClass}`}>
+          <span className={`${detailStyles.dhTimer} ${levelClass}`}>
             <span className={styles.eyebrow}>{remaining <= 0 ? "expired" : "expires in"}</span>
             <span>{formatRemaining(remaining)}</span>
           </span>
         </div>
-        <h2 className={styles.dhSummary}>{row.summary}</h2>
-        <div className={styles.dhFoot}>
+        <h2 className={detailStyles.dhSummary}>{row.summary}</h2>
+        <div className={detailStyles.dhFoot}>
           <span>
             <b>{agent.name}</b>
             {agent.role ? ` · ${agent.role}` : ""}
           </span>
-          <span className={styles.dhFootSep}>·</span>
+          <span className={detailStyles.dhFootSep}>·</span>
           <span>
             action: <b>{action}</b>
           </span>
         </div>
-        <div className={styles.params}>
-          <div className={styles.paramsHead}>
+        <div className={detailStyles.params}>
+          <div className={detailStyles.paramsHead}>
             <span className={styles.eyebrow}>details</span>
           </div>
-          <dl className={styles.paramsList}>
+          <dl className={detailStyles.paramsList}>
             {Object.entries(params).map(([k, v]) => (
-              <div key={k} className={styles.paramsRow}>
+              <div key={k} className={detailStyles.paramsRow}>
                 <dt>{k}</dt>
                 <dd>{renderValue(v)}</dd>
               </div>
