@@ -23,10 +23,10 @@ async function buildApp(opts: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existing house style in whatsapp-management.test.ts
   app.decorate("prisma", opts.prisma as any);
   app.decorateRequest("organizationIdFromAuth", "");
-  app.decorateRequest("userEmail", "");
+  app.decorateRequest("principalIdFromAuth", "");
   app.addHook("onRequest", async (request) => {
     (request as unknown as { organizationIdFromAuth: string }).organizationIdFromAuth = "org_test";
-    (request as unknown as { userEmail: string }).userEmail = "u@example.com";
+    (request as unknown as { principalIdFromAuth: string }).principalIdFromAuth = "u@example.com";
   });
   await app.register(whatsappSendTestRoutes, { graphApiFetch: opts.graphApiFetch });
   return app;
@@ -437,5 +437,54 @@ describe("GET /test-sends", () => {
     expect(body.tests).toHaveLength(1);
     expect(body.tests[0]!.lastWebhookAt).toBeNull();
     expect(body.tests[0]!.lastWebhookStatus).toBeNull();
+  });
+});
+
+describe("auth guards", () => {
+  let app: FastifyInstance;
+
+  afterEach(async () => {
+    if (app) await app.close();
+  });
+
+  async function buildAppWithoutAuth(prisma: ReturnType<typeof buildPrismaMock>) {
+    const a = Fastify({ logger: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existing house style
+    a.decorate("prisma", prisma as any);
+    a.decorateRequest("organizationIdFromAuth", "");
+    a.decorateRequest("principalIdFromAuth", "");
+    await a.register(whatsappSendTestRoutes, { graphApiFetch: vi.fn() });
+    return a;
+  }
+
+  it("POST /send-test returns 401 when organizationIdFromAuth is missing", async () => {
+    const prisma = buildPrismaMock();
+    app = await buildAppWithoutAuth(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/send-test",
+      payload: {
+        phoneNumberId: "PN_123",
+        templateName: "appt_reminder",
+        languageCode: "en_US",
+        toNumber: "+15551234567",
+      },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({
+      error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false },
+    });
+    expect(prisma.managedChannel.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("GET /test-sends returns 401 when organizationIdFromAuth is missing", async () => {
+    const prisma = buildPrismaMock();
+    app = await buildAppWithoutAuth(prisma);
+    const res = await app.inject({ method: "GET", url: "/test-sends" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({
+      error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false },
+    });
+    expect(prisma.whatsAppTestSend.findMany).not.toHaveBeenCalled();
   });
 });

@@ -86,8 +86,15 @@ export const whatsappSendTestRoutes: FastifyPluginAsync<SendTestOptions> = async
   const fetchImpl = opts.graphApiFetch ?? fetch;
 
   app.post("/send-test", async (request, reply) => {
-    const orgId = (request as unknown as { organizationIdFromAuth: string }).organizationIdFromAuth;
-    const sentBy = (request as unknown as { userEmail?: string }).userEmail ?? "system";
+    const orgId = (request as unknown as { organizationIdFromAuth?: string })
+      .organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({
+        error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false },
+      });
+    }
+    const sentBy =
+      (request as unknown as { principalIdFromAuth?: string }).principalIdFromAuth ?? "system";
 
     const parsed = WhatsAppSendTestRequestSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -222,7 +229,13 @@ export const whatsappSendTestRoutes: FastifyPluginAsync<SendTestOptions> = async
   });
 
   app.get("/test-sends", async (request, reply) => {
-    const orgId = (request as unknown as { organizationIdFromAuth: string }).organizationIdFromAuth;
+    const orgId = (request as unknown as { organizationIdFromAuth?: string })
+      .organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({
+        error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false },
+      });
+    }
     const rows = (await app.prisma!.whatsAppTestSend.findMany({
       where: { organizationId: orgId },
       orderBy: { sentAt: "desc" },
