@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { OpportunitySchema } from "@switchboard/schemas";
+import { OpportunityStageSchema } from "@switchboard/schemas";
 import {
   listOpportunitiesForBoard,
   transitionOpportunityStage,
@@ -8,13 +8,9 @@ import {
 } from "@switchboard/core/lifecycle";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
-const _StageTransitionRequestSchema = z.object({
-  stage: OpportunitySchema.shape.stage,
+const StageTransitionRequestSchema = z.object({
+  stage: OpportunityStageSchema,
 });
-
-// Re-export for Task 9's PATCH handler — prevents unused-import lint errors
-// until Task 9 adds the PATCH route in this file.
-export { transitionOpportunityStage, OpportunityNotFoundError };
 
 export const dashboardOpportunitiesRoutes: FastifyPluginAsync = async (app) => {
   // Dev/test parity: when authDisabled, accept x-org-id header (mirrors the
@@ -43,5 +39,28 @@ export const dashboardOpportunitiesRoutes: FastifyPluginAsync = async (app) => {
     return await listOpportunitiesForBoard({ orgId }, { opportunityStore: app.opportunityStore });
   });
 
-  // PATCH route added in Task 9
+  app.patch("/api/dashboard/opportunities/:id/stage", async (request, reply) => {
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
+    if (!app.opportunityStore) {
+      return reply.code(503).send({ error: "Opportunity store not available" });
+    }
+    const parsed = StageTransitionRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "INVALID_BODY" });
+    }
+    const { id } = request.params as { id: string };
+    const principalId = request.principalIdFromAuth ?? "unknown";
+    try {
+      return await transitionOpportunityStage(
+        { orgId, id, stage: parsed.data.stage, actor: { id: principalId, type: "user" } },
+        { opportunityStore: app.opportunityStore },
+      );
+    } catch (err) {
+      if (err instanceof OpportunityNotFoundError) {
+        return reply.code(404).send({ error: "OPPORTUNITY_NOT_FOUND" });
+      }
+      throw err;
+    }
+  });
 };
