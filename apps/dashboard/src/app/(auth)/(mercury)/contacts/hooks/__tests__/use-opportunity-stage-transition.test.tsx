@@ -115,6 +115,23 @@ describe("useOpportunityStageTransition", () => {
     });
   });
 
+  it("does NOT invalidate the cache after a fixture-mode mutation (preserves optimistic write)", async () => {
+    vi.mocked(isMercuryToolLive).mockReturnValue(false);
+    const { qc, wrapper } = buildHarness();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useOpportunityStageTransition(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ id: "opp_001", stage: "qualified" });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: KEY }));
+    // The optimistically-written row should still be present.
+    const after = qc.getQueryData<PipelineBoardResponse>(KEY);
+    expect(after?.rows[0].stage).toBe("qualified");
+  });
+
   it("rolls back the cache when the live mutation fails", async () => {
     vi.mocked(isMercuryToolLive).mockReturnValue(true);
     global.fetch = vi.fn(async () => new Response("nope", { status: 500 })) as typeof global.fetch;

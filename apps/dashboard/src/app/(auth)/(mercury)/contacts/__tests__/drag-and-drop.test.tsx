@@ -62,6 +62,30 @@ describe("Pipeline drag and drop", () => {
     await waitFor(() => expect(screen.getByText(/Moved Jia to Qualified\./)).toBeInTheDocument());
   });
 
+  it("keeps the card in its new column after the mutation settles (fixture mode)", async () => {
+    renderPage();
+    const card = await screen.findByText("Hydrafacial · single session");
+    const cardLink = card.closest("a")!;
+    const qualifiedColumn = screen.getByText("Qualified").closest("section")!;
+
+    const dataTransfer = { effectAllowed: "", setData: vi.fn(), getData: () => "opp_001" };
+    fireEvent.dragStart(cardLink, { dataTransfer });
+    fireEvent.dragOver(qualifiedColumn, { dataTransfer });
+    fireEvent.drop(qualifiedColumn, { dataTransfer });
+    fireEvent.dragEnd(cardLink, { dataTransfer });
+
+    await waitFor(() => expect(screen.getByText(/Moved Jia to Qualified\./)).toBeInTheDocument());
+
+    // Card must remain in the Qualified column — the fixture-mode mutation
+    // must not invalidate and snap back to the original Interested column.
+    // Re-query the card after the React re-render moves the node between columns.
+    const movedCard = screen.getByText("Hydrafacial · single session");
+    const qualifiedSection = screen.getByText("Qualified").closest("section")!;
+    const interestedSection = screen.getByText("Interested").closest("section")!;
+    expect(qualifiedSection.contains(movedCard)).toBe(true);
+    expect(interestedSection.contains(movedCard)).toBe(false);
+  });
+
   it("treats drop on the current column as a no-op", async () => {
     renderPage();
     const card = await screen.findByText("Hydrafacial · single session");

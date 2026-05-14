@@ -73,7 +73,7 @@ export function useOpportunityStageTransition(): UseMutationResult<
       qc.setQueryData(keys.opportunities.board(), ctx.previous);
     },
     onSettled: () => {
-      if (!keys) return;
+      if (!keys || !live) return;
       void qc.invalidateQueries({ queryKey: keys.opportunities.board() });
     },
   });

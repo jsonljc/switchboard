@@ -57,9 +57,9 @@ export function DetailDrawer({
             <div className={styles.detailBody}>
               <Field label="value">
                 <span data-tabular className={styles.detailValue}>
-                  {opportunity.estimatedValue
-                    ? formatSGD(opportunity.estimatedValue, { forceZero: true })
-                    : "not estimated"}
+                  {opportunity.estimatedValue == null
+                    ? "not estimated"
+                    : formatSGD(opportunity.estimatedValue, { forceZero: true })}
                 </span>
                 {opportunity.revenueTotal > 0 && (
                   <span data-tabular className={styles.detailRevenue}>
