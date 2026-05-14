@@ -15,6 +15,7 @@ export type {
   TransitionStageResult,
 } from "./opportunity-store.js";
 export { OpportunityNotFoundError } from "./opportunity-store.js";
+export { listOpportunitiesForBoard, transitionOpportunityStage } from "./opportunity-board.js";
 export type {
   RevenueStore,
   RecordRevenueInput,
