@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
+import { WhatsAppSendTestRequestSchema, type WhatsAppSendTestRequest } from "@switchboard/schemas";
+import { fetchWhatsAppTemplates } from "./whatsapp-management.js";
 
 const META_GRAPH_VERSION = process.env.META_GRAPH_VERSION ?? "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
-void GRAPH_BASE; // used in Task 6 handler
 
 interface GraphErrorBody {
   error?: {
@@ -83,13 +84,143 @@ export interface SendTestOptions {
 
 export const whatsappSendTestRoutes: FastifyPluginAsync<SendTestOptions> = async (app, opts) => {
   const fetchImpl = opts.graphApiFetch ?? fetch;
-  void fetchImpl; // used in Task 6 handler
 
-  app.post("/send-test", async (_req, reply) =>
-    reply
-      .code(501)
-      .send({ error: { code: "NOT_IMPLEMENTED", message: "filled next task", retryable: false } }),
-  );
+  app.post("/send-test", async (request, reply) => {
+    const orgId = (request as unknown as { organizationIdFromAuth: string }).organizationIdFromAuth;
+    const sentBy = (request as unknown as { userEmail?: string }).userEmail ?? "system";
+
+    const parsed = WhatsAppSendTestRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: "WHATSAPP_BAD_REQUEST",
+          message: parsed.error.issues.map((i) => i.message).join("; "),
+          retryable: false,
+        },
+      });
+    }
+    const body: WhatsAppSendTestRequest = parsed.data;
+
+    const channel = await app.prisma!.managedChannel.findFirst({
+      where: { organizationId: orgId, channel: "whatsapp" },
+    });
+    if (!channel) {
+      return reply.code(404).send({
+        error: {
+          code: "WHATSAPP_NOT_CONNECTED",
+          message: "WhatsApp channel is not connected",
+          retryable: false,
+        },
+      });
+    }
+
+    const allowed = Array.isArray(channel.testRecipients)
+      ? (channel.testRecipients as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    if (!allowed.includes(body.toNumber)) {
+      return reply.code(403).send({
+        error: {
+          code: "WHATSAPP_RECIPIENT_NOT_ALLOWLISTED",
+          message: "toNumber must be on this channel's testRecipients allowlist",
+          retryable: false,
+        },
+      });
+    }
+
+    const conn = await app.prisma!.connection.findFirst({
+      where: { id: channel.connectionId, organizationId: orgId },
+    });
+    const wabaId = conn?.externalAccountId ?? null;
+    if (!wabaId) {
+      return reply.code(500).send({
+        error: {
+          code: "WHATSAPP_WABA_MISSING",
+          message: "Connection has no externalAccountId (WABA)",
+          retryable: false,
+        },
+      });
+    }
+    const token = process.env.META_SYSTEM_USER_TOKEN ?? "";
+    if (!token) {
+      return reply.code(500).send({
+        error: {
+          code: "WHATSAPP_TOKEN_MISSING",
+          message: "META_SYSTEM_USER_TOKEN is not configured on the server",
+          retryable: false,
+        },
+      });
+    }
+
+    const tplResult = await fetchWhatsAppTemplates({ wabaId, token, fetchImpl });
+    if (!tplResult.ok) {
+      return reply.code(tplResult.httpStatus).send({
+        error: {
+          code: tplResult.code,
+          message: tplResult.message,
+          retryable: isRetryable(tplResult.code),
+        },
+      });
+    }
+    const tpl = tplResult.templates.find(
+      (t) => t.name === body.templateName && t.language === body.languageCode,
+    );
+    if (!tpl || tpl.status.toUpperCase() !== "APPROVED") {
+      return reply.code(400).send({
+        error: {
+          code: "WHATSAPP_TEMPLATE_NOT_APPROVED",
+          message: "Only APPROVED templates can be used for send-test",
+          retryable: false,
+        },
+      });
+    }
+
+    const graphBody = {
+      messaging_product: "whatsapp",
+      to: body.toNumber.replace(/^\+/, ""),
+      type: "template",
+      template: { name: body.templateName, language: { code: body.languageCode } },
+    };
+    const result = await graphPost(
+      `${GRAPH_BASE}/${body.phoneNumberId}/messages`,
+      graphBody,
+      token,
+      fetchImpl,
+    );
+    if (!result.ok) {
+      return reply.code(result.httpStatus).send({
+        error: { code: result.code, message: result.message, retryable: isRetryable(result.code) },
+      });
+    }
+    const data = result.data as { messages?: Array<{ id?: string }> };
+    const messageId = data.messages?.[0]?.id;
+    if (!messageId) {
+      return reply.code(502).send({
+        error: {
+          code: "WHATSAPP_NO_MESSAGE_ID",
+          message: "Graph accepted the message but did not return an ID",
+          retryable: true,
+        },
+      });
+    }
+
+    const sentAt = new Date();
+    await app.prisma!.whatsAppTestSend.create({
+      data: {
+        organizationId: orgId,
+        managedChannelId: channel.id,
+        messageId,
+        phoneNumberId: body.phoneNumberId,
+        templateName: body.templateName,
+        languageCode: body.languageCode,
+        toNumber: body.toNumber,
+        sentBy,
+        sentAt,
+        apiStatus: "sent",
+      },
+    });
+    return reply.code(200).send({ messageId, status: "sent", sentAt: sentAt.toISOString() });
+  });
+
   app.get("/test-sends", async (_req, reply) =>
     reply
       .code(501)
