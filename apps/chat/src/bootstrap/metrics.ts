@@ -44,7 +44,10 @@ export function createPromMetrics(): SwitchboardMetrics {
   const OUTCOME_PATTERN_TIER_LABELS = ["deployment_id", "attribution_tier"];
   const OUTCOME_PATTERN_REJECTED_LABELS = ["deployment_id", "reason"];
   const OUTCOME_PATTERN_COLLISION_LABELS = ["deployment_id", "current_key", "colliding_key"];
-  const OUTCOME_PATTERN_DECAYED_LABELS = ["deployment_tier", "canonical_category"];
+  // Labels are camelCase (matches the call site in executeDailyPatternDecay).
+  // The carry-debt observability PR will retro-rename the older snake_case
+  // outcome-pattern label sets to match.
+  const OUTCOME_PATTERN_DECAYED_LABELS = ["deploymentTier", "canonicalCategory"];
   const CONFIDENCE_BUCKETS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
   return {
     proposalsTotal: new PromCounter(
