@@ -14,8 +14,8 @@ vi.mock("@/lib/api-client/agents-server", () => ({
 vi.mock("@/components/layout/editorial-auth-shell", () => ({
   EditorialAuthShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-vi.mock("../agent-home-client", () => ({
-  AgentHomeClient: ({ agentKey }: { agentKey: string }) => (
+vi.mock("@/components/agent-home/agent-home-shell", () => ({
+  AgentHomeShell: ({ agentKey }: { agentKey: string }) => (
     <div data-testid="client">{agentKey}</div>
   ),
 }));
@@ -44,7 +44,7 @@ describe("AgentHomePage server gates", () => {
     );
   });
 
-  it("renders AgentHomeClient for valid + enabled agent", async () => {
+  it("renders AgentHomeShell for valid + enabled agent", async () => {
     process.env.NEXT_PUBLIC_DEPLOY_ENV = "preview";
     const tree = await AgentHomePage({ params: Promise.resolve({ agentKey: "alex" }) });
     const { render, screen } = await import("@testing-library/react");

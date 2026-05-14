@@ -102,11 +102,11 @@ vi.mock("@/hooks/use-agent-greeting", () => ({
   }),
 }));
 
-import { AgentHomeClient } from "../agent-home-client";
+import { AgentHomeShell } from "../agent-home-shell";
 
-describe("AgentHomeClient", () => {
+describe("AgentHomeShell", () => {
   it("renders all 5 block sections for alex", () => {
-    render(<AgentHomeClient agentKey="alex" />);
+    render(<AgentHomeShell agentKey="alex" />);
     expect(screen.getByTestId("block-greeting")).toBeInTheDocument();
     expect(screen.getByTestId("block-needs-you")).toBeInTheDocument();
     expect(screen.getByTestId("block-wins")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("AgentHomeClient", () => {
   });
 
   it("renders all 5 block sections for riley", () => {
-    render(<AgentHomeClient agentKey="riley" />);
+    render(<AgentHomeShell agentKey="riley" />);
     expect(screen.getAllByText(/Pipeline/).length).toBeGreaterThan(0);
   });
 });

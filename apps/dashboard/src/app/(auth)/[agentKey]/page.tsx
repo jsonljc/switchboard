@@ -3,7 +3,7 @@ import { AGENT_KEYS } from "@switchboard/schemas";
 import type { AgentKey } from "@switchboard/schemas";
 import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
 import { EditorialAuthShell } from "@/components/layout/editorial-auth-shell";
-import { AgentHomeClient } from "./agent-home-client";
+import { AgentHomeShell } from "@/components/agent-home/agent-home-shell";
 
 export default async function AgentHomePage({ params }: { params: Promise<{ agentKey: string }> }) {
   const { agentKey: rawAgentKey } = await params;
@@ -15,7 +15,7 @@ export default async function AgentHomePage({ params }: { params: Promise<{ agen
 
   return (
     <EditorialAuthShell>
-      <AgentHomeClient agentKey={agentKey} />
+      <AgentHomeShell agentKey={agentKey} />
     </EditorialAuthShell>
   );
 }
