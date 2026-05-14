@@ -1,10 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { isMercuryToolLive } from "@/lib/route-availability";
 import { APPROVALS_FIXTURES } from "../fixtures";
 import type { PendingRow, DetailRow } from "../types";
+import { useSessionPrincipal } from "./use-session-principal";
 
 const isLive = (): boolean => isMercuryToolLive("approvals");
 
@@ -74,5 +75,69 @@ export function useApprovalDetail(id: string | null) {
     },
     enabled: !!id && (!live || !!keys),
     staleTime: 5_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Respond mutation
+// ---------------------------------------------------------------------------
+
+export interface RespondInput {
+  id: string;
+  action: "approve" | "reject" | "patch";
+  bindingHash?: string;
+  patchValue?: Record<string, unknown>;
+}
+
+export class ApprovalRespondError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = "ApprovalRespondError";
+  }
+}
+
+export function useRespondToApproval() {
+  const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
+  const principalId = useSessionPrincipal();
+
+  return useMutation({
+    mutationFn: async (input: RespondInput) => {
+      if (!principalId) throw new ApprovalRespondError("No session principal", 401);
+      const body: Record<string, unknown> = {
+        approvalId: input.id,
+        action: input.action,
+        respondedBy: principalId,
+      };
+      if (input.action !== "reject") body.bindingHash = input.bindingHash;
+      if (input.action === "patch") body.patchValue = input.patchValue;
+
+      const res = await fetch("/api/dashboard/approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        let detail = "Request failed";
+        try {
+          const data = (await res.json()) as { error?: string };
+          if (data?.error) detail = data.error;
+        } catch {
+          /* fall through with default */
+        }
+        throw new ApprovalRespondError(detail, res.status);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      if (keys) {
+        queryClient.invalidateQueries({ queryKey: keys.approvals.all() });
+        // Defensive: if/when the decision feed surfaces approvals, ensure both
+        // caches drop together (amendment I).
+        queryClient.invalidateQueries({ queryKey: keys.decisions.all() });
+      }
+    },
   });
 }
