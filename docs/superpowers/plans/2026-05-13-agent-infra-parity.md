@@ -2106,7 +2106,7 @@ EOF
 - Create: `packages/core/src/memory/__tests__/booking-attribution.test.ts`
 - Modify: `packages/core/src/memory/compounding-service.ts` — accept `bookingStore`; gate `trackPattern` calls on attribution; pass `attribution_tier` to metrics
 - Modify: `packages/core/src/memory/__tests__/compounding-service.test.ts` — new gating tests (booking-backed, not LLM-classified)
-- Modify: `packages/core/src/memory/context-builder.ts` — increment `outcome_patterns_surfaced_total` when at least one pattern is injected
+- Modify: `packages/core/src/memory/context-builder.ts` — filter `category: "pattern"` rows out of `learnedFacts` (Task 19 Step 3a) and increment `outcome_patterns_surfaced_total` when at least one pattern is injected (Task 19 Step 3b)
 - Modify: `packages/core/src/memory/__tests__/context-builder.test.ts`
 - Modify: `packages/core/src/telemetry/metrics.ts` — extend `SwitchboardMetrics` with four counters + one histogram
 - Modify: `apps/api/src/metrics.ts` — instantiate Prometheus counters and the confidence histogram
@@ -2558,90 +2558,105 @@ Five series, all idiomatic with the existing `SwitchboardMetrics` interface:
 
 - [ ] **Step 1: Extend `SwitchboardMetrics` interface**
 
-In `packages/core/src/telemetry/metrics.ts`, add to the interface (existing definition around line 7-20):
+In `packages/core/src/telemetry/metrics.ts`, add to the interface (existing definition at lines 7-20):
 
 ```typescript
 export interface SwitchboardMetrics {
   // ... existing fields ...
-  outcomePatternsExtracted: Counter<{ deploymentId: string; attributionTier: string }>;
-  outcomePatternsMerged: Counter<{ deploymentId: string }>;
-  outcomePatternsCreated: Counter<{ deploymentId: string }>;
-  outcomePatternsSurfaced: Counter<{ deploymentId: string }>;
-  outcomePatternConfidence: Histogram<{ deploymentId: string }>;
+  outcomePatternsExtracted: Counter;
+  outcomePatternsMerged: Counter;
+  outcomePatternsCreated: Counter;
+  outcomePatternsSurfaced: Counter;
+  outcomePatternConfidence: Histogram;
 }
 ```
 
-Mirror the typing style already used by `proposalsTotal`, `executionsTotal`, etc. — keep generics consistent with existing counters.
+`Counter` and `Histogram` are non-generic interfaces in this codebase — `inc(labels?, value?)` and `observe(labels, value)` accept `Record<string, string>`. Mirror `proposalsTotal: Counter`, `executionLatencyMs: Histogram` exactly; do NOT add type parameters.
 
 - [ ] **Step 2: Add in-memory implementations for tests**
 
-Extend the existing `InMemoryMetrics` factory at `packages/core/src/telemetry/metrics.ts:30-78` with no-op `InMemoryCounter`/`InMemoryHistogram` instances for the five new series. Use the same shape as the rest — they just need `.inc()` / `.observe()` / `.get()` / `.getValues()` to be callable from tests without throwing.
+The existing `InMemoryCounter` and `InMemoryHistogram` (`metrics.ts:30-48`) are reusable as-is — no per-series class is needed. Just extend `createInMemoryMetrics()` (`metrics.ts:63-78`) to instantiate them for the five new slots:
+
+```typescript
+export function createInMemoryMetrics(): SwitchboardMetrics {
+  return {
+    // ... existing fields ...
+    outcomePatternsExtracted: new InMemoryCounter(),
+    outcomePatternsMerged: new InMemoryCounter(),
+    outcomePatternsCreated: new InMemoryCounter(),
+    outcomePatternsSurfaced: new InMemoryCounter(),
+    outcomePatternConfidence: new InMemoryHistogram(),
+  };
+}
+```
+
+`InMemoryCounter.get()` returns a scalar — it does NOT key by label set. If you need per-label assertions in a test, spy on `inc` instead of reading `get()`. (This matches how other in-memory tests in the codebase assert.)
 
 - [ ] **Step 3: Wire the Prometheus implementations**
 
-In `apps/api/src/metrics.ts`, inside `createPromMetrics()` (around lines 42-108), add:
+In `apps/api/src/metrics.ts`, all existing series go through `PromCounter` / `PromHistogram` wrappers (lines 8-36) — these wrappers implement the core `Counter` / `Histogram` interfaces, which raw `client.Counter` / `client.Histogram` do NOT. Use the wrappers, not the raw `prom-client` objects:
 
 ```typescript
-const outcomePatternsExtracted = new client.Counter({
-  name: "switchboard_outcome_patterns_extracted_total",
-  help: "Outcome patterns extracted from booked conversations, by attribution tier",
-  labelNames: ["deployment_id", "attribution_tier"],
-  registers: [registry],
-});
+// inside createPromMetrics()
+const OUTCOME_PATTERN_LABELS = ["deployment_id"];
+const OUTCOME_PATTERN_TIER_LABELS = ["deployment_id", "attribution_tier"];
+const CONFIDENCE_BUCKETS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
 
-const outcomePatternsMerged = new client.Counter({
-  name: "switchboard_outcome_patterns_merged_total",
-  help: "Outcome patterns that incremented an existing DeploymentMemory entry",
-  labelNames: ["deployment_id"],
-  registers: [registry],
-});
-
-const outcomePatternsCreated = new client.Counter({
-  name: "switchboard_outcome_patterns_created_total",
-  help: "Outcome patterns that created a new DeploymentMemory entry",
-  labelNames: ["deployment_id"],
-  registers: [registry],
-});
-
-const outcomePatternsSurfaced = new client.Counter({
-  name: "switchboard_outcome_patterns_surfaced_total",
-  help: "Skill executions where at least one outcome pattern was injected",
-  labelNames: ["deployment_id"],
-  registers: [registry],
-});
-
-const outcomePatternConfidence = new client.Histogram({
-  name: "switchboard_outcome_pattern_confidence",
-  help: "Post-write confidence distribution for outcome-pattern memories",
-  labelNames: ["deployment_id"],
-  buckets: [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95],
-  registers: [registry],
-});
+return {
+  // ... existing fields ...
+  outcomePatternsExtracted: new PromCounter(
+    "switchboard_outcome_patterns_extracted_total",
+    "Outcome patterns extracted from booked conversations, by attribution tier",
+    OUTCOME_PATTERN_TIER_LABELS,
+  ),
+  outcomePatternsMerged: new PromCounter(
+    "switchboard_outcome_patterns_merged_total",
+    "Outcome patterns that incremented an existing DeploymentMemory entry",
+    OUTCOME_PATTERN_LABELS,
+  ),
+  outcomePatternsCreated: new PromCounter(
+    "switchboard_outcome_patterns_created_total",
+    "Outcome patterns that created a new DeploymentMemory entry",
+    OUTCOME_PATTERN_LABELS,
+  ),
+  outcomePatternsSurfaced: new PromCounter(
+    "switchboard_outcome_patterns_surfaced_total",
+    "Skill executions where at least one outcome pattern was injected",
+    OUTCOME_PATTERN_LABELS,
+  ),
+  outcomePatternConfidence: new PromHistogram(
+    "switchboard_outcome_pattern_confidence",
+    "Post-write confidence distribution for outcome-pattern memories",
+    OUTCOME_PATTERN_LABELS,
+    CONFIDENCE_BUCKETS,
+  ),
+};
 ```
 
-Add them to the returned metrics object. Mirror the existing wrapper shape that exposes `.inc({ deploymentId, attributionTier })` etc. — the wrapper translates camelCase label keys to the Prometheus snake_case labelNames declared above.
+**Label-key convention.** Existing callers (`propose-pipeline.ts:297`, `execution-manager.ts:401`) pass camelCase keys to `inc({ actionType: ... })` even though the declared `labelNames` are snake_case (`action_type`). Match this established convention: pass camelCase keys at the call sites in `compounding-service.ts` and `context-builder.ts` (e.g. `inc({ deploymentId, attributionTier })`). If you discover that this convention is silently dropping labels in prom-client output, fix it as a separate observability PR — do NOT mix conventions inside PR-3.1.
 
 - [ ] **Step 4: Write a counter-increment assertion test**
 
-Use the in-memory metrics implementation. In `packages/core/src/telemetry/__tests__/metrics.test.ts` (or co-located test file — match existing convention):
+`InMemoryCounter.get()` returns an unlabeled scalar count (see `metrics.ts:35-37`), so the test cannot assert per-label counts via `get()`. Spy on `inc` instead — that's how callers in this codebase already test labeled metrics. In `packages/core/src/telemetry/__tests__/metrics.test.ts` (create if absent, beside the implementation):
 
 ```typescript
-it("outcomePatternsExtracted increments with attributionTier label", () => {
+import { vi } from "vitest";
+import { createInMemoryMetrics } from "../metrics.js";
+
+it("outcomePatternsExtracted accepts labeled increments", () => {
   const metrics = createInMemoryMetrics();
-  metrics.outcomePatternsExtracted.inc({ deploymentId: "dep-1", attributionTier: "strong" });
+  const spy = vi.spyOn(metrics.outcomePatternsExtracted, "inc");
+
   metrics.outcomePatternsExtracted.inc({ deploymentId: "dep-1", attributionTier: "strong" });
   metrics.outcomePatternsExtracted.inc({ deploymentId: "dep-1", attributionTier: "fallback" });
 
-  expect(
-    metrics.outcomePatternsExtracted.get({ deploymentId: "dep-1", attributionTier: "strong" }),
-  ).toBe(2);
-  expect(
-    metrics.outcomePatternsExtracted.get({ deploymentId: "dep-1", attributionTier: "fallback" }),
-  ).toBe(1);
+  expect(spy).toHaveBeenCalledWith({ deploymentId: "dep-1", attributionTier: "strong" });
+  expect(spy).toHaveBeenCalledWith({ deploymentId: "dep-1", attributionTier: "fallback" });
+  expect(spy).toHaveBeenCalledTimes(2);
 });
 ```
 
-If no `metrics.test.ts` exists yet, create one beside the implementation.
+If you want a positive `.get()` test, assert the scalar total (`metrics.outcomePatternsExtracted.get() === 2`) — but be aware this is unlabeled. Per-label assertions belong on the spy.
 
 - [ ] **Step 5: Run tests + typecheck**
 
@@ -3106,18 +3121,56 @@ EOF
 
 ---
 
-### Task 19: Emit `outcome_patterns_surfaced_total` in `ContextBuilder`
+### Task 19: Filter pattern-category rows from `learnedFacts` and emit `outcome_patterns_surfaced_total` in `ContextBuilder`
 
-The surfacing-side counter measures whether high-confidence patterns are actually reaching skill executions. Incremented once per `build()` call where `outcomePatternContext` is non-empty (i.e. at least one pattern was injected into context).
+Two changes in the same file, both single-line:
 
-Note: the `learnedFacts` filter that prevents pattern-category rows from being double-exposed alongside `outcomePatternContext` lands in PR-3 Task 7 Step 5 (same module, same release unit). Task 19 only adds the surfacing metric.
+1. **Filter.** PR-3 merged without filtering `category: "pattern"` rows out of `learnedFacts`, so pattern memories appear twice in skill context: once as advisory `outcomePatternContext`, once as a "learned fact." The PR-3 plan originally placed this filter in Task 7 Step 5, but the actual PR-3 shipped without it (confirmed against `origin/main` `context-builder.ts`). PR-3.1 closes the leak.
+2. **Surfaced counter.** Incremented once per `build()` call where `outcomePatternContext` is non-empty, so we can measure whether high-confidence patterns are actually reaching skill executions.
 
 **Files:**
 
 - Modify: `packages/core/src/memory/context-builder.ts`
 - Modify: `packages/core/src/memory/__tests__/context-builder.test.ts`
 
-- [ ] **Step 1: Write the failing test — surfaced counter increments when patterns are injected**
+- [ ] **Step 1a: Write the failing test — `learnedFacts` excludes pattern-category rows**
+
+```typescript
+it("excludes category:'pattern' rows from learnedFacts even when high-confidence", async () => {
+  deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+    {
+      id: "p1",
+      content: "Customers ask about downtime",
+      category: "pattern",
+      confidence: 0.9,
+      sourceCount: 5,
+      lastSeenAt: new Date(),
+    },
+    {
+      id: "f1",
+      content: "Numbing cream onset is 20 minutes",
+      category: "treatment_protocol",
+      confidence: 0.9,
+      sourceCount: 4,
+      lastSeenAt: new Date(),
+    },
+  ]);
+
+  const result = await builder.build({
+    organizationId: "org-1",
+    agentId: "agent-1",
+    deploymentId: "dep-1",
+    query: "tell me about laser",
+  });
+
+  expect(result.learnedFacts).toHaveLength(1);
+  expect(result.learnedFacts[0]!.category).toBe("treatment_protocol");
+  // The pattern row appears in outcomePatternContext only.
+  expect(result.outcomePatternContext).toContain("downtime");
+});
+```
+
+- [ ] **Step 1b: Write the failing test — surfaced counter increments when patterns are injected**
 
 ```typescript
 it("increments outcomePatternsSurfaced when at least one pattern is injected", async () => {
@@ -3171,12 +3224,33 @@ it("does not increment outcomePatternsSurfaced when no patterns surface", async 
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `pnpm --filter @switchboard/core test -- --grep "outcomePatternsSurfaced"`
-Expected: FAIL — counter not invoked.
+Run: `pnpm --filter @switchboard/core test -- --grep "outcomePatternsSurfaced\|excludes category:'pattern'"`
+Expected: Both FAIL — filter not in place, counter not invoked.
 
-- [ ] **Step 3: Increment the counter at the surfacing site**
+- [ ] **Step 3a: Filter pattern-category rows from `learnedFacts`**
 
-In `packages/core/src/memory/context-builder.ts`, where `outcomePatternContext` is built (touched by PR-3 Task 7), add the increment after `formatOutcomePatternsForContext(...)`:
+In `packages/core/src/memory/context-builder.ts`, locate the `learnedFacts` projection loop (currently around lines 141-152 on `origin/main`: `for (const mem of memories) { ... learnedFacts.push({...}) }`). Add a `continue` for pattern-category rows at the top of the loop body:
+
+```typescript
+for (const mem of memories) {
+  if (mem.category === "pattern") continue; // patterns flow via outcomePatternContext only
+  const tokens = estimateTokens(mem.content);
+  if (tokensUsed + tokens > budget) break;
+  learnedFacts.push({
+    content: mem.content,
+    category: mem.category,
+    confidence: mem.confidence,
+    sourceCount: mem.sourceCount,
+  });
+  tokensUsed += tokens;
+}
+```
+
+The `continue` (not `break`) is intentional: skipping a pattern row must not cut off iteration for downstream fact rows. Token budgeting, ordering, and `ContextLearnedFact` shape are unchanged.
+
+- [ ] **Step 3b: Increment the surfaced counter at the surfacing site**
+
+Where `outcomePatternContext` is built (PR-3 added this section to the same file), add the increment after `formatOutcomePatternsForContext(...)`:
 
 ```typescript
 import { getMetrics } from "../telemetry/metrics.js";
@@ -3193,19 +3267,27 @@ Increment only once per `build()` call — not once per pattern — so the count
 - [ ] **Step 4: Run tests + typecheck**
 
 Run: `pnpm --filter @switchboard/core test -- --grep "ContextBuilder" && pnpm typecheck`
-Expected: All PASS.
+Expected: All PASS — both new tests, and existing PR-3 ContextBuilder tests unaffected.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/memory/context-builder.ts packages/core/src/memory/__tests__/context-builder.test.ts
 git commit -m "$(cat <<'EOF'
-feat(memory): emit outcome_patterns_surfaced_total in ContextBuilder
+feat(memory): close pattern double-exposure leak, emit surfaced counter
 
-Counter increments once per build() where at least one outcome
-pattern crossed SURFACING_THRESHOLD and reached context. Lets us
-see whether high-confidence patterns are actually reaching skill
-executions, separate from how often they're written.
+Two single-line changes in context-builder.ts:
+
+1. learnedFacts projection skips category:"pattern" rows. PR-3
+   added outcomePatternContext but did not filter the generic
+   learnedFacts loop, so pattern memories surfaced through both
+   channels. Patterns now flow only through outcomePatternContext
+   where their advisory framing and provenance are preserved.
+
+2. outcomePatternsSurfaced counter increments once per build()
+   where at least one outcome pattern crossed SURFACING_THRESHOLD
+   and reached context — measures whether high-confidence patterns
+   are actually reaching skill executions.
 EOF
 )"
 ```
