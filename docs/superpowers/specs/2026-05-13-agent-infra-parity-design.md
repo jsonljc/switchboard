@@ -109,7 +109,7 @@ Use successful conversation outcomes to give Alex better context in future conve
 
 ### What changes
 
-- When a conversation ends in `booked`, extract pattern candidates from the existing `processConversationEnd` LLM extraction call (no second LLM call) and upsert them into `DeploymentMemory` with `category: "pattern"`. Reuse the existing `sourceCount`/`confidence` accumulation path so promotion thresholds match the rest of the memory system.
+- When the LLM summarization outcome is `booked`, extract pattern candidates from the existing `processConversationEnd` LLM extraction call (no second LLM call) and write them into `DeploymentMemory` with `category: "pattern"` via the existing `findByCategory` → similarity → `incrementConfidence`/`create` path (the same shape `trackQuestion` uses for FAQ promotion). Reuse the existing `sourceCount`/`confidence` accumulation path so promotion thresholds match the rest of the memory system. Note: trigger gating reads `summarization.outcome` (the LLM-inferred outcome), not `ConversationEndEvent.endReason` (the lifecycle reason — different field).
 - At skill execution time, inject only high-confidence, relevant patterns into Alex's context with provenance, confidence, and freshness metadata.
 - Keep the injected context advisory, not mandatory.
 - `ContextBuilder` is a stateful service, not a per-call store. Inject it through a new `SkillServices` slot, separate from `SkillStores`. Do not place it on the `stores` map.
