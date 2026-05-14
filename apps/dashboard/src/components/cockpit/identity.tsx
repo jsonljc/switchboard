@@ -12,9 +12,12 @@ export interface IdentityProps {
   /** Click handler for the Halt / Resume button. Receives no argument. */
   onHaltToggle: () => void;
   compact?: boolean;
-  // A.2 will add `onOpenMission?: () => void` + `missionInteractive?: boolean`
-  // so the subtitle becomes a clickable mission-popover trigger. Do not add
-  // either prop at A.1 — the subtitle is plain text.
+  /** A.2: when both this and onOpenMission are set, the subtitle becomes a
+   * clickable mission-popover trigger (subtle underline hover). Otherwise
+   * it renders as plain text (A.1 default). */
+  missionInteractive?: boolean;
+  /** A.2: called when the operator clicks the interactive subtitle. */
+  onOpenMission?: () => void;
 }
 
 function AvatarFrame({ size = 64 }: { size?: number }) {
@@ -47,6 +50,8 @@ export function Identity({
   line,
   onHaltToggle,
   compact = false,
+  missionInteractive = false,
+  onOpenMission,
 }: IdentityProps) {
   return (
     <div
@@ -81,7 +86,28 @@ export function Identity({
             letterSpacing: "0.02em",
           }}
         >
-          {subtitle}
+          {missionInteractive && onOpenMission ? (
+            <button
+              type="button"
+              onClick={onOpenMission}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                fontSize: "inherit",
+                color: "inherit",
+                fontFamily: "inherit",
+                letterSpacing: "inherit",
+                textDecoration: "none",
+              }}
+              className="text-left underline-offset-2 hover:underline"
+            >
+              {subtitle}
+            </button>
+          ) : (
+            subtitle
+          )}
         </div>
         {line && (
           <p

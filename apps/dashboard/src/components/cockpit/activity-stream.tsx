@@ -24,7 +24,10 @@ function matchesFilter(row: ActivityRow, filter: ActivityFilter): boolean {
 export function ActivityStream({ rows, filter, setFilter, compact = false }: ActivityStreamProps) {
   const filtered = rows.filter((r) => matchesFilter(r, filter));
   return (
-    <section style={{ padding: compact ? "16px 18px 28px" : "20px 28px 28px" }}>
+    <section
+      data-testid="cockpit-activity-stream"
+      style={{ padding: compact ? "16px 18px 28px" : "20px 28px 28px" }}
+    >
       <div
         style={{
           display: "flex",

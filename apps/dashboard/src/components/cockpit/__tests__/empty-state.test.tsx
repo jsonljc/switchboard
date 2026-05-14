@@ -1,0 +1,70 @@
+// apps/dashboard/src/components/cockpit/__tests__/empty-state.test.tsx
+import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { EmptyState, shouldRenderEmptyState } from "../empty-state";
+import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
+
+const setupAllUndone: MissionAggregatorResponse["setup"] = [
+  { key: "meta", done: false, primary: true },
+  { key: "inbox", done: false },
+  { key: "cal", done: false },
+  { key: "rules", done: false },
+];
+
+const setupPartialDone: MissionAggregatorResponse["setup"] = [
+  { key: "meta", done: true },
+  { key: "inbox", done: false, primary: true },
+  { key: "cal", done: false },
+  { key: "rules", done: false },
+];
+
+describe("shouldRenderEmptyState", () => {
+  it("returns true only when every setup row is undone", () => {
+    expect(shouldRenderEmptyState(setupAllUndone)).toBe(true);
+    expect(shouldRenderEmptyState(setupPartialDone)).toBe(false);
+    expect(shouldRenderEmptyState([])).toBe(false);
+  });
+});
+
+describe("EmptyState", () => {
+  it("templates thresholds from mission.rules when present", () => {
+    render(
+      <EmptyState
+        rules={{ priceApprovalThreshold: 120, refundEscalationFloor: 250 }}
+        setup={setupAllUndone}
+        onConnect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/pricing decisions over \$120/i)).toBeInTheDocument();
+    expect(screen.getByText(/refunds over \$250/i)).toBeInTheDocument();
+  });
+
+  it("falls back to locked-design defaults when rules == null", () => {
+    render(<EmptyState rules={null} setup={setupAllUndone} onConnect={vi.fn()} />);
+    expect(screen.getByText(/pricing decisions over \$89/i)).toBeInTheDocument();
+    expect(screen.getByText(/refunds over \$200/i)).toBeInTheDocument();
+  });
+
+  it("renders 4 setup rows with the primary row highlighted", () => {
+    render(<EmptyState rules={null} setup={setupAllUndone} onConnect={vi.fn()} />);
+    const rows = screen.getAllByTestId(/^setup-row-/);
+    expect(rows).toHaveLength(4);
+    const primary = screen.getByTestId("setup-row-meta");
+    expect(primary.getAttribute("data-primary")).toBe("true");
+    expect(screen.getByTestId("setup-row-inbox").getAttribute("data-primary")).toBe("false");
+  });
+
+  it("invokes onConnect with the row key when a setup row is clicked", () => {
+    const onConnect = vi.fn();
+    render(<EmptyState rules={null} setup={setupAllUndone} onConnect={onConnect} />);
+    fireEvent.click(screen.getByTestId("setup-row-inbox"));
+    expect(onConnect).toHaveBeenCalledWith("inbox");
+  });
+
+  it("shows the NEXT MOVE pill from the primary row", () => {
+    render(<EmptyState rules={null} setup={setupAllUndone} onConnect={vi.fn()} />);
+    const pill = screen.getByTestId("next-move-pill");
+    expect(pill).toHaveTextContent(/NEXT MOVE/i);
+    expect(pill).toHaveTextContent(/Connect Meta Ads/i);
+  });
+});
