@@ -57,20 +57,46 @@
 - Modify: `apps/api/src/routes/__tests__/whatsapp-management.test.ts`
 - Modify: `apps/dashboard/src/hooks/use-whatsapp-management.ts`
 
-**Important context:** `/account` has FOUR return branches in `whatsapp-management.ts:175-249` — `not_connected` (no Connection row), `incomplete` (no `externalAccountId` or no `primaryPhoneNumberId`), `needs_attention` (phone has issues), and `connected`. `testRecipients` must be threaded through every branch that returns a `connection` block (i.e., all branches where the operator can see WhatsApp UI). The `not_connected` branch returns a minimal payload without a full `connection` object — surface `testRecipients` as an empty array on the response root in that branch (or skip it entirely, since the send-test UI doesn't render when not connected).
+**Important context:** `/account` has FOUR return branches in `whatsapp-management.ts:175-249` — `not_connected`, `incomplete`, `needs_attention`, and `connected`. ALL four return a `connection` block (the `not_connected` branch returns `{ status: "not_connected", externalAccountId: null, primaryPhoneNumberId: null, connectedAt: null }`). Add `testRecipients` to the connection block in every branch uniformly. Don't try to be clever and omit it in `not_connected`.
 
-- [ ] **Step 1: Failing API test** — add a new test that:
-  - mocks `prisma.connection.findFirst` to return a connected WhatsApp Connection with `externalAccountId: "WABA_1"`
-  - mocks `prisma.managedChannel.findFirst` to return a row with `testRecipients: ["+15551234567"]`
-  - mocks the existing Graph templates / phone checks to return success
-  - asserts:
+**Test mock surface:** the existing `/account` tests in `apps/api/src/routes/__tests__/whatsapp-management.test.ts:17-22` decorate Prisma with only `{ connection: { findFirst: mockFindFirst } }`. Once the handler also calls `app.prisma!.managedChannel.findFirst(...)`, those tests will throw `Cannot read properties of undefined (reading 'findFirst')` before reaching assertions. **You must extend the shared test setup** with `managedChannel: { findFirst: mockManagedChannelFindFirst }` and provide a sensible default (`mockManagedChannelFindFirst.mockResolvedValue({ testRecipients: [] })`) in `beforeEach`, then override per-test where needed. Audit every existing `/account` test before changing the handler — green → red is silent in CI if the mock is missing.
+
+- [ ] **Step 1a: Extend the shared test mock FIRST** (before changing the handler — keeps the existing 15 tests green).
+
+In `apps/api/src/routes/__tests__/whatsapp-management.test.ts`, find the `beforeEach`/`beforeAll` decorating Prisma. Add `managedChannel: { findFirst: vi.fn() }`. In the per-test setup, default it: `mockManagedChannelFindFirst.mockResolvedValue({ testRecipients: [] })`. This default ensures every existing test still passes.
+
+- [ ] **Step 1b: Failing API tests** — add three new tests covering distinct branches:
 
 ```typescript
-const body = res.json() as { connection: { testRecipients: string[] } };
-expect(body.connection.testRecipients).toEqual(["+15551234567"]);
+it("connected: includes testRecipients on the connection block", async () => {
+  // mock Connection: connected, externalAccountId="WABA_1"
+  mockManagedChannelFindFirst.mockResolvedValueOnce({ testRecipients: ["+15551234567"] });
+  // mock Graph templates + phones happy path
+  const res = await app.inject({ method: "GET", url: "/account" });
+  const body = res.json() as { connection: { testRecipients: string[] } };
+  expect(body.connection.testRecipients).toEqual(["+15551234567"]);
+});
+
+it("not_connected: still surfaces empty testRecipients", async () => {
+  mockFindFirst.mockResolvedValueOnce(null); // no Connection row
+  mockManagedChannelFindFirst.mockResolvedValueOnce({ testRecipients: [] });
+  const res = await app.inject({ method: "GET", url: "/account" });
+  const body = res.json() as { connection: { status: string; testRecipients: string[] } };
+  expect(body.connection.status).toBe("not_connected");
+  expect(body.connection.testRecipients).toEqual([]);
+});
+
+it("incomplete: surfaces testRecipients alongside the incomplete status", async () => {
+  // mock Connection without externalAccountId → triggers "incomplete" branch
+  mockManagedChannelFindFirst.mockResolvedValueOnce({ testRecipients: ["+15551111111"] });
+  const res = await app.inject({ method: "GET", url: "/account" });
+  const body = res.json() as { connection: { status: string; testRecipients: string[] } };
+  expect(body.connection.status).toBe("incomplete");
+  expect(body.connection.testRecipients).toEqual(["+15551111111"]);
+});
 ```
 
-Also add a second test asserting `not_connected` still returns 200 with `connection.testRecipients` either absent or `[]` (your call — be consistent).
+Optional: a fourth test for `needs_attention` if you want full branch coverage. The first three are enough to prove the threading.
 
 - [ ] **Step 2: Modify the `/account` handler.** Load `ManagedChannel` once at the top of the handler (alongside the `Connection` lookup), parse `testRecipients` into a string array, and include it in the connection block of every return branch that has one:
 
@@ -93,13 +119,15 @@ connection: {
 
 Touch all four branches; do not split this across PRs.
 
-- [ ] **Step 3: Extend dashboard types** — in `apps/dashboard/src/hooks/use-whatsapp-management.ts`, find the type that backs `account.data.connection` (likely a `WhatsAppConnectionData` interface or inline type at lines 10-29). Add the field as optional (since `not_connected` may omit it) and treat `undefined` as `[]` in consumers:
+- [ ] **Step 3: Extend dashboard types** — in `apps/dashboard/src/hooks/use-whatsapp-management.ts:10-29`, the existing connection type's `status` union is `"connected" | "incomplete" | "needs_attention"` and is missing `"not_connected"` (the API actually returns that value at runtime). Fix both as part of this PR:
 
 ```typescript
-testRecipients?: string[];
+// Add "not_connected" to the union AND add the new field.
+status: "connected" | "incomplete" | "needs_attention" | "not_connected";
+testRecipients: string[];
 ```
 
-In the panel-injection code (Task 4 of this plan), use `account.data.connection.testRecipients ?? []`.
+Since Task 1 now makes the handler emit `testRecipients` in all four branches, the type is **required**, not optional. In the panel-injection code (Task 4 of this plan), `account.data.connection.testRecipients` is safe to read directly.
 
 - [ ] **Step 4: Run, pass**
 

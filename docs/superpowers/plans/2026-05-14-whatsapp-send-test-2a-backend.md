@@ -357,14 +357,19 @@ git commit -m "feat(db): PrismaWhatsAppTestSendStore — create / listRecent / u
 
 Send-test (Task 6) needs to look up approved templates without duplicating the Graph fetch. Extract a small helper.
 
-- [ ] **Step 1:** Locate the existing templates handler. It builds a full URL like `` `${graphBase}/${wabaId}/message_templates?...` `` and calls `graphGet(fullUrl, token, fetchImpl)`. Extract its core into a helper that mirrors `graphGet`'s return shape (no `retryable` field — callers infer it):
+- [ ] **Step 1:** Locate the existing templates handler. It builds a full URL like `` `${graphBase}/${wabaId}/message_templates?...` ``, calls `graphGet(fullUrl, token, fetchImpl)`, and maps Graph rows into the full `Template` shape consumed by `/templates`. The helper must return that **same** shape so the existing route can be refactored without changing its external response:
 
 ```typescript
-export interface WhatsAppTemplateLite {
+// Mirror the existing /templates route's output type — do NOT pare down.
+export interface WhatsAppTemplate {
+  id: string;
   name: string;
-  status: string; // "APPROVED" | "PENDING" | "REJECTED" | ...
   language: string;
-  components?: unknown;
+  status: string; // "APPROVED" | "PENDING" | "REJECTED" | ...
+  category: string;
+  hasBody: boolean;
+  hasButtons: boolean;
+  rejectedReason: string | null;
 }
 
 export async function fetchWhatsAppTemplates(args: {
@@ -372,15 +377,15 @@ export async function fetchWhatsAppTemplates(args: {
   token: string;
   fetchImpl: typeof fetch;
 }): Promise<
-  | { ok: true; templates: WhatsAppTemplateLite[] }
+  | { ok: true; templates: WhatsAppTemplate[] }
   | { ok: false; code: string; message: string; httpStatus: number }
 > {
   // Build the same full URL the existing /templates handler uses (graphBase + /<wabaId>/message_templates with fields).
-  // Call graphGet, map the data into WhatsAppTemplateLite[].
+  // Call graphGet, then run the existing component-mapping logic to produce WhatsAppTemplate[].
 }
 ```
 
-Refactor the `/templates` route handler to call this new helper. No external behaviour change. The route's `retryable` field (currently inferred at the boundary) stays where it is.
+Refactor the `/templates` route handler to call this new helper. The dashboard consumes `category`, `hasBody`, `hasButtons`, and `rejectedReason`; do not drop any of them. Send-test only reads `name`, `status`, and `language` — pull what you need from the full row. The route's `retryable` field (currently inferred at the boundary) stays where it is.
 
 - [ ] **Step 2: Run existing tests, expect green**
 
@@ -520,6 +525,10 @@ export async function graphPost(
 }
 
 // Boundary helper — derive the user-facing retryable flag for the JSON error envelope.
+// Intentionally LOCAL to whatsapp-send-test.ts for now. whatsapp-management.ts:398 has its
+// own narrower inline check (`code === "WHATSAPP_RATE_LIMITED"`). Unifying both into a
+// shared util is a separate follow-up; do not move this helper unless you also update
+// whatsapp-management.ts' inline check and add a regression test for /templates' retryable flag.
 export function isRetryable(code: string): boolean {
   return (
     code === "WHATSAPP_RATE_LIMITED" ||
@@ -596,7 +605,7 @@ app.post("/send-test", async (request, reply) => {
   }
   const body: WhatsAppSendTestRequest = parsed.data;
 
-  const channel = await app.prisma.managedChannel.findFirst({
+  const channel = await app.prisma!.managedChannel.findFirst({
     where: { organizationId: orgId, channel: "whatsapp" },
   });
   if (!channel) {
@@ -624,7 +633,7 @@ app.post("/send-test", async (request, reply) => {
 
   // Source the WhatsApp Business Account ID from Connection.externalAccountId
   // (NOT from credentials — credentials only carry primaryPhoneNumberId).
-  const conn = await app.prisma.connection.findFirst({
+  const conn = await app.prisma!.connection.findFirst({
     where: { id: channel.connectionId, organizationId: orgId },
   });
   const wabaId = conn?.externalAccountId ?? null;
@@ -680,10 +689,9 @@ app.post("/send-test", async (request, reply) => {
     type: "template",
     template: { name: body.templateName, language: { code: body.languageCode } },
   };
-  // graphPost takes a FULL URL (matches graphGet). Compose using the same graphBase used elsewhere.
-  const graphBase = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION ?? "v21.0"}`;
+  // graphPost takes a FULL URL (matches graphGet). Reuse the module-level GRAPH_BASE from the plugin (line ~466).
   const result = await graphPost(
-    `${graphBase}/${body.phoneNumberId}/messages`,
+    `${GRAPH_BASE}/${body.phoneNumberId}/messages`,
     graphBody,
     token,
     fetchImpl,
@@ -706,7 +714,7 @@ app.post("/send-test", async (request, reply) => {
   }
 
   const sentAt = new Date();
-  await app.prisma.whatsAppTestSend.create({
+  await app.prisma!.whatsAppTestSend.create({
     data: {
       organizationId: orgId,
       managedChannelId: channel.id,
@@ -782,7 +790,7 @@ git commit -am "test(api): /send-test Graph error mapping coverage"
 ```typescript
 app.get("/test-sends", async (request, reply) => {
   const orgId = (request as unknown as { organizationIdFromAuth: string }).organizationIdFromAuth;
-  const rows = await app.prisma.whatsAppTestSend.findMany({
+  const rows = await app.prisma!.whatsAppTestSend.findMany({
     where: { organizationId: orgId },
     orderBy: { sentAt: "desc" },
     take: 10,
