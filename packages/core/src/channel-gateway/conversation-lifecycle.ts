@@ -14,6 +14,8 @@ export interface ConversationEndEvent {
   duration: number;
   messageCount: number;
   endReason: ConversationEndReason;
+  endedAt: Date;
+  workTraceIds?: string[];
 }
 
 export type ConversationEndHandler = (event: ConversationEndEvent) => Promise<void>;
@@ -131,6 +133,7 @@ export class ConversationLifecycleTracker {
       duration: Math.round((Date.now() - session.startedAt) / 1000),
       messageCount: session.messages.length,
       endReason: reason,
+      endedAt: new Date(),
     };
 
     try {

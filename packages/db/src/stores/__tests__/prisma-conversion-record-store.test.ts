@@ -41,6 +41,42 @@ describe("PrismaConversionRecordStore", () => {
     });
   });
 
+  it("extracts bookingId from event.metadata into the indexed bookingId column", async () => {
+    const upsertMock = prisma.conversionRecord.upsert as ReturnType<typeof vi.fn>;
+    upsertMock.mockResolvedValue({ id: "cr_bk_1" });
+
+    await store.record({
+      eventId: "evt-bk-1",
+      organizationId: "org-1",
+      contactId: "ct-1",
+      type: "booked",
+      value: 0,
+      occurredAt: new Date("2026-05-14T10:00:00Z"),
+      source: "outbox",
+      metadata: { bookingId: "bk_42", note: "from calendar-book" },
+    });
+
+    expect(upsertMock.mock.calls[0]![0].create.bookingId).toBe("bk_42");
+  });
+
+  it("leaves bookingId null when metadata has no bookingId", async () => {
+    const upsertMock = prisma.conversionRecord.upsert as ReturnType<typeof vi.fn>;
+    upsertMock.mockResolvedValue({ id: "cr_no_bk" });
+
+    await store.record({
+      eventId: "evt-no-bk",
+      organizationId: "org-1",
+      contactId: "ct-1",
+      type: "qualified",
+      value: 0,
+      occurredAt: new Date("2026-05-14T10:00:00Z"),
+      source: "outbox",
+      metadata: { note: "no booking on this event" },
+    });
+
+    expect(upsertMock.mock.calls[0]![0].create.bookingId).toBeNull();
+  });
+
   it("funnelByOrg aggregates counts by stage type", async () => {
     (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
       { type: "inquiry", _count: { _all: 10 }, _sum: { value: 0 } },

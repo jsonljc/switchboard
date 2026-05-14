@@ -1,8 +1,9 @@
 import Fastify from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import type { ReplySink } from "@switchboard/core";
-import { ChannelGateway } from "@switchboard/core";
+import { ChannelGateway, setMetrics } from "@switchboard/core";
 import { checkIngressRateLimit } from "./adapters/security.js";
+import { createPromMetrics, metricsRoute } from "./bootstrap/metrics.js";
 import { RuntimeRegistry } from "./managed/runtime-registry.js";
 import { startHealthChecker } from "./managed/health-checker.js";
 import { runStartupChecks } from "./startup-checks.js";
@@ -37,6 +38,12 @@ async function main() {
     console.error("[Startup] Aborting — fix the above errors before starting");
     process.exit(1);
   }
+
+  // Initialize Prometheus metrics for this process. Without this, getMetrics()
+  // returns the in-memory default and the new outcome-pattern Prom series
+  // silently no-op in production. Mirrors apps/api/src/app.ts.
+  setMetrics(createPromMetrics());
+
   const chatLogLevel =
     process.env["LOG_LEVEL"] ?? (process.env.NODE_ENV === "production" ? "info" : "debug");
   const app = Fastify({
@@ -254,6 +261,9 @@ async function main() {
       managedChannels: registry?.size ?? 0,
     });
   });
+
+  // Prometheus metrics scrape endpoint
+  app.get("/metrics", metricsRoute);
 
   // Telegram webhook endpoint (single-tenant) — uses ChannelGateway + PlatformIngress
   app.post("/webhook/telegram", async (request, reply) => {

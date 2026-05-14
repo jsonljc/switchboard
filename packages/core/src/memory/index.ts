@@ -22,3 +22,10 @@ export {
   type ContextBuilderDeps,
 } from "./context-builder.js";
 export { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
+export {
+  resolveBookingAttribution,
+  ATTRIBUTION_WINDOW_MS,
+  type BookingAttribution,
+  type BookingAttributionStore,
+  type AttributionTier,
+} from "./booking-attribution.js";
