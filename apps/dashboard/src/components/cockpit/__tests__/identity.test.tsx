@@ -3,6 +3,14 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Identity } from "../identity";
 
+const BASE_PROPS = {
+  statusKey: "WORKING" as const,
+  halted: false,
+  subtitle: "SDR · Tours pipeline · HotPod",
+  line: null,
+  onHaltToggle: () => {},
+};
+
 describe("Identity", () => {
   it("renders the agent name 'Alex' and a status pill", () => {
     render(
@@ -76,5 +84,36 @@ describe("Identity", () => {
     expect(screen.getByText("SDR · Tours pipeline")).toBeInTheDocument();
     // No button or anchor wrapping the subtitle — popover lands at A.2.
     expect(container.querySelector("[data-mission-trigger]")).toBeNull();
+  });
+});
+
+describe("Identity — mission interactive subtitle (A.2)", () => {
+  it("renders subtitle as plain text by default (A.1 behavior preserved)", () => {
+    render(<Identity {...BASE_PROPS} subtitle="SDR · Tours pipeline · HotPod" />);
+    const subtitle = screen.getByText("SDR · Tours pipeline · HotPod");
+    expect(subtitle.tagName.toLowerCase()).not.toBe("button");
+  });
+
+  it("renders subtitle as a button and calls onOpenMission when interactive", () => {
+    const onOpenMission = vi.fn();
+    render(
+      <Identity
+        {...BASE_PROPS}
+        subtitle="SDR · Tours pipeline · HotPod"
+        missionInteractive
+        onOpenMission={onOpenMission}
+      />,
+    );
+    const btn = screen.getByRole("button", { name: /SDR/i });
+    fireEvent.click(btn);
+    expect(onOpenMission).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render subtitle as button when only missionInteractive is set (no handler)", () => {
+    render(
+      <Identity {...BASE_PROPS} subtitle="SDR · Tours pipeline · HotPod" missionInteractive />,
+    );
+    const subtitle = screen.getByText("SDR · Tours pipeline · HotPod");
+    expect(subtitle.tagName.toLowerCase()).not.toBe("button");
   });
 });
