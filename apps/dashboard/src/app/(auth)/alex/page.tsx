@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
 import { EditorialAuthShell } from "@/components/layout/editorial-auth-shell";
-import { AgentHomeShell } from "@/components/agent-home/agent-home-shell";
+import { CockpitPage } from "@/components/cockpit/cockpit-page";
 
 export default async function AlexPage() {
   const enabled = await fetchEnabledAgentsServer();
@@ -9,7 +9,7 @@ export default async function AlexPage() {
 
   return (
     <EditorialAuthShell>
-      <AgentHomeShell agentKey="alex" />
+      <CockpitPage />
     </EditorialAuthShell>
   );
 }

@@ -11,6 +11,7 @@
 **Spec:** `docs/superpowers/specs/2026-05-13-activity-rebuild-design.md` (PR #448, on `main`). This plan implements the PR-C slice defined in §13.
 
 **Hard invariants this PR introduces** (per spec §12):
+
 - **H5** (newly introduced): fetch errors never unmount the table; the previous page of rows stays on screen with an inline banner above.
 
 H1–H4 (PR-A) and H6 (PR-B) remain in force and are exercised by the regression suite Task 8 adds.
@@ -23,27 +24,27 @@ PR-C adds two new components + four new component tests + one new page-level acc
 
 **New files**
 
-| Path                                                                                                          | Responsibility                                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/error-banner.tsx`                                | Non-unmounting banner above the table on fetch failure. Eyebrow "request failed", italic display-serif message with method + path + status + duration, ink-bordered `[Retry]` button. `role="alert"`. Stays inert above the table when no error is active. |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/stale-pill.tsx`                                  | Fixed bottom-right pill. Reads `fetchedAt` (wall-clock ms) and `isFetching` from props; shows "fetched just now" within 60s, "fetched Nm ago" after. Refresh button calls `onRefetch`. `role="status"`, `aria-live="polite"` on the age value.              |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/error-banner.test.tsx`                 | Spec §9 / §12 H5: banner mounts above the table; table is NOT unmounted when banner is shown (rendered with a sibling table marker); retry calls the callback; renders the failing path + status from props.                                               |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/stale-pill.test.tsx`                   | Spec §9: "just now" when fresh, "Nm ago" after 60s+; refresh button invokes `onRefetch`; hidden when `fetchedAt === 0`; `role="status"` and `aria-live="polite"` present.                                                                                  |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/empty-state.test.tsx`                  | Spec §9: zero variant copy + ledger-health metadata; filtered variant copy + Clear CTA wired to handler; italic accent visible via `<em>` element in both variants.                                                                                         |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/pagination-footer.test.tsx`            | Spec §9 / §12 acceptance #7: `Showing N of …`; "keyset cursor — total unknown by design"; ← Newer disabled when `canGoPrev=false`; Older → disabled when `canGoNext=false`.                                                                                |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/__tests__/activity-accessibility.test.tsx`                  | Page-level a11y regression suite. Grid `role` structure; combobox combobox-with-listbox pattern; chevron focus management; drawer focus after `view previous ↓`; `role="alert"` on error banner; `role="status"` + `aria-live="polite"` on stale pill.       |
+| Path                                                                                               | Responsibility                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/error-banner.tsx`                     | Non-unmounting banner above the table on fetch failure. Eyebrow "request failed", italic display-serif message with method + path + status + duration, ink-bordered `[Retry]` button. `role="alert"`. Stays inert above the table when no error is active. |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/stale-pill.tsx`                       | Fixed bottom-right pill. Reads `fetchedAt` (wall-clock ms) and `isFetching` from props; shows "fetched just now" within 60s, "fetched Nm ago" after. Refresh button calls `onRefetch`. `role="status"`, `aria-live="polite"` on the age value.             |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/error-banner.test.tsx`      | Spec §9 / §12 H5: banner mounts above the table; table is NOT unmounted when banner is shown (rendered with a sibling table marker); retry calls the callback; renders the failing path + status from props.                                               |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/stale-pill.test.tsx`        | Spec §9: "just now" when fresh, "Nm ago" after 60s+; refresh button invokes `onRefetch`; hidden when `fetchedAt === 0`; `role="status"` and `aria-live="polite"` present.                                                                                  |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/empty-state.test.tsx`       | Spec §9: zero variant copy + ledger-health metadata; filtered variant copy + Clear CTA wired to handler; italic accent visible via `<em>` element in both variants.                                                                                        |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/pagination-footer.test.tsx` | Spec §9 / §12 acceptance #7: `Showing N of …`; "keyset cursor — total unknown by design"; ← Newer disabled when `canGoPrev=false`; Older → disabled when `canGoNext=false`.                                                                                |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/__tests__/activity-accessibility.test.tsx`       | Page-level a11y regression suite. Grid `role` structure; combobox combobox-with-listbox pattern; chevron focus management; drawer focus after `view previous ↓`; `role="alert"` on error banner; `role="status"` + `aria-live="polite"` on stale pill.     |
 
 **Modified files**
 
-| Path                                                                                              | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/empty-state.tsx`                     | Rewrite for zero + filtered variants per spec §5.5: eyebrow + display-serif italic-accent headline + Inter prose + (filtered only) Clear CTA. Drops the v1 "No activity yet." + "No matching activity." strings.                                                                                                                                                                                                          |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/pagination-footer.tsx`               | Restyle to the locked-design split: left "Showing N of … · keyset cursor — total unknown by design · limit 50" info line, right ← Newer / Older → buttons. Accept new `count` prop. 1px top hair border.                                                                                                                                                                                                                |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/activity-page.tsx`                              | (1) Pass `count` + new button labels to `PaginationFooter`. (2) Replace the `isError ? <EmptyState />` branch: instead render `<ErrorBanner above />` and keep the table mounted with the last `rows` (we cache the last successful rows in a ref / state so they survive `isError`). (3) Render `<StalePill />` once `dataUpdatedAt > 0`. (4) Update `EmptyState` callers to use new `scannedCount` + variant API.        |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/hooks/use-activity-list.ts`                     | Pass through `dataUpdatedAt` and `isFetching` from `useQuery` (no behavioural change — these were already returned by `useQuery`, but we surface them explicitly via the destructure shape callers use). No other change.                                                                                                                                                                                                |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/__tests__/activity-page.test.tsx`               | (1) Add `dataUpdatedAt: 0` / `isFetching: false` to the `hookResult()` helper so the new page consumes them. (2) Add H5 tests: when `isError` toggles after a successful fetch, the previous rows stay rendered and the banner appears above. (3) Add a stale-pill visibility test: hidden when no successful fetch; visible after a successful fetch. (4) Update the empty-filtered onClear assertion to the new copy. |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/activity-row.test.tsx`     | PR-B code-review carry-over: line ~40 asserts `screen.getByText("06:23:11")` which is TZ-dependent. Pass `orgTimezone="UTC"` to the rendered `ActivityRow` so the test passes on Singapore / America hosts too (currently passes only because CI runs UTC).                                                                                                                                                              |
-| `apps/dashboard/src/app/(auth)/(mercury)/activity/activity.module.css`                            | (1) Add CSS blocks for `.errBanner`, `.stalePill`, the rewritten empty-state (`.empty`, `.emptyEyebrow`, `.emptyHeadline`, `.emptyHeadlineEm`, `.emptySub`, `.emptyMeta`, `.emptyMetaB`, `.emptyCta`), and the restyled pagination (`.pag`, `.pagInfo`, `.pagInfoB`, `.pagInfoSep`, `.pagNav`, `.pagBtn`). (2) Delete dead classes the sweep finds (see Task 9 grep verification): `.cellTimestamp`, `.cellEvent`, `.cellActor`, `.cellEntity`, `.cellSummary`, `.cellChevron`, `.cellMono`, `.cellHash`, `.riskBadge`, `.riskNone`, `.riskLow`, `.riskMedium`, `.riskHigh`, `.riskCritical`, `.stickyCol`, `.drawerRow`, `.titleRow`, `.titleFolio`, `.toolbar`, `.activity` (the legacy `<table>` root), `.activity thead th`, `.activity tbody tr`, `.activity tbody td`, `.activityRow.isExpanded`, `.sectionLabel`, `.isMuted`, `.tabular`, `.fadeIn` + `@keyframes activityFadeIn`. Plus drop the v1 `.emptyWrap` / `.emptyTitle` / `.emptyBody` / `.emptyAction` classes (replaced by the new empty block). Plus drop v1 `.paginationFooter` / `.moreButton` / `.arr` (replaced by the new `.pag*` block). |
+| Path                                                                                          | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/empty-state.tsx`                 | Rewrite for zero + filtered variants per spec §5.5: eyebrow + display-serif italic-accent headline + Inter prose + (filtered only) Clear CTA. Drops the v1 "No activity yet." + "No matching activity." strings.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/pagination-footer.tsx`           | Restyle to the locked-design split: left "Showing N of … · keyset cursor — total unknown by design · limit 50" info line, right ← Newer / Older → buttons. Accept new `count` prop. 1px top hair border.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/activity-page.tsx`                          | (1) Pass `count` + new button labels to `PaginationFooter`. (2) Replace the `isError ? <EmptyState />` branch: instead render `<ErrorBanner above />` and keep the table mounted with the last `rows` (we cache the last successful rows in a ref / state so they survive `isError`). (3) Render `<StalePill />` once `dataUpdatedAt > 0`. (4) Update `EmptyState` callers to use new `scannedCount` + variant API.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/hooks/use-activity-list.ts`                 | Pass through `dataUpdatedAt` and `isFetching` from `useQuery` (no behavioural change — these were already returned by `useQuery`, but we surface them explicitly via the destructure shape callers use). No other change.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/__tests__/activity-page.test.tsx`           | (1) Add `dataUpdatedAt: 0` / `isFetching: false` to the `hookResult()` helper so the new page consumes them. (2) Add H5 tests: when `isError` toggles after a successful fetch, the previous rows stay rendered and the banner appears above. (3) Add a stale-pill visibility test: hidden when no successful fetch; visible after a successful fetch. (4) Update the empty-filtered onClear assertion to the new copy.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/activity-row.test.tsx` | PR-B code-review carry-over: line ~40 asserts `screen.getByText("06:23:11")` which is TZ-dependent. Pass `orgTimezone="UTC"` to the rendered `ActivityRow` so the test passes on Singapore / America hosts too (currently passes only because CI runs UTC).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `apps/dashboard/src/app/(auth)/(mercury)/activity/activity.module.css`                        | (1) Add CSS blocks for `.errBanner`, `.stalePill`, the rewritten empty-state (`.empty`, `.emptyEyebrow`, `.emptyHeadline`, `.emptyHeadlineEm`, `.emptySub`, `.emptyMeta`, `.emptyMetaB`, `.emptyCta`), and the restyled pagination (`.pag`, `.pagInfo`, `.pagInfoB`, `.pagInfoSep`, `.pagNav`, `.pagBtn`). (2) Delete dead classes the sweep finds (see Task 9 grep verification): `.cellTimestamp`, `.cellEvent`, `.cellActor`, `.cellEntity`, `.cellSummary`, `.cellChevron`, `.cellMono`, `.cellHash`, `.riskBadge`, `.riskNone`, `.riskLow`, `.riskMedium`, `.riskHigh`, `.riskCritical`, `.stickyCol`, `.drawerRow`, `.titleRow`, `.titleFolio`, `.toolbar`, `.activity` (the legacy `<table>` root), `.activity thead th`, `.activity tbody tr`, `.activity tbody td`, `.activityRow.isExpanded`, `.sectionLabel`, `.isMuted`, `.tabular`, `.fadeIn` + `@keyframes activityFadeIn`. Plus drop the v1 `.emptyWrap` / `.emptyTitle` / `.emptyBody` / `.emptyAction` classes (replaced by the new empty block). Plus drop v1 `.paginationFooter` / `.moreButton` / `.arr` (replaced by the new `.pag*` block). |
 
 **Files left alone in PR-C**
 
@@ -70,12 +71,14 @@ Per CLAUDE.md doctrine:
    pnpm worktree:init
    pnpm install   # if worktree:init did not already install
    ```
+
 3. **Verify spec and plan are present on this branch:**
 
    ```bash
    ls docs/superpowers/specs/2026-05-13-activity-rebuild-design.md
    ls docs/superpowers/plans/2026-05-14-activity-rebuild-pr-c-resilience-polish.md
    ```
+
 4. **Commit cadence:** one commit per task (TDD red → green → commit). Conventional Commits required by commitlint.
 5. **Verification before claiming complete:** every task that touches a `.test.tsx` file runs the targeted test; the final task (Task 10) runs the full dashboard test suite, `pnpm typecheck`, and `pnpm --filter @switchboard/dashboard build` (next build is not in CI — see `memory/feedback_dashboard_build_not_in_ci.md`).
 6. **Local test runs:** prefix `TZ=UTC` for any test that asserts formatted clock output. PR-A wasted a cycle on this; PR-B propagated the rule.
@@ -478,9 +481,7 @@ describe("ErrorBanner", () => {
 
   it("degrades to minimal copy when only the path is known (no fabricated telemetry)", () => {
     render(<ErrorBanner path="/api/dashboard/activity" onRetry={() => {}} />);
-    expect(
-      screen.getByText(/Request to \/api\/dashboard\/activity failed\./),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Request to \/api\/dashboard\/activity failed\./)).toBeInTheDocument();
     // Make sure we did NOT invent a status or duration.
     expect(screen.queryByText(/503/)).toBeNull();
     expect(screen.queryByText(/after \d+s/)).toBeNull();
@@ -504,10 +505,10 @@ describe("ErrorBanner", () => {
 
   it("includes partial telemetry only when complete (method+status+durationMs all present) — otherwise minimal copy", () => {
     // Only method + status, no duration → minimal copy (we treat partial as unknown).
-    render(<ErrorBanner method="GET" status={503} path="/api/dashboard/activity" onRetry={() => {}} />);
-    expect(
-      screen.getByText(/Request to \/api\/dashboard\/activity failed\./),
-    ).toBeInTheDocument();
+    render(
+      <ErrorBanner method="GET" status={503} path="/api/dashboard/activity" onRetry={() => {}} />,
+    );
+    expect(screen.getByText(/Request to \/api\/dashboard\/activity failed\./)).toBeInTheDocument();
     expect(screen.queryByText(/returned 503/)).toBeNull();
   });
 });
@@ -557,8 +558,7 @@ export interface ErrorBannerProps {
  * role="alert" — AT users get the failure announcement on appearance.
  */
 export function ErrorBanner({ path, method, status, durationMs, onRetry }: ErrorBannerProps) {
-  const hasFullTelemetry =
-    method !== undefined && status !== undefined && durationMs !== undefined;
+  const hasFullTelemetry = method !== undefined && status !== undefined && durationMs !== undefined;
   const message = hasFullTelemetry
     ? `${method} ${path} returned ${status} after ${Math.round(durationMs / 1000)}s. The previous page of entries is still shown below; nothing was dropped.`
     : `Request to ${path} failed. The previous page of entries is still shown below; nothing was dropped.`;
@@ -878,8 +878,8 @@ export function EmptyState(props: EmptyStateProps) {
         </h2>
         <p className={styles.emptySub}>
           The chain is healthy and the writer is connected — no audit-emitting event has fired in
-          this org&apos;s window. Once an agent proposes a mutation or an operator changes a
-          policy, entries will appear here, hash-chained to the genesis row.
+          this org&apos;s window. Once an agent proposes a mutation or an operator changes a policy,
+          entries will appear here, hash-chained to the genesis row.
         </p>
         <div className={styles.emptyMeta}>
           <span>writer connected</span>
@@ -951,7 +951,13 @@ import { PaginationFooter } from "../pagination-footer.js";
 describe("PaginationFooter", () => {
   it("renders the 'Showing N of …' info line with keyset chrome", () => {
     render(
-      <PaginationFooter count={22} canGoPrev={false} canGoNext={true} onPrev={() => {}} onNext={() => {}} />,
+      <PaginationFooter
+        count={22}
+        canGoPrev={false}
+        canGoNext={true}
+        onPrev={() => {}}
+        onNext={() => {}}
+      />,
     );
     expect(screen.getByText(/Showing/)).toBeInTheDocument();
     expect(screen.getByText("22")).toBeInTheDocument();
@@ -962,7 +968,13 @@ describe("PaginationFooter", () => {
 
   it("← Newer is disabled when canGoPrev=false; Older → is enabled when canGoNext=true", () => {
     render(
-      <PaginationFooter count={22} canGoPrev={false} canGoNext={true} onPrev={() => {}} onNext={() => {}} />,
+      <PaginationFooter
+        count={22}
+        canGoPrev={false}
+        canGoNext={true}
+        onPrev={() => {}}
+        onNext={() => {}}
+      />,
     );
     expect(screen.getByRole("button", { name: /Newer/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Older/ })).not.toBeDisabled();
@@ -970,7 +982,13 @@ describe("PaginationFooter", () => {
 
   it("Older → is disabled when canGoNext=false (end of list)", () => {
     render(
-      <PaginationFooter count={3} canGoPrev={true} canGoNext={false} onPrev={() => {}} onNext={() => {}} />,
+      <PaginationFooter
+        count={3}
+        canGoPrev={true}
+        canGoNext={false}
+        onPrev={() => {}}
+        onNext={() => {}}
+      />,
     );
     expect(screen.getByRole("button", { name: /Older/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Newer/ })).not.toBeDisabled();
@@ -981,7 +999,13 @@ describe("PaginationFooter", () => {
     const onPrev = vi.fn();
     const onNext = vi.fn();
     render(
-      <PaginationFooter count={22} canGoPrev={true} canGoNext={true} onPrev={onPrev} onNext={onNext} />,
+      <PaginationFooter
+        count={22}
+        canGoPrev={true}
+        canGoNext={true}
+        onPrev={onPrev}
+        onNext={onNext}
+      />,
     );
     await user.click(screen.getByRole("button", { name: /Newer/ }));
     await user.click(screen.getByRole("button", { name: /Older/ }));
@@ -991,7 +1015,13 @@ describe("PaginationFooter", () => {
 
   it("renders nothing when neither direction is navigable (single-page case)", () => {
     const { container } = render(
-      <PaginationFooter count={3} canGoPrev={false} canGoNext={false} onPrev={() => {}} onNext={() => {}} />,
+      <PaginationFooter
+        count={3}
+        canGoPrev={false}
+        canGoNext={false}
+        onPrev={() => {}}
+        onNext={() => {}}
+      />,
     );
     expect(container.firstChild).toBeNull();
   });
@@ -1047,8 +1077,7 @@ export function PaginationFooter({
   return (
     <div className={styles.pag}>
       <span className={styles.pagInfo}>
-        Showing <b className={styles.pagInfoB}>{count}</b> of{" "}
-        <b className={styles.pagInfoB}>…</b>
+        Showing <b className={styles.pagInfoB}>{count}</b> of <b className={styles.pagInfoB}>…</b>
         <span className={styles.pagInfoSep}>·</span>
         keyset cursor — total unknown by design
         <span className={styles.pagInfoSep}>·</span>
@@ -1172,62 +1201,62 @@ function hookResult(
 }
 ```
 
-**Note on `dataUpdatedAt` mock semantics:** real React Query persists `dataUpdatedAt` across error rerenders (it's the wall-clock of the last *successful* query, not the last query overall). The fallback `partial.dataUpdatedAt ?? (partial.isError ? 0 : Date.now())` deliberately models a "fresh error from clean state" — i.e., the very first fetch failed and no successful response has ever landed. For tests that simulate "successful fetch → subsequent fetch error" (such as the H5 rerender test below), pass `dataUpdatedAt` EXPLICITLY in the error mock (`hookResult({ isError: true, dataUpdatedAt: Date.now() })`) so the StalePill remains rendered. The H5 test below does not assert on the pill, so leaving the default works; but be explicit when you do.
+**Note on `dataUpdatedAt` mock semantics:** real React Query persists `dataUpdatedAt` across error rerenders (it's the wall-clock of the last _successful_ query, not the last query overall). The fallback `partial.dataUpdatedAt ?? (partial.isError ? 0 : Date.now())` deliberately models a "fresh error from clean state" — i.e., the very first fetch failed and no successful response has ever landed. For tests that simulate "successful fetch → subsequent fetch error" (such as the H5 rerender test below), pass `dataUpdatedAt` EXPLICITLY in the error mock (`hookResult({ isError: true, dataUpdatedAt: Date.now() })`) so the StalePill remains rendered. The H5 test below does not assert on the pill, so leaving the default works; but be explicit when you do.
 
 Add the following test blocks at the end of the existing `describe("ActivityPage")` body (before the closing `});`):
 
 ```tsx
-  describe("H5: fetch errors never unmount the table", () => {
-    it("renders the ErrorBanner above the table when isError fires after a successful fetch", () => {
-      vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
-      // First render: successful fetch with one row visible.
-      mockUseActivityList.mockReturnValue(hookResult({ rows: [liveRow], scope: "operational" }));
-      const { rerender } = render(<ActivityPage />);
-      expect(screen.getByText("Live row for tests")).toBeInTheDocument();
+describe("H5: fetch errors never unmount the table", () => {
+  it("renders the ErrorBanner above the table when isError fires after a successful fetch", () => {
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
+    // First render: successful fetch with one row visible.
+    mockUseActivityList.mockReturnValue(hookResult({ rows: [liveRow], scope: "operational" }));
+    const { rerender } = render(<ActivityPage />);
+    expect(screen.getByText("Live row for tests")).toBeInTheDocument();
 
-      // Re-render: hook flips to error. Table must remain mounted with the
-      // previous rows; banner must appear above.
-      mockUseActivityList.mockReturnValue(hookResult({ isError: true, rows: [] }));
-      rerender(<ActivityPage />);
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-      expect(screen.getByText(/request failed/i)).toBeInTheDocument();
-      // Crucially: the row from the previous successful fetch is still on screen.
-      expect(screen.getByText("Live row for tests")).toBeInTheDocument();
-    });
-
-    it("retry button on the banner fires the refetch handler", async () => {
-      vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
-      const refetch = vi.fn().mockResolvedValue(undefined);
-      mockUseActivityList.mockReturnValue(hookResult({ rows: [liveRow], scope: "operational" }));
-      const { rerender } = render(<ActivityPage />);
-      mockUseActivityList.mockReturnValue(hookResult({ isError: true, refetch }));
-      rerender(<ActivityPage />);
-      await userEvent.setup().click(screen.getByRole("button", { name: /Retry/ }));
-      expect(refetch).toHaveBeenCalledTimes(1);
-    });
+    // Re-render: hook flips to error. Table must remain mounted with the
+    // previous rows; banner must appear above.
+    mockUseActivityList.mockReturnValue(hookResult({ isError: true, rows: [] }));
+    rerender(<ActivityPage />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(/request failed/i)).toBeInTheDocument();
+    // Crucially: the row from the previous successful fetch is still on screen.
+    expect(screen.getByText("Live row for tests")).toBeInTheDocument();
   });
 
-  describe("Stale pill visibility", () => {
-    it("is hidden until the first successful fetch (dataUpdatedAt === 0)", () => {
-      vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
-      mockUseActivityList.mockReturnValue(hookResult({ isLoading: true, dataUpdatedAt: 0 }));
-      render(<ActivityPage />);
-      expect(screen.queryByRole("status")).toBeNull();
-    });
-
-    it("renders after a successful fetch (dataUpdatedAt > 0)", () => {
-      vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
-      mockUseActivityList.mockReturnValue(
-        hookResult({ rows: [liveRow], scope: "operational", dataUpdatedAt: Date.now() }),
-      );
-      render(<ActivityPage />);
-      // role="status" is on the StalePill wrapper. The skeleton's role="status"
-      // is gone in this branch (isLoading=false), so the only role="status"
-      // on the page is the StalePill.
-      expect(screen.getByRole("status")).toBeInTheDocument();
-      expect(screen.getByText(/fetched/)).toBeInTheDocument();
-    });
+  it("retry button on the banner fires the refetch handler", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    mockUseActivityList.mockReturnValue(hookResult({ rows: [liveRow], scope: "operational" }));
+    const { rerender } = render(<ActivityPage />);
+    mockUseActivityList.mockReturnValue(hookResult({ isError: true, refetch }));
+    rerender(<ActivityPage />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /Retry/ }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("Stale pill visibility", () => {
+  it("is hidden until the first successful fetch (dataUpdatedAt === 0)", () => {
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
+    mockUseActivityList.mockReturnValue(hookResult({ isLoading: true, dataUpdatedAt: 0 }));
+    render(<ActivityPage />);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("renders after a successful fetch (dataUpdatedAt > 0)", () => {
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
+    mockUseActivityList.mockReturnValue(
+      hookResult({ rows: [liveRow], scope: "operational", dataUpdatedAt: Date.now() }),
+    );
+    render(<ActivityPage />);
+    // role="status" is on the StalePill wrapper. The skeleton's role="status"
+    // is gone in this branch (isLoading=false), so the only role="status"
+    // on the page is the StalePill.
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByText(/fetched/)).toBeInTheDocument();
+  });
+});
 ```
 
 Run:
@@ -1252,75 +1281,75 @@ import { StalePill } from "./components/stale-pill";
 **Edit 3b — Surface `isFetching` and `dataUpdatedAt` from the hook destructure.** Find the line:
 
 ```tsx
-  const { data, isLoading, isError, refetch } = useActivityList(query);
+const { data, isLoading, isError, refetch } = useActivityList(query);
 ```
 
 Replace with:
 
 ```tsx
-  const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useActivityList(query);
+const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useActivityList(query);
 ```
 
 **Edit 3c — Add reactive last-successful-rows state (H5 enforcement).** Immediately after the destructure above, insert:
 
 ```tsx
-  // H5 enforcement: cache the most recent successful rows in REACTIVE state
-  // so a fetch error never unmounts the table. A useState+useEffect pair (over
-  // useRef) keeps the cache reactive and testable — refs would silently
-  // diverge under test rerenders.
-  const [lastSuccessfulRows, setLastSuccessfulRows] = useState<
-    ReadonlyArray<AuditEntryBrowseRow>
-  >([]);
-  useEffect(() => {
-    if (data?.rows !== undefined) {
-      setLastSuccessfulRows(data.rows);
-    }
-  }, [data?.rows]);
+// H5 enforcement: cache the most recent successful rows in REACTIVE state
+// so a fetch error never unmounts the table. A useState+useEffect pair (over
+// useRef) keeps the cache reactive and testable — refs would silently
+// diverge under test rerenders.
+const [lastSuccessfulRows, setLastSuccessfulRows] = useState<ReadonlyArray<AuditEntryBrowseRow>>(
+  [],
+);
+useEffect(() => {
+  if (data?.rows !== undefined) {
+    setLastSuccessfulRows(data.rows);
+  }
+}, [data?.rows]);
 ```
 
 **Edit 3d — Replace the row-resolution block.** Find the block that currently reads:
 
 ```tsx
-  let rows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? [];
-  const nextCursor = data?.nextCursor ?? null;
-  const apiScope: EffectiveScope = data?.scope ?? scope;
+let rows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? [];
+const nextCursor = data?.nextCursor ?? null;
+const apiScope: EffectiveScope = data?.scope ?? scope;
 
-  if (!isActivityLive()) {
-    rows = filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
-  }
+if (!isActivityLive()) {
+  rows = filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
+}
 ```
 
 Replace with:
 
 ```tsx
-  const nextCursor = data?.nextCursor ?? null;
-  const apiScope: EffectiveScope = data?.scope ?? scope;
+const nextCursor = data?.nextCursor ?? null;
+const apiScope: EffectiveScope = data?.scope ?? scope;
 
-  // Live rows fall back to the cached last-successful page when `data` is
-  // undefined (loading or error). H5: a refetch error keeps the table mounted.
-  const liveRows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? lastSuccessfulRows;
+// Live rows fall back to the cached last-successful page when `data` is
+// undefined (loading or error). H5: a refetch error keeps the table mounted.
+const liveRows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? lastSuccessfulRows;
 
-  const rows: ReadonlyArray<AuditEntryBrowseRow> = isActivityLive()
-    ? liveRows
-    : filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
+const rows: ReadonlyArray<AuditEntryBrowseRow> = isActivityLive()
+  ? liveRows
+  : filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
 ```
 
 **Edit 3e — Compute `scannedCount` for the filtered-empty prose.** Find the `entityTypes` `useMemo` block. Immediately BEFORE it, insert:
 
 ```tsx
-  // Scanned-count for the filtered-empty prose: number of rows the current
-  // scope contains BEFORE narrowing is applied. Under operational scope this
-  // is the operational subset; under "all" it's every row on the page.
-  const scannedCount = effectiveScope === "all" ? counts.allCount : counts.operationalCount;
+// Scanned-count for the filtered-empty prose: number of rows the current
+// scope contains BEFORE narrowing is applied. Under operational scope this
+// is the operational subset; under "all" it's every row on the page.
+const scannedCount = effectiveScope === "all" ? counts.allCount : counts.operationalCount;
 ```
 
 **Edit 3f — Remove the now-unused `onResetToDefault` handler.** Find the block:
 
 ```tsx
-  const onResetToDefault = useCallback(() => {
-    setScope("operational");
-    onClearFilters();
-  }, [onClearFilters]);
+const onResetToDefault = useCallback(() => {
+  setScope("operational");
+  onClearFilters();
+}, [onClearFilters]);
 ```
 
 Delete it. Under H5 there is no longer an empty-filtered branch that needs the "reset to default" semantics — the filtered branch uses `onClearFilters` directly (which preserves the operator's base scope per PR-B acceptance #11).
@@ -1328,26 +1357,26 @@ Delete it. Under H5 there is no longer an empty-filtered branch that needs the "
 **Edit 3g — Add the `onRefetch` callback.** Immediately after the (now deleted) `onResetToDefault` slot — between `onClearFilters` and `onNext` — insert:
 
 ```tsx
-  const onRefetch = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+const onRefetch = useCallback(() => {
+  void refetch();
+}, [refetch]);
 ```
 
 **Edit 3h — Update render-state derivations.** Find the `emptyVariant` / `showPagination` block:
 
 ```tsx
-  // ---- Render-state derivations ----
-  const emptyVariant = narrowingActive ? "filtered" : "zero";
-  const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
+// ---- Render-state derivations ----
+const emptyVariant = narrowingActive ? "filtered" : "zero";
+const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
 ```
 
 Replace with:
 
 ```tsx
-  // ---- Render-state derivations ----
-  const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
-  const showSkeleton = isLoading && rows.length === 0;
-  const showEmpty = !showSkeleton && rows.length === 0 && !isError;
+// ---- Render-state derivations ----
+const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
+const showSkeleton = isLoading && rows.length === 0;
+const showEmpty = !showSkeleton && rows.length === 0 && !isError;
 ```
 
 (The `emptyVariant` local is gone — the JSX inlines the variant choice now.)
@@ -1464,7 +1493,6 @@ import styles from "./activity.module.css";
 ```
 
 If your destructured `useActivityList` line, your `lastSuccessfulRows` state, and your `liveRows` fallback all match the Edit-3b/3c/3d shapes above, the rest of the file should diff cleanly.
-
 
 - [ ] **Step 4: Run the page-level tests, expect PASS**
 
@@ -1600,9 +1628,7 @@ describe("ActivityPage accessibility", () => {
     expect(within(scopeGroup).getByRole("button", { name: /Operational/ })).toHaveAttribute(
       "aria-pressed",
     );
-    expect(within(scopeGroup).getByRole("button", { name: /All/ })).toHaveAttribute(
-      "aria-pressed",
-    );
+    expect(within(scopeGroup).getByRole("button", { name: /All/ })).toHaveAttribute("aria-pressed");
   });
 
   it("spec §5.2 + §8: combobox carries the WAI-ARIA combobox-with-listbox pattern", async () => {
@@ -1665,7 +1691,7 @@ TZ=UTC pnpm --filter @switchboard/dashboard vitest run __tests__/activity-access
 
 Expected: 7 PASS. If any assertion fails, the matching spec contract is at fault — fix the source rather than the test (e.g., if the combobox is missing `aria-controls`, fix `event-type-combobox.tsx`).
 
-**Note on the "drawer focus after `view previous ↓`" assertion:** the spec calls out focus moving to the target row after scroll, but the current `activity-table.tsx` implementation calls `el.scrollIntoView` without an explicit `el.focus()`. Adding focus management to the row body would violate H1 (row body is non-interactive and has no `tabIndex`). The spec line in §8 reads "After scroll, focus moves to the target row" — under H1 the target *row* itself cannot receive focus, so the intended behaviour is that focus moves to the predecessor row's *chevron* (the one interactive element on it). If during implementation this assertion needs to be added, do it by extending `ActivityTable.scrollToRow(id)` to also resolve and `.focus()` the chevron button for that row — but treat that as a follow-up and not a Task 8 requirement, since the test suite as written above covers the spec's hard a11y contracts and the chevron-focus behaviour is already exercised by Task 8's "chevron is the only interactive element in a row" test. If a reviewer pushes back, the resolution is a small new ref map for chevron buttons in `activity-table.tsx`.
+**Note on the "drawer focus after `view previous ↓`" assertion:** the spec calls out focus moving to the target row after scroll, but the current `activity-table.tsx` implementation calls `el.scrollIntoView` without an explicit `el.focus()`. Adding focus management to the row body would violate H1 (row body is non-interactive and has no `tabIndex`). The spec line in §8 reads "After scroll, focus moves to the target row" — under H1 the target _row_ itself cannot receive focus, so the intended behaviour is that focus moves to the predecessor row's _chevron_ (the one interactive element on it). If during implementation this assertion needs to be added, do it by extending `ActivityTable.scrollToRow(id)` to also resolve and `.focus()` the chevron button for that row — but treat that as a follow-up and not a Task 8 requirement, since the test suite as written above covers the spec's hard a11y contracts and the chevron-focus behaviour is already exercised by Task 8's "chevron is the only interactive element in a row" test. If a reviewer pushes back, the resolution is a small new ref map for chevron buttons in `activity-table.tsx`.
 
 - [ ] **Step 3: Commit**
 
@@ -1722,7 +1748,7 @@ Expected: every class reports `dot=0 bracket=0 raw=0`. If ANY of the three shape
 grep -rn "styles\[" . --include='*.tsx' --include='*.ts'
 ```
 
-Expected output: no hits. If any line uses `styles[<expression>]`, expand the candidate list manually before deleting — a template-literal access like `styles[\`risk${cap(cat)}\`]` would make ALL six `.risk*` classes load-bearing.
+Expected output: no hits. If any line uses `styles[<expression>]`, expand the candidate list manually before deleting — a template-literal access like `styles[\`risk${cap(cat)}\`]`would make ALL six`.risk\*` classes load-bearing.
 
 Finally, confirm the v1 `<table>` root selector is dead. PR-A's div-grid uses `<div role="table" className={styles.tableWrap}>`, so the legacy `.activity tbody` / `.activity thead` selectors have no element to bind to. Verify by checking that no `.tsx` in this surface still emits a `<table>` element:
 
@@ -1811,7 +1837,7 @@ Visit `http://localhost:3002/activity` and confirm:
 3. Expanding a row reveals the drawer with hash chain, evidence rows, references.
 4. **(NEW — H5)** With dev tools, throw a fetch error (block `/api/dashboard/activity` in the Network tab, click refresh) — the previous page of rows stays visible and the error banner appears above.
 5. **(NEW)** Stale pill is in the bottom-right corner; says "just now" on first load, "1m ago" after a minute. Refresh button refetches.
-6. **(NEW)** Force an empty filtered state (set a date `before=1900-01-01` via URL) and confirm the editorial "No entries match *these filters*." copy with the Clear CTA.
+6. **(NEW)** Force an empty filtered state (set a date `before=1900-01-01` via URL) and confirm the editorial "No entries match _these filters_." copy with the Clear CTA.
 7. **(NEW)** Pagination footer shows "Showing N of …"; under fixture mode the footer is hidden (single-page).
 8. Counts on combobox + actor pills carry `on this page` suffix.
 9. Page-head shows `Audit log` plain (no italic accent); `last ledger entry` tile present under default scope, hidden under narrowing.

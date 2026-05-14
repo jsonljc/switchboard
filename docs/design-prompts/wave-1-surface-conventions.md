@@ -15,14 +15,14 @@ A Mercury-routed surface may adopt Layer-1 conventions while continuing to alias
 
 ## Surface coverage and token base (Layer 2 — descriptive, not prescriptive)
 
-| Surface | Current route | Current token base (V1) | V2 target (per surface spec) |
-|---|---|---|---|
-| Alex / Riley homes | `/alex`, `/riley` (post-PR 2; today via `[agentKey]`) | Editorial — `--cream`, `--ink`, `--ink-2..4`, `--hairline`, `--editorial-accent`, `--serif`, `--mono` (consumed directly) | Same. Each home owns its agent-context accent (Alex amber `#B8782E`, Riley clay `#B86C50`). |
-| /mission | greenfield | — | Stone & Weight (`--sw-*`) per `docs/design-prompts/2026-05-13-mission.md` |
-| /approvals | greenfield | — | Stone & Weight per `docs/design-prompts/2026-05-13-approvals.md`. `--sw-accent` reserved for the primary Approve CTA only. |
-| /reports | `(mercury)/reports` | Mercury aliased locally to `--cream`/`--ink`/… in `reports.module.css` | Stone & Weight per `docs/design-prompts/2026-05-13-reports.md`. `--sw-accent` is muted-amber emphasis on numerics and ROAS depth — **never** a CTA. |
-| /activity | `(mercury)/activity` | Mercury aliased locally in `activity.module.css` | Stone & Weight per `docs/design-prompts/2026-05-13-activity.md`. Stays under `(mercury)/`; only the token base shifts. |
-| /contacts | `(mercury)/contacts` | Mercury aliased locally in `contacts.module.css` | No surface spec yet. Locked `agent-home-v3/Pipeline.html` shares the editorial shell; final token base + route group intentionally unresolved — defer to a future PR. |
+| Surface            | Current route                                         | Current token base (V1)                                                                                                   | V2 target (per surface spec)                                                                                                                                          |
+| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Alex / Riley homes | `/alex`, `/riley` (post-PR 2; today via `[agentKey]`) | Editorial — `--cream`, `--ink`, `--ink-2..4`, `--hairline`, `--editorial-accent`, `--serif`, `--mono` (consumed directly) | Same. Each home owns its agent-context accent (Alex amber `#B8782E`, Riley clay `#B86C50`).                                                                           |
+| /mission           | greenfield                                            | —                                                                                                                         | Stone & Weight (`--sw-*`) per `docs/design-prompts/2026-05-13-mission.md`                                                                                             |
+| /approvals         | greenfield                                            | —                                                                                                                         | Stone & Weight per `docs/design-prompts/2026-05-13-approvals.md`. `--sw-accent` reserved for the primary Approve CTA only.                                            |
+| /reports           | `(mercury)/reports`                                   | Mercury aliased locally to `--cream`/`--ink`/… in `reports.module.css`                                                    | Stone & Weight per `docs/design-prompts/2026-05-13-reports.md`. `--sw-accent` is muted-amber emphasis on numerics and ROAS depth — **never** a CTA.                   |
+| /activity          | `(mercury)/activity`                                  | Mercury aliased locally in `activity.module.css`                                                                          | Stone & Weight per `docs/design-prompts/2026-05-13-activity.md`. Stays under `(mercury)/`; only the token base shifts.                                                |
+| /contacts          | `(mercury)/contacts`                                  | Mercury aliased locally in `contacts.module.css`                                                                          | No surface spec yet. Locked `agent-home-v3/Pipeline.html` shares the editorial shell; final token base + route group intentionally unresolved — defer to a future PR. |
 
 This table is **descriptive**, not prescriptive. Where V2 differs from V1, the change is authorized by the cited surface spec — this doc does not initiate token migrations.
 
@@ -42,56 +42,56 @@ Four overlapping token namespaces live in `apps/dashboard/src/app/globals.css`. 
 
 Public marketing site + the V2 target for all four wave-1 surface specs (activity, approvals, mission, reports). `--sw-accent` `#A07850` and shadcn `--operator` `hsl(30 55% 46%)` (≈ `#A87C4A`) are the same warm muted amber — close numerically, not literally identical hex.
 
-| Token | Value | What it's for |
-|---|---|---|
-| `--sw-base` | `#F5F3F0` (`apps/dashboard/src/app/globals.css:78`) | warm off-white page background; matches `--paper` `hsl(45 25% 98%)` in `locked/switchboard/project/approvals-v2/styles.css:9` |
-| `--sw-surface` | `#EDEAE5` (`apps/dashboard/src/app/globals.css:79`) | block surface; `docs/design-prompts/2026-05-13-approvals.md#design-system` |
-| `--sw-surface-raised` | `#F9F8F6` (`apps/dashboard/src/app/globals.css:80`) | hover state for queue rows (`docs/design-prompts/2026-05-13-approvals.md#row-design`) |
-| `--sw-border` | `#DDD9D3` (`apps/dashboard/src/app/globals.css:81`) | default hairline |
-| `--sw-border-strong` | `#C8C3BC` (`apps/dashboard/src/app/globals.css:82`) | section dividers; cross-cites `--hair-strong rgba(14,12,10,0.16)` in `locked/switchboard/project/approvals-v2/styles.css:21` |
-| `--sw-text-primary` | `#1A1714` (`apps/dashboard/src/app/globals.css:83`) | prose; ≈ `--ink #0E0C0A` in locked CSS (`approvals-v2/styles.css:13`) |
-| `--sw-text-secondary` | `#6B6560` (`apps/dashboard/src/app/globals.css:84`) | meta lines; ≈ `--ink-3 #6B6052` |
-| `--sw-text-muted` | `#9C958F` (`apps/dashboard/src/app/globals.css:85`) | section labels (`docs/design-prompts/2026-05-13-activity.md#design-system`) |
-| `--sw-accent` | `#A07850` (`apps/dashboard/src/app/globals.css:86`) | muted operator amber; surface-specific use — see §4 |
-| `--sw-ready` | `hsl(145 45% 42%)` (`apps/dashboard/src/app/globals.css:137`) | onboarding "ready" green |
+| Token                 | Value                                                         | What it's for                                                                                                                 |
+| --------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--sw-base`           | `#F5F3F0` (`apps/dashboard/src/app/globals.css:78`)           | warm off-white page background; matches `--paper` `hsl(45 25% 98%)` in `locked/switchboard/project/approvals-v2/styles.css:9` |
+| `--sw-surface`        | `#EDEAE5` (`apps/dashboard/src/app/globals.css:79`)           | block surface; `docs/design-prompts/2026-05-13-approvals.md#design-system`                                                    |
+| `--sw-surface-raised` | `#F9F8F6` (`apps/dashboard/src/app/globals.css:80`)           | hover state for queue rows (`docs/design-prompts/2026-05-13-approvals.md#row-design`)                                         |
+| `--sw-border`         | `#DDD9D3` (`apps/dashboard/src/app/globals.css:81`)           | default hairline                                                                                                              |
+| `--sw-border-strong`  | `#C8C3BC` (`apps/dashboard/src/app/globals.css:82`)           | section dividers; cross-cites `--hair-strong rgba(14,12,10,0.16)` in `locked/switchboard/project/approvals-v2/styles.css:21`  |
+| `--sw-text-primary`   | `#1A1714` (`apps/dashboard/src/app/globals.css:83`)           | prose; ≈ `--ink #0E0C0A` in locked CSS (`approvals-v2/styles.css:13`)                                                         |
+| `--sw-text-secondary` | `#6B6560` (`apps/dashboard/src/app/globals.css:84`)           | meta lines; ≈ `--ink-3 #6B6052`                                                                                               |
+| `--sw-text-muted`     | `#9C958F` (`apps/dashboard/src/app/globals.css:85`)           | section labels (`docs/design-prompts/2026-05-13-activity.md#design-system`)                                                   |
+| `--sw-accent`         | `#A07850` (`apps/dashboard/src/app/globals.css:86`)           | muted operator amber; surface-specific use — see §4                                                                           |
+| `--sw-ready`          | `hsl(145 45% 42%)` (`apps/dashboard/src/app/globals.css:137`) | onboarding "ready" green                                                                                                      |
 
 ### 1.2 Mercury (`--mercury-*`)
 
 V1 token base for `/activity`, `/contacts`, and `/reports`. The V1 CSS modules alias these locally to `--cream`/`--ink`/`--hair`/… so the surface looks editorial while the source-of-truth values live under the Mercury namespace. `/approvals` is greenfield in code and never aliased Mercury.
 
-| Token | Value | What it's for |
-|---|---|---|
-| `--mercury-cream` | `hsl(40 25% 94%)` (`apps/dashboard/src/app/globals.css:99`) | page background in V1 Mercury surfaces |
-| `--mercury-ink` | `hsl(20 10% 12%)` (`apps/dashboard/src/app/globals.css:100`) | primary text |
-| `--mercury-ink-2..4` | `hsl(20 8% 28%)` / `hsl(20 6% 46%)` / `hsl(20 6% 62%)` (`apps/dashboard/src/app/globals.css:101-103`) | ink ramp |
-| `--mercury-accent` | `hsl(20 90% 55%)` (`apps/dashboard/src/app/globals.css:104`) | bright editorial orange — **same value** as `--editorial-accent` |
-| `--mercury-accent-soft` | `hsl(20 60% 50%)` (`apps/dashboard/src/app/globals.css:105`) | softer accent for state |
-| `--mercury-hairline` / `-soft` | `hsl(40 15% 86%)` / `hsl(40 15% 90%)` (`apps/dashboard/src/app/globals.css:106-107`) | hairlines |
-| `--mercury-row-hover` | `hsl(40 18% 90%)` (`apps/dashboard/src/app/globals.css:108`) | table row hover (Mercury V1) |
-| `--mercury-pos` / `--mercury-neg` | `hsl(140 35% 35%)` / `hsl(0 60% 45%)` (`apps/dashboard/src/app/globals.css:109-110`) | pos/neg semantic; rarely needed (wave-1 prefers glyph + amber depth) |
+| Token                             | Value                                                                                                 | What it's for                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `--mercury-cream`                 | `hsl(40 25% 94%)` (`apps/dashboard/src/app/globals.css:99`)                                           | page background in V1 Mercury surfaces                               |
+| `--mercury-ink`                   | `hsl(20 10% 12%)` (`apps/dashboard/src/app/globals.css:100`)                                          | primary text                                                         |
+| `--mercury-ink-2..4`              | `hsl(20 8% 28%)` / `hsl(20 6% 46%)` / `hsl(20 6% 62%)` (`apps/dashboard/src/app/globals.css:101-103`) | ink ramp                                                             |
+| `--mercury-accent`                | `hsl(20 90% 55%)` (`apps/dashboard/src/app/globals.css:104`)                                          | bright editorial orange — **same value** as `--editorial-accent`     |
+| `--mercury-accent-soft`           | `hsl(20 60% 50%)` (`apps/dashboard/src/app/globals.css:105`)                                          | softer accent for state                                              |
+| `--mercury-hairline` / `-soft`    | `hsl(40 15% 86%)` / `hsl(40 15% 90%)` (`apps/dashboard/src/app/globals.css:106-107`)                  | hairlines                                                            |
+| `--mercury-row-hover`             | `hsl(40 18% 90%)` (`apps/dashboard/src/app/globals.css:108`)                                          | table row hover (Mercury V1)                                         |
+| `--mercury-pos` / `--mercury-neg` | `hsl(140 35% 35%)` / `hsl(0 60% 45%)` (`apps/dashboard/src/app/globals.css:109-110`)                  | pos/neg semantic; rarely needed (wave-1 prefers glyph + amber depth) |
 
 ### 1.3 Editorial (agent-home tokens, consumed directly)
 
 Used by `/alex` and `/riley` agent homes. Same value space as the Mercury aliases above (cream + ink ramp + hairline) but named for the editorial register.
 
-| Token | Value | What it's for |
-|---|---|---|
-| `--cream` | `hsl(40 25% 94%)` (`apps/dashboard/src/app/globals.css:164`) | ambient page background; consumed by the editorial auth shell via `--ambient-cream` (`apps/dashboard/src/app/globals.css:181`) and `.app-header` (`apps/dashboard/src/app/globals.css:455`) |
-| `--ink` | `hsl(20 10% 12%)` (`apps/dashboard/src/app/globals.css:165`) | prose; consumed by `.greeting-prose` (`apps/dashboard/src/app/globals.css:713`) and the brand mark dot (`apps/dashboard/src/app/globals.css:496`) |
-| `--ink-2` | `hsl(20 8% 28%)` (`apps/dashboard/src/app/globals.css:166`) | secondary prose (`.dc-resolved-line` line 782) |
-| `--ink-3` | `hsl(20 6% 46%)` (`apps/dashboard/src/app/globals.css:167`) | tertiary / muted prose (`.brand-nav a` line 510) |
-| `--ink-4` | `hsl(20 6% 62%)` (`apps/dashboard/src/app/globals.css:168`) | quaternary (`.tile-ctx` line 1118) |
-| `--hairline` | `hsl(40 15% 86%)` (`apps/dashboard/src/app/globals.css:169`) | canonical hairline |
-| `--hair` | `var(--hairline)` (`apps/dashboard/src/app/globals.css:187`) | alias; consumed by `.app-header` border (`apps/dashboard/src/app/globals.css:456`), `.win` border (line 809), `.tile` border (line 1040), and across the agent-home shell |
-| `--hair-soft` | `hsl(40 15% 90%)` (`apps/dashboard/src/app/globals.css:188`) | softer divider |
-| `--editorial-accent` | `hsl(20 90% 55%)` (`apps/dashboard/src/app/globals.css:189`) | bright editorial orange; consumed by `.greeting-prose .accent` (`apps/dashboard/src/app/globals.css:717`), `.folio-link .pip` (line 603), `.win-prose .accent` (line 847), `.tile[data-stage="hot"] .tile-bar` (line 1133) — **same value** as `--mercury-accent` |
-| `--serif` | Source Serif 4 stack (`apps/dashboard/src/app/globals.css:173-175`) | display + prose font |
-| `--mono` | JetBrains Mono stack (`apps/dashboard/src/app/globals.css:176-177`) | folios, numerics, section labels |
-| `--col` | `640px` (`apps/dashboard/src/app/globals.css:190`) | prose column width |
-| `--col-wide` | `1080px` (`apps/dashboard/src/app/globals.css:191`) | wide content column |
-| `--gap-section` | `144px` (`apps/dashboard/src/app/globals.css:192`) | between-section spacing (desktop) |
-| `--gap-section-tablet` | `104px` (`apps/dashboard/src/app/globals.css:193`) | tablet variant |
-| `--gap-section-mobile` | `72px` (`apps/dashboard/src/app/globals.css:194`) | mobile variant |
+| Token                  | Value                                                               | What it's for                                                                                                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--cream`              | `hsl(40 25% 94%)` (`apps/dashboard/src/app/globals.css:164`)        | ambient page background; consumed by the editorial auth shell via `--ambient-cream` (`apps/dashboard/src/app/globals.css:181`) and `.app-header` (`apps/dashboard/src/app/globals.css:455`)                                                                       |
+| `--ink`                | `hsl(20 10% 12%)` (`apps/dashboard/src/app/globals.css:165`)        | prose; consumed by `.greeting-prose` (`apps/dashboard/src/app/globals.css:713`) and the brand mark dot (`apps/dashboard/src/app/globals.css:496`)                                                                                                                 |
+| `--ink-2`              | `hsl(20 8% 28%)` (`apps/dashboard/src/app/globals.css:166`)         | secondary prose (`.dc-resolved-line` line 782)                                                                                                                                                                                                                    |
+| `--ink-3`              | `hsl(20 6% 46%)` (`apps/dashboard/src/app/globals.css:167`)         | tertiary / muted prose (`.brand-nav a` line 510)                                                                                                                                                                                                                  |
+| `--ink-4`              | `hsl(20 6% 62%)` (`apps/dashboard/src/app/globals.css:168`)         | quaternary (`.tile-ctx` line 1118)                                                                                                                                                                                                                                |
+| `--hairline`           | `hsl(40 15% 86%)` (`apps/dashboard/src/app/globals.css:169`)        | canonical hairline                                                                                                                                                                                                                                                |
+| `--hair`               | `var(--hairline)` (`apps/dashboard/src/app/globals.css:187`)        | alias; consumed by `.app-header` border (`apps/dashboard/src/app/globals.css:456`), `.win` border (line 809), `.tile` border (line 1040), and across the agent-home shell                                                                                         |
+| `--hair-soft`          | `hsl(40 15% 90%)` (`apps/dashboard/src/app/globals.css:188`)        | softer divider                                                                                                                                                                                                                                                    |
+| `--editorial-accent`   | `hsl(20 90% 55%)` (`apps/dashboard/src/app/globals.css:189`)        | bright editorial orange; consumed by `.greeting-prose .accent` (`apps/dashboard/src/app/globals.css:717`), `.folio-link .pip` (line 603), `.win-prose .accent` (line 847), `.tile[data-stage="hot"] .tile-bar` (line 1133) — **same value** as `--mercury-accent` |
+| `--serif`              | Source Serif 4 stack (`apps/dashboard/src/app/globals.css:173-175`) | display + prose font                                                                                                                                                                                                                                              |
+| `--mono`               | JetBrains Mono stack (`apps/dashboard/src/app/globals.css:176-177`) | folios, numerics, section labels                                                                                                                                                                                                                                  |
+| `--col`                | `640px` (`apps/dashboard/src/app/globals.css:190`)                  | prose column width                                                                                                                                                                                                                                                |
+| `--col-wide`           | `1080px` (`apps/dashboard/src/app/globals.css:191`)                 | wide content column                                                                                                                                                                                                                                               |
+| `--gap-section`        | `144px` (`apps/dashboard/src/app/globals.css:192`)                  | between-section spacing (desktop)                                                                                                                                                                                                                                 |
+| `--gap-section-tablet` | `104px` (`apps/dashboard/src/app/globals.css:193`)                  | tablet variant                                                                                                                                                                                                                                                    |
+| `--gap-section-mobile` | `72px` (`apps/dashboard/src/app/globals.css:194`)                   | mobile variant                                                                                                                                                                                                                                                    |
 
 ### 1.4 shadcn HSL components
 
@@ -225,19 +225,12 @@ Three tables appear across wave-2: `/activity` audit rows, `/approvals` queue ro
 - **Sortable columns.** Only `/reports` has sort affordances today — `.tbl thead th.sortable` with an opacity-0 amber arrow that fades in on `.active` (`locked/switchboard/project/reports-v2/styles.css:597-611`). Any wave-2 table adding sort adopts this exact pattern, including the `--ease-standard` 280ms opacity + 180deg rotation for desc.
 - **Empty-state row.** Each table renders empty inline within its own grid, not as a replacement block. `/activity` uses `.empty` block-level (`locked/switchboard/project/activity-v2/styles.css:914-949`); a single empty row inside a populated table uses a single muted-italic prose cell spanning all columns (no skeleton, no spinner) — see `/approvals` `.queue-empty` (`locked/switchboard/project/approvals-v2/styles.css:282-297`).
 
-
-
-
-
-
-
-
 ## 9. Surface-specific conventions
 
 ### 9.1 /approvals — governed action surface (greenfield; Stone & Weight tokens per spec)
 
 - **Confirmation-code / hash echo** — the Approve action echoes `bindingHash` inline in operator vocabulary ("I confirm hash 0x1a2b…"), never engineering vocabulary. The display pattern is a `var(--font-display)` 22px commit line (`locked/switchboard/project/approvals-v2/styles.css:792-800` `.approve-commit-line`) containing a mono `bindingHash` chip (`.approve-commit-line .ic` at lines 801-810) and an italic amber-deep accent span (`.approve-commit-line .actv` at lines 811-815). A `confirm-ack` checkbox the operator must tick before the Approve CTA enables (`locked/switchboard/project/approvals-v2/styles.css:824-844`). Cite `docs/design-prompts/2026-05-13-approvals.md#detail-panel` (Block 4 — Action drawer).
-- **Mutating-CTA accent** — `--sw-accent` `#A07850` is reserved exclusively for the primary Approve button (`locked/switchboard/project/approvals-v2/styles.css:847-879` `.btn-approve { background: var(--amber); color: #fff; min-width: 13rem }`). Secondary actions use neutral: `.btn-patch` outlines ink, `.btn-reject` outlines hair-strong (`locked/switchboard/project/approvals-v2/styles.css:903-939`). The Approve CTA also renders the `bindingHash` *inside* its label as a 11px mono caption (`.btn-approve .ba-label .ba-hash` at `locked/switchboard/project/approvals-v2/styles.css:875-879`).
+- **Mutating-CTA accent** — `--sw-accent` `#A07850` is reserved exclusively for the primary Approve button (`locked/switchboard/project/approvals-v2/styles.css:847-879` `.btn-approve { background: var(--amber); color: #fff; min-width: 13rem }`). Secondary actions use neutral: `.btn-patch` outlines ink, `.btn-reject` outlines hair-strong (`locked/switchboard/project/approvals-v2/styles.css:903-939`). The Approve CTA also renders the `bindingHash` _inside_ its label as a 11px mono caption (`.btn-approve .ba-label .ba-hash` at `locked/switchboard/project/approvals-v2/styles.css:875-879`).
 - **Risk-graded confirmation visual** — the queue-row left-edge hairline weight grows with `riskCategory` (`locked/switchboard/project/approvals-v2/styles.css:325-328`); the detail-panel header inherits the same risk class. The visual stays inside §3.4's depth-not-hue rule. Cite `docs/design-prompts/2026-05-13-approvals.md#row-design`.
 - **Binding hash is not collapsible** — Block 2 (Binding hash) is a persistent card with top + bottom ink rules and the 18px-mono `bindingHash` fully visible (`locked/switchboard/project/approvals-v2/styles.css:582-614`). Cite `docs/design-prompts/2026-05-13-approvals.md#detail-panel` ("Compact, but cannot be hidden behind a click. This is the integrity contract.").
 - **No inline approve outside `/approvals`** — other surfaces link to `/approvals/[id]`; they do not host their own Approve button. The cockpit's approval block (`locked/switchboard/project/agent-home-v3/cockpit.jsx:519-609`) is the single agent-home-only exception, scoped to the agent's own pending approvals; cross-agent approval lives at `/approvals`. Cite `docs/design-prompts/2026-05-13-approvals.md#layout`.
