@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { PipelineBoardResponseSchema } from "@switchboard/schemas";
 import type { OpportunityBoardRow, OpportunityStore } from "../opportunity-store.js";
-import { listOpportunitiesForBoard } from "../opportunity-board.js";
+import {
+  OpportunityNotFoundError,
+  type TransitionStageInput,
+  type TransitionStageResult,
+} from "../opportunity-store.js";
+import { listOpportunitiesForBoard, transitionOpportunityStage } from "../opportunity-board.js";
 
 function mkRow(overrides: Partial<OpportunityBoardRow> = {}): OpportunityBoardRow {
   return {
@@ -95,5 +100,54 @@ describe("listOpportunitiesForBoard", () => {
       { opportunityStore: store },
     );
     expect(result).toEqual({ rows: [] });
+  });
+});
+
+function mkTransitioningStore(
+  result: TransitionStageResult | OpportunityNotFoundError,
+): Pick<OpportunityStore, "transitionStage"> {
+  return {
+    transitionStage: vi.fn().mockImplementation((_: TransitionStageInput) => {
+      if (result instanceof OpportunityNotFoundError) return Promise.reject(result);
+      return Promise.resolve(result);
+    }),
+  };
+}
+
+describe("transitionOpportunityStage", () => {
+  it("returns { opportunity } with the wire shape", async () => {
+    const store = mkTransitioningStore({
+      opportunity: mkRow({ stage: "booked" }),
+      workTraceId: "trace_1",
+    });
+    const result = await transitionOpportunityStage(
+      { orgId: "org_acme", id: "opp_1", stage: "booked", actor: { id: "user_42", type: "user" } },
+      { opportunityStore: store },
+    );
+    expect(result.opportunity.stage).toBe("booked");
+    expect(typeof result.opportunity.updatedAt).toBe("string");
+  });
+
+  it("propagates OpportunityNotFoundError from the store", async () => {
+    const err = new OpportunityNotFoundError("opp_missing");
+    const store = mkTransitioningStore(err);
+    await expect(
+      transitionOpportunityStage(
+        { orgId: "org_acme", id: "opp_missing", stage: "booked", actor: { id: "u", type: "user" } },
+        { opportunityStore: store },
+      ),
+    ).rejects.toBeInstanceOf(OpportunityNotFoundError);
+  });
+
+  it("forwards the input verbatim to the store", async () => {
+    const store = mkTransitioningStore({ opportunity: mkRow(), workTraceId: "t" });
+    const input = {
+      orgId: "org_acme",
+      id: "opp_1",
+      stage: "won" as const,
+      actor: { id: "user_42", type: "user" as const },
+    };
+    await transitionOpportunityStage(input, { opportunityStore: store });
+    expect(store.transitionStage).toHaveBeenCalledWith(input);
   });
 });

@@ -1,5 +1,14 @@
-import type { PipelineBoardOpportunity, PipelineBoardResponse } from "@switchboard/schemas";
-import type { OpportunityStore, OpportunityBoardRow } from "./opportunity-store.js";
+import type {
+  OpportunityStage,
+  PipelineBoardOpportunity,
+  PipelineBoardResponse,
+} from "@switchboard/schemas";
+import type {
+  OpportunityStore,
+  OpportunityBoardRow,
+  TransitionStageInput,
+} from "./opportunity-store.js";
+export { OpportunityNotFoundError } from "./opportunity-store.js";
 
 function toBoardRow(row: OpportunityBoardRow): PipelineBoardOpportunity {
   return {
@@ -44,4 +53,22 @@ export async function listOpportunitiesForBoard(
 ): Promise<PipelineBoardResponse> {
   const rows = await deps.opportunityStore.findOrgBoard(input.orgId);
   return { rows: rows.map(toBoardRow) };
+}
+
+export async function transitionOpportunityStage(
+  input: {
+    orgId: string;
+    id: string;
+    stage: OpportunityStage;
+    actor: TransitionStageInput["actor"];
+  },
+  deps: { opportunityStore: Pick<OpportunityStore, "transitionStage"> },
+): Promise<{ opportunity: PipelineBoardOpportunity }> {
+  const result = await deps.opportunityStore.transitionStage({
+    orgId: input.orgId,
+    id: input.id,
+    stage: input.stage,
+    actor: input.actor,
+  });
+  return { opportunity: toBoardRow(result.opportunity) };
 }
