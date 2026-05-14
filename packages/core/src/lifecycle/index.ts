@@ -7,7 +7,15 @@ export { deriveContactStage } from "./contact-stage-deriver.js";
 export { DEFAULT_STAGE_HANDLER_MAP, agentForOpportunityStage } from "./stage-handler-map.js";
 export type { StageHandlerMap } from "./stage-handler-map.js";
 export type { ContactStore, CreateContactInput, ContactFilters } from "./contact-store.js";
-export type { OpportunityStore, CreateOpportunityInput } from "./opportunity-store.js";
+export type {
+  OpportunityStore,
+  CreateOpportunityInput,
+  OpportunityBoardRow,
+  TransitionStageInput,
+  TransitionStageResult,
+} from "./opportunity-store.js";
+export { OpportunityNotFoundError } from "./opportunity-store.js";
+export { listOpportunitiesForBoard, transitionOpportunityStage } from "./opportunity-board.js";
 export type {
   RevenueStore,
   RecordRevenueInput,

@@ -93,7 +93,12 @@ export interface TestContext {
   storage: StorageContext;
 }
 
-export async function buildTestServer(): Promise<TestContext> {
+export interface BuildTestServerOptions {
+  /** Override the opportunityStore decorator. Pass `null` to skip decoration entirely (tests the 503 path). */
+  opportunityStore?: OpportunityStore | null;
+}
+
+export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
   const app = Fastify({ logger: false });
 
   // Global error handler (mirrors app.ts)
@@ -265,7 +270,15 @@ export async function buildTestServer(): Promise<TestContext> {
   app.decorate("contactStore", new TestContactStore());
   app.decorate("handoffStore", new TestHandoffStore());
   app.decorate("threadStore", new TestThreadStore());
-  app.decorate("opportunityStore", new TestOpportunityStore());
+  // Allow null override to test the 503 path (store not available).
+  if (options.opportunityStore !== null) {
+    app.decorate(
+      "opportunityStore",
+      options.opportunityStore !== undefined
+        ? options.opportunityStore
+        : new TestOpportunityStore(),
+    );
+  }
   app.decorate("revenueEventStore", new TestRevenueStore());
   app.decorate("triggerStore", new TestTriggerStore());
 
@@ -391,6 +404,9 @@ export async function buildTestServer(): Promise<TestContext> {
 
   const { dashboardContactsRoutes } = await import("../routes/dashboard-contacts.js");
   await app.register(dashboardContactsRoutes);
+
+  const { dashboardOpportunitiesRoutes } = await import("../routes/dashboard-opportunities.js");
+  await app.register(dashboardOpportunitiesRoutes);
 
   const { dashboardContactDetailRoutes } = await import("../routes/dashboard-contact-detail.js");
   await app.register(dashboardContactDetailRoutes);

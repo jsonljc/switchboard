@@ -9,7 +9,13 @@ import type {
   TaskStatus,
 } from "@switchboard/schemas";
 import type { ContactStore, CreateContactInput } from "../contact-store.js";
-import type { OpportunityStore, CreateOpportunityInput } from "../opportunity-store.js";
+import type {
+  OpportunityStore,
+  CreateOpportunityInput,
+  OpportunityBoardRow,
+  TransitionStageInput,
+  TransitionStageResult,
+} from "../opportunity-store.js";
 import type { RevenueStore, RecordRevenueInput, RevenueSummary } from "../revenue-store.js";
 import type { OwnerTaskStore, CreateOwnerTaskInput } from "../owner-task-store.js";
 import { ContactLifecycleService } from "../lifecycle-service.js";
@@ -222,6 +228,16 @@ class InMemoryOpportunityStore implements OpportunityStore {
       });
     }
     return Array.from(counts.entries()).map(([stage, data]) => ({ stage, ...data }));
+  }
+
+  async findOrgBoard(_orgId: string): Promise<OpportunityBoardRow[]> {
+    // lifecycle-service tests don't exercise the board path; stub.
+    throw new Error("findOrgBoard: not implemented in lifecycle-service test stub");
+  }
+
+  async transitionStage(_input: TransitionStageInput): Promise<TransitionStageResult> {
+    // lifecycle-service tests don't exercise the transitionStage path; stub.
+    throw new Error("transitionStage: not implemented in lifecycle-service test stub");
   }
 }
 

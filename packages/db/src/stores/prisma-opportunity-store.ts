@@ -1,6 +1,16 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import type { PrismaDbClient } from "../prisma-db.js";
+import { isRootPrismaClient } from "../prisma-db.js";
 import type { Opportunity, OpportunityStage, ObjectionRecord } from "@switchboard/schemas";
+import type {
+  OpportunityBoardRow,
+  TransitionStageInput,
+  TransitionStageResult,
+} from "@switchboard/core";
+import { OpportunityNotFoundError } from "@switchboard/core";
+import type { WorkTrace } from "@switchboard/core/platform";
+import type { PrismaWorkTraceStore } from "./prisma-work-trace-store.js";
 
 // ---------------------------------------------------------------------------
 // Store Interface (structural match with @switchboard/core)
@@ -31,6 +41,8 @@ interface OpportunityStore {
     orgId: string,
   ): Promise<Array<{ stage: OpportunityStage; count: number; totalValue: number }>>;
   countByStage(orgId: string, stage: string): Promise<number>;
+  findOrgBoard(orgId: string): Promise<OpportunityBoardRow[]>;
+  transitionStage(input: TransitionStageInput): Promise<TransitionStageResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +50,16 @@ interface OpportunityStore {
 // ---------------------------------------------------------------------------
 
 export class PrismaOpportunityStore implements OpportunityStore {
-  constructor(private prisma: PrismaDbClient) {}
+  // Stored for transitionStage (implemented in Task 6). Unused here but required by
+  // the constructor contract so call sites can pass it now and Task 7 wires it up.
+  private workTraceStore: PrismaWorkTraceStore | null;
+
+  constructor(
+    private prisma: PrismaDbClient,
+    workTraceStore: PrismaWorkTraceStore | null,
+  ) {
+    this.workTraceStore = workTraceStore;
+  }
 
   async create(input: CreateOpportunityInput): Promise<Opportunity> {
     const id = randomUUID();
@@ -197,11 +218,166 @@ export class PrismaOpportunityStore implements OpportunityStore {
       },
     });
   }
+
+  // -------------------------------------------------------------------------
+  // Pipeline board methods — production implementation ships in PR-C2 db task.
+  // Stubs satisfy the OpportunityStore interface until then.
+  // -------------------------------------------------------------------------
+
+  async findOrgBoard(orgId: string): Promise<OpportunityBoardRow[]> {
+    const rows = await this.prisma.opportunity.findMany({
+      where: { organizationId: orgId },
+      include: { contact: { select: { id: true, name: true, primaryChannel: true } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    return rows.map(mapRowToBoardRow);
+  }
+
+  async transitionStage(input: TransitionStageInput): Promise<TransitionStageResult> {
+    if (!this.workTraceStore) {
+      throw new Error("PrismaOpportunityStore.transitionStage requires workTraceStore");
+    }
+    const { orgId, id, stage, actor } = input;
+    const requestedAt = new Date();
+    const executionStartedAt = new Date();
+
+    if (!isRootPrismaClient(this.prisma)) {
+      throw new Error(
+        "PrismaOpportunityStore.transitionStage must be called with a root Prisma client, not a transaction client",
+      );
+    }
+    const txResult = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.opportunity.findFirst({
+        where: { id, organizationId: orgId },
+        include: { contact: { select: { id: true, name: true, primaryChannel: true } } },
+      });
+      if (!existing) {
+        throw new OpportunityNotFoundError(`Opportunity not found: ${id} (org: ${orgId})`);
+      }
+
+      const isTerminal = stage === "won" || stage === "lost";
+      const updated = await tx.opportunity.update({
+        where: { id },
+        data: {
+          stage,
+          closedAt: isTerminal ? (existing.closedAt ?? requestedAt) : null,
+          updatedAt: requestedAt,
+        },
+        include: { contact: { select: { id: true, name: true, primaryChannel: true } } },
+      });
+
+      const workUnitId = randomUUID();
+      const trace: WorkTrace = {
+        workUnitId,
+        traceId: workUnitId,
+        intent: "opportunity.stage_transition",
+        mode: "operator_mutation",
+        organizationId: orgId,
+        actor,
+        trigger: "api",
+        parameters: {
+          opportunityId: id,
+          contactId: existing.contactId,
+          fromStage: existing.stage,
+          toStage: stage,
+        },
+        governanceOutcome: "execute",
+        riskScore: 0,
+        matchedPolicies: [],
+        outcome: "running",
+        durationMs: 0,
+        executionSummary: `operator ${actor.id} transitioned opportunity ${id} from ${existing.stage} to ${stage}`,
+        modeMetrics: { governanceMode: "operator_auto_allow" },
+        ingressPath: "store_recorded_operator_mutation",
+        hashInputVersion: 2,
+        requestedAt: requestedAt.toISOString(),
+        governanceCompletedAt: requestedAt.toISOString(),
+      };
+
+      await this.workTraceStore!.recordOperatorMutation(trace, {
+        tx: tx as Prisma.TransactionClient,
+      });
+
+      return { workUnitId, updated };
+    });
+
+    const completedAt = new Date();
+    const finalizeResult = await this.workTraceStore.update(
+      txResult.workUnitId,
+      {
+        outcome: "completed",
+        executionStartedAt: executionStartedAt.toISOString(),
+        completedAt: completedAt.toISOString(),
+        durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
+      },
+      { caller: "PrismaOpportunityStore.transitionStage" },
+    );
+    if (!finalizeResult.ok) {
+      console.warn(
+        `[prisma-opportunity-store] transitionStage finalize rejected for ${txResult.workUnitId}: ${finalizeResult.reason}`,
+      );
+    }
+
+    return {
+      opportunity: mapRowToBoardRow(txResult.updated as Parameters<typeof mapRowToBoardRow>[0]),
+      workTraceId: txResult.workUnitId,
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Mapper
 // ---------------------------------------------------------------------------
+
+function mapRowToBoardRow(row: {
+  id: string;
+  organizationId: string;
+  contactId: string;
+  serviceId: string;
+  serviceName: string;
+  stage: string;
+  timeline: string | null;
+  priceReadiness: string | null;
+  objections: unknown;
+  qualificationComplete: boolean;
+  estimatedValue: number | null;
+  revenueTotal: number;
+  assignedAgent: string | null;
+  assignedStaff: string | null;
+  lostReason: string | null;
+  notes: string | null;
+  openedAt: Date;
+  closedAt: Date | null;
+  updatedAt: Date;
+  contact: { id: string; name: string | null; primaryChannel: string };
+}): OpportunityBoardRow {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    contactId: row.contactId,
+    serviceId: row.serviceId,
+    serviceName: row.serviceName,
+    stage: row.stage as OpportunityStage,
+    timeline: (row.timeline as OpportunityBoardRow["timeline"]) ?? null,
+    priceReadiness: (row.priceReadiness as OpportunityBoardRow["priceReadiness"]) ?? null,
+    objections: (row.objections as ObjectionRecord[]) ?? [],
+    qualificationComplete: row.qualificationComplete,
+    estimatedValue: row.estimatedValue,
+    revenueTotal: row.revenueTotal,
+    assignedAgent: row.assignedAgent,
+    assignedStaff: row.assignedStaff,
+    lostReason: row.lostReason,
+    notes: row.notes,
+    openedAt: row.openedAt,
+    closedAt: row.closedAt,
+    updatedAt: row.updatedAt,
+    contact: {
+      id: row.contact.id,
+      name: row.contact.name ?? "",
+      primaryChannel: row.contact.primaryChannel as "whatsapp" | "telegram" | "dashboard",
+    },
+  };
+}
 
 function mapRowToOpportunity(row: {
   id: string;

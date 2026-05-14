@@ -57,6 +57,7 @@ import { googleCalendarOAuthRoutes } from "../routes/google-calendar-oauth.js";
 import { dashboardReportsRoutes } from "../routes/dashboard-reports.js";
 import { dashboardContactsRoutes } from "../routes/dashboard-contacts.js";
 import { dashboardContactDetailRoutes } from "../routes/dashboard-contact-detail.js";
+import { dashboardOpportunitiesRoutes } from "../routes/dashboard-opportunities.js";
 import { dashboardAutomationsRoutes } from "../routes/dashboard-automations.js";
 import { dashboardActivityRoutes } from "../routes/dashboard-activity.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
@@ -173,6 +174,7 @@ export async function registerRoutes(
   await app.register(dashboardReportsRoutes);
   await app.register(dashboardContactsRoutes);
   await app.register(dashboardContactDetailRoutes);
+  await app.register(dashboardOpportunitiesRoutes);
   await app.register(dashboardAutomationsRoutes);
   await app.register(dashboardActivityRoutes, { prefix: "/api/dashboard/activity" });
   // playbook, simulate, and website-scan routes define their own full paths including /api prefix
