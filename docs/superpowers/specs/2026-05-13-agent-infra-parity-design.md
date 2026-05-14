@@ -10,13 +10,15 @@
 
 Ship in dependency order. PR-1 and PR-2 are mechanical (no design decisions). PR-3 and PR-4 involve real decisions and are scoped conservatively.
 
-| PR    | Title                                                                                  | Depends on | Risk          |
-| ----- | -------------------------------------------------------------------------------------- | ---------- | ------------- |
-| PR-1  | Wire knowledgeStore into ConversationCompoundingService                                | None       | Low-to-medium |
-| PR-2  | Parallel safe tool calls in skill executor                                             | None       | Medium        |
-| PR-3  | Outcome-informed context injection (write + read sides)                                | PR-1       | Medium        |
-| PR-4  | Provider-agnostic tool-calling adapter boundary (type boundary only — no fallback)     | None       | Low-to-medium |
-| PR-4B | Fallback router + retryable-error consumption + agent-runtime adapter migration (deferred) | PR-4   | Medium        |
+| PR     | Title                                                                                       | Depends on | Risk          |
+| ------ | ------------------------------------------------------------------------------------------- | ---------- | ------------- |
+| PR-1   | Wire knowledgeStore into ConversationCompoundingService                                     | None       | Low-to-medium |
+| PR-2   | Parallel safe tool calls in skill executor                                                  | None       | Medium        |
+| PR-3   | Outcome-informed context injection (write + read sides)                                     | PR-1       | Medium        |
+| PR-3.1 | Signal upgrade: booking-backed outcome attribution + bookingId propagation fix + C1 metrics | PR-3       | Medium        |
+| PR-3.2 | Pattern canonicalization + decay maintenance cron (scoped separately)                       | PR-3.1     | Medium        |
+| PR-4   | Provider-neutral executor boundary, no fallback                                             | None       | Low-to-medium |
+| PR-4B  | Fallback router + retryable-error consumption + agent-runtime adapter migration (deferred)  | PR-4       | Medium        |
 
 ---
 
@@ -178,7 +180,115 @@ PR-3B: outcome-weighted retrieval, behind a feature flag. Only after inspecting 
 
 ---
 
-## PR-4: Provider-agnostic tool-calling adapter boundary
+## PR-3.1: Signal upgrade — booking-backed outcome attribution
+
+> Added 2026-05-14 after a post-PR-3 architectural review. PR-3 ships the plumbing (pattern write path, ContextBuilder injection, Alex parameter, escaping). PR-3.1 makes the loop trustworthy by replacing the LLM verdict with hard booking evidence, fixing two silently-broken adjacent paths, and adding the minimum metrics needed to observe whether the loop is producing signal at all.
+
+### Goal
+
+Stop treating `summarization.outcome === "booked"` as the source of truth for whether a conversation booked. Gate outcome-pattern extraction on actual `Booking` evidence instead.
+
+### What changes
+
+**1. Booking-backed outcome attribution in `ConversationCompoundingService.processConversationEnd`.**
+
+Before the existing `shouldExtractOutcomePatterns(summarization.outcome)` check, resolve booking attribution using a two-tier policy:
+
+1. **Strong attribution.** A `Booking` row whose `workTraceId` links to a tool execution that ran during this conversation. Preferred when the work-trace linkage is available end-to-end.
+2. **Fallback attribution.** If work-trace linkage is unavailable, look up a `Booking` for the same `organizationId + deploymentId + contactId` created in the post-conversation window — `conversation end` to `conversation end + 24h`. The pre-conversation half of the window is intentionally excluded: bookings before the conversation ended are more likely caused by an earlier touchpoint, and the post-conversation direction is the cleaner causal signal.
+
+Only conversations with booking-backed attribution may write `category: "pattern"` outcome memories. The fallback path is treated as weaker evidence and must be observable separately (see metrics below).
+
+The existing summarization LLM call may still provide candidate pattern phrasing as input to the extraction prompt, but it is no longer the authority for whether the outcome was booked.
+
+**2. Persist `bookingId` on `ConversionRecord`.**
+
+`calendar-book.booking.create` writes a `Booking` row and emits a `"booked"` `OutboxEvent` carrying `bookingId` in `metadata`. `OutboxPublisher` already passes `metadata` through to the emitted `ConversionEvent` (verified by `packages/core/src/events/outbox-publisher.test.ts:110-123`) — so `event.metadata.bookingId` is reachable downstream. The gap is at the store: `PrismaConversionRecordStore.record()` (`packages/db/src/stores/prisma-conversion-record-store.ts:49-67`) does not extract `bookingId` from `event.metadata` to populate the dedicated indexed `ConversionRecord.bookingId` column, even though the column exists (`packages/db/prisma/schema.prisma:1845-1865`).
+
+PR-3.1 closes this gap so `bookingId` is queryable as a first-class indexed column, not only as JSON metadata. The booking-backed attribution query benefits from this directly; the column has been silently unused otherwise.
+
+**3. Filter `category: "pattern"` out of `learnedFacts` in `ContextBuilder`.**
+
+PR-3 added `outcomePatternContext` to `BuiltContext` but did not change the generic `learnedFacts` projection, which iterates every high-confidence memory unfiltered. After PR-3, pattern-category rows therefore appear twice in skill context: once as advisory `outcomePatternContext` (correctly), and once as a "learned fact" (incorrectly — patterns are not facts and were never meant to flow through that channel). PR-3.1 fixes the leak: `learnedFacts` projection skips `m.category === "pattern"`, leaving patterns to flow only through `outcomePatternContext` where their advisory framing and provenance metadata are preserved.
+
+**4. Defensive parsing of LLM-returned `extraction.patterns`.**
+
+PR-3's `processConversationEnd` trusts `extraction.patterns` as-returned by `JSON.parse(raw)`. Because patterns become durable memory and (after PR-3.1) injected prompt context for future conversations, defensive parsing is required: filter to entries that are actually strings, cap the array length, and cap per-pattern character length. This bounds prompt-injection surface, prevents accidental memory bloat from a malformed LLM response, and pairs with the existing `escapePromptText` sentinel-stripping in `outcome-pattern-extractor.ts`.
+
+**5. C1 observability: minimum metrics to falsify the loop.**
+
+Add Prometheus counters and one histogram to `SwitchboardMetrics` in `packages/core/src/telemetry/metrics.ts`, wired in `apps/api/src/metrics.ts`:
+
+- `switchboard_outcome_patterns_extracted_total{deployment_id, attribution_tier}` — incremented per pattern at `trackPattern` entry, labeled `strong` or `fallback`.
+- `switchboard_outcome_patterns_merged_total{deployment_id}` — incremented when an extracted pattern hits the similarity threshold against an existing entry and increments confidence.
+- `switchboard_outcome_patterns_created_total{deployment_id}` — incremented when an extracted pattern does not match and a new row is created.
+- `switchboard_outcome_patterns_surfaced_total{deployment_id}` — incremented by `ContextBuilder` each time at least one pattern is injected into a skill execution.
+- `switchboard_outcome_pattern_confidence` — histogram observed at write time on the post-increment confidence value, default latency buckets replaced with a 0.0–1.0 distribution.
+
+No conversion-lift metric in this PR. Lift measurement requires a settled extraction baseline and is deferred to PR-3.2 or later.
+
+### Scope guard
+
+- No changes to pattern surfacing thresholds (`SURFACING_THRESHOLD` stays as-is).
+- No changes to similarity threshold or merge behavior.
+- No decay execution wiring (deferred to PR-3.2).
+- No canonicalization job (deferred to PR-3.2).
+- No conversion-lift measurement (deferred).
+- No changes to Alex prompt template.
+
+### Confidence threshold
+
+Unchanged from PR-3.
+
+### Risk
+
+Medium. The main risks are (a) the booking-attribution query becoming an N+1 against `processConversationEnd` and (b) the fallback window incorrectly attributing bookings caused by earlier or unrelated touchpoints. Mitigation: attribution-tier label on the metric so fallback contribution is visible, and a single indexed query on `(organizationId, contactId, createdAt)` per conversation end.
+
+### Tests
+
+- Booked conversation with `workTraceId` linkage writes patterns under attribution tier `strong`.
+- Booked conversation without `workTraceId` linkage but with a `Booking` in the post-conversation window writes patterns under attribution tier `fallback`.
+- Booked conversation with no matching `Booking` in either tier writes no patterns, even if `summarization.outcome === "booked"`.
+- LLM-classified-booked conversation with no real `Booking` row does **not** produce pattern memories. This is the regression test for the original signal.
+- Non-booked outcomes (`lost`, `escalated`, `pending`) write no patterns.
+- `Booking` outside the post-conversation window (before conversation end, or more than 24h after) does not attribute.
+- `PrismaConversionRecordStore.record()` extracts `bookingId` from `event.metadata` and persists it to the dedicated `ConversionRecord.bookingId` column when present.
+- A `ConversionRecord` written without `bookingId` in metadata leaves the column null (no false positives).
+- Each metric increments on its trigger path and carries the documented labels.
+- `attribution_tier` label is `strong` vs `fallback` and never `unknown`.
+- `learnedFacts` returned by `ContextBuilder.build()` excludes `category: "pattern"` rows even when those rows would otherwise pass the high-confidence filter.
+- The same pattern row appears in `outcomePatternContext` only — not duplicated as a `learnedFact`.
+- `extraction.patterns` from a malformed LLM response (non-array, mixed types, oversized array, oversized string) is parsed defensively: non-strings dropped, array capped at 5 entries, each entry capped at 500 characters; no pattern memory is written from invalid input.
+
+### Spec amendment note
+
+This subsection supersedes the gating signal originally documented in PR-3:
+
+> "Note: trigger gating reads `summarization.outcome` (the LLM-inferred outcome), not `ConversationEndEvent.endReason` (the lifecycle reason — different field)."
+
+After PR-3.1, gating reads booking-backed attribution. `summarization.outcome` remains a side-channel for candidate pattern _phrasing_, not for _whether the conversation booked_.
+
+### Release ordering
+
+**Post-merge state (2026-05-14):** PR-3 merged to `main` as `f19758c8` (#461) without the feature flag this section originally recommended. Switchboard is pre-launch — no production WhatsApp/chat traffic is exercising `ConversationCompoundingService.processConversationEnd` yet (launch is gated by Meta App Review). The "no LLM-classified pattern rows in durable production memory" invariant therefore holds by accident: there is no production traffic.
+
+**Binding requirement (still active):** PR-3.1 attribution gating must merge before any pre-launch customer-shaped traffic begins flowing through `processConversationEnd`. The PR-3 write path emits `category: "pattern"` memories gated only on `summarization.outcome === "booked"`, which is the exact signal PR-3.1 is correcting. Once real conversations exercise that path, every LLM-classified-booked transcript persists a pattern row regardless of any subsequent PR-3.1 gate.
+
+**One-time data hygiene at PR-3.1 deploy:** any `DeploymentMemory` rows with `category = "pattern"` written between PR-3's deploy and PR-3.1's deploy were created by the un-gated path. These rows are LLM-classified, not booking-backed, and should be purged at PR-3.1 deploy time. A single `DELETE FROM "DeploymentMemory" WHERE category = 'pattern' AND "createdAt" < <pr-3.1-deploy-time>` covers it; the post-deploy write path will re-populate against real booking evidence.
+
+**Why the original guidance is preserved below:** the next two paragraphs document the reasoning that _would_ have driven the feature-flag approach if PR-3 had been held. Keep them as the rationale for the binding requirement above and as a record of how the gap was identified.
+
+The PR-3 write path emits `category: "pattern"` memories gated only on `summarization.outcome === "booked"`, which is the exact signal PR-3.1 is correcting. Merging and deploying PR-3 into a live system would write durable LLM-classified booking patterns to production memory; those rows persist regardless of any subsequent PR-3.1 gate.
+
+This reverses the earlier "ship PR-3 as-is and stack PR-3.1" plan documented in the PR sequence table above — that plan was correct on narrative clarity but wrong on durable-memory safety. Code-review verification (see `feedback_ship_clean_not_followup` memory: ship clean, don't defer) flagged the gap, but only after PR-3 had already merged; pre-launch state is what kept it harmless.
+
+### Future (not this PR)
+
+PR-3.2: pattern canonicalization + decay execution as a daily Inngest cron, following the ad-optimizer signal-health pattern. Includes wiring `DeploymentMemoryStore.decayStale()` (currently called only from tests) and a write-time-cheap, nightly-merge approach to fragmentation. Conversion-lift gauge can ride on the same cron once the loop is producing signal worth measuring.
+
+---
+
+## PR-4: Provider-neutral executor boundary, no fallback
 
 ### Goal
 
