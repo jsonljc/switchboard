@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { T } from "../tokens.js";
+import { T } from "../tokens";
 
 describe("cockpit tokens", () => {
   it("exports the canonical color palette from the locked design", () => {

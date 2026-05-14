@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { Identity } from "../identity.js";
+import { Identity } from "../identity";
 
 describe("Identity", () => {
   it("renders the agent name 'Alex' and a status pill", () => {

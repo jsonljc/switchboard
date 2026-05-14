@@ -1,8 +1,8 @@
 // apps/dashboard/src/components/cockpit/identity.tsx
-import { T } from "./tokens.js";
-import { ALEX_CONFIG } from "@/lib/cockpit/alex-config.js";
-import { StatusPill } from "./status-pill.js";
-import type { CockpitStatus } from "./types.js";
+import { T } from "./tokens";
+import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
+import { StatusPill } from "./status-pill";
+import type { CockpitStatus } from "./types";
 
 export interface IdentityProps {
   statusKey: CockpitStatus;

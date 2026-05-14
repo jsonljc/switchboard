@@ -1,6 +1,6 @@
 // apps/dashboard/src/components/cockpit/topbar.tsx
-import { T } from "./tokens.js";
-import { ALEX_CONFIG } from "@/lib/cockpit/alex-config.js";
+import { T } from "./tokens";
+import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 
 export interface TopbarProps {
   /**

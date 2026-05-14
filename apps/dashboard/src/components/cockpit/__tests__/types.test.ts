@@ -6,7 +6,7 @@ import type {
   ActivityKind,
   ThreadMessage,
   MissionViewModel,
-} from "../types.js";
+} from "../types";
 
 describe("cockpit types", () => {
   it("ApprovalView carries the shared base shape", () => {

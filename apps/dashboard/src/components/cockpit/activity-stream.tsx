@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/activity-stream.tsx
-import { T } from "./tokens.js";
-import { ActivityRow as ActivityRowComponent } from "./activity-row.js";
-import type { ActivityRow } from "./types.js";
+import { T } from "./tokens";
+import { ActivityRow as ActivityRowComponent } from "./activity-row";
+import type { ActivityRow } from "./types";
 
 export type ActivityFilter = "all" | "booked" | "escalations";
 

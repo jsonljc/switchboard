@@ -1,6 +1,6 @@
 // apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts
 import { describe, it, expect } from "vitest";
-import { translatedActionToActivityRow } from "../activity-kind-map.js";
+import { translatedActionToActivityRow } from "../activity-kind-map";
 import type { TranslatedAction } from "@/hooks/use-agent-activity";
 
 const NOW = new Date("2026-05-14T12:00:00Z");

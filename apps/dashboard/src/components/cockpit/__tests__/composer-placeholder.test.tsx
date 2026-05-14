@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ComposerPlaceholder } from "../composer-placeholder.js";
+import { ComposerPlaceholder } from "../composer-placeholder";
 
 describe("ComposerPlaceholder", () => {
   it("renders the placeholder copy", () => {

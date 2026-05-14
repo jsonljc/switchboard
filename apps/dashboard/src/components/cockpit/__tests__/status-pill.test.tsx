@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { StatusPill } from "../status-pill.js";
+import { StatusPill } from "../status-pill";
 
 describe("StatusPill", () => {
   it("renders WORKING when status is WORKING and not halted", () => {

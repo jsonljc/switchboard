@@ -1,8 +1,8 @@
 // apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ApprovalCard } from "../approval-card.js";
-import type { AlexApprovalView } from "../types.js";
+import { ApprovalCard } from "../approval-card";
+import type { AlexApprovalView } from "../types";
 
 const fixture: AlexApprovalView = {
   id: "appr_1",

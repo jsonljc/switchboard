@@ -1,5 +1,5 @@
 // apps/dashboard/src/components/cockpit/composer-placeholder.tsx
-import { T } from "./tokens.js";
+import { T } from "./tokens";
 
 export interface ComposerPlaceholderProps {
   halted: boolean;

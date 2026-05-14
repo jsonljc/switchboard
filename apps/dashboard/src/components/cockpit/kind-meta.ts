@@ -1,6 +1,6 @@
 // apps/dashboard/src/components/cockpit/kind-meta.ts
-import { T } from "./tokens.js";
-import type { ActivityKind } from "./types.js";
+import { T } from "./tokens";
+import type { ActivityKind } from "./types";
 
 export interface KindMetaEntry {
   label: string;

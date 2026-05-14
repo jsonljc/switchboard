@@ -1,6 +1,6 @@
 // apps/dashboard/src/components/cockpit/approval-block.tsx
-import { ApprovalCard } from "./approval-card.js";
-import type { ApprovalView } from "./types.js";
+import { ApprovalCard } from "./approval-card";
+import type { ApprovalView } from "./types";
 
 export interface ApprovalBlockProps {
   data: ApprovalView[];

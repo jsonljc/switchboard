@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/__tests__/dot.test.tsx
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
-import { Dot } from "../dot.js";
+import { Dot } from "../dot";
 
 describe("Dot", () => {
   it("renders a single dot with the given color (no pulse layer)", () => {

@@ -2,16 +2,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { T } from "./tokens.js";
-import { Topbar } from "./topbar.js";
-import { Identity } from "./identity.js";
-import { ApprovalBlock } from "./approval-block.js";
-import { ActivityStream, type ActivityFilter } from "./activity-stream.js";
-import { ComposerPlaceholder } from "./composer-placeholder.js";
-import { ALEX_CONFIG } from "@/lib/cockpit/alex-config.js";
-import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view.js";
-import { translatedActionToActivityRow } from "@/lib/cockpit/activity-kind-map.js";
-import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status.js";
+import { T } from "./tokens";
+import { Topbar } from "./topbar";
+import { Identity } from "./identity";
+import { ApprovalBlock } from "./approval-block";
+import { ActivityStream, type ActivityFilter } from "./activity-stream";
+import { ComposerPlaceholder } from "./composer-placeholder";
+import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
+import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view";
+import { translatedActionToActivityRow } from "@/lib/cockpit/activity-kind-map";
+import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
 import { usePendingApprovals } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
@@ -29,12 +29,12 @@ export function CockpitPage() {
   const approvals = (approvalsQ.data?.approvals ?? []).map((a) =>
     legacyPendingApprovalToApprovalView(a, now),
   );
-  const activityRows = (activityQ.data?.actions ?? [])
-    .filter((a) => a.agentRole === "alex" || a.agentRole === "unknown")
-    .map((a) => translatedActionToActivityRow(a, now));
-
+  const rawAlexActions = (activityQ.data?.actions ?? []).filter(
+    (a) => a.agentRole === "alex" || a.agentRole === "unknown",
+  );
+  const activityRows = rawAlexActions.map((a) => translatedActionToActivityRow(a, now));
   const recentActivityAt =
-    activityRows.length > 0 ? new Date(activityQ.data!.actions[0]!.timestamp) : null;
+    rawAlexActions.length > 0 ? new Date(rawAlexActions[0]!.timestamp) : null;
 
   const statusKey = useCockpitStatusAlex({
     halted: haltCtx.halted,

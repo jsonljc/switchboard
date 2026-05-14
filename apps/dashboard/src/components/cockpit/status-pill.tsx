@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/status-pill.tsx
-import { Dot } from "./dot.js";
-import { statusColor, statusPulse } from "@/lib/cockpit/alex-config.js";
-import type { CockpitStatus } from "./types.js";
+import { Dot } from "./dot";
+import { statusColor, statusPulse } from "@/lib/cockpit/alex-config";
+import type { CockpitStatus } from "./types";
 
 export interface StatusPillProps {
   statusKey: CockpitStatus;

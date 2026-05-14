@@ -1,6 +1,6 @@
 // apps/dashboard/src/hooks/__tests__/use-cockpit-status.test.ts
 import { describe, it, expect } from "vitest";
-import { deriveAlexStatusA1 } from "../use-cockpit-status.js";
+import { deriveAlexStatusA1 } from "../use-cockpit-status";
 
 const NOW = new Date("2026-05-14T12:00:00Z");
 

@@ -1,8 +1,8 @@
 // apps/dashboard/src/components/cockpit/activity-row.tsx
-import { T } from "./tokens.js";
-import { lookupKindMeta } from "./kind-meta.js";
-import { Dot } from "./dot.js";
-import type { ActivityRow as ActivityRowType } from "./types.js";
+import { T } from "./tokens";
+import { lookupKindMeta } from "./kind-meta";
+import { Dot } from "./dot";
+import type { ActivityRow as ActivityRowType } from "./types";
 
 export interface ActivityRowProps {
   item: ActivityRowType;
@@ -11,7 +11,12 @@ export interface ActivityRowProps {
   compact?: boolean;
 }
 
-export function ActivityRow({ item, compact = false }: ActivityRowProps) {
+export function ActivityRow({
+  item,
+  open: _open,
+  toggle: _toggle,
+  compact = false,
+}: ActivityRowProps) {
   const meta = lookupKindMeta(item.kind);
   return (
     <li style={{ borderBottom: `1px solid ${T.hairSoft}` }}>

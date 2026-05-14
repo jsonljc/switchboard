@@ -1,6 +1,6 @@
 // apps/dashboard/src/components/cockpit/__tests__/kind-meta.test.ts
 import { describe, it, expect } from "vitest";
-import { KIND_META, lookupKindMeta } from "../kind-meta.js";
+import { KIND_META, lookupKindMeta } from "../kind-meta";
 
 describe("KIND_META", () => {
   it("includes all 9 Alex activity kinds", () => {

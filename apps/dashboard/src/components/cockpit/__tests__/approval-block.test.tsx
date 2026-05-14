@@ -1,8 +1,8 @@
 // apps/dashboard/src/components/cockpit/__tests__/approval-block.test.tsx
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ApprovalBlock } from "../approval-block.js";
-import type { AlexApprovalView } from "../types.js";
+import { ApprovalBlock } from "../approval-block";
+import type { AlexApprovalView } from "../types";
 
 function makeView(id: string, title: string): AlexApprovalView {
   return {

@@ -1,6 +1,6 @@
 // apps/dashboard/src/lib/cockpit/activity-kind-map.ts
 import type { TranslatedAction } from "@/hooks/use-agent-activity";
-import type { ActivityKind, ActivityRow } from "@/components/cockpit/types.js";
+import type { ActivityKind, ActivityRow } from "@/components/cockpit/types";
 
 const KIND_RULES: Array<{ test: (e: string) => boolean; kind: ActivityKind }> = [
   { test: (e) => e.startsWith("booking."), kind: "booked" },

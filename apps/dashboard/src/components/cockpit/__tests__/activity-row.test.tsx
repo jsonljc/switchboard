@@ -1,8 +1,8 @@
 // apps/dashboard/src/components/cockpit/__tests__/activity-row.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ActivityRow } from "../activity-row.js";
-import type { ActivityRow as ActivityRowType } from "../types.js";
+import { ActivityRow } from "../activity-row";
+import type { ActivityRow as ActivityRowType } from "../types";
 
 describe("ActivityRow", () => {
   it("renders time, kind label, and head", () => {

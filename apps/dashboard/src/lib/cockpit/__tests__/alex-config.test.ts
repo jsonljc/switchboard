@@ -1,6 +1,6 @@
 // apps/dashboard/src/lib/cockpit/__tests__/alex-config.test.ts
 import { describe, it, expect } from "vitest";
-import { ALEX_CONFIG, statusColor, statusPulse, animState } from "../alex-config.js";
+import { ALEX_CONFIG, statusColor, statusPulse, animState } from "../alex-config";
 
 describe("alex-config", () => {
   it("uses warm amber accent", () => {

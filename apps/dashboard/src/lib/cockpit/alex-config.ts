@@ -1,6 +1,6 @@
 // apps/dashboard/src/lib/cockpit/alex-config.ts
-import { T } from "@/components/cockpit/tokens.js";
-import type { CockpitStatus } from "@/components/cockpit/types.js";
+import { T } from "@/components/cockpit/tokens";
+import type { CockpitStatus } from "@/components/cockpit/types";
 
 export const ALEX_CONFIG = {
   name: "Alex",

@@ -1,6 +1,6 @@
 // apps/dashboard/src/components/cockpit/approval-card.tsx
-import { T } from "./tokens.js";
-import type { ApprovalView } from "./types.js";
+import { T } from "./tokens";
+import type { ApprovalView } from "./types";
 
 export interface ApprovalCardProps {
   data: ApprovalView;

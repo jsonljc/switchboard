@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/__tests__/topbar.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { Topbar } from "../topbar.js";
+import { Topbar } from "../topbar";
 
 describe("Topbar", () => {
   it("renders Alex/Riley/Mira tabs", () => {

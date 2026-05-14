@@ -1,6 +1,6 @@
 // apps/dashboard/src/lib/cockpit/__tests__/relative-age.test.ts
 import { describe, it, expect } from "vitest";
-import { relativeAge } from "../relative-age.js";
+import { relativeAge } from "../relative-age";
 
 const NOW = new Date("2026-05-14T12:00:00Z");
 

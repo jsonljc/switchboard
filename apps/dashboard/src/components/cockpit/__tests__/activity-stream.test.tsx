@@ -1,8 +1,8 @@
 // apps/dashboard/src/components/cockpit/__tests__/activity-stream.test.tsx
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ActivityStream } from "../activity-stream.js";
-import type { ActivityRow } from "../types.js";
+import { ActivityStream } from "../activity-stream";
+import type { ActivityRow } from "../types";
 
 const rows: ActivityRow[] = [
   { time: "11:42", kind: "booked", head: "Maya R. confirmed" },

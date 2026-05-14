@@ -26,7 +26,7 @@ vi.mock("@/components/layout/halt/halt-context", () => ({
   }),
 }));
 
-import { CockpitPage } from "../cockpit-page.js";
+import { CockpitPage } from "../cockpit-page";
 
 describe("CockpitPage", () => {
   beforeEach(() => {

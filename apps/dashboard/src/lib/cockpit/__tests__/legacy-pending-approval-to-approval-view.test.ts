@@ -1,6 +1,6 @@
 // apps/dashboard/src/lib/cockpit/__tests__/legacy-pending-approval-to-approval-view.test.ts
 import { describe, it, expect } from "vitest";
-import { legacyPendingApprovalToApprovalView } from "../legacy-pending-approval-to-approval-view.js";
+import { legacyPendingApprovalToApprovalView } from "../legacy-pending-approval-to-approval-view";
 import type { PendingApproval } from "@/lib/api-client-types";
 
 const NOW = new Date("2026-05-14T12:00:00Z");

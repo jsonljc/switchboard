@@ -4,8 +4,8 @@ import type {
   AlexApprovalView,
   AlexApprovalKind,
   ApprovalUrgency,
-} from "@/components/cockpit/types.js";
-import { relativeAge } from "./relative-age.js";
+} from "@/components/cockpit/types";
+import { relativeAge } from "./relative-age";
 
 function urgencyForRisk(risk: string): ApprovalUrgency {
   if (risk === "critical" || risk === "high") return "immediate";

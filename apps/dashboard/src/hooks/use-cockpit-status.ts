@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { CockpitStatus } from "@/components/cockpit/types.js";
+import type { CockpitStatus } from "@/components/cockpit/types";
 
 export interface DeriveStatusInput {
   halted: boolean;
