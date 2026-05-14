@@ -14,11 +14,14 @@ vi.mock("../use-query-keys", () => ({
   useTenantContext: () => null,
 }));
 
-const connState = { rows: [{ serviceId: "meta-ads", status: "connected" }] as unknown[] };
+const connState = {
+  rows: [{ serviceId: "meta-ads", status: "connected" }] as unknown[],
+  isLoading: false,
+};
 vi.mock("../use-connections", () => ({
   useConnections: () => ({
     data: { connections: connState.rows },
-    isLoading: false,
+    isLoading: connState.isLoading,
     isError: false,
   }),
 }));
@@ -56,5 +59,13 @@ describe("useRileyActivity", () => {
     expect(result.current.rows).toHaveLength(3);
     expect(result.current.rows[0].head).toMatch(/Connect Meta Ads/i);
     connState.rows = [{ serviceId: "meta-ads", status: "connected" }];
+  });
+
+  it("holds empty + isLoading=true while connections are still loading (no cold-state flash)", () => {
+    connState.isLoading = true;
+    const { result } = renderHook(() => useRileyActivity(), { wrapper: wrap });
+    expect(result.current.rows).toEqual([]);
+    expect(result.current.isLoading).toBe(true);
+    connState.isLoading = false;
   });
 });
