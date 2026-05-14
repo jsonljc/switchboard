@@ -9,6 +9,7 @@ import { LiveSignalPopover } from "./live-signal-popover";
 import { InboxDrawer } from "./inbox-drawer";
 import { HaltButtonClient } from "./halt/halt-button-client";
 import { HaltProvider } from "./halt/halt-context";
+import { RightDrawerProvider } from "./right-drawer-context";
 import { ToolsOverflow } from "./tools-overflow";
 import { TweaksPanelMount } from "./tweaks-panel-mount";
 
@@ -30,38 +31,40 @@ export function EditorialAuthShellInner({
 }) {
   return (
     <HaltProvider>
-      <AmbientCream />
-      <EditorialKeys />
-      <header className="app-header">
-        <div className="app-header-row">
-          <div className="brand-cluster">
-            <a href="/" className="brand-mark">
-              <span className="brand-dot" />
-              Switchboard
-            </a>
-            <nav className="brand-nav" aria-label="agents">
-              <a href="/">Home</a>
-              {enabledAgents.map((key) => (
-                <a key={key} href={`/${key}`}>
-                  {AGENT_REGISTRY[key].displayName}
-                </a>
-              ))}
-              <a href="#" className="add" aria-label="Add an agent">
-                +
+      <RightDrawerProvider>
+        <AmbientCream />
+        <EditorialKeys />
+        <header className="app-header">
+          <div className="app-header-row">
+            <div className="brand-cluster">
+              <a href="/" className="brand-mark">
+                <span className="brand-dot" />
+                Switchboard
               </a>
-            </nav>
+              <nav className="brand-nav" aria-label="agents">
+                <a href="/">Home</a>
+                {enabledAgents.map((key) => (
+                  <a key={key} href={`/${key}`}>
+                    {AGENT_REGISTRY[key].displayName}
+                  </a>
+                ))}
+                <a href="#" className="add" aria-label="Add an agent">
+                  +
+                </a>
+              </nav>
+            </div>
+            <div className="header-actions">
+              <LiveSignalPopover />
+              <InboxDrawer />
+              <HaltButtonClient />
+              <span className="me-chip">M</span>
+              <ToolsOverflow />
+            </div>
           </div>
-          <div className="header-actions">
-            <LiveSignalPopover />
-            <InboxDrawer />
-            <HaltButtonClient />
-            <span className="me-chip">M</span>
-            <ToolsOverflow />
-          </div>
-        </div>
-      </header>
-      <main>{children}</main>
-      <TweaksPanelMount />
+        </header>
+        <main>{children}</main>
+        <TweaksPanelMount />
+      </RightDrawerProvider>
     </HaltProvider>
   );
 }
