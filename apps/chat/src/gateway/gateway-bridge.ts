@@ -3,6 +3,7 @@ import {
   PrismaAgentTaskStore,
   PrismaInteractionSummaryStore,
   PrismaDeploymentMemoryStore,
+  PrismaDeploymentMemoryEvidenceStore,
   PrismaKnowledgeStore,
   PrismaContactStore,
   PrismaApprovalStore,
@@ -105,6 +106,11 @@ export function createGatewayBridge(
     // the contact+window fallback tier (still booking-backed, weaker evidence).
     // Strong-tier wiring stacks as PR-3.1.b.
     bookingStore: new PrismaBookingAttributionStore(prisma),
+    // PR-3.2a: every booking-attributed pattern write records a
+    // DeploymentMemoryEvidence row anchored on (deploymentMemoryId, bookingId).
+    // countDistinctBookingIds() over that table is the source of truth for the
+    // PR-3.2e multi-booking surfacing rule.
+    evidenceStore: new PrismaDeploymentMemoryEvidenceStore(prisma),
     agentId: "alex",
   });
 
