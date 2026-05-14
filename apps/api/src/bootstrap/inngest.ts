@@ -11,12 +11,19 @@ import {
   PrismaProductIdentityStore,
   PrismaAssetRecordStore,
   PrismaCrmFunnelStore,
+  PrismaDeploymentMemoryStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
   GovernanceConfigSchema,
+  PATTERN_DECAY_WINDOW_DAYS,
   resolveLifecycleTaggingMechanicalConfig,
 } from "@switchboard/schemas";
+import {
+  executeDailyPatternDecay,
+  getMetrics,
+  type PatternDecayDependencies,
+} from "@switchboard/core";
 import { bootstrapLifecycle } from "./lifecycle.js";
 import {
   inngestClient,
@@ -217,6 +224,35 @@ export async function registerInngest(
       await taskStore.updateStatus(task.id, "completed");
     },
   };
+
+  // Pattern-decay daily cron — pure executor lives in @switchboard/core;
+  // the Prisma store is injected here at the bootstrap boundary so core
+  // never imports from @switchboard/db (Layer 3 → Layer 4 forbidden).
+  const patternDecayDeps: PatternDecayDependencies = {
+    memoryStore: new PrismaDeploymentMemoryStore(app.prisma),
+    now: () => new Date(),
+    windowDays: PATTERN_DECAY_WINDOW_DAYS,
+    decayAmount: 0.1,
+    floor: 0.3,
+    metrics: getMetrics(),
+  };
+
+  const dailyPatternDecayCron = inngestClient.createFunction(
+    {
+      id: "memory-daily-pattern-decay",
+      name: "Memory Daily Pattern Decay",
+      retries: 2,
+      // 07:00 UTC — same slot as ad-optimizer signal-health to consolidate
+      // the daily ops attention window.
+      triggers: [{ cron: "0 7 * * *" }],
+      // Function-level idempotency: combined with the DB-level lastDecayedAt
+      // guard, double-firing is impossible across orchestrator and DB layers.
+      idempotency: `pattern-decay-{event.ts | dateMath "yyyy-MM-dd"}`,
+    },
+    async ({ step }) => {
+      await executeDailyPatternDecay(step as never, patternDecayDeps);
+    },
+  );
 
   // Meta token refresh cron dependencies
   const metaTokenRefreshDeps: MetaTokenRefreshDeps = {
@@ -565,6 +601,7 @@ export async function registerInngest(
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
       createDailySignalHealthCron(signalHealthDeps),
+      dailyPatternDecayCron,
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
