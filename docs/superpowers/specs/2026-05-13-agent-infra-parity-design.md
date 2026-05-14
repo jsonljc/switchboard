@@ -163,7 +163,7 @@ Medium. The main risk is overfitting from weak signals, so only patterns that cr
 ### Tests
 
 - Booked conversations write pattern-category memories; non-booked / lost / escalated conversations do not.
-- Repeated booked observations increment `sourceCount` via the existing memory upsert path; they do not create duplicate entries.
+- Repeated booked observations increment `sourceCount` via the existing `findByCategory` → similarity → `incrementConfidence` path; they do not create duplicate entries.
 - Low-confidence patterns are not injected.
 - Injected patterns are relevant to the current treatment / service context.
 - Stale outcome patterns are not injected if newer contradictory business facts exist (uses real `lastSeenAt`, not synthesized).
