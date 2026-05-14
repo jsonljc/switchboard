@@ -26,10 +26,12 @@
 
 - Route prefix is `/api/dashboard/whatsapp` (not `/api/whatsapp-management/...`). New POST → `POST /api/dashboard/whatsapp/send-test`.
 - `apps/api/src/routes/whatsapp-management.ts` is ~480 LOC. Add new file `whatsapp-send-test.ts` to avoid breaching the 600-LOC soft cap.
-- Existing Graph helper is `graphGet(path, token, fetchImpl)` returning a discriminated `{ ok, data } | { ok: false, code, message, httpStatus }`. We add a sibling `graphPost(path, body, token, fetchImpl)` with the same error-classification semantics.
-- Test pattern (mocked Prisma + Graph): `app.decorate("prisma", { ... } as never)`, `app.inject({ method, url, payload })`. Mirror it.
+- Existing Graph helper signature: `graphGet(path: string, token: string, fetchImpl: typeof fetch)` returning `{ ok: true; data } | { ok: false; code; message; httpStatus }` (no `retryable` field). It does **not** prepend a base URL — callers pass the full URL (e.g., `` `${graphBase}/${wabaId}/message_templates` ``). The new `graphPost` mirrors that exact shape (no `retryable`); callers infer `retryable` at the boundary using `code === "WHATSAPP_RATE_LIMITED"` (this is how `whatsapp-management.ts:398` already does it).
+- The Graph token is sourced from `process.env.META_SYSTEM_USER_TOKEN` (`whatsapp-management.ts:155`), not from `Connection.credentials`. The `wabaId` is sourced from `connection.externalAccountId` (line 199). `Connection.credentials` only carries `primaryPhoneNumberId` (`interface WhatsAppCredentials { primaryPhoneNumberId?: string; [key: string]: unknown }`). Decryption is via `decryptCredentials()` fallback after `JSON.parse` — only needed if your handler reads credentials.
+- Test pattern (mocked Prisma + Graph) uses `app.decorate("prisma", { ... } as any)`, `app.inject({ method, url, payload })`. The project allows pre-existing `as any` in test files (CLAUDE.md). Mirror it.
 - `WhatsAppMessageStatus` model already exists; out of scope.
-- `apps/chat/src/main.ts` calls `registerManagedWebhookRoutes(app, { registry, failedMessageStore, ctwaAdapter, dedup })` with no `onStatusUpdate` — we add it.
+- `ManagedWebhookDeps` in `apps/chat/src/routes/managed-webhook.ts:32` already exposes an optional `onStatusUpdate` parameter; the existing `registerManagedWebhookRoutes(app, { registry, failedMessageStore, ctwaAdapter, dedup })` call in `apps/chat/src/main.ts:330` simply omits it. We wire it.
+- **`apps/chat/src/main.ts` scope detail:** `prisma` is declared inside `if (process.env["DATABASE_URL"]) { ... }` (lines 119-124), not at outer scope. New stores must follow the same pattern as `failedMessageStore`: declare `let testSendStore: PrismaWhatsAppTestSendStore | null = null;` at outer scope, assign inside the block, then build the bridge after the block. Do not put `new PrismaWhatsAppTestSendStore(prisma)` adjacent to `registerManagedWebhookRoutes` — `prisma` is out of scope there.
 - Relative imports in `apps/api`, `apps/chat`, `packages/*` use `.js` extensions (ESM).
 - Migrations are hand-written SQL after `prisma migrate diff` (per `feedback_prisma_migrate_dev_tty.md`).
 
@@ -324,11 +326,20 @@ export class PrismaWhatsAppTestSendStore {
 }
 ```
 
-- [ ] **Step 4: Export from package index** (match the `PrismaWhatsAppStatusStore` re-export path):
+- [ ] **Step 4: Export from package index.** The convention in `packages/db/src/index.ts` is **named re-exports**, not `export *`. Add:
 
 ```typescript
-export * from "./stores/prisma-whatsapp-test-send-store.js";
+export {
+  PrismaWhatsAppTestSendStore,
+  type WhatsAppTestSendRow,
+  type WhatsAppTestSendCreateInput,
+  type UpdateWebhookStatusInput,
+  type ApiStatus,
+  type WebhookStatus,
+} from "./stores/prisma-whatsapp-test-send-store.js";
 ```
+
+(`PrismaWhatsAppStatusStore` itself is not currently re-exported; if you want symmetry, add a named re-export for it too in the same PR — optional but tidy.)
 
 - [ ] **Step 5: Run, pass, commit**
 
@@ -346,7 +357,7 @@ git commit -m "feat(db): PrismaWhatsAppTestSendStore — create / listRecent / u
 
 Send-test (Task 6) needs to look up approved templates without duplicating the Graph fetch. Extract a small helper.
 
-- [ ] **Step 1:** Locate the existing templates handler. Find where it calls `graphGet('/<wabaId>/message_templates', token, fetchImpl)` and maps the response. Extract that into:
+- [ ] **Step 1:** Locate the existing templates handler. It builds a full URL like `` `${graphBase}/${wabaId}/message_templates?...` `` and calls `graphGet(fullUrl, token, fetchImpl)`. Extract its core into a helper that mirrors `graphGet`'s return shape (no `retryable` field — callers infer it):
 
 ```typescript
 export interface WhatsAppTemplateLite {
@@ -362,13 +373,14 @@ export async function fetchWhatsAppTemplates(args: {
   fetchImpl: typeof fetch;
 }): Promise<
   | { ok: true; templates: WhatsAppTemplateLite[] }
-  | { ok: false; code: string; message: string; httpStatus: number; retryable: boolean }
+  | { ok: false; code: string; message: string; httpStatus: number }
 > {
-  // Move existing Graph call + mapping logic here, returning the same shape consumed by /templates.
+  // Build the same full URL the existing /templates handler uses (graphBase + /<wabaId>/message_templates with fields).
+  // Call graphGet, map the data into WhatsAppTemplateLite[].
 }
 ```
 
-Refactor the `/templates` route handler to call this new helper. No external behaviour change.
+Refactor the `/templates` route handler to call this new helper. No external behaviour change. The route's `retryable` field (currently inferred at the boundary) stays where it is.
 
 - [ ] **Step 2: Run existing tests, expect green**
 
@@ -416,7 +428,8 @@ async function buildApp(opts: {
   graphApiFetch: typeof fetch;
 }) {
   const app = Fastify({ logger: false });
-  app.decorate("prisma", opts.prisma as never);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existing house style in whatsapp-management.test.ts
+  app.decorate("prisma", opts.prisma as any);
   app.decorateRequest("organizationIdFromAuth", "");
   app.decorateRequest("userEmail", "");
   app.addHook("onRequest", async (request) => {
@@ -456,19 +469,21 @@ interface GraphErrorBody {
   };
 }
 
+// Mirrors graphGet's return shape — NO `retryable` field. Callers infer retryable from code.
 export type GraphPostResult =
   | { ok: true; data: unknown }
-  | { ok: false; code: string; message: string; httpStatus: number; retryable: boolean };
+  | { ok: false; code: string; message: string; httpStatus: number };
 
+// `url` is a full URL — matches graphGet's convention. Caller composes ${graphBase}/${phoneNumberId}/messages.
 export async function graphPost(
-  path: string,
+  url: string,
   body: unknown,
   token: string,
   fetchImpl: typeof fetch,
 ): Promise<GraphPostResult> {
   let res: Response;
   try {
-    res = await fetchImpl(`${GRAPH_BASE}${path}`, {
+    res = await fetchImpl(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -479,7 +494,6 @@ export async function graphPost(
       code: "WHATSAPP_NETWORK_ERROR",
       message: err instanceof Error ? err.message : "network error",
       httpStatus: 502,
-      retryable: true,
     };
   }
   let parsed: unknown;
@@ -495,33 +509,24 @@ export async function graphPost(
   const subcode = Number(errBody.error?.error_subcode ?? 0);
   const message = errBody.error?.message ?? "Graph API error";
 
-  if (code === 190)
-    return {
-      ok: false,
-      code: "WHATSAPP_TOKEN_INVALID",
-      message,
-      httpStatus: 502,
-      retryable: false,
-    };
+  if (code === 190) return { ok: false, code: "WHATSAPP_TOKEN_INVALID", message, httpStatus: 502 };
   if (code === 200 || code === 10 || res.status === 403)
-    return {
-      ok: false,
-      code: "WHATSAPP_GRAPH_PERMISSION_DENIED",
-      message,
-      httpStatus: 403,
-      retryable: false,
-    };
+    return { ok: false, code: "WHATSAPP_GRAPH_PERMISSION_DENIED", message, httpStatus: 403 };
   if (res.status === 429 || code === 4 || subcode === 80007)
-    return { ok: false, code: "WHATSAPP_RATE_LIMITED", message, httpStatus: 429, retryable: true };
+    return { ok: false, code: "WHATSAPP_RATE_LIMITED", message, httpStatus: 429 };
   if (code === 132000 || code === 132001)
-    return {
-      ok: false,
-      code: "WHATSAPP_TEMPLATE_NOT_FOUND",
-      message,
-      httpStatus: 400,
-      retryable: false,
-    };
-  return { ok: false, code: "WHATSAPP_UPSTREAM_ERROR", message, httpStatus: 502, retryable: true };
+    return { ok: false, code: "WHATSAPP_TEMPLATE_NOT_FOUND", message, httpStatus: 400 };
+  return { ok: false, code: "WHATSAPP_UPSTREAM_ERROR", message, httpStatus: 502 };
+}
+
+// Boundary helper — derive the user-facing retryable flag for the JSON error envelope.
+export function isRetryable(code: string): boolean {
+  return (
+    code === "WHATSAPP_RATE_LIMITED" ||
+    code === "WHATSAPP_UPSTREAM_ERROR" ||
+    code === "WHATSAPP_NETWORK_ERROR" ||
+    code === "WHATSAPP_NO_MESSAGE_ID"
+  );
 }
 
 export interface SendTestOptions {
@@ -561,12 +566,13 @@ Three behaviours, same handler, one task (three TDD cycles).
 
 ### 6a — Happy path
 
-- [ ] **Step 1: Failing test** — assert that when channel has `testRecipients: ["+15551234567"]`, the credentials have an `accessToken` + `wabaId`, and Graph (a) returns an APPROVED template list and (b) returns a `messageId`:
+- [ ] **Step 1: Failing test** — assert that when channel has `testRecipients: ["+15551234567"]`, the Connection has `externalAccountId: "WABA_1"`, `process.env.META_SYSTEM_USER_TOKEN` is set (use `vi.stubEnv("META_SYSTEM_USER_TOKEN", "TOKEN")` or set in `beforeEach`), and Graph (a) returns an APPROVED template list and (b) returns a `messageId`:
   - response status 200
   - body `{ messageId: "wamid.HBgLABC==", status: "sent", sentAt: "<iso>" }`
   - `prisma.whatsAppTestSend.create` called exactly once with `apiStatus: "sent"`
-  - first Graph call URL ends with `/<wabaId>/message_templates` (the approval pre-check)
-  - second Graph call URL ends with `/PN_123/messages`
+  - first Graph call URL includes `/WABA_1/message_templates` (the approval pre-check)
+  - second Graph call URL includes `/PN_123/messages`
+  - both calls use `Authorization: Bearer TOKEN`
 
 - [ ] **Step 2: Implement handler** — replace the `/send-test` stub:
 
@@ -616,27 +622,43 @@ app.post("/send-test", async (request, reply) => {
     });
   }
 
+  // Source the WhatsApp Business Account ID from Connection.externalAccountId
+  // (NOT from credentials — credentials only carry primaryPhoneNumberId).
   const conn = await app.prisma.connection.findFirst({
     where: { id: channel.connectionId, organizationId: orgId },
   });
-  const creds = (conn?.credentials ?? null) as { accessToken?: string; wabaId?: string } | null;
-  const token = creds?.accessToken;
-  const wabaId = creds?.wabaId;
-  if (!token || !wabaId) {
+  const wabaId = conn?.externalAccountId ?? null;
+  if (!wabaId) {
+    return reply.code(500).send({
+      error: {
+        code: "WHATSAPP_WABA_MISSING",
+        message: "Connection has no externalAccountId (WABA)",
+        retryable: false,
+      },
+    });
+  }
+  // The Graph token is a system-user token from env — same source as /templates and /phone-numbers.
+  const token = process.env.META_SYSTEM_USER_TOKEN ?? "";
+  if (!token) {
     return reply.code(500).send({
       error: {
         code: "WHATSAPP_TOKEN_MISSING",
-        message: "Credentials missing accessToken/wabaId",
+        message: "META_SYSTEM_USER_TOKEN is not configured on the server",
         retryable: false,
       },
     });
   }
 
-  // Template approval pre-check — trust boundary (frontend filter alone is insufficient)
+  // Template approval pre-check — trust boundary (frontend filter alone is insufficient).
+  // fetchWhatsAppTemplates mirrors graphGet's return shape (no `retryable`); infer at boundary.
   const tplResult = await fetchWhatsAppTemplates({ wabaId, token, fetchImpl });
   if (!tplResult.ok) {
     return reply.code(tplResult.httpStatus).send({
-      error: { code: tplResult.code, message: tplResult.message, retryable: tplResult.retryable },
+      error: {
+        code: tplResult.code,
+        message: tplResult.message,
+        retryable: isRetryable(tplResult.code),
+      },
     });
   }
   const tpl = tplResult.templates.find(
@@ -658,10 +680,17 @@ app.post("/send-test", async (request, reply) => {
     type: "template",
     template: { name: body.templateName, language: { code: body.languageCode } },
   };
-  const result = await graphPost(`/${body.phoneNumberId}/messages`, graphBody, token, fetchImpl);
+  // graphPost takes a FULL URL (matches graphGet). Compose using the same graphBase used elsewhere.
+  const graphBase = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION ?? "v21.0"}`;
+  const result = await graphPost(
+    `${graphBase}/${body.phoneNumberId}/messages`,
+    graphBody,
+    token,
+    fetchImpl,
+  );
   if (!result.ok) {
     return reply.code(result.httpStatus).send({
-      error: { code: result.code, message: result.message, retryable: result.retryable },
+      error: { code: result.code, message: result.message, retryable: isRetryable(result.code) },
     });
   }
   const data = result.data as { messages?: Array<{ id?: string }> };

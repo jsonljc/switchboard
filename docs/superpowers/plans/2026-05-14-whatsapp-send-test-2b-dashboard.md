@@ -26,8 +26,9 @@
 
 - Dashboard imports never use `.js` extensions (Next.js, per `feedback_dashboard_no_js_on_any_import.md`).
 - Existing hooks live in `apps/dashboard/src/hooks/use-whatsapp-management.ts`. New hooks go in a sibling file `use-whatsapp-send-test.ts`.
-- Query keys factory lives in `apps/dashboard/src/lib/query-keys.ts` under `whatsappManagement`. Add `testSends` alongside `account/phoneNumbers/templates`.
-- `WhatsAppManagement` component composes child sections (Setup → PhoneNumbers → Templates). Inject `<WhatsAppSendTest />` between PhoneNumbers and Templates.
+- **Hook import path for `useScopedQueryKeys`**: import from `@/hooks/use-query-keys`, **not** from `@/lib/query-keys` (which only re-exports the keys factory, not the hook). Mirror `use-whatsapp-management.ts:4`: `import { useScopedQueryKeys } from "@/hooks/use-query-keys";`.
+- Query keys factory lives in `apps/dashboard/src/lib/query-keys.ts` under `whatsappManagement`. Add `testSends` alongside `account/phoneNumbers/templates` there.
+- `WhatsAppManagement` component composes child sections (Setup → PhoneNumbers → Templates). Inject `<WhatsAppSendTest />` between PhoneNumbers and Templates. The component early-returns on `readiness.status === "not_connected"`, so the injected panel is only rendered when there's a connected account.
 - `pnpm --filter @switchboard/dashboard build` is **not in CI**. Must run locally before merge per `feedback_dashboard_build_not_in_ci.md`. Clear `.next/` first.
 
 ## File structure (Slice 2B only)
@@ -56,14 +57,22 @@
 - Modify: `apps/api/src/routes/__tests__/whatsapp-management.test.ts`
 - Modify: `apps/dashboard/src/hooks/use-whatsapp-management.ts`
 
-- [ ] **Step 1: Failing API test** — extend the existing `GET /account` happy-path mock to make `managedChannel.findFirst` return `testRecipients: ["+15551234567"]`. Add an assertion:
+**Important context:** `/account` has FOUR return branches in `whatsapp-management.ts:175-249` — `not_connected` (no Connection row), `incomplete` (no `externalAccountId` or no `primaryPhoneNumberId`), `needs_attention` (phone has issues), and `connected`. `testRecipients` must be threaded through every branch that returns a `connection` block (i.e., all branches where the operator can see WhatsApp UI). The `not_connected` branch returns a minimal payload without a full `connection` object — surface `testRecipients` as an empty array on the response root in that branch (or skip it entirely, since the send-test UI doesn't render when not connected).
+
+- [ ] **Step 1: Failing API test** — add a new test that:
+  - mocks `prisma.connection.findFirst` to return a connected WhatsApp Connection with `externalAccountId: "WABA_1"`
+  - mocks `prisma.managedChannel.findFirst` to return a row with `testRecipients: ["+15551234567"]`
+  - mocks the existing Graph templates / phone checks to return success
+  - asserts:
 
 ```typescript
 const body = res.json() as { connection: { testRecipients: string[] } };
 expect(body.connection.testRecipients).toEqual(["+15551234567"]);
 ```
 
-- [ ] **Step 2: Modify the `/account` handler** — load the managed channel if not already loaded, and surface `testRecipients`:
+Also add a second test asserting `not_connected` still returns 200 with `connection.testRecipients` either absent or `[]` (your call — be consistent).
+
+- [ ] **Step 2: Modify the `/account` handler.** Load `ManagedChannel` once at the top of the handler (alongside the `Connection` lookup), parse `testRecipients` into a string array, and include it in the connection block of every return branch that has one:
 
 ```typescript
 const channel = await app.prisma.managedChannel.findFirst({
@@ -73,18 +82,24 @@ const testRecipients = Array.isArray(channel?.testRecipients)
   ? (channel.testRecipients as unknown[]).filter((x): x is string => typeof x === "string")
   : [];
 
-// In the response payload's connection object:
+// In each "connected"/"needs_attention"/"incomplete" branch's connection object:
 connection: {
   // ...existing fields
   testRecipients,
 }
+// In the "not_connected" branch: either include `testRecipients: []` for consistency,
+// or omit entirely (dashboard's send-test panel only renders when readiness !== "not_connected").
 ```
 
-- [ ] **Step 3: Extend dashboard types** — in `apps/dashboard/src/hooks/use-whatsapp-management.ts`, find the connection type used by `WhatsAppAccountData` and add:
+Touch all four branches; do not split this across PRs.
+
+- [ ] **Step 3: Extend dashboard types** — in `apps/dashboard/src/hooks/use-whatsapp-management.ts`, find the type that backs `account.data.connection` (likely a `WhatsAppConnectionData` interface or inline type at lines 10-29). Add the field as optional (since `not_connected` may omit it) and treat `undefined` as `[]` in consumers:
 
 ```typescript
-testRecipients: string[];
+testRecipients?: string[];
 ```
+
+In the panel-injection code (Task 4 of this plan), use `account.data.connection.testRecipients ?? []`.
 
 - [ ] **Step 4: Run, pass**
 
@@ -122,11 +137,11 @@ whatsappManagement: {
 },
 ```
 
-- [ ] **Step 2: Create the hooks file** (no `.js` extensions in dashboard imports):
+- [ ] **Step 2: Create the hooks file** (no `.js` extensions in dashboard imports; `useScopedQueryKeys` comes from the `hooks` path):
 
 ```typescript
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useScopedQueryKeys } from "@/lib/query-keys";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface SendTestRequest {
   phoneNumberId: string;
