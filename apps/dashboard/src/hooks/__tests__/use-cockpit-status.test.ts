@@ -1,6 +1,7 @@
 // apps/dashboard/src/hooks/__tests__/use-cockpit-status.test.ts
 import { describe, it, expect } from "vitest";
-import { deriveAlexStatusA1 } from "../use-cockpit-status";
+import { renderHook } from "@testing-library/react";
+import { deriveAlexStatusA1, useCockpitStatusAlex } from "../use-cockpit-status";
 
 const NOW = new Date("2026-05-14T12:00:00Z");
 
@@ -102,5 +103,29 @@ describe("deriveAlexStatusA1", () => {
         now: NOW,
       }),
     ).toBe("WAITING");
+  });
+});
+
+describe("useCockpitStatusAlex", () => {
+  it("re-derives when `now` changes (drives WORKING → IDLE transition)", () => {
+    const recentActivityAt = new Date("2026-05-14T12:00:00Z");
+    const insideWindow = new Date("2026-05-14T12:10:00Z"); // 10 min after activity
+    const outsideWindow = new Date("2026-05-14T12:20:00Z"); // 20 min after activity
+
+    const { result, rerender } = renderHook(
+      ({ now }: { now: Date }) =>
+        useCockpitStatusAlex({
+          halted: false,
+          pendingApprovals: 0,
+          recentActivityAt,
+          now,
+        }),
+      { initialProps: { now: insideWindow } },
+    );
+
+    expect(result.current).toBe("WORKING");
+
+    rerender({ now: outsideWindow });
+    expect(result.current).toBe("IDLE");
   });
 });

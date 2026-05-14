@@ -31,9 +31,17 @@ export interface CockpitStatusHookInput {
   pendingApprovals: number;
   recentActivityAt: Date | null;
   inQuietHours?: boolean;
+  /**
+   * Current time. Pass a state-driven clock so the WORKING window
+   * transitions cleanly to IDLE after the 15-minute boundary even
+   * when the upstream activity-recency timestamp is stable.
+   * Defaults to `new Date()` (only correct for stories/tests).
+   */
+  now?: Date;
 }
 
 export function useCockpitStatusAlex(input: CockpitStatusHookInput): CockpitStatus {
+  const now = input.now ?? new Date();
   return useMemo(
     () =>
       deriveAlexStatusA1({
@@ -41,8 +49,14 @@ export function useCockpitStatusAlex(input: CockpitStatusHookInput): CockpitStat
         pendingApprovals: input.pendingApprovals,
         recentActivityAt: input.recentActivityAt,
         inQuietHours: input.inQuietHours ?? false,
-        now: new Date(),
+        now,
       }),
-    [input.halted, input.pendingApprovals, input.recentActivityAt?.getTime(), input.inQuietHours],
+    [
+      input.halted,
+      input.pendingApprovals,
+      input.recentActivityAt?.getTime(),
+      input.inQuietHours,
+      now.getTime(),
+    ],
   );
 }

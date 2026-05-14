@@ -1,7 +1,7 @@
 // apps/dashboard/src/components/cockpit/cockpit-page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { T } from "./tokens";
 import { Topbar } from "./topbar";
 import { Identity } from "./identity";
@@ -24,7 +24,14 @@ export function CockpitPage() {
   const greetingQ = useAgentGreeting("alex");
   const [filter, setFilter] = useState<ActivityFilter>("all");
 
-  const now = useMemo(() => new Date(), []);
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  // Tick every 60s so relative timestamps and the WORKING-window
+  // computation stay fresh. Cleared on unmount.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const approvals = (approvalsQ.data?.approvals ?? []).map((a) =>
     legacyPendingApprovalToApprovalView(a, now),
@@ -40,6 +47,7 @@ export function CockpitPage() {
     halted: haltCtx.halted,
     pendingApprovals: approvals.length,
     recentActivityAt,
+    now,
   });
 
   const line = greetingQ.data?.segments
