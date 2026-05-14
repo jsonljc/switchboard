@@ -189,6 +189,23 @@ Editorial italic prose, no illustration, no badge. Copy register: question or in
 
 **Bottom-right pill with relative age and a refresh affordance.** Geometry: fixed position, 8px×14px padding, 999px radius, mono 11px (`locked/switchboard/project/activity-v2/styles.css:991-1003` `.stale-pill`). The age comes from `freshness.generatedAt` per the hook contract (`apps/dashboard/src/lib/agent-home/types.ts:13`). The refresh control uses mono 10px ALL CAPS, separated by a hairline from the age. **No auto-poll** — `docs/design-prompts/2026-05-13-activity.md#api-capabilities` explicitly forbids it ("No polling — pagination breaks on autorefresh"). The pill renders when `freshness.dataSource === "fixture"` or when `Date.now() - generatedAt > N minutes`; the surface picks N. Reports has a related but distinct pattern — a "cached Nm ago" caption on the recompute button (`docs/design-prompts/2026-05-13-reports.md#window-control`), since monthly numbers don't carry the same "stale" weight as live audit rows.
 
+## 6. Motion timings and easings
+
+All wave-2 surfaces consume the four `--duration-*` tokens and the three `--ease-*` tokens already in `globals.css`. **No new durations inline.**
+
+- **`--duration-fast` 120ms** (`apps/dashboard/src/app/globals.css:126`) — micro-feedback: copy-button "copied" flash, hover color shift on text links, focus ring appearance. Cite `locked/switchboard/project/agent-home-v3/cockpit.jsx:241-242` (cockpit's `.color` hover swap on the mission button — visually a fast feedback).
+- **`--duration-default` 280ms** (`apps/dashboard/src/app/globals.css:127`) — the workhorse: row hover, filter-chip activation, button background swap, accordion expand, ring/border state change. Every Tools-tier surface declares this exact value (`locked/switchboard/project/approvals-v2/styles.css:40`, `locked/switchboard/project/reports-v2/styles.css:33`, `locked/switchboard/project/activity-v2/styles.css:46`, `locked/switchboard/project/mission/styles.css` ditto) and consumes it for transitions on rows, chips, badges, buttons.
+- **`--duration-slow` 600ms** (`apps/dashboard/src/app/globals.css:128`) — layout shifts, share-bar fill, ROAS depth opacity. Cite `locked/switchboard/project/reports-v2/styles.css:464` (`.attr-card .share-bar > span transition: width 600ms`) and `locked/switchboard/project/reports-v2/styles.css:681` (`.roas-cell .v::after transition: opacity 600ms`).
+- **`--duration-very-slow` 900ms** (`apps/dashboard/src/app/globals.css:129`) — hero transitions like the ambient cream rotation (`apps/dashboard/src/app/globals.css:446-457` — uses `1200ms` directly today; intent is the slow-rhythm bucket). Reports' funnel-bar fill uses an in-band 800ms (`locked/switchboard/project/reports-v2/styles.css:507`); when a transition exceeds `--duration-slow`, the implementer either picks `--duration-very-slow` or proposes a new token (see §6.1).
+
+### 6.1 Rules
+
+- **Three eases** — `--ease-standard` `cubic-bezier(0.4, 0, 0.2, 1)` for two-way transitions, `--ease-enter` `cubic-bezier(0, 0, 0.2, 1)` for entrances, `--ease-exit` `cubic-bezier(0.4, 0, 1, 1)` for dismissals (`apps/dashboard/src/app/globals.css:123-125`). Every Tools-tier transition uses `--ease-standard` by default (verified across all four locked CSS modules).
+- **New motion lives in `globals.css`** if it's used across two or more wave-2 surfaces. Surface-local CSS modules are fine for one-off animation (a stale-pill pulse, a target-row flash), but if a second surface picks it up, promote to `globals.css` in the second-use PR.
+- **No motion durations outside the four `--duration-*` tokens.** A new duration requires a new `--duration-*` token in `globals.css`, declared in the same PR that consumes it. Inline `transition: ... 350ms ...` is reviewer-rejected.
+- **`prefers-reduced-motion`** must zero animations and shorten transitions to ~0.01ms — already handled globally in `apps/dashboard/src/app/globals.css:274-281`. Surface-local CSS must not add animations that bypass this rule.
+
+
 
 
 
