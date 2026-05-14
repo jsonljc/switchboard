@@ -1,4 +1,9 @@
 import { SURFACING_THRESHOLD } from "@switchboard/schemas";
+import {
+  filterSurfaceablePatterns,
+  formatOutcomePatternsForContext,
+  type OutcomePattern,
+} from "./outcome-pattern-extractor.js";
 
 export interface ContextRetrievedChunk {
   content: string;
@@ -24,6 +29,7 @@ export interface BuiltContext {
   retrievedChunks: ContextRetrievedChunk[];
   learnedFacts: ContextLearnedFact[];
   recentSummaries: ContextSummary[];
+  outcomePatternContext: string;
   totalTokenEstimate: number;
 }
 
@@ -56,6 +62,7 @@ export interface ContextBuilderDeploymentMemoryStore {
       category: string;
       confidence: number;
       sourceCount: number;
+      lastSeenAt: Date;
     }>
   >;
 }
@@ -133,6 +140,7 @@ export class ContextBuilder {
 
     const learnedFacts: ContextLearnedFact[] = [];
     for (const mem of memories) {
+      if (mem.category === "pattern") continue;
       const tokens = estimateTokens(mem.content);
       if (tokensUsed + tokens > budget) break;
       learnedFacts.push({
@@ -156,11 +164,24 @@ export class ContextBuilder {
       tokensUsed += tokens;
     }
 
+    const outcomePatterns: OutcomePattern[] = memories
+      .filter((m) => m.category === "pattern")
+      .map((m) => ({
+        content: m.content,
+        category: m.category as OutcomePattern["category"],
+        confidence: m.confidence,
+        sourceCount: m.sourceCount,
+        lastSeenAt: m.lastSeenAt,
+      }));
+    const surfaceable = filterSurfaceablePatterns(outcomePatterns);
+    const outcomePatternContext = formatOutcomePatternsForContext(surfaceable);
+
     return {
       retrievedChunks,
       learnedFacts,
       recentSummaries,
-      totalTokenEstimate: tokensUsed,
+      outcomePatternContext,
+      totalTokenEstimate: tokensUsed + estimateTokens(outcomePatternContext),
     };
   }
 }
