@@ -1022,7 +1022,9 @@ EOF
 - Modify: `packages/core/src/memory/__tests__/context-builder.test.ts` — outcome filtering tests (Task 7)
 - Modify: `packages/core/src/skill-runtime/parameter-builder.ts` — add `SkillServices` slot for stateful composition deps (Task 8)
 - Modify: `packages/core/src/skill-runtime/builders/alex.ts` — resolve `OUTCOME_PATTERNS` via `services.contextBuilder` (Task 8)
+- Modify: `packages/core/src/skill-runtime/builders/alex.test.ts` — empty-string + placeholder-leak contract test (Task 8)
 - Modify: `skills/alex/SKILL.md` — declare `OUTCOME_PATTERNS` parameter, plain `{{OUTCOME_PATTERNS}}` substitution (Task 8)
+- Locate via `grep -rn 'alexBuilder(' packages/core apps/`: composition site that constructs `alexBuilder(...)`'s call args — update to pass `services: { contextBuilder }` (Task 8)
 
 ---
 
@@ -1217,24 +1219,26 @@ EOF
 
 **Why this task exists:** without writing booked-conversation patterns into `DeploymentMemory` with `category: "pattern"`, the `category === "pattern"` filter in Task 7's `ContextBuilder` always returns the empty set and the entire PR is a runtime no-op. The previous plan omitted this task; the spec ("What changes" first bullet) requires it.
 
-**Constraint:** reuse the existing LLM extraction call in `processConversationEnd`. Do not add a second LLM call for pattern extraction — pull pattern candidates from the same extraction response that already produces `extractedFacts` and `questionsAsked`.
+**Constraint:** reuse the existing LLM extraction call in `processConversationEnd`. Do not add a second LLM call for pattern extraction — pull pattern candidates from the same extraction response that already produces `facts` and `questions`.
+
+**API note (read this before writing tests):** `CompoundingDeploymentMemoryStore` (declared at `packages/core/src/memory/compounding-service.ts:25-43`) exposes `create()`, `findByCategory()`, `incrementConfidence()`, and `countByDeployment()`. It has **no `upsert` method**. The pattern-write path mirrors `trackQuestion` (compounding-service.ts:203-247): call `findByCategory` → compute similarity to existing entries → either `incrementConfidence(id, newConfidence)` if a near-duplicate exists or `create({ category: "pattern", content, confidence })` if not. `lastSeenAt` is populated by the store's `create()` implementation, not passed in by the caller.
+
+**Extraction shape:** the existing extraction response is parsed via `JSON.parse(raw) as ExtractionResult` at `packages/core/src/memory/compounding-service.ts:162`, with the `ExtractionResult` interface declared at lines 80-83. There is no Zod schema. Extending the response means: (a) extend the `ExtractionResult` interface with `patterns: string[]`, and (b) extend the prompt body in `buildFactExtractionPrompt` (in `extraction-prompts.ts`) to ask the LLM for booked-outcome patterns when relevant.
 
 **Files:**
 
-- Modify: `packages/core/src/memory/compounding-service.ts`
-- Modify: `packages/core/src/memory/__tests__/compounding-service.test.ts`
-- Modify: `packages/core/src/memory/extraction-prompts.ts` — add pattern candidates to the existing extraction response shape (if not already present)
+- Modify: `packages/core/src/memory/compounding-service.ts` — add `trackPattern` private method, extend `ExtractionResult` interface
+- Modify: `packages/core/src/memory/extraction-prompts.ts` — extend the extraction prompt body to elicit `patterns: string[]`
+- Modify: `packages/core/src/memory/__tests__/compounding-service.test.ts` — three new tests
+
+**Test scaffold:** the tests below reuse the `createMockDeps()` and `primeFaqExtractionLlm()` helpers introduced by PR-1's test commit (SHA `2523622e` on `feat/agent-infra-parity`). When implementing PR-3 from `main`, those helpers will already be on `main` via the PR-1 merge. If PR-1 has not merged yet at the time you start this task, either rebase onto a `main` that includes PR-1 or inline the LLM mock setup (a `deps.llmClient.complete.mockResolvedValueOnce(JSON.stringify({ facts: [], questions: [], patterns: ["..."] }))` plus a `mockResolvedValueOnce(JSON.stringify({ summary: "s", outcome: "booked" }))` call, matching the order used in existing tests).
 
 - [ ] **Step 1: Write the failing test — booked event writes pattern memories**
 
 ```typescript
 it("writes pattern-category memories when outcome is booked", async () => {
   const deps = createMockDeps();
-  deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
-  deps.deploymentMemoryStore.upsert = vi.fn().mockResolvedValue({
-    id: "p-1",
-    sourceCount: 1,
-  });
+  deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]); // no existing patterns
   primeFaqExtractionLlm(deps, undefined, {
     patterns: ["Customers ask about downtime before booking laser treatment"],
   });
@@ -1243,7 +1247,8 @@ it("writes pattern-category memories when outcome is booked", async () => {
   const service = new ConversationCompoundingService(deps);
   await service.processConversationEnd({ ...baseEvent, outcome: "booked" });
 
-  expect(deps.deploymentMemoryStore.upsert).toHaveBeenCalledWith(
+  // mirrors the existing FAQ-tracking assertion at line ~150 of this test file
+  expect(deps.deploymentMemoryStore.create).toHaveBeenCalledWith(
     expect.objectContaining({
       category: "pattern",
       content: "Customers ask about downtime before booking laser treatment",
@@ -1259,7 +1264,6 @@ it("does not write pattern-category memories for non-booked outcomes", async () 
   for (const outcome of ["lost", "qualified", "info_request", "escalated"] as const) {
     const deps = createMockDeps();
     deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
-    deps.deploymentMemoryStore.upsert = vi.fn().mockResolvedValue({ id: "p", sourceCount: 1 });
     primeFaqExtractionLlm(deps, undefined, {
       patterns: ["irrelevant since outcome is not booked"],
     });
@@ -1268,30 +1272,28 @@ it("does not write pattern-category memories for non-booked outcomes", async () 
     const service = new ConversationCompoundingService(deps);
     await service.processConversationEnd({ ...baseEvent, outcome });
 
-    const patternCalls = deps.deploymentMemoryStore.upsert.mock.calls.filter(
+    const patternCreates = deps.deploymentMemoryStore.create.mock.calls.filter(
       (c) => c[0].category === "pattern",
     );
-    expect(patternCalls).toHaveLength(0);
+    expect(patternCreates).toHaveLength(0);
   }
 });
 ```
 
-- [ ] **Step 3: Write the failing test — repeated booked observations increment sourceCount via existing path**
+- [ ] **Step 3: Write the failing test — repeated booked observations increment via existing path**
 
 ```typescript
-it("increments sourceCount on existing pattern entries instead of creating duplicates", async () => {
+it("increments confidence on a near-duplicate pattern instead of creating a duplicate", async () => {
   const deps = createMockDeps();
   deps.deploymentMemoryStore.findByCategory.mockResolvedValue([
     {
       id: "p-existing",
       content: "Customers ask about downtime before booking laser treatment",
-      category: "pattern",
       sourceCount: 2,
       confidence: 0.6,
-      lastSeenAt: new Date(),
     },
   ]);
-  deps.deploymentMemoryStore.incrementConfidence = vi.fn().mockResolvedValue({
+  deps.deploymentMemoryStore.incrementConfidence.mockResolvedValue({
     id: "p-existing",
     sourceCount: 3,
   });
@@ -1303,47 +1305,78 @@ it("increments sourceCount on existing pattern entries instead of creating dupli
   const service = new ConversationCompoundingService(deps);
   await service.processConversationEnd({ ...baseEvent, outcome: "booked" });
 
-  // Existing path increments rather than inserting a duplicate
   expect(deps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
     "p-existing",
-    expect.any(Object),
+    expect.any(Number),
   );
+  // The new-create path must NOT have been hit for the pattern category
+  const patternCreates = deps.deploymentMemoryStore.create.mock.calls.filter(
+    (c) => c[0].category === "pattern",
+  );
+  expect(patternCreates).toHaveLength(0);
 });
 ```
 
-- [ ] **Step 4: Implement the pattern-write path**
+- [ ] **Step 4: Extend the `ExtractionResult` interface and the extraction prompt**
 
-Extend `processConversationEnd` (after the FAQ tracking block, before the function returns) to call a new private method `trackPattern(extracted.patterns[])` when `event.outcome === "booked"`. `trackPattern` should mirror the existing `trackQuestion` shape:
+In `packages/core/src/memory/compounding-service.ts`, extend the existing interface:
+
+```typescript
+interface ExtractionResult {
+  facts: Array<{ fact: string; confidence: number; category: string }>;
+  questions: string[];
+  patterns: string[]; // new — populated only when outcome is "booked"
+}
+```
+
+In `packages/core/src/memory/extraction-prompts.ts`, extend the body of `buildFactExtractionPrompt` to elicit an additional `patterns` array in the JSON response. The prompt should instruct the LLM to populate `patterns` **only** when the conversation outcome is booking-relevant; otherwise return `patterns: []`. Make sure the JSON example in the prompt body reflects the new field so the LLM produces the expected shape.
+
+- [ ] **Step 5: Implement the pattern-write path**
+
+Mirror `trackQuestion` (compounding-service.ts:203-247). Add a private method `trackPattern(orgId, deploymentId, patternText)`:
 
 1. `findByCategory(orgId, deploymentId, "pattern")` to load existing pattern memories.
-2. Use the existing similarity helper (embedding cosine, threshold matching the FAQ path) to decide insert-vs-increment.
-3. If a near-duplicate exists, call `incrementConfidence(id, ...)` — confidence formula is the existing `computeConfidenceScore`.
-4. Otherwise, call `upsert({ category: "pattern", content, confidence, sourceCount: 1, lastSeenAt: new Date(), ... })`.
-5. Update `extractionResponseSchema` in `extraction-prompts.ts` to include a `patterns: string[]` array, parsed from the existing extraction LLM response. Do not add a second LLM call — extend the existing prompt and parsing.
+2. Embed the new pattern text; compute cosine similarity to each existing pattern (use the existing `cosineSimilarity` helper at line 85).
+3. If max similarity ≥ `SIMILARITY_THRESHOLD` (existing constant, line 70), call `incrementConfidence(matchedId, computeConfidenceScore(matchedSourceCount + 1, false))`.
+4. Otherwise, call `create({ organizationId, deploymentId, category: "pattern", content: patternText, confidence: computeConfidenceScore(1, false) })`. The store sets `sourceCount: 1` and `lastSeenAt` on the row server-side via its existing default-population logic — do NOT pass them in the `create()` payload (they are not in the `create()` input type).
 
-**Constraint:** the pattern detection prompt should only ask the LLM for patterns when the conversation outcome is `booked`. For non-booked outcomes, `patterns: []` is passed through.
+Call site: in `processConversationEnd`, after the existing FAQ-tracking block, add:
 
-- [ ] **Step 5: Run all compounding tests**
+```typescript
+if (event.outcome === "booked" && extracted.patterns?.length) {
+  for (const pattern of extracted.patterns) {
+    try {
+      await this.trackPattern(event.organizationId, event.deploymentId, pattern);
+    } catch (err) {
+      console.error("[CompoundingService] trackPattern failed", err);
+    }
+  }
+}
+```
+
+- [ ] **Step 6: Run all compounding tests**
 
 Run: `pnpm --filter @switchboard/core test -- --run -t "CompoundingService"`
-Expected: All PASS, including the 3 new tests above.
+Expected: All PASS, including the 3 new tests.
 
-- [ ] **Step 6: Run typecheck**
+- [ ] **Step 7: Run typecheck**
 
 Run: `pnpm typecheck`
-Expected: No errors.
+Expected: No errors. (If `pnpm typecheck` reports stale exports, run `pnpm reset` per CLAUDE.md.)
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add packages/core/src/memory/compounding-service.ts packages/core/src/memory/extraction-prompts.ts packages/core/src/memory/__tests__/compounding-service.test.ts
 git commit -m "$(cat <<'EOF'
 feat(memory): write booked-outcome patterns into DeploymentMemory
 
-When processConversationEnd sees outcome=booked, pattern candidates from
-the existing extraction LLM call are upserted with category=pattern.
-Repeated booked observations increment sourceCount via the existing
-similarity-and-increment path used by FAQ tracking. No second LLM call.
+When processConversationEnd sees outcome=booked, pattern candidates
+extracted by the existing extraction LLM call (now also asked for
+patterns) are written to DeploymentMemory with category=pattern via
+the existing create() path. Repeated booked observations increment
+the matched entry's confidence via incrementConfidence(), mirroring
+trackQuestion. No second LLM call; no new store method.
 EOF
 )"
 ```
@@ -1426,14 +1459,44 @@ Then update `packages/db/src/stores/prisma-deployment-memory-store.ts` `listHigh
 
 ```typescript
 it("listHighConfidence ordering is unchanged after adding lastSeenAt projection", async () => {
-  // Seed two memories with same confidence and sourceCount but different lastSeenAt.
-  // The pre-existing ordering rule (confidence desc, then sourceCount desc) should
-  // still hold; lastSeenAt must NOT become a tiebreaker.
-  // ...assertion that pre-existing first-result remains first
+  // Seed two memories with the same confidence and sourceCount but different
+  // lastSeenAt. The pre-existing ordering rule (confidence desc, then sourceCount
+  // desc) must still hold; lastSeenAt must NOT become a tiebreaker.
+  const olderId = await seedMemory(prisma, {
+    organizationId: "org-1",
+    deploymentId: "dep-1",
+    category: "fact",
+    content: "older",
+    confidence: 0.8,
+    sourceCount: 5,
+    lastSeenAt: new Date("2026-01-01"),
+  });
+  const newerId = await seedMemory(prisma, {
+    organizationId: "org-1",
+    deploymentId: "dep-1",
+    category: "fact",
+    content: "newer",
+    confidence: 0.8,
+    sourceCount: 5,
+    lastSeenAt: new Date("2026-05-01"),
+  });
+
+  const rows = await store.listHighConfidence("org-1", "dep-1", 0.5, 1);
+
+  // The first entry must be whichever row the existing orderBy returns first
+  // before this PR — pinning that here ensures lastSeenAt doesn't sneak into
+  // the orderBy clause as a tiebreaker. (If the existing implementation orders
+  // by createdAt as a final tiebreaker, adjust the seed timestamps so the
+  // expected first row is deterministic; the point is the ordering RULE is
+  // unchanged.)
+  expect(rows[0]!.id).toBe(olderId); // or newerId — whichever matches pre-PR behavior
+  expect(rows.map((r) => r.lastSeenAt)).toBeDefined(); // new field IS populated
 });
 ```
 
 This test goes in the `PrismaDeploymentMemoryStore` test file (or its integration test if mocked Prisma can't assert ordering). The point is: surfacing a new column from a query is the most common silent-ordering-change bug, and we want the test to catch it.
+
+**Mock-store consumers:** the `ContextBuilderDeploymentMemoryStore` interface widening also affects mock stores in `packages/core/src/memory/__tests__/context-builder.test.ts`. Every `listHighConfidence.mockResolvedValue([...])` call in that test file must now include `lastSeenAt: <Date>` on each entry, or TypeScript will fail. Update all existing fixtures (not just the new ones added by Step 1) before running the test suite.
 
 - [ ] **Step 5: Add outcomePatternContext to BuiltContext and wire formatting**
 
@@ -1578,7 +1641,13 @@ Update all existing callers (parameter-resolution sites, test harnesses) to pass
 
 - [ ] **Step 2: Wire `ContextBuilder` into the Alex builder dispatch path**
 
-Find the call site that invokes `alexBuilder(ctx, config, stores)` and update it to pass `services: { contextBuilder }` where `contextBuilder` is constructed once at composition root (likely `gateway-bridge.ts`, alongside the existing `ConversationCompoundingService` construction PR-1 added). Reuse the same `knowledgeRetriever`, `deploymentMemoryStore`, and `interactionSummaryStore` instances; they are already wired.
+Locate the call site that invokes `alexBuilder(...)` via `grep -rn 'alexBuilder(' packages/core apps/` (likely the `ParameterBuilder` resolution path in `parameter-builder.ts` or its callers). Update the dispatch to pass a fourth `services` argument containing `{ contextBuilder }`.
+
+Construct the `ContextBuilder` instance once at the relevant composition root. The plan author has not pre-verified the exact file — the candidates are:
+- `apps/chat/src/gateway/gateway-bridge.ts` (where PR-1 already constructs `ConversationCompoundingService` and has the prisma-backed `knowledgeStore`, `deploymentMemoryStore`, `interactionSummaryStore` instances on hand).
+- Wherever `ParameterBuilder` callers live (search for `: ParameterBuilder` and `ParameterBuilder =`).
+
+Reuse the existing `knowledgeRetriever`, `deploymentMemoryStore`, and `interactionSummaryStore` instances — do not construct fresh ones, or memory state may diverge between the compounding write path and the context-build read path.
 
 - [ ] **Step 3: Add OUTCOME_PATTERNS resolution to alex builder**
 
@@ -1617,13 +1686,32 @@ placed after business facts and operator corrections, before generic instruction
 
 - [ ] **Step 5: Write the contract test — empty OUTCOME_PATTERNS renders cleanly**
 
+Add to `packages/core/src/skill-runtime/builders/alex.test.ts`. The test has two parts: (a) builder returns the string, even when no services are passed; (b) `interpolate()` consumes that string without leaking placeholders or Mustache markers.
+
 ```typescript
-it("renders without unresolved placeholders when OUTCOME_PATTERNS is empty", async () => {
-  const params = await alexBuilder(ctx, config, stores /* no services */);
+import { interpolate } from "../template-engine.js";
+
+it("builder always supplies OUTCOME_PATTERNS as a string (empty when no services)", async () => {
+  const params = await alexBuilder(ctx, config, stores /* no services arg */);
+  expect(typeof params.OUTCOME_PATTERNS).toBe("string");
   expect(params.OUTCOME_PATTERNS).toBe("");
-  // ...assert downstream interpolate() emits no literal "{{OUTCOME_PATTERNS}}" or section markers
+});
+
+it("interpolate() leaves no unresolved {{OUTCOME_PATTERNS}} or Mustache section markers", async () => {
+  const params = await alexBuilder(ctx, config, stores);
+  const template = "Before.\n{{OUTCOME_PATTERNS}}\nAfter.";
+  const declarations = [{ name: "OUTCOME_PATTERNS", required: false }];
+
+  const rendered = interpolate(template, params, declarations);
+
+  expect(rendered).not.toMatch(/\{\{/); // no unresolved placeholders
+  expect(rendered).not.toMatch(/\{\{#|\{\{\//); // no Mustache section markers (regression)
+  // Empty OUTCOME_PATTERNS should produce a blank line, not the literal "{{OUTCOME_PATTERNS}}"
+  expect(rendered).toBe("Before.\n\nAfter.");
 });
 ```
+
+If the `ParameterDeclaration` type requires fields beyond `name`/`required`, mirror what other Alex parameters declare in the existing skill manifest.
 
 - [ ] **Step 6: Run typecheck**
 
