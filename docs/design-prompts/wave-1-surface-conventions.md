@@ -205,6 +205,15 @@ All wave-2 surfaces consume the four `--duration-*` tokens and the three `--ease
 - **No motion durations outside the four `--duration-*` tokens.** A new duration requires a new `--duration-*` token in `globals.css`, declared in the same PR that consumes it. Inline `transition: ... 350ms ...` is reviewer-rejected.
 - **`prefers-reduced-motion`** must zero animations and shorten transitions to ~0.01ms — already handled globally in `apps/dashboard/src/app/globals.css:274-281`. Surface-local CSS must not add animations that bypass this rule.
 
+## 7. Focus rings
+
+- **Default keyboard focus on bespoke inputs is an ink border swap, not a halo.** Pattern: `outline: none; border: 1px solid var(--hair); …; transition: border-color var(--duration-default) var(--ease-standard); &:focus { border-color: var(--ink) }` (`locked/switchboard/project/activity-v2/styles.css:254-258` `.combo-input`). The 280ms ease in matches the §6 default. No `box-shadow` halo, no 2px outlines, no offset colored ring.
+- **Hover is the mouse affordance, focus is the keyboard affordance — they are different visuals.** Hover changes background only (`locked/switchboard/project/activity-v2/styles.css:503` `.arow:hover { background: rgba(14,12,10,0.025) }`); focus changes border to ink. A control never expresses both states as the same color change; if a row both hovers and focuses, the two states stack visibly.
+- **shadcn-primitive components keep `--ring` `30 8% 10%`** (`apps/dashboard/src/app/globals.css:37`), which is the same ink-family hue used by the bespoke pattern above. Don't override `--ring` per-surface; if a shadcn component renders inside a wave-2 surface, its keyboard focus is the global ink ring.
+- **Cream-on-cream surfaces** — where the background is `--cream` / `--paper` and adjacent hairlines are low-contrast — use full ink (`var(--ink)` `#0E0C0A`) for the focus border, not `--hair-strong`. Cite `locked/switchboard/project/activity-v2/styles.css:258` (`.combo-input:focus { border-color: var(--ink) }`) and `locked/switchboard/project/approvals-v2/styles.css:1091` (`.reject-dialog textarea:focus { border-color: var(--ink); background: #fff }`).
+- **Focus rings do not use the editorial, operator, or agent-context accent** (per §4 anti-list). The single authorized exception is the `/approvals` patch-editor JSON textarea, where focused border is `var(--amber)` (`locked/switchboard/project/approvals-v2/styles.css:1027` `.pe-editor:focus { border-color: var(--amber); background: #fff }`) — this is the operator entering a governance-mutating payload, and the amber border doubles as a "you're now editing the agent's parameters" signal authorized by `docs/design-prompts/2026-05-13-approvals.md#detail-panel`. No other surface adopts this pattern without surface-spec authorization.
+
+
 
 
 
