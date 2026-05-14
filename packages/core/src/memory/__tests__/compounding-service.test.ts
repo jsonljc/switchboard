@@ -42,6 +42,26 @@ const baseEvent: ConversationEndEvent = {
   endReason: "inactivity",
 };
 
+function createEvent(): ConversationEndEvent {
+  return { ...baseEvent };
+}
+
+function primeFaqExtractionLlm(deps: ReturnType<typeof createMockDeps>, question: string): void {
+  deps.llmClient.complete
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        summary: "Customer asked an FAQ.",
+        outcome: "info_request",
+      }),
+    )
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        facts: [],
+        questions: [question],
+      }),
+    );
+}
+
 describe("ConversationCompoundingService", () => {
   let deps: ReturnType<typeof createMockDeps>;
   let service: ConversationCompoundingService;
@@ -246,5 +266,76 @@ describe("ConversationCompoundingService", () => {
     // Verify expiry is roughly 72 hours from now (within 1 minute tolerance)
     const expectedExpiry = Date.now() + 72 * 60 * 60 * 1000;
     expect(Math.abs(storeCall.draftExpiresAt.getTime() - expectedExpiry)).toBeLessThan(60_000);
+  });
+
+  // spec: assert learned chunks remain draft/pending under the "alex" agent wiring (PR-1 design spec)
+  // Pre-existing test above already covers sourceType/draftStatus/72h expiry under a generic
+  // agentId; this test pins the canonical "alex" agentId path end-to-end.
+  it("promotes FAQ to learned KnowledgeChunk under canonical alex agentId", async () => {
+    const knowledgeStore = { store: vi.fn().mockResolvedValue(undefined) };
+    const localDeps = createMockDeps();
+    // Pre-existing FAQ entry at 2 observations (one below threshold)
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
+      {
+        id: "faq-1",
+        content: "What is your cancellation policy?",
+        category: "faq",
+        sourceCount: 2,
+        confidence: 0.6,
+      },
+    ]);
+    localDeps.deploymentMemoryStore.incrementConfidence.mockResolvedValue({
+      id: "faq-1",
+      sourceCount: 3,
+    });
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+    primeFaqExtractionLlm(localDeps, "What is your cancellation policy?");
+
+    const localService = new ConversationCompoundingService({
+      ...localDeps,
+      knowledgeStore,
+      agentId: "alex",
+    });
+
+    await localService.processConversationEnd(createEvent());
+
+    expect(knowledgeStore.store).toHaveBeenCalledTimes(1);
+    const stored = knowledgeStore.store.mock.calls[0]![0];
+    expect(stored.sourceType).toBe("learned");
+    expect(stored.agentId).toBe("alex");
+    expect(stored.draftStatus).toBe("pending");
+    expect(stored.draftExpiresAt).toBeInstanceOf(Date);
+  });
+
+  it("skips FAQ promotion gracefully when knowledgeStore is not provided", async () => {
+    const localDeps = createMockDeps();
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
+      {
+        id: "faq-1",
+        content: "What is your cancellation policy?",
+        category: "faq",
+        sourceCount: 2,
+        confidence: 0.6,
+      },
+    ]);
+    localDeps.deploymentMemoryStore.incrementConfidence.mockResolvedValue({
+      id: "faq-1",
+      sourceCount: 3,
+    });
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+    primeFaqExtractionLlm(localDeps, "What is your cancellation policy?");
+
+    // No knowledgeStore provided — assert the FAQ-tracking path completes (incrementConfidence
+    // was reached) and the top-level try/catch in processConversationEnd did NOT swallow an
+    // error (console.error not called). .resolves.not.toThrow() alone would be a false-green
+    // because the production code wraps the body in try { ... } catch (err) { console.error(...) }.
+    const localService = new ConversationCompoundingService(localDeps);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await localService.processConversationEnd(createEvent());
+
+    expect(localDeps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });
