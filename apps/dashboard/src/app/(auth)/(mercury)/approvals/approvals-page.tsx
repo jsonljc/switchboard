@@ -1,19 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import styles from "./approvals.module.css";
 import { ApprovalsHeader } from "./components/header";
 import { ApprovalsQueue } from "./components/queue";
 import { FilterStrip, type RiskFilter } from "./components/filter-strip";
+import { Detail } from "./components/detail";
 import { useNow } from "./hooks/use-now";
 import { usePendingApprovals } from "./hooks/use-approvals";
 import { sortApprovals } from "./sort";
 
 export function ApprovalsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const idFromUrl = searchParams?.get("id") ?? null;
+
   const now = useNow(1000);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [filter, setFilter] = useState<RiskFilter>("all");
   const [expiringOnly, setExpiringOnly] = useState(false);
 
@@ -22,8 +27,7 @@ export function ApprovalsPage() {
   const { data, isLoading } = usePendingApprovals();
   const allItems = data?.approvals ?? [];
 
-  // Amendment K: refetch on visibilitychange-to-visible so expiresAt
-  // values reflect server time after the tab returns from a long pause.
+  // Amendment K: refetch on return-to-visible so expiresAt is fresh.
   useEffect(() => {
     if (typeof document === "undefined") return;
     const handler = () => {
@@ -72,17 +76,37 @@ export function ApprovalsPage() {
     return sortApprovals(out, now);
   }, [allItems, filter, expiringOnly, now]);
 
-  // Selection seeding via useEffect (amendment B): never call setState during
-  // render. Handles empty-list, fell-out-of-filter, and null-with-items cases.
+  // The effective active id: prefer URL ?id if it exists in the filtered set,
+  // otherwise fall back to the first row, otherwise null.
+  const activeId =
+    idFromUrl && filteredSorted.some((r) => r.id === idFromUrl)
+      ? idFromUrl
+      : (filteredSorted[0]?.id ?? null);
+
+  // Mirror selection -> URL when the derived activeId diverges from the URL.
+  // useEffect (amendment B); never call setState/router.replace during render.
   useEffect(() => {
-    if (filteredSorted.length === 0) {
-      if (activeId !== null) setActiveId(null);
-      return;
+    if (activeId && activeId !== idFromUrl) {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.set("id", activeId);
+      router.replace(`/approvals?${params.toString()}`, { scroll: false });
+    } else if (!activeId && idFromUrl) {
+      // Queue is empty (or selection fell out) — drop the ?id from the URL.
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.delete("id");
+      const qs = params.toString();
+      router.replace(qs ? `/approvals?${qs}` : "/approvals", { scroll: false });
     }
-    if (!activeId || !filteredSorted.some((r) => r.id === activeId)) {
-      setActiveId(filteredSorted[0].id);
-    }
-  }, [activeId, filteredSorted]);
+  }, [activeId, idFromUrl, router, searchParams]);
+
+  const onSelect = useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.set("id", id);
+      router.replace(`/approvals?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
 
   return (
     <div className={styles.approvalsPage}>
@@ -102,17 +126,13 @@ export function ApprovalsPage() {
           <ApprovalsQueue
             items={filteredSorted}
             activeId={activeId}
-            onSelect={setActiveId}
+            onSelect={onSelect}
             loading={isLoading}
             now={now}
           />
         </aside>
         <section className={styles.splitRight}>
-          {/* Detail pane lands in PR-A2; placeholder for now. */}
-          <div className={styles.detailPlaceholder}>
-            <span className={styles.eyebrow}>select an approval</span>
-            <p>The detail pane lands in the next PR.</p>
-          </div>
+          <Detail id={activeId} now={now} />
         </section>
       </main>
     </div>

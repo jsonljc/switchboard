@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -12,9 +12,10 @@ vi.mock("@/lib/route-availability", () => ({
   isMercuryToolLive: () => false,
 }));
 const mockReplace = vi.fn();
+const useSearchParamsMock = vi.fn().mockReturnValue(new URLSearchParams(""));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace }),
-  useSearchParams: () => new URLSearchParams(""),
+  useSearchParams: () => useSearchParamsMock(),
 }));
 
 import { ApprovalsPage } from "../approvals-page";
@@ -29,6 +30,11 @@ function renderPage() {
 }
 
 describe("ApprovalsPage", () => {
+  beforeEach(() => {
+    mockReplace.mockClear();
+    useSearchParamsMock.mockReturnValue(new URLSearchParams(""));
+  });
+
   it("renders the title", async () => {
     renderPage();
     expect(
@@ -90,5 +96,30 @@ describe("ApprovalsPage", () => {
     await screen.findByText(/Refund SGD 4,820/);
     // At least one row should show a remaining-time element with the testid.
     expect(screen.getAllByTestId("queue-row-timer").length).toBeGreaterThan(0);
+  });
+
+  it("renders the detail pane for the active row", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/Refund SGD 4,820/)).toBeInTheDocument());
+    // The confirmation-code block renders the bindingHash for apr_2f1a08
+    await waitFor(() => expect(screen.getByText(/^0x2f1a08c4/)).toBeInTheDocument());
+  });
+
+  it("updates ?id= in the URL when a row is selected", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/Refund SGD 4,820/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Charge no-show fee/ }));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith(expect.stringContaining("id=apr_55ab10"), {
+        scroll: false,
+      }),
+    );
+  });
+
+  it("deep-links with ?id=apr_… select that row on first paint", async () => {
+    useSearchParamsMock.mockReturnValue(new URLSearchParams("id=apr_55ab10"));
+    renderPage();
+    // The detail pane should render the bindingHash for apr_55ab10
+    await waitFor(() => expect(screen.getByText(/^0x55ab10d2/)).toBeInTheDocument());
   });
 });

@@ -478,3 +478,6 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* Task 2.7 — detail/index.tsx */
+.detail { display: flex; flex-direction: column; }
