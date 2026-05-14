@@ -12,6 +12,7 @@ import type {
   PipelineViewModel,
   WinsViewModel,
 } from "@/lib/agent-home/types";
+import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 import { SwitchboardClientCore } from "./core";
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
@@ -338,6 +339,12 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   async getGreeting(agentKey: string): Promise<{ data: GreetingViewModel }> {
     return this.request<{ data: GreetingViewModel }>(
       `/api/dashboard/agents/${encodeURIComponent(agentKey)}/greeting`,
+    );
+  }
+
+  async getMission(agentKey: string): Promise<MissionAggregatorResponse> {
+    return this.request<MissionAggregatorResponse>(
+      `/api/dashboard/agents/${encodeURIComponent(agentKey)}/mission`,
     );
   }
 
