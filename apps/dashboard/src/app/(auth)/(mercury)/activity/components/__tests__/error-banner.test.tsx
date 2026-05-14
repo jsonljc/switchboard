@@ -11,6 +11,7 @@ describe("ErrorBanner", () => {
         path="/api/dashboard/activity"
         status={503}
         durationMs={8000}
+        hasCachedRows
         onRetry={() => {}}
       />,
     );
@@ -24,13 +25,20 @@ describe("ErrorBanner", () => {
   });
 
   it("degrades to minimal copy when only the path is known (no fabricated telemetry)", () => {
-    render(<ErrorBanner path="/api/dashboard/activity" onRetry={() => {}} />);
+    render(<ErrorBanner path="/api/dashboard/activity" hasCachedRows onRetry={() => {}} />);
     expect(screen.getByText(/Request to \/api\/dashboard\/activity failed\./)).toBeInTheDocument();
     expect(screen.queryByText(/503/)).toBeNull();
     expect(screen.queryByText(/after \d+s/)).toBeNull();
     expect(
       screen.getByText(/previous page of entries is still shown below; nothing was dropped/),
     ).toBeInTheDocument();
+  });
+
+  it("omits the 'previous page' tail when no cached rows exist (first-fetch error honesty)", () => {
+    render(<ErrorBanner path="/api/dashboard/activity" onRetry={() => {}} />);
+    expect(screen.getByText(/Request to \/api\/dashboard\/activity failed\./)).toBeInTheDocument();
+    expect(screen.queryByText(/previous page of entries/)).toBeNull();
+    expect(screen.queryByText(/nothing was dropped/)).toBeNull();
   });
 
   it("retry button fires onRetry on click", async () => {

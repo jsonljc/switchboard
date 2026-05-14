@@ -6,7 +6,6 @@ export type EmptyStateProps =
   | { variant: "zero" }
   | {
       variant: "filtered";
-      scannedCount: number;
       /** Active base scope; suppresses the "switch to All events" suggestion when already on "all". */
       scope?: "operational" | "all";
       onClear?: () => void;
@@ -41,8 +40,7 @@ export function EmptyState(props: EmptyStateProps) {
         No entries match <em className={styles.emptyHeadlineEm}>these filters</em>.
       </h2>
       <p className={styles.emptySub}>
-        We checked {props.scannedCount} entries across the current scope. Try broadening the date
-        range or dropping the entity
+        Nothing in the current scope matches. Try broadening the date range or dropping the entity
         {props.scope !== "all" && (
           <>
             , or switch to <b className={styles.emptyMetaB}>All events</b> if you&apos;re looking
