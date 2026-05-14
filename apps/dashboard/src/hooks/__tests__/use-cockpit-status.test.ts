@@ -1,0 +1,106 @@
+// apps/dashboard/src/hooks/__tests__/use-cockpit-status.test.ts
+import { describe, it, expect } from "vitest";
+import { deriveAlexStatusA1 } from "../use-cockpit-status.js";
+
+const NOW = new Date("2026-05-14T12:00:00Z");
+
+describe("deriveAlexStatusA1", () => {
+  it("returns HALTED when halted is true regardless of other inputs", () => {
+    expect(
+      deriveAlexStatusA1({
+        halted: true,
+        pendingApprovals: 5,
+        recentActivityAt: NOW,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("HALTED");
+  });
+
+  it("returns WAITING when one or more approvals are pending", () => {
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 1,
+        recentActivityAt: null,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("WAITING");
+  });
+
+  it("returns WORKING when recent activity exists within the 15-minute window", () => {
+    const recent = new Date("2026-05-14T11:50:00Z");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: recent,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("WORKING");
+  });
+
+  it("returns IDLE when activity is older than 15 minutes", () => {
+    const old = new Date("2026-05-14T11:30:00Z");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: old,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("IDLE");
+  });
+
+  it("returns IDLE when there is no recent activity", () => {
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: null,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("IDLE");
+  });
+
+  it("returns IDLE even when in quiet hours (no WORKING signal)", () => {
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: null,
+        inQuietHours: true,
+        now: NOW,
+      }),
+    ).toBe("IDLE");
+  });
+
+  it("prioritizes HALTED over WAITING", () => {
+    expect(
+      deriveAlexStatusA1({
+        halted: true,
+        pendingApprovals: 3,
+        recentActivityAt: null,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("HALTED");
+  });
+
+  it("prioritizes WAITING over WORKING", () => {
+    const recent = new Date("2026-05-14T11:55:00Z");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 1,
+        recentActivityAt: recent,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("WAITING");
+  });
+});
