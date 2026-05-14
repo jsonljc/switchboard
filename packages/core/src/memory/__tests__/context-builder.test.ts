@@ -141,7 +141,7 @@ describe("ContextBuilder", () => {
       query: "Tell me about laser",
     });
 
-    expect(result.learnedFacts).toHaveLength(0);
+    expect(result.learnedFacts).toHaveLength(1);
     expect(result.outcomePatternContext).toContain("advisory");
     expect(result.outcomePatternContext).toContain("downtime");
   });

@@ -140,7 +140,6 @@ export class ContextBuilder {
 
     const learnedFacts: ContextLearnedFact[] = [];
     for (const mem of memories) {
-      if (mem.category === "pattern") continue;
       const tokens = estimateTokens(mem.content);
       if (tokensUsed + tokens > budget) break;
       learnedFacts.push({
