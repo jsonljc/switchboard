@@ -108,6 +108,53 @@ describe("PrismaDeploymentMemoryStore", () => {
     );
   });
 
+  it("listHighConfidence returns lastSeenAt and orders by confidence desc only (no lastSeenAt tiebreaker)", async () => {
+    const higherConfidence = {
+      id: "mem-higher",
+      organizationId: "org-1",
+      deploymentId: "dep-1",
+      category: "fact",
+      content: "high-confidence-older",
+      confidence: 0.9,
+      sourceCount: 5,
+      lastSeenAt: new Date("2026-01-01"),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const lowerConfidence = {
+      id: "mem-lower",
+      organizationId: "org-1",
+      deploymentId: "dep-1",
+      category: "fact",
+      content: "low-confidence-newer",
+      confidence: 0.7,
+      sourceCount: 5,
+      lastSeenAt: new Date("2026-05-01"),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    // Mock Prisma returns the rows in confidence-desc order (matches the orderBy contract).
+    (prisma.deploymentMemory.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      higherConfidence,
+      lowerConfidence,
+    ]);
+
+    const rows = await store.listHighConfidence("org-1", "dep-1", 0.5, 1);
+
+    // The store must propagate Prisma's order (no client-side resort).
+    expect(rows[0]!.id).toBe("mem-higher");
+    expect(rows[1]!.id).toBe("mem-lower");
+    // lastSeenAt MUST be propagated (regression guard: no `select` that drops the column).
+    expect(rows[0]!.lastSeenAt).toEqual(new Date("2026-01-01"));
+    expect(rows[1]!.lastSeenAt).toEqual(new Date("2026-05-01"));
+    // The orderBy clause must remain single-key confidence-desc — no lastSeenAt tiebreaker.
+    expect(prisma.deploymentMemory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: { confidence: "desc" },
+      }),
+    );
+  });
+
   it("lists all entries by deployment ordered by confidence desc", async () => {
     (prisma.deploymentMemory.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     await store.listByDeployment("org-1", "dep-1");

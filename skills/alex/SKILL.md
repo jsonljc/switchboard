@@ -38,6 +38,13 @@ parameters:
       escalationRules: { type: object, required: true }
       customInstructions: { type: string, required: false }
 
+  - name: OUTCOME_PATTERNS
+    type: string
+    required: false
+    description: >
+      Advisory context from successful booking patterns. May be empty
+      when no high-confidence patterns have surfaced yet.
+
 tools:
   - crm-query
   - crm-write
@@ -245,6 +252,8 @@ Escalation triggers:
 ## Business Facts
 
 {{BUSINESS_FACTS}}
+
+{{OUTCOME_PATTERNS}}
 
 ## Business Knowledge Rules
 

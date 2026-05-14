@@ -40,8 +40,9 @@ Return exactly this JSON structure (no markdown, no explanation):
       "category": "preference|faq|objection|pattern|fact"
     }
   ],
-  "questions": ["questions the customer asked, verbatim or close to it"]
+  "questions": ["questions the customer asked, verbatim or close to it"],
+  "patterns": ["observable patterns about what customers ask or do before booking — populate ONLY when the conversation outcome is a booking; otherwise return an empty array"]
 }
 
-If no facts can be extracted, return {"facts": [], "questions": []}.`;
+If no facts can be extracted, return {"facts": [], "questions": [], "patterns": []}.`;
 }

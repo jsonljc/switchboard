@@ -62,6 +62,7 @@ describe("ContextBuilder", () => {
         category: "fact",
         confidence: 0.85,
         sourceCount: 5,
+        lastSeenAt: new Date(),
       },
     ]);
 
@@ -83,6 +84,7 @@ describe("ContextBuilder", () => {
       category: "fact",
       confidence: 0.9,
       sourceCount: 10,
+      lastSeenAt: new Date(),
     }));
     deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue(manyFacts);
 
@@ -118,6 +120,52 @@ describe("ContextBuilder", () => {
     expect(result.retrievedChunks[1]!.sourceType).toBe("wizard");
     expect(result.retrievedChunks[2]!.sourceType).toBe("learned");
     expect(result.retrievedChunks[3]!.sourceType).toBe("document");
+  });
+
+  it("includes formatted outcome patterns in built context", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "m1",
+        content: "Customers ask about downtime before booking laser treatment",
+        category: "pattern",
+        confidence: 0.85,
+        sourceCount: 5,
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "Tell me about laser",
+    });
+
+    expect(result.learnedFacts).toHaveLength(1);
+    expect(result.outcomePatternContext).toContain("advisory");
+    expect(result.outcomePatternContext).toContain("downtime");
+  });
+
+  it("excludes low-confidence patterns from outcomePatternContext", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "m1",
+        content: "Weak signal",
+        category: "pattern",
+        confidence: 0.67,
+        sourceCount: 2, // below SURFACING_THRESHOLD.minSourceCount (3)
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "test",
+    });
+
+    expect(result.outcomePatternContext).toBe("");
   });
 
   it("includes repeat customer summaries when contactId provided", async () => {
