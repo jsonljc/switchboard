@@ -76,15 +76,17 @@ export const alexBuilder: ParameterBuilder = async (
   // Resolve outcome-informed patterns from ContextBuilder when available.
   // Empty string when no services or no high-confidence patterns have surfaced yet —
   // {{OUTCOME_PATTERNS}} in the template renders as a clean blank line in that case.
-  // query="" is intentional: OUTCOME_PATTERNS comes from listHighConfidence (pattern
-  // memory), not retrieval chunks, so the query field has no effect on pattern output.
+  // query comes from the inbound message (config.message); OUTCOME_PATTERNS itself
+  // originates from listHighConfidence (pattern memory), not retrieval chunks, but
+  // passing the real query avoids firing an empty-query retrieval round-trip.
   let OUTCOME_PATTERNS = "";
   if (services?.contextBuilder) {
     const builtCtx = await services.contextBuilder.build({
       organizationId: config.orgId,
       agentId: "alex",
       deploymentId: config.deploymentId,
-      query: "",
+      query: config.message ?? "",
+      contactId: config.contactId,
     });
     OUTCOME_PATTERNS = builtCtx.outcomePatternContext;
   }

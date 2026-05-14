@@ -530,6 +530,7 @@ export async function bootstrapSkillMode(
       contactId: ctx.workUnit.parameters.contactId as string,
       phone: ctx.workUnit.parameters.phone as string | undefined,
       channel: ctx.workUnit.parameters.channel as string | undefined,
+      message: ctx.workUnit.parameters._message as string | undefined,
     };
     return alexBuilder(agentContext, config, ctx.stores, { contextBuilder: deps.contextBuilder });
   });

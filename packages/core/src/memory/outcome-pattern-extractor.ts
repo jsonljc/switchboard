@@ -41,6 +41,13 @@ function escapePromptText(raw: string): string {
       .replace(/<\|\/tool-output\|>/gi, "[redacted]")
       .replace(/<\|outcome-patterns\|>/gi, "[redacted]")
       .replace(/<\|\/outcome-patterns\|>/gi, "[redacted]")
+      // Alex structural output tags — sidecar emission, lifecycle-driving.
+      // Attacker-influenced pattern text must not spoof the qualification
+      // sidecar that drives lifecycle tracking.
+      .replace(/<intent>/gi, "[redacted]")
+      .replace(/<\/intent>/gi, "[redacted]")
+      .replace(/<qualification_signals>/gi, "[redacted]")
+      .replace(/<\/qualification_signals>/gi, "[redacted]")
       // collapse Markdown header lines that could promote pattern content above
       // the advisory header
       .replace(/^#+\s/gm, "")
@@ -56,6 +63,7 @@ export function formatOutcomePatternsForContext(patterns: OutcomePattern[]): str
     "## Patterns from successful bookings (advisory — do not override business facts or operator corrections)",
     "",
   ];
+  const baselineLength = lines.length;
 
   for (const p of patterns) {
     const safeContent = escapePromptText(p.content);
@@ -64,6 +72,8 @@ export function formatOutcomePatternsForContext(patterns: OutcomePattern[]): str
       `- ${safeContent} (confidence: ${(p.confidence * 100).toFixed(0)}%, observed ${p.sourceCount} times)`,
     );
   }
+
+  if (lines.length === baselineLength) return ""; // every pattern collapsed to empty after escaping
 
   lines.push("<|/outcome-patterns|>");
   return lines.join("\n");

@@ -273,6 +273,7 @@ describe("alexBuilder", () => {
         agentId: "alex",
         deploymentId: config.deploymentId,
         query: "",
+        contactId: "contact_1",
       }),
     );
   });

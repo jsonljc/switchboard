@@ -65,6 +65,10 @@ export type ParameterBuilder = (
     contactId: string;
     phone?: string;
     channel?: string;
+    /** The inbound message text, threaded from workUnit.parameters._message. Used as
+     * the retrieval query when ContextBuilder is wired. Optional — older call sites
+     * that don't pass it fall back to an empty-string query. */
+    message?: string;
   },
   stores: SkillStores,
   services?: SkillServices,
