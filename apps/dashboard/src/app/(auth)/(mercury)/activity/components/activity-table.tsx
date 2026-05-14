@@ -7,7 +7,7 @@ import { ActivityRow } from "./activity-row";
 import { ActivityRowDrawer } from "./activity-row-drawer";
 
 export interface ActivityTableProps {
-  rows: AuditEntryBrowseRow[];
+  rows: ReadonlyArray<AuditEntryBrowseRow>;
   expandedId: string | null;
   onToggle: (id: string) => void;
   /** Wall-clock anchor in ms for row relative-time. */
@@ -106,7 +106,7 @@ function RowAndDrawer({
   orgTimezone,
 }: {
   row: AuditEntryBrowseRow;
-  rows: AuditEntryBrowseRow[];
+  rows: ReadonlyArray<AuditEntryBrowseRow>;
   isOpen: boolean;
   isTarget: boolean;
   onToggle: (id: string) => void;

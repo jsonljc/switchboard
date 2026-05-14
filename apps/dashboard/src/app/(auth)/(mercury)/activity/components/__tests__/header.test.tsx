@@ -36,4 +36,16 @@ describe("ActivityHeader", () => {
     render(<ActivityHeader lastLedgerEntryIso={null} />);
     expect(screen.queryByText(/last ledger entry/i)).not.toBeInTheDocument();
   });
+
+  it("H6: hides the tile when lastLedgerEntryHidden is true even with a valid timestamp", () => {
+    const { container } = render(
+      <ActivityHeader lastLedgerEntryIso="2026-05-10T06:23:11.000Z" lastLedgerEntryHidden />,
+    );
+    expect(container.textContent).not.toMatch(/last ledger entry/i);
+  });
+
+  it("H6: renders the tile when lastLedgerEntryHidden is false (default)", () => {
+    render(<ActivityHeader lastLedgerEntryIso="2026-05-10T06:23:11.000Z" />);
+    expect(screen.getByText(/last ledger entry/i)).toBeInTheDocument();
+  });
 });

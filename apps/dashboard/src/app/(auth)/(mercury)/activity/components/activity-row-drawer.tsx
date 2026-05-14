@@ -10,7 +10,7 @@ export interface ActivityRowDrawerProps {
   row: AuditEntryBrowseRow;
   /** All currently-rendered rows — used by the chain-anchor "view previous ↓"
    *  affordance to find the predecessor row on the same page. */
-  allRows: AuditEntryBrowseRow[];
+  allRows: ReadonlyArray<AuditEntryBrowseRow>;
   onScrollToRow: (id: string) => void;
   orgTimezone?: string;
 }
@@ -65,7 +65,7 @@ function ChainBlock({
   onScrollToRow,
 }: {
   row: AuditEntryBrowseRow;
-  allRows: AuditEntryBrowseRow[];
+  allRows: ReadonlyArray<AuditEntryBrowseRow>;
   onScrollToRow: (id: string) => void;
 }) {
   const prev = useMemo(
