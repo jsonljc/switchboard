@@ -23,13 +23,14 @@
 // agent-home link kinds gate on whether a target route exists in the build.
 import type { AgentHomeLink } from "./agent-home/types.js";
 
-export type ToolsNavId = "contacts" | "automations" | "activity" | "reports";
+export type ToolsNavId = "contacts" | "automations" | "activity" | "reports" | "approvals";
 
 const TOOLS_LIVE_ENV = {
   contacts: "NEXT_PUBLIC_CONTACTS_LIVE",
   automations: "NEXT_PUBLIC_AUTOMATIONS_LIVE",
   activity: "NEXT_PUBLIC_ACTIVITY_LIVE",
   reports: "NEXT_PUBLIC_REPORTS_LIVE",
+  approvals: "NEXT_PUBLIC_APPROVALS_LIVE",
 } as const satisfies Record<ToolsNavId, string>;
 
 export function isMercuryToolLive(id: ToolsNavId): boolean {

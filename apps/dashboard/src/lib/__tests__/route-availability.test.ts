@@ -11,6 +11,7 @@ describe("isMercuryToolLive", () => {
     ["automations", "NEXT_PUBLIC_AUTOMATIONS_LIVE"],
     ["activity", "NEXT_PUBLIC_ACTIVITY_LIVE"],
     ["reports", "NEXT_PUBLIC_REPORTS_LIVE"],
+    ["approvals", "NEXT_PUBLIC_APPROVALS_LIVE"],
   ] as const)("returns true when %s env (%s) === 'true'", (id, envVar) => {
     vi.stubEnv(envVar, "true");
     expect(isMercuryToolLive(id)).toBe(true);
@@ -21,6 +22,7 @@ describe("isMercuryToolLive", () => {
     ["automations", "NEXT_PUBLIC_AUTOMATIONS_LIVE"],
     ["activity", "NEXT_PUBLIC_ACTIVITY_LIVE"],
     ["reports", "NEXT_PUBLIC_REPORTS_LIVE"],
+    ["approvals", "NEXT_PUBLIC_APPROVALS_LIVE"],
   ] as const)("returns false when %s env (%s) is empty", (id, envVar) => {
     vi.stubEnv(envVar, "");
     expect(isMercuryToolLive(id)).toBe(false);
@@ -31,9 +33,15 @@ describe("isMercuryToolLive", () => {
     ["automations", "NEXT_PUBLIC_AUTOMATIONS_LIVE"],
     ["activity", "NEXT_PUBLIC_ACTIVITY_LIVE"],
     ["reports", "NEXT_PUBLIC_REPORTS_LIVE"],
+    ["approvals", "NEXT_PUBLIC_APPROVALS_LIVE"],
   ] as const)("returns false when %s env (%s) is 'false' (only 'true' counts)", (id, envVar) => {
     vi.stubEnv(envVar, "false");
     expect(isMercuryToolLive(id)).toBe(false);
+  });
+
+  it("isMercuryToolLive returns false for approvals when value is '1'", () => {
+    vi.stubEnv("NEXT_PUBLIC_APPROVALS_LIVE", "1");
+    expect(isMercuryToolLive("approvals")).toBe(false);
   });
 
   it("each tool reads only its own env var (independence)", () => {
@@ -41,10 +49,12 @@ describe("isMercuryToolLive", () => {
     vi.stubEnv("NEXT_PUBLIC_AUTOMATIONS_LIVE", "");
     vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "");
     vi.stubEnv("NEXT_PUBLIC_REPORTS_LIVE", "");
+    vi.stubEnv("NEXT_PUBLIC_APPROVALS_LIVE", "");
     expect(isMercuryToolLive("contacts")).toBe(true);
     expect(isMercuryToolLive("automations")).toBe(false);
     expect(isMercuryToolLive("activity")).toBe(false);
     expect(isMercuryToolLive("reports")).toBe(false);
+    expect(isMercuryToolLive("approvals")).toBe(false);
   });
 });
 

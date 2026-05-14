@@ -22,6 +22,7 @@ export const TOOLS_NAV_ITEMS: ReadonlyArray<{
   { id: "automations", label: "Automations", href: "/automations" },
   { id: "activity", label: "Activity", href: "/activity" },
   { id: "reports", label: "Reports", href: "/reports" },
+  { id: "approvals", label: "Approvals", href: "/approvals" },
 ];
 
 export const TOOLS_PREFIXES = TOOLS_NAV_ITEMS.map((it) => it.href);
