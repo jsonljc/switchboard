@@ -40,6 +40,7 @@ import { adOptimizerRoutes } from "../routes/ad-optimizer.js";
 import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
 import { whatsappTestRoutes } from "../routes/whatsapp-test.js";
 import { whatsappOnboardingRoutes } from "../routes/whatsapp-onboarding.js";
+import { whatsappManagementRoutes } from "../routes/whatsapp-management.js";
 import { revenueRoutes } from "../routes/revenue.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
@@ -118,6 +119,8 @@ export async function registerRoutes(
       const encrypted = (await import("@switchboard/db")).encryptCredentials({
         token: data.wabaId,
         phoneNumberId: data.phoneNumberId,
+        primaryPhoneNumberId: data.phoneNumberId,
+        displayPhoneNumber: data.displayPhoneNumber,
       });
       const conn = await app.prisma!.connection.create({
         data: {
@@ -128,11 +131,13 @@ export async function registerRoutes(
           authType: "bot_token",
           credentials: encrypted,
           scopes: [],
+          externalAccountId: data.wabaId,
         },
       });
       return { id: conn.id, webhookPath: `/webhook/managed/${conn.id}` };
     },
   });
+  await app.register(whatsappManagementRoutes, { prefix: "/api/dashboard/whatsapp" });
   await app.register(googleCalendarOAuthRoutes, { prefix: "/api/connections" });
   await app.register(dlqRoutes, { prefix: "/api/dlq" });
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });

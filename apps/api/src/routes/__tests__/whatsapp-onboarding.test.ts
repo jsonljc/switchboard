@@ -125,6 +125,52 @@ describe("WhatsApp onboarding routes", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().error).toContain("No WABA");
   });
+
+  it("should persist wabaId as externalAccountId and primaryPhoneNumberId in credentials", async () => {
+    // debug_token
+    mockGraphApi.mockResolvedValueOnce({
+      data: {
+        granular_scopes: [
+          { scope: "whatsapp_business_management", target_ids: ["waba_persist_1"] },
+        ],
+      },
+    });
+    // assigned_users
+    mockGraphApi.mockResolvedValueOnce({ success: true });
+    // phone_numbers
+    mockGraphApi.mockResolvedValueOnce({
+      data: [
+        { id: "phone_persist_1", verified_name: "Persist Biz", display_phone_number: "+1555999" },
+      ],
+    });
+    // register phone
+    mockGraphApi.mockResolvedValueOnce({ success: true });
+    // subscribed_apps
+    mockGraphApi.mockResolvedValueOnce({ success: true });
+    // business profile
+    mockGraphApi.mockResolvedValueOnce({ success: true });
+    // createConnection
+    mockCreateConnection.mockResolvedValueOnce({
+      id: "conn_persist",
+      webhookPath: "/webhook/managed/conn_persist",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "persist_token" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockCreateConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wabaId: "waba_persist_1",
+        phoneNumberId: "phone_persist_1",
+        verifiedName: "Persist Biz",
+        displayPhoneNumber: "+1555999",
+      }),
+    );
+  });
 });
 
 describe("WhatsApp onboarding ESU integration (helper-extracted path)", () => {
