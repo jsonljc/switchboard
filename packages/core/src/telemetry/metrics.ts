@@ -22,6 +22,7 @@ export interface SwitchboardMetrics {
   outcomePatternsCreated: Counter;
   outcomePatternsSurfaced: Counter;
   outcomePatternsRejected: Counter;
+  outcomePatternsCrossKeyCollision: Counter;
   outcomePatternConfidence: Histogram;
 }
 
@@ -85,6 +86,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     outcomePatternsCreated: new InMemoryCounter(),
     outcomePatternsSurfaced: new InMemoryCounter(),
     outcomePatternsRejected: new InMemoryCounter(),
+    outcomePatternsCrossKeyCollision: new InMemoryCounter(),
     outcomePatternConfidence: new InMemoryHistogram(),
   };
 }

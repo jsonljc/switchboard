@@ -3,6 +3,7 @@ import type { EmbeddingAdapter } from "../embedding-adapter.js";
 import {
   CANONICAL_KEY_PATTERN,
   MEDSPA_CANONICAL_KEYS,
+  OUTCOME_PATTERN_MERGE_THRESHOLD,
   computeConfidenceScore,
   isKnownCanonicalKey,
 } from "@switchboard/schemas";
@@ -35,7 +36,15 @@ export interface CompoundingDeploymentMemoryStore {
     organizationId: string,
     deploymentId: string,
     category: string,
-  ): Promise<Array<{ id: string; content: string; sourceCount: number; confidence: number }>>;
+  ): Promise<
+    Array<{
+      id: string;
+      content: string;
+      sourceCount: number;
+      confidence: number;
+      canonicalKey?: string | null;
+    }>
+  >;
   findByCategoryAndCanonicalKey(
     organizationId: string,
     deploymentId: string,
@@ -401,25 +410,54 @@ export class ConversationCompoundingService {
     canonicalKey: string,
   ): Promise<string> {
     const metrics = getMetrics();
-    // Single-bucket scan stays in place until PR-3.2b's two-stage merge —
-    // for now we just persist canonicalKey on the new-row branch.
-    const existing = await this.memoryStore.findByCategory(organizationId, deploymentId, "pattern");
+    const newEmbedding = await this.embedding.embed(patternText);
 
-    if (existing.length > 0) {
-      const newEmbedding = await this.embedding.embed(patternText);
+    // Stage 1: canonical-bucket lookup. Highest-similarity match above the
+    // pilot threshold wins.
+    const sameBucket = await this.memoryStore.findByCategoryAndCanonicalKey(
+      organizationId,
+      deploymentId,
+      "pattern",
+      canonicalKey,
+    );
 
-      for (const entry of existing) {
+    if (sameBucket.length > 0) {
+      let best: { id: string; sourceCount: number; similarity: number } | null = null;
+      for (const entry of sameBucket) {
         const entryEmbedding = await this.embedding.embed(entry.content);
         const similarity = cosineSimilarity(newEmbedding, entryEmbedding);
-
-        if (similarity >= SIMILARITY_THRESHOLD) {
-          const newSourceCount = entry.sourceCount + 1;
-          const newConfidence = computeConfidenceScore(newSourceCount, false);
-          await this.memoryStore.incrementConfidence(entry.id, newConfidence);
-          metrics.outcomePatternsMerged.inc({ deploymentId });
-          metrics.outcomePatternConfidence.observe({ deploymentId }, newConfidence);
-          return entry.id;
+        if (similarity >= OUTCOME_PATTERN_MERGE_THRESHOLD) {
+          if (!best || similarity > best.similarity) {
+            best = { id: entry.id, sourceCount: entry.sourceCount, similarity };
+          }
         }
+      }
+      if (best) {
+        const newSourceCount = best.sourceCount + 1;
+        const newConfidence = computeConfidenceScore(newSourceCount, false);
+        await this.memoryStore.incrementConfidence(best.id, newConfidence);
+        metrics.outcomePatternsMerged.inc({ deploymentId });
+        metrics.outcomePatternConfidence.observe({ deploymentId }, newConfidence);
+        return best.id;
+      }
+    }
+
+    // Cross-key collision guard: a stage-1 miss with a stage-0 match outside
+    // the canonical bucket signals either an under-granular enum or LLM-
+    // label inconsistency. Counted, NOT auto-merged.
+    const broad = await this.memoryStore.findByCategory(organizationId, deploymentId, "pattern");
+    for (const entry of broad) {
+      const entryCanonicalKey = entry.canonicalKey;
+      if (!entryCanonicalKey || entryCanonicalKey === canonicalKey) continue;
+      const entryEmbedding = await this.embedding.embed(entry.content);
+      const similarity = cosineSimilarity(newEmbedding, entryEmbedding);
+      if (similarity >= SIMILARITY_THRESHOLD /* legacy 0.92 */) {
+        metrics.outcomePatternsCrossKeyCollision.inc({
+          deploymentId,
+          currentKey: canonicalKey,
+          collidingKey: entryCanonicalKey,
+        });
+        break; // one collision per write is enough; metric is a flag, not a count
       }
     }
 

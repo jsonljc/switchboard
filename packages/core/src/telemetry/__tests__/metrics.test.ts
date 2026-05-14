@@ -52,4 +52,17 @@ describe("outcomePattern metrics", () => {
     expect(spy).toHaveBeenCalledWith({ deploymentId: "dep-1", reason: "unknown_canonical_key" });
     expect(spy).toHaveBeenCalledTimes(2);
   });
+
+  it("outcomePatternsCrossKeyCollision accepts {deploymentId, currentKey, collidingKey}", () => {
+    const metrics = createInMemoryMetrics();
+    const spy = vi.spyOn(metrics.outcomePatternsCrossKeyCollision, "inc");
+
+    metrics.outcomePatternsCrossKeyCollision.inc({
+      deploymentId: "dep-1",
+      currentKey: "objection:pain",
+      collidingKey: "objection:price_value",
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
 });
