@@ -108,3 +108,21 @@ Neutral foundation that both registers consume via Tailwind utilities (`hsl(var(
 - New tokens land in the same PR that consumes them. No "token-only" PRs that ship dead values.
 - Do not retune existing token values inside a surface PR. If a value needs to change across surfaces (e.g., `--mercury-accent` to match the mockup amber), that's a focused token-retune PR cited by its own spec.
 
+## 2. Type stacks
+
+Four font families ship in `globals.css`. Each surface picks from this list — none introduces a new family. The rules below adjudicate the disagreements visible in the locked mockups vs the surface specs.
+
+- **`--font-sans`** — Inter (`apps/dashboard/src/app/globals.css:74`). Body prose, control labels, queue summary text. Default for all six surfaces' UI chrome.
+- **`--font-display`** — Instrument Sans (`apps/dashboard/src/app/globals.css:75`). Hero headlines on `/reports` (`docs/design-prompts/2026-05-13-reports.md#design-system`), zone titles on `/mission` (`docs/design-prompts/2026-05-13-mission.md#design-system`), the page-title display on `/approvals` (`docs/design-prompts/2026-05-13-approvals.md#design-system`). **Sparing.** Not body, not control labels.
+- **`--font-serif`** / `--serif` — Source Serif 4 stack (`apps/dashboard/src/app/globals.css:173-175`). **Agent-home prose only.** Consumed by `.greeting-prose` (`apps/dashboard/src/app/globals.css:708`; mirrors greeting display in `locked/switchboard/project/agent-home-v3/cockpit.jsx:224`), `.win-prose` (`apps/dashboard/src/app/globals.css:838`; mirrors win prose in `locked/switchboard/project/agent-home-v3/cockpit.jsx:837`), `.hero-num` (`apps/dashboard/src/app/globals.css:880`), `.tile-name` (`apps/dashboard/src/app/globals.css:1107`). Tools-tier surfaces (`/approvals`, `/reports`, `/activity`, `/mission`) lead with Inter, not serif.
+- **`--font-mono-editorial`** / `--mono` — JetBrains Mono stack (`apps/dashboard/src/app/globals.css:176-177`). Folios, numerics, timestamps, hashes, IDs, section labels (`.eyebrow` / `.section-label`). Required for every numeric on `/reports` (`docs/design-prompts/2026-05-13-reports.md#design-system`; locked `locked/switchboard/project/reports-v2/styles.css:620-629` campaign-table cells) and for time + event-type + actor + entity columns on `/activity` (`docs/design-prompts/2026-05-13-activity.md#design-system`; locked `locked/switchboard/project/activity-v2/styles.css:538-549` time-column mono). Required for `bindingHash` on `/approvals` (`docs/design-prompts/2026-05-13-approvals.md#detail-panel`; locked `locked/switchboard/project/approvals-v2/styles.css:607-614`).
+
+### 2.1 Adjudication — Source Serif 4 vs Cormorant Garamond
+
+Agent-home prose (cockpit + greeting) uses Source Serif 4 via `--serif` (`apps/dashboard/src/app/globals.css:173`; consumed at `.greeting-prose` line 708). The locked Tools-tier CSS modules (`locked/switchboard/project/approvals-v2/styles.css:36`, `reports-v2/styles.css:29`, `activity-v2/styles.css:35`) declare `--font-display: "Cormorant Garamond"`. **Source Serif 4 wins for agent-home prose**; Cormorant in the locked CSS is mockup-local display chrome, not a production directive. Tools-tier surfaces do not adopt Cormorant — they consume `--font-display` (Instrument Sans) per their surface specs.
+
+### 2.2 Adjudication — Instrument Sans vs Cormorant Garamond (display)
+
+`docs/design-prompts/2026-05-13-reports.md` explicitly directs Instrument Sans for the display title, hero number, and pull-quote value/cost. `docs/design-prompts/2026-05-13-approvals.md` and `docs/design-prompts/2026-05-13-mission.md` likewise direct Instrument Sans for headings. The locked CSS declares Cormorant Garamond as `--font-display` (`locked/switchboard/project/approvals-v2/styles.css:36`, `locked/switchboard/project/reports-v2/styles.css:29`, `locked/switchboard/project/activity-v2/styles.css:35`) — **spec wins**, mockup loses. Production code consumes `--font-display` (Instrument Sans) for all wave-2 display chrome.
+
+
