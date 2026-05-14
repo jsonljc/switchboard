@@ -29,3 +29,8 @@ export {
   type BookingAttributionStore,
   type AttributionTier,
 } from "./booking-attribution.js";
+export {
+  executeDailyPatternDecay,
+  type PatternDecayDependencies,
+  type PatternDecayMemoryStore,
+} from "./inngest-functions.js";
