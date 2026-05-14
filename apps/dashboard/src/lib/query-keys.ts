@@ -190,6 +190,10 @@ export const scopedKeys = (orgId: string) => ({
     all: () => [orgId, "reports"] as const,
     byWindow: (window: string) => [orgId, "reports", window] as const,
   },
+  opportunities: {
+    all: () => [orgId, "opportunities"] as const,
+    board: () => [orgId, "opportunities", "board"] as const,
+  },
   contacts: {
     all: () => [orgId, "contacts"] as const,
     list: (query: object) => [orgId, "contacts", "list", query] as const,
