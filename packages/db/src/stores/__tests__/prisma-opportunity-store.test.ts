@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaOpportunityStore } from "../prisma-opportunity-store.js";
+import type { PrismaDbClient } from "../../prisma-db.js";
 
 const now = new Date("2026-03-25T12:00:00Z");
 
@@ -16,6 +17,22 @@ function makeMockPrisma() {
       aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }),
     },
   };
+}
+
+function mkPrismaMock() {
+  return {
+    opportunity: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    $transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
+      cb({
+        opportunity: { findFirst: vi.fn(), update: vi.fn() },
+        workTrace: { create: vi.fn() },
+      }),
+    ),
+  } as unknown as PrismaDbClient;
 }
 
 function makeOpportunity(overrides: Record<string, unknown> = {}) {
@@ -50,7 +67,7 @@ describe("PrismaOpportunityStore", () => {
 
   beforeEach(() => {
     prisma = makeMockPrisma();
-    store = new PrismaOpportunityStore(prisma as never);
+    store = new PrismaOpportunityStore(prisma as never, null);
   });
 
   describe("create", () => {
@@ -351,5 +368,65 @@ describe("PrismaOpportunityStore", () => {
         totalValue: 0,
       });
     });
+  });
+});
+
+describe("PrismaOpportunityStore.findOrgBoard", () => {
+  it("filters by organizationId and includes the contact projection", async () => {
+    const prisma = mkPrismaMock();
+    (prisma.opportunity.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const store = new PrismaOpportunityStore(prisma, null);
+    await store.findOrgBoard("org_acme");
+    const call = (prisma.opportunity.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(call.where).toEqual({ organizationId: "org_acme" });
+    expect(call.include).toEqual({
+      contact: { select: { id: true, name: true, primaryChannel: true } },
+    });
+    expect(call.orderBy).toEqual({ updatedAt: "desc" });
+  });
+
+  it("maps rows to OpportunityBoardRow shape with Date fields preserved", async () => {
+    const prisma = mkPrismaMock();
+    const opened = new Date("2026-05-06T05:00:00Z");
+    const updated = new Date("2026-05-13T07:19:00Z");
+    (prisma.opportunity.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "opp_1",
+        organizationId: "org_acme",
+        contactId: "c_1",
+        serviceId: "svc",
+        serviceName: "Service",
+        stage: "quoted",
+        timeline: "soon",
+        priceReadiness: "flexible",
+        objections: [],
+        qualificationComplete: true,
+        estimatedValue: 168000,
+        revenueTotal: 0,
+        assignedAgent: "alex",
+        assignedStaff: null,
+        lostReason: null,
+        notes: null,
+        openedAt: opened,
+        closedAt: null,
+        updatedAt: updated,
+        contact: { id: "c_1", name: "Felicia", primaryChannel: "whatsapp" },
+      },
+    ]);
+    const store = new PrismaOpportunityStore(prisma, null);
+    const rows = await store.findOrgBoard("org_acme");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe("opp_1");
+    expect(rows[0]!.openedAt).toBeInstanceOf(Date);
+    expect(rows[0]!.openedAt.toISOString()).toBe("2026-05-06T05:00:00.000Z");
+    expect(rows[0]!.contact.name).toBe("Felicia");
+  });
+
+  it("returns [] for an org with no rows", async () => {
+    const prisma = mkPrismaMock();
+    (prisma.opportunity.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const store = new PrismaOpportunityStore(prisma, null);
+    const rows = await store.findOrgBoard("org_empty");
+    expect(rows).toEqual([]);
   });
 });

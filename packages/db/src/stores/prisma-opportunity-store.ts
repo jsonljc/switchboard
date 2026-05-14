@@ -6,6 +6,7 @@ import type {
   TransitionStageInput,
   TransitionStageResult,
 } from "@switchboard/core";
+import type { PrismaWorkTraceStore } from "./prisma-work-trace-store.js";
 
 // ---------------------------------------------------------------------------
 // Store Interface (structural match with @switchboard/core)
@@ -45,7 +46,16 @@ interface OpportunityStore {
 // ---------------------------------------------------------------------------
 
 export class PrismaOpportunityStore implements OpportunityStore {
-  constructor(private prisma: PrismaDbClient) {}
+  // Stored for transitionStage (implemented in Task 6). Unused here but required by
+  // the constructor contract so call sites can pass it now and Task 7 wires it up.
+  private workTraceStore: PrismaWorkTraceStore | null;
+
+  constructor(
+    private prisma: PrismaDbClient,
+    workTraceStore: PrismaWorkTraceStore | null,
+  ) {
+    this.workTraceStore = workTraceStore;
+  }
 
   async create(input: CreateOpportunityInput): Promise<Opportunity> {
     const id = randomUUID();
@@ -210,11 +220,18 @@ export class PrismaOpportunityStore implements OpportunityStore {
   // Stubs satisfy the OpportunityStore interface until then.
   // -------------------------------------------------------------------------
 
-  async findOrgBoard(_orgId: string): Promise<OpportunityBoardRow[]> {
-    throw new Error("PrismaOpportunityStore.findOrgBoard: not implemented (PR-C2 db task)");
+  async findOrgBoard(orgId: string): Promise<OpportunityBoardRow[]> {
+    const rows = await this.prisma.opportunity.findMany({
+      where: { organizationId: orgId },
+      include: { contact: { select: { id: true, name: true, primaryChannel: true } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    return rows.map(mapRowToBoardRow);
   }
 
   async transitionStage(_input: TransitionStageInput): Promise<TransitionStageResult> {
+    // workTraceStore will be used here in Task 6.
+    void this.workTraceStore;
     throw new Error("PrismaOpportunityStore.transitionStage: not implemented (PR-C2 db task)");
   }
 }
@@ -222,6 +239,56 @@ export class PrismaOpportunityStore implements OpportunityStore {
 // ---------------------------------------------------------------------------
 // Mapper
 // ---------------------------------------------------------------------------
+
+function mapRowToBoardRow(row: {
+  id: string;
+  organizationId: string;
+  contactId: string;
+  serviceId: string;
+  serviceName: string;
+  stage: string;
+  timeline: string | null;
+  priceReadiness: string | null;
+  objections: unknown;
+  qualificationComplete: boolean;
+  estimatedValue: number | null;
+  revenueTotal: number;
+  assignedAgent: string | null;
+  assignedStaff: string | null;
+  lostReason: string | null;
+  notes: string | null;
+  openedAt: Date;
+  closedAt: Date | null;
+  updatedAt: Date;
+  contact: { id: string; name: string | null; primaryChannel: string };
+}): OpportunityBoardRow {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    contactId: row.contactId,
+    serviceId: row.serviceId,
+    serviceName: row.serviceName,
+    stage: row.stage as OpportunityStage,
+    timeline: (row.timeline as OpportunityBoardRow["timeline"]) ?? null,
+    priceReadiness: (row.priceReadiness as OpportunityBoardRow["priceReadiness"]) ?? null,
+    objections: (row.objections as ObjectionRecord[]) ?? [],
+    qualificationComplete: row.qualificationComplete,
+    estimatedValue: row.estimatedValue,
+    revenueTotal: row.revenueTotal,
+    assignedAgent: row.assignedAgent,
+    assignedStaff: row.assignedStaff,
+    lostReason: row.lostReason,
+    notes: row.notes,
+    openedAt: row.openedAt,
+    closedAt: row.closedAt,
+    updatedAt: row.updatedAt,
+    contact: {
+      id: row.contact.id,
+      name: row.contact.name ?? "",
+      primaryChannel: row.contact.primaryChannel as "whatsapp" | "telegram" | "dashboard",
+    },
+  };
+}
 
 function mapRowToOpportunity(row: {
   id: string;
