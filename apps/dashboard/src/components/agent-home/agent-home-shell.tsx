@@ -12,7 +12,7 @@ import { useAgentWins } from "@/hooks/use-agent-wins";
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useAgentPipeline } from "@/hooks/use-agent-pipeline";
 
-export function AgentHomeClient({ agentKey }: { agentKey: AgentKey }) {
+export function AgentHomeShell({ agentKey }: { agentKey: AgentKey }) {
   const greeting = useAgentGreeting(agentKey);
   const wins = useAgentWins(agentKey);
   const metrics = useAgentMetrics(agentKey);
