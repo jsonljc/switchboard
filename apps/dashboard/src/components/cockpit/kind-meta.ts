@@ -9,11 +9,11 @@ export interface KindMetaEntry {
   pulse?: boolean;
 }
 
-// A.1 ships Alex kinds only. Riley kinds (watching / reviewing / paused / scaled
-// / rotated / shifted / restructured / alert) are typed in ActivityKind for
-// shell prop-type compatibility but are NOT populated here. Riley's PR adds the
-// entries when it wires Riley's activity stream.
+// A.1 shipped Alex kinds; Riley B.1 adds the 8 additional kinds Riley emits
+// (`started` is shared with Alex and unchanged). All kinds are typed in
+// `ActivityKind` so the shell never crashes on an unknown row.
 export const KIND_META: Partial<Record<ActivityKind, KindMetaEntry>> = {
+  // Alex
   booked: { label: "BOOKED", color: T.amberDeep, bg: T.amberSoft },
   qualified: { label: "QUALIFIED", color: T.amber, bg: T.amberSoft },
   replied: { label: "REPLIED", color: T.ink2, bg: "rgba(14,12,10,0.05)" },
@@ -23,6 +23,15 @@ export const KIND_META: Partial<Record<ActivityKind, KindMetaEntry>> = {
   waiting: { label: "WAITING", color: T.amberDeep, bg: T.amberSoft },
   escalated: { label: "TO YOU", color: T.red, bg: "rgba(160,58,46,0.08)" },
   passed: { label: "PASSED", color: T.ink4, bg: "rgba(14,12,10,0.04)" },
+  // Riley
+  watching: { label: "WATCHING", color: T.green, bg: "rgba(63,122,54,0.08)" },
+  reviewing: { label: "REVIEWING", color: T.amberDeep, bg: T.amberSoft, pulse: true },
+  paused: { label: "PAUSED", color: T.ink3, bg: "rgba(14,12,10,0.04)" },
+  scaled: { label: "SCALED", color: T.green, bg: "rgba(63,122,54,0.08)" },
+  rotated: { label: "ROTATED", color: T.blue, bg: "rgba(58,90,128,0.08)" },
+  shifted: { label: "SHIFTED", color: T.blue, bg: "rgba(58,90,128,0.08)" },
+  restructured: { label: "RESTRUCTURED", color: T.blue, bg: "rgba(58,90,128,0.08)" },
+  alert: { label: "ALERT", color: T.red, bg: "rgba(160,58,46,0.08)" },
 };
 
 const NEUTRAL_FALLBACK: KindMetaEntry = {

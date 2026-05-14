@@ -4,10 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
 import { translateEvent, getEventIcon } from "@/components/activity/event-translator";
-import { translateRileyActivity } from "@/lib/cockpit/riley/riley-activity-translator";
-import { coldStateActivityRows } from "@/lib/cockpit/riley/cold-state-activity-rows";
-import { useConnections } from "./use-connections";
-import type { ActivityRow } from "@/components/cockpit/types";
 
 export interface AuditEntryRaw {
   id: string;
@@ -80,32 +76,4 @@ export function useAgentActivity(days = 1) {
     refetchInterval: 30_000,
     enabled: !!keys,
   });
-}
-
-// --- Riley B.1 — useRileyActivity (composes useAgentActivity + useConnections + Riley adapters) ---
-
-export function useRileyActivity(): { rows: ActivityRow[]; isLoading: boolean; isError: boolean } {
-  const base = useAgentActivity(1);
-  const connectionsQuery = useConnections();
-
-  // Hold cold-state until connections finish loading — otherwise a user with a
-  // Meta connection sees the "Connect Meta Ads" prompt flash on every page load.
-  if (connectionsQuery.isLoading) {
-    return { rows: [], isLoading: true, isError: connectionsQuery.isError };
-  }
-
-  const hasMetaConnection = (connectionsQuery.data?.connections ?? []).some(
-    (c) => c.serviceId === "meta-ads",
-  );
-
-  if (!hasMetaConnection) {
-    return { rows: coldStateActivityRows(), isLoading: false, isError: connectionsQuery.isError };
-  }
-
-  const rileyActions = (base.data?.actions ?? []).filter((a) => a.agentRole === "riley");
-  return {
-    rows: translateRileyActivity(rileyActions),
-    isLoading: base.isLoading,
-    isError: base.isError || connectionsQuery.isError,
-  };
 }

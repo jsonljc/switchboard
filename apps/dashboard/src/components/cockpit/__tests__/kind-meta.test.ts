@@ -1,6 +1,7 @@
 // apps/dashboard/src/components/cockpit/__tests__/kind-meta.test.ts
 import { describe, it, expect } from "vitest";
 import { KIND_META, lookupKindMeta } from "../kind-meta";
+import type { ActivityKind } from "../types";
 
 describe("KIND_META", () => {
   it("includes all 9 Alex activity kinds", () => {
@@ -20,7 +21,7 @@ describe("KIND_META", () => {
     }
   });
 
-  it("does NOT include Riley kinds at A.1 (Riley PR adds them)", () => {
+  it("includes all 8 Riley-specific activity kinds (B.1 wired them)", () => {
     const keys = Object.keys(KIND_META);
     for (const k of [
       "watching",
@@ -32,7 +33,7 @@ describe("KIND_META", () => {
       "restructured",
       "alert",
     ]) {
-      expect(keys).not.toContain(k);
+      expect(keys).toContain(k);
     }
   });
 
@@ -48,11 +49,28 @@ describe("KIND_META", () => {
     expect(KIND_META.waiting).toMatchObject({ label: "WAITING", color: "#7C4F1C", bg: "#F1E2C2" });
   });
 
+  it("Riley `alert` uses red; `reviewing` pulses", () => {
+    expect(KIND_META.alert).toMatchObject({ label: "ALERT", color: "#A03A2E" });
+    expect(KIND_META.reviewing).toMatchObject({ label: "REVIEWING", pulse: true });
+  });
+
+  it("Riley `watching` and `scaled` share the green palette", () => {
+    expect(KIND_META.watching).toMatchObject({ label: "WATCHING", color: "#3F7A36" });
+    expect(KIND_META.scaled).toMatchObject({ label: "SCALED", color: "#3F7A36" });
+  });
+
   it("lookupKindMeta returns the Alex entry for a known kind", () => {
     expect(lookupKindMeta("booked")).toMatchObject({ label: "BOOKED" });
   });
 
+  it("lookupKindMeta returns the Riley entry for a Riley kind", () => {
+    expect(lookupKindMeta("watching")).toMatchObject({ label: "WATCHING", color: "#3F7A36" });
+  });
+
   it("lookupKindMeta falls back to a neutral entry for an unmapped kind", () => {
-    expect(lookupKindMeta("watching")).toMatchObject({ label: "WATCHING" });
+    // Force an ActivityKind value that no entry maps. Cast for the negative case.
+    const result = lookupKindMeta("__unknown__" as ActivityKind);
+    expect(result.label).toBe("__UNKNOWN__");
+    expect(result.color).toBe("#6B6052");
   });
 });

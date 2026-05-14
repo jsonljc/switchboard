@@ -1,4 +1,5 @@
 import type { CockpitStatus } from "@/components/cockpit/types";
+import type { TopbarTab } from "@/components/cockpit/topbar";
 
 export const RILEY_ACCENT = {
   base: "#B86C50",
@@ -7,10 +8,12 @@ export const RILEY_ACCENT = {
   paper: "#F6E7DE",
 } as const;
 
-export const RILEY_TABS = [
-  { key: "alex" as const, label: "Alex", state: "inactive" as const },
-  { key: "riley" as const, label: "Riley", state: "active" as const },
-  { key: "mira" as const, label: "Mira", state: "muted" as const },
+// Topbar tab order with Riley active. Matches the TopbarTab shape so the page
+// can pass `tabs={RILEY_TABS}` directly.
+export const RILEY_TABS: readonly TopbarTab[] = [
+  { name: "Alex" },
+  { name: "Riley", active: true },
+  { name: "Mira", muted: true },
 ];
 
 export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";

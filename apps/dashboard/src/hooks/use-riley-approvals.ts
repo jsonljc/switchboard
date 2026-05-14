@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo } from "react";
 import { useRecommendations } from "./use-recommendations";
 import { mapRecommendationsToApprovalViews } from "@/lib/cockpit/riley/recommendation-to-approval-view";

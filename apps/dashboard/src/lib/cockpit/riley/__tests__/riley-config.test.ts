@@ -17,11 +17,11 @@ describe("riley-config", () => {
     });
   });
 
-  it("RILEY_TABS orders Alex / Riley / Mira with Riley active", () => {
+  it("RILEY_TABS orders Alex / Riley / Mira with Riley active (TopbarTab shape)", () => {
     expect(RILEY_TABS).toEqual([
-      { key: "alex", label: "Alex", state: "inactive" },
-      { key: "riley", label: "Riley", state: "active" },
-      { key: "mira", label: "Mira", state: "muted" },
+      { name: "Alex" },
+      { name: "Riley", active: true },
+      { name: "Mira", muted: true },
     ]);
   });
 

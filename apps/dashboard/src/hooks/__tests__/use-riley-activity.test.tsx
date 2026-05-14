@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { useRileyActivity } from "../use-agent-activity";
+import { useRileyActivity } from "../use-riley-activity";
 import {
   pausedFixture,
   watchingFixture,

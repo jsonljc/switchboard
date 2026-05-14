@@ -24,13 +24,9 @@ vi.mock("@/hooks/use-riley-status", () => ({
 }));
 
 const rileyActivityState = { rows: [] as unknown[] };
-vi.mock("@/hooks/use-agent-activity", async (orig) => {
-  const actual = await orig<typeof import("@/hooks/use-agent-activity")>();
-  return {
-    ...actual,
-    useRileyActivity: () => ({ rows: rileyActivityState.rows, isLoading: false, isError: false }),
-  };
-});
+vi.mock("@/hooks/use-riley-activity", () => ({
+  useRileyActivity: () => ({ rows: rileyActivityState.rows, isLoading: false, isError: false }),
+}));
 
 import { RileyCockpitPage } from "../riley-cockpit-page";
 import {

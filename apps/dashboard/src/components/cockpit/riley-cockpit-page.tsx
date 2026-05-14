@@ -8,10 +8,10 @@ import { Identity } from "./identity";
 import { ApprovalBlock } from "./approval-block";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { ComposerPlaceholder } from "./composer-placeholder";
-import { RILEY_MISSION_SUBTITLE } from "@/lib/cockpit/riley/riley-config";
+import { RILEY_MISSION_SUBTITLE, RILEY_TABS } from "@/lib/cockpit/riley/riley-config";
 import { useRileyApprovals } from "@/hooks/use-riley-approvals";
 import { useRileyStatus } from "@/hooks/use-riley-status";
-import { useRileyActivity } from "@/hooks/use-agent-activity";
+import { useRileyActivity } from "@/hooks/use-riley-activity";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import type { ApprovalView } from "./types";
 
@@ -33,7 +33,7 @@ export function RileyCockpitPage() {
         fontFamily: "Inter, system-ui, sans-serif",
       }}
     >
-      <Topbar paletteEnabled={false} compact />
+      <Topbar paletteEnabled={false} compact tabs={RILEY_TABS} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <Identity
           statusKey={statusKey}
