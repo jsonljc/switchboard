@@ -5,6 +5,7 @@ import {
   isKnownCanonicalKey,
   CANONICAL_KEY_PATTERN,
 } from "../canonical-keys.js";
+import { OUTCOME_PATTERN_MERGE_THRESHOLD } from "../deployment-memory.js";
 
 describe("CanonicalKeySchema", () => {
   it("accepts a well-formed slug matching ^[a-z_]+:[a-z0-9_]+$", () => {
@@ -36,5 +37,9 @@ describe("CanonicalKeySchema", () => {
     expect(isKnownCanonicalKey("objection:downtime_work", MEDSPA_CANONICAL_KEYS)).toBe(true);
     expect(isKnownCanonicalKey("objection:made_up", MEDSPA_CANONICAL_KEYS)).toBe(false);
     expect(isKnownCanonicalKey("unknown", MEDSPA_CANONICAL_KEYS)).toBe(false);
+  });
+
+  it("OUTCOME_PATTERN_MERGE_THRESHOLD is set to the conservative pilot value", () => {
+    expect(OUTCOME_PATTERN_MERGE_THRESHOLD).toBe(0.84);
   });
 });
