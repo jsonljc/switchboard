@@ -36,7 +36,9 @@ describe("CockpitPage", () => {
 
   it("renders Topbar, Identity, and ActivityStream in the cold state", () => {
     render(<CockpitPage />);
-    expect(screen.getByText("Alex")).toBeInTheDocument();
+    // Topbar tab "Alex" + Identity name "Alex" = 2 matches
+    expect(screen.getAllByText("Alex").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Switchboard")).toBeInTheDocument();
     expect(screen.getByText("IDLE")).toBeInTheDocument();
     expect(screen.getByText(/Nothing here yet/i)).toBeInTheDocument();
   });

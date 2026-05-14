@@ -3,6 +3,7 @@
 
 import { useState, useMemo } from "react";
 import { T } from "./tokens.js";
+import { Topbar } from "./topbar.js";
 import { Identity } from "./identity.js";
 import { ApprovalBlock } from "./approval-block.js";
 import { ActivityStream, type ActivityFilter } from "./activity-stream.js";
@@ -59,10 +60,7 @@ export function CockpitPage() {
         fontFamily: "Inter, system-ui, sans-serif",
       }}
     >
-      {/* Topbar slots into the outer shell — rendered by the route layout at
-          A.5 when the real composer and palette land. At A.1 the CockpitPage
-          manages only its own content region so no duplicate "Alex" tab node
-          shadows the Identity name. */}
+      <Topbar paletteEnabled={false} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <Identity
           statusKey={statusKey}
