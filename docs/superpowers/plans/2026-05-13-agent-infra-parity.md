@@ -2302,7 +2302,7 @@ EOF
 
 ### Task 16: Add `BookingAttributionResolver` helper
 
-Pure helper that resolves a two-tier booking attribution from a `ConversationEndEvent`. Strong tier matches `Booking.workTraceId` against the event's `workTraceIds`. Fallback tier matches `org + deployment + contact + (endedAt, endedAt + 24h]`. Returns `{ tier: "strong" | "fallback" | "none", bookingId?: string }`.
+Pure helper that resolves a two-tier booking attribution from a `ConversationEndEvent`. Strong tier matches `Booking.workTraceId` against the event's `workTraceIds`. Fallback tier matches `org + contact + (endedAt, endedAt + 24h]` (per-deployment scoping is not enforced — neither `Booking` nor `Contact` carries a `deploymentId` column today). Returns `{ tier: "strong" | "fallback" | "none", bookingId?: string }`.
 
 The resolver depends on a thin `BookingAttributionStore` interface (one method) so compounding-service can wire it without depending on `@switchboard/db` directly (Layer 3 → Layer 4 is forbidden).
 
@@ -2390,7 +2390,6 @@ export interface BookingAttributionStore {
   ): Promise<Array<{ id: string; workTraceId: string | null }>>;
   findInWindow(
     organizationId: string,
-    deploymentId: string,
     contactId: string,
     startExclusive: Date,
     endInclusive: Date,
@@ -2412,14 +2411,15 @@ export async function resolveBookingAttribution(
     }
   }
 
-  // Tier 2: fallback — same contact, same deployment, post-conversation
-  // window only (pre-conversation bookings are likely caused by an earlier
-  // touchpoint and would muddy attribution).
+  // Tier 2: fallback — same org + contact, post-conversation window only
+  // (pre-conversation bookings are likely caused by an earlier touchpoint
+  // and would muddy attribution). Per-deployment scoping is not enforced:
+  // neither Booking nor Contact carries a deploymentId column today. Adding
+  // one would be a separate schema migration.
   if (event.contactId) {
     const windowEnd = new Date(event.endedAt.getTime() + ATTRIBUTION_WINDOW_MS);
     const fallback = await store.findInWindow(
       event.organizationId,
-      event.deploymentId,
       event.contactId,
       event.endedAt,
       windowEnd,
@@ -2455,7 +2455,6 @@ it("falls back to contact+window when no workTraceId matches", async () => {
   expect(result.bookingId).toBe("bk-2");
   expect(store.findInWindow).toHaveBeenCalledWith(
     "org-1",
-    "dep-1",
     "ct-1",
     new Date("2026-05-14T10:00:00Z"),
     new Date("2026-05-15T10:00:00Z"),
@@ -2508,7 +2507,7 @@ it("uses a strict post-conversation window — pre-conversation bookings do not 
   };
   await resolveBookingAttribution(store, event());
   const args = (store.findInWindow as ReturnType<typeof vi.fn>).mock.calls[0]!;
-  const [, , , start, end] = args;
+  const [, , start, end] = args;
   expect(start).toEqual(new Date("2026-05-14T10:00:00Z"));
   expect(end).toEqual(new Date("2026-05-15T10:00:00Z"));
   expect(end.getTime() - start.getTime()).toBe(ATTRIBUTION_WINDOW_MS);
@@ -2633,7 +2632,7 @@ return {
 };
 ```
 
-**Label-key convention.** Existing callers (`propose-pipeline.ts:297`, `execution-manager.ts:401`) pass camelCase keys to `inc({ actionType: ... })` even though the declared `labelNames` are snake_case (`action_type`). Match this established convention: pass camelCase keys at the call sites in `compounding-service.ts` and `context-builder.ts` (e.g. `inc({ deploymentId, attributionTier })`). If you discover that this convention is silently dropping labels in prom-client output, fix it as a separate observability PR — do NOT mix conventions inside PR-3.1.
+**Label-key convention.** Existing callers (`packages/core/src/orchestrator/propose-pipeline.ts:297`, `packages/core/src/orchestrator/execution-manager.ts:401`) pass camelCase keys to `inc({ actionType: ... })` even though the declared `labelNames` are snake_case (`action_type`). Match this established convention: pass camelCase keys at the call sites in `compounding-service.ts` and `context-builder.ts` (e.g. `inc({ deploymentId, attributionTier })`). If you discover that this convention is silently dropping labels in prom-client output, fix it as a separate observability PR — do NOT mix conventions inside PR-3.1.
 
 - [ ] **Step 4: Write a counter-increment assertion test**
 
@@ -3363,7 +3362,6 @@ export class PrismaBookingAttributionStore implements BookingAttributionStore {
 
   async findInWindow(
     organizationId: string,
-    deploymentId: string,
     contactId: string,
     startExclusive: Date,
     endInclusive: Date,
@@ -3373,8 +3371,6 @@ export class PrismaBookingAttributionStore implements BookingAttributionStore {
         organizationId,
         contactId,
         createdAt: { gt: startExclusive, lte: endInclusive },
-        // deploymentId filter only if the column exists on Booking —
-        // grep schema.prisma to confirm; if not, drop this clause.
       },
       select: { id: true },
     });
