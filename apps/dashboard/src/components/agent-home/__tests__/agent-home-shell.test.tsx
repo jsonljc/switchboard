@@ -102,30 +102,11 @@ vi.mock("@/hooks/use-agent-greeting", () => ({
   }),
 }));
 
-vi.mock("@/components/layout/halt/halt-context", () => ({
-  useHalt: () => ({ halted: false, setHalted: vi.fn(), toggleHalt: vi.fn() }),
-}));
+import { AgentHomeShell } from "../agent-home-shell";
 
-vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-approvals", () => ({
-  usePendingApprovals: () => ({ data: { approvals: [] }, isLoading: false }),
-}));
-
-vi.mock("@/hooks/use-agent-activity", () => ({
-  useAgentActivity: () => ({ data: { roster: [], states: [], actions: [] }, isLoading: false }),
-}));
-
-import { AgentHomeClient } from "../agent-home-client";
-
-describe("AgentHomeClient", () => {
-  it("renders the cockpit when agentKey is 'alex'", () => {
-    render(<AgentHomeClient agentKey="alex" />);
-    // Cockpit renders both Topbar tab "Alex" AND Identity name "Alex"
-    expect(screen.getAllByText("Alex").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("IDLE")).toBeInTheDocument();
-  });
-
-  it("renders all 5 block sections for riley", () => {
-    render(<AgentHomeClient agentKey="riley" />);
+describe("AgentHomeShell", () => {
+  it("renders all 5 block sections for alex", () => {
+    render(<AgentHomeShell agentKey="alex" />);
     expect(screen.getByTestId("block-greeting")).toBeInTheDocument();
     expect(screen.getByTestId("block-needs-you")).toBeInTheDocument();
     expect(screen.getByTestId("block-wins")).toBeInTheDocument();
@@ -133,8 +114,8 @@ describe("AgentHomeClient", () => {
     expect(screen.getByTestId("block-pipeline")).toBeInTheDocument();
   });
 
-  it("renders all 5 block sections for riley (pipeline check)", () => {
-    render(<AgentHomeClient agentKey="riley" />);
+  it("renders all 5 block sections for riley", () => {
+    render(<AgentHomeShell agentKey="riley" />);
     expect(screen.getAllByText(/Pipeline/).length).toBeGreaterThan(0);
   });
 });

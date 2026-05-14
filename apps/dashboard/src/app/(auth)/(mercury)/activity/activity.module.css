@@ -70,191 +70,6 @@
   color: hsl(40 25% 94%);
 }
 
-/* ============= header ============= */
-.appHeader {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--cream);
-  border-bottom: 1px solid var(--hair);
-}
-.appHeaderRow {
-  max-width: 1280px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px;
-  gap: 24px;
-}
-@media (min-width: 768px) {
-  .appHeaderRow {
-    padding: 16px 40px;
-  }
-}
-@media (min-width: 1280px) {
-  .appHeaderRow {
-    padding: 18px 56px;
-  }
-}
-
-.brandCluster {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-}
-.brandMark {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--serif);
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-.brandDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink);
-  display: inline-block;
-}
-.brandNav {
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
-/* Mirrors /contacts' .brandNav rule. /activity renders its nav as inert
-   <span>s (Tools-tier surface, not agent-owned), so hover and active
-   rules are dormant — kept so <span>→<Link> swap needs zero CSS changes. */
-.brandNav a,
-.brandNav button,
-.brandNav span {
-  font-family: var(--serif);
-  font-size: 15px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  color: var(--ink-3);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition:
-    color 0.2s ease,
-    background 0.2s ease;
-}
-.brandNav span {
-  cursor: default;
-}
-.brandNav a.isActive,
-.brandNav button.isActive,
-.brandNav span.isActive {
-  color: var(--ink);
-  background: hsl(20 10% 12% / 0.05);
-}
-.brandNav a:hover,
-.brandNav button:hover {
-  color: var(--ink);
-}
-.brandNav .navAdd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid var(--hair);
-  font-size: 14px;
-  color: var(--ink-3);
-  margin-left: 6px;
-  background: transparent;
-  padding: 0;
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  color: var(--ink-3);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-@media (min-width: 768px) {
-  .headerActions {
-    gap: 24px;
-  }
-}
-.livePip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-3);
-}
-.pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: hsl(140 50% 38%);
-  position: relative;
-  display: inline-block;
-}
-.pulse::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1px solid hsl(140 50% 38% / 0.4);
-  animation: activityPulseRing 2s ease-out infinite;
-}
-@keyframes activityPulseRing {
-  0% {
-    transform: scale(0.7);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-}
-.folioLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-3);
-  background: transparent;
-  border: none;
-  font: inherit;
-}
-.folioLink .num {
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.folioLink .pip {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-  display: inline-block;
-}
-.meChip {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--ink);
-  color: hsl(40 25% 94%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--serif);
-  font-size: 13px;
-}
-
 /* ============= page shell ============= */
 .page {
   max-width: var(--col-wide);
@@ -299,15 +114,6 @@
   }
 }
 
-/* ============= title row ============= */
-.titleRow {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--hair);
-}
 .pageTitle {
   font-family: var(--serif);
   font-weight: 400;
@@ -328,131 +134,11 @@
     letter-spacing: -0.025em;
   }
 }
-.titleFolio {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: hsl(20 10% 12% / 0.55);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  padding-bottom: 4px;
-}
-
-/* ============= toolbar (chips + search) ============= */
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  flex-wrap: wrap;
-  margin-top: 24px;
-}
-/* Filter-chip styles moved to components/mercury/filter-chips.module.css.
- * The activity surface now consumes the shared <FilterChips> primitive. The
- * Filtered pill (custom-scope adornment) below remains activity-specific. */
-
 /* ============= activity table ============= */
 .tableWrap {
   margin-top: 28px;
   width: 100%;
 }
-.activity {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--sans);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-.activity thead th {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-weight: 500;
-  color: hsl(20 10% 12% / 0.55);
-  padding: 0 12px 12px 0;
-  border-bottom: 1px solid var(--hair);
-  text-align: left;
-  user-select: none;
-  white-space: nowrap;
-  background: transparent;
-}
-.activity tbody tr {
-  border-bottom: 1px solid var(--hair);
-  transition: background 0.15s ease;
-}
-.activity tbody tr:hover {
-  background: var(--row-hover);
-}
-.activity tbody td {
-  padding: 14px 12px 14px 0;
-  color: var(--ink);
-  vertical-align: middle;
-}
-.activity tbody td.isMuted {
-  color: var(--ink-3);
-}
-
-/* Hash prefix cell — mono, tabular, muted. Full hash on copy. */
-.cellHash {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-/* Risk badge */
-.riskBadge {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-.riskNone {
-  color: var(--ink-4);
-  background: hsl(20 8% 88%);
-}
-.riskLow {
-  color: var(--pos);
-  background: hsl(140 30% 90%);
-}
-.riskMedium {
-  color: hsl(30 80% 38%);
-  background: hsl(30 60% 90%);
-}
-.riskHigh {
-  color: var(--neg);
-  background: hsl(0 50% 92%);
-}
-.riskCritical {
-  color: hsl(345 70% 40%);
-  background: hsl(345 60% 92%);
-}
-
-/* ============= section label (ACTIVITY caps mono) ============= */
-.sectionLabel {
-  font-family: var(--mono);
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: hsl(20 10% 12% / 0.55);
-}
-
-/* muted-ink text utility */
-.isMuted {
-  color: var(--ink-3);
-}
-
-/* tabular numerals for timestamp cells */
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-
 /* ============= skeleton loading ============= */
 .skeletonTable {
   margin-top: 28px;
@@ -484,93 +170,6 @@
   }
 }
 
-/* ============= empty action button (filtered-empty Clear filters) ============= */
-.emptyAction {
-  margin-top: 18px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  padding: 6px 14px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-.emptyAction:hover {
-  border-color: var(--ink-3);
-}
-
-/* ============= table row / cell overrides for activity ============= */
-
-/* sticky first column */
-.stickyCol {
-  position: sticky;
-  left: 0;
-  background: var(--cream);
-  z-index: 1;
-}
-
-/* row expanded state — subtle background */
-.activityRow.isExpanded {
-  background: var(--row-hover);
-}
-
-/* cell styles for the activity table */
-.cellTimestamp {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-  white-space: nowrap;
-  min-width: 160px;
-  position: sticky;
-  left: 0;
-  background: var(--cream);
-  z-index: 1;
-}
-.activityRow.isExpanded .cellTimestamp {
-  background: var(--row-hover);
-}
-.activity tbody tr:hover .cellTimestamp {
-  background: var(--row-hover);
-}
-
-.cellEvent {
-  min-width: 180px;
-}
-.cellActor {
-  min-width: 160px;
-}
-.cellEntity {
-  min-width: 160px;
-}
-.cellSummary {
-  min-width: 280px;
-  max-width: 480px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cellChevron {
-  text-align: right;
-  padding-right: 4px;
-  width: 36px;
-}
-
-/* mono cell text (event, actor, entity) */
-.cellMono {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-}
-
 /* chevron toggle button */
 .chevronButton {
   background: transparent;
@@ -591,27 +190,6 @@
   outline: 1px solid var(--accent);
   outline-offset: 2px;
 }
-.chevronIcon {
-  font-family: var(--serif);
-  font-size: 18px;
-  line-height: 1;
-  display: inline-block;
-  transform: rotate(0deg);
-  transition: transform 0.2s ease;
-}
-.chevronIcon.chevronUp {
-  transform: rotate(-90deg);
-}
-
-/* drawer row — no border-bottom on the row containing the drawer */
-.drawerRow {
-  border-bottom: none !important;
-}
-.drawerCell {
-  padding: 0 !important;
-  border-bottom: 1px solid var(--hair);
-}
-
 /* ============= inline drawer ============= */
 .drawer {
   background: hsl(45 20% 96%);
@@ -619,195 +197,253 @@
   padding: 24px 28px 28px;
 }
 
-.drawerGrid {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 12px 16px;
-  align-items: baseline;
-  max-width: var(--col-prose);
-}
-
-.drawerField {
-  display: contents;
-}
-
-.drawerLabel {
-  color: hsl(20 10% 12% / 0.55);
-  padding-top: 2px;
-  white-space: nowrap;
-  align-self: start;
-}
-
-.drawerValue {
-  color: var(--ink);
-  font-family: var(--sans);
-  font-size: 14px;
-  line-height: 1.55;
+/* ============= error banner (PR-C, H5) ============= */
+.errBanner {
+  max-width: 74rem;
+  margin: 16px auto 0;
+  padding: 14px 18px;
+  background: var(--paper-warm);
+  border: 1px solid var(--hair-strong);
+  border-left: 3px solid var(--ink);
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 14px;
   flex-wrap: wrap;
 }
-
-.drawerSummary {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* snapshot keys */
-.drawerSnapshotKeys {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-}
-.drawerRedacted {
-  display: block;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--ink-4);
-  margin-top: 4px;
-}
-
-/* evidence pointers */
-.drawerEvidenceWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.drawerEvidenceCount {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-3);
-}
-.drawerEvidenceList {
-  list-style: none;
-  margin: 2px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.drawerEvidenceItem {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.drawerEvidenceItem::before {
-  content: "•";
-  color: var(--ink-4);
-  font-size: 12px;
-}
-.drawerEvidenceType {
-  display: inline-block;
-  min-width: 52px;
-  color: var(--ink-3);
-}
-
-/* [copy] ghost button */
-.copyButton {
-  font-family: var(--mono);
+.errBannerEyebrow {
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 10px;
-  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  font-weight: 700;
+}
+.errBannerMsg {
+  font-family: var(--font-display, "Cormorant Garamond", "Source Serif 4", serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--ink);
+  flex: 1;
+  min-width: 16rem;
+}
+.errBannerRetry {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 7px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
   background: transparent;
-  border: none;
-  padding: 0;
   cursor: pointer;
-  transition: color 0.15s ease;
-  white-space: nowrap;
-  align-self: center;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
 }
-.copyButton:hover {
-  color: var(--accent);
-}
-.copyButton:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
+.errBannerRetry:hover {
+  background: var(--ink);
+  color: var(--paper);
 }
 
-/* ============= pagination footer (prev/next cursor) ============= */
-.paginationFooter {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--hair);
+/* ============= empty states (PR-C rewrite — zero / filtered) ============= */
+.empty {
+  max-width: 74rem;
+  margin: 0 auto;
+  padding: 64px 0;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 24px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: hsl(20 10% 12% / 0.55);
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
 }
-.moreButton {
-  font-family: var(--sans);
-  font-size: 13px;
+.emptyEyebrow {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+  font-weight: 700;
+}
+.emptyHeadline {
+  font-family: var(--font-display, "Cormorant Garamond", "Source Serif 4", serif);
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.012em;
+  line-height: 1.1;
+  margin: 0;
+}
+.emptyHeadlineEm {
+  color: var(--amber-deep);
+  font-style: italic;
+}
+.emptySub {
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  font-size: 14.5px;
   color: var(--ink-3);
-  letter-spacing: normal;
-  text-transform: none;
+  max-width: 38em;
+  line-height: 1.6;
+  text-wrap: pretty;
+  margin: 0;
+}
+.emptyMeta {
+  margin-top: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ink-4);
+  letter-spacing: 0.02em;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.2s ease;
+  gap: 8px;
 }
-.moreButton:hover:not(:disabled) {
-  color: var(--ink);
-}
-.moreButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-.arr {
-  font-family: var(--serif);
-  font-size: 14px;
-  line-height: 1;
-}
-
-/* ============= empty / error ============= */
-.emptyWrap {
-  margin-top: 48px;
-  padding: 32px 0;
-  text-align: center;
-  font-family: var(--sans);
+.emptyMetaB {
   color: var(--ink-2);
+  font-weight: 600;
 }
-.emptyTitle {
-  font-family: var(--serif);
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
+.emptyMetaSep {
+  color: var(--ink-4);
+  opacity: 0.5;
+}
+.emptyCta {
+  margin-top: 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  text-transform: uppercase;
   color: var(--ink);
-  margin: 0 0 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
 }
-.emptyBody {
-  font-size: 15px;
-  color: var(--ink-3);
-  margin: 0 auto;
-  max-width: 420px;
-  text-wrap: pretty;
+.emptyCta:hover {
+  background: var(--ink);
+  color: var(--paper);
 }
 
-/* ============= utility ============= */
-.fadeIn {
-  animation: activityFadeIn 0.35s ease-out;
+/* ============= pagination footer (PR-C restyle) ============= */
+.pag {
+  max-width: 74rem;
+  margin: 0 auto;
+  padding: 22px 0 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--hair);
 }
-@keyframes activityFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
+.pagInfo {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.pagInfoB {
+  color: var(--ink);
+  font-weight: 600;
+}
+.pagInfoSep {
+  color: var(--ink-4);
+  opacity: 0.5;
+  margin: 0 8px;
+}
+.pagNav {
+  display: inline-flex;
+  gap: 10px;
+}
+.pagBtn {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 9px 18px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+.pagBtn:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.pagBtn:disabled {
+  color: var(--ink-4);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+/* ============= stale-fetch pill (PR-C) ============= */
+.stalePill {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  background: var(--paper-raised);
+  border: 1px solid var(--hair-strong);
+  border-radius: 999px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  box-shadow: 0 6px 18px rgba(14, 12, 10, 0.06);
+}
+.stalePillAge {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.stalePillRefresh {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding-left: 10px;
+  border-left: 1px solid var(--hair);
+  background: transparent;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
+}
+.stalePillRefresh:hover {
+  color: var(--amber-deep);
+}
+.stalePillRefreshSpin {
+  color: var(--amber-deep);
+  animation: stalePillPulse 1s linear infinite;
+}
+@keyframes stalePillPulse {
+  0%,
+  100% {
+    opacity: 0.5;
   }
-  to {
+  50% {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

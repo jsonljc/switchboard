@@ -1,0 +1,321 @@
+// Fixtures for the Opportunity Pipeline view.
+// Shape matches packages/schemas/src/lifecycle.ts (OpportunitySchema + ContactSchema joined).
+// Currency = SGD; estimatedValue + revenueTotal stored as integer cents.
+
+const PIPELINE_STAGES = [
+  { key: 'interested', label: 'Interested',  tone: 'neutral', subtitle: 'top of funnel' },
+  { key: 'qualified',  label: 'Qualified',   tone: 'neutral', subtitle: 'fit confirmed' },
+  { key: 'quoted',     label: 'Quoted',      tone: 'accent',  subtitle: 'price on table' },
+  { key: 'booked',     label: 'Booked',      tone: 'accent',  subtitle: 'appt confirmed' },
+  { key: 'showed',     label: 'Showed',      tone: 'accent',  subtitle: 'arrived in clinic' },
+  { key: 'won',        label: 'Won',         tone: 'closed',  subtitle: 'revenue captured' },
+  { key: 'lost',       label: 'Lost',        tone: 'closed',  subtitle: 'closed out' },
+  { key: 'nurturing',  label: 'Nurturing',   tone: 'parking', subtitle: 'long-tail · re-engage' },
+];
+
+// Pretty agent labels (free string in schema; these are the realistic values
+// for this org's three agents.)
+const AGENT_LABELS = {
+  alex:  'Alex',
+  riley: 'Riley',
+  mira:  'Mira',
+};
+
+// ISO-ish dates relative to "today" May 13 2026.
+const D = (offsetDaysAgo, hour = 10, min = 0) => {
+  const d = new Date(2026, 4, 13, hour, min, 0); // May = month 4
+  d.setDate(d.getDate() - offsetDaysAgo);
+  return d.toISOString();
+};
+
+// Each fixture has joined Contact info on `contact`.
+const PIPELINE_FIXTURES = [
+  // ─── interested ───────────────────────────────────────────────────────
+  {
+    id: 'opp_001', contactId: 'c_001', serviceId: 'svc_hydra',
+    serviceName: 'Hydrafacial · single session',
+    stage: 'interested',
+    timeline: 'exploring', priceReadiness: 'unknown',
+    objections: [],
+    qualificationComplete: false,
+    estimatedValue: 28000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: null,
+    lostReason: null,
+    notes: 'Saw the ad on IG, wanted to know wait times this week.',
+    openedAt: D(0, 9, 14), updatedAt: D(0, 9, 41), closedAt: null,
+    contact: { name: 'Jia Min Tan', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_002', contactId: 'c_002', serviceId: 'svc_botox',
+    serviceName: 'Botox · forehead + glabellar',
+    stage: 'interested',
+    timeline: 'soon', priceReadiness: 'flexible',
+    objections: [],
+    qualificationComplete: false,
+    estimatedValue: null, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: null,
+    lostReason: null, notes: null,
+    openedAt: D(0, 8, 22), updatedAt: D(0, 11, 3), closedAt: null,
+    contact: { name: 'Priya Sharma', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_003', contactId: 'c_003', serviceId: 'svc_laser',
+    serviceName: 'Pico laser · pigmentation',
+    stage: 'interested',
+    timeline: 'exploring', priceReadiness: 'price_sensitive',
+    objections: [{ category: 'price', raisedAt: D(0, 9, 50), resolvedAt: null }],
+    qualificationComplete: false,
+    estimatedValue: 65000, revenueTotal: 0,
+    assignedAgent: 'mira', assignedStaff: null,
+    lostReason: null, notes: 'Asked if there\u2019s a first-timer promo.',
+    openedAt: D(1, 16, 8), updatedAt: D(0, 10, 12), closedAt: null,
+    contact: { name: 'Wei Lin Ng', primaryChannel: 'telegram' },
+  },
+  {
+    id: 'opp_004', contactId: 'c_004', serviceId: 'svc_led',
+    serviceName: 'LED therapy · acne package',
+    stage: 'interested',
+    timeline: 'unknown', priceReadiness: 'unknown',
+    objections: [],
+    qualificationComplete: false,
+    estimatedValue: null, revenueTotal: 0,
+    assignedAgent: null, assignedStaff: null,
+    lostReason: null, notes: null,
+    openedAt: D(2, 14, 0), updatedAt: D(2, 14, 18), closedAt: null,
+    contact: { name: 'Daniel Koh', primaryChannel: 'dashboard' },
+  },
+
+  // ─── qualified ────────────────────────────────────────────────────────
+  {
+    id: 'opp_005', contactId: 'c_005', serviceId: 'svc_micro',
+    serviceName: 'Microneedling · 3-session course',
+    stage: 'qualified',
+    timeline: 'soon', priceReadiness: 'flexible',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 88000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: null,
+    lostReason: null, notes: 'No prior treatments. Wants weekend slot.',
+    openedAt: D(3, 11, 0), updatedAt: D(0, 14, 22), closedAt: null,
+    contact: { name: 'Rachel Lim', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_006', contactId: 'c_006', serviceId: 'svc_lip',
+    serviceName: 'Lip filler · 0.5ml',
+    stage: 'qualified',
+    timeline: 'immediate', priceReadiness: 'ready',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 58000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: null,
+    lostReason: null, notes: 'Returning client, last seen Feb.',
+    openedAt: D(1, 9, 32), updatedAt: D(0, 8, 7), closedAt: null,
+    contact: { name: 'Charlotte Ong', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_007', contactId: 'c_007', serviceId: 'svc_peel',
+    serviceName: 'Chemical peel · glycolic',
+    stage: 'qualified',
+    timeline: 'soon', priceReadiness: 'price_sensitive',
+    objections: [
+      { category: 'price', raisedAt: D(2, 10, 0), resolvedAt: null },
+      { category: 'side_effects', raisedAt: D(1, 16, 12), resolvedAt: null },
+    ],
+    qualificationComplete: true,
+    estimatedValue: 32000, revenueTotal: 0,
+    assignedAgent: 'mira', assignedStaff: null,
+    lostReason: null, notes: 'Concerned about downtime before her sister\u2019s wedding.',
+    openedAt: D(4, 14, 0), updatedAt: D(0, 12, 41), closedAt: null,
+    contact: { name: 'Aishwarya Singh', primaryChannel: 'telegram' },
+  },
+
+  // ─── quoted ───────────────────────────────────────────────────────────
+  {
+    id: 'opp_008', contactId: 'c_008', serviceId: 'svc_profhilo',
+    serviceName: 'Profhilo · 2-session protocol',
+    stage: 'quoted',
+    timeline: 'soon', priceReadiness: 'flexible',
+    objections: [{ category: 'price', raisedAt: D(1, 10, 0), resolvedAt: null }],
+    qualificationComplete: true,
+    estimatedValue: 168000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: 'Dr. Yeo',
+    lostReason: null, notes: 'Quote sent Monday, asked for instalment options.',
+    openedAt: D(7, 13, 0), updatedAt: D(0, 15, 19), closedAt: null,
+    contact: { name: 'Felicia Goh', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_009', contactId: 'c_009', serviceId: 'svc_cool',
+    serviceName: 'CoolSculpting · flanks consult',
+    stage: 'quoted',
+    timeline: 'exploring', priceReadiness: 'flexible',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 240000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: 'Dr. Yeo',
+    lostReason: null, notes: null,
+    openedAt: D(5, 11, 0), updatedAt: D(1, 17, 9), closedAt: null,
+    contact: { name: 'Marcus Chen', primaryChannel: 'dashboard' },
+  },
+  {
+    id: 'opp_010', contactId: 'c_010', serviceId: 'svc_rf',
+    serviceName: 'RF microneedling · neck',
+    stage: 'quoted',
+    timeline: 'soon', priceReadiness: 'ready',
+    objections: [{ category: 'timing', raisedAt: D(0, 11, 0), resolvedAt: null }],
+    qualificationComplete: true,
+    estimatedValue: 142000, revenueTotal: 0,
+    assignedAgent: 'riley', assignedStaff: null,
+    lostReason: null, notes: 'Travelling end of month, wants slot before 24th.',
+    openedAt: D(3, 9, 0), updatedAt: D(0, 13, 2), closedAt: null,
+    contact: { name: 'Hui Ying Wong', primaryChannel: 'telegram' },
+  },
+
+  // ─── booked ───────────────────────────────────────────────────────────
+  {
+    id: 'opp_011', contactId: 'c_011', serviceId: 'svc_hydra',
+    serviceName: 'Hydrafacial + LED add-on',
+    stage: 'booked',
+    timeline: 'immediate', priceReadiness: 'ready',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 34000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: 'Nadia',
+    lostReason: null, notes: 'Sat 16 May 11:30am with Nadia.',
+    openedAt: D(2, 10, 0), updatedAt: D(0, 9, 12), closedAt: null,
+    contact: { name: 'Sophia Kaur', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_012', contactId: 'c_012', serviceId: 'svc_botox',
+    serviceName: 'Botox touch-up · returning',
+    stage: 'booked',
+    timeline: 'immediate', priceReadiness: 'ready',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 42000, revenueTotal: 0,
+    assignedAgent: 'mira', assignedStaff: 'Dr. Yeo',
+    lostReason: null, notes: 'Fri 15 May 7pm.',
+    openedAt: D(4, 17, 0), updatedAt: D(1, 11, 33), closedAt: null,
+    contact: { name: 'Jia Hui Ang', primaryChannel: 'whatsapp' },
+  },
+
+  // ─── showed ───────────────────────────────────────────────────────────
+  {
+    id: 'opp_013', contactId: 'c_013', serviceId: 'svc_skin',
+    serviceName: 'Skin booster · cheeks',
+    stage: 'showed',
+    timeline: 'immediate', priceReadiness: 'ready',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 95000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: 'Dr. Yeo',
+    lostReason: null, notes: 'Arrived 9:50am, in chair. Awaiting payment.',
+    openedAt: D(6, 14, 0), updatedAt: D(0, 10, 4), closedAt: null,
+    contact: { name: 'Bernice Lee', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_014', contactId: 'c_014', serviceId: 'svc_laser',
+    serviceName: 'Laser hair removal · underarm',
+    stage: 'showed',
+    timeline: 'immediate', priceReadiness: 'ready',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 18000, revenueTotal: 0,
+    assignedAgent: 'riley', assignedStaff: 'Nadia',
+    lostReason: null, notes: 'In consultation now.',
+    openedAt: D(2, 11, 0), updatedAt: D(0, 9, 58), closedAt: null,
+    contact: { name: 'Tasha Iyer', primaryChannel: 'telegram' },
+  },
+
+  // ─── won ──────────────────────────────────────────────────────────────
+  {
+    id: 'opp_015', contactId: 'c_015', serviceId: 'svc_profhilo',
+    serviceName: 'Profhilo · session 1 of 2',
+    stage: 'won',
+    timeline: 'immediate', priceReadiness: 'ready',
+    objections: [{ category: 'price', raisedAt: D(8, 10, 0), resolvedAt: D(6, 11, 0) }],
+    qualificationComplete: true,
+    estimatedValue: 84000, revenueTotal: 84000,
+    assignedAgent: 'alex', assignedStaff: 'Dr. Yeo',
+    lostReason: null, notes: 'Paid in full, session 2 to schedule.',
+    openedAt: D(10, 14, 0), updatedAt: D(1, 18, 0), closedAt: D(1, 18, 0),
+    contact: { name: 'Cheryl Tay', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_016', contactId: 'c_016', serviceId: 'svc_botox',
+    serviceName: 'Botox · forehead + crows',
+    stage: 'won',
+    timeline: 'immediate', priceReadiness: 'ready',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 62000, revenueTotal: 62000,
+    assignedAgent: 'mira', assignedStaff: 'Dr. Yeo',
+    lostReason: null, notes: null,
+    openedAt: D(9, 11, 0), updatedAt: D(2, 16, 30), closedAt: D(2, 16, 30),
+    contact: { name: 'Vivian Sim', primaryChannel: 'whatsapp' },
+  },
+
+  // ─── lost ─────────────────────────────────────────────────────────────
+  {
+    id: 'opp_017', contactId: 'c_017', serviceId: 'svc_cool',
+    serviceName: 'CoolSculpting · abdomen',
+    stage: 'lost',
+    timeline: 'exploring', priceReadiness: 'price_sensitive',
+    objections: [
+      { category: 'price', raisedAt: D(6, 10, 0), resolvedAt: null },
+      { category: 'alternative_options', raisedAt: D(4, 9, 0), resolvedAt: null },
+    ],
+    qualificationComplete: true,
+    estimatedValue: 320000, revenueTotal: 0,
+    assignedAgent: 'alex', assignedStaff: null,
+    lostReason: 'Going with competitor (cheaper package).',
+    notes: null,
+    openedAt: D(12, 9, 0), updatedAt: D(3, 12, 0), closedAt: D(3, 12, 0),
+    contact: { name: 'Andrew Phua', primaryChannel: 'dashboard' },
+  },
+  {
+    id: 'opp_018', contactId: 'c_018', serviceId: 'svc_lip',
+    serviceName: 'Lip filler · 1.0ml',
+    stage: 'lost',
+    timeline: 'exploring', priceReadiness: 'unknown',
+    objections: [{ category: 'trust', raisedAt: D(5, 14, 0), resolvedAt: null }],
+    qualificationComplete: false,
+    estimatedValue: null, revenueTotal: 0,
+    assignedAgent: 'mira', assignedStaff: null,
+    lostReason: 'Ghosted after initial reply.',
+    notes: null,
+    openedAt: D(8, 19, 0), updatedAt: D(5, 14, 0), closedAt: D(2, 0, 0),
+    contact: { name: 'Hana Yoshida', primaryChannel: 'telegram' },
+  },
+
+  // ─── nurturing ────────────────────────────────────────────────────────
+  {
+    id: 'opp_019', contactId: 'c_019', serviceId: 'svc_micro',
+    serviceName: 'Microneedling · interested Q3',
+    stage: 'nurturing',
+    timeline: 'exploring', priceReadiness: 'flexible',
+    objections: [],
+    qualificationComplete: true,
+    estimatedValue: 88000, revenueTotal: 0,
+    assignedAgent: 'riley', assignedStaff: null,
+    lostReason: null, notes: 'Postponed to August, asked us to ping in July.',
+    openedAt: D(28, 10, 0), updatedAt: D(11, 9, 0), closedAt: null,
+    contact: { name: 'Jocelyn Teo', primaryChannel: 'whatsapp' },
+  },
+  {
+    id: 'opp_020', contactId: 'c_020', serviceId: 'svc_skin',
+    serviceName: 'Skin booster · waiting on partner',
+    stage: 'nurturing',
+    timeline: 'unknown', priceReadiness: 'unknown',
+    objections: [{ category: 'timing', raisedAt: D(20, 9, 0), resolvedAt: null }],
+    qualificationComplete: false,
+    estimatedValue: null, revenueTotal: 0,
+    assignedAgent: null, assignedStaff: null,
+    lostReason: null, notes: null,
+    openedAt: D(34, 10, 0), updatedAt: D(18, 11, 0), closedAt: null,
+    contact: { name: 'Lillian Khoo', primaryChannel: 'dashboard' },
+  },
+];
+
+window.PIPELINE_STAGES = PIPELINE_STAGES;
+window.AGENT_LABELS = AGENT_LABELS;
+window.PIPELINE_FIXTURES = PIPELINE_FIXTURES;

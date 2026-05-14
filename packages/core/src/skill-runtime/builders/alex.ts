@@ -1,9 +1,14 @@
 import type { BusinessFacts } from "@switchboard/schemas";
-import type { ParameterBuilder } from "../parameter-builder.js";
+import type { ParameterBuilder, SkillServices } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
 import { renderBusinessFacts } from "../context-resolver.js";
 
-export const alexBuilder: ParameterBuilder = async (ctx, config, stores) => {
+export const alexBuilder: ParameterBuilder = async (
+  ctx,
+  config,
+  stores,
+  services?: SkillServices,
+) => {
   const contactId = config.contactId;
   const orgId = config.orgId;
 
@@ -68,11 +73,30 @@ export const alexBuilder: ParameterBuilder = async (ctx, config, stores) => {
     }
   }
 
+  // Resolve outcome-informed patterns from ContextBuilder when available.
+  // Empty string when no services or no high-confidence patterns have surfaced yet —
+  // {{OUTCOME_PATTERNS}} in the template renders as a clean blank line in that case.
+  // query comes from the inbound message (config.message); OUTCOME_PATTERNS itself
+  // originates from listHighConfidence (pattern memory), not retrieval chunks, but
+  // passing the real query avoids firing an empty-query retrieval round-trip.
+  let OUTCOME_PATTERNS = "";
+  if (services?.contextBuilder) {
+    const builtCtx = await services.contextBuilder.build({
+      organizationId: config.orgId,
+      agentId: "alex",
+      deploymentId: config.deploymentId,
+      query: config.message ?? "",
+      contactId: config.contactId,
+    });
+    OUTCOME_PATTERNS = builtCtx.outcomePatternContext;
+  }
+
   return {
     BUSINESS_NAME: ctx.persona.businessName,
     OPPORTUNITY_ID: opportunity.id,
     LEAD_PROFILE: leadProfile,
     BUSINESS_FACTS,
+    OUTCOME_PATTERNS,
     PERSONA_CONFIG: {
       tone: ctx.persona.tone,
       qualificationCriteria: ctx.persona.qualificationCriteria,

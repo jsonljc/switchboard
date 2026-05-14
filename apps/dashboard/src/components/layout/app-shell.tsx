@@ -12,8 +12,8 @@ const DevPanel =
 
 /**
  * Paths that mount their own EditorialAuthShell — either directly (agent
- * homes via [agentKey]/page.tsx) or via a route-group layout (Mercury Tools
- * surfaces via (mercury)/layout.tsx). AppShell skips its bare-<main> wrapper
+ * homes via /alex and /riley page.tsx) or via a route-group layout (Mercury
+ * Tools surfaces via (mercury)/layout.tsx). AppShell skips its bare-<main> wrapper
  * for these so the page-owned <main> from EditorialAuthShell isn't nested.
  *
  * "/" is exact (Owner Home placeholder). Other entries are prefix matches so

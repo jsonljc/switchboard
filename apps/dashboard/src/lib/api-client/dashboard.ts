@@ -6,6 +6,8 @@ import type {
   ContactDetailResponse,
   ScheduledTriggersListResponse,
   AuditEntriesListResponse,
+  ReportDataV1,
+  ReportWindow,
 } from "@switchboard/schemas";
 import { SwitchboardAgentsClient } from "./agents";
 
@@ -126,6 +128,20 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     if (query.before) params.set("before", query.before);
     const qs = params.toString();
     return this.request<AuditEntriesListResponse>(`/api/dashboard/activity${qs ? `?${qs}` : ""}`);
+  }
+
+  // ── Reports (Mercury /reports) ──
+
+  async getReport(window: ReportWindow): Promise<ReportDataV1> {
+    const params = new URLSearchParams({ window });
+    return this.request<ReportDataV1>(`/api/dashboard/reports?${params.toString()}`);
+  }
+
+  async refreshReport(window: ReportWindow): Promise<ReportDataV1> {
+    const params = new URLSearchParams({ window });
+    return this.request<ReportDataV1>(`/api/dashboard/reports/refresh?${params.toString()}`, {
+      method: "POST",
+    });
   }
 
   /**

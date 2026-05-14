@@ -40,6 +40,9 @@ const HISTOGRAM_LABELS = ["cartridge_id"];
 const LATENCY_BUCKETS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 
 export function createPromMetrics(): SwitchboardMetrics {
+  const OUTCOME_PATTERN_LABELS = ["deployment_id"];
+  const OUTCOME_PATTERN_TIER_LABELS = ["deployment_id", "attribution_tier"];
+  const CONFIDENCE_BUCKETS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
   return {
     proposalsTotal: new PromCounter(
       "switchboard_proposals_total",
@@ -104,6 +107,32 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Policy engine evaluation latency in ms",
       HISTOGRAM_LABELS,
       LATENCY_BUCKETS,
+    ),
+    outcomePatternsExtracted: new PromCounter(
+      "switchboard_outcome_patterns_extracted_total",
+      "Outcome patterns extracted from booked conversations, by attribution tier",
+      OUTCOME_PATTERN_TIER_LABELS,
+    ),
+    outcomePatternsMerged: new PromCounter(
+      "switchboard_outcome_patterns_merged_total",
+      "Outcome patterns that incremented an existing DeploymentMemory entry",
+      OUTCOME_PATTERN_LABELS,
+    ),
+    outcomePatternsCreated: new PromCounter(
+      "switchboard_outcome_patterns_created_total",
+      "Outcome patterns that created a new DeploymentMemory entry",
+      OUTCOME_PATTERN_LABELS,
+    ),
+    outcomePatternsSurfaced: new PromCounter(
+      "switchboard_outcome_patterns_surfaced_total",
+      "Skill executions where at least one outcome pattern was injected",
+      OUTCOME_PATTERN_LABELS,
+    ),
+    outcomePatternConfidence: new PromHistogram(
+      "switchboard_outcome_pattern_confidence",
+      "Post-write confidence distribution for outcome-pattern memories",
+      OUTCOME_PATTERN_LABELS,
+      CONFIDENCE_BUCKETS,
     ),
   };
 }

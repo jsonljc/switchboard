@@ -17,6 +17,11 @@ export interface SwitchboardMetrics {
   approvalLatencyMs: Histogram;
   executionLatencyMs: Histogram;
   policyEngineLatencyMs: Histogram;
+  outcomePatternsExtracted: Counter;
+  outcomePatternsMerged: Counter;
+  outcomePatternsCreated: Counter;
+  outcomePatternsSurfaced: Counter;
+  outcomePatternConfidence: Histogram;
 }
 
 export interface Counter {
@@ -74,5 +79,10 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     approvalLatencyMs: new InMemoryHistogram(),
     executionLatencyMs: new InMemoryHistogram(),
     policyEngineLatencyMs: new InMemoryHistogram(),
+    outcomePatternsExtracted: new InMemoryCounter(),
+    outcomePatternsMerged: new InMemoryCounter(),
+    outcomePatternsCreated: new InMemoryCounter(),
+    outcomePatternsSurfaced: new InMemoryCounter(),
+    outcomePatternConfidence: new InMemoryHistogram(),
   };
 }

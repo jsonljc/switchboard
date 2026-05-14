@@ -3,6 +3,7 @@ import { alexBuilder } from "./alex.js";
 import type { AgentContext } from "@switchboard/sdk";
 import type { SkillStores } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
+import { interpolate } from "../template-engine.js";
 
 function createMockCtx(overrides?: Partial<AgentContext>): AgentContext {
   return {
@@ -219,5 +220,61 @@ describe("alexBuilder", () => {
       }),
     );
     expect(result.OPPORTUNITY_ID).toBe("opp_auto");
+  });
+
+  it("builder always supplies OUTCOME_PATTERNS as a string (empty when no services)", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores();
+    const params = await alexBuilder(ctx, config, stores);
+    expect(typeof params.OUTCOME_PATTERNS).toBe("string");
+    expect(params.OUTCOME_PATTERNS).toBe("");
+  });
+
+  it("interpolate() leaves no unresolved {{OUTCOME_PATTERNS}} or Mustache section markers", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores();
+    const params = await alexBuilder(ctx, config, stores);
+    const template = "Before.\n{{OUTCOME_PATTERNS}}\nAfter.";
+    const declarations: import("../types.js").ParameterDeclaration[] = [
+      { name: "OUTCOME_PATTERNS", required: false, type: "string" },
+    ];
+
+    const rendered = interpolate(template, params, declarations);
+
+    expect(rendered).not.toMatch(/\{\{/);
+    expect(rendered).not.toMatch(/\{\{#|\{\{\//);
+    expect(rendered).toBe("Before.\n\nAfter.");
+  });
+
+  it("OUTCOME_PATTERNS is populated from ContextBuilder when services are provided", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores();
+    const mockContextBuilder = {
+      build: vi.fn().mockResolvedValue({
+        retrievedChunks: [],
+        learnedFacts: [],
+        recentSummaries: [],
+        outcomePatternContext: "<|outcome-patterns|>Test pattern content</|outcome-patterns|>",
+        totalTokenEstimate: 10,
+      }),
+    };
+
+    const params = await alexBuilder(ctx, config, stores, {
+      contextBuilder:
+        mockContextBuilder as unknown as import("../parameter-builder.js").SkillServices["contextBuilder"],
+    });
+
+    expect(params.OUTCOME_PATTERNS).toBe(
+      "<|outcome-patterns|>Test pattern content</|outcome-patterns|>",
+    );
+    expect(mockContextBuilder.build).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: config.orgId,
+        agentId: "alex",
+        deploymentId: config.deploymentId,
+        query: "",
+        contactId: "contact_1",
+      }),
+    );
   });
 });

@@ -9,6 +9,7 @@ import {
   PrismaHandoffStore,
   PrismaGovernanceVerdictStore,
   PrismaDeploymentStore,
+  PrismaBookingAttributionStore,
   createPrismaConsentStore,
 } from "@switchboard/db";
 import {
@@ -95,6 +96,15 @@ export function createGatewayBridge(
     interactionSummaryStore: new PrismaInteractionSummaryStore(prisma),
     deploymentMemoryStore: new PrismaDeploymentMemoryStore(prisma),
     knowledgeStore: new PrismaKnowledgeStore(prisma),
+    // Booking-backed outcome attribution (Task 20 / PR-3.1). Without this, the
+    // compounding service falls back to "none" tier and skips pattern
+    // extraction entirely — even when summarization labels the outcome
+    // "booked". `endedAt` is populated upstream in conversation-lifecycle's
+    // fireEnd(). `workTraceIds` is not populated yet — the session shape does
+    // not track executed-tool work-trace ids, so attribution falls through to
+    // the contact+window fallback tier (still booking-backed, weaker evidence).
+    // Strong-tier wiring stacks as PR-3.1.b.
+    bookingStore: new PrismaBookingAttributionStore(prisma),
     agentId: "alex",
   });
 

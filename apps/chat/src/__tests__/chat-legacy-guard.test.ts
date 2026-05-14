@@ -20,12 +20,15 @@ describe("chat legacy guard", () => {
   }
 
   it("no source file imports deleted modules", () => {
+    // Match imports of the deleted *file* modules. The negative lookahead
+    // after `bootstrap` excludes the surviving `./bootstrap/<dir>` imports
+    // (e.g. ./bootstrap/sentry.js, ./bootstrap/metrics.js).
     const patterns = [
-      /from\s+["']\.\/runtime/,
-      /from\s+["']\.\/bootstrap/,
-      /from\s+["']\.\/managed-runtime/,
-      /from\s+["']\.\/api-orchestrator-adapter/,
-      /from\s+["']\.\/message-pipeline/,
+      /from\s+["']\.\/runtime["'.]/,
+      /from\s+["']\.\/bootstrap(?!\/)/,
+      /from\s+["']\.\/managed-runtime["'.]/,
+      /from\s+["']\.\/api-orchestrator-adapter["'.]/,
+      /from\s+["']\.\/message-pipeline["'.]/,
     ];
 
     // Walk src/ for .ts files, excluding __tests__ and node_modules

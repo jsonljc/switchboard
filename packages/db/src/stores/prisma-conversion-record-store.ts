@@ -47,6 +47,9 @@ export class PrismaConversionRecordStore {
   constructor(private prisma: PrismaDbClient) {}
 
   async record(event: RecordInput): Promise<void> {
+    const bookingId =
+      typeof event.metadata.bookingId === "string" ? event.metadata.bookingId : null;
+
     await this.prisma.conversionRecord.upsert({
       where: { eventId: event.eventId },
       create: {
@@ -59,6 +62,7 @@ export class PrismaConversionRecordStore {
         sourceCampaignId: event.sourceCampaignId ?? null,
         sourceChannel: event.sourceChannel ?? null,
         agentDeploymentId: event.agentDeploymentId ?? null,
+        bookingId,
         metadata: event.metadata as Record<string, string | number | boolean | null>,
         occurredAt: event.occurredAt,
       },

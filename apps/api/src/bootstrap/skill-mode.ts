@@ -37,6 +37,14 @@ interface SkillModeBootstrapDeps {
    * hook wiring is skipped (e.g. in test or environments without a playbook store).
    */
   playbookReader?: PlaybookReader;
+  /**
+   * Optional outcome-informed context builder. When provided, the Alex builder
+   * injects OUTCOME_PATTERNS into the skill prompt. When absent, OUTCOME_PATTERNS
+   * is an empty string and the template placeholder renders as a clean blank line.
+   * Constructed in app.ts from conversationDeps.retriever + Prisma memory stores
+   * so the same underlying DB client and embedding adapter are reused.
+   */
+  contextBuilder?: import("@switchboard/core").ContextBuilder;
 }
 
 export async function bootstrapSkillMode(
@@ -522,8 +530,9 @@ export async function bootstrapSkillMode(
       contactId: ctx.workUnit.parameters.contactId as string,
       phone: ctx.workUnit.parameters.phone as string | undefined,
       channel: ctx.workUnit.parameters.channel as string | undefined,
+      message: ctx.workUnit.parameters._message as string | undefined,
     };
-    return alexBuilder(agentContext, config, ctx.stores);
+    return alexBuilder(agentContext, config, ctx.stores, { contextBuilder: deps.contextBuilder });
   });
 
   modeRegistry.register(

@@ -21,6 +21,11 @@ describe("useReportData (PR-R1 fixture form)", () => {
       process.env.NEXT_PUBLIC_REPORTS_LIVE = originalEnv;
     }
   });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.doUnmock("@/hooks/use-query-keys");
+    vi.resetModules();
+  });
 
   function createWrapper() {
     const queryClient = new QueryClient({
@@ -58,9 +63,64 @@ describe("useReportData (PR-R1 fixture form)", () => {
     expect(result.current.data).toEqual(goodFixture);
   });
 
-  it("when NEXT_PUBLIC_REPORTS_LIVE is 'true', the hook still returns fixture in PR-R1", () => {
+  it("calls /api/dashboard/reports with the window param when NEXT_PUBLIC_REPORTS_LIVE='true'", async () => {
     process.env.NEXT_PUBLIC_REPORTS_LIVE = "true";
-    const { result } = renderHook(() => useReportData("THIS MONTH"), { wrapper: createWrapper() });
-    expect(result.current.data).toEqual(goodFixture);
+    vi.resetModules();
+    vi.doMock("@/hooks/use-query-keys", () => ({
+      useScopedQueryKeys: () => ({
+        reports: {
+          all: () => ["test-org", "reports"] as const,
+          byWindow: (w: string) => ["test-org", "reports", w] as const,
+        },
+      }),
+    }));
+    const { useReportData: liveUseReportData } = await import("../use-report-data");
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify(goodFixture), { status: 200 }));
+
+    const { result } = renderHook(() => liveUseReportData("THIS MONTH"), {
+      wrapper: createWrapper(),
+    });
+
+    const { waitFor } = await import("@testing-library/react");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/reports?window=THIS%20MONTH");
+    await waitFor(() => expect(result.current.data).toEqual(goodFixture));
+
+    fetchMock.mockRestore();
+    vi.doUnmock("@/hooks/use-query-keys");
+  });
+
+  it("surfaces fetch errors as `error` (no silent fallback to fixtures in live mode)", async () => {
+    process.env.NEXT_PUBLIC_REPORTS_LIVE = "true";
+    vi.resetModules();
+    vi.doMock("@/hooks/use-query-keys", () => ({
+      useScopedQueryKeys: () => ({
+        reports: {
+          all: () => ["test-org", "reports"] as const,
+          byWindow: (w: string) => ["test-org", "reports", w] as const,
+        },
+      }),
+    }));
+    const { useReportData: liveUseReportData } = await import("../use-report-data");
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }));
+
+    const { result } = renderHook(() => liveUseReportData("THIS MONTH"), {
+      wrapper: createWrapper(),
+    });
+
+    const { waitFor } = await import("@testing-library/react");
+    await waitFor(() => {
+      expect(result.current.error).not.toBeNull();
+      expect(result.current.data).toBeUndefined();
+    });
+
+    fetchMock.mockRestore();
+    vi.doUnmock("@/hooks/use-query-keys");
   });
 });
