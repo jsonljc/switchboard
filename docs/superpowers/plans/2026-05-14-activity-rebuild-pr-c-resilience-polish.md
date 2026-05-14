@@ -82,6 +82,8 @@ Per CLAUDE.md doctrine:
 7. **ESM `.js` extensions:** dashboard PRODUCTION files (`apps/dashboard/src/...`) do NOT use `.js` on relative imports. TEST files DO use `.js`. This matches the existing codebase convention.
 8. **No `console.log`, no `any`, no unused-var without `_` prefix.** Per CLAUDE.md.
 9. **Husky pre-commit** auto-formats with prettier/eslint and silently rewrites staged files. Don't fight it; the linter changes are intentional.
+10. **Surgical edits over file replacement.** The page-level integration (Task 7) is the highest-risk task because `activity-page.tsx` carries URL sync, filter state, cursor stack, fixture/live branching, and drawer state — all of which PR-A and PR-B already got right. Prefer line-level `Edit` operations that change ONLY the imports, the destructure, the render-tree branches, and the additions; do NOT rewrite the file end-to-end unless your diff is genuinely smaller than the file. The same rule applies anywhere — patch where you can, replace only when you must.
+11. **No fabricated telemetry.** Where the audit surface displays facts about the system (HTTP status, durations, timestamps), only render them when the page actually has them. The error banner accepts optional `method` / `status` / `durationMs`, and the page passes only what React Query genuinely gives us (path + onRetry). Inventing a 503 / 8s when we don't know is worse than honest minimal copy.
 
 ---
 
@@ -437,6 +439,13 @@ git commit -m "style(dashboard): activity error-banner / stale-pill / empty / pa
 
 Spec §5.5 + §12 H5 + §12 walk-the-page #4. The banner is a presentational component — page-level logic (caching the last successful rows so the table stays mounted) lives in `activity-page.tsx` (Task 7).
 
+**Telemetry honesty (per workflow rule #11):** The locked design renders "GET /api/dashboard/activity returned 503 after 8s" as a fully-populated example. In production, `useActivityList` throws a generic `Error("Failed to load activity: ${status}")` and we have no measured duration — the error object does NOT carry method, duration, or a parsed status code we can trust without coupling the banner to the hook's error-message format. The banner therefore accepts `method`, `status`, and `durationMs` as OPTIONAL props and degrades its copy:
+
+- All three known: `${method} ${path} returned ${status} after ${seconds}s. The previous page of entries is still shown below; nothing was dropped.`
+- None known: `Request to ${path} failed. The previous page of entries is still shown below; nothing was dropped.`
+
+The page (Task 7) passes only `path` and `onRetry`; the banner's optional props exist so a future PR that surfaces real telemetry (e.g. an Inngest-style observation wrapper) can wire them up without changing the component signature.
+
 - [ ] **Step 1: Write the failing tests**
 
 Create `apps/dashboard/src/app/\(auth\)/\(mercury\)/activity/components/__tests__/error-banner.test.tsx`:
@@ -448,7 +457,7 @@ import userEvent from "@testing-library/user-event";
 import { ErrorBanner } from "../error-banner.js";
 
 describe("ErrorBanner", () => {
-  it("renders eyebrow + italic display-serif message with method/path/status", () => {
+  it("renders eyebrow + italic display-serif message with full telemetry when all fields are known", () => {
     render(
       <ErrorBanner
         method="GET"
@@ -467,48 +476,39 @@ describe("ErrorBanner", () => {
     ).toBeInTheDocument();
   });
 
+  it("degrades to minimal copy when only the path is known (no fabricated telemetry)", () => {
+    render(<ErrorBanner path="/api/dashboard/activity" onRetry={() => {}} />);
+    expect(
+      screen.getByText(/Request to \/api\/dashboard\/activity failed\./),
+    ).toBeInTheDocument();
+    // Make sure we did NOT invent a status or duration.
+    expect(screen.queryByText(/503/)).toBeNull();
+    expect(screen.queryByText(/after \d+s/)).toBeNull();
+    // The trailing context line still holds.
+    expect(
+      screen.getByText(/previous page of entries is still shown below; nothing was dropped/),
+    ).toBeInTheDocument();
+  });
+
   it("retry button fires onRetry on click", async () => {
     const onRetry = vi.fn();
-    render(
-      <ErrorBanner
-        method="GET"
-        path="/api/dashboard/activity"
-        status={503}
-        durationMs={8000}
-        onRetry={onRetry}
-      />,
-    );
+    render(<ErrorBanner path="/api/dashboard/activity" onRetry={onRetry} />);
     await userEvent.setup().click(screen.getByRole("button", { name: /retry/i }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
   it("has role='alert' so AT users get the failure announcement", () => {
-    render(
-      <ErrorBanner
-        method="GET"
-        path="/api/dashboard/activity"
-        status={503}
-        durationMs={8000}
-        onRetry={() => {}}
-      />,
-    );
+    render(<ErrorBanner path="/api/dashboard/activity" onRetry={() => {}} />);
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
-  it("rounds sub-second durations to '0s' and uses '<status>' fallback when status is null", () => {
-    render(
-      <ErrorBanner
-        method="GET"
-        path="/api/dashboard/activity"
-        status={null}
-        durationMs={140}
-        onRetry={() => {}}
-      />,
-    );
-    // Format: "<METHOD> <path> failed after <Ns>." when status is null.
+  it("includes partial telemetry only when complete (method+status+durationMs all present) — otherwise minimal copy", () => {
+    // Only method + status, no duration → minimal copy (we treat partial as unknown).
+    render(<ErrorBanner method="GET" status={503} path="/api/dashboard/activity" onRetry={() => {}} />);
     expect(
-      screen.getByText(/GET \/api\/dashboard\/activity failed after 0s/),
+      screen.getByText(/Request to \/api\/dashboard\/activity failed\./),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/returned 503/)).toBeNull();
   });
 });
 ```
@@ -531,14 +531,14 @@ Create `apps/dashboard/src/app/\(auth\)/\(mercury\)/activity/components/error-ba
 import styles from "../activity.module.css";
 
 export interface ErrorBannerProps {
-  /** HTTP method of the failing request (e.g. "GET"). */
-  method: string;
-  /** Path of the failing request (e.g. "/api/dashboard/activity"). */
+  /** Path of the failing request. Required — primary identifier in the banner copy. */
   path: string;
-  /** HTTP status code, or null if the request errored before a response was received. */
-  status: number | null;
-  /** Approximate duration of the failed attempt in milliseconds. */
-  durationMs: number;
+  /** HTTP method, optional. Only used when method + status + durationMs are ALL known. */
+  method?: string;
+  /** HTTP status code, optional. Only used when method + status + durationMs are ALL known. */
+  status?: number;
+  /** Approximate duration of the failed attempt in ms. Only used when method + status + durationMs are ALL known. */
+  durationMs?: number;
   /** Fired when the operator clicks the [Retry] button. */
   onRetry: () => void;
 }
@@ -550,14 +550,18 @@ export interface ErrorBannerProps {
  * is in an error state. The previous page of rows survives the error so
  * operators don't lose context mid-investigation.
  *
+ * Copy degrades when telemetry is unknown: an audit surface should never
+ * fabricate operational details. Partial telemetry (e.g. status without
+ * duration) is treated as unknown — all-or-nothing keeps the message honest.
+ *
  * role="alert" — AT users get the failure announcement on appearance.
  */
-export function ErrorBanner({ method, path, status, durationMs, onRetry }: ErrorBannerProps) {
-  const seconds = Math.round(durationMs / 1000);
-  const message =
-    status !== null
-      ? `${method} ${path} returned ${status} after ${seconds}s. The previous page of entries is still shown below; nothing was dropped.`
-      : `${method} ${path} failed after ${seconds}s. The previous page of entries is still shown below; nothing was dropped.`;
+export function ErrorBanner({ path, method, status, durationMs, onRetry }: ErrorBannerProps) {
+  const hasFullTelemetry =
+    method !== undefined && status !== undefined && durationMs !== undefined;
+  const message = hasFullTelemetry
+    ? `${method} ${path} returned ${status} after ${Math.round(durationMs / 1000)}s. The previous page of entries is still shown below; nothing was dropped.`
+    : `Request to ${path} failed. The previous page of entries is still shown below; nothing was dropped.`;
 
   return (
     <div role="alert" className={styles.errBanner}>
@@ -577,7 +581,7 @@ export function ErrorBanner({ method, path, status, durationMs, onRetry }: Error
 TZ=UTC pnpm --filter @switchboard/dashboard vitest run components/__tests__/error-banner.test.tsx
 ```
 
-Expected: 4 tests PASS.
+Expected: 5 tests PASS.
 
 - [ ] **Step 4: Commit**
 
@@ -767,7 +771,7 @@ git commit -m "feat(dashboard): stale-pill component for /activity (PR-C)"
 - Modify: `apps/dashboard/src/app/(auth)/(mercury)/activity/components/empty-state.tsx`
 - Create: `apps/dashboard/src/app/(auth)/(mercury)/activity/components/__tests__/empty-state.test.tsx`
 
-Spec §5.5: two variants with distinct copy. `zero` has the ledger-health metadata block (last recorded + chain head verified); `filtered` has the scanned-count prose + Clear CTA. The italic accent on "recorded yet" / "these filters" lives INSIDE the empty state (spec §1.5 last paragraph — editorial pauses on a Tools surface are OK inside empty states).
+Spec §5.5: two variants with distinct copy. `filtered` has the scanned-count prose + Clear CTA. `zero` declares ledger health — but **departs from the locked design's `last recorded · ${date}` line** which is semantically contradictory under the spec §7 state matrix (zero variant fires when `rows.length === 0 && !narrowing && scope === "operational"` — i.e., there genuinely is no last-recorded entry to surface). We render `writer connected · chain head verified` instead, which keeps the ledger-health intent without inventing a timestamp. The italic accent on "recorded yet" / "these filters" lives INSIDE the empty state (spec §1.5 last paragraph — editorial pauses on a Tools surface are OK inside empty states).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -780,20 +784,17 @@ import userEvent from "@testing-library/user-event";
 import { EmptyState } from "../empty-state.js";
 
 describe("EmptyState — zero variant", () => {
-  it("renders eyebrow, italic-accent headline, ledger-health prose, and last-recorded metadata", () => {
-    render(<EmptyState variant="zero" lastRecordedIso="2026-05-14T11:55:00.000Z" />);
+  it("renders eyebrow, italic-accent headline, ledger-health prose, and the writer-connected metadata", () => {
+    render(<EmptyState variant="zero" />);
     expect(screen.getByText(/ledger health/i)).toBeInTheDocument();
     // The headline carries the italic <em> accent on "recorded yet".
     expect(screen.getByText(/No activity/)).toBeInTheDocument();
     expect(screen.getByText("recorded yet")).toBeInTheDocument();
     expect(screen.getByText("recorded yet").tagName.toLowerCase()).toBe("em");
     expect(screen.getByText(/chain is healthy and the writer is connected/i)).toBeInTheDocument();
-    expect(screen.getByText(/last recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/writer connected/i)).toBeInTheDocument();
     expect(screen.getByText(/chain head verified/i)).toBeInTheDocument();
-  });
-
-  it("hides the last-recorded metadata block when lastRecordedIso is null", () => {
-    render(<EmptyState variant="zero" lastRecordedIso={null} />);
+    // Crucially: no "last recorded · <date>" line — there is no last entry under zero.
     expect(screen.queryByText(/last recorded/i)).toBeNull();
   });
 });
@@ -825,7 +826,7 @@ Run:
 TZ=UTC pnpm --filter @switchboard/dashboard vitest run components/__tests__/empty-state.test.tsx
 ```
 
-Expected: FAIL on the new props / new copy (the v1 component renders "No activity yet." and has no `lastRecordedIso` / `scannedCount` props).
+Expected: FAIL on the new copy / props (the v1 component renders "No activity yet." and has no `scannedCount` prop).
 
 - [ ] **Step 2: Implement the rewrite**
 
@@ -837,11 +838,7 @@ Replace the contents of `apps/dashboard/src/app/\(auth\)/\(mercury\)/activity/co
 import styles from "../activity.module.css";
 
 export type EmptyStateProps =
-  | {
-      variant: "zero";
-      /** ISO string of the most recent ledger entry available to the page (or null). */
-      lastRecordedIso: string | null;
-    }
+  | { variant: "zero" }
   | {
       variant: "filtered";
       /** Total rows the current scope scanned before narrowing returned zero matches. */
@@ -858,7 +855,9 @@ export type EmptyStateProps =
  * - "zero" — shown when the ledger itself has no rows for the org under
  *   operational scope and no narrowing is active. Eyebrow "ledger health",
  *   display-serif headline "No activity *recorded yet*.", prose context,
- *   and a mono "last recorded" / "chain head verified" metadata line.
+ *   and a mono "writer connected · chain head verified" metadata line.
+ *   We deliberately do NOT show a "last recorded · <date>" line — zero
+ *   means there is no last entry, so a timestamp here would lie.
  *
  * - "filtered" — shown when narrowing returns zero matches. Eyebrow
  *   "no matches", display-serif headline "No entries match *these filters*.",
@@ -882,14 +881,11 @@ export function EmptyState(props: EmptyStateProps) {
           this org&apos;s window. Once an agent proposes a mutation or an operator changes a
           policy, entries will appear here, hash-chained to the genesis row.
         </p>
-        {props.lastRecordedIso !== null && (
-          <div className={styles.emptyMeta}>
-            <span>last recorded</span>
-            <b className={styles.emptyMetaB}>{new Date(props.lastRecordedIso).toLocaleString()}</b>
-            <span className={styles.emptyMetaSep}>·</span>
-            <span>chain head verified</span>
-          </div>
-        )}
+        <div className={styles.emptyMeta}>
+          <span>writer connected</span>
+          <span className={styles.emptyMetaSep}>·</span>
+          <span>chain head verified</span>
+        </div>
       </div>
     );
   }
@@ -921,7 +917,7 @@ export function EmptyState(props: EmptyStateProps) {
 TZ=UTC pnpm --filter @switchboard/dashboard vitest run components/__tests__/empty-state.test.tsx
 ```
 
-Expected: 4 tests PASS.
+Expected: 3 tests PASS.
 
 - [ ] **Step 4: Commit**
 
@@ -1121,10 +1117,12 @@ PR-C's target tree:
 {isError && <ErrorBanner ... />}
 {isLoading && !hasRenderedOnce ? <Skeleton /> : rows.length === 0 ? <EmptyState ... /> : <ActivityTable rows={tableRows} />}
 {showPagination && <PaginationFooter count={tableRows.length} ... />}
-{dataUpdatedAt > 0 && <StalePill ... />}
+{isActivityLive() && dataUpdatedAt > 0 && <StalePill ... />}
 ```
 
-`tableRows` is `data?.rows` when present, otherwise the last successful rows we remember in a ref (so H5: a fetch error keeps the table mounted with the previous page).
+`tableRows` is `data?.rows` when present, otherwise the last successful rows we remember in **reactive state** (`useState` + `useEffect`, not a ref) so H5 is explicit and testable: a fetch error keeps the table mounted with the previous page. The stale pill is additionally gated on `isActivityLive()` — fixture mode has no real fetch, so showing "fetched just now" chrome there would be misleading.
+
+**Edit strategy:** the post-PR-B `activity-page.tsx` is 334 lines and handles URL sync, filter signature reset, fixture/live branching, cursor stack, and drawer state — all PR-A + PR-B logic that must NOT regress. Apply the changes as surgical `Edit` calls against specific blocks of the file. The "Expected final state" code block at the end of this task is a REFERENCE for what the file should look like after all the edits land, not a copy-paste target — if your line-level diffs produce equivalent output, prefer them over a wholesale rewrite.
 
 - [ ] **Step 1: Surface `dataUpdatedAt` and `isFetching` from `useActivityList`**
 
@@ -1238,300 +1236,123 @@ TZ=UTC pnpm --filter @switchboard/dashboard vitest run __tests__/activity-page.t
 
 Expected: FAIL — current page render branches `isError ? <EmptyState />` and never renders ErrorBanner or StalePill.
 
-- [ ] **Step 3: Restructure the page render tree**
+- [ ] **Step 3: Restructure the page render tree (surgical edits)**
 
-Replace the contents of `apps/dashboard/src/app/\(auth\)/\(mercury\)/activity/activity-page.tsx`:
+Apply these edits to `apps/dashboard/src/app/\(auth\)/\(mercury\)/activity/activity-page.tsx`. Each edit is a small, focused change to a specific block. Do not rewrite the file end-to-end.
+
+**Edit 3a — Extend the React + component imports.** Find the top-of-file import block. Add `useEffect` to the existing `react` import only if it's not already there (PR-B's file already imports `useEffect`, so this is a no-op in practice — verify and skip). Add the two new component imports beside the existing ones:
 
 ```tsx
-"use client";
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import type { AuditEntriesListQuery, AuditEntryBrowseRow } from "@switchboard/schemas";
-import { AuditEventTypeSchema, OPERATIONAL_AUDIT_EVENT_TYPES } from "@switchboard/schemas";
-import { isMercuryToolLive } from "@/lib/route-availability";
-import { useActivityList } from "./hooks/use-activity-list";
-import { ACTIVITY_FIXTURES } from "./fixtures";
-import { ActivityHeader } from "./components/header";
-import { FilterStrip } from "./components/filter-strip";
-import type { ScopeBase, EffectiveScope } from "./components/scope-segment";
-import type { ActorType } from "./components/actor-pills";
-import type { DateRangeValue } from "./components/date-range";
-import type { EntitySelectorValue } from "./components/entity-selector";
-import { ActivityTable } from "./components/activity-table";
-import { PaginationFooter } from "./components/pagination-footer";
-import { EmptyState } from "./components/empty-state";
 import { ErrorBanner } from "./components/error-banner";
 import { StalePill } from "./components/stale-pill";
-import { EVENT_TYPE_BANDS } from "./event-bands";
-import styles from "./activity.module.css";
+```
 
-const isActivityLive = (): boolean => isMercuryToolLive("activity");
+**Edit 3b — Surface `isFetching` and `dataUpdatedAt` from the hook destructure.** Find the line:
 
-const OPERATIONAL_SET = new Set<string>(OPERATIONAL_AUDIT_EVENT_TYPES);
+```tsx
+  const { data, isLoading, isError, refetch } = useActivityList(query);
+```
 
-// ---------------------------------------------------------------------------
-// URL reads (read-only — we never write URLs)
-// ---------------------------------------------------------------------------
+Replace with:
 
-interface NarrowingState {
-  eventType: string | null;
-  actorType: ActorType | null;
-  dateRange: DateRangeValue;
-  entity: EntitySelectorValue;
-}
-
-function readScope(sp: URLSearchParams): ScopeBase {
-  return sp.get("scope") === "all" ? "all" : "operational";
-}
-
-function isActorType(v: string): v is ActorType {
-  return v === "user" || v === "agent" || v === "system" || v === "service_account";
-}
-
-const KNOWN_EVENT_TYPES = new Set<string>(AuditEventTypeSchema.options);
-
-function readEventType(sp: URLSearchParams): string | null {
-  const raw = sp.get("eventType");
-  if (raw && KNOWN_EVENT_TYPES.has(raw)) return raw;
-  return null;
-}
-
-function readNarrowing(sp: URLSearchParams): NarrowingState {
-  const actorParam = sp.get("actorType");
-  return {
-    eventType: readEventType(sp),
-    actorType: actorParam && isActorType(actorParam) ? actorParam : null,
-    dateRange: {
-      after: sp.get("after"),
-      before: sp.get("before"),
-    },
-    entity: {
-      entityType: sp.get("entityType"),
-      entityId: sp.get("entityId"),
-    },
-  };
-}
-
-function isNarrowingActive(n: NarrowingState): boolean {
-  return !!(
-    n.eventType ||
-    n.actorType ||
-    n.dateRange.after ||
-    n.dateRange.before ||
-    n.entity.entityType ||
-    n.entity.entityId
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Fixture-mode in-memory filtering
-// ---------------------------------------------------------------------------
-
-function filterRowsInMemory(
-  rows: ReadonlyArray<AuditEntryBrowseRow>,
-  scope: ScopeBase,
-  n: NarrowingState,
-): AuditEntryBrowseRow[] {
-  let out = rows.slice();
-  if (scope === "operational") {
-    out = out.filter((r) => OPERATIONAL_SET.has(r.eventType));
-  }
-  if (n.eventType) out = out.filter((r) => r.eventType === n.eventType);
-  if (n.actorType) out = out.filter((r) => r.actorType === n.actorType);
-  if (n.dateRange.after) {
-    const t = new Date(n.dateRange.after).getTime();
-    out = out.filter((r) => new Date(r.timestamp).getTime() >= t);
-  }
-  if (n.dateRange.before) {
-    const t = new Date(n.dateRange.before).getTime() + 24 * 60 * 60 * 1000;
-    out = out.filter((r) => new Date(r.timestamp).getTime() < t);
-  }
-  if (n.entity.entityType) out = out.filter((r) => r.entityType === n.entity.entityType);
-  if (n.entity.entityId) {
-    const q = n.entity.entityId.toLowerCase();
-    out = out.filter((r) => r.entityId.toLowerCase().includes(q));
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
-export function ActivityPage() {
-  const searchParams = useSearchParams();
-  const sp = searchParams ?? new URLSearchParams();
-
-  // ---- Filter state (local; URL params are read on mount + back/forward) ----
-  const initialScope = readScope(sp);
-  const initialNarrowing = readNarrowing(sp);
-  const [scope, setScope] = useState<ScopeBase>(initialScope);
-  const [eventType, setEventType] = useState<string | null>(initialNarrowing.eventType);
-  const [actorType, setActorType] = useState<ActorType | null>(initialNarrowing.actorType);
-  const [dateRange, setDateRange] = useState<DateRangeValue>(initialNarrowing.dateRange);
-  const [entity, setEntity] = useState<EntitySelectorValue>(initialNarrowing.entity);
-
-  // ---- Cursor / drawer state ----
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [prevCursorStack, setPrevCursorStack] = useState<string[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  // ---- Back/forward sync from URL ----
-  const urlScope = readScope(sp);
-  useEffect(() => {
-    setScope(urlScope);
-  }, [urlScope]);
-
-  const urlEventType = readEventType(sp);
-  const urlActorParam = sp.get("actorType");
-  const urlActor: ActorType | null =
-    urlActorParam && isActorType(urlActorParam) ? urlActorParam : null;
-  const urlAfter = sp.get("after");
-  const urlBefore = sp.get("before");
-  const urlEntityType = sp.get("entityType");
-  const urlEntityId = sp.get("entityId");
-  useEffect(() => {
-    setEventType(urlEventType);
-    setActorType(urlActor);
-    setDateRange({ after: urlAfter, before: urlBefore });
-    setEntity({ entityType: urlEntityType, entityId: urlEntityId });
-  }, [urlEventType, urlActor, urlAfter, urlBefore, urlEntityType, urlEntityId]);
-
-  // ---- Filter-signature reset (cursor stack + expanded drawer) ----
-  const narrowing: NarrowingState = useMemo(
-    () => ({ eventType, actorType, dateRange, entity }),
-    [eventType, actorType, dateRange, entity],
-  );
-  const narrowingActive = isNarrowingActive(narrowing);
-  const filterSignature = useMemo(
-    () =>
-      [
-        scope,
-        eventType ?? "",
-        actorType ?? "",
-        dateRange.after ?? "",
-        dateRange.before ?? "",
-        entity.entityType ?? "",
-        entity.entityId ?? "",
-      ].join("|"),
-    [scope, eventType, actorType, dateRange, entity],
-  );
-  useEffect(() => {
-    setCursor(null);
-    setPrevCursorStack([]);
-    setExpandedId(null);
-  }, [filterSignature]);
-
-  // ---- Query construction ----
-  const query = useMemo<Partial<AuditEntriesListQuery>>(
-    () => ({
-      scope,
-      cursor: cursor ?? undefined,
-      eventType: (eventType as AuditEntriesListQuery["eventType"]) ?? undefined,
-      actorType: (actorType as AuditEntriesListQuery["actorType"]) ?? undefined,
-      entityType: entity.entityType ?? undefined,
-      entityId: entity.entityId ?? undefined,
-      after: dateRange.after ?? undefined,
-      before: dateRange.before ?? undefined,
-    }),
-    [scope, cursor, eventType, actorType, dateRange, entity],
-  );
-
-  // ---- Data — live or fixture ----
+```tsx
   const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useActivityList(query);
+```
 
-  // H5: remember the most recently rendered rows so a fetch error does not
-  // unmount the table. When data is undefined (loading or error), we fall
-  // back to the last successful render. On the very first error before any
-  // successful render, lastRowsRef stays empty and EmptyState/Skeleton wins.
-  const lastRowsRef = useRef<ReadonlyArray<AuditEntryBrowseRow>>([]);
+**Edit 3c — Add reactive last-successful-rows state (H5 enforcement).** Immediately after the destructure above, insert:
 
-  let liveRows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? lastRowsRef.current;
+```tsx
+  // H5 enforcement: cache the most recent successful rows in REACTIVE state
+  // so a fetch error never unmounts the table. A useState+useEffect pair (over
+  // useRef) keeps the cache reactive and testable — refs would silently
+  // diverge under test rerenders.
+  const [lastSuccessfulRows, setLastSuccessfulRows] = useState<
+    ReadonlyArray<AuditEntryBrowseRow>
+  >([]);
+  useEffect(() => {
+    if (data?.rows !== undefined) {
+      setLastSuccessfulRows(data.rows);
+    }
+  }, [data?.rows]);
+```
+
+**Edit 3d — Replace the row-resolution block.** Find the block that currently reads:
+
+```tsx
+  let rows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? [];
   const nextCursor = data?.nextCursor ?? null;
   const apiScope: EffectiveScope = data?.scope ?? scope;
 
-  if (data?.rows !== undefined) {
-    lastRowsRef.current = data.rows;
-    liveRows = data.rows;
-  }
-
-  let rows: ReadonlyArray<AuditEntryBrowseRow>;
   if (!isActivityLive()) {
     rows = filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
-  } else {
-    rows = liveRows;
   }
+```
 
-  // Narrowing wins for effective scope (fixture mode has no API to report it).
-  const effectiveScope: EffectiveScope = narrowingActive ? "custom" : apiScope;
+Replace with:
 
-  // ---- Page-local counts ----
-  const sourceRows: ReadonlyArray<AuditEntryBrowseRow> = isActivityLive()
-    ? rows
-    : ACTIVITY_FIXTURES;
-  const counts = useMemo(() => {
-    const operationalCount = sourceRows.filter((r) => OPERATIONAL_SET.has(r.eventType)).length;
-    const allCount = sourceRows.length;
-    const byActor: Record<ActorType, number> = {
-      user: 0,
-      agent: 0,
-      system: 0,
-      service_account: 0,
-    };
-    const byEvent: Record<string, number> = {};
-    for (const r of sourceRows) {
-      byActor[r.actorType] = (byActor[r.actorType] ?? 0) + 1;
-      byEvent[r.eventType] = (byEvent[r.eventType] ?? 0) + 1;
-    }
-    return { operationalCount, allCount, byActor, byEvent };
-  }, [sourceRows]);
+```tsx
+  const nextCursor = data?.nextCursor ?? null;
+  const apiScope: EffectiveScope = data?.scope ?? scope;
 
+  // Live rows fall back to the cached last-successful page when `data` is
+  // undefined (loading or error). H5: a refetch error keeps the table mounted.
+  const liveRows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? lastSuccessfulRows;
+
+  const rows: ReadonlyArray<AuditEntryBrowseRow> = isActivityLive()
+    ? liveRows
+    : filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
+```
+
+**Edit 3e — Compute `scannedCount` for the filtered-empty prose.** Find the `entityTypes` `useMemo` block. Immediately BEFORE it, insert:
+
+```tsx
   // Scanned-count for the filtered-empty prose: number of rows the current
   // scope contains BEFORE narrowing is applied. Under operational scope this
   // is the operational subset; under "all" it's every row on the page.
   const scannedCount = effectiveScope === "all" ? counts.allCount : counts.operationalCount;
+```
 
-  const entityTypes = useMemo(
-    () => Array.from(new Set(sourceRows.map((r) => r.entityType))).sort(),
-    [sourceRows],
-  );
+**Edit 3f — Remove the now-unused `onResetToDefault` handler.** Find the block:
 
-  // ---- Handlers ----
-  const onClearFilters = useCallback(() => {
-    setEventType(null);
-    setActorType(null);
-    setDateRange({ after: null, before: null });
-    setEntity({ entityType: null, entityId: null });
-  }, []);
+```tsx
+  const onResetToDefault = useCallback(() => {
+    setScope("operational");
+    onClearFilters();
+  }, [onClearFilters]);
+```
 
-  const onNext = useCallback(() => {
-    if (!nextCursor) return;
-    setPrevCursorStack((prev) => [...prev, cursor ?? ""]);
-    setCursor(nextCursor);
-  }, [cursor, nextCursor]);
+Delete it. Under H5 there is no longer an empty-filtered branch that needs the "reset to default" semantics — the filtered branch uses `onClearFilters` directly (which preserves the operator's base scope per PR-B acceptance #11).
 
-  const onPrev = useCallback(() => {
-    setPrevCursorStack((prev) => {
-      const stack = [...prev];
-      const prevCursor = stack.pop() ?? null;
-      setCursor(prevCursor);
-      return stack;
-    });
-  }, []);
+**Edit 3g — Add the `onRefetch` callback.** Immediately after the (now deleted) `onResetToDefault` slot — between `onClearFilters` and `onNext` — insert:
 
+```tsx
   const onRefetch = useCallback(() => {
     void refetch();
   }, [refetch]);
+```
 
+**Edit 3h — Update render-state derivations.** Find the `emptyVariant` / `showPagination` block:
+
+```tsx
+  // ---- Render-state derivations ----
+  const emptyVariant = narrowingActive ? "filtered" : "zero";
+  const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
+```
+
+Replace with:
+
+```tsx
   // ---- Render-state derivations ----
   const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
   const showSkeleton = isLoading && rows.length === 0;
   const showEmpty = !showSkeleton && rows.length === 0 && !isError;
-  const lastRecordedIso = sourceRows[0]?.timestamp ?? null;
+```
 
-  return (
-    <div className={styles.activityPage}>
+(The `emptyVariant` local is gone — the JSX inlines the variant choice now.)
+
+**Edit 3i — Replace the section render-tree (banner above + table never unmounts).** Find the `return (` block and replace the whole `<section className={...}>` … `</section>` plus the closing `</div>` with the structure that puts the banner above the section, removes the `isError ? <EmptyState />` branch, and adds the stale pill after. Specifically, the entire JSX inside the page's outer `<div className={styles.activityPage}>` becomes:
+
+```tsx
       <ActivityHeader
         lastLedgerEntryIso={rows[0]?.timestamp ?? null}
         lastLedgerEntryHidden={narrowingActive}
@@ -1559,15 +1380,7 @@ export function ActivityPage() {
         onClearFilters={onClearFilters}
       />
 
-      {isError && (
-        <ErrorBanner
-          method="GET"
-          path="/api/dashboard/activity"
-          status={null}
-          durationMs={0}
-          onRetry={onRefetch}
-        />
-      )}
+      {isError && <ErrorBanner path="/api/dashboard/activity" onRetry={onRefetch} />}
 
       <section className={`${styles.section} ${styles.page}`}>
         {showSkeleton ? (
@@ -1584,7 +1397,7 @@ export function ActivityPage() {
               onClear={onClearFilters}
             />
           ) : (
-            <EmptyState variant="zero" lastRecordedIso={lastRecordedIso} />
+            <EmptyState variant="zero" />
           )
         ) : (
           <ActivityTable
@@ -1606,28 +1419,50 @@ export function ActivityPage() {
         )}
       </section>
 
-      {dataUpdatedAt > 0 && (
+      {isActivityLive() && dataUpdatedAt > 0 && (
         <StalePill
           fetchedAt={dataUpdatedAt}
           isFetching={isFetching}
           onRefetch={onRefetch}
         />
       )}
-    </div>
-  );
-}
 ```
 
-Key changes versus the post-PR-B file:
+Key changes:
 
-1. New imports: `ErrorBanner`, `StalePill`, `useRef`.
-2. `lastRowsRef` caches the most recent successful `data.rows` so H5 holds.
-3. `useActivityList` destructure now includes `isFetching` + `dataUpdatedAt`.
-4. The `isError` branch above the table renders `<ErrorBanner />` and the section below ignores `isError` for its decision tree — `showSkeleton` and `showEmpty` are explicit and avoid trampling the table when an error fires.
-5. `<StalePill />` renders below the section once `dataUpdatedAt > 0` (i.e., a successful fetch has landed).
-6. `PaginationFooter` now receives a `count` prop.
-7. EmptyState calls use the new prop shape (`scannedCount` / `lastRecordedIso`).
-8. `onResetToDefault` is removed — under H5 a fresh error never replaces the empty-state, so the only path back to operational-zero is the operator clicking Operational or clearing narrowing.
+- `<ErrorBanner />` sits ABOVE the `<section>` (not inside), so a fetch error never gates the section's render branches.
+- The section's three branches are `showSkeleton` / `showEmpty` / `<ActivityTable />`. None of them inspect `isError` — the error path falls through to the cached `rows` and renders the table.
+- The skeleton only shows when `isLoading && rows.length === 0` — once we have any rows (live or cached), a subsequent loading state keeps the table on screen.
+- `<StalePill />` is gated on `isActivityLive() && dataUpdatedAt > 0` — fixture mode never shows the pill (no real fetch happened), and live mode shows it only once the first successful fetch has landed.
+- The path passed to ErrorBanner is the literal `/api/dashboard/activity` we know from `useActivityList`; no fabricated method/status/duration.
+
+**Edit 3j (reference) — Expected final state of the imports + destructure block.** After Edits 3a + 3b + 3c, the top of the component should look like (use this as a reviewer's eyeball check, not as a copy target):
+
+```tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import type { AuditEntriesListQuery, AuditEntryBrowseRow } from "@switchboard/schemas";
+import { AuditEventTypeSchema, OPERATIONAL_AUDIT_EVENT_TYPES } from "@switchboard/schemas";
+import { isMercuryToolLive } from "@/lib/route-availability";
+import { useActivityList } from "./hooks/use-activity-list";
+import { ACTIVITY_FIXTURES } from "./fixtures";
+import { ActivityHeader } from "./components/header";
+import { FilterStrip } from "./components/filter-strip";
+import type { ScopeBase, EffectiveScope } from "./components/scope-segment";
+import type { ActorType } from "./components/actor-pills";
+import type { DateRangeValue } from "./components/date-range";
+import type { EntitySelectorValue } from "./components/entity-selector";
+import { ActivityTable } from "./components/activity-table";
+import { PaginationFooter } from "./components/pagination-footer";
+import { EmptyState } from "./components/empty-state";
+import { ErrorBanner } from "./components/error-banner";
+import { StalePill } from "./components/stale-pill";
+import { EVENT_TYPE_BANDS } from "./event-bands";
+import styles from "./activity.module.css";
+```
+
+If your destructured `useActivityList` line, your `lastSuccessfulRows` state, and your `liveRows` fallback all match the Edit-3b/3c/3d shapes above, the rest of the file should diff cleanly.
+
 
 - [ ] **Step 4: Run the page-level tests, expect PASS**
 
@@ -1849,33 +1684,51 @@ After PR-A landed the div-grid table + drawer rewrite and PR-B landed the filter
 
 - [ ] **Step 1: Verify candidate classes are orphaned**
 
-For each candidate class, run a grep over the activity directory ONLY (the class names are CSS-Module-local, so a hit anywhere in the directory means it's still live; a clean directory means safe to delete):
+CSS-Module class access can take three shapes — be defensive and grep all three before deleting anything:
+
+1. Dot access: `styles.cellTimestamp`
+2. Bracket access: `styles["cellTimestamp"]` or `styles[\`cell${key}\`]` (template-literal composition can hide a class behind a runtime key)
+3. Raw string in a hand-written `className`: `className="cellTimestamp"` (rare in CSS Modules but possible in legacy code)
+
+For each candidate class run the multi-shape grep. The class is safe to delete ONLY if all four checks come back empty:
 
 ```bash
 cd apps/dashboard/src/app/\(auth\)/\(mercury\)/activity
 
-for cls in \
-  emptyWrap emptyTitle emptyBody emptyAction \
-  paginationFooter moreButton arr \
-  stickyCol cellTimestamp cellEvent cellActor cellEntity cellSummary cellChevron cellMono cellHash \
-  riskBadge riskNone riskLow riskMedium riskHigh riskCritical \
-  drawerRow titleRow titleFolio toolbar \
+CANDIDATES=(
+  emptyWrap emptyTitle emptyBody emptyAction
+  paginationFooter moreButton arr
+  stickyCol cellTimestamp cellEvent cellActor cellEntity cellSummary cellChevron cellMono cellHash
+  riskBadge riskNone riskLow riskMedium riskHigh riskCritical
+  drawerRow titleRow titleFolio toolbar
   sectionLabel isMuted tabular fadeIn activityFadeIn isExpanded
-do
-  hits=$(grep -rn "styles\.${cls}\b\|\\\"${cls}\\\"" . --include='*.tsx' --include='*.ts' 2>/dev/null | wc -l | tr -d ' ')
-  echo "${cls}  hits=${hits}"
+)
+
+for cls in "${CANDIDATES[@]}"; do
+  dot=$(grep -rn "styles\.${cls}\b" . --include='*.tsx' --include='*.ts' 2>/dev/null | wc -l | tr -d ' ')
+  bracket=$(grep -rn "styles\[['\"]${cls}['\"]\]" . --include='*.tsx' --include='*.ts' 2>/dev/null | wc -l | tr -d ' ')
+  raw=$(grep -rn "className=[\"']${cls}[\"']" . --include='*.tsx' --include='*.ts' 2>/dev/null | wc -l | tr -d ' ')
+  echo "${cls}  dot=${dot}  bracket=${bracket}  raw=${raw}"
 done
 ```
 
-Expected: every class in the list reports `hits=0`. If any class reports `hits>0`, remove it from the deletion list below and KEEP it in the CSS — a `.tsx` still references it.
+Expected: every class reports `dot=0 bracket=0 raw=0`. If ANY of the three shapes is non-zero, drop that class from the deletion list and KEEP its CSS.
 
-Also verify the v1 `.activity thead`, `.activity tbody`, `.activity` (root) blocks are unreferenced:
+**Additional template-literal safety net.** Some PR-A code uses `data-risk={row.riskCategory}` and CSS attribute selectors (e.g. `.activityRow[data-risk="high"]`) rather than `.riskHigh` class composition. That's safe — the class names below are NOT composed at runtime in PR-A or PR-B. But verify with a broad grep just in case a future refactor introduced one:
 
 ```bash
-grep -rn "<table[^>]*activity\|className=.*activity\\b" . --include='*.tsx' | head -5
+grep -rn "styles\[" . --include='*.tsx' --include='*.ts'
 ```
 
-Expected: no hits on the legacy `<table>` selector usage (the v1 root `.activity` class targeted the legacy `<table>` element; PR-A's div-grid uses `.tableWrap` instead). If hits exist, the `.activity tbody/.thead` rules stay.
+Expected output: no hits. If any line uses `styles[<expression>]`, expand the candidate list manually before deleting — a template-literal access like `styles[\`risk${cap(cat)}\`]` would make ALL six `.risk*` classes load-bearing.
+
+Finally, confirm the v1 `<table>` root selector is dead. PR-A's div-grid uses `<div role="table" className={styles.tableWrap}>`, so the legacy `.activity tbody` / `.activity thead` selectors have no element to bind to. Verify by checking that no `.tsx` in this surface still emits a `<table>` element:
+
+```bash
+grep -rn "<table\b" . --include='*.tsx'
+```
+
+Expected: no hits. If hits exist, the `.activity*` table-element selectors stay.
 
 - [ ] **Step 2: Delete the verified-orphan blocks**
 
@@ -2022,7 +1875,9 @@ Expected: the squash commit body enumerates the per-task commits.
 
 ### How H5 is enforced
 
-The page caches `data.rows` into `lastRowsRef` on every successful render. When `data` flips to `undefined` (loading or error), `liveRows` falls back to `lastRowsRef.current`. The error banner is rendered ABOVE the section, not INSIDE it, so the section's render branches are independent of `isError`. The skeleton fires only on `isLoading && rows.length === 0` (first render before any data), so a refetch-error mid-session leaves the table on screen.
+The page caches `data.rows` into `lastSuccessfulRows` (React `useState`, not `useRef`) via a `useEffect` keyed on `data?.rows`. When `data` flips to `undefined` (loading or error), `liveRows` falls back to `lastSuccessfulRows`. The error banner is rendered ABOVE the section, not INSIDE it, so the section's render branches are independent of `isError`. The skeleton fires only on `isLoading && rows.length === 0` (first render before any data), so a refetch-error mid-session leaves the table on screen.
+
+**Why state, not a ref.** A ref would also work here, but a ref isn't reactive — under React Testing Library a ref update inside a render won't necessarily trigger the next render in the test. `useState` makes the cache observable to the test runner and to future refactors. The cost is one extra render after each successful fetch, which is unmeasurable on a 50-row table.
 
 ### Why `dataUpdatedAt` over `useEffect(fetchedAt = Date.now())`
 
