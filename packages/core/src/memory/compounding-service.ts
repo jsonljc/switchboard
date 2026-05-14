@@ -1,6 +1,11 @@
 import type { ConversationEndEvent } from "../channel-gateway/conversation-lifecycle.js";
 import type { EmbeddingAdapter } from "../embedding-adapter.js";
-import { computeConfidenceScore } from "@switchboard/schemas";
+import {
+  CANONICAL_KEY_PATTERN,
+  MEDSPA_CANONICAL_KEYS,
+  computeConfidenceScore,
+  isKnownCanonicalKey,
+} from "@switchboard/schemas";
 import { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
 import { shouldExtractOutcomePatterns } from "./outcome-pattern-extractor.js";
 import { resolveBookingAttribution, type BookingAttributionStore } from "./booking-attribution.js";
@@ -31,18 +36,36 @@ export interface CompoundingDeploymentMemoryStore {
     deploymentId: string,
     category: string,
   ): Promise<Array<{ id: string; content: string; sourceCount: number; confidence: number }>>;
+  findByCategoryAndCanonicalKey(
+    organizationId: string,
+    deploymentId: string,
+    category: string,
+    canonicalKey: string,
+  ): Promise<Array<{ id: string; content: string; sourceCount: number; confidence: number }>>;
   create(input: {
     organizationId: string;
     deploymentId: string;
     category: string;
     content: string;
     confidence?: number;
+    canonicalKey?: string | null;
   }): Promise<{ id: string }>;
   incrementConfidence(
     id: string,
     newConfidence: number,
   ): Promise<{ id: string; sourceCount: number }>;
   countByDeployment(organizationId: string, deploymentId: string): Promise<number>;
+}
+
+export interface DeploymentMemoryEvidenceStore {
+  recordEvidence(input: {
+    deploymentMemoryId: string;
+    organizationId: string;
+    bookingId: string | null;
+    conversionRecordId: string | null;
+    workTraceId: string | null;
+    attributionTier: "strong" | "fallback";
+  }): Promise<void>;
 }
 
 export interface CompoundingDeps {
@@ -67,6 +90,7 @@ export interface CompoundingDeps {
     }): Promise<void>;
   };
   bookingStore?: BookingAttributionStore;
+  evidenceStore?: DeploymentMemoryEvidenceStore;
   agentId?: string;
 }
 
@@ -78,12 +102,27 @@ const FAQ_DRAFT_EXPIRY_MS = 72 * 60 * 60 * 1000; // 72 hours
 const MAX_PATTERNS_PER_CONVERSATION = 5;
 const MAX_PATTERN_LENGTH = 500;
 
-function sanitizeExtractedPatterns(raw: unknown): string[] {
+interface ExtractedPattern {
+  text: string;
+  canonicalKey: string;
+}
+
+function sanitizeExtractedPatterns(raw: unknown): ExtractedPattern[] {
   if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((p): p is string => typeof p === "string" && p.trim().length > 0)
-    .slice(0, MAX_PATTERNS_PER_CONVERSATION)
-    .map((p) => (p.length > MAX_PATTERN_LENGTH ? p.slice(0, MAX_PATTERN_LENGTH) : p));
+  const candidates: ExtractedPattern[] = [];
+  for (const p of raw) {
+    if (p === null || typeof p !== "object") continue;
+    const candidate = p as { text?: unknown; canonicalKey?: unknown };
+    if (typeof candidate.text !== "string" || typeof candidate.canonicalKey !== "string") continue;
+    if (candidate.text.trim().length === 0) continue;
+    const text =
+      candidate.text.length > MAX_PATTERN_LENGTH
+        ? candidate.text.slice(0, MAX_PATTERN_LENGTH)
+        : candidate.text;
+    candidates.push({ text, canonicalKey: candidate.canonicalKey });
+    if (candidates.length >= MAX_PATTERNS_PER_CONVERSATION) break;
+  }
+  return candidates;
 }
 
 interface SummarizationResult {
@@ -94,7 +133,16 @@ interface SummarizationResult {
 interface ExtractionResult {
   facts: Array<{ fact: string; confidence: number; category: string }>;
   questions: string[];
-  patterns: string[]; // populated only when outcome is "booked"
+  patterns: ExtractedPattern[]; // populated only when outcome is "booked"
+}
+
+/**
+ * Per-deployment enum lookup. v1 ships medspa-only; vertical config arrives
+ * in a later workstream. Centralizing here means the call site does not
+ * branch on deployment shape, only on the resolved enumeration.
+ */
+function resolveCanonicalEnum(_deploymentId: string): readonly string[] {
+  return MEDSPA_CANONICAL_KEYS;
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -117,6 +165,7 @@ export class ConversationCompoundingService {
   private readonly memoryStore: CompoundingDeploymentMemoryStore;
   private readonly knowledgeStore: CompoundingDeps["knowledgeStore"];
   private readonly bookingStore: BookingAttributionStore | undefined;
+  private readonly evidenceStore: DeploymentMemoryEvidenceStore | undefined;
   private readonly agentId: string;
 
   constructor(deps: CompoundingDeps) {
@@ -126,6 +175,7 @@ export class ConversationCompoundingService {
     this.memoryStore = deps.deploymentMemoryStore;
     this.knowledgeStore = deps.knowledgeStore;
     this.bookingStore = deps.bookingStore;
+    this.evidenceStore = deps.evidenceStore;
     this.agentId = deps.agentId ?? "default";
   }
 
@@ -135,7 +185,7 @@ export class ConversationCompoundingService {
     try {
       const [summarization, extraction] = await Promise.all([
         this.summarize(event.messages),
-        this.extractFacts(event.messages),
+        this.extractFacts(event.messages, event.deploymentId),
       ]);
 
       await this.summaryStore.create({
@@ -170,25 +220,71 @@ export class ConversationCompoundingService {
         extraction.patterns?.length &&
         this.bookingStore
       ) {
-        const attribution = await resolveBookingAttribution(this.bookingStore, event);
-        if (attribution.tier !== "none") {
-          const metrics = getMetrics();
-          const sanitized = sanitizeExtractedPatterns(extraction.patterns);
-          for (const pattern of sanitized) {
-            try {
-              metrics.outcomePatternsExtracted.inc({
-                deploymentId: event.deploymentId,
-                attributionTier: attribution.tier,
-              });
-              await this.trackPattern(event.organizationId, event.deploymentId, pattern);
-            } catch (err) {
-              console.error("[CompoundingService] trackPattern failed", err);
-            }
-          }
-        }
+        await this.processOutcomePatterns(event, extraction.patterns, this.bookingStore);
       }
     } catch (err) {
       console.error("[CompoundingService] Failed to process conversation end:", err);
+    }
+  }
+
+  private async processOutcomePatterns(
+    event: ConversationEndEvent,
+    rawPatterns: ExtractedPattern[],
+    bookingStore: BookingAttributionStore,
+  ): Promise<void> {
+    const attribution = await resolveBookingAttribution(bookingStore, event);
+    if (attribution.tier === "none") return;
+
+    const metrics = getMetrics();
+    const sanitized = sanitizeExtractedPatterns(rawPatterns);
+    const enumeration = resolveCanonicalEnum(event.deploymentId);
+
+    for (const pattern of sanitized) {
+      // Structural validation first — a malformed slug indicates a prompt
+      // bug, counted separately from "unknown but well-shaped" slugs.
+      if (!CANONICAL_KEY_PATTERN.test(pattern.canonicalKey)) {
+        metrics.outcomePatternsRejected.inc({
+          deploymentId: event.deploymentId,
+          reason: "invalid_canonical_key",
+        });
+        continue;
+      }
+      if (!isKnownCanonicalKey(pattern.canonicalKey, enumeration)) {
+        metrics.outcomePatternsRejected.inc({
+          deploymentId: event.deploymentId,
+          reason: "unknown_canonical_key",
+        });
+        continue;
+      }
+      try {
+        metrics.outcomePatternsExtracted.inc({
+          deploymentId: event.deploymentId,
+          attributionTier: attribution.tier,
+        });
+        const memoryId = await this.trackPattern(
+          event.organizationId,
+          event.deploymentId,
+          pattern.text,
+          pattern.canonicalKey,
+        );
+        if (this.evidenceStore && attribution.bookingId) {
+          await this.evidenceStore.recordEvidence({
+            deploymentMemoryId: memoryId,
+            organizationId: event.organizationId,
+            bookingId: attribution.bookingId,
+            conversionRecordId: null,
+            // workTraceId back-reference is intentionally null in PR-3.2a:
+            // BookingAttribution shape is { tier, bookingId? } only. The
+            // carry-debt PR-3.1.b that plumbs workTraceIds at the gateway
+            // can widen BookingAttribution to surface it and backfill this
+            // field — the column is nullable to allow progression.
+            workTraceId: null,
+            attributionTier: attribution.tier,
+          });
+        }
+      } catch (err) {
+        console.error("[CompoundingService] trackPattern failed", err);
+      }
     }
   }
 
@@ -202,8 +298,10 @@ export class ConversationCompoundingService {
 
   private async extractFacts(
     messages: Array<{ role: string; content: string }>,
+    deploymentId: string,
   ): Promise<ExtractionResult> {
-    const prompt = buildFactExtractionPrompt(messages);
+    const enumeration = resolveCanonicalEnum(deploymentId);
+    const prompt = buildFactExtractionPrompt(messages, enumeration);
     const raw = await this.llm.complete(prompt);
     return JSON.parse(raw) as ExtractionResult;
   }
@@ -300,8 +398,11 @@ export class ConversationCompoundingService {
     organizationId: string,
     deploymentId: string,
     patternText: string,
-  ): Promise<void> {
+    canonicalKey: string,
+  ): Promise<string> {
     const metrics = getMetrics();
+    // Single-bucket scan stays in place until PR-3.2b's two-stage merge —
+    // for now we just persist canonicalKey on the new-row branch.
     const existing = await this.memoryStore.findByCategory(organizationId, deploymentId, "pattern");
 
     if (existing.length > 0) {
@@ -317,20 +418,22 @@ export class ConversationCompoundingService {
           await this.memoryStore.incrementConfidence(entry.id, newConfidence);
           metrics.outcomePatternsMerged.inc({ deploymentId });
           metrics.outcomePatternConfidence.observe({ deploymentId }, newConfidence);
-          return;
+          return entry.id;
         }
       }
     }
 
     const initialConfidence = computeConfidenceScore(1, false);
-    await this.memoryStore.create({
+    const created = await this.memoryStore.create({
       organizationId,
       deploymentId,
       category: "pattern",
       content: patternText,
+      canonicalKey,
       confidence: initialConfidence,
     });
     metrics.outcomePatternsCreated.inc({ deploymentId });
     metrics.outcomePatternConfidence.observe({ deploymentId }, initialConfidence);
+    return created.id;
   }
 }

@@ -154,3 +154,6 @@ export * from "./intent-class.js";
 
 // Conversation Lifecycle (state machine enums + precedence comparator — Alex medspa Phase 3a)
 export * from "./conversation-lifecycle.js";
+
+// Canonical-key enum + Zod refinement (PR-3.2a — outcome-pattern bucketing)
+export * from "./canonical-keys.js";

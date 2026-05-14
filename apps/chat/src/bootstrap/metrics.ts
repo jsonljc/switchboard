@@ -42,6 +42,7 @@ const LATENCY_BUCKETS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 export function createPromMetrics(): SwitchboardMetrics {
   const OUTCOME_PATTERN_LABELS = ["deployment_id"];
   const OUTCOME_PATTERN_TIER_LABELS = ["deployment_id", "attribution_tier"];
+  const OUTCOME_PATTERN_REJECTED_LABELS = ["deployment_id", "reason"];
   const CONFIDENCE_BUCKETS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
   return {
     proposalsTotal: new PromCounter(
@@ -127,6 +128,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "switchboard_outcome_patterns_surfaced_total",
       "Skill executions where at least one outcome pattern was injected",
       OUTCOME_PATTERN_LABELS,
+    ),
+    outcomePatternsRejected: new PromCounter(
+      "switchboard_outcome_patterns_rejected_total",
+      "Outcome patterns dropped during extraction; reason ∈ {invalid_canonical_key, unknown_canonical_key}",
+      OUTCOME_PATTERN_REJECTED_LABELS,
     ),
     outcomePatternConfidence: new PromHistogram(
       "switchboard_outcome_pattern_confidence",

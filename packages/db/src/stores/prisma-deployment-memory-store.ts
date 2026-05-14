@@ -6,6 +6,7 @@ export interface CreateDeploymentMemoryInput {
   category: string;
   content: string;
   confidence?: number;
+  canonicalKey?: string | null;
 }
 
 export class PrismaDeploymentMemoryStore {
@@ -19,6 +20,7 @@ export class PrismaDeploymentMemoryStore {
         deploymentId: input.deploymentId,
         category: input.category,
         content: input.content,
+        canonicalKey: input.canonicalKey ?? null,
         confidence: input.confidence ?? 0.5,
         sourceCount: 1,
         lastSeenAt: now,
@@ -64,6 +66,17 @@ export class PrismaDeploymentMemoryStore {
   async findByCategory(organizationId: string, deploymentId: string, category: string) {
     return this.prisma.deploymentMemory.findMany({
       where: { organizationId, deploymentId, category },
+    });
+  }
+
+  async findByCategoryAndCanonicalKey(
+    organizationId: string,
+    deploymentId: string,
+    category: string,
+    canonicalKey: string,
+  ) {
+    return this.prisma.deploymentMemory.findMany({
+      where: { organizationId, deploymentId, category, canonicalKey },
     });
   }
 
