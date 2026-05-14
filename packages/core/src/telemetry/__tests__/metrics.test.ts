@@ -40,4 +40,16 @@ describe("outcomePattern metrics", () => {
     expect(spy).toHaveBeenCalledWith({ deploymentId: "dep-1" }, 0.91);
     expect(spy).toHaveBeenCalledTimes(2);
   });
+
+  it("outcomePatternsRejected accepts {deploymentId, reason} increments", () => {
+    const metrics = createInMemoryMetrics();
+    const spy = vi.spyOn(metrics.outcomePatternsRejected, "inc");
+
+    metrics.outcomePatternsRejected.inc({ deploymentId: "dep-1", reason: "invalid_canonical_key" });
+    metrics.outcomePatternsRejected.inc({ deploymentId: "dep-1", reason: "unknown_canonical_key" });
+
+    expect(spy).toHaveBeenCalledWith({ deploymentId: "dep-1", reason: "invalid_canonical_key" });
+    expect(spy).toHaveBeenCalledWith({ deploymentId: "dep-1", reason: "unknown_canonical_key" });
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
 });
