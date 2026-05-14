@@ -31,12 +31,19 @@ export interface CompoundingDeploymentMemoryStore {
     deploymentId: string,
     category: string,
   ): Promise<Array<{ id: string; content: string; sourceCount: number; confidence: number }>>;
+  findByCategoryAndCanonicalKey(
+    organizationId: string,
+    deploymentId: string,
+    category: string,
+    canonicalKey: string,
+  ): Promise<Array<{ id: string; content: string; sourceCount: number; confidence: number }>>;
   create(input: {
     organizationId: string;
     deploymentId: string;
     category: string;
     content: string;
     confidence?: number;
+    canonicalKey?: string | null;
   }): Promise<{ id: string }>;
   incrementConfidence(
     id: string,

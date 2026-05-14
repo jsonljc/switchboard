@@ -36,6 +36,7 @@ function createMockDeps() {
     },
     deploymentMemoryStore: {
       findByCategory: vi.fn().mockResolvedValue([]),
+      findByCategoryAndCanonicalKey: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: "mem-1" }),
       incrementConfidence: vi.fn().mockResolvedValue({ id: "mem-1", sourceCount: 2 }),
       countByDeployment: vi.fn().mockResolvedValue(0),
