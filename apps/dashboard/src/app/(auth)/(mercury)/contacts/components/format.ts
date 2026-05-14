@@ -1,44 +1,7 @@
-import { formatRelativeAge } from "@switchboard/core";
-import type { ContactBrowseRow } from "@switchboard/schemas";
-
-import { browserTimezone } from "@/lib/format/browser-timezone";
-
 // Unit: Opportunity.estimatedValue + .revenueTotal are stored in CENTS.
 // Verified 2026-05-14 against packages/core/src/lifecycle/fallback-handler.ts:145
 // (which divides by 100 to format as dollars) and packages/db/prisma/schema.prisma:1630-1631
 // (Int columns; magnitude of mockup fixtures like 28000=S$280 confirms cents).
-
-/** Renders an ISO timestamp as the same short relative string the agent-home
- *  pipeline tiles use. `now` is injectable for deterministic tests.
- *
- *  Defensive against bad input — if the upstream ever delivers a malformed or
- *  null timestamp (the schema rejects this, but a hot-fix could route around
- *  it), fall back to "—" rather than rendering literal "Invalid Date". */
-export function relativeAge(iso: string, now: Date = new Date(), timezone?: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return formatRelativeAge(d, now, timezone ?? browserTimezone());
-}
-
-const STAGE_LABELS: Record<ContactBrowseRow["stage"], string> = {
-  new: "New",
-  active: "Active",
-  customer: "Customer",
-  retained: "Retained",
-  dormant: "Dormant",
-};
-export function stageLabel(stage: ContactBrowseRow["stage"]): string {
-  return STAGE_LABELS[stage];
-}
-
-const CHANNEL_LABELS: Record<ContactBrowseRow["primaryChannel"], string> = {
-  whatsapp: "WhatsApp",
-  telegram: "Telegram",
-  dashboard: "Dashboard",
-};
-export function channelLabel(channel: ContactBrowseRow["primaryChannel"]): string {
-  return CHANNEL_LABELS[channel];
-}
 
 /** Formats an integer SGD value as `S$1,234`. Em-dash for null. By default,
  *  also em-dash for zero (typical pipeline display rule). Pass `forceZero`
@@ -62,8 +25,8 @@ export function formatSGDCompact(value: number | null): string | null {
   return `S$${Math.round(dollars).toLocaleString()}`;
 }
 
-/** Short relative-age helper, mirroring `relativeAge` but with a stable
- *  short-form output: "just now" / "Nm ago" / "Nh ago" / "Nd ago" / "Nmo ago".
+/** Short relative-age helper with a stable short-form output:
+ *  "just now" / "Nm ago" / "Nh ago" / "Nd ago" / "Nmo ago".
  *  `now` is injectable for deterministic tests. */
 export function relTime(iso: string, now: Date): string {
   const t = new Date(iso).getTime();

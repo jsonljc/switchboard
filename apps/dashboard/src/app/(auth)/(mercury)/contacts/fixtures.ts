@@ -457,8 +457,3 @@ export const PIPELINE_FIXTURE_PAGE: PipelineBoardResponse = {
 /** Reference "now" used by the fixture set. Components that need a relative-
  *  time anchor in fixture mode should import this so screenshots are stable. */
 export const PIPELINE_FIXTURE_NOW = NOW;
-
-// ────────────────────────────────────────────────────────────────────
-// Legacy exports — kept until use-contacts-list.ts is deleted in Task 18.
-// ────────────────────────────────────────────────────────────────────
-export { CONTACTS_FIXTURE_ROWS, CONTACTS_FIXTURE_PAGE } from "./_legacy-fixtures.js";

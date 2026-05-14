@@ -81,7 +81,9 @@ function StatTile({
   );
 }
 
-/** Legacy export kept until contacts-page.tsx is deleted in Task 18. */
+/** No-op breadcrumb retained for the detail route (/contacts/[id]). The
+ *  detail route is byte-for-byte untouched per PR-C1 acceptance criterion 1,
+ *  so this stub stays even though the pipeline page doesn't use it. */
 export function ContactsHeader() {
   return null;
 }
