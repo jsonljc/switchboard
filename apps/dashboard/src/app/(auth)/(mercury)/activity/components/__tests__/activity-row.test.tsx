@@ -35,6 +35,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={() => {}}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     expect(screen.getByText("06:23:11")).toBeInTheDocument();
@@ -54,6 +55,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={onToggle}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     const row = container.querySelector("[data-rowid]");
@@ -73,6 +75,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={onToggle}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     await user.click(screen.getByText(/Booked appointment for contact/));
@@ -89,6 +92,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={onToggle}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     await user.click(screen.getByRole("button", { name: /toggle details/i }));
@@ -105,6 +109,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={onToggle}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     const chevron = screen.getByRole("button", { name: /toggle details/i });
@@ -130,6 +135,7 @@ describe("ActivityRow", () => {
           isTarget={false}
           onToggle={() => {}}
           now={NOW_MS}
+          orgTimezone="UTC"
         />,
       );
       expect(container.querySelector(`[data-band="${band}"]`)).toBeInTheDocument();
@@ -152,6 +158,7 @@ describe("ActivityRow", () => {
           isTarget={false}
           onToggle={() => {}}
           now={NOW_MS}
+          orgTimezone="UTC"
         />,
       );
       expect(screen.getByText(glyph)).toBeInTheDocument();
@@ -175,6 +182,7 @@ describe("ActivityRow", () => {
           isTarget={false}
           onToggle={() => {}}
           now={NOW_MS}
+          orgTimezone="UTC"
         />,
       );
       expect(container.querySelector(`[data-risk="${risk}"]`)).toBeInTheDocument();
@@ -190,6 +198,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={() => {}}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     expect(screen.getByText(/\+5 redacted/i)).toBeInTheDocument();
@@ -203,6 +212,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={() => {}}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     expect(screen.queryByText(/redacted/i)).not.toBeInTheDocument();
@@ -216,6 +226,7 @@ describe("ActivityRow", () => {
         isTarget={false}
         onToggle={() => {}}
         now={NOW_MS}
+        orgTimezone="UTC"
       />,
     );
     expect(container.querySelector("[data-actor='agent']")).toBeInTheDocument();
