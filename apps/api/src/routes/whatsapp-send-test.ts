@@ -221,9 +221,38 @@ export const whatsappSendTestRoutes: FastifyPluginAsync<SendTestOptions> = async
     return reply.code(200).send({ messageId, status: "sent", sentAt: sentAt.toISOString() });
   });
 
-  app.get("/test-sends", async (_req, reply) =>
-    reply
-      .code(501)
-      .send({ error: { code: "NOT_IMPLEMENTED", message: "filled next task", retryable: false } }),
-  );
+  app.get("/test-sends", async (request, reply) => {
+    const orgId = (request as unknown as { organizationIdFromAuth: string }).organizationIdFromAuth;
+    const rows = (await app.prisma!.whatsAppTestSend.findMany({
+      where: { organizationId: orgId },
+      orderBy: { sentAt: "desc" },
+      take: 10,
+    })) as Array<{
+      id: string;
+      messageId: string;
+      phoneNumberId: string;
+      templateName: string;
+      languageCode: string;
+      toNumber: string;
+      sentBy: string;
+      sentAt: Date;
+      apiStatus: string;
+      lastWebhookStatus: string | null;
+      lastWebhookAt: Date | null;
+    }>;
+    const tests = rows.map((r) => ({
+      id: r.id,
+      messageId: r.messageId,
+      phoneNumberId: r.phoneNumberId,
+      templateName: r.templateName,
+      languageCode: r.languageCode,
+      toNumber: r.toNumber,
+      sentBy: r.sentBy,
+      sentAt: r.sentAt.toISOString(),
+      apiStatus: r.apiStatus,
+      lastWebhookStatus: r.lastWebhookStatus,
+      lastWebhookAt: r.lastWebhookAt ? r.lastWebhookAt.toISOString() : null,
+    }));
+    return reply.send({ tests });
+  });
 };

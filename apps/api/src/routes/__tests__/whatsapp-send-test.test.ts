@@ -341,3 +341,101 @@ describe("POST /send-test — Graph error mapping", () => {
     expect(prisma.whatsAppTestSend.create).not.toHaveBeenCalled();
   });
 });
+
+describe("GET /test-sends", () => {
+  let app: FastifyInstance;
+
+  afterEach(async () => {
+    if (app) await app.close();
+  });
+
+  it("returns recent test sends scoped to the org with ISO-serialized dates", async () => {
+    const prisma = buildPrismaMock();
+    prisma.whatsAppTestSend.findMany.mockResolvedValue([
+      {
+        id: "ts_1",
+        messageId: "wamid.AAA",
+        phoneNumberId: "PN_123",
+        templateName: "appt_reminder",
+        languageCode: "en_US",
+        toNumber: "+15551234567",
+        sentBy: "u@example.com",
+        sentAt: new Date("2026-05-14T10:00:00.000Z"),
+        apiStatus: "sent",
+        lastWebhookStatus: "delivered",
+        lastWebhookAt: new Date("2026-05-14T10:00:05.000Z"),
+      },
+    ]);
+
+    app = await buildApp({ prisma, graphApiFetch: vi.fn() });
+
+    const res = await app.inject({ method: "GET", url: "/test-sends" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      tests: Array<{
+        id: string;
+        messageId: string;
+        phoneNumberId: string;
+        templateName: string;
+        languageCode: string;
+        toNumber: string;
+        sentBy: string;
+        sentAt: string;
+        apiStatus: string;
+        lastWebhookStatus: string | null;
+        lastWebhookAt: string | null;
+      }>;
+    };
+    expect(body.tests).toHaveLength(1);
+    expect(body.tests[0]).toEqual({
+      id: "ts_1",
+      messageId: "wamid.AAA",
+      phoneNumberId: "PN_123",
+      templateName: "appt_reminder",
+      languageCode: "en_US",
+      toNumber: "+15551234567",
+      sentBy: "u@example.com",
+      sentAt: "2026-05-14T10:00:00.000Z",
+      apiStatus: "sent",
+      lastWebhookStatus: "delivered",
+      lastWebhookAt: "2026-05-14T10:00:05.000Z",
+    });
+
+    expect(prisma.whatsAppTestSend.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.whatsAppTestSend.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org_test" },
+      orderBy: { sentAt: "desc" },
+      take: 10,
+    });
+  });
+
+  it("preserves lastWebhookAt: null without crashing", async () => {
+    const prisma = buildPrismaMock();
+    prisma.whatsAppTestSend.findMany.mockResolvedValue([
+      {
+        id: "ts_2",
+        messageId: "wamid.BBB",
+        phoneNumberId: "PN_123",
+        templateName: "appt_reminder",
+        languageCode: "en_US",
+        toNumber: "+15551234567",
+        sentBy: "u@example.com",
+        sentAt: new Date("2026-05-14T11:00:00.000Z"),
+        apiStatus: "sent",
+        lastWebhookStatus: null,
+        lastWebhookAt: null,
+      },
+    ]);
+
+    app = await buildApp({ prisma, graphApiFetch: vi.fn() });
+
+    const res = await app.inject({ method: "GET", url: "/test-sends" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      tests: Array<{ lastWebhookAt: string | null; lastWebhookStatus: string | null }>;
+    };
+    expect(body.tests).toHaveLength(1);
+    expect(body.tests[0]!.lastWebhookAt).toBeNull();
+    expect(body.tests[0]!.lastWebhookStatus).toBeNull();
+  });
+});
