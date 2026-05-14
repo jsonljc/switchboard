@@ -29,7 +29,7 @@ interface PhoneNumber {
   isPrimaryForSwitchboard: boolean;
 }
 
-interface Template {
+export interface WhatsAppTemplate {
   id: string;
   name: string;
   language: string;
@@ -94,6 +94,9 @@ function classifyGraphError(
   return { code: "WHATSAPP_UPSTREAM_ERROR", httpStatus: 502 };
 }
 
+const META_GRAPH_VERSION = process.env.META_GRAPH_VERSION ?? "v21.0";
+const graphBase = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
+
 /** Fetches from Graph API with timeout and error handling */
 async function graphGet(
   path: string,
@@ -147,14 +150,59 @@ async function graphGet(
   }
 }
 
+/**
+ * Fetches approved/pending/rejected message templates for a WABA from the Graph API.
+ * Shared between the `/templates` route and the send-test flow so the URL + mapping
+ * stay in lockstep.
+ */
+export async function fetchWhatsAppTemplates(args: {
+  wabaId: string;
+  token: string;
+  fetchImpl: typeof fetch;
+}): Promise<
+  | { ok: true; templates: WhatsAppTemplate[] }
+  | { ok: false; code: string; message: string; httpStatus: number }
+> {
+  const { wabaId, token, fetchImpl } = args;
+  const templatePath = `${graphBase}/${wabaId}/message_templates?fields=id,name,status,category,language,components,rejected_reason&limit=100`;
+  const templateResult = await graphGet(templatePath, token, fetchImpl);
+
+  if (!templateResult.ok) {
+    return {
+      ok: false,
+      code: templateResult.code,
+      message: templateResult.message,
+      httpStatus: templateResult.httpStatus,
+    };
+  }
+
+  const templateData = templateResult.data as { data?: any[] };
+  const templates: WhatsAppTemplate[] = (templateData.data ?? []).map((t: any) => {
+    const components = Array.isArray(t.components) ? t.components : [];
+    const hasBody = components.some((c: any) => c.type === "BODY");
+    const hasButtons = components.some((c: any) => c.type === "BUTTONS");
+
+    return {
+      id: t.id,
+      name: t.name ?? "",
+      language: t.language ?? "",
+      status: t.status ?? "UNKNOWN",
+      category: t.category ?? "",
+      hasBody,
+      hasButtons,
+      rejectedReason: (t.rejected_reason as string) ?? null,
+    };
+  });
+
+  return { ok: true, templates };
+}
+
 export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = async (
   app,
   opts,
 ) => {
   const fetchImpl = opts.graphApiFetch ?? fetch;
   const metaSystemUserToken = process.env.META_SYSTEM_USER_TOKEN ?? "";
-  const META_GRAPH_VERSION = process.env.META_GRAPH_VERSION ?? "v21.0";
-  const graphBase = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 
   app.get("/account", async (request, reply) => {
     const organizationId = request.organizationIdFromAuth;
@@ -444,8 +492,11 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
     }
 
     const wabaId = connection.externalAccountId;
-    const templatePath = `${graphBase}/${wabaId}/message_templates?fields=id,name,status,category,language,components,rejected_reason&limit=100`;
-    const templateResult = await graphGet(templatePath, metaSystemUserToken, fetchImpl);
+    const templateResult = await fetchWhatsAppTemplates({
+      wabaId,
+      token: metaSystemUserToken,
+      fetchImpl,
+    });
 
     if (!templateResult.ok) {
       return reply.code(templateResult.httpStatus).send({
@@ -457,24 +508,6 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
       });
     }
 
-    const templateData = templateResult.data as { data?: any[] };
-    const templates: Template[] = (templateData.data ?? []).map((t: any) => {
-      const components = Array.isArray(t.components) ? t.components : [];
-      const hasBody = components.some((c: any) => c.type === "BODY");
-      const hasButtons = components.some((c: any) => c.type === "BUTTONS");
-
-      return {
-        id: t.id,
-        name: t.name ?? "",
-        language: t.language ?? "",
-        status: t.status ?? "UNKNOWN",
-        category: t.category ?? "",
-        hasBody,
-        hasButtons,
-        rejectedReason: (t.rejected_reason as string) ?? null,
-      };
-    });
-
-    return reply.code(200).send({ templates });
+    return reply.code(200).send({ templates: templateResult.templates });
   });
 };
