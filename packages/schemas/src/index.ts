@@ -58,6 +58,9 @@ export * from "./operator-command.js";
 // Unified lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle.js";
 
+// Pipeline board view-model (opportunity cards + joined contact projection)
+export * from "./pipeline-board.js";
+
 // Contacts browse projection (surface-agnostic /contacts list view-model)
 export * from "./contacts.js";
 

@@ -59,7 +59,7 @@ describe("ToolsOverflow", () => {
     const menu = await screen.findByRole("menu");
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((el) => el.textContent)).toEqual([
-      "Contacts",
+      "Pipeline",
       "Automations",
       "Activity",
       "Reports",
@@ -81,7 +81,7 @@ describe("ToolsOverflow", () => {
     await openMenu();
     const menu = await screen.findByRole("menu");
     expect(within(menu).queryByText("Automations")).not.toBeInTheDocument();
-    expect(within(menu).getByText("Contacts")).toBeInTheDocument();
+    expect(within(menu).getByText("Pipeline")).toBeInTheDocument();
     expect(within(menu).getByText("Activity")).toBeInTheDocument();
     expect(within(menu).getByText("Reports")).toBeInTheDocument();
     expect(within(menu).getByText("Approvals")).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe("ToolsOverflow", () => {
 
   // Case 8
   it.each([
-    ["/contacts-old", "Contacts"],
+    ["/contacts-old", "Pipeline"],
     ["/reports-archive", "Reports"],
     ["/settingsness", "Settings"],
   ])("boundary matching: pathname %s does not activate %s", async (pathname, label) => {
@@ -174,7 +174,7 @@ describe("ToolsOverflow", () => {
 
   // Case 10
   it.each([
-    ["/contacts", "Contacts"],
+    ["/contacts", "Pipeline"],
     ["/automations", "Automations"],
     ["/activity", "Activity"],
     ["/reports", "Reports"],

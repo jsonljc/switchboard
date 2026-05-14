@@ -97,3 +97,15 @@ describe("scopedKeys agent-home factories", () => {
     expect(keys.pipeline.feed("alex")).toEqual(["org-1", "pipeline", "feed", "alex"]);
   });
 });
+
+describe("scopedKeys().opportunities", () => {
+  const keys = scopedKeys("org_test");
+
+  it("exposes an `all` prefix scoped to orgId", () => {
+    expect(keys.opportunities.all()).toEqual(["org_test", "opportunities"]);
+  });
+
+  it("exposes a `board` key under the prefix", () => {
+    expect(keys.opportunities.board()).toEqual(["org_test", "opportunities", "board"]);
+  });
+});

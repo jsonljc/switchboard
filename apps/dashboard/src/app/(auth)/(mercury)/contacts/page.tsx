@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { ContactsPage } from "./contacts-page";
+import { PipelinePage } from "./pipeline-page";
 
 export const metadata: Metadata = {
-  title: "Contacts — Switchboard",
-  description: "Read-only register of people captured by Switchboard.",
+  title: "Pipeline — Switchboard",
+  description: "Every active deal across all eight stages.",
 };
 
 export default function ContactsRoute() {
-  return <ContactsPage />;
+  return <PipelinePage />;
 }
