@@ -40,6 +40,7 @@ const baseEvent: ConversationEndEvent = {
   duration: 120,
   messageCount: 4,
   endReason: "inactivity",
+  endedAt: new Date(),
 };
 
 function createEvent(): ConversationEndEvent {
