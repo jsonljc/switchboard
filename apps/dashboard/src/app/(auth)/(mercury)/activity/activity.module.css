@@ -811,6 +811,256 @@
   }
 }
 
+/* ============= error banner (PR-C, H5) ============= */
+.errBanner {
+  max-width: 74rem;
+  margin: 16px auto 0;
+  padding: 14px 18px;
+  background: var(--paper-warm);
+  border: 1px solid var(--hair-strong);
+  border-left: 3px solid var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.errBannerEyebrow {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  font-weight: 700;
+}
+.errBannerMsg {
+  font-family: var(--font-display, "Cormorant Garamond", "Source Serif 4", serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--ink);
+  flex: 1;
+  min-width: 16rem;
+}
+.errBannerRetry {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 7px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
+}
+.errBannerRetry:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ============= empty states (PR-C rewrite — zero / filtered) ============= */
+.empty {
+  max-width: 74rem;
+  margin: 0 auto;
+  padding: 64px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+}
+.emptyEyebrow {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+  font-weight: 700;
+}
+.emptyHeadline {
+  font-family: var(--font-display, "Cormorant Garamond", "Source Serif 4", serif);
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.012em;
+  line-height: 1.1;
+  margin: 0;
+}
+.emptyHeadlineEm {
+  color: var(--amber-deep);
+  font-style: italic;
+}
+.emptySub {
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  font-size: 14.5px;
+  color: var(--ink-3);
+  max-width: 38em;
+  line-height: 1.6;
+  text-wrap: pretty;
+  margin: 0;
+}
+.emptyMeta {
+  margin-top: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ink-4);
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.emptyMetaB {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.emptyMetaSep {
+  color: var(--ink-4);
+  opacity: 0.5;
+}
+.emptyCta {
+  margin-top: 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 9px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
+}
+.emptyCta:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ============= pagination footer (PR-C restyle) ============= */
+.pag {
+  max-width: 74rem;
+  margin: 0 auto;
+  padding: 22px 0 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--hair);
+}
+.pagInfo {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.pagInfoB {
+  color: var(--ink);
+  font-weight: 600;
+}
+.pagInfoSep {
+  color: var(--ink-4);
+  opacity: 0.5;
+  margin: 0 8px;
+}
+.pagNav {
+  display: inline-flex;
+  gap: 10px;
+}
+.pagBtn {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 9px 18px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+.pagBtn:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.pagBtn:disabled {
+  color: var(--ink-4);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+/* ============= stale-fetch pill (PR-C) ============= */
+.stalePill {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  background: var(--paper-raised);
+  border: 1px solid var(--hair-strong);
+  border-radius: 999px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  box-shadow: 0 6px 18px rgba(14, 12, 10, 0.06);
+}
+.stalePillAge {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.stalePillRefresh {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding-left: 10px;
+  border-left: 1px solid var(--hair);
+  background: transparent;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
+}
+.stalePillRefresh:hover {
+  color: var(--amber-deep);
+}
+.stalePillRefreshSpin {
+  color: var(--amber-deep);
+  animation: stalePillPulse 1s linear infinite;
+}
+@keyframes stalePillPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* ============= editorial filter strip (PR-B) ============= */
 .filterStrip {
   position: sticky;
