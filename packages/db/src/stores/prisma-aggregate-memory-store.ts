@@ -116,13 +116,22 @@ export class PrismaAggregateMemoryStore implements AggregateScopedMemoryAccess {
     return result.count;
   }
 
-  async decayStale(cutoffDate: Date, decayAmount: number): Promise<number> {
+  async decayStale(input: {
+    cutoffDate: Date;
+    decayAmount: number;
+    floor: number;
+    startOfDay: Date;
+  }): Promise<number> {
     const result = await this.prisma.deploymentMemory.updateMany({
       where: {
-        lastSeenAt: { lt: cutoffDate },
-        confidence: { gt: 0 },
+        lastSeenAt: { lt: input.cutoffDate },
+        confidence: { gt: input.floor },
+        OR: [{ lastDecayedAt: null }, { lastDecayedAt: { lt: input.startOfDay } }],
       },
-      data: { confidence: { decrement: decayAmount } },
+      data: {
+        confidence: { decrement: input.decayAmount },
+        lastDecayedAt: new Date(),
+      },
     });
     return result.count;
   }
