@@ -207,4 +207,17 @@ describe("ActivityRow", () => {
     );
     expect(screen.queryByText(/redacted/i)).not.toBeInTheDocument();
   });
+
+  it("agent rows carry data-actor='agent' for the amber-treatment CSS rule (PR-B carry-over)", () => {
+    const { container } = render(
+      <ActivityRow
+        row={{ ...baseRow, actorType: "agent" }}
+        isOpen={false}
+        isTarget={false}
+        onToggle={() => {}}
+        now={NOW_MS}
+      />,
+    );
+    expect(container.querySelector("[data-actor='agent']")).toBeInTheDocument();
+  });
 });
