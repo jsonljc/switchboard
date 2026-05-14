@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import styles from "../../approvals.module.css";
 import detailStyles from "../../detail.module.css";
 import { ApproveBlock } from "./approve-block";
 import { RejectConfirm } from "./reject-confirm";
 import { DispatchBanner, type DispatchKind } from "./dispatch-banner";
+import { PatchEditor } from "./patch-editor";
 import { agentDisplay } from "../../hooks/use-agent-display";
 import { actionDisplay } from "../../action-display";
 import { formatRemaining } from "../../format";
@@ -19,6 +21,7 @@ export interface ActionDrawerProps {
   pending?: boolean;
   onApprove: () => void;
   onReject: () => void;
+  onPatch?: (patchValue: Record<string, unknown>) => void;
 }
 
 export function ActionDrawer({
@@ -30,7 +33,20 @@ export function ActionDrawer({
   pending,
   onApprove,
   onReject,
+  onPatch,
 }: ActionDrawerProps) {
+  // Hooks must be called unconditionally at the top — before any short-circuit returns.
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem("approvals.advancedJsonOpen") === "true";
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem("approvals.advancedJsonOpen", advancedOpen ? "true" : "false");
+  }, [advancedOpen]);
+
   const remaining = new Date(row.expiresAt).getTime() - now;
   const expired = remaining <= 0;
   const recovery = row.status === "recovery_required";
@@ -103,6 +119,27 @@ export function ActionDrawer({
         disabled={pending}
       />
       <RejectConfirm onConfirm={onReject} disabled={pending} />
+
+      {!isMobile && onPatch && (
+        <div className={detailStyles.advancedToggleRow}>
+          <button
+            type="button"
+            className={detailStyles.advancedToggleBtn}
+            onClick={() => setAdvancedOpen((v) => !v)}
+          >
+            {advancedOpen ? "Hide JSON ▴" : "View JSON (advanced) ▾"}
+          </button>
+        </div>
+      )}
+      {!isMobile && advancedOpen && onPatch && (
+        <PatchEditor
+          snapshot={row.request?.parametersSnapshot ?? {}}
+          seed={(row.patchProposal?.diff as Record<string, unknown> | undefined) ?? null}
+          onCancel={() => setAdvancedOpen(false)}
+          onSubmit={(patchValue) => onPatch(patchValue)}
+        />
+      )}
+
       {error && (
         <p className={detailStyles.actionsError}>
           {error.status === 409

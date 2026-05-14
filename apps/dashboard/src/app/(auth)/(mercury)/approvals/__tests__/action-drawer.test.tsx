@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { ActionDrawer } from "../components/detail/action-drawer";
 import { APPROVALS_FIXTURES } from "../fixtures";
 
@@ -106,5 +106,74 @@ describe("ActionDrawer", () => {
     const dismiss = screen.getByRole("button", { name: /dismiss/i });
     dismiss.click();
     expect(onReject).toHaveBeenCalled();
+  });
+});
+
+describe("ActionDrawer — advanced JSON toggle", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    // Default to desktop width for these tests.
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1200 });
+  });
+
+  it("hides the JSON toggle on mobile widths even when sessionStorage says open", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 600 });
+    sessionStorage.setItem("approvals.advancedJsonOpen", "true");
+    render(
+      <ActionDrawer
+        row={lowRow}
+        now={Date.now()}
+        principalId="p-1"
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onPatch={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /view json/i })).not.toBeInTheDocument();
+  });
+
+  it("renders the JSON toggle on desktop widths when onPatch is provided", () => {
+    render(
+      <ActionDrawer
+        row={lowRow}
+        now={Date.now()}
+        principalId="p-1"
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onPatch={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /view json/i })).toBeInTheDocument();
+  });
+
+  it("opening the toggle reveals the patch editor", () => {
+    render(
+      <ActionDrawer
+        row={lowRow}
+        now={Date.now()}
+        principalId="p-1"
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onPatch={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /view json/i }));
+    // The patch editor renders a textarea
+    expect(screen.getByRole("textbox", { name: /patch JSON editor/i })).toBeInTheDocument();
+  });
+
+  it("persists open state to sessionStorage", () => {
+    render(
+      <ActionDrawer
+        row={lowRow}
+        now={Date.now()}
+        principalId="p-1"
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onPatch={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /view json/i }));
+    expect(sessionStorage.getItem("approvals.advancedJsonOpen")).toBe("true");
   });
 });

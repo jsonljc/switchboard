@@ -85,6 +85,21 @@ export function Detail({ id, now }: DetailProps) {
     );
   }
 
+  function handlePatch(patchValue: Record<string, unknown>) {
+    if (!row) return;
+    setErrorState(null);
+    mutation.mutate(
+      { id: row.id, action: "patch", bindingHash: row.bindingHash, patchValue },
+      {
+        onSuccess: () => setDecision({ kind: "patched" }),
+        onError: (err) => {
+          if (err instanceof ApprovalRespondError) setErrorState({ status: err.status });
+          else setErrorState({ status: 500 });
+        },
+      },
+    );
+  }
+
   return (
     <div className={detailStyles.detail}>
       <DetailHeader row={row} now={now} />
@@ -98,6 +113,7 @@ export function Detail({ id, now }: DetailProps) {
         pending={mutation.isPending}
         onApprove={handleApprove}
         onReject={handleReject}
+        onPatch={handlePatch}
       />
     </div>
   );
