@@ -8,6 +8,9 @@ import type {
   AuditEntriesListResponse,
   ReportDataV1,
   ReportWindow,
+  PipelineBoardResponse,
+  PipelineBoardOpportunity,
+  OpportunityStage,
 } from "@switchboard/schemas";
 import { SwitchboardAgentsClient } from "./agents";
 
@@ -218,5 +221,44 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
       },
     );
     return { status: res.status, body: await res.json().catch(() => ({})) };
+  }
+
+  // ── Pipeline Board (Mercury /contacts pipeline) ──
+
+  async getOpportunitiesBoard(): Promise<PipelineBoardResponse> {
+    return this.request<PipelineBoardResponse>("/api/dashboard/opportunities");
+  }
+
+  /**
+   * Move an opportunity to a new stage. Uses raw fetch so that 404 (unknown id)
+   * and 400 (invalid stage) survive back to the dashboard proxy with status-
+   * annotated errors — matching the pattern used by `getContact`.
+   */
+  async patchOpportunityStage(
+    id: string,
+    stage: OpportunityStage,
+  ): Promise<{ opportunity: PipelineBoardOpportunity }> {
+    const url = `${this.baseUrl}/api/dashboard/opportunities/${encodeURIComponent(id)}/stage`;
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({ stage }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const err = new Error(
+        res.status === 404
+          ? "not found"
+          : res.status === 400
+            ? "invalid stage"
+            : body.error || `API error: ${res.status}`,
+      ) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
+    }
+    return res.json() as Promise<{ opportunity: PipelineBoardOpportunity }>;
   }
 }
