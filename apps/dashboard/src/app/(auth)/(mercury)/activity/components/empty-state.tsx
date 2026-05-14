@@ -7,6 +7,8 @@ export type EmptyStateProps =
   | {
       variant: "filtered";
       scannedCount: number;
+      /** Active base scope; suppresses the "switch to All events" suggestion when already on "all". */
+      scope?: "operational" | "all";
       onClear?: () => void;
     };
 
@@ -40,8 +42,14 @@ export function EmptyState(props: EmptyStateProps) {
       </h2>
       <p className={styles.emptySub}>
         We checked {props.scannedCount} entries across the current scope. Try broadening the date
-        range, dropping the entity, or switching to <b className={styles.emptyMetaB}>All events</b>{" "}
-        if you&apos;re looking for non-operational types.
+        range or dropping the entity
+        {props.scope !== "all" && (
+          <>
+            , or switch to <b className={styles.emptyMetaB}>All events</b> if you&apos;re looking
+            for non-operational types
+          </>
+        )}
+        .
       </p>
       {props.onClear !== undefined && (
         <button type="button" className={styles.emptyCta} onClick={props.onClear}>

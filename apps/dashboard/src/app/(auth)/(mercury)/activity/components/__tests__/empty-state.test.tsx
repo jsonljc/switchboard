@@ -35,4 +35,19 @@ describe("EmptyState — filtered variant", () => {
     render(<EmptyState variant="filtered" scannedCount={30} />);
     expect(screen.queryByRole("button", { name: /Clear filters/ })).toBeNull();
   });
+
+  it("suppresses the 'switch to All events' suggestion when scope is already 'all'", () => {
+    render(<EmptyState variant="filtered" scannedCount={30} scope="all" />);
+    // Suggestion text should be gone; "All events" emphasis no longer rendered.
+    expect(screen.queryByText("All events")).toBeNull();
+    expect(screen.queryByText(/non-operational types/)).toBeNull();
+    // Core copy still holds.
+    expect(screen.getByText(/We checked 30 entries across the current scope/)).toBeInTheDocument();
+  });
+
+  it("renders the 'switch to All events' suggestion under operational scope (default)", () => {
+    render(<EmptyState variant="filtered" scannedCount={30} scope="operational" />);
+    expect(screen.getByText("All events")).toBeInTheDocument();
+    expect(screen.getByText(/non-operational types/)).toBeInTheDocument();
+  });
 });

@@ -329,8 +329,17 @@ export function ActivityPage() {
             ))}
           </div>
         ) : showEmpty ? (
+          // Spec §7's empty matrix would also fire `filtered` for scope="all" with no
+          // narrowing, but Operational ⊆ All means an empty `all` set implies `operational`
+          // is also empty — the same dataset. We collapse those into the ledger-health
+          // framing rather than the "no matches" framing; semantically tighter than the spec.
           narrowingActive ? (
-            <EmptyState variant="filtered" scannedCount={scannedCount} onClear={onClearFilters} />
+            <EmptyState
+              variant="filtered"
+              scannedCount={scannedCount}
+              scope={scope}
+              onClear={onClearFilters}
+            />
           ) : (
             <EmptyState variant="zero" />
           )
