@@ -12,6 +12,7 @@ import { Detail } from "./components/detail";
 import { useNow } from "./hooks/use-now";
 import { usePendingApprovals } from "./hooks/use-approvals";
 import { sortApprovals } from "./sort";
+import { emit } from "./telemetry";
 
 export function ApprovalsPage() {
   const router = useRouter();
@@ -26,6 +27,12 @@ export function ApprovalsPage() {
   const keys = useScopedQueryKeys();
   const { data, isLoading } = usePendingApprovals();
   const allItems = data?.approvals ?? [];
+
+  // Emit approvals.viewed once on mount (telemetry stub).
+  // Empty deps intentional: fire once on mount, not on every count change.
+  useEffect(() => {
+    emit({ type: "approvals.viewed", pendingCount: allItems.length });
+  }, []); // empty-deps: mount-only
 
   // Amendment K: refetch on return-to-visible so expiresAt is fresh.
   useEffect(() => {
@@ -101,11 +108,13 @@ export function ApprovalsPage() {
 
   const onSelect = useCallback(
     (id: string) => {
+      const row = filteredSorted.find((r) => r.id === id);
+      if (row) emit({ type: "approvals.row_selected", id, riskCategory: row.riskCategory });
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       params.set("id", id);
       router.replace(`/approvals?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParams, filteredSorted],
   );
 
   return (
@@ -129,6 +138,11 @@ export function ApprovalsPage() {
             onSelect={onSelect}
             loading={isLoading}
             now={now}
+            narrowed={filter !== "all" || expiringOnly}
+            onClearFilters={() => {
+              setFilter("all");
+              setExpiringOnly(false);
+            }}
           />
         </aside>
         <section className={styles.splitRight}>

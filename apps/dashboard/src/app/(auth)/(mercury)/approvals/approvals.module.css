@@ -294,3 +294,18 @@
 .filterChip[data-cat="high"] .filterChipBullet { background: var(--risk-high); }
 .filterChip[data-cat="critical"] .filterChipBullet { background: var(--risk-crit); }
 
+.queueClearBtn {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 9px 16px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+.queueClearBtn:hover { color: var(--ink); border-color: var(--ink); }
+

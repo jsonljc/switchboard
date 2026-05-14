@@ -15,9 +15,19 @@ export interface ApprovalsQueueProps {
   onSelect: (id: string) => void;
   loading?: boolean;
   now?: number;
+  narrowed?: boolean;
+  onClearFilters?: () => void;
 }
 
-export function ApprovalsQueue({ items, activeId, onSelect, loading, now }: ApprovalsQueueProps) {
+export function ApprovalsQueue({
+  items,
+  activeId,
+  onSelect,
+  loading,
+  now,
+  narrowed,
+  onClearFilters,
+}: ApprovalsQueueProps) {
   if (loading) {
     return (
       <div className={styles.queue}>
@@ -33,6 +43,21 @@ export function ApprovalsQueue({ items, activeId, onSelect, loading, now }: Appr
   }
 
   if (items.length === 0) {
+    if (narrowed) {
+      return (
+        <div className={styles.queue}>
+          <div className={styles.queueEmpty}>
+            <span className={styles.eyebrow}>no matches</span>
+            <div className={styles.queueEmptyTitle}>No approvals match this filter.</div>
+            {onClearFilters && (
+              <button type="button" className={styles.queueClearBtn} onClick={onClearFilters}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className={styles.queue}>
         <div className={styles.queueEmpty}>

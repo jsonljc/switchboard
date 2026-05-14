@@ -60,6 +60,22 @@ describe("ApprovalsQueue", () => {
     expect(screen.getByText(/nothing waiting/i)).toBeInTheDocument();
   });
 
+  it("renders the filter-narrowed empty copy with a clear button", () => {
+    const onClear = vi.fn();
+    render(
+      <ApprovalsQueue
+        items={[]}
+        activeId={null}
+        onSelect={() => {}}
+        narrowed
+        onClearFilters={onClear}
+      />,
+    );
+    expect(screen.getByText(/no approvals match/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
+    expect(onClear).toHaveBeenCalled();
+  });
+
   it("renders no risk pips (deliberate omission from locked design)", () => {
     render(<ApprovalsQueue items={PENDING_FIXTURES} activeId={null} onSelect={() => {}} />);
     expect(document.querySelectorAll('[data-testid="risk-pip"]')).toHaveLength(0);

@@ -10,6 +10,7 @@ import { PatchEditor } from "./patch-editor";
 import { agentDisplay } from "../../hooks/use-agent-display";
 import { actionDisplay } from "../../action-display";
 import { formatRemaining } from "../../format";
+import { emit } from "../../telemetry";
 import type { DetailRow } from "../../types";
 
 export interface ActionDrawerProps {
@@ -46,6 +47,13 @@ export function ActionDrawer({
     if (typeof window === "undefined") return;
     sessionStorage.setItem("approvals.advancedJsonOpen", advancedOpen ? "true" : "false");
   }, [advancedOpen]);
+
+  function handleAdvancedToggle() {
+    setAdvancedOpen((v) => {
+      if (!v) emit({ type: "approvals.advanced_json_opened", id: row.id });
+      return !v;
+    });
+  }
 
   const remaining = new Date(row.expiresAt).getTime() - now;
   const expired = remaining <= 0;
@@ -125,7 +133,7 @@ export function ActionDrawer({
           <button
             type="button"
             className={detailStyles.advancedToggleBtn}
-            onClick={() => setAdvancedOpen((v) => !v)}
+            onClick={handleAdvancedToggle}
           >
             {advancedOpen ? "Hide JSON ▴" : "View JSON (advanced) ▾"}
           </button>
@@ -134,7 +142,7 @@ export function ActionDrawer({
       {!isMobile && advancedOpen && onPatch && (
         <PatchEditor
           snapshot={row.request?.parametersSnapshot ?? {}}
-          seed={(row.patchProposal?.diff as Record<string, unknown> | undefined) ?? null}
+          seed={row.patchProposal?.diff ?? null}
           onCancel={() => setAdvancedOpen(false)}
           onSubmit={(patchValue) => onPatch(patchValue)}
         />

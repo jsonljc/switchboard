@@ -13,6 +13,7 @@ import {
   useRespondToApproval,
 } from "../../hooks/use-approvals";
 import { useSessionPrincipal } from "../../hooks/use-session-principal";
+import { emit } from "../../telemetry";
 import type { DispatchKind } from "./dispatch-banner";
 
 export interface DetailProps {
@@ -57,6 +58,12 @@ export function Detail({ id, now }: DetailProps) {
 
   function handleApprove() {
     if (!row) return;
+    emit({
+      type: "approvals.approve_clicked",
+      id: row.id,
+      riskCategory: row.riskCategory,
+      quorum: false,
+    });
     setErrorState(null);
     mutation.mutate(
       { id: row.id, action: "approve", bindingHash: row.bindingHash },
@@ -72,6 +79,7 @@ export function Detail({ id, now }: DetailProps) {
 
   function handleReject() {
     if (!row) return;
+    emit({ type: "approvals.reject_clicked", id: row.id });
     setErrorState(null);
     mutation.mutate(
       { id: row.id, action: "reject" },
@@ -87,6 +95,7 @@ export function Detail({ id, now }: DetailProps) {
 
   function handlePatch(patchValue: Record<string, unknown>) {
     if (!row) return;
+    emit({ type: "approvals.patch_submitted", id: row.id, changedKeys: Object.keys(patchValue) });
     setErrorState(null);
     mutation.mutate(
       { id: row.id, action: "patch", bindingHash: row.bindingHash, patchValue },
