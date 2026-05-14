@@ -46,6 +46,26 @@ function createEvent(): ConversationEndEvent {
   return { ...baseEvent };
 }
 
+function primeSummarizeAndExtract(
+  deps: ReturnType<typeof createMockDeps>,
+  summarization: { summary: string; outcome: string },
+  extraction: {
+    facts?: Array<{ fact: string; confidence: number; category: string }>;
+    questions?: string[];
+    patterns?: string[];
+  },
+): void {
+  deps.llmClient.complete
+    .mockResolvedValueOnce(JSON.stringify(summarization))
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        facts: extraction.facts ?? [],
+        questions: extraction.questions ?? [],
+        patterns: extraction.patterns ?? [],
+      }),
+    );
+}
+
 function primeFaqExtractionLlm(deps: ReturnType<typeof createMockDeps>, question: string): void {
   deps.llmClient.complete
     .mockResolvedValueOnce(
@@ -305,6 +325,82 @@ describe("ConversationCompoundingService", () => {
     expect(stored.agentId).toBe("alex");
     expect(stored.draftStatus).toBe("pending");
     expect(stored.draftExpiresAt).toBeInstanceOf(Date);
+  });
+
+  it("writes pattern-category memories when summarization outcome is booked", async () => {
+    const localDeps = createMockDeps();
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Customer booked laser treatment", outcome: "booked" },
+      { patterns: ["Customers ask about downtime before booking laser treatment"] },
+    );
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+    const localService = new ConversationCompoundingService(localDeps);
+    await localService.processConversationEnd(baseEvent);
+
+    expect(localDeps.deploymentMemoryStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "pattern",
+        content: "Customers ask about downtime before booking laser treatment",
+      }),
+    );
+  });
+
+  it("does not write pattern-category memories for non-booked outcomes", async () => {
+    for (const outcome of ["lost", "qualified", "info_request", "escalated"] as const) {
+      const localDeps = createMockDeps();
+      localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+      primeSummarizeAndExtract(
+        localDeps,
+        { summary: `Conversation ended ${outcome}`, outcome },
+        { patterns: ["should not surface because outcome is not booked"] },
+      );
+      localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+      const localService = new ConversationCompoundingService(localDeps);
+      await localService.processConversationEnd(baseEvent);
+
+      const patternCreates = localDeps.deploymentMemoryStore.create.mock.calls.filter(
+        (c) => c[0].category === "pattern",
+      );
+      expect(patternCreates).toHaveLength(0);
+    }
+  });
+
+  it("increments confidence on a near-duplicate pattern instead of creating a duplicate", async () => {
+    const localDeps = createMockDeps();
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
+      {
+        id: "p-existing",
+        content: "Customers ask about downtime before booking laser treatment",
+        sourceCount: 2,
+        confidence: 0.6,
+      },
+    ]);
+    localDeps.deploymentMemoryStore.incrementConfidence.mockResolvedValue({
+      id: "p-existing",
+      sourceCount: 3,
+    });
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Booked again", outcome: "booked" },
+      { patterns: ["Customers ask about downtime before booking laser treatment"] },
+    );
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+    const localService = new ConversationCompoundingService(localDeps);
+    await localService.processConversationEnd(baseEvent);
+
+    expect(localDeps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+      "p-existing",
+      expect.any(Number),
+    );
+    const patternCreates = localDeps.deploymentMemoryStore.create.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCreates).toHaveLength(0);
   });
 
   it("skips FAQ promotion gracefully when knowledgeStore is not provided", async () => {

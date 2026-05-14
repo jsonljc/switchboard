@@ -2,6 +2,7 @@ import type { ConversationEndEvent } from "../channel-gateway/conversation-lifec
 import type { EmbeddingAdapter } from "../embedding-adapter.js";
 import { computeConfidenceScore } from "@switchboard/schemas";
 import { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
+import { shouldExtractOutcomePatterns } from "./outcome-pattern-extractor.js";
 
 export interface CompoundingLLMClient {
   complete(prompt: string): Promise<string>;
@@ -80,6 +81,7 @@ interface SummarizationResult {
 interface ExtractionResult {
   facts: Array<{ fact: string; confidence: number; category: string }>;
   questions: string[];
+  patterns: string[]; // populated only when outcome is "booked"
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -140,6 +142,16 @@ export class ConversationCompoundingService {
 
       for (const question of extraction.questions) {
         await this.trackQuestion(event.organizationId, event.deploymentId, question);
+      }
+
+      if (shouldExtractOutcomePatterns(summarization.outcome) && extraction.patterns?.length) {
+        for (const pattern of extraction.patterns) {
+          try {
+            await this.trackPattern(event.organizationId, event.deploymentId, pattern);
+          } catch (err) {
+            console.error("[CompoundingService] trackPattern failed", err);
+          }
+        }
       }
     } catch (err) {
       console.error("[CompoundingService] Failed to process conversation end:", err);
@@ -247,6 +259,38 @@ export class ConversationCompoundingService {
       deploymentId,
       category: "faq",
       content: question,
+    });
+  }
+
+  private async trackPattern(
+    organizationId: string,
+    deploymentId: string,
+    patternText: string,
+  ): Promise<void> {
+    const existing = await this.memoryStore.findByCategory(organizationId, deploymentId, "pattern");
+
+    if (existing.length > 0) {
+      const newEmbedding = await this.embedding.embed(patternText);
+
+      for (const entry of existing) {
+        const entryEmbedding = await this.embedding.embed(entry.content);
+        const similarity = cosineSimilarity(newEmbedding, entryEmbedding);
+
+        if (similarity >= SIMILARITY_THRESHOLD) {
+          const newSourceCount = entry.sourceCount + 1;
+          const newConfidence = computeConfidenceScore(newSourceCount, false);
+          await this.memoryStore.incrementConfidence(entry.id, newConfidence);
+          return;
+        }
+      }
+    }
+
+    await this.memoryStore.create({
+      organizationId,
+      deploymentId,
+      category: "pattern",
+      content: patternText,
+      confidence: computeConfidenceScore(1, false),
     });
   }
 }
