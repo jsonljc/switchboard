@@ -15,8 +15,8 @@ vi.mock("@/lib/api-client/agents-server", () => ({
 vi.mock("@/components/layout/editorial-auth-shell", () => ({
   EditorialAuthShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-vi.mock("@/components/agent-home/agent-home-shell", () => ({
-  AgentHomeShell: ({ agentKey }: { agentKey: string }) => <div data-testid="shell">{agentKey}</div>,
+vi.mock("@/components/cockpit/cockpit-page", () => ({
+  CockpitPage: () => <div data-testid="cockpit-page">cockpit</div>,
 }));
 
 import AlexPage from "../page";
@@ -28,11 +28,11 @@ describe("AlexPage server gate", () => {
     fetchEnabledFn.mockImplementation(async () => ["alex", "riley"]);
   });
 
-  it("renders AgentHomeShell with agentKey=alex when alex is enabled", async () => {
+  it("renders CockpitPage when alex is enabled", async () => {
     const tree = await AlexPage();
     const { render, screen } = await import("@testing-library/react");
     render(tree);
-    expect(screen.getByTestId("shell")).toHaveTextContent("alex");
+    expect(screen.getByTestId("cockpit-page")).toBeInTheDocument();
   });
 
   it("notFound() when alex is not enabled", async () => {
