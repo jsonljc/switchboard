@@ -21,6 +21,11 @@ describe("useReportData (PR-R1 fixture form)", () => {
       process.env.NEXT_PUBLIC_REPORTS_LIVE = originalEnv;
     }
   });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.doUnmock("@/hooks/use-query-keys");
+    vi.resetModules();
+  });
 
   function createWrapper() {
     const queryClient = new QueryClient({
@@ -110,8 +115,10 @@ describe("useReportData (PR-R1 fixture form)", () => {
     });
 
     const { waitFor } = await import("@testing-library/react");
-    await waitFor(() => expect(result.current.error).not.toBeNull());
-    expect(result.current.data).toBeUndefined();
+    await waitFor(() => {
+      expect(result.current.error).not.toBeNull();
+      expect(result.current.data).toBeUndefined();
+    });
 
     fetchMock.mockRestore();
     vi.doUnmock("@/hooks/use-query-keys");
