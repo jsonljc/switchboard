@@ -29,6 +29,19 @@ describe("outcomePattern metrics", () => {
     expect(surfacedSpy).toHaveBeenCalledWith({ deploymentId: "dep-3" });
   });
 
+  it("outcomePatternsDecayed accepts {deploymentTier, canonicalCategory}", () => {
+    const metrics = createInMemoryMetrics();
+    const spy = vi.spyOn(metrics.outcomePatternsDecayed, "inc");
+
+    metrics.outcomePatternsDecayed.inc(
+      { deploymentTier: "aggregate", canonicalCategory: "all" },
+      5,
+    );
+
+    expect(spy).toHaveBeenCalledWith({ deploymentTier: "aggregate", canonicalCategory: "all" }, 5);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
   it("outcomePatternConfidence histogram records labeled observations", () => {
     const metrics = createInMemoryMetrics();
     const spy = vi.spyOn(metrics.outcomePatternConfidence, "observe");

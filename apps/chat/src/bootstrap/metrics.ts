@@ -44,6 +44,7 @@ export function createPromMetrics(): SwitchboardMetrics {
   const OUTCOME_PATTERN_TIER_LABELS = ["deployment_id", "attribution_tier"];
   const OUTCOME_PATTERN_REJECTED_LABELS = ["deployment_id", "reason"];
   const OUTCOME_PATTERN_COLLISION_LABELS = ["deployment_id", "current_key", "colliding_key"];
+  const OUTCOME_PATTERN_DECAYED_LABELS = ["deployment_tier", "canonical_category"];
   const CONFIDENCE_BUCKETS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
   return {
     proposalsTotal: new PromCounter(
@@ -139,6 +140,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "switchboard_outcome_patterns_cross_key_collision_total",
       "Cross-canonical-key cosine match above legacy 0.92 — review signal for enum granularity",
       OUTCOME_PATTERN_COLLISION_LABELS,
+    ),
+    outcomePatternsDecayed: new PromCounter(
+      "switchboard_outcome_patterns_decayed_total",
+      "Pattern rows whose confidence was decreased during the daily decay sweep",
+      OUTCOME_PATTERN_DECAYED_LABELS,
     ),
     outcomePatternConfidence: new PromHistogram(
       "switchboard_outcome_pattern_confidence",
