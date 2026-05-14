@@ -19,6 +19,7 @@ import { StaticDeploymentResolver } from "./single-tenant/static-deployment-reso
 import { InMemoryGatewayConversationStore } from "./single-tenant/memory-conversation-store.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerManagedWebhookRoutes } from "./routes/managed-webhook.js";
+import { buildWhatsAppStatusBridge } from "./bridges/whatsapp-test-send-status-bridge.js";
 import { CtwaAdapter } from "@switchboard/ad-optimizer";
 
 async function main() {
@@ -116,11 +117,13 @@ async function main() {
 
   // DLQ store
   let failedMessageStore: FailedMessageStore | null = null;
+  let testSendStore: import("@switchboard/db").PrismaWhatsAppTestSendStore | null = null;
   if (process.env["DATABASE_URL"]) {
-    const { getDb } = await import("@switchboard/db");
+    const { getDb, PrismaWhatsAppTestSendStore } = await import("@switchboard/db");
     const prisma = getDb();
     healthPrisma = prisma;
     failedMessageStore = new FailedMessageStore(prisma);
+    testSendStore = new PrismaWhatsAppTestSendStore(prisma);
   }
 
   // Initialize Redis-backed security store if Redis is available
@@ -326,12 +329,18 @@ async function main() {
   });
 
   // --- Managed channel webhook routes (GET verification + POST messages) ---
+  const statusBridge = testSendStore ? buildWhatsAppStatusBridge({ testSendStore }) : null;
   if (registry) {
     registerManagedWebhookRoutes(app, {
       registry,
       failedMessageStore,
       ctwaAdapter,
       dedup: { checkDedup },
+      ...(statusBridge
+        ? {
+            onStatusUpdate: (update, orgId) => statusBridge.onStatusUpdate(update, orgId ?? ""),
+          }
+        : {}),
     });
   }
 
