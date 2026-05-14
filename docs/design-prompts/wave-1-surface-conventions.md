@@ -169,6 +169,27 @@ The accent is **NEVER** used for any of the following:
 - **NOT for background fills** outside the surface-spec-authorized roles in §9. Filter chips and selected rows on `/activity` are an authorized exception (`docs/design-prompts/2026-05-13-activity.md#design-system`); the approve CTA on `/approvals` is an authorized exception (`docs/design-prompts/2026-05-13-approvals.md#detail-panel`). All other background fills must come from neutral hairline + paper-raised, not from accent.
 - **NEVER as a "default emphasis"** for arbitrary text. Pick the role from the four authorized uses above; if no role fits, use ink and hairline weight, not accent.
 
+## 5. Empty / loading / error / stale states
+
+All four states are first-class on every wave-2 surface; none collapses to a generic spinner. The hook contract is `DataFreshness { generatedAt, window, dataSource, isPartial?, unavailableSources? }` (`apps/dashboard/src/lib/agent-home/types.ts:12-18`) — consumed identically by `useAgent*` and the new wave-2 hooks. Editorial surfaces never invent freshness state outside this contract.
+
+### 5.1 Empty
+
+Editorial italic prose, no illustration, no badge. Copy register: question or invitation, not "no data." Example agent-home empty: italic serif, 18px, ink-2 (`apps/dashboard/src/app/globals.css:1163-1169` `.empty-state`). Example Tools-tier empty: display 30px italic accent ("Nothing here yet — or it hasn't happened in this window") + sans 14.5px ink-3 subcopy + mono 11px ink-4 last-recorded timestamp (`locked/switchboard/project/activity-v2/styles.css:915-939`). Cite `docs/design-prompts/2026-05-13-activity.md#state-coverage` for the "Empty (zero) / Empty (filtered)" split — both forms exist; the filtered variant adds a "Clear filters" CTA in mono outline.
+
+### 5.2 Loading
+
+**Skeleton rows that preserve row geometry**, never a spinner overlay. The skeleton grid mirrors the real row's grid-template-columns so layout doesn't jitter when data arrives — see `locked/switchboard/project/activity-v2/styles.css:886-912` (`.skel-row` reuses the same six-column grid as `.arow`, animates a 10px-tall `.skel-bar` at 1400ms ease-in-out). Each wave-2 table includes its own skeleton variant; the geometry rule is cross-surface, the per-column widths are local.
+
+### 5.3 Error
+
+**Inline banner, not a full-page replace.** Banner uses paper-warm background with a 3px left border in ink (`locked/switchboard/project/approvals-v2/styles.css:747-755` `.errbanner`: `padding: 16px 18px; border: 1px solid var(--hair-strong); border-left: 3px solid var(--ink)`). Copy in display italic 18px (line 756). Cite `docs/design-prompts/2026-05-13-approvals.md#state-coverage` and `docs/design-prompts/2026-05-13-activity.md#state-coverage` — both surfaces explicitly state "don't unmount table" / "error: inline banner, not a full-page replace." A connection-missing banner is similar but uses a different ink-left-border weight (`locked/switchboard/project/reports-v2/styles.css:128-145`).
+
+### 5.4 Stale
+
+**Bottom-right pill with relative age and a refresh affordance.** Geometry: fixed position, 8px×14px padding, 999px radius, mono 11px (`locked/switchboard/project/activity-v2/styles.css:991-1003` `.stale-pill`). The age comes from `freshness.generatedAt` per the hook contract (`apps/dashboard/src/lib/agent-home/types.ts:13`). The refresh control uses mono 10px ALL CAPS, separated by a hairline from the age. **No auto-poll** — `docs/design-prompts/2026-05-13-activity.md#api-capabilities` explicitly forbids it ("No polling — pagination breaks on autorefresh"). The pill renders when `freshness.dataSource === "fixture"` or when `Date.now() - generatedAt > N minutes`; the surface picks N. Reports has a related but distinct pattern — a "cached Nm ago" caption on the recompute button (`docs/design-prompts/2026-05-13-reports.md#window-control`), since monthly numbers don't carry the same "stale" weight as live audit rows.
+
+
 
 
 
