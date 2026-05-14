@@ -9,6 +9,7 @@ export function createMetricsSpy(): SwitchboardMetrics {
   vi.spyOn(base.outcomePatternsCreated, "inc");
   vi.spyOn(base.outcomePatternsSurfaced, "inc");
   vi.spyOn(base.outcomePatternsRejected, "inc");
+  vi.spyOn(base.outcomePatternsCrossKeyCollision, "inc");
   vi.spyOn(base.outcomePatternConfidence, "observe");
   return base;
 }

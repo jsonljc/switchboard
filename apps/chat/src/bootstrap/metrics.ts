@@ -43,6 +43,7 @@ export function createPromMetrics(): SwitchboardMetrics {
   const OUTCOME_PATTERN_LABELS = ["deployment_id"];
   const OUTCOME_PATTERN_TIER_LABELS = ["deployment_id", "attribution_tier"];
   const OUTCOME_PATTERN_REJECTED_LABELS = ["deployment_id", "reason"];
+  const OUTCOME_PATTERN_COLLISION_LABELS = ["deployment_id", "current_key", "colliding_key"];
   const CONFIDENCE_BUCKETS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
   return {
     proposalsTotal: new PromCounter(
@@ -133,6 +134,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "switchboard_outcome_patterns_rejected_total",
       "Outcome patterns dropped during extraction; reason ∈ {invalid_canonical_key, unknown_canonical_key}",
       OUTCOME_PATTERN_REJECTED_LABELS,
+    ),
+    outcomePatternsCrossKeyCollision: new PromCounter(
+      "switchboard_outcome_patterns_cross_key_collision_total",
+      "Cross-canonical-key cosine match above legacy 0.92 — review signal for enum granularity",
+      OUTCOME_PATTERN_COLLISION_LABELS,
     ),
     outcomePatternConfidence: new PromHistogram(
       "switchboard_outcome_pattern_confidence",

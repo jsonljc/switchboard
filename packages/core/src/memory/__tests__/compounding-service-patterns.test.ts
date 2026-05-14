@@ -93,7 +93,10 @@ describe("ConversationCompoundingService — outcome-pattern writes (PR-3.1 book
       findByWorkTraceIds: vi.fn().mockResolvedValue([]),
       findInWindow: vi.fn().mockResolvedValue([{ id: "bk-dup" }]),
     };
-    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
+    // PR-3.2b two-stage merge: the canonical-bucket lookup is the merge path,
+    // not the broad findByCategory scan (that scan now only flags cross-key
+    // collisions). Stub the bucket lookup with the existing row.
+    localDeps.deploymentMemoryStore.findByCategoryAndCanonicalKey.mockResolvedValue([
       {
         id: "p-existing",
         content: "Customers ask about downtime before booking laser treatment",
@@ -101,6 +104,7 @@ describe("ConversationCompoundingService — outcome-pattern writes (PR-3.1 book
         confidence: 0.6,
       },
     ]);
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
     localDeps.deploymentMemoryStore.incrementConfidence.mockResolvedValue({
       id: "p-existing",
       sourceCount: 3,
