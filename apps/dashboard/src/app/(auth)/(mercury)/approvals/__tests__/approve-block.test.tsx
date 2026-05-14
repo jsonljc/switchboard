@@ -90,3 +90,15 @@ describe("ApproveBlock — quorum", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("ApproveBlock — CTA visual smoke", () => {
+  it("approve CTA receives the approveBtn class", () => {
+    render(<ApproveBlock {...baseProps} />);
+    const btn = screen.getByRole("button", { name: /approve/i });
+    // The class name is CSS-module-scoped; we just assert that *some* class
+    // applies (jsdom doesn't resolve var(--accent) to a color, so a real AA
+    // contrast measurement must be done in a browser DevTools session and
+    // documented in the PR description).
+    expect(btn.className).not.toBe("");
+  });
+});
