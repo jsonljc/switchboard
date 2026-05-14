@@ -10,15 +10,15 @@
 
 Ship in dependency order. PR-1 and PR-2 are mechanical (no design decisions). PR-3 and PR-4 involve real decisions and are scoped conservatively.
 
-| PR     | Title                                                                                       | Depends on | Risk          |
-| ------ | ------------------------------------------------------------------------------------------- | ---------- | ------------- |
-| PR-1   | Wire knowledgeStore into ConversationCompoundingService                                     | None       | Low-to-medium |
-| PR-2   | Parallel safe tool calls in skill executor                                                  | None       | Medium        |
-| PR-3   | Outcome-informed context injection (write + read sides)                                     | PR-1       | Medium        |
-| PR-3.1 | Signal upgrade: booking-backed outcome attribution + bookingId propagation fix + C1 metrics | PR-3       | Medium        |
-| PR-3.2 | Pattern canonicalization + decay maintenance cron (scoped separately)                       | PR-3.1     | Medium        |
-| PR-4   | Provider-neutral executor boundary, no fallback                                             | None       | Low-to-medium |
-| PR-4B  | Fallback router + retryable-error consumption + agent-runtime adapter migration (deferred)  | PR-4       | Medium        |
+| PR     | Title                                                                                                                                                                                                     | Depends on | Risk          |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------- |
+| PR-1   | Wire knowledgeStore into ConversationCompoundingService                                                                                                                                                   | None       | Low-to-medium |
+| PR-2   | Parallel safe tool calls in skill executor                                                                                                                                                                | None       | Medium        |
+| PR-3   | Outcome-informed context injection (write + read sides)                                                                                                                                                   | PR-1       | Medium        |
+| PR-3.1 | Signal upgrade: booking-backed outcome attribution + bookingId propagation fix + C1 metrics                                                                                                               | PR-3       | Medium        |
+| PR-3.2 | Learning-quality controls: canonical keys, two-stage merge, decay cron, pattern IDs in trace, pilot thresholds — see [`2026-05-14-agent-infra-pr3.2-design.md`](./2026-05-14-agent-infra-pr3.2-design.md) | PR-3.1     | Medium-high   |
+| PR-4   | Provider-neutral executor boundary, no fallback                                                                                                                                                           | None       | Low-to-medium |
+| PR-4B  | Fallback router + retryable-error consumption + agent-runtime adapter migration (deferred)                                                                                                                | PR-4       | Medium        |
 
 ---
 
@@ -282,9 +282,9 @@ The PR-3 write path emits `category: "pattern"` memories gated only on `summariz
 
 This reverses the earlier "ship PR-3 as-is and stack PR-3.1" plan documented in the PR sequence table above — that plan was correct on narrative clarity but wrong on durable-memory safety. Code-review verification (see `feedback_ship_clean_not_followup` memory: ship clean, don't defer) flagged the gap, but only after PR-3 had already merged; pre-launch state is what kept it harmless.
 
-### Future (not this PR)
+### Next (scoped separately as PR-3.2)
 
-PR-3.2: pattern canonicalization + decay execution as a daily Inngest cron, following the ad-optimizer signal-health pattern. Includes wiring `DeploymentMemoryStore.decayStale()` (currently called only from tests) and a write-time-cheap, nightly-merge approach to fragmentation. Conversion-lift gauge can ride on the same cron once the loop is producing signal worth measuring.
+PR-3.2 closes the **compounding-quality** loop: canonical pattern keys, two-stage merge, lower pilot-scale surfacing thresholds (flagged), decay cron, and pattern IDs in prompt + trace for later falsifiability. Full design in [`2026-05-14-agent-infra-pr3.2-design.md`](./2026-05-14-agent-infra-pr3.2-design.md). The clean distinction: PR-3 + PR-3.1 make the loop **correct and trustworthy**; PR-3.2 makes the loop **useful at pilot scale** by preventing fragmentation from keeping `outcomePatternsSurfaced_total` flat while extraction/creation counters rise.
 
 ---
 
