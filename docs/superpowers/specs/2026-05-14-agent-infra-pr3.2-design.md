@@ -84,6 +84,14 @@ Other verticals onboard with their own seed enum (separate config). The enum is 
 
 **Migration.** Add `canonicalKey` column + `DeploymentMemoryEvidence` table in one Prisma migration. Patterns already written under PR-3 / PR-3.1 keep `canonicalKey = null` and have no evidence rows — they continue to surface under the legacy `sourceCount ≥ 3 ∧ confidence ≥ 0.7` rule until either (a) they're re-merged by a future extraction (which carries the new key) or (b) a backfill job re-classifies them. Backfill is a separate follow-up; not in scope for PR-3.2a.
 
+**Extraction-prompt widening — three-touch change.** The current shape is `ExtractionResult.patterns: string[]` (typed at `packages/core/src/memory/compounding-service.ts:84`), produced by the prompt template at `packages/core/src/memory/extraction-prompts.ts:44`. Widening to `{ text, canonicalKey }` requires three coordinated edits in PR-3.2a:
+
+1. **Type** — change `ExtractionResult.patterns` from `string[]` to `Array<{ text: string; canonicalKey: string }>` in `compounding-service.ts`. Update the consumer at `compounding-service.ts:147` (the booking-gated extraction loop introduced by PR-3.1 Task 18) to read `pattern.text` and `pattern.canonicalKey` instead of treating the entry as a bare string.
+2. **Prompt** — rewrite the patterns instruction in `extraction-prompts.ts:44` to ask for the new object shape, present the deployment's enum, and instruct `"return canonicalKey: 'unknown' if nothing fits"`.
+3. **Test fixture** — `packages/core/src/memory/__tests__/compounding-service.test.ts:64` (and any other fixture mocking `extraction.patterns`) updates from `["pattern string"]` to `[{ text: "pattern string", canonicalKey: "objection:..." }]`.
+
+No other consumer reads `extraction.patterns` on current main (verified). The change is therefore confined to these three files plus their test files.
+
 ### 2. Two-stage merge (conservative threshold, ratcheted by evidence)
 
 Replace the single embedding-similarity check in `trackPattern` with:
@@ -123,7 +131,14 @@ This is the most behavior-changing knob in the PR. It should land last in the se
 
 ### 4. Decay cron (idempotent per day)
 
-Wire `DeploymentMemoryStore.decayStale()` (exists, currently called only from tests) to a nightly Inngest cron, mirroring the ad-optimizer signal-health pattern (see `project_gap2_signal_health_status` memory).
+Wire `DeploymentMemoryStore.decayStale()` (exists at `packages/core/src/memory/scoped-stores.ts:136`, currently called only from tests) to a nightly Inngest cron, mirroring the ad-optimizer signal-health pattern.
+
+**Placement convention (verified against `executeDailySignalHealthCheck`).** Inngest crons in this repo split across two locations:
+
+- **Pure function** — lives in the owning package. For signal-health: `packages/ad-optimizer/src/inngest-functions.ts` exports `executeDailySignalHealthCheck` (id `"ad-optimizer-daily-signal-health"`, `triggers: [{ cron: "0 7 * * *" }]`). For pattern decay, the equivalent function lives in `packages/core/src/memory/inngest-functions.ts` (or `packages/core/src/jobs/pattern-decay.ts`; either is fine — pick one and document) and exports `executeDailyPatternDecay` with id `"memory-daily-pattern-decay"`.
+- **Registration** — happens in `apps/api/src/bootstrap/inngest.ts`. Signal-health is registered at line ~567 via `createDailySignalHealthCron(signalHealthDeps)`. Pattern decay must be registered the same way alongside it, and is the boundary at which `DeploymentMemoryStore` is **injected** into the pure function. The `core` function cannot import from `@switchboard/db` (Layer 3 → Layer 4 forbidden); the store comes in via the registration call.
+
+The `apps/api/src/services/cron/` directory holds a second Inngest pattern (e.g. `lead-retry`, `meta-token-refresh`) where the function and registration both live in `apps/api`. Do NOT use that pattern for pattern decay — it would either (a) put memory-domain logic in the app layer or (b) leak a `@switchboard/db` import into something that should be domain code. Follow the signal-health split.
 
 - Schedule: daily at 07:00 UTC (same slot as ad-optimizer signal-health, to keep ops attention on one window).
 - Behavior: lower `confidence` for rows whose `lastSeenAt` is older than `PATTERN_DECAY_WINDOW_DAYS` (already in schemas; default ~30d). The reduction factor and floor are config — start with `×0.9` per cycle, floor at `0.3`, never delete.
@@ -154,7 +169,8 @@ Foundation for falsifiability without doing A/B testing yet.
 
   The wrapping `<outcome-patterns>` envelope is invisible to the operator-facing surface but visible in the prompt. The disclaimer paragraph is load-bearing: without it, models occasionally read `<pattern id=...>` as an instruction shape and surface IDs back to the user.
 
-- **Trace**: every Alex turn that surfaces patterns appends `injectedPatternIds: string[]` onto the `WorkTrace` entry for that turn. This is durable — once enough turns and outcomes accumulate, a separate analytics job can compute per-pattern lift retroactively without needing a live A/B framework.
+- **Trace persistence target.** The current `WorkTrace` schema has no extensible `metadata Json?` column — only typed fields plus four narrow JSON-as-Text fields (`parameters`, `deploymentContext`, `executionOutputs`, `executionSummary`), all of which are product-meaningful and unsafe to overload. PR-3.2c **adds a new column** `WorkTrace.injectedPatternIds String[]` (Postgres `text[]`), in the same Prisma migration as the column's first write. Rationale: a typed array column is queryable from analytics (the eventual conversion-lift job joins on `unnest(injectedPatternIds)`), cheaper than a JSON sidecar, and keeps the `WorkTrace` shape self-describing. A JSON `metadata Json?` column was considered but rejected for this PR — extensible-bag metadata is a future need that should land with its own design, not be introduced as a side-effect of trace pattern IDs.
+- **Trace write site.** Every Alex turn that surfaces patterns appends the pattern IDs to its `WorkTrace.injectedPatternIds`. The write happens inside the existing `WorkTrace` finalization, not as a separate row. Empty array (or null, depending on Prisma default behavior — use `@default([])`) when no patterns were surfaced.
 - **No new prompt logic in PR-3.2**: Alex is not told to "follow pattern pat_abc123." The IDs exist only to enable later attribution.
 
 ## Scope guards
@@ -225,8 +241,13 @@ The pilot-threshold flag is high-leverage but explicitly off by default, so risk
 **Pattern IDs in prompt + trace:**
 
 - `outcomePatternContext` payload wraps patterns in `<outcome-patterns>...<pattern id=... key=... />` with the metadata-only disclaimer paragraph.
-- `WorkTrace` for a turn that surfaced patterns records `injectedPatternIds` matching what `outcomePatternContext` rendered.
+- `WorkTrace.injectedPatternIds` column persists the array; a turn that surfaced no patterns has `injectedPatternIds = []`.
+- `WorkTrace` for a turn that surfaced patterns records `injectedPatternIds` matching what `outcomePatternContext` rendered (same order, same string IDs).
 - Smoke test against a real Alex turn: customer asks about downtime; the model's response does NOT include the `pat_*` ID or the `<outcome-patterns>` markup verbatim. This pins the "metadata only" disclaimer's job.
+
+**Cron placement (PR-3.2d):**
+
+- The cron function lives in `packages/core/src/memory/` (not `apps/api/src/services/cron/`); `DeploymentMemoryStore` is injected via the registration call in `apps/api/src/bootstrap/inngest.ts`. Test: the `core` module has no `@switchboard/db` import (assert via dependency-cruiser or grep).
 
 ## Sequencing inside PR-3.2
 
@@ -236,7 +257,7 @@ Sub-PRs in dependency order:
 
 2. **PR-3.2b — Two-stage merge at `0.84`.** Wire `trackPattern` through the canonical-bucket lookup, threshold at `0.84` (not 0.78). Add the cross-key collision counter. Add the rejection metric for `unknown_canonical_key`. **Medium risk** — load-bearing behavior change for the write path.
 
-3. **PR-3.2c — Pattern IDs in prompt + trace + metadata disclaimer.** Structural `<outcome-patterns>` payload with the "metadata only, do not mention" disclaimer + `WorkTrace.injectedPatternIds`. Independent of (a) and (b) but most useful after both. **Low risk.**
+3. **PR-3.2c — Pattern IDs in prompt + trace + metadata disclaimer.** Adds `WorkTrace.injectedPatternIds: String[]` column via Prisma migration, structural `<outcome-patterns>` payload with the "metadata only, do not mention" disclaimer, and the write at `WorkTrace` finalization. Independent of (a) and (b) but most useful after both. **Low risk** — the new column is additive and `@default([])`, so backfill is not required.
 
 4. **PR-3.2d — Decay cron with daily idempotency.** Inngest job + `DeploymentMemory.lastDecayedAt` column + metric + config defaults. Fully independent of the others; can ship in parallel with (a)/(b)/(c). **Low risk.**
 
