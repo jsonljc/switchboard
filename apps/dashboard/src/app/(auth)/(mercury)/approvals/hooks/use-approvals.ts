@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { isMercuryToolLive } from "@/lib/route-availability";
 import { APPROVALS_FIXTURES } from "../fixtures";
-import type { PendingRow } from "../types";
+import type { PendingRow, DetailRow } from "../types";
 
 const isLive = (): boolean => isMercuryToolLive("approvals");
 
@@ -50,5 +50,29 @@ export function usePendingApprovals() {
     // is the explicit refresh signal — no refetchInterval (live countdown is
     // client-side; refetch is event-driven).
     refetchOnWindowFocus: live,
+  });
+}
+
+export function useApprovalDetail(id: string | null) {
+  const keys = useScopedQueryKeys();
+  const live = isLive();
+
+  return useQuery<DetailRow>({
+    queryKey: id
+      ? (keys?.approvals.detail(id) ?? (["__disabled_approval_detail__", id] as const))
+      : (["__no_id_approval_detail__"] as const),
+    queryFn: async () => {
+      if (!id) throw new Error("missing id");
+      if (!live) {
+        const row = APPROVALS_FIXTURES.find((r) => r.id === id);
+        if (!row) throw new Error(`fixture not found: ${id}`);
+        return row;
+      }
+      const res = await fetch(`/api/dashboard/approvals?id=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(`Failed to load approval: ${res.status}`);
+      return res.json() as Promise<DetailRow>;
+    },
+    enabled: !!id && (!live || !!keys),
+    staleTime: 5_000,
   });
 }
