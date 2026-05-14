@@ -4,7 +4,7 @@
 
 **Goal:** Ship the Riley cockpit core operator loop at `/riley`: approval cards (all 11 action variants + signal-health grouping), activity stream, status pill, halt control, on top of the shared cockpit shell Alex A.1 ships. Zero backend changes. Adapter boundary load-bearing.
 
-**Architecture:** Five-layer adapter architecture — substrate (`Recommendation` + `AuditEntry`) → existing dashboard hooks → Riley adapter layer (5 pure-function files under `apps/dashboard/src/lib/cockpit/riley/`) → cockpit hooks (`use-riley-approvals`, `use-riley-status`, extended `use-agent-activity`) → UI components from Alex A.1's shell. UI components and cockpit hooks must NOT import `Recommendation` / `AuditEntry` / `@switchboard/db` / `@prisma`. Enforcement: ESLint `no-restricted-imports` rule scoped to `components/cockpit/**`, `hooks/use-riley-*.ts`, and `app/(auth)/[agentKey]/**` (adapter files under `lib/cockpit/riley/**` are exempt). Pre-merge grep smoke check as review gate. When Wave B mirrors recommendations into `WorkTrace`, only the adapter layer changes — the cockpit UI is source-agnostic by construction.
+**Architecture:** Five-layer adapter architecture — substrate (`Recommendation` + `AuditEntry`) → existing dashboard hooks → Riley adapter layer (5 pure-function files under `apps/dashboard/src/lib/cockpit/riley/`) → cockpit hooks (`use-riley-approvals`, `use-riley-status`, extended `use-agent-activity`) → UI components from Alex A.1's shell. UI components and cockpit hooks must NOT import `Recommendation` / `AuditEntry` / `@switchboard/db` / `@prisma`. Enforcement: ESLint `no-restricted-imports` rule scoped to `components/cockpit/**`, `hooks/use-riley-*.ts`, `app/(auth)/alex/**`, and `app/(auth)/riley/**` (adapter files under `lib/cockpit/riley/**` are exempt). Pre-merge grep smoke check as review gate. When Wave B mirrors recommendations into `WorkTrace`, only the adapter layer changes — the cockpit UI is source-agnostic by construction.
 
 **Tech Stack:** Next.js 14 App Router, React 18, TypeScript (ESM, `.js` extensions in relative imports per `CLAUDE.md`), Vitest + `@testing-library/react`, Tailwind for layout primitives only. The cockpit shell already exists on main (`apps/dashboard/src/components/cockpit/types.ts` shipped via Alex A.1's type-only landing); the rest of the shell components land when Alex A.1 merges.
 
@@ -64,12 +64,22 @@ relative-age.ts
 And:
 
 ```bash
-ls apps/dashboard/src/app/\(auth\)/\[agentKey\]/
+cat apps/dashboard/src/app/\(auth\)/alex/page.tsx | head -5
 ```
 
-Expected to include both `agent-home-client.tsx` (now per-agent-branching) and `legacy-agent-home-client.tsx`.
+Expected: imports `CockpitPage` from `@/components/cockpit/cockpit-page` and renders `<CockpitPage />` directly (route-level branching introduced when A.1 was rebased onto the post-#468 explicit-route structure).
+
+And:
+
+```bash
+cat apps/dashboard/src/app/\(auth\)/riley/page.tsx | head -5
+```
+
+Expected: imports `AgentHomeShell` and renders `<AgentHomeShell agentKey="riley" />`. **B.1 changes this to render `<RileyCockpitPage />` instead** (see Task 16).
 
 If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 to merge.** Riley B.1 cannot execute against a half-merged shell.
+
+> **Route-architecture note.** PR #468 (merged before A.1) deleted the dynamic `[agentKey]/` route and replaced it with explicit `/alex/`, `/riley/`, `/mira/` directories. A.1's merge into main adapted by moving its per-agent branching from a single `agent-home-client.tsx` to route-level: `/alex/page.tsx` renders `<CockpitPage />`; non-Alex routes continue to render the legacy `AgentHomeShell`. Riley B.1 follows the same route-level pattern.
 
 ---
 
@@ -89,7 +99,7 @@ If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 t
 | 6 | Three-vocabulary intent drift | ✅ | Engine primitives (`recommendation-engine.ts`): `"pause"`, `"scale"`, etc. Schema enum (`packages/schemas/src/ad-optimizer.ts:16-31`): 13 actions. Pipeline-prefix intents (`recommendation.pause_adset`, `recommendation.ad_set_pause`) appear in fixtures / pipeline code. **Translator must accept all three.** |
 | 7 | External-action dismissal | ⚠ Two-tap today | `actOnRecommendation` (`packages/core/src/recommendations/act.ts:48-108`) does NOT auto-dismiss when an external URL is clicked. Operator must separately call dismiss. **B.1 preserves this two-tap flow** — does not introduce auto-dismiss. Slicing spec §4 acceptance criterion 8 explicitly accommodates this. |
 | 8 | `actOnRecommendation` undo | ✅ | `undoableUntil` field set by `emit.ts:7,44`. **24-hour window** (`ONE_DAY_MS`) for `surface === "shadow_action"`, `null` for `queue`. `useRecommendationAction(id).undo(note?)` invokes; status responses include `"undo_window_closed"` / `"already_terminal"` / `"expired"` / `"ok"`. **Toast is caller responsibility** — cockpit B.1 surfaces existing toast wiring without redesign. |
-| 9 | Page branching | ✅ | `apps/dashboard/src/app/(auth)/[agentKey]/page.tsx:8-21` validates `agentKey` against `AGENT_KEYS`. `agent-home-client.tsx:15-42` currently renders the same block layout for all agents. **B.1 extends agent-home-client.tsx with a Riley branch.** Alex A.1 introduces the Alex branch first; B.1 piggybacks. |
+| 9 | Page branching | ✅ (post-#468 + post-A.1) | PR #468 deleted `[agentKey]/page.tsx` and introduced explicit `/alex/page.tsx`, `/riley/page.tsx`, `/mira/page.tsx`. A.1 (after rebase) modified `/alex/page.tsx` to render `<CockpitPage />` directly. **B.1 modifies `/riley/page.tsx` to render `<RileyCockpitPage />` directly** (a new Riley composition created in B.1). `<AgentHomeShell agentKey="riley" />` rendering is removed from `/riley/page.tsx`; the shell stays in the codebase for `/mira/` only. |
 | 10 | ESLint config | ✅ | Root `.eslintrc.json`. Uses `"overrides"` key with file globs + `no-restricted-imports`. Existing pattern at `.eslintrc.json:48-62` shows the rule shape. B.1 adds a new override block. |
 
 **Three adjustments propagated into this plan:**
@@ -117,6 +127,7 @@ If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 t
 | `apps/dashboard/src/lib/cockpit/riley/riley-status-deriver.ts` | Pure function: `deriveRileyStatus(input): CockpitStatus`. Order: `HALTED` → `IDLE` (no connection / no active campaign) → `WAITING` (pending recs, connection present) → `WATCHING` (steady). **Connection precedence:** absence of Meta Ads connection takes precedence over pending recommendation rows. `REVIEWING` deferred — derivation absent. |
 | `apps/dashboard/src/hooks/use-riley-approvals.ts` | Hook: `useRileyApprovals(): { approvals: RileyApprovalView[]; isLoading; isError }`. Wraps `useRecommendations()`, filters to Riley intents (`agentKey === "riley"` or `intent.startsWith("recommendation.")`), passes through adapter. Returns view-models only. |
 | `apps/dashboard/src/hooks/use-riley-status.ts` | Hook: `useRileyStatus(): CockpitStatus`. Composes `useHalt()` + `useConnections()` + `useRecommendations()` + recent-activity poll, passes through deriver. **Uses `useNow(60_000)` from `@/app/(auth)/(mercury)/approvals/hooks/use-now.js`** (existing pre-A.1 hook on main) for 1-minute ticking on the WATCHING/IDLE 15-minute boundary; `now` is included in the `useMemo` dependency array so the status flips when the window expires without a parent re-render. |
+| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Riley composition of the shell — parallel to Alex's `cockpit-page.tsx`, not a modification of it. Imports the shell primitives (`Topbar`, `Identity`, `ApprovalBlock`, `ActivityStream`, `ComposerPlaceholder`, `T`) + Riley config + Riley hooks. Renders `<RileyCockpitPage />` with no props. A.1's `cockpit-page.tsx` is unchanged. |
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts` | Verifies accent, tabs, status helpers. |
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/kind-meta-riley.test.ts` | Verifies all 9 kinds have `{ label, color, pulse }` entries. |
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/recommendation-to-approval-view.test.ts` | Describe.each over 11 action variants; verifies title/urgency/quote/primary CTA/risk extraction. |
@@ -126,16 +137,17 @@ If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 t
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-status-deriver.test.ts` | All 4 wired states (HALTED, IDLE, WAITING, WATCHING). Connection precedence rule. 15-minute WATCHING boundary. |
 | `apps/dashboard/src/hooks/__tests__/use-riley-approvals.test.tsx` | Hook returns view-models, hides raw `Recommendation` rows, handles loading + error. |
 | `apps/dashboard/src/hooks/__tests__/use-riley-status.test.tsx` | Hook composition: halt + connection + approvals + activity → `CockpitStatus`. |
-| `apps/dashboard/src/app/(auth)/[agentKey]/__tests__/riley-cockpit-page.test.tsx` | Page-level integration: `/riley` cold-state (no connection) + steady-state (≥1 pending rec) + halted. |
+| `apps/dashboard/src/app/(auth)/riley/__tests__/page.test.tsx` | **Modified** (this file already exists from #468 — testing `AgentHomeShell` rendering). B.1 replaces its body with cockpit assertions: mocks `RileyCockpitPage` and asserts the page renders it when Riley is enabled. The route-gate test (`notFound()` when Riley not enabled) is preserved. |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | New component-level integration test for `RileyCockpitPage`: cold state (no connection) + steady state (≥1 pending rec) + halted. Mocks Riley hooks. |
 
 ### Modified files
 
 | Path | Change |
 |---|---|
 | `apps/dashboard/src/hooks/use-agent-activity.ts` | **Add a new named export `useRileyActivity()` at the bottom of the file. Do NOT modify the existing `useAgentActivity()` return shape — Alex and any other consumers continue to use it unchanged.** The new export composes `useAgentActivity()` + `useConnections()` + the Riley translator + cold-state synthetic rows, and returns Riley-shaped `ActivityRow[]`. |
-| `apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx` | Add Riley branch: `if (agentKey === "riley") return <CockpitPage agentKey="riley" />`. Alex A.1 introduces the Alex branch first; this is a one-line extension. |
+| `apps/dashboard/src/app/(auth)/riley/page.tsx` | Replace `<AgentHomeShell agentKey="riley" />` with `<RileyCockpitPage />`. Replace the `AgentHomeShell` import with `RileyCockpitPage`. The route gate (`notFound()` if Riley not enabled) is preserved. |
 | `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Extend Alex A.1's fixture-based render test with all 11 Riley action variants + the grouped account-level `signal_health_group` card. |
-| `.eslintrc.json` | Add new `overrides` block: `no-restricted-imports` rule scoped to `apps/dashboard/src/components/cockpit/**`, `apps/dashboard/src/hooks/use-riley-*.ts`, and `apps/dashboard/src/app/(auth)/[agentKey]/**`. Adapter files under `apps/dashboard/src/lib/cockpit/riley/**` are NOT in the scope (i.e., not restricted). |
+| `.eslintrc.json` | Add new `overrides` block: `no-restricted-imports` rule scoped to `apps/dashboard/src/components/cockpit/**`, `apps/dashboard/src/hooks/use-riley-*.ts`, `apps/dashboard/src/app/(auth)/alex/**`, and `apps/dashboard/src/app/(auth)/riley/**`. Adapter files under `apps/dashboard/src/lib/cockpit/riley/**` are NOT in the scope (i.e., not restricted). |
 
 ### Files NOT touched (architectural boundary verification)
 
@@ -2430,8 +2442,10 @@ Append to the `"overrides"` array in `.eslintrc.json`:
     "apps/dashboard/src/components/cockpit/**/*.ts",
     "apps/dashboard/src/components/cockpit/**/*.tsx",
     "apps/dashboard/src/hooks/use-riley-*.ts",
-    "apps/dashboard/src/app/(auth)/[agentKey]/**/*.ts",
-    "apps/dashboard/src/app/(auth)/[agentKey]/**/*.tsx"
+    "apps/dashboard/src/app/(auth)/alex/**/*.ts",
+    "apps/dashboard/src/app/(auth)/alex/**/*.tsx",
+    "apps/dashboard/src/app/(auth)/riley/**/*.ts",
+    "apps/dashboard/src/app/(auth)/riley/**/*.tsx"
   ],
   "excludedFiles": [
     "**/__tests__/**",
@@ -2627,7 +2641,7 @@ swap a layer-3 change rather than a UI rewrite:
 
 - .eslintrc.json: new no-restricted-imports override scoped to
   components/cockpit/**, hooks/use-riley-*.ts, and
-  app/(auth)/[agentKey]/**. Bans imports from @switchboard/db,
+  app/(auth)/{alex,riley}/**. Bans imports from @switchboard/db,
   @prisma, and schemas/recommendations|audit. Test and fixture files
   exempt. Adapter files under lib/cockpit/riley/** are exempt.
 - approval-card.test.tsx: extends Alex A.1's fixture-based contract
@@ -2649,143 +2663,65 @@ EOF
 
 ## Boundary 5: Page wiring + integration
 
-### Task 16: Add Riley branch to `agent-home-client.tsx`
+### Task 16: Create `RileyCockpitPage` and swap `/riley/page.tsx` to use it
+
+**Architectural decision** (locked, surfaced by codebase audit on post-#468 / post-A.1 main):
+
+Alex A.1 shipped `cockpit-page.tsx` as a **hardcoded Alex composition** (imports `ALEX_CONFIG`, calls `useAgentGreeting("alex")`, filters `agentRole === "alex"`, uses `useCockpitStatusAlex`). It is not parameterized. Two ways forward for B.1:
+
+- **Option A — Parameterize `CockpitPage`** to accept `agentKey?: AgentKey` and switch config + hooks internally. Modifies A.1's shipped file. Higher risk of regression for Alex; more reviewer scrutiny on a shared shell file.
+- **Option B (locked) — Create a parallel `RileyCockpitPage`** that composes the same shell primitives (`Topbar`, `Identity`, `ApprovalBlock`, `ActivityStream`, `ComposerPlaceholder`, `T`) with Riley's hooks/config/adapters. A.1's `cockpit-page.tsx` is not touched. Symmetric structure: two compositions, both consuming the same primitives, each owns its agent's wiring.
+
+Option B is chosen because: (a) it preserves A.1's shipped composition untouched, (b) it aligns with the adapter discipline (Riley's composition uses Riley's hooks), (c) the file count grows by one `.tsx` (under the 400-line warn / 600-line error budget per memory), and (d) future Mira composition would follow the same symmetric pattern.
 
 **Files:**
-- Modify: `apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx`
+- Create: `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`
+- Modify: `apps/dashboard/src/app/(auth)/riley/page.tsx`
 
-Alex A.1 already introduces the Alex branch (`if (agentKey === "alex") return <CockpitPage ...>`). Riley B.1 extends with a parallel Riley branch.
-
-- [ ] **Step 1: Read the post-A.1 file**
-
-```bash
-cat apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx
-```
-
-Expected (post-Alex-A.1): the file has a structure like
-
-```tsx
-import { CockpitPage } from "@/components/cockpit/cockpit-page.js";
-import { LegacyAgentHomeClient } from "./legacy-agent-home-client.js";
-
-export function AgentHomeClient({ agentKey }: { agentKey: AgentKey }) {
-  if (agentKey === "alex") return <CockpitPage agentKey={agentKey} />;
-  return <LegacyAgentHomeClient agentKey={agentKey} />;
-}
-```
-
-- [ ] **Step 2: Extend with Riley branch**
-
-Replace the conditional with:
-
-```tsx
-export function AgentHomeClient({ agentKey }: { agentKey: AgentKey }) {
-  if (agentKey === "alex") return <CockpitPage agentKey={agentKey} />;
-  if (agentKey === "riley") return <CockpitPage agentKey={agentKey} />;
-  return <LegacyAgentHomeClient agentKey={agentKey} />;
-}
-```
-
-(`CockpitPage` is the single shared shell — it consumes per-agent config via the `agentKey` prop. Per Alex A.1's shell design, the page composition reads the right config from the per-agent files via that prop.)
-
-- [ ] **Step 3: Type-check**
+- [ ] **Step 1: Read A.1's `cockpit-page.tsx` as the structural reference**
 
 ```bash
-pnpm typecheck
+cat apps/dashboard/src/components/cockpit/cockpit-page.tsx
 ```
 
-Expected: clean.
+The Riley composition follows the same shape: hook calls, view-model mapping, status derivation, rendering Topbar + Identity + ApprovalBlock + ActivityStream + ComposerPlaceholder. The differences are: which hooks (Riley's), which config (Riley's), which adapters (already wrapped inside the Riley hooks). The render JSX is structurally identical.
 
-- [ ] **Step 4: Verify `CockpitPage` reads Riley config when `agentKey === "riley"`**
-
-The shell's `cockpit-page.tsx` (shipped by Alex A.1) must branch on `agentKey` internally to select the right config (Alex's vs Riley's). If A.1's `CockpitPage` hard-codes `ALEX_*` imports without an `agentKey` branch, this task expands to include modifying `CockpitPage` to import Riley's config from `lib/cockpit/riley/riley-config.js` and pick the right one per `agentKey`.
-
-**Thin integration rule.** Page-layer files (`agent-home-client.tsx`, `cockpit-page.tsx`, anything under `app/(auth)/[agentKey]/**`) may import:
-
-- Config files (`alex-config.ts`, `riley-config.ts`) — values, not substrate
-- Cockpit hooks (`useRileyApprovals`, `useRileyStatus`, `useRileyActivity`, `usePendingApprovals`, etc.) — return view-models
-- Shell components from `components/cockpit/**`
-- View-model types from `components/cockpit/types.js`
-
-Page-layer files MUST NOT import:
-
-- `@switchboard/db` / `@prisma/**`
-- `@switchboard/schemas/recommendations` / `@switchboard/schemas/audit`
-- Anything from `lib/cockpit/riley/**` other than `riley-config.ts` (the adapters themselves stay behind the hook layer)
-
-The ESLint rule from Task 13 already enforces the first two bans. The third (no direct adapter imports from page files) is a review-discipline rule; the grep smoke check in Task 15 surfaces violations.
-
-**Check via grep:**
-
-```bash
-rg "ALEX_ACCENT|alex-config" apps/dashboard/src/components/cockpit/cockpit-page.tsx
-```
-
-If matches are found, `CockpitPage` needs the per-agent config selection. The minimal change is:
+- [ ] **Step 2: Write failing test for `RileyCockpitPage`**
 
 ```tsx
-// In apps/dashboard/src/components/cockpit/cockpit-page.tsx
-import { ALEX_ACCENT, ALEX_TABS, ALEX_MISSION_SUBTITLE } from "@/lib/cockpit/alex-config.js";
-import { RILEY_ACCENT, RILEY_TABS, RILEY_MISSION_SUBTITLE } from "@/lib/cockpit/riley/riley-config.js";
-
-const CONFIG = {
-  alex:  { accent: ALEX_ACCENT,  tabs: ALEX_TABS,  subtitle: ALEX_MISSION_SUBTITLE  },
-  riley: { accent: RILEY_ACCENT, tabs: RILEY_TABS, subtitle: RILEY_MISSION_SUBTITLE },
-};
-
-// Inside the component:
-const { accent, tabs, subtitle } = CONFIG[agentKey];
-```
-
-Plus per-agent hook selection (Alex uses `usePendingApprovals` + `useAgentActivity`; Riley uses `useRileyApprovals` + `useRileyActivity` + `useRileyStatus`). This is the integration seam — keep it tight.
-
-- [ ] **Step 5: Stage**
-
-```bash
-git add apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx apps/dashboard/src/components/cockpit/cockpit-page.tsx
-```
-
----
-
-### Task 17: Page-level integration test
-
-**Files:**
-- Create: `apps/dashboard/src/app/(auth)/[agentKey]/__tests__/riley-cockpit-page.test.tsx`
-
-- [ ] **Step 1: Write failing test**
-
-```tsx
-// apps/dashboard/src/app/(auth)/[agentKey]/__tests__/riley-cockpit-page.test.tsx
+// apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { AgentHomeClient } from "../agent-home-client.js";
-import { pauseFixture } from "@/lib/cockpit/riley/__fixtures__/riley-recommendation-fixtures.js";
+import { RileyCockpitPage } from "../riley-cockpit-page.js";
 
 const haltState = { halted: false };
-const connectionsState = { rows: [{ serviceId: "meta-ads", status: "connected" }] as unknown[] };
-const recsState = { rows: [] as unknown[] };
-const activityState = { rows: [] as unknown[] };
-
-vi.mock("@/components/layout/halt/halt-context.js", () => ({
-  useHalt: () => ({ halted: haltState.halted, setHalted: () => {}, toggleHalt: () => {} }),
+vi.mock("@/components/layout/halt/halt-context", () => ({
+  useHalt: () => ({ halted: haltState.halted, setHalted: vi.fn(), toggleHalt: vi.fn() }),
   HaltProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@/hooks/use-connections.js", () => ({
-  useConnections: () => ({ data: { connections: connectionsState.rows }, isLoading: false, isError: false }),
+const rileyApprovalsState = { approvals: [] as unknown[] };
+vi.mock("@/hooks/use-riley-approvals", () => ({
+  useRileyApprovals: () => ({
+    approvals: rileyApprovalsState.approvals,
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
-vi.mock("@/hooks/use-recommendations.js", () => ({
-  useRecommendations: () => ({ data: { recommendations: recsState.rows }, isLoading: false, isError: false }),
+const rileyStatusState = { status: "IDLE" };
+vi.mock("@/hooks/use-riley-status", () => ({
+  useRileyStatus: () => rileyStatusState.status,
 }));
 
-vi.mock("@/hooks/use-agent-activity.js", async () => {
-  const actual = await vi.importActual<typeof import("@/hooks/use-agent-activity.js")>("@/hooks/use-agent-activity.js");
+const rileyActivityState = { rows: [] as unknown[] };
+vi.mock("@/hooks/use-agent-activity", async (orig) => {
+  const actual = await orig<typeof import("@/hooks/use-agent-activity.js")>();
   return {
     ...actual,
-    useAgentActivity: () => ({ data: { actions: activityState.rows, roster: [], states: [] }, isLoading: false, isError: false }),
+    useRileyActivity: () => ({ rows: rileyActivityState.rows, isLoading: false, isError: false }),
   };
 });
 
@@ -2794,82 +2730,353 @@ function wrap(node: React.ReactNode) {
   return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
 }
 
-describe("/riley cockpit page (B.1 integration)", () => {
-  it("cold state: no Meta connection → IDLE status pill + 3 synthetic activity rows", () => {
-    connectionsState.rows = [];
-    recsState.rows = [];
-    activityState.rows = [];
-    wrap(<AgentHomeClient agentKey="riley" />);
+describe("RileyCockpitPage", () => {
+  it("renders Topbar with Riley tab active", () => {
+    wrap(<RileyCockpitPage />);
+    const tabs = screen.getAllByText("Riley");
+    expect(tabs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders IDLE status pill in cold state", () => {
+    wrap(<RileyCockpitPage />);
     expect(screen.getByText(/IDLE/i)).toBeInTheDocument();
-    expect(screen.getByText(/Connect Meta Ads/i)).toBeInTheDocument();
-    connectionsState.rows = [{ serviceId: "meta-ads", status: "connected" }];
   });
 
-  it("steady state: connected + 1 pending pause rec → WAITING status pill + Pause card", () => {
-    recsState.rows = [pauseFixture];
-    wrap(<AgentHomeClient agentKey="riley" />);
-    expect(screen.getByText(/WAITING/i)).toBeInTheDocument();
-    expect(screen.getByText(/Pause adset/i)).toBeInTheDocument();
-    recsState.rows = [];
-  });
-
-  it("halted state: halted → HALTED status pill + halted placeholder copy", () => {
+  it("renders HALTED state when halt is active", () => {
     haltState.halted = true;
-    wrap(<AgentHomeClient agentKey="riley" />);
+    rileyStatusState.status = "HALTED";
+    wrap(<RileyCockpitPage />);
     expect(screen.getByText(/HALTED/i)).toBeInTheDocument();
     haltState.halted = false;
-  });
-
-  it("renders the Riley tab as active, Alex as inactive, Mira as muted", () => {
-    wrap(<AgentHomeClient agentKey="riley" />);
-    // Topbar tabs are rendered by Alex A.1's shell; exact selectors depend on
-    // the shipped component. This assertion may need to be loosened or made
-    // selector-specific based on how Topbar renders tab state.
-    const tabs = screen.getAllByRole("link");
-    expect(tabs.some((t) => t.textContent === "Riley")).toBe(true);
+    rileyStatusState.status = "IDLE";
   });
 });
 ```
 
-- [ ] **Step 2: Run test, expect FAIL initially (likely missing mocks or selector mismatch)**
+- [ ] **Step 3: Run test, expect FAIL**
 
 ```bash
-pnpm --filter @switchboard/dashboard test -- src/app/\(auth\)/\[agentKey\]/__tests__/riley-cockpit-page.test.tsx
+pnpm --filter @switchboard/dashboard test -- src/components/cockpit/__tests__/riley-cockpit-page.test.tsx
 ```
 
-- [ ] **Step 3: Fix selectors against the actual Alex A.1 shell DOM**
+Expected: module not found.
 
-Read the actual `cockpit-page.tsx` rendered output (e.g., via a quick `console.log(prettyDOM(container))` in the test) and adjust selectors. Status pill text, tab labels, and halt button labels are owned by Alex A.1's shell — match them exactly.
+- [ ] **Step 4: Implement `RileyCockpitPage`**
 
-- [ ] **Step 4: Run test, expect PASS**
+```tsx
+// apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx
+"use client";
 
-```bash
-pnpm --filter @switchboard/dashboard test -- src/app/\(auth\)/\[agentKey\]/__tests__/riley-cockpit-page.test.tsx
+import { useState } from "react";
+import { T } from "./tokens.js";
+import { Topbar } from "./topbar.js";
+import { Identity } from "./identity.js";
+import { ApprovalBlock } from "./approval-block.js";
+import { ActivityStream, type ActivityFilter } from "./activity-stream.js";
+import { ComposerPlaceholder } from "./composer-placeholder.js";
+import {
+  RILEY_ACCENT,
+  RILEY_TABS,
+  RILEY_MISSION_SUBTITLE,
+  statusColor,
+  statusPulse,
+} from "@/lib/cockpit/riley/riley-config.js";
+import { RILEY_KIND_META } from "@/lib/cockpit/riley/kind-meta-riley.js";
+import { useRileyApprovals } from "@/hooks/use-riley-approvals.js";
+import { useRileyStatus } from "@/hooks/use-riley-status.js";
+import { useRileyActivity } from "@/hooks/use-agent-activity.js";
+import { useHalt } from "@/components/layout/halt/halt-context.js";
+
+export function RileyCockpitPage() {
+  const haltCtx = useHalt();
+  const { approvals } = useRileyApprovals();
+  const statusKey = useRileyStatus();
+  const { rows: activityRows } = useRileyActivity();
+  const [filter, setFilter] = useState<ActivityFilter>("all");
+
+  return (
+    <div style={{ background: T.bg, color: T.ink, minHeight: "100vh" }}>
+      <Topbar tabs={RILEY_TABS} paletteEnabled={false} compact />
+      <Identity
+        statusKey={statusKey}
+        halted={haltCtx.halted}
+        subtitle={RILEY_MISSION_SUBTITLE}
+        accent={RILEY_ACCENT}
+        statusColor={statusColor(statusKey)}
+        statusPulse={statusPulse(statusKey)}
+        onHaltToggle={haltCtx.toggleHalt}
+      />
+      <ApprovalBlock data={approvals} compact />
+      <ActivityStream
+        data={activityRows}
+        filter={filter}
+        setFilter={setFilter}
+        kindMeta={RILEY_KIND_META}
+        compact
+      />
+      <ComposerPlaceholder
+        text={
+          haltCtx.halted
+            ? "Riley is halted — resume to take operator commands."
+            : "Tell Riley what to do — coming soon."
+        }
+      />
+    </div>
+  );
+}
 ```
 
-- [ ] **Step 5: Stage and commit boundary 5 (the final B.1 commit)**
+**Verify the prop names against the actual Alex `cockpit-page.tsx`** before locking — the Topbar / Identity / ApprovalBlock / ActivityStream / ComposerPlaceholder prop signatures are owned by Alex A.1. If A.1 passes props differently (e.g., `tabs` is read from config inside `Topbar` rather than passed as a prop, or `Identity` doesn't accept `accent`), adjust the implementation to match A.1's contract. The test verifies render output, not prop wire shape.
+
+- [ ] **Step 5: Run test, expect PASS**
 
 ```bash
-git add apps/dashboard/src/app/\(auth\)/\[agentKey\]/__tests__/riley-cockpit-page.test.tsx
+pnpm --filter @switchboard/dashboard test -- src/components/cockpit/__tests__/riley-cockpit-page.test.tsx
+```
+
+If the test fails because of prop mismatch against A.1's shell components, adjust `riley-cockpit-page.tsx` until it passes. Do not modify the shell components.
+
+- [ ] **Step 6: Read and modify `/riley/page.tsx`**
+
+```bash
+cat apps/dashboard/src/app/\(auth\)/riley/page.tsx
+```
+
+Expected current contents (per post-#468 / post-A.1 main):
+
+```tsx
+import { notFound } from "next/navigation";
+import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
+import { EditorialAuthShell } from "@/components/layout/editorial-auth-shell";
+import { AgentHomeShell } from "@/components/agent-home/agent-home-shell";
+
+export default async function RileyPage() {
+  const enabled = await fetchEnabledAgentsServer();
+  if (!enabled.includes("riley")) notFound();
+
+  return (
+    <EditorialAuthShell>
+      <AgentHomeShell agentKey="riley" />
+    </EditorialAuthShell>
+  );
+}
+```
+
+Replace the `AgentHomeShell` import + usage with `RileyCockpitPage`:
+
+```tsx
+import { notFound } from "next/navigation";
+import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
+import { EditorialAuthShell } from "@/components/layout/editorial-auth-shell";
+import { RileyCockpitPage } from "@/components/cockpit/riley-cockpit-page";
+
+export default async function RileyPage() {
+  const enabled = await fetchEnabledAgentsServer();
+  if (!enabled.includes("riley")) notFound();
+
+  return (
+    <EditorialAuthShell>
+      <RileyCockpitPage />
+    </EditorialAuthShell>
+  );
+}
+```
+
+The route gate (`notFound()`) is preserved exactly.
+
+- [ ] **Step 7: Update `/riley/__tests__/page.test.tsx`**
+
+The existing test (created by #468 + #468's test file) asserts `AgentHomeShell` is rendered. Update it to assert `RileyCockpitPage` instead, mirroring how A.1's `/alex/__tests__/page.test.tsx` was updated to mock `CockpitPage`.
+
+```tsx
+// apps/dashboard/src/app/(auth)/riley/__tests__/page.test.tsx
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { notFoundFn, fetchEnabledFn } = vi.hoisted(() => {
+  const notFoundFn = vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  });
+  const fetchEnabledFn = vi.fn(async () => ["alex", "riley"]);
+  return { notFoundFn, fetchEnabledFn };
+});
+
+vi.mock("next/navigation", () => ({ notFound: notFoundFn }));
+vi.mock("@/lib/api-client/agents-server", () => ({
+  fetchEnabledAgentsServer: fetchEnabledFn,
+}));
+vi.mock("@/components/layout/editorial-auth-shell", () => ({
+  EditorialAuthShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+vi.mock("@/components/cockpit/riley-cockpit-page", () => ({
+  RileyCockpitPage: () => <div data-testid="riley-cockpit-page">riley-cockpit</div>,
+}));
+
+import RileyPage from "../page";
+
+describe("RileyPage server gate", () => {
+  afterEach(() => {
+    notFoundFn.mockClear();
+    fetchEnabledFn.mockReset();
+    fetchEnabledFn.mockImplementation(async () => ["alex", "riley"]);
+  });
+
+  it("renders RileyCockpitPage when riley is enabled", async () => {
+    const tree = await RileyPage();
+    const { render, screen } = await import("@testing-library/react");
+    render(tree);
+    expect(screen.getByTestId("riley-cockpit-page")).toBeInTheDocument();
+  });
+
+  it("notFound() when riley is not enabled", async () => {
+    fetchEnabledFn.mockImplementation(async () => ["alex"]);
+    await expect(RileyPage()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+```
+
+- [ ] **Step 8: Type-check + run both test files**
+
+```bash
+pnpm typecheck
+pnpm --filter @switchboard/dashboard test -- src/components/cockpit/__tests__/riley-cockpit-page.test.tsx src/app/\(auth\)/riley/__tests__/page.test.tsx
+```
+
+Expected: clean typecheck + both test files green.
+
+**Thin integration rule** (carried forward from the slicing spec). Page-layer files (`apps/dashboard/src/app/(auth)/{alex,riley}/page.tsx`, the cockpit composition files `cockpit-page.tsx` and `riley-cockpit-page.tsx`) may import:
+
+- Config files (`alex-config.ts`, `riley-config.ts`) — values, not substrate
+- Cockpit hooks (`useRileyApprovals`, `useRileyStatus`, `useRileyActivity`, `usePendingApprovals`, etc.) — return view-models
+- Shell primitive components (`Topbar`, `Identity`, `ApprovalBlock`, `ActivityStream`, `ComposerPlaceholder`, `Dot`, `StatusPill`)
+- View-model types from `components/cockpit/types.js`
+- `RILEY_KIND_META` table from `lib/cockpit/riley/kind-meta-riley.js` (kind metadata, not substrate)
+
+Page-layer + composition files MUST NOT import:
+
+- `@switchboard/db` / `@prisma/**`
+- `@switchboard/schemas/recommendations` / `@switchboard/schemas/audit`
+- Anything from `lib/cockpit/riley/**` other than `riley-config.ts` and `kind-meta-riley.ts` (the data adapters stay behind the hook layer)
+
+The ESLint rule from Task 13 enforces the first two bans. The third (no direct adapter imports from composition files) is enforced by review + the grep smoke check in Task 15.
+
+- [ ] **Step 9: Stage**
+
+```bash
+git add apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx \
+        apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx \
+        apps/dashboard/src/app/\(auth\)/riley/page.tsx \
+        apps/dashboard/src/app/\(auth\)/riley/__tests__/page.test.tsx
+```
+
+---
+
+### Task 17: Page-level steady/cold integration sweep
+
+Task 16's `RileyCockpitPage` component test (Step 2's `riley-cockpit-page.test.tsx`) covers IDLE / HALTED + Riley tab. Task 17 adds the **steady-state + cold-state + signal-health-grouped** end-to-end coverage at the component level. The route-level page test (`/riley/__tests__/page.test.tsx`) stays minimal — it only verifies the route gate and that the right composition is invoked. The component-level test in this task verifies the cockpit's behavior under real data shapes.
+
+**Files:**
+- Extend: `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` (the file created by Task 16)
+
+- [ ] **Step 1: Add steady-state + cold-state + signal-health assertions to the existing test**
+
+Append to the test file from Task 16:
+
+```tsx
+// --- B.1 Task 17: end-to-end coverage ---
+
+import {
+  pauseFixture,
+  signalHealthFixtures,
+} from "@/lib/cockpit/riley/__fixtures__/riley-recommendation-fixtures.js";
+import { mapRecommendationsToApprovalViews } from "@/lib/cockpit/riley/recommendation-to-approval-view.js";
+import { coldStateActivityRows } from "@/lib/cockpit/riley/cold-state-activity-rows.js";
+
+describe("RileyCockpitPage — data-driven states", () => {
+  it("cold state: no Meta connection → 3 synthetic onboarding rows surface", () => {
+    rileyActivityState.rows = coldStateActivityRows();
+    rileyStatusState.status = "IDLE";
+    wrap(<RileyCockpitPage />);
+    expect(screen.getByText(/Connect Meta Ads to begin/i)).toBeInTheDocument();
+    expect(screen.getByText(/Set average lead value/i)).toBeInTheDocument();
+    expect(screen.getByText(/Standing rules loaded/i)).toBeInTheDocument();
+    rileyActivityState.rows = [];
+  });
+
+  it("steady state: 1 pending pause rec → WAITING pill + Pause card", () => {
+    rileyApprovalsState.approvals = mapRecommendationsToApprovalViews([pauseFixture]);
+    rileyStatusState.status = "WAITING";
+    wrap(<RileyCockpitPage />);
+    expect(screen.getByText(/WAITING/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pause adset/i)).toBeInTheDocument();
+    expect(screen.getByText(pauseFixture.humanSummary)).toBeInTheDocument();
+    rileyApprovalsState.approvals = [];
+    rileyStatusState.status = "IDLE";
+  });
+
+  it("signal-health: 3 raw rows → 1 grouped account-level card; no 'Dismiss all' button", () => {
+    rileyApprovalsState.approvals = mapRecommendationsToApprovalViews(signalHealthFixtures);
+    rileyStatusState.status = "WAITING";
+    wrap(<RileyCockpitPage />);
+    expect(screen.getByText(/Open Events Manager/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Dismiss all/i)).not.toBeInTheDocument();
+    rileyApprovalsState.approvals = [];
+    rileyStatusState.status = "IDLE";
+  });
+
+  it("composer placeholder text changes when halted", () => {
+    haltState.halted = true;
+    rileyStatusState.status = "HALTED";
+    wrap(<RileyCockpitPage />);
+    expect(screen.getByText(/Riley is halted/i)).toBeInTheDocument();
+    haltState.halted = false;
+    rileyStatusState.status = "IDLE";
+  });
+});
+```
+
+- [ ] **Step 2: Run the extended test**
+
+```bash
+pnpm --filter @switchboard/dashboard test -- src/components/cockpit/__tests__/riley-cockpit-page.test.tsx
+```
+
+Expected: all describe blocks (Task 16's three tests + Task 17's four tests) pass = 7 tests total.
+
+- [ ] **Step 3: Adjust selectors if needed**
+
+If the composer placeholder copy or any UI string doesn't match expectations, fix the `RileyCockpitPage` composition or the test selector — whichever is wrong. Status pill text, tab labels, halt button labels are owned by Alex A.1's shell — match them exactly. The Riley composer text is owned by `RileyCockpitPage` (Task 16, Step 4) — adjust the test or the component string for consistency.
+
+- [ ] **Step 4: Stage and commit boundary 5 (the final B.1 commit)**
+
+```bash
+git add apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx
 git commit -m "$(cat <<'EOF'
 feat(riley-cockpit): /riley page wiring + integration tests (B.1)
 
-- agent-home-client.tsx: adds Riley branch alongside Alex's. Both
-  agents now render the shared CockpitPage; per-agent config and hook
-  selection lives inside the shell.
-- cockpit-page.tsx (if modified): per-agent config selection so
-  Riley reads from riley-config + useRileyApprovals/useRileyStatus/
-  useRileyActivity, Alex continues to read from alex-config +
-  legacy-pending-approval adapter.
-- riley-cockpit-page.test.tsx: integration tests for cold state
-  (no Meta connection → IDLE + synthetic rows), steady state
-  (connected + pending pause rec → WAITING + Pause card), halted,
-  and Riley tab active.
+- riley-cockpit-page.tsx: new Riley composition of the shell,
+  parallel to Alex's cockpit-page.tsx. Imports the same primitives
+  (Topbar, Identity, ApprovalBlock, ActivityStream,
+  ComposerPlaceholder) and wires them with Riley config + Riley
+  hooks (useRileyApprovals, useRileyStatus, useRileyActivity).
+  Does not modify A.1's cockpit-page.tsx. Symmetric structure for
+  future Mira composition.
+- /riley/page.tsx: replaces <AgentHomeShell agentKey="riley" /> with
+  <RileyCockpitPage />. Route gate (notFound() when Riley not
+  enabled) preserved exactly. Matches the route-level branching
+  pattern A.1 introduced for /alex.
+- /riley/__tests__/page.test.tsx: mocks RileyCockpitPage and asserts
+  the page renders it when Riley is enabled. Route-gate test
+  preserved.
+- riley-cockpit-page.test.tsx: 7 tests covering IDLE / HALTED /
+  WAITING + Riley tab active, cold-state synthetic rows, signal-
+  health grouped card with no "Dismiss all" button, halted composer
+  copy.
 
 B.1 ships zero backend changes. Adapter boundary holds: grep smoke
-check returns clean. ESLint no-restricted-imports active. Cross-agent
-contract test covers all 11 Riley variants + grouped signal-health
-card.
+check returns clean. ESLint no-restricted-imports active. Cross-
+agent contract test covers all 11 Riley variants + grouped signal-
+health card. AgentHomeShell stays in the codebase for /mira/, which
+continues to render legacy blocks.
 
 Wave A boundary B.1 / B.2 / B.3 sequence per slicing spec
 2026-05-14-riley-cockpit-wave-a-slicing-design.md. B.2 (mission +
