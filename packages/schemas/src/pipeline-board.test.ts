@@ -120,6 +120,21 @@ describe("PipelineBoardResponseSchema — locked PR-C2 wire shape", () => {
   };
 
   it("accepts the locked PR-C2 wire shape", () => {
-    expect(() => PipelineBoardResponseSchema.parse(PR_C2_REPRESENTATIVE_PAYLOAD)).not.toThrow();
+    const parsed = PipelineBoardResponseSchema.parse(PR_C2_REPRESENTATIVE_PAYLOAD);
+    // Explicit field asserts so Zod can't silently strip a field and pass.
+    expect(parsed.rows).toHaveLength(1);
+    const row = parsed.rows[0]!;
+    expect(row.estimatedValue).toBe(168000);
+    const objection = row.objections[0]!;
+    expect(objection.category).toBe("price");
+    // Wire shape: ISO string, NOT Date (canonical ObjectionRecordSchema uses
+    // z.coerce.date(), so this guards against the board schema accidentally
+    // reusing that shape).
+    expect(objection.raisedAt).toBe("2026-05-12T02:00:00.000Z");
+    expect(typeof objection.raisedAt).toBe("string");
+    expect(objection.resolvedAt).toBeNull();
+    expect(row.contact.name).toBe("Felicia Goh");
+    expect(row.closedAt).toBeNull();
+    expect(row.assignedStaff).toBe("Dr. Yeo");
   });
 });

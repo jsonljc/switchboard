@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OpportunitySchema } from "./lifecycle.js";
+import { ObjectionRecordSchema, OpportunitySchema } from "./lifecycle.js";
 
 /**
  * Minimal contact projection joined onto each opportunity for board rendering.
@@ -12,6 +12,19 @@ export const PipelineBoardContactSchema = z.object({
   primaryChannel: z.enum(["whatsapp", "telegram", "dashboard"]),
 });
 export type PipelineBoardContact = z.infer<typeof PipelineBoardContactSchema>;
+
+/**
+ * Wire-shape mirror of ObjectionRecordSchema. The canonical schema in
+ * `lifecycle.ts` uses `z.coerce.date()` for `raisedAt` / `resolvedAt`, which
+ * turns into Date objects after parse. The board payload keeps dates as ISO
+ * strings so React Query cache + JSON serialisation stay symmetrical with the
+ * other date fields on the row.
+ */
+const PipelineBoardObjectionSchema = z.object({
+  category: ObjectionRecordSchema.shape.category,
+  raisedAt: z.string().datetime(),
+  resolvedAt: z.string().datetime().nullable(),
+});
 
 /**
  * One card on the opportunity pipeline board.
@@ -29,7 +42,7 @@ export const PipelineBoardOpportunitySchema = z.object({
   stage: OpportunitySchema.shape.stage,
   timeline: OpportunitySchema.shape.timeline,
   priceReadiness: OpportunitySchema.shape.priceReadiness,
-  objections: OpportunitySchema.shape.objections,
+  objections: z.array(PipelineBoardObjectionSchema),
   qualificationComplete: OpportunitySchema.shape.qualificationComplete,
   estimatedValue: z.number().int().nullable(),
   revenueTotal: z.number().int(),
