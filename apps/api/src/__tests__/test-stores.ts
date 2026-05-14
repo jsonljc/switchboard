@@ -13,11 +13,16 @@ import type {
   HandoffStatus,
   ConversationThreadStore,
   OpportunityStore,
+  OpportunityBoardRow,
+  TransitionStageInput,
+  TransitionStageResult,
   RevenueStore,
   TriggerStore,
   TriggerBrowseQuery,
   TriggerBrowseResult,
 } from "@switchboard/core";
+import { OpportunityNotFoundError } from "@switchboard/core";
+import { randomUUID } from "node:crypto";
 import type {
   WorkTrace,
   WorkTraceStore,
@@ -293,16 +298,66 @@ export class TestHandoffStore implements HandoffStore {
 
 export class TestOpportunityStore implements OpportunityStore {
   private rows = new Map<string, Opportunity>();
+  private boardRows: OpportunityBoardRow[] = [];
+  public lastTraceWritten: {
+    ingressPath: string;
+    intent: string;
+    parameters: Record<string, unknown>;
+  } | null = null;
 
-  /** Test-only seed helper. */
+  /** Test-only seed helper for legacy Opportunity rows. */
   seed(opp: Opportunity): void {
     this.rows.set(opp.id, opp);
+  }
+
+  /** Test-only seed helper for board rows (findOrgBoard / transitionStage). */
+  seedBoard(rows: OpportunityBoardRow[]): void {
+    this.boardRows = rows;
   }
 
   async findByContact(orgId: string, contactId: string): Promise<Opportunity[]> {
     return Array.from(this.rows.values()).filter(
       (o) => o.organizationId === orgId && o.contactId === contactId,
     );
+  }
+
+  async findOrgBoard(orgId: string): Promise<OpportunityBoardRow[]> {
+    return this.boardRows
+      .filter((r) => r.organizationId === orgId)
+      .slice()
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  async transitionStage(input: TransitionStageInput): Promise<TransitionStageResult> {
+    const idx = this.boardRows.findIndex(
+      (r) => r.id === input.id && r.organizationId === input.orgId,
+    );
+    if (idx === -1) {
+      throw new OpportunityNotFoundError(
+        `Opportunity not found: ${input.id} (org: ${input.orgId})`,
+      );
+    }
+    const existing = this.boardRows[idx]!;
+    const now = new Date();
+    const isTerminal = input.stage === "won" || input.stage === "lost";
+    const updated: OpportunityBoardRow = {
+      ...existing,
+      stage: input.stage,
+      closedAt: isTerminal ? (existing.closedAt ?? now) : null,
+      updatedAt: now,
+    };
+    this.boardRows[idx] = updated;
+    this.lastTraceWritten = {
+      ingressPath: "store_recorded_operator_mutation",
+      intent: "opportunity.stage_transition",
+      parameters: {
+        opportunityId: input.id,
+        contactId: existing.contactId,
+        fromStage: existing.stage,
+        toStage: input.stage,
+      },
+    };
+    return { opportunity: updated, workTraceId: randomUUID() };
   }
 
   async create(): Promise<Opportunity> {

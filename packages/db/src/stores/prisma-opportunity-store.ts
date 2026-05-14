@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaDbClient } from "../prisma-db.js";
 import type { Opportunity, OpportunityStage, ObjectionRecord } from "@switchboard/schemas";
+import type {
+  OpportunityBoardRow,
+  TransitionStageInput,
+  TransitionStageResult,
+} from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
 // Store Interface (structural match with @switchboard/core)
@@ -31,6 +36,8 @@ interface OpportunityStore {
     orgId: string,
   ): Promise<Array<{ stage: OpportunityStage; count: number; totalValue: number }>>;
   countByStage(orgId: string, stage: string): Promise<number>;
+  findOrgBoard(orgId: string): Promise<OpportunityBoardRow[]>;
+  transitionStage(input: TransitionStageInput): Promise<TransitionStageResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +203,19 @@ export class PrismaOpportunityStore implements OpportunityStore {
         lostReason: null,
       },
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Pipeline board methods — production implementation ships in PR-C2 db task.
+  // Stubs satisfy the OpportunityStore interface until then.
+  // -------------------------------------------------------------------------
+
+  async findOrgBoard(_orgId: string): Promise<OpportunityBoardRow[]> {
+    throw new Error("PrismaOpportunityStore.findOrgBoard: not implemented (PR-C2 db task)");
+  }
+
+  async transitionStage(_input: TransitionStageInput): Promise<TransitionStageResult> {
+    throw new Error("PrismaOpportunityStore.transitionStage: not implemented (PR-C2 db task)");
   }
 }
 
