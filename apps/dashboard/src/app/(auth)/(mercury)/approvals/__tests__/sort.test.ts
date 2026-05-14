@@ -46,3 +46,24 @@ describe("sortApprovals (expiring-soonest)", () => {
     expect(input.map((r) => r.id)).toEqual(before);
   });
 });
+
+describe("sortApprovals critical-pinned variant", () => {
+  it("pins critical-and-under-5min to the top regardless of expiry order", () => {
+    const now = Date.now();
+    const expiringIn = (ms: number) => new Date(now + ms).toISOString();
+    const lowSoon = row("low", expiringIn(60_000), "low");
+    const criticalSoon = row("crit", expiringIn(4 * 60_000), "critical");
+    const lowLater = row("later", expiringIn(30 * 60_000), "low");
+    const sorted = sortApprovals([lowSoon, criticalSoon, lowLater], now);
+    expect(sorted.map((r) => r.id)).toEqual(["crit", "low", "later"]);
+  });
+
+  it("does not pin critical that is not under 5 minutes", () => {
+    const now = Date.now();
+    const expiringIn = (ms: number) => new Date(now + ms).toISOString();
+    const criticalLate = row("crit", expiringIn(30 * 60_000), "critical");
+    const lowSoon = row("low", expiringIn(60_000), "low");
+    const sorted = sortApprovals([criticalLate, lowSoon], now);
+    expect(sorted.map((r) => r.id)).toEqual(["low", "crit"]);
+  });
+});

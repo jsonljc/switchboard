@@ -2,6 +2,7 @@
 
 import styles from "../approvals.module.css";
 import type { PendingRow } from "../types";
+import { formatRemaining, timerLevel } from "../format";
 
 // NOTE: the queue reads ONLY PendingApproval-shape fields. Agent display
 // surfaces in the detail pane (lands in Phase 2 PR-A2) where the rich
@@ -13,9 +14,10 @@ export interface ApprovalsQueueProps {
   activeId: string | null;
   onSelect: (id: string) => void;
   loading?: boolean;
+  now?: number;
 }
 
-export function ApprovalsQueue({ items, activeId, onSelect, loading }: ApprovalsQueueProps) {
+export function ApprovalsQueue({ items, activeId, onSelect, loading, now }: ApprovalsQueueProps) {
   if (loading) {
     return (
       <div className={styles.queue}>
@@ -48,7 +50,13 @@ export function ApprovalsQueue({ items, activeId, onSelect, loading }: Approvals
   return (
     <div className={styles.queue}>
       {items.map((req) => (
-        <QueueRow key={req.id} req={req} active={req.id === activeId} onSelect={onSelect} />
+        <QueueRow
+          key={req.id}
+          req={req}
+          active={req.id === activeId}
+          onSelect={onSelect}
+          now={now}
+        />
       ))}
     </div>
   );
@@ -58,10 +66,12 @@ function QueueRow({
   req,
   active,
   onSelect,
+  now,
 }: {
   req: PendingRow;
   active: boolean;
   onSelect: (id: string) => void;
+  now?: number;
 }) {
   return (
     <button
@@ -80,6 +90,30 @@ function QueueRow({
         {/* Agent display surfaces in DetailHeader (Phase 2), not in queue rows —
             the wire shape of /api/approvals/pending does not include `agent`. */}
       </div>
+      {typeof now === "number" && (
+        <div className={styles.queueRowRight}>
+          {(() => {
+            const remaining = new Date(req.expiresAt).getTime() - now;
+            const level = timerLevel(remaining);
+            const levelClass =
+              level === "warn"
+                ? styles.queueRowTimer_warn
+                : level === "critical"
+                  ? styles.queueRowTimer_critical
+                  : level === "expired"
+                    ? styles.queueRowTimer_expired
+                    : "";
+            return (
+              <span
+                className={`${styles.queueRowTimer} ${levelClass}`}
+                data-testid="queue-row-timer"
+              >
+                {formatRemaining(remaining)}
+              </span>
+            );
+          })()}
+        </div>
+      )}
     </button>
   );
 }

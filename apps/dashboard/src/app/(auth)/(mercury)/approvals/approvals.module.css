@@ -120,7 +120,7 @@
 .queueRow {
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: flex-start;
   gap: 18px;
   padding: 22px 28px 22px 24px;
@@ -205,6 +205,26 @@
 @media (prefers-reduced-motion: reduce) {
   .skelBar { animation: none; }
 }
+
+.queueRowRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.queueRowTimer {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.queueRowTimer_warn { color: var(--risk-high); font-weight: 600; }
+.queueRowTimer_critical { color: var(--ink); font-weight: 700; }
+.queueRowTimer_expired { color: var(--ink-4); text-decoration: line-through; }
 
 .split {
   max-width: 1480px;
