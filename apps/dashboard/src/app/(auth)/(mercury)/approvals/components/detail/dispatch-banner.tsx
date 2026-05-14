@@ -38,7 +38,7 @@ export function DispatchBanner({ kind, agentName, awaitingQuorum }: DispatchBann
   const verb = kind === "patched" ? "Approved with changes" : "Approved";
   return (
     <div className={detailStyles.dispatchBanner} data-kind="approved">
-      <span className={styles.eyebrow}>dispatched</span>
+      <span className={styles.eyebrow}>processed</span>
       <p className={detailStyles.dispatchMsg}>
         <b>{verb}.</b> {agentName} is processing this now — check Activity in a moment to see the
         result.
