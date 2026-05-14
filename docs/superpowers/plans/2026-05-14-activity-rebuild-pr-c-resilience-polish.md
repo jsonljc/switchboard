@@ -1172,6 +1172,8 @@ function hookResult(
 }
 ```
 
+**Note on `dataUpdatedAt` mock semantics:** real React Query persists `dataUpdatedAt` across error rerenders (it's the wall-clock of the last *successful* query, not the last query overall). The fallback `partial.dataUpdatedAt ?? (partial.isError ? 0 : Date.now())` deliberately models a "fresh error from clean state" — i.e., the very first fetch failed and no successful response has ever landed. For tests that simulate "successful fetch → subsequent fetch error" (such as the H5 rerender test below), pass `dataUpdatedAt` EXPLICITLY in the error mock (`hookResult({ isError: true, dataUpdatedAt: Date.now() })`) so the StalePill remains rendered. The H5 test below does not assert on the pill, so leaving the default works; but be explicit when you do.
+
 Add the following test blocks at the end of the existing `describe("ActivityPage")` body (before the closing `});`):
 
 ```tsx
@@ -1902,6 +1904,7 @@ The page-level a11y assertions (grid roles, combobox pattern, error/stale `aria-
 - No URL-write convergence with /contacts and /automations (spec §2.10 — deliberate).
 - No MercuryFilterChips adapter (editorial register visually differs per spec §3 + locked design).
 - No `shared-conventions.md` update — that's a separate small docs PR after PR-C merges (spec §13 PR-C last bullet).
+- **No focus-target on `view previous ↓`** (spec §8 last bullet). Spec says "After scroll, focus moves to the target row," but H1 forbids the row body from receiving focus (it has no `tabIndex` and no `role="button"`). The chevron-focus alternative — extending `ActivityTable.scrollToRow(id)` to resolve the predecessor's chevron button via a ref map and `.focus()` it — is deferred to a follow-up. Task 8's accessibility suite asserts on the chevron's `aria-expanded` / focusability and the drawer's `role="region"`, which exercises the spec's hard a11y contracts; the chevron-focus-on-scroll behaviour is the one bullet of §8 deliberately not covered by PR-C.
 
 ---
 
