@@ -233,6 +233,36 @@ describe("ActivityPage", () => {
       await userEvent.setup().click(screen.getByRole("button", { name: /Retry/ }));
       expect(refetch).toHaveBeenCalledTimes(1);
     });
+
+    it("first-fetch error: banner appears without the 'previous page' tail and no empty table renders", () => {
+      vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
+      // No prior successful fetch. Banner should NOT claim "previous page is shown below".
+      mockUseActivityList.mockReturnValue(hookResult({ isError: true }));
+      render(<ActivityPage />);
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.queryByText(/previous page of entries/)).toBeNull();
+      expect(screen.queryByText(/nothing was dropped/)).toBeNull();
+      // The empty <ActivityTable rows={[]} /> fallthrough must not render.
+      expect(screen.queryByRole("table", { name: /activity entries/i })).toBeNull();
+    });
+
+    it("cached rows do NOT leak across a filter signature change", () => {
+      vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
+      // First fetch lands successfully under operational scope.
+      mockUseActivityList.mockReturnValue(hookResult({ rows: [liveRow], scope: "operational" }));
+      const { rerender } = render(<ActivityPage />);
+      expect(screen.getByText("Live row for tests")).toBeInTheDocument();
+
+      // User switches to scope=all; React Query has not resolved yet (data is
+      // undefined). The cached operational rows must NOT render under the new
+      // strip — H5 cache is for refetch errors within a signature, not across.
+      setSearch("scope=all");
+      mockUseActivityList.mockReturnValue(
+        hookResult({ rows: undefined as unknown as never, isLoading: true }),
+      );
+      rerender(<ActivityPage />);
+      expect(screen.queryByText("Live row for tests")).toBeNull();
+    });
   });
 
   describe("Stale pill visibility", () => {

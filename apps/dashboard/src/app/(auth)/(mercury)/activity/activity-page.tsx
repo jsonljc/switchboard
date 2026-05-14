@@ -181,6 +181,11 @@ export function ActivityPage() {
     setCursor(null);
     setPrevCursorStack([]);
     setExpandedId(null);
+    // Reset the H5 cache too: the cached rows belong to a stale filter
+    // signature and would otherwise show under the new strip until the
+    // refetch lands. Cache must only paper over refetch errors *within* a
+    // signature, never across one.
+    setLastSuccessfulRows([]);
   }, [filterSignature]);
 
   // ---- Query construction ----
@@ -253,10 +258,6 @@ export function ActivityPage() {
     [sourceRows],
   );
 
-  // Scanned-count for the filtered-empty prose: number of rows the current
-  // scope contains BEFORE narrowing is applied.
-  const scannedCount = effectiveScope === "all" ? counts.allCount : counts.operationalCount;
-
   // ---- Handlers ----
   const onClearFilters = useCallback(() => {
     setEventType(null);
@@ -288,7 +289,14 @@ export function ActivityPage() {
   // ---- Render-state derivations ----
   const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
   const showSkeleton = isLoading && rows.length === 0;
+  const hasCachedRows = rows.length > 0;
   const showEmpty = !showSkeleton && rows.length === 0 && !isError;
+  // First-fetch error: error fires before any successful page existed. The
+  // banner above already explains the failure and offers Retry; the section
+  // body would otherwise render an empty <ActivityTable rows={[]} />, which
+  // contradicts the banner's "previous page is still shown below" framing.
+  // Suppress the section body in that case and let the banner stand alone.
+  const showErrorOnly = isError && !hasCachedRows;
 
   return (
     <div className={styles.activityPage}>
@@ -319,7 +327,13 @@ export function ActivityPage() {
         onClearFilters={onClearFilters}
       />
 
-      {isError && <ErrorBanner path="/api/dashboard/activity" onRetry={onRefetch} />}
+      {isError && (
+        <ErrorBanner
+          path="/api/dashboard/activity"
+          hasCachedRows={hasCachedRows}
+          onRetry={onRefetch}
+        />
+      )}
 
       <section className={`${styles.section} ${styles.page}`}>
         {showSkeleton ? (
@@ -328,18 +342,13 @@ export function ActivityPage() {
               <div key={i} className={styles.skeletonRow} />
             ))}
           </div>
-        ) : showEmpty ? (
+        ) : showErrorOnly ? null : showEmpty ? (
           // Spec §7's empty matrix would also fire `filtered` for scope="all" with no
           // narrowing, but Operational ⊆ All means an empty `all` set implies `operational`
           // is also empty — the same dataset. We collapse those into the ledger-health
           // framing rather than the "no matches" framing; semantically tighter than the spec.
           narrowingActive ? (
-            <EmptyState
-              variant="filtered"
-              scannedCount={scannedCount}
-              scope={scope}
-              onClear={onClearFilters}
-            />
+            <EmptyState variant="filtered" scope={scope} onClear={onClearFilters} />
           ) : (
             <EmptyState variant="zero" />
           )
