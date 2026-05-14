@@ -125,4 +125,31 @@ Agent-home prose (cockpit + greeting) uses Source Serif 4 via `--serif` (`apps/d
 
 `docs/design-prompts/2026-05-13-reports.md` explicitly directs Instrument Sans for the display title, hero number, and pull-quote value/cost. `docs/design-prompts/2026-05-13-approvals.md` and `docs/design-prompts/2026-05-13-mission.md` likewise direct Instrument Sans for headings. The locked CSS declares Cormorant Garamond as `--font-display` (`locked/switchboard/project/approvals-v2/styles.css:36`, `locked/switchboard/project/reports-v2/styles.css:29`, `locked/switchboard/project/activity-v2/styles.css:35`) — **spec wins**, mockup loses. Production code consumes `--font-display` (Instrument Sans) for all wave-2 display chrome.
 
+## 3. Badges and pills
+
+Three families live on these surfaces — agent status pills, governance risk badges, mono event-type badges. The shapes vary; the discipline doesn't.
+
+### 3.1 Status pills (Alex/Riley state)
+
+State pills are **text-only, no background fill** — a colored dot followed by uppercase tracked label. Geometry: `fontSize: 10.5px, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase'`, color matches the dot (`locked/switchboard/project/agent-home-v3/cockpit.jsx:226-233`). Dot is 7px round (`locked/switchboard/project/agent-home-v3/cockpit.jsx:263`). Pulse animation `ck-pulse 1.6s ease-out infinite` only when the agent has a live signal — Alex pulses on `TALKING` / `WAITING` (`locked/switchboard/project/agent-home-v3/alex-config.jsx:23`); Riley pulses on `REVIEWING` (`locked/switchboard/project/agent-home-v3/riley-config.jsx:27`); halted never pulses.
+
+State colors come from the agent's `statusColor` function, not from a shared token table — they're owned by the agent context. Alex: `TALKING` `#3F7A36` green, `WAITING` `#B8782E` amber, idle `#A39786` ink-4, halted `#A03A2E` red (`locked/switchboard/project/agent-home-v3/alex-config.jsx:18-22`). Riley: `WATCHING` `#3F7A36`, `REVIEWING` `#B8782E`, `WAITING` `#B8782E`, `IDLE` `#A39786`, halted `#A03A2E` (`locked/switchboard/project/agent-home-v3/riley-config.jsx:20-26`). **No agent leaks color into another agent's state pill.**
+
+### 3.2 Activity-band event-type badges
+
+Mono outline pills with a tiny colored band-dot. Geometry: `padding: 4px 9px, border: 1px solid var(--hair-strong), border-radius: 2px, background: var(--paper-raised), font-family: var(--font-mono), font-size: 11.5px, font-weight: 500` (`locked/switchboard/project/activity-v2/styles.css:553-564`). Band-dot is 5×5 round (`locked/switchboard/project/activity-v2/styles.css:568-571`) and colored by event-type band: action band = `--amber`, identity = `--ink-3`, event = `--ink-5`, agent = `--ink` (`locked/switchboard/project/activity-v2/styles.css:573-576`). The badge background never carries semantic color — bands are signaled by the 5×5 dot, not by background fill.
+
+### 3.3 Inline activity-row kind chips (agent-home only)
+
+The cockpit's inline activity stream uses denser kind chips: `height: 18px, padding: 0 7px, borderRadius: 3px, fontSize: 10px, fontWeight: 700, letterSpacing: 0.1em` with a category-specific background fill from `KIND_META` (`locked/switchboard/project/agent-home-v3/cockpit.jsx:669-678`). These live inside the cockpit's single-page activity tail and **do not** appear on `/activity` (Tools tier) — which uses the §3.2 mono outline pills instead. Activity-tier surfaces converge on the outline-pill geometry; cockpit's denser inline chips are agent-home only.
+
+### 3.4 Risk badges (depth, not hue)
+
+`/approvals` queue rows communicate risk through a **left-edge hairline weight that grows with risk**, not through traffic-light fills. From `locked/switchboard/project/approvals-v2/styles.css:319-328`: `low` → 1px `var(--ink-5)`; `medium` → 2px `--risk-med` `hsl(34 35% 64%)`; `high` → 2px `--risk-high` `hsl(28 40% 48%)`; `critical` → 3px `--risk-crit` `var(--ink)`. Same pattern in `/activity` row `::before` accent (`locked/switchboard/project/activity-v2/styles.css:511-526`): 1px `--ink-5` low → 2px medium → 2px high → 3px ink critical. Filter-chip `.fchip-bullet` uses a 6×6 round colored dot for the same risk taxonomy (`locked/switchboard/project/approvals-v2/styles.css:223-231`).
+
+### 3.5 Filter and tab chips
+
+Filter chips on `/approvals` and `/activity` are pill-shaped: `font-family: var(--font-mono), font-size: 11.5px, padding: 6px 12px, border-radius: 999px, color: var(--ink-3)`; on (selected) `background: rgba(14,12,10,0.06), color: var(--ink)` (`locked/switchboard/project/approvals-v2/styles.css:196-215`). Brand-nav tabs (cockpit) use a rectangular variant: `padding: 5px 10px, borderRadius: 4px, fontSize: 13px, fontWeight: active ? 600 : 500`; active gets `background: rgba(14,12,10,0.05)` (`locked/switchboard/project/agent-home-v3/cockpit.jsx:198-208`). **Rule:** keep pill chips (999px radius) for filter taxonomy; keep rectangular chips (4px radius) for top-level navigation.
+
+
 
