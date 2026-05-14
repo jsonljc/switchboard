@@ -59,9 +59,8 @@ export function useApprovalDetail(id: string | null) {
   const live = isLive();
 
   return useQuery<DetailRow>({
-    queryKey: id
-      ? (keys?.approvals.detail(id) ?? (["__disabled_approval_detail__", id] as const))
-      : (["__no_id_approval_detail__"] as const),
+    queryKey:
+      keys?.approvals.detail(id ?? "__none__") ?? (["__disabled_approval_detail__", id] as const),
     queryFn: async () => {
       if (!id) throw new Error("missing id");
       if (!live) {

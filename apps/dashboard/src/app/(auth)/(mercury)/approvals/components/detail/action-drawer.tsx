@@ -7,7 +7,7 @@ import { ApproveBlock } from "./approve-block";
 import { RejectConfirm } from "./reject-confirm";
 import { DispatchBanner, type DispatchKind } from "./dispatch-banner";
 import { PatchEditor } from "./patch-editor";
-import { agentDisplay } from "../../hooks/use-agent-display";
+import { agentDisplay } from "../../agent-display";
 import { actionDisplay } from "../../action-display";
 import { formatRemaining } from "../../format";
 import { emit } from "../../telemetry";

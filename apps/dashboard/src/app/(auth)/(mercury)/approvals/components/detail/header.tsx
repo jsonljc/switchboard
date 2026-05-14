@@ -3,7 +3,7 @@
 import styles from "../../approvals.module.css";
 import detailStyles from "../../detail.module.css";
 import { formatRemaining, timerLevel } from "../../format";
-import { agentDisplay } from "../../hooks/use-agent-display";
+import { agentDisplay } from "../../agent-display";
 import { actionDisplay } from "../../action-display";
 import type { DetailRow } from "../../types";
 

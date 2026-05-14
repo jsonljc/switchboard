@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { agentDisplay } from "../hooks/use-agent-display";
+import { agentDisplay } from "../agent-display";
 
 describe("agentDisplay", () => {
   it("maps billing-agent to Alex / Billing & Bookings", () => {
