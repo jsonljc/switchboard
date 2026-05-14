@@ -504,7 +504,7 @@ describe("PrismaOpportunityStore.transitionStage", () => {
       actor: { id: "user_42", type: "user" },
     });
 
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect((prisma as unknown as { $transaction: unknown }).$transaction).toHaveBeenCalledTimes(1);
     expect(tx.opportunity.update).toHaveBeenCalledTimes(1);
     expect(traceStore.recordOperatorMutation).toHaveBeenCalledTimes(1);
 

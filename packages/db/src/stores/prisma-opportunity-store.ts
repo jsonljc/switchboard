@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { PrismaDbClient } from "../prisma-db.js";
+import { isRootPrismaClient } from "../prisma-db.js";
 import type { Opportunity, OpportunityStage, ObjectionRecord } from "@switchboard/schemas";
 import type {
   OpportunityBoardRow,
@@ -240,6 +241,11 @@ export class PrismaOpportunityStore implements OpportunityStore {
     const requestedAt = new Date();
     const executionStartedAt = new Date();
 
+    if (!isRootPrismaClient(this.prisma)) {
+      throw new Error(
+        "PrismaOpportunityStore.transitionStage must be called with a root Prisma client, not a transaction client",
+      );
+    }
     const txResult = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.opportunity.findFirst({
         where: { id, organizationId: orgId },

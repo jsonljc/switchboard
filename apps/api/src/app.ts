@@ -410,6 +410,46 @@ export async function buildServer() {
   const modeRegistry = new ExecutionModeRegistry();
   modeRegistry.register(new CartridgeMode({ cartridgeRegistry: storage.cartridges }));
 
+  // --- OperatorAlerter + WorkTraceStore (moved before SkillMode so workTraceStore
+  //     can be threaded into PrismaOpportunityStore inside bootstrapSkillMode) ---
+  const operatorAlerter: OperatorAlerter = process.env.OPERATOR_ALERT_WEBHOOK_URL
+    ? new WebhookOperatorAlerter({
+        webhookUrl: process.env.OPERATOR_ALERT_WEBHOOK_URL,
+        headers: process.env.OPERATOR_ALERT_WEBHOOK_SECRET
+          ? { Authorization: `Bearer ${process.env.OPERATOR_ALERT_WEBHOOK_SECRET}` }
+          : undefined,
+      })
+    : new NoopOperatorAlerter();
+
+  let workTraceStore: import("@switchboard/db").PrismaWorkTraceStore | undefined;
+  let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
+  let conversationStateStore:
+    | import("@switchboard/core/platform").ConversationStateStore
+    | undefined;
+  let deploymentLifecycleStore:
+    | import("@switchboard/core/platform").DeploymentLifecycleStore
+    | null = null;
+  if (prismaClient) {
+    const { PrismaWorkTraceStore, PrismaConversationStateStore, PrismaDeploymentLifecycleStore } =
+      await import("@switchboard/db");
+    const prismaWorkTraceStore = new PrismaWorkTraceStore(prismaClient, {
+      auditLedger: ledger,
+      operatorAlerter,
+    });
+    workTraceStore = prismaWorkTraceStore;
+    conversationStateStore = new PrismaConversationStateStore(prismaClient, prismaWorkTraceStore);
+    deploymentLifecycleStore = new PrismaDeploymentLifecycleStore(
+      prismaClient,
+      prismaWorkTraceStore,
+    );
+    const { PrismaDeploymentResolver } = await import("@switchboard/core/platform");
+    deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
+  }
+  app.decorate("deploymentResolver", deploymentResolver);
+  app.decorate("workTraceStore", workTraceStore ?? null);
+  app.decorate("conversationStateStore", conversationStateStore ?? null);
+  app.decorate("deploymentLifecycleStore", deploymentLifecycleStore ?? null);
+
   // --- SkillMode registration (skill-backed deployments) ---
   let simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null = null;
   let simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null = null;
@@ -426,6 +466,7 @@ export async function buildServer() {
       modeRegistry,
       logger: app.log,
       contextBuilder,
+      workTraceStore: workTraceStore ?? null,
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;
@@ -461,44 +502,6 @@ export async function buildServer() {
       return governanceProfileStore.get(orgId);
     },
   });
-
-  const operatorAlerter: OperatorAlerter = process.env.OPERATOR_ALERT_WEBHOOK_URL
-    ? new WebhookOperatorAlerter({
-        webhookUrl: process.env.OPERATOR_ALERT_WEBHOOK_URL,
-        headers: process.env.OPERATOR_ALERT_WEBHOOK_SECRET
-          ? { Authorization: `Bearer ${process.env.OPERATOR_ALERT_WEBHOOK_SECRET}` }
-          : undefined,
-      })
-    : new NoopOperatorAlerter();
-
-  let workTraceStore: import("@switchboard/core/platform").WorkTraceStore | undefined;
-  let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
-  let conversationStateStore:
-    | import("@switchboard/core/platform").ConversationStateStore
-    | undefined;
-  let deploymentLifecycleStore:
-    | import("@switchboard/core/platform").DeploymentLifecycleStore
-    | null = null;
-  if (prismaClient) {
-    const { PrismaWorkTraceStore, PrismaConversationStateStore, PrismaDeploymentLifecycleStore } =
-      await import("@switchboard/db");
-    const prismaWorkTraceStore = new PrismaWorkTraceStore(prismaClient, {
-      auditLedger: ledger,
-      operatorAlerter,
-    });
-    workTraceStore = prismaWorkTraceStore;
-    conversationStateStore = new PrismaConversationStateStore(prismaClient, prismaWorkTraceStore);
-    deploymentLifecycleStore = new PrismaDeploymentLifecycleStore(
-      prismaClient,
-      prismaWorkTraceStore,
-    );
-    const { PrismaDeploymentResolver } = await import("@switchboard/core/platform");
-    deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
-  }
-  app.decorate("deploymentResolver", deploymentResolver);
-  app.decorate("workTraceStore", workTraceStore ?? null);
-  app.decorate("conversationStateStore", conversationStateStore ?? null);
-  app.decorate("deploymentLifecycleStore", deploymentLifecycleStore ?? null);
 
   let lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null = null;
   if (prismaClient) {
@@ -542,7 +545,7 @@ export async function buildServer() {
     const reportStores = {
       revenue: new PrismaRevenueStore(prismaClient),
       bookings: new PrismaBookingStore(prismaClient),
-      opportunities: new PrismaOpportunityStore(prismaClient),
+      opportunities: new PrismaOpportunityStore(prismaClient, workTraceStore ?? null),
       conversions: new PrismaConversionRecordStore(prismaClient),
       recommendations: new PrismaRecStore(prismaClient),
       conversations: new PrismaConversationThreadStore(prismaClient),
@@ -593,7 +596,10 @@ export async function buildServer() {
     app.decorate("contactStore", new PrismaContactStore(prismaClient));
     app.decorate("handoffStore", new PrismaHandoffStore(prismaClient));
     app.decorate("threadStore", new PrismaConversationThreadStore(prismaClient));
-    app.decorate("opportunityStore", new PrismaOpportunityStore(prismaClient));
+    app.decorate(
+      "opportunityStore",
+      new PrismaOpportunityStore(prismaClient, workTraceStore ?? null),
+    );
     app.decorate("revenueEventStore", new PrismaRevenueStore(prismaClient));
     app.decorate("triggerStore", new PrismaTriggerStore(prismaClient));
   }
