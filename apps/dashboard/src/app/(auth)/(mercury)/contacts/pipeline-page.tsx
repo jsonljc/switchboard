@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { OpportunityStage, PipelineBoardOpportunity } from "@switchboard/schemas";
 import { useOpportunitiesBoard } from "./hooks/use-opportunities-board";
 import { useOpportunityStageTransition } from "./hooks/use-opportunity-stage-transition";
@@ -40,10 +40,16 @@ export function PipelinePage() {
 
   const rows = board.data?.rows ?? [];
 
-  const now = useMemo(
-    () => (board.isLoading ? PIPELINE_FIXTURE_NOW : new Date()),
-    [board.isLoading],
-  );
+  const [now, setNow] = useState<Date>(() => (board.isLoading ? PIPELINE_FIXTURE_NOW : new Date()));
+  useEffect(() => {
+    if (board.isLoading) {
+      setNow(PIPELINE_FIXTURE_NOW);
+      return;
+    }
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, [board.isLoading]);
 
   const filtered = useMemo(() => {
     return rows.filter((row) => {

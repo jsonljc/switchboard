@@ -46,6 +46,17 @@ describe("RightDrawerProvider + useRightDrawer", () => {
     expect(screen.getByTestId("kind").textContent).toBe("opportunity");
   });
 
+  it("replaces the kind in the reverse direction (opportunity → inbox)", () => {
+    render(
+      <RightDrawerProvider>
+        <Harness />
+      </RightDrawerProvider>,
+    );
+    act(() => screen.getByText("open-opp").click());
+    act(() => screen.getByText("open-inbox").click());
+    expect(screen.getByTestId("kind").textContent).toBe("inbox");
+  });
+
   it("closes when close() is called", () => {
     render(
       <RightDrawerProvider>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { OpportunityStage, PipelineBoardOpportunity } from "@switchboard/schemas";
-import { Column, PIPELINE_STAGES, type StageDescriptor } from "./column";
+import { Column, PIPELINE_STAGES } from "./column";
 import styles from "../pipeline.module.css";
 
 export function Board({
@@ -65,7 +65,3 @@ function groupByStage(
   }
   return map;
 }
-
-// Re-export so the page composition has one import surface.
-export type { StageDescriptor };
-export { PIPELINE_STAGES };

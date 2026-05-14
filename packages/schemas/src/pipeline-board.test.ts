@@ -138,3 +138,16 @@ describe("PipelineBoardResponseSchema — locked PR-C2 wire shape", () => {
     expect(row.assignedStaff).toBe("Dr. Yeo");
   });
 });
+
+describe("private exports lock", () => {
+  it("does not export PipelineBoardObjectionSchema", () => {
+    // Type-level lock: PipelineBoardObjectionSchema is intentionally private to
+    // pipeline-board.ts (consumed only inside PipelineBoardOpportunitySchema).
+    // If a future change exports it, the @ts-expect-error fires at compile time.
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error PipelineBoardObjectionSchema is intentionally not exported
+    const _check: typeof import("./pipeline-board.js").PipelineBoardObjectionSchema =
+      undefined as never;
+    expect(_check).toBeUndefined();
+  });
+});
