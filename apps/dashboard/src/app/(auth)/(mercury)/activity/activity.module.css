@@ -299,15 +299,6 @@
   }
 }
 
-/* ============= title row ============= */
-.titleRow {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--hair);
-}
 .pageTitle {
   font-family: var(--serif);
   font-weight: 400;
@@ -328,131 +319,11 @@
     letter-spacing: -0.025em;
   }
 }
-.titleFolio {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: hsl(20 10% 12% / 0.55);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  padding-bottom: 4px;
-}
-
-/* ============= toolbar (chips + search) ============= */
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  flex-wrap: wrap;
-  margin-top: 24px;
-}
-/* Filter-chip styles moved to components/mercury/filter-chips.module.css.
- * The activity surface now consumes the shared <FilterChips> primitive. The
- * Filtered pill (custom-scope adornment) below remains activity-specific. */
-
 /* ============= activity table ============= */
 .tableWrap {
   margin-top: 28px;
   width: 100%;
 }
-.activity {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--sans);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-.activity thead th {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-weight: 500;
-  color: hsl(20 10% 12% / 0.55);
-  padding: 0 12px 12px 0;
-  border-bottom: 1px solid var(--hair);
-  text-align: left;
-  user-select: none;
-  white-space: nowrap;
-  background: transparent;
-}
-.activity tbody tr {
-  border-bottom: 1px solid var(--hair);
-  transition: background 0.15s ease;
-}
-.activity tbody tr:hover {
-  background: var(--row-hover);
-}
-.activity tbody td {
-  padding: 14px 12px 14px 0;
-  color: var(--ink);
-  vertical-align: middle;
-}
-.activity tbody td.isMuted {
-  color: var(--ink-3);
-}
-
-/* Hash prefix cell — mono, tabular, muted. Full hash on copy. */
-.cellHash {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-/* Risk badge */
-.riskBadge {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-.riskNone {
-  color: var(--ink-4);
-  background: hsl(20 8% 88%);
-}
-.riskLow {
-  color: var(--pos);
-  background: hsl(140 30% 90%);
-}
-.riskMedium {
-  color: hsl(30 80% 38%);
-  background: hsl(30 60% 90%);
-}
-.riskHigh {
-  color: var(--neg);
-  background: hsl(0 50% 92%);
-}
-.riskCritical {
-  color: hsl(345 70% 40%);
-  background: hsl(345 60% 92%);
-}
-
-/* ============= section label (ACTIVITY caps mono) ============= */
-.sectionLabel {
-  font-family: var(--mono);
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: hsl(20 10% 12% / 0.55);
-}
-
-/* muted-ink text utility */
-.isMuted {
-  color: var(--ink-3);
-}
-
-/* tabular numerals for timestamp cells */
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-
 /* ============= skeleton loading ============= */
 .skeletonTable {
   margin-top: 28px;
@@ -482,93 +353,6 @@
   100% {
     background-position: -200% 0;
   }
-}
-
-/* ============= empty action button (filtered-empty Clear filters) ============= */
-.emptyAction {
-  margin-top: 18px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  padding: 6px 14px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-.emptyAction:hover {
-  border-color: var(--ink-3);
-}
-
-/* ============= table row / cell overrides for activity ============= */
-
-/* sticky first column */
-.stickyCol {
-  position: sticky;
-  left: 0;
-  background: var(--cream);
-  z-index: 1;
-}
-
-/* row expanded state — subtle background */
-.activityRow.isExpanded {
-  background: var(--row-hover);
-}
-
-/* cell styles for the activity table */
-.cellTimestamp {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-  white-space: nowrap;
-  min-width: 160px;
-  position: sticky;
-  left: 0;
-  background: var(--cream);
-  z-index: 1;
-}
-.activityRow.isExpanded .cellTimestamp {
-  background: var(--row-hover);
-}
-.activity tbody tr:hover .cellTimestamp {
-  background: var(--row-hover);
-}
-
-.cellEvent {
-  min-width: 180px;
-}
-.cellActor {
-  min-width: 160px;
-}
-.cellEntity {
-  min-width: 160px;
-}
-.cellSummary {
-  min-width: 280px;
-  max-width: 480px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cellChevron {
-  text-align: right;
-  padding-right: 4px;
-  width: 36px;
-}
-
-/* mono cell text (event, actor, entity) */
-.cellMono {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
 }
 
 /* chevron toggle button */
@@ -603,10 +387,6 @@
   transform: rotate(-90deg);
 }
 
-/* drawer row — no border-bottom on the row containing the drawer */
-.drawerRow {
-  border-bottom: none !important;
-}
 .drawerCell {
   padding: 0 !important;
   border-bottom: 1px solid var(--hair);
@@ -727,88 +507,6 @@
 .copyButton:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 2px;
-}
-
-/* ============= pagination footer (prev/next cursor) ============= */
-.paginationFooter {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--hair);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 24px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: hsl(20 10% 12% / 0.55);
-}
-.moreButton {
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink-3);
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.2s ease;
-}
-.moreButton:hover:not(:disabled) {
-  color: var(--ink);
-}
-.moreButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-.arr {
-  font-family: var(--serif);
-  font-size: 14px;
-  line-height: 1;
-}
-
-/* ============= empty / error ============= */
-.emptyWrap {
-  margin-top: 48px;
-  padding: 32px 0;
-  text-align: center;
-  font-family: var(--sans);
-  color: var(--ink-2);
-}
-.emptyTitle {
-  font-family: var(--serif);
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-  margin: 0 0 8px;
-}
-.emptyBody {
-  font-size: 15px;
-  color: var(--ink-3);
-  margin: 0 auto;
-  max-width: 420px;
-  text-wrap: pretty;
-}
-
-/* ============= utility ============= */
-.fadeIn {
-  animation: activityFadeIn 0.35s ease-out;
-}
-@keyframes activityFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* ============= error banner (PR-C, H5) ============= */
