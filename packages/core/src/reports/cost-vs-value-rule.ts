@@ -1,6 +1,6 @@
 import type { CostBreakdown } from "@switchboard/schemas";
 import type { RollupContext } from "./types.js";
-import { formatCurrencyUSD } from "./period-helpers.js";
+import { formatCurrencySGD } from "./period-helpers.js";
 
 export const SDR_MONTHLY_USD = 5000;
 export const AGENCY_MONTHLY_USD = 3000;
@@ -25,12 +25,12 @@ export async function computeCostVsValue(
     costNarrative =
       `No active subscription detected. ` +
       `A comparable in-house stack (junior SDR + ad agency retainer) ` +
-      `would run ~${formatCurrencyUSD(alt)} for this period.`;
+      `would run ~${formatCurrencySGD(alt)} for this period.`;
   } else {
     costNarrative =
-      `Switchboard cost is estimated from your subscription plan at ~${formatCurrencyUSD(paid)} for this period. ` +
-      `A comparable in-house stack would run ~${formatCurrencyUSD(alt)}, ` +
-      `saving ~${formatCurrencyUSD(saving)}. ` +
+      `Switchboard cost is estimated from your subscription plan at ~${formatCurrencySGD(paid)} for this period. ` +
+      `A comparable in-house stack would run ~${formatCurrencySGD(alt)}, ` +
+      `saving ~${formatCurrencySGD(saving)}. ` +
       `Actual invoice amounts may vary.`;
   }
 

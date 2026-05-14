@@ -1,53 +1,39 @@
-import type { FunnelNarrative, FunnelRowData } from "../fixtures";
+import type { FunnelRowData, FunnelNarrative } from "@switchboard/schemas";
 import styles from "../reports.module.css";
 
-interface FunnelRowProps {
-  row: FunnelRowData;
-  maxN: number;
-}
+export function Funnel({ rows, narrative }: { rows: FunnelRowData[]; narrative: FunnelNarrative }) {
+  const maxN = Math.max(...rows.map((r) => r.n), 1);
 
-function FunnelRow({ row, maxN }: FunnelRowProps) {
-  const ratio = row.n / maxN;
-  const W = 100;
-  const len = Math.max(2, ratio * W);
-  const deltaCls =
-    row.delta?.kind === "neg" ? styles.isNeg : row.delta?.kind === "pos" ? styles.isPos : "";
   return (
-    <div className={styles.funnelRow}>
-      <span className={styles.funnelStage}>{row.stage}</span>
-      <span className={styles.funnelNum}>{row.label}</span>
-      <span className={styles.funnelBar} aria-hidden="true">
-        <svg viewBox={`0 0 ${W} 1`} preserveAspectRatio="none">
-          <line x1="0" y1="0.5" x2={len.toFixed(2)} y2="0.5" className={styles.funnelLine} />
-        </svg>
-      </span>
-      <span className={`${styles.funnelDelta} ${deltaCls}`}>{row.delta ? row.delta.text : ""}</span>
-    </div>
-  );
-}
-
-interface FunnelProps {
-  data: FunnelRowData[];
-  narrative: FunnelNarrative;
-  period: string;
-}
-
-export function Funnel({ data, narrative, period }: FunnelProps) {
-  const maxN = Math.max(...data.map((d) => d.n));
-  return (
-    <>
-      <div className={styles.folio}>
-        <span className={styles.folioL}>Funnel</span>
-        <span className={styles.folioR}>{period}</span>
+    <section className={styles.section}>
+      <div className={styles.sectionHead}>
+        <span className={styles.eyebrow}>Funnel</span>
+        <span className={styles.right}>five stages · proportional</span>
       </div>
+
       <div className={styles.funnel}>
-        {data.map((r) => (
-          <FunnelRow key={r.stage} row={r} maxN={maxN} />
-        ))}
+        {rows.map((r, i) => {
+          const pct = (r.n / maxN) * 100;
+          const dKind = r.delta?.kind ?? "flat";
+          return (
+            <div className={styles.funnelTable} data-i={i} key={r.stage}>
+              <span className={styles.funnelStage}>{r.stage}</span>
+              <span className={styles.funnelBar} aria-hidden="true">
+                <span className={styles.fill} style={{ width: `${pct.toFixed(2)}%` }} />
+              </span>
+              <span className={styles.funnelNum}>{r.label}</span>
+              <span className={`${styles.funnelDelta} ${styles[dKind]}`}>
+                {r.delta ? r.delta.text : "—"}
+              </span>
+            </div>
+          );
+        })}
+
+        <div className={styles.funnelByline}>
+          <span className={styles.marker}>{narrative.marker}</span>
+          <p className={styles.text}>{narrative.text}</p>
+        </div>
       </div>
-      <p className={styles.funnelNarrative}>
-        <span className={styles.marker}>{narrative.marker}</span>— {narrative.text}
-      </p>
-    </>
+    </section>
   );
 }

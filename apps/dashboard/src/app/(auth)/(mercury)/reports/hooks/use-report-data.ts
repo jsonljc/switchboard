@@ -9,6 +9,7 @@ import { FIXTURES_BY_WINDOW, type ReportData, type ReportWindow } from "../fixtu
 export interface UseReportData {
   data: ReportData | undefined;
   isLoading: boolean;
+  isFetching: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
 }
@@ -22,7 +23,7 @@ export function useReportData(window: ReportWindow): UseReportData {
   const keys = useScopedQueryKeys();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery<ReportData>({
+  const { data, isLoading, isFetching, error } = useQuery<ReportData>({
     queryKey: keys?.reports.byWindow(window) ?? ["__disabled_reports__"],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/reports?window=${encodeURIComponent(window)}`);
@@ -49,6 +50,7 @@ export function useReportData(window: ReportWindow): UseReportData {
     return {
       data: FIXTURES_BY_WINDOW[window],
       isLoading: false,
+      isFetching: false,
       error: null,
       refresh: async () => {},
     };
@@ -57,6 +59,7 @@ export function useReportData(window: ReportWindow): UseReportData {
   return {
     data,
     isLoading,
+    isFetching,
     error: error as Error | null,
     refresh,
   };

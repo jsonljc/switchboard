@@ -1,4 +1,4 @@
-import { formatCurrencyUSD } from "../period-helpers.js";
+import { formatCurrencySGD } from "../period-helpers.js";
 
 /**
  * Internal type — the narrow fact set the LLM actually needs.
@@ -31,9 +31,9 @@ Example shape (illustrative — your wording will differ based on the period):
 {"pre": "This month, your team converted leads", "mid": "in revenue against a Switchboard fee of", "post": "well below traditional staffing costs."}`;
 
 export function buildUserPrompt(facts: PullQuoteFacts): string {
-  const revenue = formatCurrencyUSD(facts.revenueUsd);
-  const cost = formatCurrencyUSD(facts.costUsd);
-  const savings = formatCurrencyUSD(facts.savingsUsd);
+  const revenue = formatCurrencySGD(facts.revenueUsd);
+  const cost = formatCurrencySGD(facts.costUsd);
+  const savings = formatCurrencySGD(facts.savingsUsd);
   return `Period: ${facts.periodLabel}
 Revenue this period: ${revenue}
 Switchboard cost this period: ${cost}

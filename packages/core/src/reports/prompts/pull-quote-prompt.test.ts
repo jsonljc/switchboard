@@ -34,11 +34,11 @@ describe("buildUserPrompt", () => {
     expect(buildUserPrompt(FACTS)).toContain("this month");
   });
 
-  it("includes the formatted revenue, cost, and savings as USD strings", () => {
+  it("includes the formatted revenue, cost, and savings as SGD strings", () => {
     const prompt = buildUserPrompt(FACTS);
-    expect(prompt).toContain("$18,433"); // formatCurrencyUSD rounds >=1000
-    expect(prompt).toContain("$499");
-    expect(prompt).toContain("$7,501");
+    expect(prompt).toContain("S$18,433"); // formatCurrencySGD rounds >=1000
+    expect(prompt).toContain("S$499");
+    expect(prompt).toContain("S$7,501");
   });
 
   it("does not throw on zero values", () => {

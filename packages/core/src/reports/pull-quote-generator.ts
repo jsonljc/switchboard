@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ReportDataV1, ReportWindow } from "@switchboard/schemas";
 import type { LLMClient, PullQuoteGenerator } from "./interfaces.js";
 import type { RollupContext } from "./types.js";
-import { formatCurrencyUSD } from "./period-helpers.js";
+import { formatCurrencySGD } from "./period-helpers.js";
 import { PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt } from "./prompts/pull-quote-prompt.js";
 import type { PullQuoteFacts } from "./prompts/pull-quote-prompt.js";
 
@@ -81,8 +81,8 @@ function violatesContentGuard(slots: { pre: string; mid: string; post: string })
 export function createPullQuoteGenerator(deps: { llm: LLMClient | null }): PullQuoteGenerator {
   return async (input) => {
     const facts = buildFacts(input);
-    const value = formatCurrencyUSD(facts.revenueUsd);
-    const cost = formatCurrencyUSD(facts.costUsd);
+    const value = formatCurrencySGD(facts.revenueUsd);
+    const cost = formatCurrencySGD(facts.costUsd);
     const template = buildTemplate(facts, value, cost);
 
     if (deps.llm == null) {
