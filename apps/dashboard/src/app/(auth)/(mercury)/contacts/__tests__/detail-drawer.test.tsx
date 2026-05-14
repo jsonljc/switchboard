@@ -76,25 +76,12 @@ describe("DetailDrawer", () => {
   });
 
   it("changes a card's stage via the drawer <select> with no mouse drag", async () => {
-    // Acceptance criterion §13.6.
-    //
-    // NOTE: PipelinePage's drawer onStageChange currently calls
-    // `transition.mutate(input)` with no success callback, so no toast is
-    // surfaced for drawer-driven moves (only drag-and-drop moves toast).
-    // This is a real gap vs §13.6 — flagged but not papered over.
-    // We assert the user-visible side effect that DOES happen today: the
-    // mutation's optimistic onMutate updates the React Query cache so the
-    // drawer's <select value> reflects the new stage immediately.
     const user = userEvent.setup();
     renderPage();
     const card = await screen.findByText("Hydrafacial · single session");
     await user.click(card);
-    const select = (await screen.findByLabelText(/Change stage/i)) as HTMLSelectElement;
-    expect(select.value).toBe("interested");
+    const select = await screen.findByLabelText(/Change stage/i);
     await user.selectOptions(select, "qualified");
-    await waitFor(() => {
-      const refreshed = screen.getByLabelText(/Change stage/i) as HTMLSelectElement;
-      expect(refreshed.value).toBe("qualified");
-    });
+    await waitFor(() => expect(screen.getByText(/Moved Jia to Qualified\./)).toBeInTheDocument());
   });
 });

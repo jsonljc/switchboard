@@ -86,20 +86,19 @@ export function PipelinePage() {
   function onDragLeave(stage: OpportunityStage) {
     setOverStage((prev) => (prev === stage ? null : prev));
   }
-  function onDrop(stage: OpportunityStage) {
-    if (!draggingId) return;
-    const dragged = rows.find((r) => r.id === draggingId);
-    setOverStage(null);
-    setDraggingId(null);
-    if (!dragged || dragged.stage === stage) return;
-    const previousStage = dragged.stage;
-    const firstName = dragged.contact.name.split(" ")[0] ?? dragged.contact.name;
-
+  function mutateStage(id: string, nextStage: OpportunityStage) {
+    const target = rows.find((r) => r.id === id);
+    if (!target || target.stage === nextStage) return;
+    const previousStage = target.stage;
+    const firstName = target.contact.name.split(" ")[0] ?? target.contact.name;
     transition.mutate(
-      { id: draggingId, stage },
+      { id, stage: nextStage },
       {
         onSuccess: () => {
-          setToast({ message: `Moved ${firstName} to ${STAGE_LABEL[stage]}.`, variant: "success" });
+          setToast({
+            message: `Moved ${firstName} to ${STAGE_LABEL[nextStage]}.`,
+            variant: "success",
+          });
         },
         onError: () => {
           setToast({
@@ -109,6 +108,13 @@ export function PipelinePage() {
         },
       },
     );
+  }
+  function onDrop(stage: OpportunityStage) {
+    if (!draggingId) return;
+    const id = draggingId;
+    setOverStage(null);
+    setDraggingId(null);
+    mutateStage(id, stage);
   }
   function onOpenCard(opp: PipelineBoardOpportunity) {
     setOpenOpp(opp);
@@ -157,9 +163,7 @@ export function PipelinePage() {
       <DetailDrawer
         opportunity={drawerOpp}
         now={now}
-        onStageChange={(input) => {
-          transition.mutate(input);
-        }}
+        onStageChange={({ id, stage }) => mutateStage(id, stage)}
       />
       <Toast
         message={toast?.message ?? null}
