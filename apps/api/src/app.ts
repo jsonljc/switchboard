@@ -272,6 +272,24 @@ export async function buildServer() {
 
   app.decorate("ingestionPipeline", ingestionPipeline);
 
+  // Build ContextBuilder for outcome-informed skill context (Task 8 / agent-infra-parity).
+  // Requires prismaClient + conversationDeps (provides KnowledgeRetriever) + knowledgeStore.
+  // PrismaDeploymentMemoryStore and PrismaInteractionSummaryStore are stateless wrappers over
+  // prismaClient — constructing them here rather than reusing shared instances is equivalent
+  // because the invariant is "same prismaClient → same DB rows", not shared in-memory state.
+  let contextBuilder: import("@switchboard/core").ContextBuilder | undefined;
+  if (prismaClient && conversationDeps && knowledgeStore) {
+    const { ContextBuilder } = await import("@switchboard/core");
+    const { PrismaDeploymentMemoryStore, PrismaInteractionSummaryStore } =
+      await import("@switchboard/db");
+    contextBuilder = new ContextBuilder({
+      knowledgeRetriever: conversationDeps.retriever,
+      deploymentMemoryStore: new PrismaDeploymentMemoryStore(prismaClient),
+      interactionSummaryStore: new PrismaInteractionSummaryStore(prismaClient),
+    });
+    app.log.info("ContextBuilder wired (outcome-informed skill context)");
+  }
+
   // --- Session runtime bootstrap (optional — requires DATABASE_URL + SESSION_TOKEN_SECRET) ---
   let sessionManager: import("@switchboard/core/sessions").SessionManager | null = null;
   if (prismaClient) {
@@ -407,6 +425,7 @@ export async function buildServer() {
       intentRegistry,
       modeRegistry,
       logger: app.log,
+      contextBuilder,
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;

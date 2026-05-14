@@ -1,4 +1,14 @@
 import type { AgentContext } from "@switchboard/sdk";
+import type { ContextBuilder } from "../memory/context-builder.js";
+
+export interface SkillServices {
+  /**
+   * Outcome-informed context builder. When provided, builders may call
+   * `contextBuilder.build()` to surface high-confidence patterns and
+   * learned facts for injection into the skill prompt.
+   */
+  contextBuilder?: ContextBuilder;
+}
 
 export interface SkillStores {
   opportunityStore: {
@@ -57,6 +67,7 @@ export type ParameterBuilder = (
     channel?: string;
   },
   stores: SkillStores,
+  services?: SkillServices,
 ) => Promise<Record<string, unknown>>;
 
 export class ParameterResolutionError extends Error {
