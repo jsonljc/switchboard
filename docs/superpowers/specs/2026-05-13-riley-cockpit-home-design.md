@@ -39,7 +39,7 @@ Notes:
 
 - The Claude Design mockup uses `rotate_creative` as a label; the engine emits `refresh_creative`. Production must use `refresh_creative` as the intent and persist `presentation.primaryLabel = "Refresh creative"` (or whatever copy the engine writes). The cockpit displays `presentation.primaryLabel` verbatim — no hard-coded "Rotate" string.
 - `review_budget` is a **review signal**, not an executable action. Its `presentation.primaryLabel` is "Review in Ads Manager" (open external) — no internal mutation. The cockpit renders it as an approval card with an "Open Meta Ads →" primary action and a "Dismiss" secondary.
-- Reversibility (`pause`, `reduce_budget`) drives an "Undo within 1h" affordance on the toast that appears after Approve. Implemented per the existing `actOnRecommendation` undo flow.
+- Reversibility set is `{pause, reduce_budget}` per `packages/core/src/recommendations/router.ts:13`. Of these, **only `pause` is currently emitted by the ad-optimizer engine**; `reduce_budget` is reserved for future emitters. The cockpit honors the full set so it doesn't need to change when `reduce_budget` lands. Reversible-action approvals get an "Undo within 1h" affordance on the post-approve toast via the existing `actOnRecommendation` undo flow.
 
 ### Diagnoses Riley produces (drive recommendation generation)
 
@@ -212,14 +212,24 @@ function deriveRileyStatus(input: {
 }
 ```
 
-**Scoring cadence.** Riley runs a daily audit at **07:00 UTC** (`packages/ad-optimizer/src/inngest-functions.ts`, the `audit-runner` cron). REVIEWING surfaces during this window plus any ad-hoc re-scoring trigger. Outside the window, REVIEWING is rare — most page loads will see WATCHING or WAITING.
+**Scoring cadence.** From `packages/ad-optimizer/src/inngest-functions.ts`:
+
+| Cron ID                            | Schedule       | What it does                                     |
+|------------------------------------|----------------|--------------------------------------------------|
+| `ad-optimizer-daily-signal-health` | `0 7 * * *`    | Signal-health pre-flight (pixel + CAPI checks)   |
+| `ad-optimizer-daily-check`         | `0 8 * * *`    | **Main daily audit — emits recommendations**     |
+| `ad-optimizer-daily-dispatch`      | `0 8 * * *`    | Dispatches conversions to Meta CAPI              |
+| `ad-optimizer-weekly`              | `0 9 * * 1`    | Weekly audit                                     |
+| `ad-optimizer-weekly-dispatch`     | `0 6 * * 1`    | Weekly conversion dispatch                       |
+
+REVIEWING surfaces during the **08:00 UTC** main-audit window plus any ad-hoc re-scoring trigger. The 07:00 UTC signal-health cron is too narrow (no campaign-level recs) to drive REVIEWING. Outside the windows, REVIEWING is rare — most page loads will see WATCHING or WAITING.
 
 Mission popover rows (data only; same component as Alex):
 
 | Eyebrow    | Value                                                  |
 |------------|--------------------------------------------------------|
 | `ROLE`     | `Ad optimizer · score, recommend, never act without your approval` |
-| `PIPELINE` | `Ad sets · all campaigns · scored daily 07:00 UTC`     |
+| `PIPELINE` | `Ad sets · all campaigns · scored daily 08:00 UTC`     |
 | `BRAND`    | `{org.displayName} · {org.tagline ?? "—"}`             |
 | `CHANNELS` | `Meta Ads` with status dot (`ok` / `degraded` / `disconnected` derived from `Connection.status`); if Google Ads is connected, second pill |
 | `TARGETS`  | `target CPL ${targetCpb} · avg lead value ${avgValue} · ROAS from {CRM,Meta}` |
@@ -414,7 +424,7 @@ The Riley `Recommendation` table already persists exactly the fields the cockpit
 
 ### Action wiring
 
-Primary tap → `POST /api/dashboard/recommendations/:id/act { action: "primary" }` (uses existing `actOnRecommendation` flow). Secondary tap → `{ action: "dismiss" }`. Optimistic UI hides the card on tap; toast appears from `presentation.acceptToast` / `presentation.declineToast` (these are NOT in the persisted `RecommendationPresentationSchema` today — see §Schema extensions).
+The approval CTAs reuse the **existing hooks** `apps/dashboard/src/hooks/use-recommendations.ts` (read pending list) and `apps/dashboard/src/hooks/use-recommendation-action.ts` (act on one). No new hooks. Primary tap → `actOnRecommendation({ action: "primary" })`. Secondary tap → `{ action: "dismiss" }`. Optimistic UI hides the card on tap; toast appears from `presentation.acceptToast` / `presentation.declineToast` (these are NOT in the persisted `RecommendationPresentationSchema` today — see §Schema extensions).
 
 ### Empty / cold-state behavior
 
@@ -574,7 +584,7 @@ These are **per-agent, per-org** and serve both Alex (cost-per-booking, avg book
     targetCpbCents: number | null;
     roasSource: "crm" | "meta"; // crm when crm-data-provider Connection exists, else meta
   };
-  scoringCron: { hourUtc: number; description: string }; // { hourUtc: 7, description: "Scored daily at 07:00 UTC" } for Riley
+  scoringCron: { hourUtc: number; description: string }; // { hourUtc: 8, description: "Scored daily at 08:00 UTC" } for Riley
 }
 ```
 
@@ -594,6 +604,11 @@ One aggregator, agent-key-aware. Channels source depends on agent: Riley reads `
 ```
 
 Riley's branch in `buildRileyMetricsViewModel` produces `tiles` + `roi`. Alex's branch keeps emitting today's flat schema; the dashboard's `legacyTiles` / `legacyRoi` adapters (already present in `cockpit.jsx` design source) handle the conversion.
+
+**Existing `/api/dashboard/roi` + `use-roi.ts`** — there's already a ROI endpoint returning funnel-shaped data (`{funnel: {inquiry, qualified, booked, purchased, completed, totalRevenue}, breakdown, health}`) consumed by `apps/dashboard/src/hooks/use-roi.ts`. Per memory, this feeds the `/reports` page (shipped 2026-05-11). The cockpit ROI bar is **a different concern** — a fast at-a-glance ROAS/CPL view, not a funnel breakdown. Implementation choice (plan-stage):
+
+- **(a)** Add ROAS+CPL fields to `/api/dashboard/roi` response (one endpoint serves both surfaces). Risk: couples cockpit perf to reports query.
+- **(b) — recommended** Keep `/api/dashboard/roi` for `/reports` and put cockpit ROAS+CPL on `/api/dashboard/agents/[agentId]/metrics`. Two endpoints, surface-specific shapes, minimal coupling. The cockpit hook count stays at 2 (mission + metrics).
 
 ### 4. Schema: `RecommendationPresentation` toast fields
 
@@ -653,7 +668,7 @@ Recommendation is **Path A**, with this Riley spec frozen first so Alex shell PR
 9. Clicking an internal-action approval's primary button calls `actOnRecommendation`, optimistically hides the card, and emits the toast from `presentation.acceptToast` (or fallback).
 10. Mission subtitle is clickable; popover shows 5 rows (Role / Pipeline / Brand / Channels / Targets) with connection-status dots and the ROAS source disclosure.
 11. ⌘K opens the palette pre-populated with Riley's commands.
-12. **REVIEWING state surfaces during the 07:00 UTC daily scoring window** (verified via integration test that backdates `scoringRunActiveAt`).
+12. **REVIEWING state surfaces during the 08:00 UTC daily main-audit window** (verified via integration test that backdates `scoringRunActiveAt`).
 13. The diff between `Riley Home v2.html` and `Alex Home v2.html` in the design bundle is honored: production code has **no Riley-specific layout code** outside `riley-config.*` / `metrics-riley.*` / activity translator branch. Layout/structure lives in the shared cockpit components.
 14. Type-check, lint, and tests pass. New tests cover: Riley's status derivation (all 5 states), KPI tile assembly (cold + steady), ROI degraded fallback, approval mapping for each of the 11 action variants, signal-health grouping, urgency sort order, and external-action handling.
 
