@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ConversationCompoundingService } from "../compounding-service.js";
 import type { ConversationEndEvent } from "@switchboard/core";
 import type { BookingAttributionStore } from "../booking-attribution.js";
@@ -110,6 +110,13 @@ describe("ConversationCompoundingService", () => {
     service = new ConversationCompoundingService(deps);
     metricsSpy = createMetricsSpy();
     setMetrics(metricsSpy);
+  });
+
+  afterEach(() => {
+    // Restore the module-singleton metrics so this test file doesn't leak its
+    // spy instance into other test files running in the same vitest worker
+    // (notably context-builder.test.ts, which also reads getMetrics()).
+    setMetrics(createInMemoryMetrics());
   });
 
   it("creates an interaction summary from LLM output", async () => {

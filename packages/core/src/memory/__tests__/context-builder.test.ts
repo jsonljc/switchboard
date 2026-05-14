@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ContextBuilder } from "../context-builder.js";
 import {
   createInMemoryMetrics,
@@ -37,6 +37,12 @@ describe("ContextBuilder", () => {
     builder = new ContextBuilder(deps);
     metricsSpy = createMetricsSpy();
     setMetrics(metricsSpy);
+  });
+
+  afterEach(() => {
+    // Restore the module-singleton metrics so this test file doesn't leak its
+    // spy instance into other test files running in the same vitest worker.
+    setMetrics(createInMemoryMetrics());
   });
 
   it("returns empty context when no data exists", async () => {
