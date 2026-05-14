@@ -221,3 +221,123 @@ describe("POST /send-test", () => {
     expect(prisma.whatsAppTestSend.create).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /send-test — Graph error mapping", () => {
+  let app: FastifyInstance;
+
+  beforeEach(() => {
+    vi.stubEnv("META_SYSTEM_USER_TOKEN", "TOKEN");
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    if (app) await app.close();
+  });
+
+  function approvedTemplatesResponse(): Response {
+    return jsonResponse({
+      data: [
+        {
+          id: "t1",
+          name: "appt_reminder",
+          language: "en_US",
+          status: "APPROVED",
+          category: "UTILITY",
+          components: [{ type: "BODY" }],
+        },
+      ],
+    });
+  }
+
+  it("maps Graph 429 rate-limit response to 429 WHATSAPP_RATE_LIMITED (retryable)", async () => {
+    const prisma = buildPrismaMock();
+    prisma.managedChannel.findFirst.mockResolvedValue({
+      id: "ch_1",
+      connectionId: "conn_1",
+      testRecipients: ["+15551234567"],
+    });
+    prisma.connection.findFirst.mockResolvedValue({
+      id: "conn_1",
+      externalAccountId: "WABA_1",
+    });
+
+    const graphApiFetch = vi
+      .fn()
+      .mockImplementationOnce(async () => approvedTemplatesResponse())
+      .mockImplementationOnce(
+        async () =>
+          new Response(JSON.stringify({ error: { code: 4, message: "rate" } }), {
+            status: 429,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+
+    app = await buildApp({ prisma, graphApiFetch });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/send-test",
+      payload: {
+        phoneNumberId: "PN_123",
+        templateName: "appt_reminder",
+        languageCode: "en_US",
+        toNumber: "+15551234567",
+      },
+    });
+
+    expect(res.statusCode).toBe(429);
+    const body = res.json() as { error: { code: string; retryable: boolean } };
+    expect(body.error.code).toBe("WHATSAPP_RATE_LIMITED");
+    expect(body.error.retryable).toBe(true);
+
+    // Precheck (templates) call happened first
+    expect(graphApiFetch).toHaveBeenCalledTimes(2);
+    const firstUrl = graphApiFetch.mock.calls[0]![0] as string;
+    expect(firstUrl).toContain("/WABA_1/message_templates");
+
+    expect(prisma.whatsAppTestSend.create).not.toHaveBeenCalled();
+  });
+
+  it("maps Graph 200 without message id to 502 WHATSAPP_NO_MESSAGE_ID (retryable)", async () => {
+    const prisma = buildPrismaMock();
+    prisma.managedChannel.findFirst.mockResolvedValue({
+      id: "ch_1",
+      connectionId: "conn_1",
+      testRecipients: ["+15551234567"],
+    });
+    prisma.connection.findFirst.mockResolvedValue({
+      id: "conn_1",
+      externalAccountId: "WABA_1",
+    });
+
+    const graphApiFetch = vi
+      .fn()
+      .mockImplementationOnce(async () => approvedTemplatesResponse())
+      .mockImplementationOnce(async () => jsonResponse({ messages: [] }));
+
+    app = await buildApp({ prisma, graphApiFetch });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/send-test",
+      payload: {
+        phoneNumberId: "PN_123",
+        templateName: "appt_reminder",
+        languageCode: "en_US",
+        toNumber: "+15551234567",
+      },
+    });
+
+    expect(res.statusCode).toBe(502);
+    const body = res.json() as { error: { code: string; retryable: boolean } };
+    expect(body.error.code).toBe("WHATSAPP_NO_MESSAGE_ID");
+    expect(body.error.retryable).toBe(true);
+
+    // Precheck (templates) call happened first
+    expect(graphApiFetch).toHaveBeenCalledTimes(2);
+    const firstUrl = graphApiFetch.mock.calls[0]![0] as string;
+    expect(firstUrl).toContain("/WABA_1/message_templates");
+
+    expect(prisma.whatsAppTestSend.create).not.toHaveBeenCalled();
+  });
+});
