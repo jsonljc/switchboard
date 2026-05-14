@@ -129,6 +129,15 @@ describe("ActivityPage", () => {
     expect(within(strip).getByRole("button", { name: /Clear filters/ })).toBeInTheDocument();
   });
 
+  it("ignores an unknown event-type URL param (defense against deep-link garbage)", () => {
+    setSearch("eventType=action.not_a_real_event");
+    render(<ActivityPage />);
+    // The garbage param doesn't trigger Custom mode — no narrowing should be applied.
+    expect(screen.queryByText(/^· Custom$/)).toBeNull();
+    const strip = screen.getByRole("search");
+    expect(within(strip).queryByRole("button", { name: /Clear filters/ })).toBeNull();
+  });
+
   it("H6: hides the `last ledger entry` tile when narrowing is active", () => {
     setSearch("eventType=action.failed");
     render(<ActivityPage />);

@@ -159,8 +159,10 @@ export function EventTypeCombobox({ value, bands, counts, onChange }: EventTypeC
   const groupedView = (() => {
     let idx = -1;
     return Object.entries(bands).map(([band, list]) => (
-      <div key={band}>
-        <div className={styles.comboBand}>{band}</div>
+      <div key={band} role="presentation">
+        <div role="presentation" className={styles.comboBand}>
+          {band}
+        </div>
         {list.map((et) => {
           idx += 1;
           return renderedOption(et, idx);

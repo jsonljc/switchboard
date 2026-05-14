@@ -42,10 +42,18 @@ function isActorType(v: string): v is ActorType {
   return v === "user" || v === "agent" || v === "system" || v === "service_account";
 }
 
+const KNOWN_EVENT_TYPES = new Set<string>(Object.values(EVENT_TYPE_BANDS).flat());
+
+function readEventType(sp: URLSearchParams): string | null {
+  const raw = sp.get("eventType");
+  if (raw && KNOWN_EVENT_TYPES.has(raw)) return raw;
+  return null;
+}
+
 function readNarrowing(sp: URLSearchParams): NarrowingState {
   const actorParam = sp.get("actorType");
   return {
-    eventType: sp.get("eventType"),
+    eventType: readEventType(sp),
     actorType: actorParam && isActorType(actorParam) ? actorParam : null,
     dateRange: {
       after: sp.get("after"),
@@ -130,7 +138,7 @@ export function ActivityPage() {
     setScope(urlScope);
   }, [urlScope]);
 
-  const urlEventType = sp.get("eventType");
+  const urlEventType = readEventType(sp);
   const urlActorParam = sp.get("actorType");
   const urlActor: ActorType | null =
     urlActorParam && isActorType(urlActorParam) ? urlActorParam : null;
@@ -302,7 +310,7 @@ export function ActivityPage() {
           />
         ) : (
           <ActivityTable
-            rows={rows as AuditEntryBrowseRow[]}
+            rows={rows}
             expandedId={expandedId}
             onToggle={(id) => setExpandedId((cur) => (cur === id ? null : id))}
             now={Date.now()}
