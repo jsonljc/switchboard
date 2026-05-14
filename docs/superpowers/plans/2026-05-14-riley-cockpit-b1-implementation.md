@@ -116,7 +116,7 @@ If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 t
 | `apps/dashboard/src/lib/cockpit/riley/cold-state-activity-rows.ts` | Pure function: `coldStateActivityRows(): ActivityRow[]`. Three synthetic onboarding rows when no Meta Ads `Connection` exists. No DB write. |
 | `apps/dashboard/src/lib/cockpit/riley/riley-status-deriver.ts` | Pure function: `deriveRileyStatus(input): CockpitStatus`. Order: `HALTED` → `IDLE` (no connection / no active campaign) → `WAITING` (pending recs, connection present) → `WATCHING` (steady). **Connection precedence:** absence of Meta Ads connection takes precedence over pending recommendation rows. `REVIEWING` deferred — derivation absent. |
 | `apps/dashboard/src/hooks/use-riley-approvals.ts` | Hook: `useRileyApprovals(): { approvals: RileyApprovalView[]; isLoading; isError }`. Wraps `useRecommendations()`, filters to Riley intents (`agentKey === "riley"` or `intent.startsWith("recommendation.")`), passes through adapter. Returns view-models only. |
-| `apps/dashboard/src/hooks/use-riley-status.ts` | Hook: `useRileyStatus(): CockpitStatus`. Composes `useHalt()` + `useConnections()` + `useRecommendations()` + recent-activity poll, passes through deriver. Uses `useNow(60_000)` for 1-minute resolution on WATCHING/IDLE boundary. |
+| `apps/dashboard/src/hooks/use-riley-status.ts` | Hook: `useRileyStatus(): CockpitStatus`. Composes `useHalt()` + `useConnections()` + `useRecommendations()` + recent-activity poll, passes through deriver. **Uses `useNow(60_000)` from `@/app/(auth)/(mercury)/approvals/hooks/use-now.js`** (existing pre-A.1 hook on main) for 1-minute ticking on the WATCHING/IDLE 15-minute boundary; `now` is included in the `useMemo` dependency array so the status flips when the window expires without a parent re-render. |
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts` | Verifies accent, tabs, status helpers. |
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/kind-meta-riley.test.ts` | Verifies all 9 kinds have `{ label, color, pulse }` entries. |
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/recommendation-to-approval-view.test.ts` | Describe.each over 11 action variants; verifies title/urgency/quote/primary CTA/risk extraction. |
@@ -132,7 +132,7 @@ If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 t
 
 | Path | Change |
 |---|---|
-| `apps/dashboard/src/hooks/use-agent-activity.ts` | Add Riley branch in the per-agent translator. Branch delegates to `translateRileyActivity()` from `lib/cockpit/riley/`. |
+| `apps/dashboard/src/hooks/use-agent-activity.ts` | **Add a new named export `useRileyActivity()` at the bottom of the file. Do NOT modify the existing `useAgentActivity()` return shape — Alex and any other consumers continue to use it unchanged.** The new export composes `useAgentActivity()` + `useConnections()` + the Riley translator + cold-state synthetic rows, and returns Riley-shaped `ActivityRow[]`. |
 | `apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx` | Add Riley branch: `if (agentKey === "riley") return <CockpitPage agentKey="riley" />`. Alex A.1 introduces the Alex branch first; this is a one-line extension. |
 | `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Extend Alex A.1's fixture-based render test with all 11 Riley action variants + the grouped account-level `signal_health_group` card. |
 | `.eslintrc.json` | Add new `overrides` block: `no-restricted-imports` rule scoped to `apps/dashboard/src/components/cockpit/**`, `apps/dashboard/src/hooks/use-riley-*.ts`, and `apps/dashboard/src/app/(auth)/[agentKey]/**`. Adapter files under `apps/dashboard/src/lib/cockpit/riley/**` are NOT in the scope (i.e., not restricted). |
@@ -287,11 +287,14 @@ describe("riley-config", () => {
     expect(statusColor("HALTED")).toBe("#A03A2E");
   });
 
-  it("statusPulse pulses on WAITING, no pulse on others", () => {
-    expect(statusPulse("WAITING")).toBe(true);
+  it("statusPulse does NOT pulse on WAITING in B.1 (REVIEWING is the only pulse case; deferred)", () => {
+    // Per slicing spec B.1 acceptance criterion 3: "WAITING (amber, no pulse)".
+    // REVIEWING is the only state that would pulse, and it is not wired in B.1.
+    expect(statusPulse("WAITING")).toBe(false);
     expect(statusPulse("WATCHING")).toBe(false);
     expect(statusPulse("IDLE")).toBe(false);
     expect(statusPulse("HALTED")).toBe(false);
+    expect(statusPulse("REVIEWING")).toBe(true); // type-level only in B.1
   });
 });
 ```
@@ -327,19 +330,21 @@ export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";
 
 export function statusColor(statusKey: CockpitStatus): string {
   switch (statusKey) {
-    case "WATCHING": return "#3F7A36"; // green
-    case "REVIEWING":
-    case "WAITING": return "#B8782E";  // amber
-    case "HALTED": return "#A03A2E";   // red
-    case "IDLE":
-    case "WORKING":
-    case "TALKING":
-    default: return "#A39786";          // grey (ink4)
+    case "WATCHING":  return "#3F7A36"; // green
+    case "REVIEWING": return "#B8782E"; // amber (REVIEWING is type-only in B.1)
+    case "WAITING":   return "#B8782E"; // amber
+    case "HALTED":    return "#A03A2E"; // red
+    default:          return "#A39786"; // grey (ink4) — IDLE/WORKING and any future states fall through
   }
 }
 
+// REVIEWING is the only state that pulses. WAITING is amber-but-static per
+// slicing spec B.1 acceptance criterion 3. REVIEWING is type-shipped but
+// not derivation-wired in B.1 (no signal source today), so in practice no
+// B.1 status pulses. The function still correctly handles REVIEWING for
+// when B.2 (or a micro-slice) wires the derivation.
 export function statusPulse(statusKey: CockpitStatus): boolean {
-  return statusKey === "WAITING" || statusKey === "REVIEWING";
+  return statusKey === "REVIEWING";
 }
 ```
 
@@ -2170,12 +2175,17 @@ pnpm --filter @switchboard/dashboard test -- src/hooks/__tests__/use-riley-statu
 //
 // Composes halt + connection + recommendations + activity into a CockpitStatus.
 // View-model output only. ESLint enforces the boundary.
+//
+// `useNow(60_000)` ticks at 1-minute resolution so the WATCHING → IDLE
+// transition fires when the 15-minute activity window expires, even if
+// no other prop changes. `now` is in the memo deps to force recompute.
 
 import { useMemo } from "react";
 import { useHalt } from "@/components/layout/halt/halt-context.js";
 import { useConnections } from "./use-connections.js";
 import { useRecommendations } from "./use-recommendations.js";
 import { useAgentActivity } from "./use-agent-activity.js";
+import { useNow } from "@/app/(auth)/(mercury)/approvals/hooks/use-now.js";
 import { deriveRileyStatus } from "@/lib/cockpit/riley/riley-status-deriver.js";
 import type { CockpitStatus } from "@/components/cockpit/types.js";
 
@@ -2184,6 +2194,7 @@ export function useRileyStatus(): CockpitStatus {
   const connectionsQuery = useConnections();
   const recsQuery = useRecommendations();
   const activityQuery = useAgentActivity(1);
+  const now = useNow(60_000);
 
   return useMemo(() => {
     const hasMetaConnection = (connectionsQuery.data?.connections ?? []).some(
@@ -2211,13 +2222,14 @@ export function useRileyStatus(): CockpitStatus {
       hasActiveCampaign,
       pendingApprovals: pendingRileyRecs,
       recentActivityAt: mostRecent > 0 ? new Date(mostRecent) : null,
-      now: new Date(),
+      now,
     });
   }, [
     halted,
     connectionsQuery.data,
     recsQuery.data,
     activityQuery.data,
+    now,
   ]);
 }
 ```
@@ -2236,19 +2248,20 @@ git add apps/dashboard/src/hooks/use-riley-status.ts apps/dashboard/src/hooks/__
 
 ---
 
-### Task 12: Extend `use-agent-activity.ts` with Riley branch
+### Task 12: Add `useRileyActivity` named export to `use-agent-activity.ts`
 
 **Files:**
-- Modify: `apps/dashboard/src/hooks/use-agent-activity.ts`
-- Test: extend `apps/dashboard/src/hooks/__tests__/use-agent-activity.test.tsx` (if it exists) or add a new test file scoped to the Riley branch.
+- Modify: `apps/dashboard/src/hooks/use-agent-activity.ts` — **append a new named export. The existing `useAgentActivity()` function is NOT changed (signature, return shape, internals all preserved).** Alex and legacy consumers continue to use it unchanged.
+- Test: add `apps/dashboard/src/hooks/__tests__/use-riley-activity.test.tsx` (new file).
 
-The existing hook returns `TranslatedAction[]` raw. The Riley cockpit needs `ActivityRow[]`. We add a per-agent translator branch in this hook that calls `translateRileyActivity` for Riley actions and emits `ActivityRow[]` alongside (or replacing — based on existing API).
+The existing `useAgentActivity()` returns `{ roster, states, actions: TranslatedAction[] }` — raw rows. The Riley cockpit needs `ActivityRow[]` with cold-state fallback. We add a sibling `useRileyActivity()` export that:
 
-Read `apps/dashboard/src/hooks/use-agent-activity.ts` first to see the current shape. The extension shape depends on it.
+1. Calls the existing `useAgentActivity(1)` for raw actions.
+2. Calls `useConnections()` to check for a Meta Ads connection.
+3. If no connection: returns 3 synthetic cold-state rows.
+4. Otherwise: filters to Riley actions and runs them through `translateRileyActivity()`.
 
-**Likely approach (verify against actual code at implementation time):**
-
-If `useAgentActivity()` currently returns `{ roster, states, actions: TranslatedAction[] }`, extend it to also expose a per-agent translation via a derived selector or a sibling hook. Simplest: keep the existing hook unchanged and add a new sibling hook in this file:
+**Append (do not replace):**
 
 ```ts
 // At the bottom of apps/dashboard/src/hooks/use-agent-activity.ts (NEW EXPORT, not replacement)
@@ -2686,6 +2699,21 @@ Expected: clean.
 - [ ] **Step 4: Verify `CockpitPage` reads Riley config when `agentKey === "riley"`**
 
 The shell's `cockpit-page.tsx` (shipped by Alex A.1) must branch on `agentKey` internally to select the right config (Alex's vs Riley's). If A.1's `CockpitPage` hard-codes `ALEX_*` imports without an `agentKey` branch, this task expands to include modifying `CockpitPage` to import Riley's config from `lib/cockpit/riley/riley-config.js` and pick the right one per `agentKey`.
+
+**Thin integration rule.** Page-layer files (`agent-home-client.tsx`, `cockpit-page.tsx`, anything under `app/(auth)/[agentKey]/**`) may import:
+
+- Config files (`alex-config.ts`, `riley-config.ts`) — values, not substrate
+- Cockpit hooks (`useRileyApprovals`, `useRileyStatus`, `useRileyActivity`, `usePendingApprovals`, etc.) — return view-models
+- Shell components from `components/cockpit/**`
+- View-model types from `components/cockpit/types.js`
+
+Page-layer files MUST NOT import:
+
+- `@switchboard/db` / `@prisma/**`
+- `@switchboard/schemas/recommendations` / `@switchboard/schemas/audit`
+- Anything from `lib/cockpit/riley/**` other than `riley-config.ts` (the adapters themselves stay behind the hook layer)
+
+The ESLint rule from Task 13 already enforces the first two bans. The third (no direct adapter imports from page files) is a review-discipline rule; the grep smoke check in Task 15 surfaces violations.
 
 **Check via grep:**
 
