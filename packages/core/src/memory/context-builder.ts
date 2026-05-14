@@ -1,4 +1,5 @@
 import { SURFACING_THRESHOLD } from "@switchboard/schemas";
+import { getMetrics } from "../telemetry/metrics.js";
 import {
   filterSurfaceablePatterns,
   formatOutcomePatternsForContext,
@@ -140,6 +141,7 @@ export class ContextBuilder {
 
     const learnedFacts: ContextLearnedFact[] = [];
     for (const mem of memories) {
+      if (mem.category === "pattern") continue; // patterns flow via outcomePatternContext only
       const tokens = estimateTokens(mem.content);
       if (tokensUsed + tokens > budget) break;
       learnedFacts.push({
@@ -174,6 +176,9 @@ export class ContextBuilder {
       }));
     const surfaceable = filterSurfaceablePatterns(outcomePatterns);
     const outcomePatternContext = formatOutcomePatternsForContext(surfaceable);
+    if (outcomePatternContext.length > 0) {
+      getMetrics().outcomePatternsSurfaced.inc({ deploymentId: input.deploymentId });
+    }
 
     return {
       retrievedChunks,

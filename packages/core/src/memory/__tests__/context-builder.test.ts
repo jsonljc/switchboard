@@ -1,5 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ContextBuilder } from "../context-builder.js";
+import {
+  createInMemoryMetrics,
+  setMetrics,
+  type SwitchboardMetrics,
+} from "../../telemetry/metrics.js";
+
+function createMetricsSpy(): SwitchboardMetrics {
+  const base = createInMemoryMetrics();
+  vi.spyOn(base.outcomePatternsSurfaced, "inc");
+  return base;
+}
+
+let metricsSpy: SwitchboardMetrics;
 
 function createMockDeps() {
   return {
@@ -22,6 +35,8 @@ describe("ContextBuilder", () => {
   beforeEach(() => {
     deps = createMockDeps();
     builder = new ContextBuilder(deps);
+    metricsSpy = createMetricsSpy();
+    setMetrics(metricsSpy);
   });
 
   it("returns empty context when no data exists", async () => {
@@ -141,9 +156,87 @@ describe("ContextBuilder", () => {
       query: "Tell me about laser",
     });
 
-    expect(result.learnedFacts).toHaveLength(1);
     expect(result.outcomePatternContext).toContain("advisory");
     expect(result.outcomePatternContext).toContain("downtime");
+  });
+
+  it("excludes category:'pattern' rows from learnedFacts even when high-confidence", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "Customers ask about downtime",
+        category: "pattern",
+        confidence: 0.9,
+        sourceCount: 5,
+        lastSeenAt: new Date(),
+      },
+      {
+        id: "f1",
+        content: "Numbing cream onset is 20 minutes",
+        category: "treatment_protocol",
+        confidence: 0.9,
+        sourceCount: 4,
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "tell me about laser",
+    });
+
+    expect(result.learnedFacts).toHaveLength(1);
+    expect(result.learnedFacts[0]!.category).toBe("treatment_protocol");
+    expect(result.outcomePatternContext).toContain("downtime");
+  });
+
+  it("increments outcomePatternsSurfaced when at least one pattern is injected", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "Customers ask about downtime",
+        category: "pattern",
+        confidence: 0.85,
+        sourceCount: 5,
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "tell me about laser",
+    });
+
+    expect(metricsSpy.outcomePatternsSurfaced.inc).toHaveBeenCalledWith({
+      deploymentId: "dep-1",
+    });
+    expect(metricsSpy.outcomePatternsSurfaced.inc).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not increment outcomePatternsSurfaced when no patterns surface", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "weak signal",
+        category: "pattern",
+        confidence: 0.55,
+        sourceCount: 1,
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "x",
+    });
+
+    expect(metricsSpy.outcomePatternsSurfaced.inc).not.toHaveBeenCalled();
   });
 
   it("excludes low-confidence patterns from outcomePatternContext", async () => {
