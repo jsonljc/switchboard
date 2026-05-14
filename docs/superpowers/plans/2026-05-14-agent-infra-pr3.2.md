@@ -26,11 +26,11 @@ These are documented elsewhere and tracked as separate work — PR-3.2 should be
 
 ## Sub-PR sequencing
 
-1. **PR-3.2a** — Canonical key foundation + evidence edge (Tasks 21–29). One migration. Backwards compatible; existing rows keep `canonicalKey = null` and have no evidence rows. **Low risk.**
-2. **PR-3.2b** — Two-stage merge at `0.84` + cross-key collision counter (Tasks 30–33). Load-bearing behavior change for the write path. **Medium risk.**
-3. **PR-3.2c** — Pattern IDs in prompt + trace + metadata disclaimer (Tasks 34–37). Adds `WorkTrace.injectedPatternIds` column. Independent of (a) and (b) but most useful after both. **Low risk.**
-4. **PR-3.2d** — Decay cron with daily idempotency (Tasks 38–42). Adds `DeploymentMemory.lastDecayedAt` column. Fully independent. **Low risk.**
-5. **PR-3.2e** — Pilot-scale surfacing thresholds (Tasks 43–45), flagged off by default. Depends on (a) for evidence-table queries. **Medium risk (operator-controlled).**
+1. **PR-3.2a** — Canonical key foundation + evidence edge (Tasks 21–28). One migration. Backwards compatible; existing rows keep `canonicalKey = null` and have no evidence rows. **Low risk.**
+2. **PR-3.2b** — Two-stage merge at `0.84` + cross-key collision counter (Tasks 29–33). Load-bearing behavior change for the write path. **Medium risk.**
+3. **PR-3.2c** — Pattern IDs in prompt + trace + metadata disclaimer (Tasks 34–38). Adds `WorkTrace.injectedPatternIds` column. Independent of (a) and (b) but most useful after both. **Low risk.**
+4. **PR-3.2d** — Decay cron with daily idempotency (Tasks 39–44). Adds `DeploymentMemory.lastDecayedAt` column. Fully independent. **Low risk.**
+5. **PR-3.2e** — Pilot-scale surfacing thresholds (Tasks 45–48), flagged off by default. Depends on (a) for evidence-table queries. **Medium risk (operator-controlled).**
 
 Each sub-PR lands its **own migration alongside the code that first writes to it** — do not batch migrations. Each sub-PR ends with `pnpm typecheck` + `pnpm test` + commit + the PR creation command.
 
@@ -444,6 +444,20 @@ create(input: {
 ```
 
 PR-3.2b activates the new method inside `trackPattern`; PR-3.2a just makes the contract available.
+
+Also update the shared mock helper in `packages/core/src/memory/__tests__/compounding-service.test.ts` so subsequent task tests can configure it. Find `createMockDeps()` (currently around `compounding-service.test.ts:23–45`) and add:
+
+```typescript
+deploymentMemoryStore: {
+  findByCategory: vi.fn().mockResolvedValue([]),
+  findByCategoryAndCanonicalKey: vi.fn().mockResolvedValue([]),
+  create: vi.fn().mockResolvedValue({ id: "mem-new" }),
+  incrementConfidence: vi.fn(),
+  countByDeployment: vi.fn().mockResolvedValue(0),
+},
+```
+
+The default `mockResolvedValue([])` makes the new method safe for existing tests that don't care about canonical-bucket behavior — they fall through to the legacy `findByCategory` scan unchanged.
 
 - [ ] **Step 5: Run tests + typecheck**
 
@@ -910,7 +924,7 @@ private async trackPattern(
 }
 ```
 
-The `CompoundingDeploymentMemoryStore` interface needs `create` to return `{ id: string }` (it already does today — verified at compounding-service.ts:32-38) and needs `findByCategoryAndCanonicalKey` added in PR-3.2b. For PR-3.2a, the new-row branch is the only path that touches `canonicalKey`, so we don't extend the interface yet.
+The `CompoundingDeploymentMemoryStore` interface already has `findByCategoryAndCanonicalKey` and an optional `canonicalKey` on `create` (added in Task 23 step 4) — Task 25 just uses them. The new method is unused by `trackPattern` until PR-3.2b activates the two-stage merge; declaring it on the Layer-3 contract early lets the new tests below mock it without an additional sweep.
 
 - [ ] **Step 4: Widen the prompt — `buildFactExtractionPrompt`**
 
@@ -1845,7 +1859,7 @@ function escapeAttr(value: string): string {
 }
 ```
 
-Keep `escapePromptText` unchanged. Update its sentinel-replacement set:
+Keep `escapePromptText`'s existing redactions intact. **ADD** the following lines to the existing sentinel-replacement chain (after the legacy `<|outcome-patterns|>` replacements; do NOT delete the legacy lines — keeping them defends against attacker text that uses the old pipe form, which still appears in older test fixtures):
 
 ```typescript
 .replace(/<outcome-patterns>/gi, "[redacted]")
@@ -2140,7 +2154,7 @@ EOF
 - Modify: `packages/db/src/stores/__tests__/prisma-deployment-memory-store.test.ts`
 - Create: `packages/core/src/memory/inngest-functions.ts` — pure `executeDailyPatternDecay(step, deps)` function + `PatternDecayDependencies` interface
 - Create: `packages/core/src/memory/__tests__/inngest-functions.test.ts`
-- Modify: `apps/api/src/bootstrap/inngest.ts` — wire `createDailyPatternDecayCron(patternDecayDeps)` into the registration list
+- Modify: `apps/api/src/bootstrap/inngest.ts` — inline factory (`inngestClient.createFunction({...})`) wrapping `executeDailyPatternDecay`; registered alongside `createDailySignalHealthCron`. The factory does NOT live in `core` — see Task 42 for the layer-rule reasoning.
 - Modify: `packages/core/src/telemetry/metrics.ts` — add `outcomePatternsDecayed` counter (`{ deploymentTier, canonicalCategory }` labels, NOT `deploymentId`)
 - Modify: `apps/api/src/metrics.ts`
 
@@ -2441,10 +2455,17 @@ export async function executeDailyPatternDecay(
     }),
   );
 
-  // Aggregate label values: this cron is a global sweep, not per-deployment,
-  // so per-deployment cardinality would be wasteful and the spec calls for
-  // deploymentTier over deploymentId. "aggregate"/"all" keep the series
-  // queryable while preserving the contract.
+  // Aggregate label values: decayStale currently returns a single scalar
+  // (Prisma updateMany count), so the labels read "aggregate"/"all" rather
+  // than splitting by tier and canonical category. The spec only forbids
+  // deploymentId on this counter; "aggregate"/"all" honors that contract
+  // but collapses the cohort.
+  //
+  // GA follow-up: widen decayStale to return Array<{ canonicalCategory,
+  // count }> (extract category from canonicalKey's namespace prefix on
+  // the row) AND join deployment-tier metadata before emitting. Tracked
+  // separately — not in scope for PR-3.2d, where the goal is just
+  // shipping the cron with an idempotent floor.
   deps.metrics.outcomePatternsDecayed.inc(
     { deploymentTier: "aggregate", canonicalCategory: "all" },
     decayedCount,
@@ -2482,62 +2503,37 @@ EOF
 
 ---
 
-### Task 42: Register `createDailyPatternDecayCron` in `apps/api`
+### Task 42: Register the pattern-decay cron in `apps/api`
 
 **Files:**
 
-- Modify: `packages/core/src/memory/inngest-functions.ts` — add the `createDailyPatternDecayCron` factory (lives in core because it returns an Inngest function object; the factory takes already-injected deps)
-- Modify: `apps/api/src/bootstrap/inngest.ts`
+- Modify: `apps/api/src/bootstrap/inngest.ts` — inline `createDailyPatternDecayCron` factory + registration
 
-- [ ] **Step 1: Add the factory in `inngest-functions.ts`**
+**Why the factory lives in `apps/api`, not `core`.** Verified against current `main`:
 
-The factory belongs alongside the executor in core so the shape stays consistent with `createDailySignalHealthCron`. Append to `packages/core/src/memory/inngest-functions.ts`:
+- The canonical `inngestClient` is exported from `packages/creative-pipeline/src/inngest-client.ts` and imported by `apps/api/src/bootstrap/inngest.ts:22` as `import { inngestClient } from "@switchboard/creative-pipeline"`.
+- `@switchboard/creative-pipeline` is a Layer-2 package; `@switchboard/core` is Layer 3. Per CLAUDE.md "Dependency Layers", **Layer 3 → Layer 2 outside `schemas`/`cartridge-sdk`/`sdk` is forbidden** — `core` cannot import the canonical client. (`packages/ad-optimizer` locally instantiates its own `new Inngest({ id: "switchboard" })` at `inngest-functions.ts:4`, but adding a second canonical client to `core` would fragment registration — the inngest fastify register at `bootstrap/inngest.ts:543` accepts exactly one client.)
+- The matching pattern already in `core` is `packages/core/src/skill-runtime/batch-executor-function.ts:15`: `createBatchExecutorFunction(inngestClient: InngestLike, runtime)` — i.e. the factory accepts the client as a parameter and the caller in `apps/api` provides it.
 
-```typescript
-import { inngestClient } from "../inngest/client.js"; // verify path against ad-optimizer for parity
+For PR-3.2d we adopt the simpler split: the pure `executeDailyPatternDecay` stays in `core` (Task 41); the factory that wraps it as an Inngest function lives inline in `apps/api/src/bootstrap/inngest.ts`. This matches how `createCreativeJobRunner`, `createUgcJobRunner`, and the other apps-side wrappers in that file are structured.
 
-export function createDailyPatternDecayCron(deps: PatternDecayDependencies) {
-  return inngestClient.createFunction(
-    {
-      id: "memory-daily-pattern-decay",
-      name: "Memory Daily Pattern Decay",
-      retries: 2,
-      // 07:00 UTC — same slot as ad-optimizer signal-health to consolidate
-      // the daily ops attention window.
-      triggers: [{ cron: "0 7 * * *" }],
-      // Function-level idempotency. Combined with the DB-level lastDecayedAt
-      // guard, double-firing is impossible across the orchestrator and DB layers.
-      idempotency: `pattern-decay-{event.ts | dateMath "yyyy-MM-dd"}`,
-    },
-    async ({ step }) => {
-      await executeDailyPatternDecay(step as never, deps);
-    },
-  );
-}
-```
+- [ ] **Step 1: Add the factory + registration in `apps/api/src/bootstrap/inngest.ts`**
 
-The `inngestClient` import path must match what `ad-optimizer/src/inngest-functions.ts` uses. Grep:
-
-```bash
-grep -n "inngestClient" packages/ad-optimizer/src/inngest-functions.ts
-```
-
-Adopt the same import. If the client doesn't live in a path reachable from `@switchboard/core`, refactor minimally to expose it (out of scope unless required); the simpler path is to keep `createDailyPatternDecayCron` in `apps/api/src/bootstrap/inngest.ts` instead of `core`. Decide at implementation time based on whichever respects the layer rule; the spec mandates the pure executor in `core` and registration in `apps/api`, so adopt the second option if needed:
-
-> **Fallback placement:** if the Inngest client isn't safely importable from `core`, put only `executeDailyPatternDecay` in `packages/core/src/memory/inngest-functions.ts` and place `createDailyPatternDecayCron` inline in `apps/api/src/bootstrap/inngest.ts`. The dependency-injection contract is preserved either way; the pure executor stays domain-side.
-
-- [ ] **Step 2: Register in `apps/api/src/bootstrap/inngest.ts`**
-
-Find the `functions: [...]` array in `app.register(inngestFastify, { client: inngestClient, functions: [...] })` (around line 544) and add:
+Open `apps/api/src/bootstrap/inngest.ts`. Add the imports at the top:
 
 ```typescript
-import { createDailyPatternDecayCron } from "@switchboard/core";
+import { executeDailyPatternDecay, type PatternDecayDependencies } from "@switchboard/core/memory";
 import { PrismaDeploymentMemoryStore } from "@switchboard/db";
 import { getMetrics } from "@switchboard/core/telemetry";
 import { PATTERN_DECAY_WINDOW_DAYS } from "@switchboard/schemas";
+```
 
-// ... near where signalHealthDeps is constructed ...
-const patternDecayDeps = {
+(Confirm the precise sub-path exports — if `@switchboard/core/memory` is not a configured subpath, import from the package root and pull `executeDailyPatternDecay` and `PatternDecayDependencies` from there. Grep `packages/core/src/index.ts` for the canonical re-export pattern.)
+
+Inside the bootstrap function, alongside the existing `signalHealthDeps` construction:
+
+```typescript
+const patternDecayDeps: PatternDecayDependencies = {
   memoryStore: new PrismaDeploymentMemoryStore(prisma),
   now: () => new Date(),
   windowDays: PATTERN_DECAY_WINDOW_DAYS,
@@ -2546,9 +2542,36 @@ const patternDecayDeps = {
   metrics: getMetrics(),
 };
 
-// ... inside the functions: [...] array, alongside createDailySignalHealthCron(signalHealthDeps) ...
-createDailyPatternDecayCron(patternDecayDeps),
+const dailyPatternDecayCron = inngestClient.createFunction(
+  {
+    id: "memory-daily-pattern-decay",
+    name: "Memory Daily Pattern Decay",
+    retries: 2,
+    // 07:00 UTC — same slot as ad-optimizer signal-health to consolidate
+    // the daily ops attention window.
+    triggers: [{ cron: "0 7 * * *" }],
+    // Function-level idempotency: combined with the DB-level lastDecayedAt
+    // guard, double-firing is impossible across orchestrator and DB layers.
+    idempotency: `pattern-decay-{event.ts | dateMath "yyyy-MM-dd"}`,
+  },
+  async ({ step }) => {
+    await executeDailyPatternDecay(step as never, patternDecayDeps);
+  },
+);
 ```
+
+Then inside the existing `functions: [...]` array (currently around line 544 in `apps/api/src/bootstrap/inngest.ts`), insert `dailyPatternDecayCron` alongside `createDailySignalHealthCron(signalHealthDeps)`:
+
+```typescript
+functions: [
+  // ... existing entries ...
+  createDailySignalHealthCron(signalHealthDeps),
+  dailyPatternDecayCron,
+  // ... existing entries ...
+],
+```
+
+Task 41 should therefore export _only_ `executeDailyPatternDecay` and `PatternDecayDependencies` from `packages/core/src/memory/inngest-functions.ts` — no `createDailyPatternDecayCron` symbol in `core`. If Task 41's "Step 4: Commit" already added that symbol, drop it before continuing. (See Task 41 file map: the factory is intentionally absent from core; the comment block in `executeDailyPatternDecay` documents that the apps-side wrapper provides the Inngest client.)
 
 - [ ] **Step 3: Run typecheck + tests**
 
@@ -2645,7 +2668,7 @@ gh pr create --title "feat(agent-infra-parity): PR-3.2d — daily pattern decay 
 - Adds `DeploymentMemory.lastDecayedAt` for daily idempotency.
 - Rewrites `decayStale` to filter `lastDecayedAt < startOfDay` and respect a configurable floor.
 - New `executeDailyPatternDecay` pure function in `packages/core/src/memory/inngest-functions.ts` (mirrors `executeDailySignalHealthCheck`).
-- `createDailyPatternDecayCron` registered in `apps/api/src/bootstrap/inngest.ts` at the bootstrap boundary; store is injected so `core` does not import from `@switchboard/db`.
+- Inline cron factory in `apps/api/src/bootstrap/inngest.ts` wraps the core-side executor with the canonical `inngestClient` (imported from `@switchboard/creative-pipeline`); store is injected at the boundary so `core` does not import from `@switchboard/db` or `@switchboard/creative-pipeline`.
 - Inngest function-level idempotency key `pattern-decay-{yyyy-MM-dd}` belt-and-braces with the DB-level guard.
 - `outcomePatternsDecayed_total{deploymentTier, canonicalCategory}` counter (deploymentTier from day one — see spec cardinality note).
 
@@ -2663,57 +2686,105 @@ EOF
 
 ## PR-3.2e: Pilot-scale surfacing thresholds (flagged)
 
+> **Schema location verified against `main`.** The deployment row is `AgentDeployment` (Prisma `packages/db/prisma/schema.prisma:983`, Zod `packages/schemas/src/marketplace.ts:66`). Its config field is `inputConfig: Json @default("{}")` / Zod `z.record(z.unknown()).default({})` — an open shape. PR-3.2e overlays a typed `OutcomePatternsConfigSchema` on top via a runtime accessor. There is no `Deployment` model or `Deployment.config` field.
+
 ### File Map
 
-- Modify: `packages/schemas/src/deployment.ts` (or equivalent — grep before editing) — add `outcomePatterns.pilotMode: boolean` to the `Deployment.config` Zod shape
-- Modify: `packages/core/src/memory/context-builder.ts` — branch surfacing logic on `pilotMode`; thread `evidenceStore.countDistinctBookingIds` through `ContextBuilderDeps`
+- Create: `packages/schemas/src/outcome-patterns-config.ts` — `OutcomePatternsConfigSchema` + `resolveOutcomePatternsConfig(inputConfig)` accessor that does `OutcomePatternsConfigSchema.parse(inputConfig.outcomePatterns ?? {})`
+- Modify: `packages/schemas/src/index.ts` — re-export
+- Modify: `packages/core/src/memory/context-builder.ts` — accept `evidenceStore`; branch surfacing logic on `pilotMode`
+- Modify: `packages/core/src/memory/outcome-pattern-extractor.ts` — add `filterPilotModeSurfaceable`
 - Modify: `packages/core/src/memory/__tests__/context-builder.test.ts`
-- Modify: `apps/chat/src/gateway/gateway-bridge.ts` — pass the evidence store + deployment config into `ContextBuilder`
+- Modify: `apps/api/src/app.ts` — pass `evidenceStore` into the `new ContextBuilder({...})` call at line 285
+- Modify: `packages/core/src/skill-runtime/builders/alex.ts` — thread `pilotMode` from the caller-resolved deployment config into the `services.contextBuilder.build({...})` call at line 84
+- Modify: caller-of-alex (skill executor / orchestrator that constructs `BuilderConfig`) — look up the deployment row, run `resolveOutcomePatternsConfig(inputConfig)`, and place the resolved `pilotMode` on `BuilderConfig`
 - Optional: dashboard config UI to flip the flag — out of scope here; surface as a follow-up
 
 ---
 
-### Task 45: Add `pilotMode` flag to deployment config schema
+### Task 45: Add `OutcomePatternsConfigSchema` + accessor in `@switchboard/schemas`
 
 **Files:**
 
-- Modify: `packages/schemas/src/<deployment-config-file>.ts` (locate via `grep -rn "outcomePatterns\|DeploymentConfig" packages/schemas/src`)
-- Modify: corresponding test file
+- Create: `packages/schemas/src/outcome-patterns-config.ts`
+- Create: `packages/schemas/src/__tests__/outcome-patterns-config.test.ts`
+- Modify: `packages/schemas/src/index.ts`
 
-- [ ] **Step 1: Locate the deployment config Zod schema**
-
-```bash
-grep -rn "DeploymentConfig\b\|outcomePatterns" packages/schemas/src
-```
-
-If no `outcomePatterns` namespace exists in the config, add a new one. The exact file path depends on the schema layout — typical location is `packages/schemas/src/deployment.ts` or `packages/schemas/src/agent-config.ts`.
-
-- [ ] **Step 2: Extend the schema**
+- [ ] **Step 1: Create the config module**
 
 ```typescript
+// packages/schemas/src/outcome-patterns-config.ts
+import { z } from "zod";
+
+/**
+ * Per-deployment outcome-pattern surfacing config. Lives under
+ * AgentDeployment.inputConfig.outcomePatterns. The inputConfig column is
+ * shaped as `z.record(z.unknown())` on the schema side, so this typed
+ * overlay is opt-in: callers run resolveOutcomePatternsConfig(inputConfig)
+ * to read the field with defaults filled.
+ */
 export const OutcomePatternsConfigSchema = z
   .object({
     pilotMode: z.boolean().default(false),
   })
   .default({ pilotMode: false });
 
-// Inside the deployment-config Zod object:
-outcomePatterns: OutcomePatternsConfigSchema,
+export type OutcomePatternsConfig = z.infer<typeof OutcomePatternsConfigSchema>;
+
+export function resolveOutcomePatternsConfig(
+  inputConfig: Record<string, unknown> | null | undefined,
+): OutcomePatternsConfig {
+  const raw =
+    inputConfig && typeof inputConfig === "object" ? inputConfig.outcomePatterns : undefined;
+  // Parse always — Zod fills defaults whether the field is missing or partial.
+  return OutcomePatternsConfigSchema.parse(raw ?? {});
+}
 ```
 
-`.default({ pilotMode: false })` keeps existing deployment configs valid without a backfill — Zod's default fills the missing key.
+- [ ] **Step 2: Re-export**
 
-- [ ] **Step 3: Add a test for default + override**
+In `packages/schemas/src/index.ts`:
 
 ```typescript
-import { OutcomePatternsConfigSchema } from "..."; // adjust path
+export * from "./outcome-patterns-config.js";
+```
 
-it("OutcomePatternsConfigSchema defaults pilotMode to false", () => {
-  expect(OutcomePatternsConfigSchema.parse({})).toEqual({ pilotMode: false });
+- [ ] **Step 3: Add tests**
+
+```typescript
+// packages/schemas/src/__tests__/outcome-patterns-config.test.ts
+import { describe, it, expect } from "vitest";
+import {
+  OutcomePatternsConfigSchema,
+  resolveOutcomePatternsConfig,
+} from "../outcome-patterns-config.js";
+
+describe("OutcomePatternsConfigSchema", () => {
+  it("defaults pilotMode to false", () => {
+    expect(OutcomePatternsConfigSchema.parse({})).toEqual({ pilotMode: false });
+  });
+
+  it("accepts pilotMode override", () => {
+    expect(OutcomePatternsConfigSchema.parse({ pilotMode: true })).toEqual({ pilotMode: true });
+  });
 });
 
-it("OutcomePatternsConfigSchema accepts pilotMode override", () => {
-  expect(OutcomePatternsConfigSchema.parse({ pilotMode: true })).toEqual({ pilotMode: true });
+describe("resolveOutcomePatternsConfig", () => {
+  it("returns defaults when inputConfig is null/undefined/empty", () => {
+    expect(resolveOutcomePatternsConfig(null)).toEqual({ pilotMode: false });
+    expect(resolveOutcomePatternsConfig(undefined)).toEqual({ pilotMode: false });
+    expect(resolveOutcomePatternsConfig({})).toEqual({ pilotMode: false });
+  });
+
+  it("returns defaults when inputConfig.outcomePatterns is absent", () => {
+    expect(resolveOutcomePatternsConfig({ unrelated: 1 })).toEqual({ pilotMode: false });
+  });
+
+  it("reads pilotMode from inputConfig.outcomePatterns when present", () => {
+    expect(resolveOutcomePatternsConfig({ outcomePatterns: { pilotMode: true } })).toEqual({
+      pilotMode: true,
+    });
+  });
 });
 ```
 
@@ -2721,14 +2792,16 @@ it("OutcomePatternsConfigSchema accepts pilotMode override", () => {
 
 ```bash
 pnpm --filter @switchboard/schemas test && pnpm typecheck
-git add packages/schemas/src
+git add packages/schemas/src/outcome-patterns-config.ts packages/schemas/src/__tests__/outcome-patterns-config.test.ts packages/schemas/src/index.ts
 git commit -m "$(cat <<'EOF'
-feat(schemas): Deployment.config.outcomePatterns.pilotMode (PR-3.2e)
+feat(schemas): OutcomePatternsConfigSchema + resolver (PR-3.2e)
 
-Default false; operators flip to true on newly-onboarded deployments
-to lower the surfacing bar while the cohort is small. Cleared once
-sustained outcomePatternsSurfaced_total proves the loop is producing
-signal under the steady-state thresholds.
+Typed overlay on AgentDeployment.inputConfig.outcomePatterns —
+inputConfig is a free-form z.record(z.unknown()) on the marketplace
+schema, so PR-3.2e reads it via resolveOutcomePatternsConfig() which
+parses the namespace with defaults filled. pilotMode defaults false;
+operators flip to true on newly-onboarded deployments to lower the
+surfacing bar while the cohort is small.
 EOF
 )"
 ```
@@ -2946,71 +3019,130 @@ git add packages/core/src/memory/context-builder.ts packages/core/src/memory/out
 git commit -m "$(cat <<'EOF'
 feat(memory): pilot-mode surfacing thresholds (PR-3.2e)
 
-When Deployment.config.outcomePatterns.pilotMode is true, ContextBuilder
-surfaces patterns at sourceCount>=2 AND confidence>=0.6, OR when the
-DeploymentMemoryEvidence table has >=2 distinct booking-ids for the
-pattern row. Steady-state thresholds (sourceCount>=3, confidence>=0.66)
-remain default-off so flipping the flag is the only behavioral change.
+When AgentDeployment.inputConfig.outcomePatterns.pilotMode is true,
+ContextBuilder surfaces patterns at sourceCount>=2 AND confidence>=0.6,
+OR when the DeploymentMemoryEvidence table has >=2 distinct booking-ids
+for the pattern row. Steady-state thresholds (sourceCount>=3,
+confidence>=0.66) remain default-off so flipping the flag is the only
+behavioral change.
 EOF
 )"
 ```
 
 ---
 
-### Task 47: Wire `pilotMode` + `evidenceStore` through `gateway-bridge.ts`
+### Task 47: Wire `evidenceStore` + `pilotMode` into the memory `ContextBuilder`
+
+> **Construction site verified against `main`.** The memory `ContextBuilder` is constructed at `apps/api/src/app.ts:285` (inside the `if (prismaClient && conversationDeps && knowledgeStore)` block), NOT in `apps/chat/src/gateway/gateway-bridge.ts`. The build call site is `packages/core/src/skill-runtime/builders/alex.ts:84` (`services.contextBuilder.build({...})`). The Alex builder receives `services` from its caller and currently has no deployment-config in scope — `pilotMode` has to ride in on `BuilderConfig` from upstream.
 
 **Files:**
 
-- Modify: `apps/chat/src/gateway/gateway-bridge.ts`
+- Modify: `apps/api/src/app.ts` — extend the `new ContextBuilder({...})` call at line 285 with `evidenceStore: new PrismaDeploymentMemoryEvidenceStore(prismaClient)`
+- Modify: `packages/core/src/skill-runtime/builders/alex.ts` — add `pilotMode` to the `services.contextBuilder.build({...})` arg at line 84, sourced from `config.pilotMode`
+- Modify: the type that defines `BuilderConfig` (locate via `grep -rn "BuilderConfig" packages/core/src/skill-runtime/`) — add `pilotMode?: boolean`
+- Modify: the upstream caller that constructs `BuilderConfig` per turn (locate via `grep -rn "BuilderConfig\|alexBuilder\|buildAlex" packages/core/src/skill-runtime/ apps/`) — call `resolveOutcomePatternsConfig(deployment.inputConfig)` and set `pilotMode` on `BuilderConfig`
 
-- [ ] **Step 1: Pass `pilotMode` and `evidenceStore` into `ContextBuilder`**
+- [ ] **Step 1: Extend the `ContextBuilder` constructor call in `apps/api/src/app.ts`**
 
-Find the `ContextBuilder` construction in `gateway-bridge.ts`. Pass the evidence store (already instantiated in PR-3.2a Task 27):
+At `apps/api/src/app.ts:285`, the current construction is:
 
 ```typescript
-const contextBuilder = new ContextBuilder({
-  knowledgeRetriever,
-  deploymentMemoryStore: memoryStore,
-  interactionSummaryStore: summaryStore,
-  evidenceStore, // from PR-3.2a Task 27
+const { PrismaDeploymentMemoryStore, PrismaInteractionSummaryStore } =
+  await import("@switchboard/db");
+contextBuilder = new ContextBuilder({
+  knowledgeRetriever: conversationDeps.retriever,
+  deploymentMemoryStore: new PrismaDeploymentMemoryStore(prismaClient),
+  interactionSummaryStore: new PrismaInteractionSummaryStore(prismaClient),
 });
 ```
 
-At the `contextBuilder.build()` call site, thread `pilotMode` from the deployment config. The bridge already loads the deployment row; extract the flag:
+Extend to include the evidence store (already shipped in PR-3.2a Task 24):
 
 ```typescript
-const builtContext = await contextBuilder.build({
-  organizationId,
-  agentId,
-  deploymentId,
-  query: latestUserMessage,
-  contactId,
-  pilotMode: deployment.config.outcomePatterns?.pilotMode ?? false,
+const {
+  PrismaDeploymentMemoryStore,
+  PrismaInteractionSummaryStore,
+  PrismaDeploymentMemoryEvidenceStore,
+} = await import("@switchboard/db");
+contextBuilder = new ContextBuilder({
+  knowledgeRetriever: conversationDeps.retriever,
+  deploymentMemoryStore: new PrismaDeploymentMemoryStore(prismaClient),
+  interactionSummaryStore: new PrismaInteractionSummaryStore(prismaClient),
+  evidenceStore: new PrismaDeploymentMemoryEvidenceStore(prismaClient),
 });
 ```
 
-`?? false` is defensive — Zod default should provide it, but the runtime config could be loaded from an older row without it.
+- [ ] **Step 2: Add `pilotMode` to `BuilderConfig` and thread it into the `.build()` call in `alex.ts`**
 
-- [ ] **Step 2: Run typecheck + chat build**
+Locate the `BuilderConfig` type:
+
+```bash
+grep -rn "BuilderConfig" packages/core/src/skill-runtime/
+```
+
+Add an optional `pilotMode?: boolean` field. Then at `packages/core/src/skill-runtime/builders/alex.ts:84`, extend the `.build({...})` arg:
+
+```typescript
+const builtCtx = await services.contextBuilder.build({
+  organizationId: config.orgId,
+  agentId: "alex",
+  deploymentId: config.deploymentId,
+  query: config.message ?? "",
+  contactId: config.contactId,
+  pilotMode: config.pilotMode ?? false,
+});
+```
+
+- [ ] **Step 3: Set `pilotMode` at the upstream call site**
+
+Locate the caller that constructs `BuilderConfig` for each turn:
+
+```bash
+grep -rn "BuilderConfig\|alexBuilder\|buildAlex\|buildContext" packages/core/src/skill-runtime/ apps/api/src apps/chat/src
+```
+
+The caller already has the `AgentDeployment` row in scope (it owns `deploymentId` resolution). Add:
+
+```typescript
+import { resolveOutcomePatternsConfig } from "@switchboard/schemas";
+
+// ... after the deployment row is loaded ...
+const outcomePatternsConfig = resolveOutcomePatternsConfig(
+  deployment.inputConfig as Record<string, unknown> | null,
+);
+
+// when constructing BuilderConfig:
+const builderConfig: BuilderConfig = {
+  // ... existing fields ...
+  pilotMode: outcomePatternsConfig.pilotMode,
+};
+```
+
+If the caller does not currently have the `AgentDeployment` row in scope, fetch it via the deployment store available on `services`. The exact construction order depends on the executor's layout — read it before adding.
+
+- [ ] **Step 4: Run typecheck + tests + Next.js build**
 
 ```bash
 pnpm typecheck
-pnpm --filter @switchboard/chat build
-pnpm --filter @switchboard/chat test
+pnpm --filter @switchboard/core test
+pnpm --filter @switchboard/api test
+pnpm --filter @switchboard/dashboard build  # per feedback_dashboard_build_not_in_ci memory
 ```
 
 Expected: All PASS.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/chat/src/gateway/gateway-bridge.ts
+git add apps/api/src/app.ts packages/core/src/skill-runtime/builders/alex.ts packages/core/src/skill-runtime
 git commit -m "$(cat <<'EOF'
-feat(chat): thread pilotMode + evidenceStore into ContextBuilder (PR-3.2e)
+feat(memory,api): thread pilotMode + evidenceStore into ContextBuilder (PR-3.2e)
 
-ContextBuilder now reads Deployment.config.outcomePatterns.pilotMode
-at each turn and queries DeploymentMemoryEvidence for distinct booking
-counts when surfacing under the relaxed pilot rules.
+apps/api/src/app.ts:285 ContextBuilder construction now receives the
+DeploymentMemoryEvidenceStore for multi-booking surfacing queries.
+alex.ts builder threads BuilderConfig.pilotMode into the build call;
+upstream caller resolves it via resolveOutcomePatternsConfig over
+AgentDeployment.inputConfig.outcomePatterns.
 EOF
 )"
 ```
@@ -3025,7 +3157,7 @@ EOF
 git push -u origin HEAD
 gh pr create --title "feat(agent-infra-parity): PR-3.2e — pilot-scale surfacing thresholds (flagged)" --body "$(cat <<'EOF'
 ## Summary
-- Adds `Deployment.config.outcomePatterns.pilotMode: boolean` (default `false`).
+- Adds `AgentDeployment.inputConfig.outcomePatterns.pilotMode: boolean` (default `false`), accessed via `resolveOutcomePatternsConfig()`.
 - When `pilotMode = true`, `ContextBuilder` surfaces patterns at `sourceCount >= 2 AND confidence >= 0.6`, OR `DeploymentMemoryEvidence.countDistinctBookingIds(memoryId) >= 2`.
 - Steady-state thresholds (`sourceCount >= 3 AND confidence >= 0.66`) remain default-off.
 - No backfill: existing deployments default `pilotMode = false`. Operators flip per-deployment from the dashboard.
@@ -3062,3 +3194,5 @@ EOF
 - **Constrained decoding on patterns.** If conversion-lift shows a specific high-confidence pattern measurably shifts booking rates, a typed `{trigger, action, support}` schema becomes worth the lift — not before that evidence exists.
 - **Carry-debt items from PR-3.1**: gateway `workTraceIds` plumbing (PR-3.1.b) and the camelCase-vs-snake_case prom-client label convention (separate observability PR).
 - **Dashboard UI for flipping `pilotMode`.** Operators flip via DB/config API at launch; dashboard control follows the first operator pain point.
+- **Per-tier / per-canonical-category decay metric labels.** `outcomePatternsDecayed_total` currently emits `{deploymentTier: "aggregate", canonicalCategory: "all"}`. Widening `decayStale` to return `Array<{ canonicalCategory, count }>` (with category extracted from `canonicalKey` namespace prefix on the row) AND joining deployment-tier metadata before emitting is the GA-shape fix.
+- **WorkTrace finalize threading audit.** Task 37 uses a "find via grep" approach to locate the finalize site for `injectedPatternIds`. If the executor doesn't already carry `BuiltContext` past the prompt-substitution boundary, the threading mechanism is an open architectural call. Recommend a 30-min audit before starting PR-3.2c implementation.
