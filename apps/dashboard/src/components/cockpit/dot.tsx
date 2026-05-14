@@ -5,9 +5,10 @@ export interface DotProps {
   color: string;
   pulse?: boolean;
   size?: number;
+  "aria-label"?: string;
 }
 
-export function Dot({ color, pulse, size = 7 }: DotProps) {
+export function Dot({ color, pulse, size = 7, "aria-label": ariaLabel }: DotProps) {
   const wrapStyle: CSSProperties = {
     position: "relative",
     display: "inline-block",
@@ -21,7 +22,7 @@ export function Dot({ color, pulse, size = 7 }: DotProps) {
     background: color,
   };
   return (
-    <span style={wrapStyle}>
+    <span style={wrapStyle} aria-label={ariaLabel}>
       {pulse && <span style={{ ...layerStyle, animation: "ck-pulse 1.6s ease-out infinite" }} />}
       <span style={layerStyle} />
     </span>
