@@ -3,6 +3,8 @@ import type { EmbeddingAdapter } from "../embedding-adapter.js";
 import { computeConfidenceScore } from "@switchboard/schemas";
 import { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
 import { shouldExtractOutcomePatterns } from "./outcome-pattern-extractor.js";
+import { resolveBookingAttribution, type BookingAttributionStore } from "./booking-attribution.js";
+import { getMetrics } from "../telemetry/metrics.js";
 
 export interface CompoundingLLMClient {
   complete(prompt: string): Promise<string>;
@@ -64,6 +66,7 @@ export interface CompoundingDeps {
       draftExpiresAt?: Date | null;
     }): Promise<void>;
   };
+  bookingStore?: BookingAttributionStore;
   agentId?: string;
 }
 
@@ -103,6 +106,7 @@ export class ConversationCompoundingService {
   private readonly summaryStore: CompoundingInteractionSummaryStore;
   private readonly memoryStore: CompoundingDeploymentMemoryStore;
   private readonly knowledgeStore: CompoundingDeps["knowledgeStore"];
+  private readonly bookingStore: BookingAttributionStore | undefined;
   private readonly agentId: string;
 
   constructor(deps: CompoundingDeps) {
@@ -111,6 +115,7 @@ export class ConversationCompoundingService {
     this.summaryStore = deps.interactionSummaryStore;
     this.memoryStore = deps.deploymentMemoryStore;
     this.knowledgeStore = deps.knowledgeStore;
+    this.bookingStore = deps.bookingStore;
     this.agentId = deps.agentId ?? "default";
   }
 
@@ -144,12 +149,30 @@ export class ConversationCompoundingService {
         await this.trackQuestion(event.organizationId, event.deploymentId, question);
       }
 
-      if (shouldExtractOutcomePatterns(summarization.outcome) && extraction.patterns?.length) {
-        for (const pattern of extraction.patterns) {
-          try {
-            await this.trackPattern(event.organizationId, event.deploymentId, pattern);
-          } catch (err) {
-            console.error("[CompoundingService] trackPattern failed", err);
+      // Booking-backed gating supersedes summarization.outcome as the source
+      // of truth for whether a conversation booked. summarization.outcome is
+      // still required to be a booking-shaped outcome — patterns are only
+      // meaningful when the LLM extraction produced booking-relevant phrasing
+      // — but the AUTHORITY for "this conversation booked" is the Booking
+      // row, not the LLM.
+      if (
+        shouldExtractOutcomePatterns(summarization.outcome) &&
+        extraction.patterns?.length &&
+        this.bookingStore
+      ) {
+        const attribution = await resolveBookingAttribution(this.bookingStore, event);
+        if (attribution.tier !== "none") {
+          const metrics = getMetrics();
+          for (const pattern of extraction.patterns) {
+            try {
+              metrics.outcomePatternsExtracted.inc({
+                deploymentId: event.deploymentId,
+                attributionTier: attribution.tier,
+              });
+              await this.trackPattern(event.organizationId, event.deploymentId, pattern);
+            } catch (err) {
+              console.error("[CompoundingService] trackPattern failed", err);
+            }
           }
         }
       }
@@ -267,6 +290,7 @@ export class ConversationCompoundingService {
     deploymentId: string,
     patternText: string,
   ): Promise<void> {
+    const metrics = getMetrics();
     const existing = await this.memoryStore.findByCategory(organizationId, deploymentId, "pattern");
 
     if (existing.length > 0) {
@@ -280,17 +304,22 @@ export class ConversationCompoundingService {
           const newSourceCount = entry.sourceCount + 1;
           const newConfidence = computeConfidenceScore(newSourceCount, false);
           await this.memoryStore.incrementConfidence(entry.id, newConfidence);
+          metrics.outcomePatternsMerged.inc({ deploymentId });
+          metrics.outcomePatternConfidence.observe({ deploymentId }, newConfidence);
           return;
         }
       }
     }
 
+    const initialConfidence = computeConfidenceScore(1, false);
     await this.memoryStore.create({
       organizationId,
       deploymentId,
       category: "pattern",
       content: patternText,
-      confidence: computeConfidenceScore(1, false),
+      confidence: initialConfidence,
     });
+    metrics.outcomePatternsCreated.inc({ deploymentId });
+    metrics.outcomePatternConfidence.observe({ deploymentId }, initialConfidence);
   }
 }

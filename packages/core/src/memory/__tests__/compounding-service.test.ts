@@ -1,6 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ConversationCompoundingService } from "../compounding-service.js";
 import type { ConversationEndEvent } from "@switchboard/core";
+import type { BookingAttributionStore } from "../booking-attribution.js";
+import {
+  createInMemoryMetrics,
+  setMetrics,
+  type SwitchboardMetrics,
+} from "../../telemetry/metrics.js";
+
+function createMetricsSpy(): SwitchboardMetrics {
+  const base = createInMemoryMetrics();
+  vi.spyOn(base.outcomePatternsExtracted, "inc");
+  vi.spyOn(base.outcomePatternsMerged, "inc");
+  vi.spyOn(base.outcomePatternsCreated, "inc");
+  vi.spyOn(base.outcomePatternsSurfaced, "inc");
+  vi.spyOn(base.outcomePatternConfidence, "observe");
+  return base;
+}
+
+let metricsSpy: SwitchboardMetrics;
 
 function createMockDeps() {
   return {
@@ -90,6 +108,8 @@ describe("ConversationCompoundingService", () => {
   beforeEach(() => {
     deps = createMockDeps();
     service = new ConversationCompoundingService(deps);
+    metricsSpy = createMetricsSpy();
+    setMetrics(metricsSpy);
   });
 
   it("creates an interaction summary from LLM output", async () => {
@@ -330,6 +350,10 @@ describe("ConversationCompoundingService", () => {
 
   it("writes pattern-category memories when summarization outcome is booked", async () => {
     const localDeps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([]),
+      findInWindow: vi.fn().mockResolvedValue([{ id: "bk-1" }]),
+    };
     localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
     primeSummarizeAndExtract(
       localDeps,
@@ -338,8 +362,8 @@ describe("ConversationCompoundingService", () => {
     );
     localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
 
-    const localService = new ConversationCompoundingService(localDeps);
-    await localService.processConversationEnd(baseEvent);
+    const localService = new ConversationCompoundingService({ ...localDeps, bookingStore });
+    await localService.processConversationEnd({ ...baseEvent, contactId: "contact-1" });
 
     expect(localDeps.deploymentMemoryStore.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -372,6 +396,10 @@ describe("ConversationCompoundingService", () => {
 
   it("increments confidence on a near-duplicate pattern instead of creating a duplicate", async () => {
     const localDeps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([]),
+      findInWindow: vi.fn().mockResolvedValue([{ id: "bk-dup" }]),
+    };
     localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
       {
         id: "p-existing",
@@ -391,13 +419,109 @@ describe("ConversationCompoundingService", () => {
     );
     localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
 
-    const localService = new ConversationCompoundingService(localDeps);
-    await localService.processConversationEnd(baseEvent);
+    const localService = new ConversationCompoundingService({ ...localDeps, bookingStore });
+    await localService.processConversationEnd({ ...baseEvent, contactId: "contact-1" });
 
     expect(localDeps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
       "p-existing",
       expect.any(Number),
     );
+    const patternCreates = localDeps.deploymentMemoryStore.create.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCreates).toHaveLength(0);
+  });
+
+  it("does NOT write patterns when summarization.outcome is booked but no Booking exists", async () => {
+    const localDeps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([]),
+      findInWindow: vi.fn().mockResolvedValue([]),
+    };
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Customer claimed to book", outcome: "booked" },
+      { patterns: ["fake-pattern from hallucinated booking"] },
+    );
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+    const localService = new ConversationCompoundingService({ ...localDeps, bookingStore });
+    await localService.processConversationEnd(baseEvent);
+
+    const patternCreates = localDeps.deploymentMemoryStore.create.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCreates).toHaveLength(0);
+    expect(localDeps.deploymentMemoryStore.incrementConfidence).not.toHaveBeenCalled();
+  });
+
+  it("writes patterns under tier 'strong' when workTraceId matches a Booking", async () => {
+    const localDeps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-1", workTraceId: "wt-A" }]),
+      findInWindow: vi.fn(),
+    };
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Booked", outcome: "booked" },
+      { patterns: ["Customers ask about downtime before booking laser treatment"] },
+    );
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+
+    const localService = new ConversationCompoundingService({ ...localDeps, bookingStore });
+    await localService.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
+
+    expect(localDeps.deploymentMemoryStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({ category: "pattern" }),
+    );
+    expect(metricsSpy.outcomePatternsExtracted.inc).toHaveBeenCalledWith({
+      deploymentId: baseEvent.deploymentId,
+      attributionTier: "strong",
+    });
+  });
+
+  it("writes patterns under tier 'fallback' when only the window matches", async () => {
+    const localDeps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([]),
+      findInWindow: vi.fn().mockResolvedValue([{ id: "bk-2" }]),
+    };
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Booked", outcome: "booked" },
+      { patterns: ["Customers prefer morning appointments"] },
+    );
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+
+    const localService = new ConversationCompoundingService({ ...localDeps, bookingStore });
+    await localService.processConversationEnd({ ...baseEvent, contactId: "contact-1" });
+
+    expect(metricsSpy.outcomePatternsExtracted.inc).toHaveBeenCalledWith({
+      deploymentId: baseEvent.deploymentId,
+      attributionTier: "fallback",
+    });
+    expect(metricsSpy.outcomePatternsCreated.inc).toHaveBeenCalledWith({
+      deploymentId: baseEvent.deploymentId,
+    });
+  });
+
+  it("does not write patterns for non-booked outcomes even when a recent Booking exists", async () => {
+    const localDeps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([]),
+      findInWindow: vi.fn().mockResolvedValue([{ id: "bk-orphan" }]),
+    };
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Customer asked about pricing", outcome: "qualified" },
+      { patterns: ["should not surface"] },
+    );
+
+    const localService = new ConversationCompoundingService({ ...localDeps, bookingStore });
+    await localService.processConversationEnd(baseEvent);
+
     const patternCreates = localDeps.deploymentMemoryStore.create.mock.calls.filter(
       (c) => c[0].category === "pattern",
     );
