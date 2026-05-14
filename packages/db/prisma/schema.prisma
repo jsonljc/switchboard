@@ -677,6 +677,7 @@ model DeploymentMemoryEvidence {
   @@unique([deploymentMemoryId, bookingId])
   @@index([deploymentMemoryId])
   @@index([deploymentMemoryId, bookingId])
+  @@index([organizationId])
 }
 
 // ---------------------------------------------------------------------------
