@@ -151,5 +151,24 @@ The cockpit's inline activity stream uses denser kind chips: `height: 18px, padd
 
 Filter chips on `/approvals` and `/activity` are pill-shaped: `font-family: var(--font-mono), font-size: 11.5px, padding: 6px 12px, border-radius: 999px, color: var(--ink-3)`; on (selected) `background: rgba(14,12,10,0.06), color: var(--ink)` (`locked/switchboard/project/approvals-v2/styles.css:196-215`). Brand-nav tabs (cockpit) use a rectangular variant: `padding: 5px 10px, borderRadius: 4px, fontSize: 13px, fontWeight: active ? 600 : 500`; active gets `background: rgba(14,12,10,0.05)` (`locked/switchboard/project/agent-home-v3/cockpit.jsx:198-208`). **Rule:** keep pill chips (999px radius) for filter taxonomy; keep rectangular chips (4px radius) for top-level navigation.
 
+## 4. Accent-color discipline
+
+Three accents. Each has one role; none generalises.
+
+- **`--editorial-accent` / `--mercury-accent`** — bright orange `hsl(20 90% 55%)` (`apps/dashboard/src/app/globals.css:104,189`). Default editorial emphasis on agent homes and `/mission`. Used by the cockpit greeting accent span (`locked/switchboard/project/agent-home-v3/cockpit.jsx:717`; CSS at `apps/dashboard/src/app/globals.css:716-718`), the folio-link "pip" indicator (`apps/dashboard/src/app/globals.css:602`), win-prose accent span (`apps/dashboard/src/app/globals.css:847`), and the "hot" pipeline tile bar (`apps/dashboard/src/app/globals.css:1133`).
+- **`--sw-accent` / `--operator`** — muted operator amber `#A07850` / `hsl(30 55% 46%)` (`apps/dashboard/src/app/globals.css:52,86`). Used in **two distinct surface-specific ways**, each authorized by its own spec — see §9 for full rules. Summary: `/approvals` reserves it for the primary mutating Approve CTA (`docs/design-prompts/2026-05-13-approvals.md#detail-panel`); `/reports` uses it for muted-amber emphasis on numerics, delta arrows, and ROAS depth — **explicitly not a CTA** (`docs/design-prompts/2026-05-13-reports.md#design-system`); `/activity` restricts it to active filter chip + selected row (`docs/design-prompts/2026-05-13-activity.md#design-system`). The public marketing site also consumes it. **No other use is authorized** without new surface-spec approval.
+- **Agent-context accents** — Alex amber `#B8782E` (`locked/switchboard/project/agent-home-v3/alex-config.jsx:8`) and Riley clay `#B86C50` (`locked/switchboard/project/agent-home-v3/riley-config.jsx:8`). Owned exclusively by their agent's context. Used for that agent's avatar frame, status pill colors when in a live state, and inline-chip backgrounds. **Alex amber NEVER appears on `/riley` and vice versa.** Cross-agent surfaces (`/mission`, `/approvals`, `/activity`, `/reports`) do not consume agent-context accents — they stay on `--sw-accent` / `--editorial-accent` per the rules above.
+
+### 4.1 Anti-list
+
+The accent is **NEVER** used for any of the following:
+
+- **NEVER for success states.** `--positive` `hsl(152 28% 32%)` (`apps/dashboard/src/app/globals.css:42`) or a calibrated green like the agent-home `--green` `#3F7A36` (`locked/switchboard/project/agent-home-v3/cockpit.jsx:21`) carries success. Amber means "operator needs attention," never "everything is fine."
+- **NEVER for links.** Editorial links are underlined ink, not colored — see `.see-all`, `.win-undo` (`apps/dashboard/src/app/globals.css:856,866-876`).
+- **NEVER for focus rings.** Focus uses ink border, not accent — see §7.
+- **NOT for background fills** outside the surface-spec-authorized roles in §9. Filter chips and selected rows on `/activity` are an authorized exception (`docs/design-prompts/2026-05-13-activity.md#design-system`); the approve CTA on `/approvals` is an authorized exception (`docs/design-prompts/2026-05-13-approvals.md#detail-panel`). All other background fills must come from neutral hairline + paper-raised, not from accent.
+- **NEVER as a "default emphasis"** for arbitrary text. Pick the role from the four authorized uses above; if no role fits, use ink and hairline weight, not accent.
+
+
 
 
