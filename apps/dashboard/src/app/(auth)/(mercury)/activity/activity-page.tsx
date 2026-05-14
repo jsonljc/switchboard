@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { AuditEntriesListQuery, AuditEntryBrowseRow } from "@switchboard/schemas";
-import { OPERATIONAL_AUDIT_EVENT_TYPES } from "@switchboard/schemas";
+import { AuditEventTypeSchema, OPERATIONAL_AUDIT_EVENT_TYPES } from "@switchboard/schemas";
 import { isMercuryToolLive } from "@/lib/route-availability";
 import { useActivityList } from "./hooks/use-activity-list";
 import { ACTIVITY_FIXTURES } from "./fixtures";
@@ -42,7 +42,10 @@ function isActorType(v: string): v is ActorType {
   return v === "user" || v === "agent" || v === "system" || v === "service_account";
 }
 
-const KNOWN_EVENT_TYPES = new Set<string>(Object.values(EVENT_TYPE_BANDS).flat());
+// Single source of truth for valid event types: the Zod schema. Adding a new
+// event type to AuditEventTypeSchema automatically widens the URL gate;
+// EVENT_TYPE_BANDS only owns band-grouping for the combobox.
+const KNOWN_EVENT_TYPES = new Set<string>(AuditEventTypeSchema.options);
 
 function readEventType(sp: URLSearchParams): string | null {
   const raw = sp.get("eventType");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { useMemo } from "react";
 import styles from "../activity.module.css";
 
 export interface EntitySelectorValue {
@@ -20,20 +20,19 @@ export interface EntitySelectorProps {
  * Entity selector — type `<select>` (populated from the loaded page's distinct
  * entityTypes, sorted) + freeform id `<input>`. The server accepts each
  * independently; we don't gate either on the other.
+ *
+ * Naming uses `aria-label` directly on the controls — matches sibling Mercury
+ * surfaces (e.g. /contacts SearchInput) rather than introducing a stray
+ * `sr-only` Tailwind utility into a CSS-Module-styled surface.
  */
 export function EntitySelector({ entityType, entityId, types, onChange }: EntitySelectorProps) {
-  const typeId = useId();
-  const idId = useId();
   const sortedTypes = useMemo(() => [...types].sort(), [types]);
   return (
     <>
       <span className={styles.filterStripEyebrow}>entity</span>
       <div className={styles.entityPick}>
-        <label htmlFor={typeId} className="sr-only">
-          entity type
-        </label>
         <select
-          id={typeId}
+          aria-label="entity type"
           className={styles.entityPickSelect}
           value={entityType ?? ""}
           onChange={(e) => onChange({ entityType: e.target.value || null, entityId })}
@@ -45,11 +44,8 @@ export function EntitySelector({ entityType, entityId, types, onChange }: Entity
             </option>
           ))}
         </select>
-        <label htmlFor={idId} className="sr-only">
-          entity id
-        </label>
         <input
-          id={idId}
+          aria-label="entity id"
           className={styles.entityPickInput}
           placeholder="entityId…"
           value={entityId ?? ""}
