@@ -151,3 +151,6 @@ export * from "./intent-class.js";
 
 // Conversation Lifecycle (state machine enums + precedence comparator — Alex medspa Phase 3a)
 export * from "./conversation-lifecycle.js";
+
+// WhatsApp send-test schemas (slice 2a — request/result/row for operator send-test flow)
+export * from "./whatsapp-test-send.js";
