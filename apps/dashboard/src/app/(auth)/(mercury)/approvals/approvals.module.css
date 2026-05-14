@@ -249,3 +249,47 @@
   text-align: center;
   color: var(--ink-3);
 }
+
+.filterStrip {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 14px 28px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--hair);
+}
+.filterChip {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink-3);
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  transition:
+    color 280ms cubic-bezier(0.4, 0, 0.2, 1),
+    background 280ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.filterChip:hover { color: var(--ink); background: rgba(14, 12, 10, 0.04); }
+.filterChipOn { color: var(--ink); background: rgba(14, 12, 10, 0.06); }
+.filterChipCount {
+  font-size: 10.5px;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.filterChipOn .filterChipCount { color: var(--ink); }
+.filterChipBullet { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-4); }
+.filterChip[data-cat="low"] .filterChipBullet { background: var(--risk-low); }
+.filterChip[data-cat="medium"] .filterChipBullet { background: var(--risk-med); }
+.filterChip[data-cat="high"] .filterChipBullet { background: var(--risk-high); }
+.filterChip[data-cat="critical"] .filterChipBullet { background: var(--risk-crit); }

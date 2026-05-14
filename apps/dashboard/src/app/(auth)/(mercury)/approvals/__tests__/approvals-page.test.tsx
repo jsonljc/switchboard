@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("next-auth/react", () => ({
@@ -71,5 +71,24 @@ describe("ApprovalsPage", () => {
     const renderedNumbers = statTiles.map((el) => el.textContent);
     expect(renderedNumbers).toContain("12");
     expect(renderedNumbers).toContain("4");
+  });
+
+  it("toggling a risk filter narrows the rendered rows", async () => {
+    renderPage();
+    await screen.findByText(/Refund SGD 4,820/);
+    fireEvent.click(screen.getByRole("button", { name: /^critical/i }));
+    // Only the one critical fixture should remain visible
+    await waitFor(() => {
+      const rows = screen.getAllByRole("button", { name: /^Open approval:/ });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toHaveAccessibleName(/Refund SGD 4,820/);
+    });
+  });
+
+  it("the page renders the live timer on rows (passes `now` to queue)", async () => {
+    renderPage();
+    await screen.findByText(/Refund SGD 4,820/);
+    // At least one row should show a remaining-time element with the testid.
+    expect(screen.getAllByTestId("queue-row-timer").length).toBeGreaterThan(0);
   });
 });
