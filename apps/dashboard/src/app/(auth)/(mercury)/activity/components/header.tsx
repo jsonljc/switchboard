@@ -4,15 +4,20 @@ import styles from "../activity.module.css";
 import { fmtRel } from "./format";
 
 export interface ActivityHeaderProps {
-  /** ISO timestamp of the most recent ledger entry available to the page (typically rows[0].timestamp).
-   *  Null hides the tile. PR-B extends this with a narrowing-aware override. */
+  /** ISO timestamp of the most recent ledger entry available to the page
+   *  (typically rows[0].timestamp). Null hides the tile. */
   lastLedgerEntryIso: string | null;
+  /** H6 (spec §12): when true, the tile is hidden regardless of the iso prop.
+   *  Page sets this when `appliedFilters` is non-empty so the tile doesn't
+   *  lie about ledger head under narrowing. */
+  lastLedgerEntryHidden?: boolean;
 }
 
-export function ActivityHeader({ lastLedgerEntryIso }: ActivityHeaderProps) {
-  const lastRel = lastLedgerEntryIso
-    ? fmtRel(Date.now() - new Date(lastLedgerEntryIso).getTime())
-    : null;
+export function ActivityHeader({ lastLedgerEntryIso, lastLedgerEntryHidden }: ActivityHeaderProps) {
+  const lastRel =
+    !lastLedgerEntryHidden && lastLedgerEntryIso
+      ? fmtRel(Date.now() - new Date(lastLedgerEntryIso).getTime())
+      : null;
 
   return (
     <header className={styles.pageHeadWrap}>
