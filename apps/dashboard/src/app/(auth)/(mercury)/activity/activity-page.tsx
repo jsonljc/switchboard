@@ -16,6 +16,8 @@ import type { EntitySelectorValue } from "./components/entity-selector";
 import { ActivityTable } from "./components/activity-table";
 import { PaginationFooter } from "./components/pagination-footer";
 import { EmptyState } from "./components/empty-state";
+import { ErrorBanner } from "./components/error-banner";
+import { StalePill } from "./components/stale-pill";
 import { EVENT_TYPE_BANDS } from "./event-bands";
 import styles from "./activity.module.css";
 
@@ -197,14 +199,30 @@ export function ActivityPage() {
   );
 
   // ---- Data — live or fixture ----
-  const { data, isLoading, isError, refetch } = useActivityList(query);
-  let rows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? [];
+  const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useActivityList(query);
+
+  // H5: cache the most recent successful rows in reactive state so a fetch
+  // error never unmounts the table. useState (over useRef) keeps the cache
+  // observable to the test runner.
+  const [lastSuccessfulRows, setLastSuccessfulRows] = useState<ReadonlyArray<AuditEntryBrowseRow>>(
+    [],
+  );
+  useEffect(() => {
+    if (data?.rows !== undefined) {
+      setLastSuccessfulRows(data.rows);
+    }
+  }, [data?.rows]);
+
   const nextCursor = data?.nextCursor ?? null;
   const apiScope: EffectiveScope = data?.scope ?? scope;
 
-  if (!isActivityLive()) {
-    rows = filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
-  }
+  // Live rows fall back to the cached last-successful page when `data` is
+  // undefined (loading or error). H5: a refetch error keeps the table mounted.
+  const liveRows: ReadonlyArray<AuditEntryBrowseRow> = data?.rows ?? lastSuccessfulRows;
+
+  const rows: ReadonlyArray<AuditEntryBrowseRow> = isActivityLive()
+    ? liveRows
+    : filterRowsInMemory(ACTIVITY_FIXTURES, scope, narrowing);
 
   // Narrowing wins for effective scope (fixture mode has no API to report it).
   const effectiveScope: EffectiveScope = narrowingActive ? "custom" : apiScope;
@@ -235,6 +253,10 @@ export function ActivityPage() {
     [sourceRows],
   );
 
+  // Scanned-count for the filtered-empty prose: number of rows the current
+  // scope contains BEFORE narrowing is applied.
+  const scannedCount = effectiveScope === "all" ? counts.allCount : counts.operationalCount;
+
   // ---- Handlers ----
   const onClearFilters = useCallback(() => {
     setEventType(null);
@@ -244,10 +266,9 @@ export function ActivityPage() {
     // Preserve operator's base scope (operational OR all) — spec acceptance #11.
   }, []);
 
-  const onResetToDefault = useCallback(() => {
-    setScope("operational");
-    onClearFilters();
-  }, [onClearFilters]);
+  const onRefetch = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
   const onNext = useCallback(() => {
     if (!nextCursor) return;
@@ -265,8 +286,9 @@ export function ActivityPage() {
   }, []);
 
   // ---- Render-state derivations ----
-  const emptyVariant = narrowingActive ? "filtered" : "zero";
   const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
+  const showSkeleton = isLoading && rows.length === 0;
+  const showEmpty = !showSkeleton && rows.length === 0 && !isError;
 
   return (
     <div className={styles.activityPage}>
@@ -297,20 +319,21 @@ export function ActivityPage() {
         onClearFilters={onClearFilters}
       />
 
+      {isError && <ErrorBanner path="/api/dashboard/activity" onRetry={onRefetch} />}
+
       <section className={`${styles.section} ${styles.page}`}>
-        {isLoading ? (
+        {showSkeleton ? (
           <div className={styles.skeletonTable} role="status" aria-label="Loading activity">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className={styles.skeletonRow} />
             ))}
           </div>
-        ) : isError ? (
-          <EmptyState variant="filtered" onClear={() => void refetch()} />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            variant={emptyVariant}
-            onClear={narrowingActive ? onResetToDefault : undefined}
-          />
+        ) : showEmpty ? (
+          narrowingActive ? (
+            <EmptyState variant="filtered" scannedCount={scannedCount} onClear={onClearFilters} />
+          ) : (
+            <EmptyState variant="zero" />
+          )
         ) : (
           <ActivityTable
             rows={rows}
@@ -322,6 +345,7 @@ export function ActivityPage() {
 
         {showPagination && (
           <PaginationFooter
+            count={rows.length}
             canGoPrev={prevCursorStack.length > 0}
             canGoNext={!!nextCursor}
             onPrev={onPrev}
@@ -329,6 +353,10 @@ export function ActivityPage() {
           />
         )}
       </section>
+
+      {isActivityLive() && dataUpdatedAt > 0 && (
+        <StalePill fetchedAt={dataUpdatedAt} isFetching={isFetching} onRefetch={onRefetch} />
+      )}
     </div>
   );
 }
