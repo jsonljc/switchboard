@@ -75,6 +75,16 @@ const SIMILARITY_THRESHOLD = 0.92;
 const MAX_MEMORY_ENTRIES = 500;
 const FAQ_PROMOTION_THRESHOLD = 3;
 const FAQ_DRAFT_EXPIRY_MS = 72 * 60 * 60 * 1000; // 72 hours
+const MAX_PATTERNS_PER_CONVERSATION = 5;
+const MAX_PATTERN_LENGTH = 500;
+
+function sanitizeExtractedPatterns(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+    .slice(0, MAX_PATTERNS_PER_CONVERSATION)
+    .map((p) => (p.length > MAX_PATTERN_LENGTH ? p.slice(0, MAX_PATTERN_LENGTH) : p));
+}
 
 interface SummarizationResult {
   summary: string;
@@ -163,7 +173,8 @@ export class ConversationCompoundingService {
         const attribution = await resolveBookingAttribution(this.bookingStore, event);
         if (attribution.tier !== "none") {
           const metrics = getMetrics();
-          for (const pattern of extraction.patterns) {
+          const sanitized = sanitizeExtractedPatterns(extraction.patterns);
+          for (const pattern of sanitized) {
             try {
               metrics.outcomePatternsExtracted.inc({
                 deploymentId: event.deploymentId,

@@ -528,6 +528,106 @@ describe("ConversationCompoundingService", () => {
     expect(patternCreates).toHaveLength(0);
   });
 
+  const MAX_PATTERNS_PER_CONVERSATION = 5;
+  const MAX_PATTERN_LENGTH = 500;
+
+  it("ignores extraction.patterns when it is not an array", async () => {
+    const deps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-1", workTraceId: "wt-A" }]),
+      findInWindow: vi.fn(),
+    };
+    deps.llmClient.complete
+      .mockResolvedValueOnce(JSON.stringify({ summary: "x", outcome: "booked" }))
+      .mockResolvedValueOnce(
+        JSON.stringify({ facts: [], questions: [], patterns: "not an array" }),
+      );
+    deps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+    const service = new ConversationCompoundingService({ ...deps, bookingStore });
+    await service.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
+
+    expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
+  });
+
+  it("filters non-string entries out of extraction.patterns", async () => {
+    const deps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-1", workTraceId: "wt-A" }]),
+      findInWindow: vi.fn(),
+    };
+    deps.llmClient.complete
+      .mockResolvedValueOnce(JSON.stringify({ summary: "x", outcome: "booked" }))
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          facts: [],
+          questions: [],
+          patterns: ["valid pattern", 42, null, { evil: "object" }, "another valid pattern"],
+        }),
+      );
+    deps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+    deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+
+    const service = new ConversationCompoundingService({ ...deps, bookingStore });
+    await service.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
+
+    const patternCreates = deps.deploymentMemoryStore.create.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCreates).toHaveLength(2);
+    expect(patternCreates.map((c) => c[0].content)).toEqual([
+      "valid pattern",
+      "another valid pattern",
+    ]);
+  });
+
+  it("caps extraction.patterns at MAX_PATTERNS_PER_CONVERSATION entries", async () => {
+    const deps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-1", workTraceId: "wt-A" }]),
+      findInWindow: vi.fn(),
+    };
+    const twentyPatterns = Array.from({ length: 20 }, (_, i) => `pattern ${i}`);
+    deps.llmClient.complete
+      .mockResolvedValueOnce(JSON.stringify({ summary: "x", outcome: "booked" }))
+      .mockResolvedValueOnce(
+        JSON.stringify({ facts: [], questions: [], patterns: twentyPatterns }),
+      );
+    deps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+    deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+
+    const service = new ConversationCompoundingService({ ...deps, bookingStore });
+    await service.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
+
+    const patternCreates = deps.deploymentMemoryStore.create.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCreates).toHaveLength(MAX_PATTERNS_PER_CONVERSATION);
+  });
+
+  it("truncates pattern strings longer than MAX_PATTERN_LENGTH", async () => {
+    const deps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-1", workTraceId: "wt-A" }]),
+      findInWindow: vi.fn(),
+    };
+    const huge = "x".repeat(5000);
+    deps.llmClient.complete
+      .mockResolvedValueOnce(JSON.stringify({ summary: "x", outcome: "booked" }))
+      .mockResolvedValueOnce(JSON.stringify({ facts: [], questions: [], patterns: [huge] }));
+    deps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+    deps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+
+    const service = new ConversationCompoundingService({ ...deps, bookingStore });
+    await service.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
+
+    const patternCreates = deps.deploymentMemoryStore.create.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCreates).toHaveLength(1);
+    expect((patternCreates[0]![0].content as string).length).toBe(MAX_PATTERN_LENGTH);
+  });
+
   it("skips FAQ promotion gracefully when knowledgeStore is not provided", async () => {
     const localDeps = createMockDeps();
     localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
