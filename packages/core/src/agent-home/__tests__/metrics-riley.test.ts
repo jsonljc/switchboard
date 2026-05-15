@@ -176,6 +176,36 @@ describe("buildRileyMetricsViewModel", () => {
       expect(vm.spendCents).toBeNull();
       expect(vm.leads).toBeGreaterThanOrEqual(0);
     });
+
+    // Producer-side invariant: stats[2] (Spend) and unavailableSources must agree
+    // with spendCents nullity. Catches the latent contract bug surfaced in PR #500
+    // review (Important #4) where a future B.2b spend wiring could silently leave
+    // stats[2].unavailable=true while emitting non-null spendCents.
+    it("Spend stat-cell unavailable mirrors spendCents nullity (Riley)", async () => {
+      const week = buildWeekContext(WED_NOW, TZ);
+      const present = await buildRileyMetricsViewModel({
+        orgId: "org-1",
+        week,
+        store: { ...makeStore({}), getMetaSpendCents: vi.fn(async () => 21400) },
+        targets: DEFAULT_TARGETS,
+      });
+      expect(present.spendCents).toBe(21400);
+      expect(present.stats[2].unavailable).toBe(false);
+      expect(present.stats[2].display).toBe("$214");
+      expect(present.stats[2].rawValue).toBe(21400);
+      expect(present.freshness.unavailableSources).not.toContain("ad-platform-spend");
+
+      const absent = await buildRileyMetricsViewModel({
+        orgId: "org-1",
+        week,
+        store: makeStore({}),
+        targets: DEFAULT_TARGETS,
+      });
+      expect(absent.spendCents).toBeNull();
+      expect(absent.stats[2].unavailable).toBe(true);
+      expect(absent.stats[2].display).toBe("—");
+      expect(absent.freshness.unavailableSources).toContain("ad-platform-spend");
+    });
   });
 });
 

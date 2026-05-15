@@ -214,6 +214,18 @@ describe("CockpitPage — A.3 KPI strip", () => {
     expect(screen.getByText(/return on spend/i)).toBeInTheDocument();
   });
 
+  // Pins the eyebrow composition contract: the dashboard prefixes
+  // "This week · " to the wire's `folioRange` (whose format is itself
+  // pinned at packages/core/src/agent-home/__tests__/metrics-buckets.test.ts).
+  // If either side changes its format, this assertion fails — closes the
+  // gap flagged in PR #500 review (Important #5).
+  it("eyebrow renders as 'This week · {folioRange}' verbatim", async () => {
+    missionData = MISSION_PARTIAL_DONE;
+    metricsData = { ...STEADY_METRICS, folioRange: "Mon — Wed" };
+    render(<CockpitPage />);
+    expect(await screen.findByText("This week · Mon — Wed")).toBeInTheDocument();
+  });
+
   it("does not render KPIStrip in cold state (all setup undone)", async () => {
     missionData = FULL_MISSION_ALL_UNDONE;
     metricsData = STEADY_METRICS;

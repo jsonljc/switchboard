@@ -69,14 +69,25 @@ export async function buildRileyMetricsViewModel(
       unit: "percent",
       unavailable: true,
     },
-    {
-      label: "Spend",
-      display: "—",
-      rawValue: null,
-      unit: "currency",
-      unavailable: true,
-    },
+    spendCents !== null
+      ? {
+          label: "Spend",
+          display: `$${Math.round(spendCents / 100)}`,
+          rawValue: spendCents,
+          unit: "currency",
+          unavailable: false,
+        }
+      : {
+          label: "Spend",
+          display: "—",
+          rawValue: null,
+          unit: "currency",
+          unavailable: true,
+        },
   ];
+
+  const unavailableSources: string[] = ["ad-platform-ctr"];
+  if (spendCents === null) unavailableSources.push("ad-platform-spend");
 
   return {
     hero: {
@@ -91,7 +102,7 @@ export async function buildRileyMetricsViewModel(
       generatedAt: week.now.toISOString(),
       window: "week",
       dataSource: "live",
-      unavailableSources: ["ad-platform-ctr", "ad-platform-spend"],
+      unavailableSources,
     },
     folioRange: week.folioRange,
     targets,
