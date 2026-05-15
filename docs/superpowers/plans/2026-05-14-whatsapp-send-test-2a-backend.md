@@ -42,6 +42,8 @@
 - **`apiStatus`** — terminal: `"sent"` (Graph returned a `messageId`) or `"failed"` (Graph returned an error or no ID). This is the App Review proof. Avoid the word `"queued"` — Meta returning a `messageId` means the message is **accepted**, not pending Meta action.
 - **`lastWebhookStatus`** — progressive: `null` until the first webhook arrives, then `"sent" | "delivered" | "read" | "failed"`. Renders as "Accepted by WhatsApp · awaiting delivery webhook" before the first event arrives.
 
+> **Persistence rule (Slice 2A):** The enum reserves `"failed"` for forward compatibility, but **2A only persists rows once Graph returns a `messageId`**. The Prisma model declares `messageId String @unique`, so a row cannot exist without one. Upstream Graph failures return an HTTP error response to the operator and are **not persisted** in this slice. A future slice may add a separate failure-attempts table or relax the uniqueness constraint to record failed sends.
+
 ## File structure (Slice 2A only)
 
 **Create:**
