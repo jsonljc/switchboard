@@ -16,6 +16,16 @@
 
 > **The umbrella spec is authoritative.** If anything in this plan expands A.5's scope — new action.kinds, backend wiring for stubs, inline-send for handoff/context, auto-resume on pause-Nh, schema additions, Riley wiring — the spec wins and the conflicting text here is wrong. Resolve in favor of the umbrella spec.
 
+## Boundary locks (read before every task)
+
+These contracts are easy to violate accidentally. Executors must respect them across every task:
+
+1. **The Composer never toasts.** `<Composer>` parses, stages, and calls `onDispatch(parsedAction)`. It does **not** call `useToast`, `toastVoice`, or any other side effect. Toast firing is the dispatcher hook's responsibility. Double-toasting is the failure mode this lock prevents: if both Composer and dispatcher fire on the same Enter press, the operator sees two toasts for one action.
+2. **The dispatcher is the only toast owner for composer-action paths.** `useAlexActionDispatcher` calls `useToast` + `toastVoice` inside its switch. Composer, Palette, and CockpitPage never call `useToast` for composer-action paths.
+3. **"Confirm/Undo" is staging-driven, NOT toast-driven.** "Confirm" is the operator pressing Enter on a staged chip; "Undo" is the operator pressing Escape during staging (before Enter). After Enter fires, the action is committed — there is **no in-toast Undo button**, no post-dispatch rollback affordance, no `setTimeout` to rewind state. Implementers must not add toast-level Undo regardless of how natural it seems. Reversal of `pause`/`resume` happens by the operator typing the opposite command.
+4. **`hold-named` is catalog-visible but inert in A.5.** The command appears in `ALEX_COMMANDS` but `ParsedActionKind` does not include a `hold` variant and the dispatcher does not handle one. Because `threadContext` is always `undefined` at the CockpitPage call site in A.5, `hold-named` is permanently disabled in the palette and never reaches the dispatcher. Do not add a `hold` case to `ParsedActionKind` or the dispatcher in this slice — that is a future thread-context slice's decision.
+5. **Palette group order is `control → thread → rules → nav`.** Operational commands lead because the palette's primary job is "tell Alex what to do," not navigation. Nav routes away from the cockpit, so it is last. Do not reorder to alphabetical or insertion-order.
+
 ---
 
 ## Precondition checks
@@ -228,7 +238,8 @@ Per-id overrides for `command` group:
 | `open-settings` | `router.push("/settings")` |
 | `open-rules` | `router.push("/settings?focus=rules")` |
 | `open-meta` | `router.push("/settings?focus=channels")` |
-| `fu-named` / `reply-named` / `hold-named` | Disabled in palette when `threadContext` is undefined; when defined, dispatches via the matching action.kind (`followup` / `handoff` / `hold`) — at A.5, **always** undefined at the CockpitPage call site, so these never fire. |
+| `fu-named` / `reply-named` | Disabled in palette when `threadContext` is undefined; when defined, dispatches via the matching action.kind (`followup` / `handoff`). At A.5, **always** undefined at the CockpitPage call site, so these never fire. |
+| `hold-named` | Disabled in palette when `threadContext` is undefined. **No corresponding `ParsedActionKind` exists** — `ParsedActionKind` declares no `hold` variant in A.5. Because `threadContext` is always undefined at the A.5 call site, the command is permanently disabled and never reaches the dispatcher. A future thread-context slice owns the choice to add `hold` to `ParsedActionKind` + dispatch table, or remove the command from `ALEX_COMMANDS`. A.5 does neither. The palette test asserts the command renders disabled. |
 
 ### Toast voice (umbrella spec §Composer §Toast voice + `alex-config.jsx:41`)
 
@@ -332,6 +343,30 @@ describe("parseCommand", () => {
     expect(r.icon).toBe("⏸");
     expect(r.label).toContain("pause");
     expect(r.detail).toMatch(/until/);
+  });
+
+  it("pause an hour (word quantifier)", () => {
+    const r = parseCommand("pause an hour");
+    expect(r.kind).toBe("pause");
+    expect(r.label).toMatch(/1h/);
+    expect(r.detail).toMatch(/until/);
+  });
+
+  it("pause for an hour (word quantifier + 'for')", () => {
+    expect(parseCommand("pause for an hour").kind).toBe("pause");
+    expect(parseCommand("pause for an hour").label).toMatch(/1h/);
+  });
+
+  it("pause one hour (word quantifier)", () => {
+    const r = parseCommand("pause one hour");
+    expect(r.kind).toBe("pause");
+    expect(r.label).toMatch(/1h/);
+  });
+
+  it("pause half an hour (fractional word quantifier)", () => {
+    const r = parseCommand("pause half an hour");
+    expect(r.kind).toBe("pause");
+    expect(r.label).toMatch(/30m/);
   });
 
   it("pause until <when>", () => {
@@ -443,8 +478,19 @@ Create `apps/dashboard/src/lib/cockpit/parse-command.ts`:
 import type { ParsedAction } from "@/components/cockpit/types";
 
 const PAUSE_FOR = /^pause\s+(?:for\s+)?(\d+)\s*(min|m|h|hour|hours)\b/i;
+const PAUSE_WORD = /^pause\s+(?:for\s+)?(half\s+an?|an|one|two|three|four|five|six)\s+(hour|hours|min|minute|minutes)\b/i;
 const PAUSE_UNTIL = /^pause\s+until\s+(.+)$/i;
 const PAUSE_BARE = /^pause(?:\s+alex)?$/i;
+
+const WORD_TO_NUM: Record<string, number> = {
+  an: 1,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+};
 const RESUME = /^(resume|unpause|go)$/i;
 const HALT = /^(halt|stop)$/i;
 const FOLLOWUP = /^(?:fu|follow\s+up)\s+(?:with\s+)?([\w'.\- ]+?)(?:\s+(tonight|today|tomorrow|now|later))?$/i;
@@ -492,6 +538,26 @@ export function parseCommand(raw: string): ParsedAction {
       kind: "pause",
       icon: "⏸",
       label: hours >= 1 ? `pause · ${hours}h` : `pause · ${n}m`,
+      detail: untilHourLabel(hours),
+      raw: original,
+    };
+  }
+
+  match = text.match(PAUSE_WORD);
+  if (match) {
+    const quantifierRaw = match[1]!.toLowerCase().trim();
+    const unit = match[2]!.toLowerCase();
+    let n: number;
+    if (quantifierRaw.startsWith("half")) {
+      n = 0.5;
+    } else {
+      n = WORD_TO_NUM[quantifierRaw] ?? 1;
+    }
+    const hours = unit.startsWith("m") ? n / 60 : n;
+    return {
+      kind: "pause",
+      icon: "⏸",
+      label: hours >= 1 ? `pause · ${hours}h` : `pause · ${Math.round(hours * 60)}m`,
       detail: untilHourLabel(hours),
       raw: original,
     };
@@ -889,10 +955,18 @@ function wrapper({ children }: { children: ReactNode }) {
   return <HaltProvider>{children}</HaltProvider>;
 }
 
+// CRITICAL: dispatcher + halt must share ONE provider instance, otherwise
+// the dispatcher's setHalted call writes to a different provider than the
+// halt.halted assertion reads from. Use a single renderHook with a combined
+// hook to guarantee one wrapper render = one HaltProvider.
 function setup() {
-  const dispatcher = renderHook(() => useAlexActionDispatcher(), { wrapper });
-  const halt = renderHook(() => useHalt(), { wrapper });
-  return { dispatcher, halt };
+  return renderHook(
+    () => ({
+      dispatch: useAlexActionDispatcher(),
+      halt: useHalt(),
+    }),
+    { wrapper },
+  );
 }
 
 beforeEach(() => {
@@ -903,9 +977,9 @@ beforeEach(() => {
 
 describe("useAlexActionDispatcher", () => {
   it("pause flips halt true and toasts", () => {
-    const { dispatcher, halt } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "pause",
         icon: "⏸",
         label: "pause",
@@ -913,15 +987,15 @@ describe("useAlexActionDispatcher", () => {
         raw: "pause",
       });
     });
-    expect(halt.result.current.halted).toBe(true);
+    expect(result.current.halt.halted).toBe(true);
     expect(toastMock).toHaveBeenCalledOnce();
   });
 
   it("resume flips halt false", () => {
-    const { dispatcher, halt } = setup();
-    act(() => halt.result.current.setHalted(true));
+    const { result } = setup();
+    act(() => result.current.halt.setHalted(true));
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "resume",
         icon: "▶",
         label: "resume",
@@ -929,13 +1003,13 @@ describe("useAlexActionDispatcher", () => {
         raw: "resume",
       });
     });
-    expect(halt.result.current.halted).toBe(false);
+    expect(result.current.halt.halted).toBe(false);
   });
 
   it("halt flips halt true (no auto-resume)", () => {
-    const { dispatcher, halt } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "halt",
         icon: "⏹",
         label: "halt",
@@ -943,13 +1017,13 @@ describe("useAlexActionDispatcher", () => {
         raw: "halt",
       });
     });
-    expect(halt.result.current.halted).toBe(true);
+    expect(result.current.halt.halted).toBe(true);
   });
 
   it("rule routes to /settings?focus=rules", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "rule",
         icon: "⊘",
         label: "rule change",
@@ -961,9 +1035,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("handoff with threadContext routes to /contacts/[id]?takeover=true", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current(
+      result.current.dispatch(
         {
           kind: "handoff",
           icon: "✎",
@@ -978,9 +1052,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("handoff without threadContext toasts a fallback (no route)", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "handoff",
         icon: "✎",
         label: "handoff · Maya",
@@ -993,9 +1067,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("context with threadContext routes to /contacts/[id]?note=open", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current(
+      result.current.dispatch(
         {
           kind: "context",
           icon: "ⓘ",
@@ -1010,9 +1084,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("brief is toast-only stub", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "brief",
         icon: "☼",
         label: "brief me",
@@ -1025,9 +1099,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("command pause-1h flips halt true via synthetic parseCommand", () => {
-    const { dispatcher, halt } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "command",
         icon: "·",
         label: "Pause Alex for 1 hour",
@@ -1036,13 +1110,13 @@ describe("useAlexActionDispatcher", () => {
         commandId: "pause-1h",
       });
     });
-    expect(halt.result.current.halted).toBe(true);
+    expect(result.current.halt.halted).toBe(true);
   });
 
   it("command stop-founder routes with founderRateEnabled=false", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "command",
         icon: "·",
         label: "Stop offering the founder rate",
@@ -1055,9 +1129,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("command raise-rule routes with priceApprovalThreshold=99", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "command",
         icon: "·",
         label: "Raise approval threshold to $99",
@@ -1070,9 +1144,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("command open-settings routes to /settings", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "command",
         icon: "·",
         label: "Open settings",
@@ -1085,9 +1159,9 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("command open-meta routes to /settings?focus=channels", () => {
-    const { dispatcher } = setup();
+    const { result } = setup();
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "command",
         icon: "·",
         label: "Open Meta Ads campaigns",
@@ -1100,11 +1174,11 @@ describe("useAlexActionDispatcher", () => {
   });
 
   it("resume works even when currently halted", () => {
-    const { dispatcher, halt } = setup();
-    act(() => halt.result.current.setHalted(true));
-    expect(halt.result.current.halted).toBe(true);
+    const { result } = setup();
+    act(() => result.current.halt.setHalted(true));
+    expect(result.current.halt.halted).toBe(true);
     act(() => {
-      dispatcher.result.current({
+      result.current.dispatch({
         kind: "resume",
         icon: "▶",
         label: "resume",
@@ -1112,7 +1186,7 @@ describe("useAlexActionDispatcher", () => {
         raw: "",
       });
     });
-    expect(halt.result.current.halted).toBe(false);
+    expect(result.current.halt.halted).toBe(false);
   });
 });
 ```
@@ -1314,6 +1388,28 @@ describe("<CommandPalette>", () => {
     expect(followup).toBeDisabled();
   });
 
+  it("hold-named is rendered but disabled (inert in A.5)", () => {
+    // hold-named appears in ALEX_COMMANDS but has no corresponding
+    // ParsedActionKind in A.5. The palette's thread-group disable behavior
+    // keeps it inert because threadContext is always undefined at the A.5
+    // CockpitPage call site. This case locks the catalog/dispatcher
+    // asymmetry — see slice brief §"Typed `hold` action kind" non-goal.
+    render(
+      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
+    );
+    const hold = screen.getByText("Hold {contact}, don't send anything").closest("button");
+    expect(hold).toBeInTheDocument();
+    expect(hold).toBeDisabled();
+  });
+
+  it("renders groups in operational-first order (control → thread → rules → nav)", () => {
+    render(
+      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
+    );
+    const labels = screen.getAllByText(/^(Control|Thread|Rules|Navigate)$/);
+    expect(labels.map((el) => el.textContent)).toEqual(["Control", "Thread", "Rules", "Navigate"]);
+  });
+
   it("thread-group commands enabled when threadContext present", () => {
     render(
       <CommandPalette
@@ -1370,12 +1466,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "./tokens";
 import type { Command, CommandGroup, ThreadContext } from "./types";
 
-const GROUP_ORDER: CommandGroup[] = ["nav", "rules", "control", "thread"];
+// Order: control → thread → rules → nav. The palette's primary job is
+// "tell Alex what to do" — operational commands lead. Nav routes away
+// from the cockpit, so it's last. Do not reorder.
+const GROUP_ORDER: CommandGroup[] = ["control", "thread", "rules", "nav"];
 const GROUP_LABEL: Record<CommandGroup, string> = {
-  nav: "Navigate",
-  rules: "Rules",
   control: "Control",
   thread: "Thread",
+  rules: "Rules",
+  nav: "Navigate",
 };
 
 export interface CommandPaletteProps {
