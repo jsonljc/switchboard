@@ -150,6 +150,8 @@ export function RileyCockpitPage() {
             pulseFor={statusPulse}
             missionInteractive={!!mission.data}
             onOpenMission={() => setMissionOpen((o) => !o)}
+            displayName="Riley"
+            avatarAccent={{ soft: RILEY_ACCENT.soft, deep: RILEY_ACCENT.deep }}
           />
           {mission.data ? (
             <MissionPopover
