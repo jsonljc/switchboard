@@ -262,6 +262,7 @@ export function createGatewayBridge(
         sessionId: info.sessionId,
         role: info.role,
         content: info.content,
+        workTraceId: info.workTraceId,
       });
     },
   });

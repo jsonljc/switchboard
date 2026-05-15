@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const compoundingCtorArgs: unknown[] = [];
 const processConversationEndMock = vi.fn();
 let capturedLifecycleHandler: ((event: unknown) => Promise<void>) | null = null;
+let capturedOnMessageRecorded: ((info: Record<string, unknown>) => void) | null = null;
+const lifecycleRecordMessageSpy = vi.fn();
 
 vi.mock("@switchboard/core", async () => {
   const actual = await vi.importActual<typeof import("@switchboard/core")>("@switchboard/core");
@@ -23,10 +25,15 @@ vi.mock("@switchboard/core", async () => {
       .mockImplementation((config: { onConversationEnd: (e: unknown) => Promise<void> }) => {
         capturedLifecycleHandler = config.onConversationEnd;
         return {
-          recordMessage: vi.fn(),
+          recordMessage: lifecycleRecordMessageSpy,
         };
       }),
-    ChannelGateway: vi.fn().mockImplementation((config: unknown) => ({ config })),
+    ChannelGateway: vi
+      .fn()
+      .mockImplementation((config: { onMessageRecorded?: typeof capturedOnMessageRecorded }) => {
+        capturedOnMessageRecorded = config.onMessageRecorded ?? null;
+        return { config };
+      }),
   };
 });
 
@@ -44,6 +51,8 @@ describe("createGatewayBridge — outcome attribution wiring (Task 20)", () => {
     compoundingCtorArgs.length = 0;
     processConversationEndMock.mockReset();
     capturedLifecycleHandler = null;
+    capturedOnMessageRecorded = null;
+    lifecycleRecordMessageSpy.mockReset();
   });
 
   it("constructs ConversationCompoundingService with a BookingAttributionStore (bookingStore dep)", async () => {
@@ -94,5 +103,59 @@ describe("createGatewayBridge — outcome attribution wiring (Task 20)", () => {
     expect(processConversationEndMock).toHaveBeenCalledWith(
       expect.objectContaining({ endedAt: expect.any(Date) }),
     );
+  });
+
+  it("forwards workTraceId from assistant-turn onMessageRecorded to lifecycleTracker.recordMessage", async () => {
+    const { createGatewayBridge } = await import("../gateway-bridge.js");
+    const fakePrisma = {} as never;
+    const fakeIngress = { submit: vi.fn() };
+
+    createGatewayBridge(fakePrisma, { platformIngress: fakeIngress });
+
+    expect(capturedOnMessageRecorded).not.toBeNull();
+
+    capturedOnMessageRecorded!({
+      deploymentId: "dep_1",
+      listingId: "list_1",
+      organizationId: "org_1",
+      channel: "telegram",
+      sessionId: "ses_1",
+      role: "assistant",
+      content: "Hi there",
+      workTraceId: "wt-X",
+    });
+
+    expect(lifecycleRecordMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        content: "Hi there",
+        workTraceId: "wt-X",
+      }),
+    );
+  });
+
+  it("does not add workTraceId when forwarding a user-turn message to lifecycleTracker.recordMessage", async () => {
+    const { createGatewayBridge } = await import("../gateway-bridge.js");
+    const fakePrisma = {} as never;
+    const fakeIngress = { submit: vi.fn() };
+
+    createGatewayBridge(fakePrisma, { platformIngress: fakeIngress });
+
+    expect(capturedOnMessageRecorded).not.toBeNull();
+
+    capturedOnMessageRecorded!({
+      deploymentId: "dep_1",
+      listingId: "list_1",
+      organizationId: "org_1",
+      channel: "telegram",
+      sessionId: "ses_1",
+      role: "user",
+      content: "Hello",
+      // NOTE: no workTraceId field — pins that user turns stay text events.
+    });
+
+    const call = lifecycleRecordMessageSpy.mock.calls[0]!;
+    const recordArg = call[0] as { workTraceId?: string };
+    expect(recordArg.workTraceId).toBeUndefined();
   });
 });
