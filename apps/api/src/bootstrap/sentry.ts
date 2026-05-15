@@ -7,11 +7,11 @@ import type { FastifyInstance } from "fastify";
 let sentryInitialized = false;
 
 /**
- * Initialize Sentry SDK. No-op if SENTRY_DSN is not set.
+ * Initialize Sentry SDK. No-op if SENTRY_DSN_SERVER is not set.
  * Must be called early in the bootstrap sequence (before routes).
  */
 export async function initSentry(): Promise<void> {
-  const dsn = process.env["SENTRY_DSN"];
+  const dsn = process.env["SENTRY_DSN_SERVER"];
   if (!dsn) return;
 
   const Sentry = await import("@sentry/node");

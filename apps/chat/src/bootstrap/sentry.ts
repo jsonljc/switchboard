@@ -1,7 +1,7 @@
 let sentryInitialized = false;
 
 export async function initChatSentry(): Promise<void> {
-  const dsn = process.env["SENTRY_DSN"];
+  const dsn = process.env["SENTRY_DSN_SERVER"];
   if (!dsn) return;
 
   const Sentry = await import("@sentry/node");
