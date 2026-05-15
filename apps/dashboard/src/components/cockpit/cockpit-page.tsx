@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { T } from "./tokens";
 import { Topbar } from "./topbar";
 import { Identity } from "./identity";
-import { ApprovalBlock } from "./approval-block";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { Composer } from "./composer";
 import { CommandPalette } from "./command-palette";
@@ -17,6 +16,7 @@ import type { CockpitKpiData } from "./types";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 import { ALEX_COMMANDS, ALEX_COMPOSER_PLACEHOLDER } from "@/lib/cockpit/alex-commands";
 import { useAlexActionDispatcher } from "@/lib/cockpit/alex-action-dispatcher";
+import { AlexApprovalRow } from "@/lib/cockpit/alex/alex-approval-row";
 import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view";
 import { metricsViewModelToLegacyKpiInput } from "@/lib/cockpit/metrics-to-kpi-input";
 import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
@@ -147,14 +147,23 @@ export function CockpitPage() {
         </div>
         {!coldState && kpis ? <KPIStrip kpis={kpis} collapsed={approvals.length > 0} /> : null}
         {approvals.length > 0 && (
-          <ApprovalBlock
-            data={approvals}
-            onResolve={(_verdict, _idx) => {
-              // A.1 stops at view assembly; resolution wires up at A.5 once
-              // useRespondToApproval is integrated into the cockpit. Until
-              // then the buttons are visually present but inert.
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              margin: "20px 28px 0",
             }}
-          />
+          >
+            {approvals.map((approval, idx) => (
+              <AlexApprovalRow
+                key={approval.id}
+                approval={approval}
+                idx={idx}
+                total={approvals.length}
+              />
+            ))}
+          </div>
         )}
         {coldState && mission.data ? (
           <EmptyState
