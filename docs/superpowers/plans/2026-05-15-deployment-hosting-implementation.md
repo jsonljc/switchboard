@@ -187,7 +187,22 @@ Run: `pnpm typecheck`
 
 Expected: PASS for all packages. If a package fails because the `SENTRY_DSN` rename left a stale reference, run `grep -rn 'SENTRY_DSN[^_]' apps packages` to find it and update.
 
-- [ ] **Step 2.8: Commit**
+- [ ] **Step 2.8: Broad-scope grep to confirm no stale `SENTRY_DSN` references survived**
+
+Run:
+
+```bash
+grep -R -n "SENTRY_DSN" apps packages .env.example \
+  --include='*.ts' --include='*.tsx' --include='*.js' \
+  --include='*.json' --include='*.example' --include='*.md' \
+  --exclude-dir=node_modules --exclude-dir=dist
+```
+
+Expected: the only matches are `SENTRY_DSN_SERVER` (api/chat code) and `NEXT_PUBLIC_SENTRY_DSN` (dashboard sentry configs + `.env.example`). A bare `SENTRY_DSN` (no `_SERVER` suffix, no `NEXT_PUBLIC_` prefix) outside of a deliberate documentation note is a stale reference — go fix it before commit.
+
+Note: `docker-compose.prod.yml` is **deliberately not synced** with this rename (per spec §12, the prod compose represents the prior self-hosted plan and is kept for local integration testing only). If your grep picks it up, leave it; otherwise the rename is complete.
+
+- [ ] **Step 2.9: Commit**
 
 ```bash
 git add apps/api/src/bootstrap/sentry.ts apps/chat/src/bootstrap/sentry.ts apps/chat/src/__tests__/sentry-bootstrap.test.ts .env.example
@@ -562,50 +577,66 @@ git commit -m "feat(chat): register /api/health/deep route in main.ts"
 
 ## Task 5: Author `render.yaml`
 
-**Why:** Spec §5 requires Render topology to be Infrastructure-as-Code in the repo. The `render.yaml` declares the two services, the managed Postgres and Redis, the Dockerfile target for each service, the pre-deploy command for `api` only (enforcing the migration-runner invariant), and the health-check paths.
+**Why:** Spec §5 requires Render topology to be Infrastructure-as-Code in the repo. The `render.yaml` declares the two web services (`api`, `chat`), the managed Postgres, the managed Redis, the pre-deploy command for `api` only (enforcing the migration-runner invariant), and the shallow `/health` path used for Render's container-promotion gating.
 
 **Files:**
 
 - Create: `render.yaml` at repo root.
+- **Possibly create** (only if Step 5.0 verification reveals Render's blueprint does not support multi-stage `--target` selection): `Dockerfile.api`, `Dockerfile.chat` as per-service Dockerfiles. See Step 5.2.
 
-**Design notes:**
+**Design decisions (locked):**
 
-- Region is left as a placeholder (`<RENDER_REGION>`) with a comment instructing the operator to choose at provisioning per spec §3.
-- `envVars` blocks declare **keys only**, never values. Values are entered in the Render UI from the vault.
-- The `api` service uses `healthCheckPath: /api/health/deep` because that endpoint exists today. The `chat` service uses `healthCheckPath: /api/health/deep` after Task 4 lands (which this task assumes is already merged).
-- `numInstances: 1` for both services at pilot — autoscale is a §9 exit-condition concern.
-- Postgres + Redis named `switchboard-postgres` / `switchboard-redis` for clarity in the Render dashboard.
+- `healthCheckPath: /health` for **both** services — shallow liveness. This matches spec §7's deliberate decision: deep readiness (`/api/health/deep`) is correct for monitoring/UptimeRobot but **wrong for Render gating**, because chat's deep endpoint reports `api`-reachability and would fail during `api` blips, triggering needless chat redeploys.
+- **No `dockerCommand` override.** The Dockerfile's `api` stage ends with `CMD ["node", "apps/api/dist/server.js"]` and the `chat` stage with `CMD ["node", "apps/chat/dist/main.js"]`. Per the audit, these are correct; overriding them would be a footgun.
+- `SWITCHBOARD_API_URL` is set as a **direct value** (`http://switchboard-api:3000`), not via `fromService`. Render's private network resolves the service name `switchboard-api` to its internal hostname; the port is 3000 (set deterministically in the same blueprint). Setting the full URL with scheme + port eliminates the chat-side "is this a hostport or a URL?" ambiguity.
+- `region: <RENDER_REGION>` is a deliberate fill-in (3 occurrences) — the operator picks at provisioning per spec §3 and replaces all three before connecting to Render.
+- `envVars` blocks declare **keys only** for secrets (`sync: false`). Values are entered in the Render UI from the master vault.
 
 ---
 
+- [ ] **Step 5.0 (verification gate): confirm current Render Blueprint schema**
+
+This step exists because Render's Blueprint v2 schema may have evolved. The implementation must use the currently-valid schema, not a snapshot from this plan's authoring date.
+
+Open https://render.com/docs/blueprint-spec and confirm the **current** spec for each of the following. If any differs from what this plan's example uses, **adjust the example before writing the file**:
+
+1. **Redis declaration.** This plan declares Redis as `type: redis` inside the top-level `services:` list. If Render's current schema uses a different block (e.g., a separate top-level `redis:` list), use that form. **Do not commit speculative or "validate later" blocks.**
+2. **Postgres declaration.** This plan uses a top-level `databases:` list. Verify it's still the correct location and field name.
+3. **Multi-stage Dockerfile target selection.** The existing `Dockerfile` has stages `api`, `chat`, `dashboard`, `mcp-server`. Each web service needs to build only its target stage.
+   - If Render's blueprint supports a multi-stage target field on the service (current candidates as of writing: `dockerfileTarget`, `target`, or similar), use it. The example below uses `dockerfileTarget` as a working guess — replace with the verified field name.
+   - **If no such field exists in current Render blueprint:** fall back to creating `Dockerfile.api` and `Dockerfile.chat` as per-service Dockerfiles (Step 5.2 below), and reference them via `dockerfilePath`.
+4. **`preDeployCommand`.** This plan uses `preDeployCommand` (camelCase, on the service). Verify field name and casing.
+5. **`healthCheckPath`.** Same — verify field name and casing.
+
+Record in the PR description which version of the Render Blueprint reference was consulted (URL + date), so future readers can see what was current at provisioning.
+
 - [ ] **Step 5.1: Write the `render.yaml` file**
 
-Create `render.yaml` at the repo root:
+Create `render.yaml` at the repo root. The example below uses field names that are **best-known correct** as of this plan's authoring; replace any that Step 5.0 identified as different in the current Render schema.
 
 ```yaml
 # Render Infrastructure-as-Code for Switchboard pilot launch.
 # Reference: docs/superpowers/specs/2026-05-15-deployment-hosting-design.md
 #
-# Values for envVars are managed in the Render UI from the master vault.
-# This file declares only the *keys* and where they should appear.
+# Values for envVars with `sync: false` are entered in the Render UI from
+# the master vault. This file declares only their *keys*.
 #
-# Region must be set by the operator at provisioning time per spec §3.
-# Replace <RENDER_REGION> below with the chosen region (e.g., "singapore",
-# "oregon", "frankfurt") before connecting the repo to Render.
+# Region (3 occurrences) is set by the operator at provisioning per spec §3.
+# Replace <RENDER_REGION> with the chosen region before connecting to Render.
 
 services:
   - type: web
     name: switchboard-api
     runtime: docker
     dockerfilePath: ./Dockerfile
+    dockerfileTarget: api          # If Step 5.0 verification finds a different field name, replace here.
     dockerContext: .
-    dockerCommand: node apps/api/dist/server.js
     plan: starter
     region: <RENDER_REGION>
     numInstances: 1
     branch: main
     autoDeploy: true
-    healthCheckPath: /api/health/deep
+    healthCheckPath: /health        # Shallow liveness — Render uses this to gate container promotion.
     preDeployCommand: pnpm --filter @switchboard/db run migrate:deploy
     buildFilter:
       paths:
@@ -661,14 +692,14 @@ services:
     name: switchboard-chat
     runtime: docker
     dockerfilePath: ./Dockerfile
+    dockerfileTarget: chat         # Same caveat as `api` above.
     dockerContext: .
-    dockerCommand: node apps/chat/dist/main.js
     plan: starter
     region: <RENDER_REGION>
     numInstances: 1
     branch: main
     autoDeploy: true
-    healthCheckPath: /api/health/deep
+    healthCheckPath: /health        # Shallow liveness — does NOT depend on api reachability.
     buildFilter:
       paths:
         - apps/chat/**
@@ -697,10 +728,7 @@ services:
       - key: INTERNAL_API_SECRET
         sync: false
       - key: SWITCHBOARD_API_URL
-        fromService:
-          type: web
-          name: switchboard-api
-          property: hostport
+        value: http://switchboard-api:3000   # Render private network: http://<service-name>:<PORT>. PORT for api is 3000 (set above).
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
@@ -726,50 +754,55 @@ services:
       - key: LOG_LEVEL
         value: info
 
-databases:
-  - name: switchboard-postgres
-    plan: starter
-    region: <RENDER_REGION>
-    postgresMajorVersion: 16
-
-services_extra:
   - type: redis
     name: switchboard-redis
     plan: starter
     region: <RENDER_REGION>
     maxmemoryPolicy: allkeys-lru
-    ipAllowList: []   # private-network only
+    ipAllowList: []                # Empty list = private-network only, no public access.
 
-# Notes for the operator:
-# 1. Replace <RENDER_REGION> (3 occurrences) with the chosen Render region per spec §3
-#    before connecting this repo to Render.
-# 2. The `services_extra` block above is a placeholder — Render's blueprint schema
-#    for Redis as of the spec date uses a top-level `services` entry of type `redis`,
-#    NOT a separate block. Validate against Render's current blueprint reference
-#    (https://render.com/docs/blueprint-spec) at provisioning time and merge into
-#    the `services:` list if Render's schema has converged.
-# 3. The `fromService` resolution for SWITCHBOARD_API_URL produces an internal
-#    `host:port` like "switchboard-api:3000". The chat process must construct
-#    a full URL with the right scheme — Render private network is plain HTTP.
-#    Verify the resolved value in chat's startup logs after first deploy.
+databases:
+  - name: switchboard-postgres
+    plan: starter
+    region: <RENDER_REGION>
+    postgresMajorVersion: 16
 ```
 
-- [ ] **Step 5.2: Validate YAML syntactically**
+- [ ] **Step 5.2 (conditional fallback): per-service Dockerfiles if multi-stage target selection isn't supported**
+
+Only execute this step if Step 5.0 verification revealed that Render's current blueprint **does not** support multi-stage Docker `--target` selection. In that case:
+
+1. Remove the `dockerfileTarget:` line from both services in `render.yaml`.
+2. Change `dockerfilePath: ./Dockerfile` → `dockerfilePath: ./Dockerfile.api` for `switchboard-api`, and `./Dockerfile.chat` for `switchboard-chat`.
+3. Create `Dockerfile.api` at repo root by copying the existing `Dockerfile` and removing the `chat`, `dashboard`, and `mcp-server` stages. The remaining stages (`base`, `build`, `api`) form a complete build that produces an api-only image.
+4. Create `Dockerfile.chat` similarly, keeping `base`, `build`, `chat` and removing the others.
+
+The existing `Dockerfile` at repo root stays — `docker-compose.prod.yml` and local integration testing still depend on it.
+
+If Step 5.0 confirmed Render does support `dockerfileTarget` (or the equivalent), **skip this step entirely** — the single Dockerfile + target selection is the cleaner solution and avoids duplication.
+
+- [ ] **Step 5.3: Validate the YAML syntax**
 
 Run: `python3 -c "import yaml; yaml.safe_load(open('render.yaml'))"`
 
-Expected: no output (clean parse). If `python3` is unavailable, use `node -e "require('yaml').parse(require('fs').readFileSync('render.yaml','utf8'))"` or any other YAML parser.
+Expected: no output (clean parse). If `python3` is unavailable, run `node -e "require('js-yaml').load(require('fs').readFileSync('render.yaml','utf8'))"` or another YAML parser. A parse error here means the file isn't even YAML, never mind valid blueprint.
 
-- [ ] **Step 5.3: Sanity-grep that every secret in the spec's §4 ownership matrix is declared**
+- [ ] **Step 5.4: Sanity-grep the secrets and the placeholder count**
 
 Run: `grep -E '^\s*- key:' render.yaml | sort -u`
 
-Expected output includes (at minimum): `CREDENTIALS_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `META_ADS_ACCESS_TOKEN`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `SENTRY_DSN_SERVER`, `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`. Cross-reference against the spec's §4 matrix — anything missing must be added.
+Expected output includes (at minimum): `CREDENTIALS_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `META_ADS_ACCESS_TOKEN`, `META_ADS_ACCOUNT_ID`, `META_PIXEL_ID`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `SENTRY_DSN_SERVER`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`. Cross-reference against the spec's §4 matrix — anything missing must be added before commit.
 
-- [ ] **Step 5.4: Commit**
+Also confirm only the deliberate region placeholder remains:
+
+Run: `grep -c '<RENDER_REGION>' render.yaml`
+
+Expected: `3` (api service region, chat service region, redis region — Postgres in `databases:` also uses it, depending on whether you count its placement; verify against the actual file). If there's any other placeholder string (`<TBD>`, `TODO`, `FIXME`, `validate later`), remove it — the file must be ready to provision against once `<RENDER_REGION>` is filled.
+
+- [ ] **Step 5.5: Commit**
 
 ```bash
-git add render.yaml
+git add render.yaml Dockerfile.api Dockerfile.chat   # Last two only if Step 5.2 ran.
 git commit -m "feat(deploy): add render.yaml declaring api+chat+Postgres+Redis topology"
 ```
 
@@ -1024,6 +1057,10 @@ Create `scripts/smoke-prod.sh`:
 
 set -euo pipefail
 
+# Required CLI dependencies. Fail early with a clear message if anything is missing.
+command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is required" >&2; exit 64; }
+command -v jq   >/dev/null 2>&1 || { echo "ERROR: jq is required (brew install jq / apt-get install jq)" >&2; exit 64; }
+
 require() {
   local var_name="$1"
   if [ -z "${!var_name:-}" ]; then
@@ -1110,14 +1147,14 @@ check "/api/health/deep reports redis=connected" \
 check "/api/health/deep reports api reachability" \
   check_json_field "$CHAT_URL/api/health/deep" '.checks.api.status' 'connected'
 
-echo "[webhook signature verification — negative case]"
-check "chat rejects unsigned managed-webhook POST with 4xx" \
+echo "[webhook routing — negative case]"
+check "chat returns 4xx for an unknown managed-webhook id (routing alive)" \
   check_http_status "$CHAT_URL/webhook/managed/__smoke__" "404" -X POST -H "content-type: application/json" -d '{}'
 
-# Note: a strict signature-rejection test (Meta hub.verify_token or Slack signing-secret)
-# requires per-channel context. The 404 above proves the routing layer is alive; the
-# spec's launch runbook §10 step 7 should be augmented with channel-specific signed
-# vs unsigned probes once real webhookIds are registered.
+# This check proves only that the routing layer is alive — it is NOT a signature-
+# verification test. Real signature verification (Meta hub.verify_token, Slack signing
+# secret, Telegram secret token) is channel-specific and requires real webhookIds and
+# valid signed payloads; it remains a manual smoke step in the runbook.
 
 echo
 echo "Summary: $pass passed, $fail failed"
@@ -1277,6 +1314,13 @@ docs/superpowers/plans/2026-05-15-deployment-hosting-implementation.md
 packages/db/package.json
 render.yaml
 scripts/smoke-prod.sh
+```
+
+Plus, **only if Task 5 Step 5.2 ran** (Render's blueprint doesn't support multi-stage target selection, so per-service Dockerfiles are needed):
+
+```
+Dockerfile.api
+Dockerfile.chat
 ```
 
 If any file is missing or any unexpected file is in the diff, investigate before opening the PR.
