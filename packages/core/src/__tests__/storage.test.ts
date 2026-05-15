@@ -351,6 +351,49 @@ describe("InMemoryApprovalStore", () => {
     const pending = await store.listPending();
     expect(pending).toHaveLength(2);
   });
+
+  it("preserves ApprovalRequest.payload through save+listPending (A.7c-followup)", async () => {
+    // Persistence-layer contract: payload kind/body/quote/quoteFrom round-trip
+    // intact so the dashboard's rich adapter can read them on GET
+    // /api/approvals/pending. Mirrors the production code path:
+    // skill-runtime ToolResult.error.payload → propose-pipeline pass-through →
+    // approvals.save({ request, ... }) → request.payload persists in
+    // Approval.request (Json column) → listPending → server-route projection.
+    const approval = {
+      ...makeApproval("appr_payload"),
+      request: {
+        ...makeApproval("appr_payload").request,
+        payload: {
+          kind: "regulatory" as const,
+          body: "Patient asked about FDA approval status.",
+          quote: "Our laser is FDA approved.",
+          quoteFrom: "Alex (draft)",
+        },
+      },
+    };
+    await store.save(approval);
+
+    const retrieved = await store.getById("appr_payload");
+    expect(retrieved?.request.payload?.kind).toBe("regulatory");
+    expect(retrieved?.request.payload?.body).toBe("Patient asked about FDA approval status.");
+    expect(retrieved?.request.payload?.quote).toBe("Our laser is FDA approved.");
+    expect(retrieved?.request.payload?.quoteFrom).toBe("Alex (draft)");
+
+    const pending = await store.listPending();
+    const reg = pending.find((p) => p.request.id === "appr_payload");
+    expect(reg?.request.payload?.kind).toBe("regulatory");
+  });
+
+  it("preserves absence of payload (legacy approval round-trip)", async () => {
+    // Backward-compat: legacy approvals (pre-A.7c) have no payload. The rich
+    // adapter must continue to receive payload=undefined and fall back to the
+    // legacy adapter (kind: "pricing").
+    const legacy = makeApproval("appr_legacy");
+    await store.save(legacy);
+
+    const retrieved = await store.getById("appr_legacy");
+    expect(retrieved?.request.payload).toBeUndefined();
+  });
 });
 
 describe("InMemoryCartridgeRegistry", () => {
