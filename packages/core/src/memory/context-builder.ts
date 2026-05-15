@@ -31,6 +31,10 @@ export interface BuiltContext {
   learnedFacts: ContextLearnedFact[];
   recentSummaries: ContextSummary[];
   outcomePatternContext: string;
+  // PR-3.2c: IDs of pattern memories rendered into outcomePatternContext.
+  // Reflects what was surfaceable; not budget-truncated (patterns are appended
+  // after the budgeted chunks/facts/summaries). Empty when no patterns surfaced.
+  injectedPatternIds: string[];
   totalTokenEstimate: number;
 }
 
@@ -61,6 +65,10 @@ export interface ContextBuilderDeploymentMemoryStore {
       id: string;
       content: string;
       category: string;
+      // Optional in the Layer-3 contract — the Prisma store returns it always
+      // (PR-3.2a column with @default(null)), but older in-memory test fixtures
+      // pre-date the column. Coalesced to null at the OutcomePattern boundary.
+      canonicalKey?: string | null;
       confidence: number;
       sourceCount: number;
       lastSeenAt: Date;
@@ -168,7 +176,9 @@ export class ContextBuilder {
     const outcomePatterns: OutcomePattern[] = memories
       .filter((m) => m.category === "pattern")
       .map((m) => ({
+        id: m.id,
         content: m.content,
+        canonicalKey: m.canonicalKey ?? null,
         category: m.category as OutcomePattern["category"],
         confidence: m.confidence,
         sourceCount: m.sourceCount,
@@ -176,6 +186,7 @@ export class ContextBuilder {
       }));
     const surfaceable = filterSurfaceablePatterns(outcomePatterns);
     const outcomePatternContext = formatOutcomePatternsForContext(surfaceable);
+    const injectedPatternIds = outcomePatternContext.length > 0 ? surfaceable.map((p) => p.id) : [];
     if (outcomePatternContext.length > 0) {
       getMetrics().outcomePatternsSurfaced.inc({ deploymentId: input.deploymentId });
     }
@@ -185,6 +196,7 @@ export class ContextBuilder {
       learnedFacts,
       recentSummaries,
       outcomePatternContext,
+      injectedPatternIds,
       totalTokenEstimate: tokensUsed + estimateTokens(outcomePatternContext),
     };
   }
