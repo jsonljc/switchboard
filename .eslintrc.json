@@ -242,6 +242,40 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "apps/dashboard/src/components/cockpit/**/*.ts",
+        "apps/dashboard/src/components/cockpit/**/*.tsx",
+        "apps/dashboard/src/hooks/use-riley-*.ts",
+        "apps/dashboard/src/app/(auth)/alex/**/*.ts",
+        "apps/dashboard/src/app/(auth)/alex/**/*.tsx",
+        "apps/dashboard/src/app/(auth)/riley/**/*.ts",
+        "apps/dashboard/src/app/(auth)/riley/**/*.tsx"
+      ],
+      "excludedFiles": ["**/__tests__/**", "**/__fixtures__/**", "**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@switchboard/db", "@switchboard/db/*", "@prisma/*"],
+                "message": "Cockpit UI/hooks may not import db or Prisma types. Use view-models from @/components/cockpit/types or adapter outputs from @/lib/cockpit/riley."
+              },
+              {
+                "group": [
+                  "@switchboard/schemas/recommendations",
+                  "@switchboard/schemas/recommendations/*",
+                  "@switchboard/schemas/audit",
+                  "@switchboard/schemas/audit/*"
+                ],
+                "message": "Cockpit UI/hooks may not import Recommendation or AuditEntry schemas directly. Use ApprovalView / ActivityRow view-models."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

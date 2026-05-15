@@ -160,6 +160,10 @@ export const scopedKeys = (orgId: string) => ({
     all: () => [orgId, "greeting"] as const,
     feed: (agentKey: string) => [orgId, "greeting", "feed", agentKey] as const,
   },
+  mission: {
+    all: () => [orgId, "mission"] as const,
+    detail: (agentKey: string) => [orgId, "mission", "detail", agentKey] as const,
+  },
   wins: {
     all: () => [orgId, "wins"] as const,
     feed: (agentKey: string, window: "today" | "week" | "month") =>
@@ -189,6 +193,10 @@ export const scopedKeys = (orgId: string) => ({
   reports: {
     all: () => [orgId, "reports"] as const,
     byWindow: (window: string) => [orgId, "reports", window] as const,
+  },
+  opportunities: {
+    all: () => [orgId, "opportunities"] as const,
+    board: () => [orgId, "opportunities", "board"] as const,
   },
   contacts: {
     all: () => [orgId, "contacts"] as const,

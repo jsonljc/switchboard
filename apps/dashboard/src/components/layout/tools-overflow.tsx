@@ -18,7 +18,7 @@ export const TOOLS_NAV_ITEMS: ReadonlyArray<{
   readonly label: string;
   readonly href: string;
 }> = [
-  { id: "contacts", label: "Contacts", href: "/contacts" },
+  { id: "contacts", label: "Pipeline", href: "/contacts" },
   { id: "automations", label: "Automations", href: "/automations" },
   { id: "activity", label: "Activity", href: "/activity" },
   { id: "reports", label: "Reports", href: "/reports" },

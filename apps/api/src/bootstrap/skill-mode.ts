@@ -45,12 +45,18 @@ interface SkillModeBootstrapDeps {
    * so the same underlying DB client and embedding adapter are reused.
    */
   contextBuilder?: import("@switchboard/core").ContextBuilder;
+  /**
+   * Optional WorkTraceStore. When provided, PrismaOpportunityStore uses it to
+   * emit WorkTrace entries on stage transitions. When absent, stage transitions
+   * are persisted but not traced.
+   */
+  workTraceStore?: import("@switchboard/db").PrismaWorkTraceStore | null;
 }
 
 export async function bootstrapSkillMode(
   deps: SkillModeBootstrapDeps,
 ): Promise<SkillModeBootstrapResult> {
-  const { prismaClient, intentRegistry, modeRegistry, logger } = deps;
+  const { prismaClient, intentRegistry, modeRegistry, logger, workTraceStore = null } = deps;
 
   const {
     loadSkill,
@@ -110,7 +116,7 @@ export async function bootstrapSkillMode(
   registerSkillIntents(intentRegistry, [alexSkill]);
 
   const contactStore = new PrismaContactStore(prismaClient);
-  const opportunityStore = new PrismaOpportunityStore(prismaClient);
+  const opportunityStore = new PrismaOpportunityStore(prismaClient, workTraceStore);
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
   const businessFactsStore = new PrismaBusinessFactsStore(prismaClient);

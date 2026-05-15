@@ -2,6 +2,12 @@
 import { T } from "./tokens";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 
+export interface TopbarTab {
+  name: string;
+  active?: boolean;
+  muted?: boolean;
+}
+
 export interface TopbarProps {
   /**
    * Whether the command-palette affordance is wired. A.1 ships `false`
@@ -12,6 +18,8 @@ export interface TopbarProps {
   /** Optional click handler invoked when paletteEnabled is true. */
   onOpenPalette?: () => void;
   compact?: boolean;
+  /** Per-route tab list. Defaults to `ALEX_CONFIG.tabs` for backward compat. */
+  tabs?: readonly TopbarTab[];
 }
 
 function Mark() {
@@ -49,7 +57,12 @@ function Tab({ name, active, muted }: { name: string; active?: boolean; muted?: 
   );
 }
 
-export function Topbar({ paletteEnabled, onOpenPalette, compact = false }: TopbarProps) {
+export function Topbar({
+  paletteEnabled,
+  onOpenPalette,
+  compact = false,
+  tabs = ALEX_CONFIG.tabs,
+}: TopbarProps) {
   return (
     <header
       style={{
@@ -74,13 +87,8 @@ export function Topbar({ paletteEnabled, onOpenPalette, compact = false }: Topba
           )}
         </div>
         <nav style={{ display: "flex", gap: 2 }}>
-          {ALEX_CONFIG.tabs.map((t) => (
-            <Tab
-              key={t.name}
-              name={t.name}
-              active={"active" in t ? t.active : false}
-              muted={"muted" in t ? t.muted : false}
-            />
+          {tabs.map((t) => (
+            <Tab key={t.name} name={t.name} active={t.active ?? false} muted={t.muted ?? false} />
           ))}
         </nav>
       </div>

@@ -58,11 +58,13 @@ import { googleCalendarOAuthRoutes } from "../routes/google-calendar-oauth.js";
 import { dashboardReportsRoutes } from "../routes/dashboard-reports.js";
 import { dashboardContactsRoutes } from "../routes/dashboard-contacts.js";
 import { dashboardContactDetailRoutes } from "../routes/dashboard-contact-detail.js";
+import { dashboardOpportunitiesRoutes } from "../routes/dashboard-opportunities.js";
 import { dashboardAutomationsRoutes } from "../routes/dashboard-automations.js";
 import { dashboardActivityRoutes } from "../routes/dashboard-activity.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
+import { missionRoute } from "../routes/agent-home/mission.js";
 import { registerLifecycleDisqualificationsRoutes } from "../routes/lifecycle-disqualifications.js";
 import type { LifecycleDisqualificationsRouteDeps } from "../routes/lifecycle-disqualifications.js";
 
@@ -94,6 +96,8 @@ export async function registerRoutes(
   await app.register(pipelineRoute, { prefix: "/api/dashboard" });
   // metricsRoute: GET /api/dashboard/agents/:agentId/metrics — agent-home metrics feed
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
+  // missionRoute: GET /api/dashboard/agents/:agentId/mission — agent-home mission aggregator
+  await app.register(missionRoute, { prefix: "/api/dashboard" });
   // greetingRoutes: GET /api/dashboard/agents/:agentKey/greeting — agent-home greeting block
   await app.register(greetingRoutes, { prefix: "/api/dashboard" });
   await app.register(policiesRoutes, { prefix: "/api/policies" });
@@ -172,6 +176,7 @@ export async function registerRoutes(
   await app.register(dashboardReportsRoutes);
   await app.register(dashboardContactsRoutes);
   await app.register(dashboardContactDetailRoutes);
+  await app.register(dashboardOpportunitiesRoutes);
   await app.register(dashboardAutomationsRoutes);
   await app.register(dashboardActivityRoutes, { prefix: "/api/dashboard/activity" });
   // playbook, simulate, and website-scan routes define their own full paths including /api prefix

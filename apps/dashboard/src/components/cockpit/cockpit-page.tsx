@@ -2,12 +2,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { T } from "./tokens";
 import { Topbar } from "./topbar";
 import { Identity } from "./identity";
 import { ApprovalBlock } from "./approval-block";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { ComposerPlaceholder } from "./composer-placeholder";
+import { MissionPopover } from "./mission-popover";
+import { EmptyState, shouldRenderEmptyState } from "./empty-state";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view";
 import { translatedActionToActivityRow } from "@/lib/cockpit/activity-kind-map";
@@ -15,6 +18,7 @@ import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
 import { usePendingApprovals } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
+import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useHalt } from "@/components/layout/halt/halt-context";
 
 export function CockpitPage() {
@@ -22,7 +26,10 @@ export function CockpitPage() {
   const approvalsQ = usePendingApprovals();
   const activityQ = useAgentActivity(1);
   const greetingQ = useAgentGreeting("alex");
+  const mission = useAgentMission("alex");
+  const router = useRouter();
   const [filter, setFilter] = useState<ActivityFilter>("all");
+  const [missionOpen, setMissionOpen] = useState(false);
 
   const [now, setNow] = useState<Date>(() => new Date());
 
@@ -50,6 +57,8 @@ export function CockpitPage() {
     now,
   });
 
+  const coldState = mission.data ? shouldRenderEmptyState(mission.data.setup) : false;
+
   const line = greetingQ.data?.segments
     ? greetingQ.data.segments
         .map((s) => s.text)
@@ -70,13 +79,24 @@ export function CockpitPage() {
     >
       <Topbar paletteEnabled={false} />
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <Identity
-          statusKey={statusKey}
-          halted={haltCtx.halted}
-          subtitle={ALEX_CONFIG.missionSubtitle}
-          line={line}
-          onHaltToggle={haltCtx.toggleHalt}
-        />
+        <div style={{ position: "relative" }}>
+          <Identity
+            statusKey={statusKey}
+            halted={haltCtx.halted}
+            subtitle={ALEX_CONFIG.missionSubtitle}
+            line={line}
+            onHaltToggle={haltCtx.toggleHalt}
+            missionInteractive={!!mission.data}
+            onOpenMission={() => setMissionOpen((o) => !o)}
+          />
+          {mission.data ? (
+            <MissionPopover
+              open={missionOpen}
+              onClose={() => setMissionOpen(false)}
+              mission={mission.data.mission}
+            />
+          ) : null}
+        </div>
         {/* A.3 inserts <KPIStrip kpis={kpis} collapsed={approvals.length > 0} />
             here, between Identity and the approval block. A.1 renders nothing
             in this region — no empty <div /> placeholder. */}
@@ -90,7 +110,15 @@ export function CockpitPage() {
             }}
           />
         )}
-        <ActivityStream rows={activityRows} filter={filter} setFilter={setFilter} />
+        {coldState && mission.data ? (
+          <EmptyState
+            rules={mission.data.mission.rules}
+            setup={mission.data.setup}
+            onConnect={(key) => router.push(`/setup?step=${key}`)}
+          />
+        ) : (
+          <ActivityStream rows={activityRows} filter={filter} setFilter={setFilter} />
+        )}
       </div>
       <ComposerPlaceholder halted={haltCtx.halted} />
     </div>

@@ -6,6 +6,7 @@ export interface CreateDeploymentMemoryInput {
   category: string;
   content: string;
   confidence?: number;
+  canonicalKey?: string | null;
 }
 
 export class PrismaDeploymentMemoryStore {
@@ -19,6 +20,7 @@ export class PrismaDeploymentMemoryStore {
         deploymentId: input.deploymentId,
         category: input.category,
         content: input.content,
+        canonicalKey: input.canonicalKey ?? null,
         confidence: input.confidence ?? 0.5,
         sourceCount: 1,
         lastSeenAt: now,
@@ -67,6 +69,17 @@ export class PrismaDeploymentMemoryStore {
     });
   }
 
+  async findByCategoryAndCanonicalKey(
+    organizationId: string,
+    deploymentId: string,
+    category: string,
+    canonicalKey: string,
+  ) {
+    return this.prisma.deploymentMemory.findMany({
+      where: { organizationId, deploymentId, category, canonicalKey },
+    });
+  }
+
   async delete(id: string) {
     return this.prisma.deploymentMemory.delete({ where: { id } });
   }
@@ -77,14 +90,21 @@ export class PrismaDeploymentMemoryStore {
     });
   }
 
-  async decayStale(cutoffDate: Date, decayAmount: number): Promise<number> {
+  async decayStale(input: {
+    cutoffDate: Date;
+    decayAmount: number;
+    floor: number;
+    startOfDay: Date;
+  }): Promise<number> {
     const result = await this.prisma.deploymentMemory.updateMany({
       where: {
-        lastSeenAt: { lt: cutoffDate },
-        confidence: { gt: 0 },
+        lastSeenAt: { lt: input.cutoffDate },
+        confidence: { gt: input.floor },
+        OR: [{ lastDecayedAt: null }, { lastDecayedAt: { lt: input.startOfDay } }],
       },
       data: {
-        confidence: { decrement: decayAmount },
+        confidence: { decrement: input.decayAmount },
+        lastDecayedAt: new Date(),
       },
     });
     return result.count;

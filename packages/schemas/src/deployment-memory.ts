@@ -81,3 +81,14 @@ export const MAX_DEPLOYMENT_MEMORY_ENTRIES = 500;
 /** Days without being seen before confidence decays by 0.1. */
 export const DECAY_WINDOW_DAYS = 90;
 export const PATTERN_DECAY_WINDOW_DAYS = 180;
+
+/**
+ * Two-stage merge threshold for outcome patterns (PR-3.2b).
+ *
+ * Conservative starting value. Lowering to 0.80 or 0.78 is the ratchet
+ * path after the cross-key collision counter and rejection queue confirm
+ * the canonical enum is well-calibrated (~4 weeks of pilot data minimum).
+ * The legacy 0.92 SIMILARITY_THRESHOLD remains in compounding-service for
+ * facts/FAQs and for the cross-key collision inspection counter.
+ */
+export const OUTCOME_PATTERN_MERGE_THRESHOLD = 0.84;

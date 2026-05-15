@@ -65,6 +65,7 @@ vi.mock("@/components/decisions/decision-card", () => ({
 }));
 
 import { InboxDrawer } from "../inbox-drawer";
+import { RightDrawerProvider } from "../right-drawer-context";
 
 beforeEach(() => {
   // Reset mutable mock state to the default tenant-present, empty-feed shape.
@@ -80,7 +81,11 @@ beforeEach(() => {
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <RightDrawerProvider>{children}</RightDrawerProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe("InboxDrawer — header DOM contract", () => {

@@ -1,52 +1,89 @@
-import styles from "../contacts.module.css";
+import { formatSGDCompact, pluralize } from "./format";
+import { SavingIndicator } from "./saving-indicator";
+import type { FilterState, UpdatedRange } from "./filter-strip";
+import styles from "../pipeline.module.css";
 
-/**
- * Mercury-register header for /contacts. Near-clone of ReportsHeader with one
- * deliberate difference: no agent name carries `.isActive`, since /contacts is
- * a Tools-tier surface that doesn't belong to any single agent.
- *
- * Nav and actions render as inert <span> elements — same posture as
- * ReportsHeader. A future Mercury-chrome consolidation slice will lift this
- * into a shared MercuryAuthShell once a third Mercury surface lands (D2/D3).
- */
-export function ContactsHeader() {
-  const inboxCount = 0;
+const RANGE_DESCRIPTION: Record<UpdatedRange, string> = {
+  all: "all time",
+  "24h": "last 24h",
+  "7d": "last 7 days",
+  "30d": "last 30 days",
+};
+
+export function PipelineHeader({
+  openCents,
+  openCount,
+  wonCents,
+  wonCount,
+  filters,
+  saving,
+}: {
+  openCents: number;
+  openCount: number;
+  wonCents: number;
+  wonCount: number;
+  filters: FilterState;
+  saving: boolean;
+}) {
+  const filterActive = filters.range !== "all" || filters.qualifiedOnly;
+  const filterSuffix = filterActive ? " (filtered)" : "";
+  const wonPeriod = filters.range === "all" ? "all time" : RANGE_DESCRIPTION[filters.range];
 
   return (
-    <header className={styles.appHeader}>
-      <div className={styles.appHeaderRow}>
-        <div className={styles.brandCluster}>
-          <span className={styles.brandMark} aria-label="Switchboard home">
-            <span className={styles.brandDot} />
-            Switchboard
-          </span>
-          <nav className={styles.brandNav} aria-label="agents">
-            <span>Alex</span>
-            <span>Riley</span>
-            <span className={styles.navAdd} aria-label="Add an agent">
-              +
-            </span>
-          </nav>
-        </div>
-        <div className={styles.headerActions}>
-          <span className={styles.livePip}>
-            <span className={styles.pulse} />
-            Live
-          </span>
-          <span className={styles.folioLink} aria-label={`Inbox, ${inboxCount} items`}>
-            {inboxCount > 0 && <span className={styles.pip} />}
-            <span>Inbox</span>
-            {inboxCount > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className={styles.num}>{inboxCount}</span>
-              </>
-            )}
-          </span>
-          <span className={styles.folioLink}>Halt</span>
-          <span className={styles.meChip}>M</span>
-        </div>
+    <header className={styles.pageHeader}>
+      <div className={styles.pageHeaderLeft}>
+        <span className={styles.eyebrow}>Mercury Tools · Pipeline</span>
+        <h1 className={styles.pageTitle}>Opportunity pipeline</h1>
+        <p className={styles.pageLede}>
+          Every active deal across all eight stages. Drag a card to move it &mdash; the change saves
+          quietly. Won and lost columns are dimmed; nurturing parks the long tail.
+        </p>
+      </div>
+      <div className={styles.pageHeaderRight}>
+        <StatTile
+          label="open pipeline"
+          value={formatSGDCompact(openCents) ?? "—"}
+          sublabel={`${openCount} ${pluralize(openCount, "opportunity", "opportunities")}${filterSuffix}`}
+        />
+        <StatTile
+          label="won this period"
+          value={formatSGDCompact(wonCents) ?? "—"}
+          sublabel={`${wonCount} captured · ${wonPeriod}${filterSuffix}`}
+          tone="accent"
+        />
+        <SavingIndicator saving={saving} />
       </div>
     </header>
   );
+}
+
+function StatTile({
+  label,
+  value,
+  sublabel,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sublabel: string;
+  tone?: "accent";
+}) {
+  return (
+    <div className={styles.statTile}>
+      <span className={styles.eyebrow}>{label}</span>
+      <div className={styles.statValue} data-tone={tone} data-tabular>
+        {value}
+      </div>
+      <div className={styles.statSub} data-tabular>
+        {sublabel}
+      </div>
+    </div>
+  );
+}
+
+/** No-op breadcrumb retained for the detail route (/contacts/[id]). The
+ *  detail route is byte-for-byte untouched per PR-C1 acceptance criterion 1,
+ *  so this stub stays even though the pipeline page doesn't use it. */
+export function ContactsHeader() {
+  return null;
 }

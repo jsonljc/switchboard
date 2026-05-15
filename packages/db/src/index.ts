@@ -83,6 +83,8 @@ export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-conn
 export { PrismaCreativeJobStore } from "./stores/prisma-creative-job-store.js";
 export { PrismaInteractionSummaryStore } from "./stores/prisma-interaction-summary-store.js";
 export { PrismaDeploymentMemoryStore } from "./stores/prisma-deployment-memory-store.js";
+export { PrismaDeploymentMemoryEvidenceStore } from "./stores/prisma-deployment-memory-evidence-store.js";
+export type { RecordEvidenceInput } from "./stores/prisma-deployment-memory-evidence-store.js";
 export { PrismaEventStore } from "./stores/prisma-event-store.js";
 export type { EmitEventInput } from "./stores/prisma-event-store.js";
 export { PrismaActivityLogStore } from "./stores/prisma-activity-log-store.js";

@@ -133,5 +133,10 @@ export interface AggregateScopedMemoryAccess {
 
   promoteDraftFAQs(olderThan: Date): Promise<number>;
 
-  decayStale(cutoffDate: Date, decayAmount: number): Promise<number>;
+  decayStale(input: {
+    cutoffDate: Date;
+    decayAmount: number;
+    floor: number;
+    startOfDay: Date;
+  }): Promise<number>;
 }

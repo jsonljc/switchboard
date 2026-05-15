@@ -6,6 +6,7 @@ function createMockPrisma() {
     deploymentMemory: {
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
       delete: vi.fn(),
@@ -185,5 +186,100 @@ describe("PrismaDeploymentMemoryStore", () => {
     expect(prisma.deploymentMemory.count).toHaveBeenCalledWith({
       where: { organizationId: "org-1", deploymentId: "dep-1" },
     });
+  });
+
+  it("findByCategoryAndCanonicalKey filters by all four columns", async () => {
+    (prisma.deploymentMemory.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "m1",
+        content: "x",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.7,
+        sourceCount: 2,
+      },
+    ]);
+    const rows = await store.findByCategoryAndCanonicalKey(
+      "org-1",
+      "dep-1",
+      "pattern",
+      "objection:downtime_work",
+    );
+    expect(prisma.deploymentMemory.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        deploymentId: "dep-1",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+      },
+    });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("create accepts an optional canonicalKey", async () => {
+    (prisma.deploymentMemory.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "m2" });
+    await store.create({
+      organizationId: "org-1",
+      deploymentId: "dep-1",
+      category: "pattern",
+      content: "Customers ask about downtime",
+      canonicalKey: "objection:downtime_work",
+    });
+    expect(prisma.deploymentMemory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ canonicalKey: "objection:downtime_work" }),
+    });
+  });
+
+  it("create persists canonicalKey as null when omitted", async () => {
+    (prisma.deploymentMemory.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "m3" });
+    await store.create({
+      organizationId: "org-1",
+      deploymentId: "dep-1",
+      category: "fact",
+      content: "Closed on Sundays",
+    });
+    expect(prisma.deploymentMemory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ canonicalKey: null }),
+    });
+  });
+
+  it("decayStale updates only rows not yet decayed today AND stale by lastSeenAt", async () => {
+    const startOfDay = new Date("2026-05-14T00:00:00Z");
+    const cutoff = new Date("2026-04-14T07:00:00Z");
+    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 3,
+    });
+
+    const result = await store.decayStale({
+      cutoffDate: cutoff,
+      decayAmount: 0.1,
+      floor: 0.3,
+      startOfDay,
+    });
+
+    expect(result).toBe(3);
+    expect(prisma.deploymentMemory.updateMany).toHaveBeenCalledWith({
+      where: {
+        lastSeenAt: { lt: cutoff },
+        confidence: { gt: 0.3 },
+        OR: [{ lastDecayedAt: null }, { lastDecayedAt: { lt: startOfDay } }],
+      },
+      data: {
+        confidence: { decrement: 0.1 },
+        lastDecayedAt: expect.any(Date),
+      },
+    });
+  });
+
+  it("decayStale floor: rows already at floor are not decremented further", async () => {
+    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 0,
+    });
+    const result = await store.decayStale({
+      cutoffDate: new Date(),
+      decayAmount: 0.1,
+      floor: 0.3,
+      startOfDay: new Date(),
+    });
+    expect(result).toBe(0);
   });
 });

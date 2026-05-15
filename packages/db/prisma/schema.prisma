@@ -652,15 +652,34 @@ model DeploymentMemory {
   deploymentId   String
   category       String
   content        String
+  canonicalKey   String?
   confidence     Float    @default(0.5)
   sourceCount    Int      @default(1)
   lastSeenAt     DateTime
+  lastDecayedAt  DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([organizationId, deploymentId, category, content])
   @@index([organizationId, deploymentId])
+  @@index([organizationId, deploymentId, category, canonicalKey])
   @@index([confidence])
+}
+
+model DeploymentMemoryEvidence {
+  id                 String   @id @default(uuid())
+  deploymentMemoryId String
+  organizationId     String
+  bookingId          String?
+  conversionRecordId String?
+  workTraceId        String?
+  attributionTier    String
+  observedAt         DateTime @default(now())
+
+  @@unique([deploymentMemoryId, bookingId])
+  @@index([deploymentMemoryId])
+  @@index([deploymentMemoryId, bookingId])
+  @@index([organizationId])
 }
 
 // ---------------------------------------------------------------------------

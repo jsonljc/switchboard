@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import {
@@ -17,6 +17,7 @@ import { useTenantContext } from "@/hooks/use-query-keys";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
 import { dispatchDecisionAction } from "@/lib/decisions/dispatch-action";
 import type { Decision } from "@/lib/decisions/types";
+import { useRightDrawer } from "./right-drawer-context";
 import "./inbox-drawer.css";
 
 function describeTotal(total: number, isLoading: boolean, isError: boolean): string {
@@ -27,7 +28,9 @@ function describeTotal(total: number, isLoading: boolean, isError: boolean): str
 }
 
 export function InboxDrawer() {
-  const [open, setOpen] = useState(false);
+  const drawer = useRightDrawer();
+  const open = drawer.kind === "inbox";
+  const setOpen = (next: boolean) => (next ? drawer.open("inbox") : drawer.close());
   const { data, isLoading, isError } = useDecisionFeed(null);
   const tenant = useTenantContext();
   const queryClient = useQueryClient();

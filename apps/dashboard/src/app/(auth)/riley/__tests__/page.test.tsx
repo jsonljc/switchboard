@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import React from "react";
 
 const { notFoundFn, fetchEnabledFn } = vi.hoisted(() => {
   const notFoundFn = vi.fn(() => {
@@ -15,8 +16,8 @@ vi.mock("@/lib/api-client/agents-server", () => ({
 vi.mock("@/components/layout/editorial-auth-shell", () => ({
   EditorialAuthShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-vi.mock("@/components/agent-home/agent-home-shell", () => ({
-  AgentHomeShell: ({ agentKey }: { agentKey: string }) => <div data-testid="shell">{agentKey}</div>,
+vi.mock("@/components/cockpit/riley-cockpit-page", () => ({
+  RileyCockpitPage: () => <div data-testid="riley-cockpit-page">riley-cockpit</div>,
 }));
 
 import RileyPage from "../page";
@@ -28,11 +29,11 @@ describe("RileyPage server gate", () => {
     fetchEnabledFn.mockImplementation(async () => ["alex", "riley"]);
   });
 
-  it("renders AgentHomeShell with agentKey=riley when riley is enabled", async () => {
+  it("renders RileyCockpitPage when riley is enabled", async () => {
     const tree = await RileyPage();
     const { render, screen } = await import("@testing-library/react");
     render(tree);
-    expect(screen.getByTestId("shell")).toHaveTextContent("riley");
+    expect(screen.getByTestId("riley-cockpit-page")).toBeInTheDocument();
   });
 
   it("notFound() when riley is not enabled", async () => {

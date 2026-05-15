@@ -58,6 +58,9 @@ export * from "./operator-command.js";
 // Unified lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle.js";
 
+// Pipeline board view-model (opportunity cards + joined contact projection)
+export * from "./pipeline-board.js";
+
 // Contacts browse projection (surface-agnostic /contacts list view-model)
 export * from "./contacts.js";
 
@@ -154,3 +157,6 @@ export * from "./conversation-lifecycle.js";
 
 // WhatsApp send-test schemas (slice 2a — request/result/row for operator send-test flow)
 export * from "./whatsapp-test-send.js";
+
+// Canonical-key enum + Zod refinement (PR-3.2a — outcome-pattern bucketing)
+export * from "./canonical-keys.js";
