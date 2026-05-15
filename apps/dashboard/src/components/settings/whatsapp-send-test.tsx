@@ -10,7 +10,7 @@ export interface SendTestPhoneNumber {
   id: string;
   displayPhoneNumber: string | null;
   verifiedName: string | null;
-  status: string;
+  status: string | null;
 }
 
 export interface SendTestTemplate {
