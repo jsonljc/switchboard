@@ -153,7 +153,7 @@ Expected: clean. `pnpm reset` clears stale `dist/` + regenerates Prisma + rebuil
 - `apps/dashboard/src/components/cockpit/kind-meta.ts` — kinds unchanged.
 - `apps/dashboard/src/components/cockpit/cockpit-page.tsx` props or composition order — only the activity-source swap.
 - `packages/db/prisma/schema.prisma` — no migration. `ConversationMessage` already has the needed columns + index.
-- `packages/schemas/**` — no schema layer changes.
+- `packages/schemas/src/*.ts` other than the new `cockpit-activity.ts` + the one-line `index.ts` barrel addition — no other schema layer changes.
 
 ---
 
@@ -269,11 +269,13 @@ Run: `pnpm --filter @switchboard/core test -- --run activity-preview-reader` —
 - [ ] **Step 2: Create `packages/core/src/agent-home/activity-preview-reader.ts`.**
 
 ```ts
-export interface ThreadMessageRecord {
-  from: "contact" | "alex" | "operator";
-  text: string;
-  createdAt: string;
-}
+import type { ThreadMessage } from "@switchboard/schemas";
+
+// Persisted-message extension of the schemas-package ThreadMessage shape.
+// The cockpit UI does not render per-message timestamps, so the translator
+// drops `createdAt` before placing rows in ActivityRow.preview. The reader
+// carries it because group-by-createdAt is needed for ordering.
+export type ThreadMessageRecord = ThreadMessage & { createdAt: string };
 
 export interface ActivityPreviewReader {
   readRecentBatch(args: {
@@ -1850,7 +1852,12 @@ await app.register(cockpitActivityRoutes(cockpitActivityDeps), {
 
 - [ ] **Step 5: Write the server-level integration test.**
 
-Create `apps/api/src/__tests__/api-cockpit-activity.test.ts` mirroring the existing `api-metrics.test.ts` pattern. Use mocked Prisma; assert end-to-end `GET /api/dashboard/agents/alex/activity` returns `{ rows: ActivityRow[] }` with `preview` populated when ConversationMessage rows exist. Add a **cross-org isolation case**: audit fixture spans two `organizationId` values; the request's `organizationIdFromAuth` is set to one; assert the response excludes rows from the other org (Risk #11).
+Create `apps/api/src/__tests__/api-cockpit-activity.test.ts` mirroring the existing `api-metrics.test.ts` pattern. Use mocked Prisma; assert end-to-end `GET /api/dashboard/agents/alex/activity` returns `{ rows: ActivityRow[] }` with `preview` populated when ConversationMessage rows exist.
+
+Two mandatory isolation cases:
+
+- **Cross-org isolation** (Risk #11): audit fixture spans two `organizationId` values; the request's `organizationIdFromAuth` is set to one; assert the response excludes rows from the other org.
+- **Cross-agent isolation** (Risk #10): single org; audit fixture contains both alex-actor and riley-actor entries (some with `actorId: "alex"`, some with `actorId: "riley"`, some with `actorId: <uuid>` + `snapshot.agentRole: "riley"`); request hits `/agents/alex/activity`; assert no riley rows appear in the response. Then repeat the request against `/agents/riley/activity` and assert the inverse — alex rows do not leak. This proves the per-agent endpoint will scale to coexist with Riley's cockpit (which today still renders the legacy block client).
 
 - [ ] **Step 6: Commit.**
 
@@ -2373,6 +2380,28 @@ describe("<ActivityRow>", () => {
     expect(screen.queryByRole("button", { name: /expand/i })).not.toBeInTheDocument();
   });
 
+  it("hides expand chevron when replyable=true but no preview/body/contactId", () => {
+    // Defensive: a future translator that mis-sets replyable=true on a
+    // contentless row should NOT yield an expandable chevron with nothing
+    // to show. This is the Riley-safety invariant from the slice brief.
+    setup(
+      {
+        replyable: true,
+        preview: undefined,
+        body: undefined,
+        contactId: undefined,
+        who: undefined,
+      },
+      false,
+    );
+    expect(screen.queryByRole("button", { name: /expand/i })).not.toBeInTheDocument();
+  });
+
+  it("shows expand chevron when replyable=true and only body is present", () => {
+    setup({ replyable: true, preview: undefined, body: "Calendar held." }, false);
+    expect(screen.getByRole("button", { name: /expand/i })).toBeInTheDocument();
+  });
+
   it("clicking chevron toggles open", async () => {
     const user = userEvent.setup();
     const { toggle } = setup({}, false);
@@ -2434,7 +2463,17 @@ function firstName(name: string): string {
 export function ActivityRow({ item, open, toggle, compact = false }: ActivityRowProps) {
   const router = useRouter();
   const meta = lookupKindMeta(item.kind);
-  const expandable = item.replyable === true;
+  // Tight invariant: a row is expandable only when it both (a) declares
+  // itself replyable AND (b) has at least one piece of expandable content
+  // (a thread preview, a body line, or a contact deep-link). Riley rows
+  // ship `replyable: false` and undefined preview/body/contactId, so they
+  // remain collapsed forever — even if a future Riley translator later
+  // populates body or contactId, replyable stays false until Riley opts in.
+  const hasExpandableContent =
+    (item.preview?.length ?? 0) > 0 ||
+    (typeof item.body === "string" && item.body.length > 0) ||
+    typeof item.contactId === "string";
+  const expandable = item.replyable === true && hasExpandableContent;
   return (
     <li style={{ borderBottom: `1px solid ${T.hairSoft}` }}>
       <div
@@ -2933,6 +2972,7 @@ If `/alex` shows "Couldn't load org config" or a blank stream, check `feedback_d
 - [ ] ThreadPreview + ActivityRow + ActivityStream + CockpitPage green
 - [ ] Schemas package test green (`ActivityRowSchema` parses populated + minimal + rejects empty head)
 - [ ] Cross-org isolation case green (audit fixture spanning two orgs returns only the requester's rows)
+- [ ] Cross-agent isolation case green (riley entries do not appear in `/agents/alex/activity` and vice versa, even with shared org)
 - [ ] Pre-merge adapter-boundary grep gate clean
 - [ ] Pre-merge surface-agnostic grep gate clean
 - [ ] `pnpm --filter @switchboard/dashboard build` clean (per `feedback_dashboard_build_not_in_ci.md`)
