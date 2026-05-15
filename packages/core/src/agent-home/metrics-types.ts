@@ -56,7 +56,39 @@ export interface MetricsViewModel {
   bookedDelta: string | null;
   leadsDelta: string | null;
   qualifiedDelta: string | null;
+  tiles?: readonly KpiTile[];
+  roi?: RoiBar;
 }
+
+export interface KpiTile {
+  label: string;
+  value: number | string;
+  unit?: string;
+  trend?: string;
+  unavailable?: boolean;
+  hint?: string;
+}
+
+export interface RoiBarFull {
+  label: string;
+  leftMeta: string;
+  rightMeta: { value: string; suffix: string };
+  fillPct: number;
+  breakEvenPct: number;
+  breakEvenLabel: string;
+  scaleLeft: string;
+  scaleRight: string;
+  comparator: { value: string; target: string; onTarget: boolean };
+}
+
+export interface RoiBarDegraded {
+  degraded: true;
+  degradedHint: string;
+  label?: string;
+  comparator: { value: string; target: string; onTarget?: false };
+}
+
+export type RoiBar = RoiBarFull | RoiBarDegraded;
 
 export interface MetricsSignalStore {
   countBookingsCreated(input: {
