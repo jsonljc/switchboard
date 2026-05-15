@@ -527,9 +527,14 @@ export async function bootstrapSkillMode(
   const builderRegistry = new BuilderRegistry();
 
   const { alexBuilder } = await import("@switchboard/core/skill-runtime");
+  const { resolveOutcomePatternsConfig } = await import("@switchboard/schemas");
 
   builderRegistry.register("alex", async (ctx) => {
     const agentContext = ctx.workUnit.parameters._agentContext as Parameters<typeof alexBuilder>[0];
+    // PR-3.2e: resolve pilotMode from the deployment's inputConfig.outcomePatterns
+    // namespace. Defaults to false when the namespace is absent, so steady-state
+    // surfacing remains the default for every deployment.
+    const { pilotMode } = resolveOutcomePatternsConfig(ctx.deployment.deploymentConfig ?? null);
     const config = {
       deploymentId: ctx.deployment.deploymentId,
       orgId: ctx.workUnit.organizationId,
@@ -537,6 +542,7 @@ export async function bootstrapSkillMode(
       phone: ctx.workUnit.parameters.phone as string | undefined,
       channel: ctx.workUnit.parameters.channel as string | undefined,
       message: ctx.workUnit.parameters._message as string | undefined,
+      pilotMode,
     };
     const result = await alexBuilder(agentContext, config, ctx.stores, {
       contextBuilder: deps.contextBuilder,

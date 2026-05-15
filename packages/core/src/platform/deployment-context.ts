@@ -24,4 +24,10 @@ export interface DeploymentContext {
   trustScore: number;
   persona?: AgentPersona;
   policyOverrides?: DeploymentPolicyOverrides;
+  // PR-3.2e: raw AgentDeployment.inputConfig forwarded for builders that
+  // need to read typed sub-namespaces (e.g. resolveOutcomePatternsConfig
+  // for the pilotMode surfacing flag). Optional because not every
+  // DeploymentContext construction path resolves from a real AgentDeployment
+  // row (e.g. api-direct fallback in resolve-deployment.ts).
+  deploymentConfig?: Record<string, unknown>;
 }
