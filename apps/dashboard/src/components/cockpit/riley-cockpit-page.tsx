@@ -24,7 +24,7 @@ import { useRileyActivity } from "@/hooks/use-riley-activity";
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
 import { useToast } from "@/components/ui/use-toast";
 import { useHalt } from "@/components/layout/halt/halt-context";
-import type { ApprovalView, RileyApprovalView } from "./types";
+import type { RileyApprovalView } from "./types";
 
 const RILEY_APPROVAL_ACCENT: ApprovalAccent = {
   base: RILEY_ACCENT.base,
@@ -55,14 +55,14 @@ function RileyApprovalRow({
       .then(() => {
         toast(rileyToast({ verdict, approval }));
       })
-      .catch(() => {
-        // Swallow mutation errors — success-only toast: only fire on success.
-      });
+      // Error state surfaces via TanStack Query (`useRecommendationAction.error`);
+      // swallow here so success-only toast never fires on rejection.
+      .catch(() => {});
   };
 
   return (
     <ApprovalCard
-      data={approval as ApprovalView}
+      data={approval}
       idx={idx}
       total={total}
       onResolve={onResolve}
