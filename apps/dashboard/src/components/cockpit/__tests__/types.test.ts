@@ -62,7 +62,7 @@ describe("cockpit types", () => {
   });
 
   it("ThreadMessage has from + text", () => {
-    const msg: ThreadMessage = { from: "Alex", text: "On it." };
-    expect(msg.from).toBe("Alex");
+    const msg: ThreadMessage = { from: "alex", text: "On it." };
+    expect(msg.from).toBe("alex");
   });
 });
