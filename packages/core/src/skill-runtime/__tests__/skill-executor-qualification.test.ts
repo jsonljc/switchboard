@@ -2,7 +2,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 import { describe, it, expect, vi } from "vitest";
 import { SkillExecutorImpl } from "../skill-executor.js";
-import type { ToolCallingAdapter } from "../tool-calling-adapter.js";
+import type { ToolCallingLLMAdapter } from "../llm-types.js";
 import type { SkillDefinition } from "../types.js";
 
 const mockSkill: SkillDefinition = {
@@ -35,7 +35,7 @@ function createMockAdapter(
     >;
     stop_reason: string;
   }>,
-): ToolCallingAdapter {
+): ToolCallingLLMAdapter {
   let callIndex = 0;
   return {
     chatWithTools: vi.fn().mockImplementation(() => {

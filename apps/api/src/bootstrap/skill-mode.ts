@@ -66,7 +66,7 @@ export async function bootstrapSkillMode(
     ClaimClassifierHook,
     PdpaConsentGateHook,
     WhatsAppWindowGateHook,
-    AnthropicToolCallingAdapter,
+    AnthropicToolAdapter,
     BuilderRegistry,
     createCrmQueryTool,
     createCrmWriteToolFactory,
@@ -309,7 +309,7 @@ export async function bootstrapSkillMode(
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
-  const adapter = new AnthropicToolCallingAdapter(anthropicClient);
+  const adapter = new AnthropicToolAdapter(anthropicClient);
 
   // DeterministicSafetyGateHook registered BEFORE TracePersistenceHook (and any
   // future hooks that persist result.response) so the trace store never sees

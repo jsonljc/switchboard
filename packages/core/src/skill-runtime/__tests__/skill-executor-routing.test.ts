@@ -1,13 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { SkillExecutorImpl } from "../skill-executor.js";
 import { ModelRouter } from "../../model-router.js";
-import type { ToolCallingAdapter, ToolCallingAdapterResponse } from "../tool-calling-adapter.js";
+import type { ToolCallingLLMAdapter, LLMResponse, LLMTextBlock } from "../llm-types.js";
 import type { SkillDefinition, SkillExecutionParams } from "../types.js";
-import type Anthropic from "@anthropic-ai/sdk";
 
-function makeEndTurnResponse(text: string): ToolCallingAdapterResponse {
+function makeEndTurnResponse(text: string): LLMResponse {
   return {
-    content: [{ type: "text", text } as Anthropic.TextBlock],
+    content: [{ type: "text", text } as LLMTextBlock],
     stopReason: "end_turn",
     usage: { inputTokens: 100, outputTokens: 50 },
   };
@@ -27,7 +26,7 @@ const minimalSkill: SkillDefinition = {
 
 describe("SkillExecutorImpl - ModelRouter integration", () => {
   it("resolves model via router when provided", async () => {
-    const mockAdapter: ToolCallingAdapter = {
+    const mockAdapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockResolvedValue(makeEndTurnResponse("done")),
     };
 
@@ -56,7 +55,7 @@ describe("SkillExecutorImpl - ModelRouter integration", () => {
   });
 
   it("uses premium model when skill has minimumModelTier: premium", async () => {
-    const mockAdapter: ToolCallingAdapter = {
+    const mockAdapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockResolvedValue(makeEndTurnResponse("done")),
     };
 
@@ -90,7 +89,7 @@ describe("SkillExecutorImpl - ModelRouter integration", () => {
   });
 
   it("falls back to hardcoded behavior when no router provided", async () => {
-    const mockAdapter: ToolCallingAdapter = {
+    const mockAdapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockResolvedValue(makeEndTurnResponse("done")),
     };
 

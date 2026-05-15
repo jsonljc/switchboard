@@ -1,4 +1,3 @@
-import type { ToolCallingAdapter } from "./tool-calling-adapter.js";
 import type {
   SkillExecutionParams,
   SkillExecutionResult,
@@ -20,7 +19,14 @@ import type { ToolResult } from "./tool-result.js";
 import { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
 import type { SkillToolOperation } from "./types.js";
 import { validateToolInput, redactInputForLog } from "./input-schema-validator.js";
-import type Anthropic from "@anthropic-ai/sdk";
+import type {
+  LLMTextBlock,
+  LLMToolUseBlock,
+  LLMMessage,
+  LLMToolDefinition,
+  LLMToolResultBlock,
+  ToolCallingLLMAdapter,
+} from "./llm-types.js";
 import type { ModelRouter } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
@@ -88,7 +94,7 @@ function escapeSentinel(value: string): string {
 
 export class SkillExecutorImpl implements SkillExecutor {
   constructor(
-    private adapter: ToolCallingAdapter,
+    private adapter: ToolCallingLLMAdapter,
     private tools: Map<string, SkillTool>,
     private router?: ModelRouter,
     private hooks: SkillHook[] = [],
@@ -97,7 +103,7 @@ export class SkillExecutorImpl implements SkillExecutor {
      * Per-request tool factories. When a tool id is present here, the executor
      * materializes a fresh `SkillTool` for each `execute()` call with a trusted
      * `SkillRequestContext` closed in. This is the canonical path; the
-     * `tools` map is retained for schema-only registration (`buildAnthropicTools`)
+     * `tools` map is retained for schema-only registration (`buildToolDefinitions`)
      * and for tools with no per-request trust context.
      */
     private toolFactories: Map<string, SkillToolFactory> = new Map(),
@@ -169,7 +175,7 @@ export class SkillExecutorImpl implements SkillExecutor {
 
     const system = `${interpolated}\n\n${getGovernanceConstraints()}`;
 
-    const anthropicTools = this.buildAnthropicTools(params.skill.tools);
+    const toolDefinitions = this.buildToolDefinitions(params.skill.tools);
 
     // Materialize per-request tools with trusted SkillRequestContext closed in.
     // Tool factories produce a fresh SkillTool per execution so trust-bound
@@ -177,7 +183,7 @@ export class SkillExecutorImpl implements SkillExecutor {
     const requestCtx = this.buildRequestContext(params);
     const runtimeTools = this.materializeRuntimeTools(requestCtx);
 
-    const messages: Anthropic.MessageParam[] = params.messages.map((m) => ({
+    const messages: LLMMessage[] = params.messages.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
@@ -221,7 +227,7 @@ export class SkillExecutorImpl implements SkillExecutor {
         this.adapter.chatWithTools({
           system,
           messages,
-          tools: anthropicTools,
+          tools: toolDefinitions,
           profile,
         }),
         new Promise<never>((_resolve, reject) => {
@@ -256,7 +262,7 @@ export class SkillExecutorImpl implements SkillExecutor {
 
       if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
         const rawResponseText = response.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .filter((b): b is LLMTextBlock => b.type === "text")
           .map((b) => b.text)
           .join("");
 
@@ -321,12 +327,12 @@ export class SkillExecutorImpl implements SkillExecutor {
       }
 
       const toolUseBlocks = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+        (b): b is LLMToolUseBlock => b.type === "tool_use",
       );
 
       messages.push({ role: "assistant", content: response.content });
 
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      const toolResults: LLMToolResultBlock[] = [];
 
       for (const toolUse of toolUseBlocks) {
         if (toolCallRecords.length >= this.policy.maxToolCalls) {
@@ -449,8 +455,8 @@ export class SkillExecutorImpl implements SkillExecutor {
     throw new SkillExecutionBudgetError(`Exceeded maximum LLM turns (${this.policy.maxLlmTurns})`);
   }
 
-  private buildAnthropicTools(toolIds: string[]): Anthropic.Tool[] {
-    const result: Anthropic.Tool[] = [];
+  private buildToolDefinitions(toolIds: string[]): LLMToolDefinition[] {
+    const result: LLMToolDefinition[] = [];
     for (const toolId of toolIds) {
       const tool = this.tools.get(toolId);
       if (!tool) continue;
@@ -458,7 +464,7 @@ export class SkillExecutorImpl implements SkillExecutor {
         result.push({
           name: `${toolId}.${opName}`,
           description: op.description,
-          input_schema: op.inputSchema as Anthropic.Tool.InputSchema,
+          input_schema: op.inputSchema,
         });
       }
     }

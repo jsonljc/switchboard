@@ -10,7 +10,7 @@ import { ExecutionModeRegistry } from "../execution-mode-registry.js";
 import { SkillMode } from "../modes/skill-mode.js";
 import { BuilderRegistry } from "../../skill-runtime/builder-registry.js";
 import { SkillExecutorImpl } from "../../skill-runtime/skill-executor.js";
-import { AnthropicToolCallingAdapter } from "../../skill-runtime/tool-calling-adapter.js";
+import { AnthropicToolAdapter } from "../../skill-runtime/adapters/anthropic-tool-adapter.js";
 import { loadSkill } from "../../skill-runtime/skill-loader.js";
 import { createEscalateToolFactory } from "../../skill-runtime/tools/escalate.js";
 import { ok } from "../../skill-runtime/tool-result.js";
@@ -178,7 +178,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Runtime First Response", () => 
     const skill = loadSkill("alex", join(REPO_ROOT, "skills"));
 
     // Real LLM adapter
-    const adapter = new AnthropicToolCallingAdapter(
+    const adapter = new AnthropicToolAdapter(
       new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
     );
 

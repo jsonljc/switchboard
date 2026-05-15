@@ -2,11 +2,16 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type Anthropic from "@anthropic-ai/sdk";
 import { SkillExecutorImpl } from "../skill-executor.js";
 import { loadSkill } from "../skill-loader.js";
 import { createEscalateToolFactory } from "../tools/escalate.js";
-import type { ToolCallingAdapter } from "../tool-calling-adapter.js";
+import type {
+  ToolCallingLLMAdapter,
+  LLMMessage,
+  LLMToolDefinition,
+  LLMTextBlock,
+  LLMToolUseBlock,
+} from "../llm-types.js";
 import type { SkillTool, SkillExecutionParams } from "../types.js";
 import { SkillParameterError, SkillExecutionBudgetError } from "../types.js";
 import { ok } from "../tool-result.js";
@@ -49,19 +54,19 @@ function loadFixture(name: string): EvalFixture {
   return JSON.parse(raw) as EvalFixture;
 }
 
-function createMockAdapter(fixture: EvalFixture): ToolCallingAdapter {
+function createMockAdapter(fixture: EvalFixture): ToolCallingLLMAdapter {
   let callIndex = 0;
   return {
     chatWithTools: async (_params: {
       system: string;
-      messages: Array<Anthropic.MessageParam>;
-      tools: Array<Anthropic.Tool>;
+      messages: Array<LLMMessage>;
+      tools: Array<LLMToolDefinition>;
       maxTokens?: number;
     }) => {
       const resp = fixture.mockResponses[callIndex];
       if (!resp) {
         return {
-          content: [{ type: "text" as const, text: "Mock exhausted" } as Anthropic.TextBlock],
+          content: [{ type: "text" as const, text: "Mock exhausted" } as LLMTextBlock],
           stopReason: "end_turn" as const,
           usage: { inputTokens: 100, outputTokens: 50 },
         };
@@ -75,10 +80,9 @@ function createMockAdapter(fixture: EvalFixture): ToolCallingAdapter {
               id: block.id ?? "mock-id",
               name: block.name ?? "unknown",
               input: block.input ?? {},
-              caller: { type: "direct" as const },
-            } as Anthropic.ToolUseBlock;
+            } as LLMToolUseBlock;
           }
-          return { type: "text" as const, text: block.text ?? "" } as Anthropic.TextBlock;
+          return { type: "text" as const, text: block.text ?? "" } as LLMTextBlock;
         }),
         stopReason: resp.stop_reason as "end_turn" | "tool_use",
         usage: { inputTokens: 100, outputTokens: 50 },

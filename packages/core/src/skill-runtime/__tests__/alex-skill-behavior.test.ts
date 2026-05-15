@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SkillExecutorImpl } from "../skill-executor.js";
 import { loadSkill } from "../skill-loader.js";
 import { createEscalateToolFactory } from "../tools/escalate.js";
-import { AnthropicToolCallingAdapter } from "../tool-calling-adapter.js";
+import { AnthropicToolAdapter } from "../adapters/anthropic-tool-adapter.js";
 import type { SkillTool, SkillExecutionParams } from "../types.js";
 import { ok } from "../tool-result.js";
 import { VERTICALS } from "./behavior-fixtures/verticals.js";
@@ -132,7 +132,7 @@ function countSentences(text: string): number {
 
 describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Alex Skill Behavior (Cross-Vertical)", () => {
   const skill = loadSkill("alex", join(REPO_ROOT, "skills"));
-  const adapter = new AnthropicToolCallingAdapter(
+  const adapter = new AnthropicToolAdapter(
     new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
   );
   for (const fixture of VERTICALS) {
