@@ -28,3 +28,21 @@ export const ActOnRecommendationParametersSchema = z.object({
 });
 
 export type ActOnRecommendationParameters = z.infer<typeof ActOnRecommendationParametersSchema>;
+
+export const ConfirmDisqualificationParametersSchema = z.object({
+  conversationThreadId: z.string().min(1),
+  operatorNote: z.string().optional(),
+});
+
+export type ConfirmDisqualificationParameters = z.infer<
+  typeof ConfirmDisqualificationParametersSchema
+>;
+
+export const DismissDisqualificationParametersSchema = z.object({
+  conversationThreadId: z.string().min(1),
+  operatorNote: z.string().optional(),
+});
+
+export type DismissDisqualificationParameters = z.infer<
+  typeof DismissDisqualificationParametersSchema
+>;
