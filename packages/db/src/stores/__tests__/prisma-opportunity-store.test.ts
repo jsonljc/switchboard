@@ -50,7 +50,7 @@ describe("PrismaOpportunityStore", () => {
 
   beforeEach(() => {
     prisma = makeMockPrisma();
-    store = new PrismaOpportunityStore(prisma as never, null);
+    store = new PrismaOpportunityStore(prisma as never);
   });
 
   describe("create", () => {

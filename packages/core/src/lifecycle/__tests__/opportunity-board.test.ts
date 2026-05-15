@@ -118,7 +118,6 @@ describe("transitionOpportunityStage", () => {
   it("returns { opportunity } with the wire shape", async () => {
     const store = mkTransitioningStore({
       opportunity: mkRow({ stage: "booked" }),
-      workTraceId: "trace_1",
     });
     const result = await transitionOpportunityStage(
       { orgId: "org_acme", id: "opp_1", stage: "booked", actor: { id: "user_42", type: "user" } },
@@ -140,7 +139,7 @@ describe("transitionOpportunityStage", () => {
   });
 
   it("forwards the input verbatim to the store", async () => {
-    const store = mkTransitioningStore({ opportunity: mkRow(), workTraceId: "t" });
+    const store = mkTransitioningStore({ opportunity: mkRow() });
     const input = {
       orgId: "org_acme",
       id: "opp_1",

@@ -91,6 +91,8 @@ declare module "fastify" {
       outcome: string;
       organizationId: string;
     } | null;
+    /** Test-only counter of WorkTrace persist() calls. */
+    ingressTraceCount?: number;
   }
 }
 
@@ -377,11 +379,15 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   app.decorate("workTraceStore", workTraceStore);
 
   // Test-only ingress trace observer: the ObservableWorkTraceStore records the
-  // most recent persisted WorkTrace summary. Tests can read it via
-  // `app.lastIngressTrace` to verify ingress-path flow in operator-direct
-  // ingress route tests (Wave 2 Phase 1b).
+  // most recent persisted WorkTrace summary AND counts persist() calls so
+  // tests can assert "exactly one WorkTrace per route call" (Wave 2 Phase 1b
+  // cleanup — one operator stage transition = one WorkTrace).
   Object.defineProperty(app, "lastIngressTrace", {
     get: () => workTraceStore.lastPersistedSummary,
+    configurable: true,
+  });
+  Object.defineProperty(app, "ingressTraceCount", {
+    get: () => workTraceStore.persistCount,
     configurable: true,
   });
 

@@ -78,6 +78,24 @@ describe("PATCH /api/dashboard/opportunities/:id/stage — PlatformIngress migra
     expect(last!.outcome).toBe("failed");
   });
 
+  it("produces exactly one WorkTrace per stage transition — the ingress one (no legacy store-side trace)", async () => {
+    // Regression guard for Phase 1b.1 cleanup: prior to this slice, both the
+    // route's PlatformIngress submission AND the opportunity store's internal
+    // bypass wrote separate WorkTraces. The cleanup strips the store-side
+    // bypass so exactly one canonical WorkTrace remains per operator mutation.
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/dashboard/opportunities/opp_ingress_1/stage",
+      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      payload: { stage: "booked" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    expect(app.ingressTraceCount).toBe(1);
+    expect(app.lastIngressTrace?.intent).toBe("operator.transition_opportunity_stage");
+    expect(app.lastIngressTrace?.mode).toBe("operator_mutation");
+  });
+
   it("idempotency path: same Idempotency-Key + payload returns the cached result on second call", async () => {
     const idempotencyKey = "test-idempotency-key-opp-1";
 

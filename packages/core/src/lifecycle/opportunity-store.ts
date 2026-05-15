@@ -52,7 +52,6 @@ export interface TransitionStageInput {
 
 export interface TransitionStageResult {
   opportunity: OpportunityBoardRow;
-  workTraceId: string;
 }
 
 /** Thrown by transitionStage when the id is missing or belongs to a different org. */

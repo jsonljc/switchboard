@@ -22,7 +22,6 @@ import type {
   TriggerBrowseResult,
 } from "@switchboard/core";
 import { OpportunityNotFoundError } from "@switchboard/core";
-import { randomUUID } from "node:crypto";
 import type {
   WorkTrace,
   WorkTraceStore,
@@ -89,6 +88,7 @@ export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
     outcome: string;
     organizationId: string;
   } | null = null;
+  public persistCount = 0;
 
   async persist(trace: WorkTrace): Promise<void> {
     this.lastPersistedSummary = {
@@ -97,7 +97,13 @@ export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
       outcome: trace.outcome,
       organizationId: trace.organizationId,
     };
+    this.persistCount += 1;
     await super.persist(trace);
+  }
+
+  resetCounters(): void {
+    this.lastPersistedSummary = null;
+    this.persistCount = 0;
   }
 }
 
@@ -328,11 +334,6 @@ export class TestHandoffStore implements HandoffStore {
 export class TestOpportunityStore implements OpportunityStore {
   private rows = new Map<string, Opportunity>();
   private boardRows: OpportunityBoardRow[] = [];
-  public lastTraceWritten: {
-    ingressPath: string;
-    intent: string;
-    parameters: Record<string, unknown>;
-  } | null = null;
 
   /** Test-only seed helper for legacy Opportunity rows. */
   seed(opp: Opportunity): void {
@@ -376,17 +377,7 @@ export class TestOpportunityStore implements OpportunityStore {
       updatedAt: now,
     };
     this.boardRows[idx] = updated;
-    this.lastTraceWritten = {
-      ingressPath: "store_recorded_operator_mutation",
-      intent: "opportunity.stage_transition",
-      parameters: {
-        opportunityId: input.id,
-        contactId: existing.contactId,
-        fromStage: existing.stage,
-        toStage: input.stage,
-      },
-    };
-    return { opportunity: updated, workTraceId: randomUUID() };
+    return { opportunity: updated };
   }
 
   async create(): Promise<Opportunity> {

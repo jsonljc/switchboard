@@ -472,7 +472,6 @@ export async function buildServer() {
       modeRegistry,
       logger: app.log,
       contextBuilder,
-      workTraceStore: workTraceStore ?? null,
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;
@@ -551,7 +550,7 @@ export async function buildServer() {
     const reportStores = {
       revenue: new PrismaRevenueStore(prismaClient),
       bookings: new PrismaBookingStore(prismaClient),
-      opportunities: new PrismaOpportunityStore(prismaClient, workTraceStore ?? null),
+      opportunities: new PrismaOpportunityStore(prismaClient),
       conversions: new PrismaConversionRecordStore(prismaClient),
       recommendations: new PrismaRecStore(prismaClient),
       conversations: new PrismaConversationThreadStore(prismaClient),
@@ -602,10 +601,7 @@ export async function buildServer() {
     app.decorate("contactStore", new PrismaContactStore(prismaClient));
     app.decorate("handoffStore", new PrismaHandoffStore(prismaClient));
     app.decorate("threadStore", new PrismaConversationThreadStore(prismaClient));
-    app.decorate(
-      "opportunityStore",
-      new PrismaOpportunityStore(prismaClient, workTraceStore ?? null),
-    );
+    app.decorate("opportunityStore", new PrismaOpportunityStore(prismaClient));
     app.decorate("revenueEventStore", new PrismaRevenueStore(prismaClient));
     app.decorate("triggerStore", new PrismaTriggerStore(prismaClient));
   }
