@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { AgentKeySchema } from "@switchboard/schemas";
+import { getAgentTargets } from "@switchboard/core";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
@@ -159,7 +160,7 @@ export function buildAlexMissionResponse(inputs: {
     },
     composerPlaceholder: ALEX_COMPOSER_PLACEHOLDER,
     commands: [],
-    targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    targets: { ...getAgentTargets(roster), roasSource: "deterministic" },
     setup: setupRows,
   };
 }

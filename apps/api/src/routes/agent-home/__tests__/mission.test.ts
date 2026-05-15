@@ -78,6 +78,36 @@ describe("buildAlexMissionResponse", () => {
     expect(out.mission.channels.find((c) => c.kind === "whatsapp")?.status).toBe("warn");
   });
 
+  it("emits targets from AgentRoster.config when avgValueCents and targetCpbCents are set", () => {
+    const out = buildAlexMissionResponse({
+      ...baseInputs,
+      roster: {
+        ...baseInputs.roster,
+        config: { avgValueCents: 17900, targetCpbCents: 3000 },
+      },
+    });
+    expect(out.targets).toEqual({
+      avgValueCents: 17900,
+      targetCpbCents: 3000,
+      roasSource: "deterministic",
+    });
+  });
+
+  it("emits null targets when AgentRoster.config has only avgValueCents", () => {
+    const out = buildAlexMissionResponse({
+      ...baseInputs,
+      roster: {
+        ...baseInputs.roster,
+        config: { avgValueCents: 17900 },
+      },
+    });
+    expect(out.targets).toEqual({
+      avgValueCents: 17900,
+      targetCpbCents: null,
+      roasSource: "deterministic",
+    });
+  });
+
   it("emits rules when AgentRoster.config carries thresholds", () => {
     const out = buildAlexMissionResponse({
       ...baseInputs,

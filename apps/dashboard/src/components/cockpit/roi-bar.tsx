@@ -56,7 +56,9 @@ export function ROIBar({ roi }: ROIBarProps) {
           {roi.comparator.value}
           <span style={{ color: T.ink4 }}> · {roi.comparator.target}</span>
         </span>
-        <span style={{ fontSize: 12, color: T.ink4 }}>{roi.degradedHint}</span>
+        {roi.degradedHint ? (
+          <span style={{ fontSize: 12, color: T.ink4 }}>{roi.degradedHint}</span>
+        ) : null}
       </div>
     );
   }

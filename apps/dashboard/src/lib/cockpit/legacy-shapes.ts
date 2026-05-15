@@ -45,7 +45,8 @@ export function legacyTiles(k: LegacyKpiInput): KpiTile[] {
 }
 
 export function legacyRoi(k: LegacyKpiInput): RoiBar {
-  // Degraded paths — Meta Ads hint preferred when both null (spend checked first)
+  // Hint priority — first match wins. See brief §ROI hint priority.
+  // Rule 1: spend === null → Meta Ads hint (regardless of avgValue).
   if (k.spend === null) {
     return {
       degraded: true,
@@ -57,6 +58,7 @@ export function legacyRoi(k: LegacyKpiInput): RoiBar {
       },
     };
   }
+  // Rule 2: spend > 0 && avgValue === null → Set-avg-value hint.
   if (k.avgValue === null) {
     const cpb = k.booked && k.booked > 0 ? Math.round(k.spend / k.booked) : null;
     return {
@@ -69,8 +71,23 @@ export function legacyRoi(k: LegacyKpiInput): RoiBar {
       },
     };
   }
+  // Rule 3: spend > 0 && avgValue != null && bookings <= 0 → degraded with
+  // comparator "—" and **no hint copy**. The degradation is "no math possible
+  // yet — wait for bookings," not a missing setup step.
+  if (k.booked === null || k.booked <= 0) {
+    return {
+      degraded: true,
+      degradedHint: "",
+      label: "return on spend",
+      comparator: {
+        value: "—",
+        target: k.target !== null ? `target $${k.target}` : "—",
+      },
+    };
+  }
 
-  const booked = k.booked ?? 0;
+  // Rule 4: live ROI.
+  const booked = k.booked;
   const spend = k.spend;
   const avgValue = k.avgValue;
   const target = k.target ?? 0;

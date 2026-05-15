@@ -39,6 +39,7 @@ describe("legacyTiles", () => {
 });
 
 describe("legacyRoi", () => {
+  // Steady-state math (locked-design parity)
   it("steady-state on-target", () => {
     const roi = legacyRoi({ ...base, spend: 270, target: 30, booked: 9, avgValue: 179 });
     // cpb = 270/9 = 30 → onTarget
@@ -54,33 +55,45 @@ describe("legacyRoi", () => {
     expect(roi.fillPct).toBe(100);
   });
 
-  it("cpb null when booked === 0", () => {
-    const roi = legacyRoi({ ...base, booked: 0, spend: 100, avgValue: 179, target: 30 });
-    if ("degraded" in roi!) throw new Error("expected full ROI");
-    expect(roi.comparator.value).toBe("—");
-  });
-
-  it("degraded when avgValue is null — 'Set average booking value' hint", () => {
-    const roi = legacyRoi({ ...base, avgValue: null });
-    expect(roi).toMatchObject({
-      degraded: true,
-      degradedHint: "Set average booking value to see return on spend",
+  // Hint priority — five-row table-driven, in `legacy-shapes.ts` priority order.
+  // Brief §ROI hint priority: first match wins.
+  describe("hint priority (five-row table — first match wins)", () => {
+    it("rule 1: spend null + avgValue null → Meta Ads hint", () => {
+      const roi = legacyRoi({ ...base, spend: null, avgValue: null });
+      expect(roi).toMatchObject({
+        degraded: true,
+        degradedHint: "Connect Meta Ads to see return on spend",
+      });
     });
-  });
 
-  it("degraded when spend is null — 'Connect Meta Ads' hint", () => {
-    const roi = legacyRoi({ ...base, spend: null });
-    expect(roi).toMatchObject({
-      degraded: true,
-      degradedHint: "Connect Meta Ads to see return on spend",
+    it("rule 1 wins over rule 2: spend null + avgValue set → still Meta Ads hint", () => {
+      const roi = legacyRoi({ ...base, spend: null, avgValue: 179 });
+      expect(roi).toMatchObject({
+        degraded: true,
+        degradedHint: "Connect Meta Ads to see return on spend",
+      });
     });
-  });
 
-  it("degraded when both null — prefers Meta Ads hint", () => {
-    const roi = legacyRoi({ ...base, spend: null, avgValue: null });
-    expect(roi).toMatchObject({
-      degraded: true,
-      degradedHint: "Connect Meta Ads to see return on spend",
+    it("rule 2: spend set + avgValue null → Set-avg-value hint", () => {
+      const roi = legacyRoi({ ...base, spend: 214, avgValue: null });
+      expect(roi).toMatchObject({
+        degraded: true,
+        degradedHint: "Set average booking value to see return on spend",
+      });
+    });
+
+    it("rule 3: spend set + avgValue set + bookings === 0 → degraded with comparator '—' and no hint copy", () => {
+      const roi = legacyRoi({ ...base, spend: 100, avgValue: 179, booked: 0, target: 30 });
+      if (!("degraded" in roi)) throw new Error("expected degraded ROI");
+      expect(roi.degraded).toBe(true);
+      expect(roi.comparator.value).toBe("—");
+      // Brief: "no hint copy — the degradation is 'no math possible,' not a missing setup step."
+      expect(roi.degradedHint).toBe("");
+    });
+
+    it("rule 4: spend set + avgValue set + bookings > 0 → live", () => {
+      const roi = legacyRoi({ ...base, spend: 270, avgValue: 179, booked: 9, target: 30 });
+      expect("degraded" in roi).toBe(false);
     });
   });
 });
