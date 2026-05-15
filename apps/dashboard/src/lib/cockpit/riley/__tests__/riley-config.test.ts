@@ -19,10 +19,10 @@ describe("riley-config", () => {
     });
   });
 
-  it("RILEY_TABS orders Alex / Riley / Mira with Riley active (TopbarTab shape)", () => {
+  it("RILEY_TABS orders Alex / Riley / Mira with Riley active and hrefs (Mira non-routing)", () => {
     expect(RILEY_TABS).toEqual([
-      { name: "Alex" },
-      { name: "Riley", active: true },
+      { name: "Alex", href: "/alex" },
+      { name: "Riley", active: true, href: "/riley" },
       { name: "Mira", muted: true },
     ]);
   });
