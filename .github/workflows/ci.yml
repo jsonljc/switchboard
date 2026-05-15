@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Install .agent/tools dependencies
+        run: cd .agent/tools && pnpm install --ignore-workspace --no-frozen-lockfile
+
       - name: Generate Prisma client
         run: pnpm --filter @switchboard/db exec prisma generate
 
@@ -73,6 +76,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
   typecheck:
@@ -103,6 +107,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Typecheck
@@ -136,6 +141,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Lint
@@ -172,6 +178,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Test with coverage
@@ -234,6 +241,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Regenerate lockfile with overrides
@@ -270,6 +278,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Architecture health check
