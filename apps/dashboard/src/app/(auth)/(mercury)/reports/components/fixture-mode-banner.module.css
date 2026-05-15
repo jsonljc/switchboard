@@ -1,0 +1,29 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid hsl(30 35% 80%);
+  border-radius: 0.5rem;
+  background: hsl(45 55% 96%);
+  color: hsl(30 25% 30%);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.chip {
+  flex-shrink: 0;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  background: hsl(30 55% 46%);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.text {
+  flex: 1;
+}

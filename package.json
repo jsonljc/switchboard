@@ -7,6 +7,8 @@
     "dev": "turbo dev",
     "predev": "bash scripts/check-env.sh",
     "lint": "turbo lint",
+    "local:verify": "npx tsx scripts/local-verify.ts",
+    "local:verify:fast": "npx tsx scripts/local-verify-fast.ts",
     "test": "turbo test",
     "test:unit": "turbo test:unit",
     "test:integration": "turbo test:integration",

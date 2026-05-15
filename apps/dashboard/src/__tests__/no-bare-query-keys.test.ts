@@ -40,7 +40,6 @@ const TENANT_PRIVATE_NAMESPACES = new Set([
   "governance",
   "knowledge",
   "playbook",
-  "operatorConfig",
   "inbox",
   "tokenUsage",
   "creative",
