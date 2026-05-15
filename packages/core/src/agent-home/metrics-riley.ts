@@ -95,7 +95,8 @@ export async function buildRileyMetricsViewModel(
   const spendDollars = spendCents !== null ? Math.round(spendCents / 100) : null;
   const cpl =
     spendCents !== null && heroValue > 0 ? Math.round(spendCents / 100 / heroValue) : null;
-  const cplDisplay = cpl === 0 ? "<$1 per lead" : cpl !== null ? `$${cpl} per lead` : "—";
+  let cplDisplay = "—";
+  if (cpl !== null) cplDisplay = cpl === 0 ? "<$1 per lead" : `$${cpl} per lead`;
   // Riley v1 reinterprets `targetCpbCents` as **target cost per lead** for the
   // ROI comparator. The config key is shared with Alex (target cost per
   // booking) for storage symmetry — `AgentRoster.config.targetCpbCents` is a
