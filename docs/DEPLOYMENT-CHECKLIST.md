@@ -52,7 +52,7 @@ Copy `.env.example` to `.env` and fill in:
 
 | Variable       | For                            |
 | -------------- | ------------------------------ |
-| `SENTRY_DSN`   | Sentry error tracking DSN      |
+| `SENTRY_DSN_SERVER` | Sentry error tracking DSN |
 | `NGINX_DOMAIN` | Domain name for TLS cert paths |
 
 **Optional (enable when needed):**

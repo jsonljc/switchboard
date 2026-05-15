@@ -97,11 +97,16 @@ check "/api/health/deep reports redis=connected" \
     -H "Authorization: Bearer $API_KEY"
 
 echo "[chat]"
-# chat /api/health/deep is added in Phase 2 — once that PR lands, swap the
-# /health probe below for /api/health/deep and re-add database/redis/api
-# field assertions parallel to the api block.
 check "GET /health returns 200" \
   check_http_ok "$CHAT_URL/health"
+check "GET /api/health/deep returns 200" \
+  check_http_ok "$CHAT_URL/api/health/deep"
+check "/api/health/deep reports database=connected" \
+  check_json_field "$CHAT_URL/api/health/deep" '.checks.database.status' 'connected'
+check "/api/health/deep reports redis=connected" \
+  check_json_field "$CHAT_URL/api/health/deep" '.checks.redis.status' 'connected'
+check "/api/health/deep reports api reachability" \
+  check_json_field "$CHAT_URL/api/health/deep" '.checks.api.status' 'connected'
 
 echo "[webhook routing — negative case]"
 check "chat returns 4xx for an unknown managed-webhook id (routing alive)" \
