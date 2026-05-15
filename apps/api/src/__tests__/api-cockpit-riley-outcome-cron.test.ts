@@ -44,4 +44,13 @@ describe("createRileyOutcomeAttributionWorker", () => {
     expect(out).toEqual({ skipped: "disabled" });
     expect(deps.logger.info).toHaveBeenCalledWith(expect.objectContaining({ skipped: "disabled" }));
   });
+
+  it("throws and logs on missing orgId", async () => {
+    const deps = buildDeps();
+    await expect(
+      executeRileyOutcomeAttributionWorker(deps, { data: {}, name: "riley.outcome.attribute" }),
+    ).rejects.toThrow(/missing orgId/);
+    expect(deps.logger.error).toHaveBeenCalled();
+    expect(deps.runRileyOutcomeAttribution).not.toHaveBeenCalled();
+  });
 });

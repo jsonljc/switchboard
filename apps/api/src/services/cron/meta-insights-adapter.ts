@@ -18,14 +18,10 @@ export function createMetaInsightsProviderForOrg(
   orgId: string,
   prisma: PrismaClient,
 ): MetaInsightsProvider {
-  // Lazy-initialised client: resolved on the first getWindowMetrics call so
-  // the credential lookup happens inside the Inngest function body, not at
-  // worker-construction time.
-  let clientPromise: Promise<MetaAdsClient | null> | null = null;
-
-  async function resolveClient(): Promise<MetaAdsClient | null> {
-    if (clientPromise) return clientPromise;
-    clientPromise = (async () => {
+  return {
+    async getWindowMetrics(query: InsightsWindowQuery): Promise<WindowMetrics | null> {
+      // Re-resolve credentials on every call so Inngest retries and credential
+      // rotations never reuse a stale client from a prior invocation.
       const deployment = await prisma.agentDeployment.findFirst({
         where: { organizationId: orgId, status: "active" },
         select: { id: true },
@@ -43,15 +39,7 @@ export function createMetaInsightsProviderForOrg(
       const accountId = creds.accountId as string | undefined;
       if (!accessToken || !accountId) return null;
 
-      return new MetaAdsClient({ accessToken, accountId });
-    })();
-    return clientPromise;
-  }
-
-  return {
-    async getWindowMetrics(query: InsightsWindowQuery): Promise<WindowMetrics | null> {
-      const client = await resolveClient();
-      if (!client) return null;
+      const client = new MetaAdsClient({ accessToken, accountId });
 
       const fmt = (d: Date) => d.toISOString().split("T")[0]!;
       const since = fmt(query.startInclusive);
@@ -77,8 +65,7 @@ export function createMetaInsightsProviderForOrg(
       if (rows.length === 0) return null;
 
       const spendCents = Math.round(rows.reduce((sum, r) => sum + r.spend, 0) * 100);
-      const ctr =
-        rows.length > 0 ? rows.reduce((sum, r) => sum + r.inlineLinkClickCtr, 0) / rows.length : 0;
+      const ctr = rows.reduce((sum, r) => sum + r.inlineLinkClickCtr, 0) / rows.length;
       const dailyRowCount = rows.length;
 
       return { spendCents, ctr, dailyRowCount };
