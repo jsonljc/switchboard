@@ -129,6 +129,7 @@ export { PrismaGovernanceVerdictStore } from "./prisma-governance-verdict-store.
 export { PrismaConversationLifecycleSnapshotStore } from "./prisma-conversation-lifecycle-snapshot-store.js";
 export { PrismaConversationLifecycleTransitionStore } from "./prisma-conversation-lifecycle-transition-store.js";
 export { PrismaMessageHistoryReader } from "./prisma-message-history-reader.js";
+export { PrismaActivityPreviewReader } from "./prisma-activity-preview-reader.js";
 export { PrismaReEngagementVerdictReader } from "./prisma-re-engagement-verdict-reader.js";
 export { createPrismaApprovedComplianceClaimStore } from "./prisma-approved-compliance-claim-store.js";
 export { createPrismaConsentStore } from "./prisma-consent-store.js";
