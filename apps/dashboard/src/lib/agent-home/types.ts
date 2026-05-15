@@ -127,6 +127,14 @@ export interface MetricsViewModel {
   stats: readonly [StatCell, StatCell, StatCell];
   freshness: DataFreshness;
   folioRange: string;
+  // A.3 echo fields — additive; undefined on older API responses during deploy skew
+  targets?: { avgValueCents: number | null; targetCpbCents: number | null };
+  spendCents?: number | null;
+  leads?: number;
+  qualifiedPct?: number;
+  bookedDelta?: string | null;
+  leadsDelta?: string | null;
+  qualifiedDelta?: string | null;
 }
 
 // ─── B5 Pipeline ──────────────────────────────────────────────
