@@ -28,3 +28,12 @@ export {
   type CreateInMemoryEmissionMirrorOptions,
 } from "./in-memory-emission-mirror.js";
 export type { EmitRecommendationOptions } from "./emit.js";
+
+// PR-3: Outcome attribution
+export {
+  SETTLEMENT_LAG_HOURS,
+  V1_ATTRIBUTABLE_KINDS,
+  KIND_CONFIG,
+  isAttributableKind,
+  type AttributableKind,
+} from "./outcome-attribution-config.js";
