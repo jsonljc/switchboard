@@ -69,8 +69,6 @@
   reason: "Policy CRUD — defines rules ingress evaluates; control-plane config, not a governed action."
 - path: "apps/api/src/routes/identity.ts"
   reason: "Identity spec / role overlay CRUD — agent identity configuration; control-plane config, not a governed business action."
-- path: "apps/api/src/routes/operator-config.ts"
-  reason: "AdsOperatorConfig CRUD — operator autonomy configuration; control-plane config (currently stubbed)."
 - path: "apps/api/src/routes/competence.ts"
   reason: "Competence record listing/updates — internal competence-tracking state, not an operator-initiated business action."
 

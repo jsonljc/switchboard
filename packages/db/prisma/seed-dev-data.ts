@@ -105,6 +105,9 @@ async function seedOpportunities(prisma: PrismaClient): Promise<void> {
 }
 
 async function seedExtraAuditEntries(prisma: PrismaClient): Promise<void> {
+  // Concurrent seed runs are safe: both readers see the same anchor hash,
+  // both compute identical entry shapes (id is deterministic), and the
+  // upserts below no-op on existing dev_audit_* IDs. First writer wins.
   const latest = await prisma.auditEntry.findFirst({
     where: { organizationId: ORG_ID },
     orderBy: { timestamp: "desc" },
@@ -215,36 +218,54 @@ async function seedExtraAuditEntries(prisma: PrismaClient): Promise<void> {
 async function seedApprovals(prisma: PrismaClient): Promise<void> {
   const futureExpiry = (hoursAhead: number) => new Date(Date.now() + hoursAhead * 60 * 60 * 1000);
 
+  // Dashboard /approvals reads `id`, `summary`, `riskCategory`, `bindingHash`,
+  // `createdAt` from the `request` JSON (apps/api/src/routes/approvals.ts:137-145).
+  // The detail page returns the entire `request` object as-is. Mirror `id` and
+  // `createdAt` into the JSON so list rendering and detail navigation work.
+  //
+  // Seeded approvals can be browsed but NOT submitted through the UI: the
+  // bindingHash here is sha256(id) for shape only, and validateBindingHash
+  // (packages/core/src/approval/binding.ts) computes from real action data.
+  // Acceptable for v1 — spec scope is "render non-empty surfaces".
+  const a1Id = "dev_approval_001";
+  const a1CreatedAt = new Date(Date.now() - 30 * 60 * 1000);
+  const a2Id = "dev_approval_002";
+  const a2CreatedAt = new Date(Date.now() - 5 * 60 * 1000);
+
   const approvals = [
     {
-      id: "dev_approval_001",
+      id: a1Id,
       envelopeId: "dev_envelope_001",
       organizationId: ORG_ID,
       request: {
+        id: a1Id,
+        createdAt: a1CreatedAt.toISOString(),
         riskCategory: "medium",
         summary: "Spend $1,200 on Meta Ads campaign 'Spring Sale 2026'",
-        bindingHash: sha256("dev_approval_001"),
+        bindingHash: sha256(a1Id),
         actionType: "campaign.update",
         principalId: "principal_dev",
       },
       status: "pending",
       expiresAt: futureExpiry(24),
-      createdAt: new Date(Date.now() - 30 * 60 * 1000),
+      createdAt: a1CreatedAt,
     },
     {
-      id: "dev_approval_002",
+      id: a2Id,
       envelopeId: "dev_envelope_002",
       organizationId: ORG_ID,
       request: {
+        id: a2Id,
+        createdAt: a2CreatedAt.toISOString(),
         riskCategory: "high",
         summary: "Pause underperforming campaign 'Awareness Q1'",
-        bindingHash: sha256("dev_approval_002"),
+        bindingHash: sha256(a2Id),
         actionType: "campaign.pause",
         principalId: "principal_dev",
       },
       status: "pending",
       expiresAt: futureExpiry(48),
-      createdAt: new Date(Date.now() - 5 * 60 * 1000),
+      createdAt: a2CreatedAt,
     },
   ];
 
