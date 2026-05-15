@@ -27,6 +27,14 @@ import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useHalt } from "@/components/layout/halt/halt-context";
 
+// Hoisted to module scope to avoid re-allocating the lookup on every render.
+// Order per spec §Card sort order: immediate → this_week → next_cycle.
+const URGENCY_ORDER: Record<"immediate" | "this_week" | "next_cycle", number> = {
+  immediate: 0,
+  this_week: 1,
+  next_cycle: 2,
+};
+
 export function CockpitPage() {
   const haltCtx = useHalt();
   const approvalsQ = usePendingApprovals();
@@ -67,12 +75,8 @@ export function CockpitPage() {
   // Sort order per spec §Card sort order: immediate → this_week → next_cycle,
   // then createdAt desc within band. The wrap-then-unwrap is required because
   // the tiebreak reads `createdAt` from the raw PendingApproval (the view-only
-  // `askedAt` is a relative string, not a timestamp).
-  const URGENCY_ORDER: Record<"immediate" | "this_week" | "next_cycle", number> = {
-    immediate: 0,
-    this_week: 1,
-    next_cycle: 2,
-  };
+  // `askedAt` is a relative string, not a timestamp). URGENCY_ORDER is hoisted
+  // to module scope above to avoid per-render allocation.
   const approvals = (approvalsQ.data?.approvals ?? [])
     .map((a) => ({ raw: a, view: richPendingApprovalToApprovalView(a, now) }))
     .sort((a, b) => {
