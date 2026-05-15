@@ -278,6 +278,8 @@ export type {
   ActivityPreviewReader,
   ThreadMessageRecord,
 } from "./agent-home/activity-preview-reader.js";
+export { extractContactRef } from "./agent-home/contact-snapshot-extractors.js";
+export type { ContactRef } from "./agent-home/contact-snapshot-extractors.js";
 
 // Reports projection (operator deep-dive surface)
 export * as reports from "./reports/index.js";
