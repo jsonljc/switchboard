@@ -115,4 +115,87 @@ describe("runRecommendationSink", () => {
       expect(s).toContain("Whitening Set B");
     });
   });
+
+  it("buildPresentation emits action-specific acceptToast and declineToast for every action", async () => {
+    const presentations: Array<{
+      action: RecommendationOutput["action"];
+      acceptToast: string | undefined;
+      declineToast: string | undefined;
+    }> = [];
+    const emit: RecommendationEmitter = vi.fn(async (input) => {
+      presentations.push({
+        action: input.action as RecommendationOutput["action"],
+        acceptToast: input.presentation.acceptToast,
+        declineToast: input.presentation.declineToast,
+      });
+      return mockRoute(input);
+    });
+    const actions: RecommendationOutput["action"][] = [
+      "scale",
+      "pause",
+      "refresh_creative",
+      "restructure",
+      "hold",
+      "test",
+      "review_budget",
+      "add_creative",
+      "expand_targeting",
+      "consolidate",
+      "shift_budget_to_source",
+      "switch_optimization_event",
+      "harden_capi_attribution",
+      "fix_signal_health",
+    ];
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-toasts",
+      recommendations: actions.map((a, i) =>
+        baseRec({ action: a, campaignId: `c-${i}`, confidence: 0.9 }),
+      ),
+      emit,
+    });
+    expect(presentations).toHaveLength(actions.length);
+
+    // All actions must have non-empty toasts.
+    for (const p of presentations) {
+      expect(p.acceptToast, `${p.action} acceptToast must be non-empty`).toBeTruthy();
+      expect(p.declineToast, `${p.action} declineToast must be non-empty`).toBeTruthy();
+    }
+
+    // Actions that interpolate the campaign name must contain it.
+    // harden_capi_attribution and fix_signal_health reference "the pixel" /
+    // "CAPI attribution" and do NOT interpolate campaign name — exclude them.
+    const campaignNameActions: RecommendationOutput["action"][] = [
+      "scale",
+      "pause",
+      "refresh_creative",
+      "restructure",
+      "hold",
+      "test",
+      "review_budget",
+      "add_creative",
+      "expand_targeting",
+      "consolidate",
+      "shift_budget_to_source",
+      "switch_optimization_event",
+    ];
+    for (const p of presentations.filter((p) => campaignNameActions.includes(p.action))) {
+      expect(p.acceptToast ?? "", `${p.action} acceptToast must contain campaign name`).toContain(
+        "Whitening Set B",
+      );
+    }
+
+    // Spot-check specific toast copy.
+    const pause = presentations.find((p) => p.action === "pause")!;
+    expect(pause.acceptToast).toBe("Paused Whitening Set B. Standing by.");
+    expect(pause.declineToast).toBe("Leaving Whitening Set B running.");
+
+    const scale = presentations.find((p) => p.action === "scale")!;
+    expect(scale.acceptToast).toBe("Scaling Whitening Set B 20%.");
+    expect(scale.declineToast).toBe("Holding Whitening Set B where it is.");
+
+    const fix = presentations.find((p) => p.action === "fix_signal_health")!;
+    expect(fix.acceptToast).toBe("Opening Events Manager for the pixel.");
+    expect(fix.declineToast).toBe("Acknowledged — back to scanning the pixel.");
+  });
 });

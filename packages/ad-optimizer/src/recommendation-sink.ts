@@ -119,31 +119,111 @@ function humanizeRecommendation(rec: RecommendationOutput): string {
 }
 
 /**
- * Surface-agnostic presentation. Defines the canonical button labels and data
- * lines that any surface (queue card, /riley page, inbox drawer) can render.
- * The router sets `surface`; this presentation is identical regardless.
+ * Surface-agnostic presentation. Defines the canonical button labels, data
+ * lines, and optional first-person toast copy that any surface (queue card,
+ * /riley page, inbox drawer) can render. The router sets `surface`; this
+ * presentation is identical regardless.
+ *
+ * acceptToast / declineToast are first-person Riley voice. Honest-impact
+ * language: they describe what Riley did with the operator's instruction,
+ * never causal claims about metric improvement.
  */
 function buildPresentation(rec: RecommendationOutput): {
   primaryLabel: string;
   secondaryLabel: string;
   dismissLabel: string;
   dataLines: string[][];
+  acceptToast: string;
+  declineToast: string;
 } {
-  const labels: Record<RecommendationOutput["action"], { primary: string; secondary: string }> = {
-    scale: { primary: "Scale 20%", secondary: "Hold" },
-    pause: { primary: "Pause", secondary: "Reduce 50%" },
-    refresh_creative: { primary: "Refresh creative", secondary: "Hold" },
-    restructure: { primary: "Restructure", secondary: "Review" },
-    hold: { primary: "Hold", secondary: "Investigate" },
-    test: { primary: "Run test", secondary: "Skip" },
-    review_budget: { primary: "Review budget", secondary: "Hold" },
-    add_creative: { primary: "Add creatives", secondary: "Adjust later" },
-    expand_targeting: { primary: "Expand", secondary: "Wait" },
-    consolidate: { primary: "Consolidate", secondary: "Review" },
-    shift_budget_to_source: { primary: "Shift budget", secondary: "Wait" },
-    switch_optimization_event: { primary: "Switch event", secondary: "Wait" },
-    harden_capi_attribution: { primary: "Fix attribution", secondary: "Skip" },
-    fix_signal_health: { primary: "Fix signal", secondary: "Skip" },
+  const labels: Record<
+    RecommendationOutput["action"],
+    { primary: string; secondary: string; accept: string; decline: string }
+  > = {
+    scale: {
+      primary: "Scale 20%",
+      secondary: "Hold",
+      accept: `Scaling ${rec.campaignName} 20%.`,
+      decline: `Holding ${rec.campaignName} where it is.`,
+    },
+    pause: {
+      primary: "Pause",
+      secondary: "Reduce 50%",
+      accept: `Paused ${rec.campaignName}. Standing by.`,
+      decline: `Leaving ${rec.campaignName} running.`,
+    },
+    refresh_creative: {
+      primary: "Refresh creative",
+      secondary: "Hold",
+      accept: `Queued a creative refresh for ${rec.campaignName}.`,
+      decline: `Holding the current creative on ${rec.campaignName}.`,
+    },
+    restructure: {
+      primary: "Restructure",
+      secondary: "Review",
+      accept: `Restructure plan opened for ${rec.campaignName}.`,
+      decline: `Holding the structure on ${rec.campaignName}.`,
+    },
+    hold: {
+      primary: "Hold",
+      secondary: "Investigate",
+      accept: `Holding ${rec.campaignName}. Watching.`,
+      decline: `Acknowledged — back to scanning.`,
+    },
+    test: {
+      primary: "Run test",
+      secondary: "Skip",
+      accept: `Test variant queued for ${rec.campaignName}.`,
+      decline: `Skipping the test on ${rec.campaignName}.`,
+    },
+    review_budget: {
+      primary: "Review budget",
+      secondary: "Hold",
+      accept: `Opening Meta to review ${rec.campaignName}'s budget.`,
+      decline: `Holding ${rec.campaignName}'s budget where it is.`,
+    },
+    add_creative: {
+      primary: "Add creatives",
+      secondary: "Adjust later",
+      accept: `Routed an add-creative ask for ${rec.campaignName}.`,
+      decline: `Holding off on adding creatives to ${rec.campaignName}.`,
+    },
+    expand_targeting: {
+      primary: "Expand",
+      secondary: "Wait",
+      accept: `Targeting expansion queued for ${rec.campaignName}.`,
+      decline: `Keeping targeting where it is on ${rec.campaignName}.`,
+    },
+    consolidate: {
+      primary: "Consolidate",
+      secondary: "Review",
+      accept: `Consolidation plan opened for ${rec.campaignName}.`,
+      decline: `Leaving ${rec.campaignName} as-is.`,
+    },
+    shift_budget_to_source: {
+      primary: "Shift budget",
+      secondary: "Wait",
+      accept: `Shifting budget on ${rec.campaignName}.`,
+      decline: `Holding the current budget split on ${rec.campaignName}.`,
+    },
+    switch_optimization_event: {
+      primary: "Switch event",
+      secondary: "Wait",
+      accept: `Switched optimization event on ${rec.campaignName}.`,
+      decline: `Holding the current optimization event on ${rec.campaignName}.`,
+    },
+    harden_capi_attribution: {
+      primary: "Fix attribution",
+      secondary: "Skip",
+      accept: `Opening Meta to harden CAPI attribution.`,
+      decline: `Holding the current CAPI configuration.`,
+    },
+    fix_signal_health: {
+      primary: "Fix signal",
+      secondary: "Skip",
+      accept: `Opening Events Manager for the pixel.`,
+      decline: `Acknowledged — back to scanning the pixel.`,
+    },
   };
   const found = labels[rec.action];
   return {
@@ -151,6 +231,8 @@ function buildPresentation(rec: RecommendationOutput): {
     secondaryLabel: found.secondary,
     dismissLabel: "Dismiss",
     dataLines: [[rec.estimatedImpact], [`Learning phase: ${rec.learningPhaseImpact}`]],
+    acceptToast: found.accept,
+    declineToast: found.decline,
   };
 }
 

@@ -4,9 +4,18 @@ import { T } from "./tokens";
 export interface ComposerPlaceholderProps {
   halted: boolean;
   compact?: boolean;
+  senderLabel?: string;
+  placeholderCopy?: string;
+  accentColor?: string;
 }
 
-export function ComposerPlaceholder({ halted, compact = false }: ComposerPlaceholderProps) {
+export function ComposerPlaceholder({
+  halted,
+  compact = false,
+  senderLabel = "ALEX",
+  placeholderCopy = "Tell Alex what to do — coming soon",
+  accentColor = T.ink4,
+}: ComposerPlaceholderProps) {
   return (
     <div
       style={{
@@ -32,14 +41,14 @@ export function ComposerPlaceholder({ halted, compact = false }: ComposerPlaceho
           style={{
             fontFamily: "JetBrains Mono",
             fontSize: 11,
-            color: T.ink4,
+            color: accentColor,
             letterSpacing: "0.08em",
           }}
         >
-          → ALEX
+          → {senderLabel}
         </span>
         <span style={{ fontSize: 13, color: T.ink4, padding: "8px 0" }}>
-          {halted ? "Halted — resume to send instructions" : "Tell Alex what to do — coming soon"}
+          {halted ? "Halted — resume to send instructions" : placeholderCopy}
         </span>
       </div>
     </div>

@@ -45,3 +45,25 @@ export function statusColor(statusKey: CockpitStatus): string {
 export function statusPulse(statusKey: CockpitStatus): boolean {
   return statusKey === "REVIEWING";
 }
+
+export const RILEY_COMPOSER_PLACEHOLDER =
+  "Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…";
+
+export interface RileyCommand {
+  id: string;
+  label: string;
+  group: "control" | "thread" | "rules" | "nav";
+}
+
+// Catalog ships as typed data only in B.3. The B.3-followup (after Alex A.5)
+// wires these into the shared <CommandPalette>. Order matches the order the
+// palette renders groups: nav → rules → control → thread.
+export const RILEY_COMMANDS: readonly RileyCommand[] = [
+  { id: "open-meta", label: "Open Meta", group: "nav" },
+  { id: "open-rules", label: "Open standing rules", group: "rules" },
+  { id: "open-targets", label: "Open targets", group: "rules" },
+  { id: "pause-1h", label: "Pause Riley for 1h", group: "control" },
+  { id: "resume", label: "Resume Riley", group: "control" },
+  { id: "brief-eod", label: "Brief me at EOD", group: "thread" },
+  { id: "cpl-30", label: "Show CPL — last 30d", group: "thread" },
+];

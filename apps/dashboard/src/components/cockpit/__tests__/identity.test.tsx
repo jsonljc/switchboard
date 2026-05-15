@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Identity } from "../identity";
+import type { CockpitStatus } from "../types";
 
 const BASE_PROPS = {
   statusKey: "WORKING" as const,
@@ -115,5 +116,25 @@ describe("Identity — mission interactive subtitle (A.2)", () => {
     );
     const subtitle = screen.getByText("SDR · Tours pipeline · HotPod");
     expect(subtitle.tagName.toLowerCase()).not.toBe("button");
+  });
+});
+
+describe("Identity — colorFor / pulseFor pass-through (B.3 prep)", () => {
+  it("forwards colorFor / pulseFor through to StatusPill", () => {
+    const colorFor = vi.fn((_s: CockpitStatus, _halted: boolean) => "rgb(184, 108, 80)");
+    const pulseFor = vi.fn((_s: CockpitStatus, _halted: boolean) => false);
+    render(
+      <Identity
+        statusKey="WAITING"
+        halted={false}
+        subtitle="Optimizing Meta Ads"
+        line={null}
+        onHaltToggle={() => {}}
+        colorFor={colorFor}
+        pulseFor={pulseFor}
+      />,
+    );
+    expect(colorFor).toHaveBeenCalledWith("WAITING", false);
+    expect(pulseFor).toHaveBeenCalledWith("WAITING", false);
   });
 });

@@ -65,6 +65,51 @@ describe("RecommendationPresentationSchema", () => {
       RecommendationPresentationSchema.parse({ primaryLabel: "x", dataLines: [] }),
     ).toThrow();
   });
+
+  it("accepts optional acceptToast and declineToast strings", () => {
+    const ok = RecommendationPresentationSchema.parse({
+      primaryLabel: "Pause",
+      secondaryLabel: "Reduce 50%",
+      dismissLabel: "Dismiss",
+      dataLines: [],
+      acceptToast: "Paused Whitening Set B. Standing by.",
+      declineToast: "Leaving Whitening Set B running.",
+    });
+    expect(ok.acceptToast).toBe("Paused Whitening Set B. Standing by.");
+    expect(ok.declineToast).toBe("Leaving Whitening Set B running.");
+  });
+
+  it("parses when acceptToast and declineToast are absent (backwards-compatible)", () => {
+    const ok = RecommendationPresentationSchema.parse({
+      primaryLabel: "Pause",
+      secondaryLabel: "Reduce 50%",
+      dismissLabel: "Dismiss",
+      dataLines: [],
+    });
+    expect(ok.acceptToast).toBeUndefined();
+    expect(ok.declineToast).toBeUndefined();
+  });
+
+  it("rejects empty-string acceptToast / declineToast (min-1 guards blank toasts)", () => {
+    expect(() =>
+      RecommendationPresentationSchema.parse({
+        primaryLabel: "Pause",
+        secondaryLabel: "Reduce 50%",
+        dismissLabel: "Dismiss",
+        dataLines: [],
+        acceptToast: "",
+      }),
+    ).toThrow();
+    expect(() =>
+      RecommendationPresentationSchema.parse({
+        primaryLabel: "Pause",
+        secondaryLabel: "Reduce 50%",
+        dismissLabel: "Dismiss",
+        dataLines: [],
+        declineToast: "",
+      }),
+    ).toThrow();
+  });
 });
 
 describe("RecommendationInputSchema", () => {
@@ -135,6 +180,51 @@ describe("RecommendationInputSchema", () => {
         presentation: { primaryLabel: "x", secondaryLabel: "x", dismissLabel: "x", dataLines: [] },
       }),
     ).toThrow();
+  });
+
+  it("propagates acceptToast and declineToast through presentation when present", () => {
+    const ok = RecommendationInputSchema.parse({
+      orgId: "org-1",
+      agentKey: "riley",
+      intent: "recommendation.pause",
+      action: "pause",
+      humanSummary: "Pause Whitening Set B — saves $40/day",
+      confidence: 0.9,
+      dollarsAtRisk: 25,
+      riskLevel: "low",
+      parameters: {},
+      presentation: {
+        primaryLabel: "Pause",
+        secondaryLabel: "Reduce 50%",
+        dismissLabel: "Dismiss",
+        dataLines: [],
+        acceptToast: "Paused Whitening Set B. Standing by.",
+        declineToast: "Leaving Whitening Set B running.",
+      },
+    });
+    expect(ok.presentation.acceptToast).toBe("Paused Whitening Set B. Standing by.");
+    expect(ok.presentation.declineToast).toBe("Leaving Whitening Set B running.");
+  });
+
+  it("accepts a RecommendationInput without acceptToast / declineToast (backwards-compatible)", () => {
+    const ok = RecommendationInputSchema.parse({
+      orgId: "org-1",
+      agentKey: "riley",
+      intent: "recommendation.pause",
+      action: "pause",
+      humanSummary: "Pause Whitening Set B — saves $40/day",
+      confidence: 0.9,
+      dollarsAtRisk: 25,
+      riskLevel: "low",
+      parameters: {},
+      presentation: {
+        primaryLabel: "Pause",
+        secondaryLabel: "Reduce 50%",
+        dismissLabel: "Dismiss",
+        dataLines: [],
+      },
+    });
+    expect(ok.presentation.acceptToast).toBeUndefined();
   });
 });
 

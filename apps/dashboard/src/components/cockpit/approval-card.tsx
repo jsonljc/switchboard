@@ -2,22 +2,46 @@
 import { T } from "./tokens";
 import type { ApprovalView } from "./types";
 
+export interface ApprovalAccent {
+  base: string;
+  deep: string;
+  soft: string;
+  paper: string;
+}
+
+export const ALEX_APPROVAL_ACCENT: ApprovalAccent = {
+  base: T.amber,
+  deep: T.amberDeep,
+  soft: T.amberSoft,
+  paper: T.amberPaper,
+};
+
 export interface ApprovalCardProps {
   data: ApprovalView;
   idx: number;
   total: number;
   onResolve: (verdict: "accept" | "decline", idx: number) => void;
   compact?: boolean;
+  accent?: ApprovalAccent;
+  senderLabel?: string;
 }
 
-export function ApprovalCard({ data, idx, total, onResolve, compact = false }: ApprovalCardProps) {
+export function ApprovalCard({
+  data,
+  idx,
+  total,
+  onResolve,
+  compact = false,
+  accent = ALEX_APPROVAL_ACCENT,
+  senderLabel = "Alex needs you",
+}: ApprovalCardProps) {
   return (
     <section
       style={{
         padding: compact ? "16px 18px" : "20px 22px",
-        background: T.amberPaper,
+        background: accent.paper,
         borderRadius: 8,
-        border: `1px solid ${T.amberSoft}`,
+        border: `1px solid ${accent.soft}`,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -26,13 +50,13 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
             fontSize: 10,
             fontWeight: 700,
             letterSpacing: "0.14em",
-            color: T.amberDeep,
+            color: accent.deep,
             textTransform: "uppercase",
           }}
         >
-          Alex needs you
+          {senderLabel}
         </span>
-        <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.amberDeep }}>
+        <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: accent.deep }}>
           · {data.askedAt}
         </span>
         {total > 1 && (
@@ -42,7 +66,7 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
               style={{
                 fontFamily: "JetBrains Mono",
                 fontSize: 11,
-                color: T.amberDeep,
+                color: accent.deep,
                 fontWeight: 600,
               }}
             >
@@ -83,15 +107,15 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
             padding: "10px 14px",
             background: "rgba(255,255,255,0.55)",
             borderRadius: 4,
-            border: `1px solid ${T.amberSoft}`,
+            border: `1px solid ${accent.soft}`,
             fontSize: 13.5,
             lineHeight: 1.5,
             color: T.ink2,
           }}
         >
-          <span style={{ color: T.amber, fontWeight: 600, marginRight: 3 }}>"</span>
+          <span style={{ color: accent.base, fontWeight: 600, marginRight: 3 }}>"</span>
           {data.quote}
-          <span style={{ color: T.amber, fontWeight: 600, marginLeft: 3 }}>"</span>
+          <span style={{ color: accent.base, fontWeight: 600, marginLeft: 3 }}>"</span>
           {data.quoteFrom && (
             <div
               style={{ marginTop: 4, fontFamily: "JetBrains Mono", fontSize: 10.5, color: T.ink4 }}
@@ -107,7 +131,7 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
             marginTop: 10,
             fontFamily: "JetBrains Mono",
             fontSize: 11,
-            color: T.amberDeep,
+            color: accent.deep,
             letterSpacing: "0.04em",
           }}
         >
@@ -120,9 +144,9 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
         <button
           onClick={() => onResolve("accept", idx)}
           style={{
-            background: T.amber,
+            background: accent.base,
             color: "#fff",
-            border: `1px solid ${T.amberDeep}`,
+            border: `1px solid ${accent.deep}`,
             padding: "8px 16px",
             borderRadius: 4,
             fontSize: 13,

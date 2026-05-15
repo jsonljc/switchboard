@@ -18,6 +18,10 @@ export interface IdentityProps {
   missionInteractive?: boolean;
   /** A.2: called when the operator clicks the interactive subtitle. */
   onOpenMission?: () => void;
+  /** B.3: override the dot color for the embedded StatusPill. */
+  colorFor?: (s: CockpitStatus, halted: boolean) => string;
+  /** B.3: override the pulse behaviour for the embedded StatusPill. */
+  pulseFor?: (s: CockpitStatus, halted: boolean) => boolean;
 }
 
 function AvatarFrame({ size = 64 }: { size?: number }) {
@@ -52,6 +56,8 @@ export function Identity({
   compact = false,
   missionInteractive = false,
   onOpenMission,
+  colorFor,
+  pulseFor,
 }: IdentityProps) {
   return (
     <div
@@ -75,7 +81,12 @@ export function Identity({
           >
             {ALEX_CONFIG.name}
           </span>
-          <StatusPill statusKey={statusKey} halted={halted} />
+          <StatusPill
+            statusKey={statusKey}
+            halted={halted}
+            colorFor={colorFor}
+            pulseFor={pulseFor}
+          />
         </div>
         <div
           style={{
