@@ -37,3 +37,13 @@ export {
   isAttributableKind,
   type AttributableKind,
 } from "./outcome-attribution-config.js";
+export type {
+  VisibilityFlag,
+  WindowMetrics,
+  InsightsWindowQuery,
+  MetaInsightsProvider,
+  AttributableRecommendation,
+  AttributableRecommendationStore,
+  RileyOutcomeRow,
+  RecommendationOutcomeStore,
+} from "./outcome-attribution-types.js";
