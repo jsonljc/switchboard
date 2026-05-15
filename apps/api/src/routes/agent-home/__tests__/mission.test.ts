@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import Fastify from "fastify";
 import { missionRoute } from "../mission.js";
-import { buildAlexMissionResponse } from "../mission.js";
+import { buildAlexMissionResponse, buildRileyMissionResponse } from "../mission.js";
 
 describe("buildAlexMissionResponse", () => {
   const baseInputs = {
@@ -173,6 +173,135 @@ describe("buildAlexMissionResponse", () => {
   });
 });
 
+describe("buildRileyMissionResponse", () => {
+  const baseInputs = {
+    roster: {
+      id: "ros-riley-1",
+      organizationId: "org-1",
+      agentRole: "optimizer",
+      displayName: "Riley",
+      description: "",
+      status: "active",
+      tier: "starter",
+      config: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    org: { id: "org-1", name: "HotPod Yoga" },
+    connections: [] as Array<{ serviceId: string; status: string }>,
+  };
+
+  it("returns Riley display fields when nothing is connected", () => {
+    const out = buildRileyMissionResponse(baseInputs);
+    expect(out.agentKey).toBe("riley");
+    expect(out.displayName).toBe("Riley");
+    expect(out.mission.role).toBe(
+      "Ad optimizer · score, recommend, never act without your approval",
+    );
+    expect(out.mission.pipeline).toBe("Ad sets · all campaigns");
+    expect(out.mission.brand).toBe("HotPod Yoga · —");
+    expect(out.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
+    expect(out.mission.channels[0]).toEqual({
+      kind: "meta-ads",
+      label: "Meta Ads",
+      status: "off",
+    });
+    expect(out.mission.rules).toBeNull();
+    expect(out.targets).toEqual({
+      avgValueCents: null,
+      targetCpbCents: null,
+      roasSource: "deterministic",
+    });
+    expect(out.composerPlaceholder).toBe("Tell Riley what to do — coming soon");
+    expect(out.commands).toEqual([]);
+    // Riley setup array has 2 rows: meta and rules. No inbox/cal.
+    expect(out.setup.map((r) => r.key)).toEqual(["meta", "rules"]);
+    expect(out.setup.every((row) => row.done === false)).toBe(true);
+    expect(out.setup.find((row) => row.key === "meta")?.primary).toBe(true);
+  });
+
+  it("marks meta done when a Meta Ads Connection exists; status='ok' when connected", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      connections: [{ serviceId: "meta-ads", status: "connected" }],
+    });
+    expect(out.mission.channels[0]?.status).toBe("ok");
+    expect(out.setup.find((row) => row.key === "meta")?.done).toBe(true);
+    // primary shifts to rules (next un-done row)
+    expect(out.setup.find((row) => row.key === "rules")?.primary).toBe(true);
+  });
+
+  it("marks Meta Ads status='warn' when Connection is degraded", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      connections: [{ serviceId: "meta-ads", status: "degraded" }],
+    });
+    expect(out.mission.channels[0]?.status).toBe("warn");
+  });
+
+  it("sets roasSource='crm' when a crm-data-provider Connection exists", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      connections: [
+        { serviceId: "meta-ads", status: "connected" },
+        { serviceId: "crm-data-provider", status: "connected" },
+      ],
+    });
+    expect(out.targets.roasSource).toBe("crm");
+  });
+
+  it("keeps roasSource='deterministic' when no crm-data-provider Connection exists", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      connections: [{ serviceId: "meta-ads", status: "connected" }],
+    });
+    expect(out.targets.roasSource).toBe("deterministic");
+  });
+
+  it("reads avgValueCents/targetCpbCents from roster.config", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      roster: {
+        ...baseInputs.roster,
+        config: { avgValueCents: 12000, targetCpbCents: 2500 },
+      },
+    });
+    expect(out.targets.avgValueCents).toBe(12000);
+    expect(out.targets.targetCpbCents).toBe(2500);
+    expect(out.setup.find((row) => row.key === "rules")?.done).toBe(true);
+  });
+
+  it("returns null targets and rules-row undone when only one threshold is present", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      roster: {
+        ...baseInputs.roster,
+        config: { avgValueCents: 12000 },
+      },
+    });
+    expect(out.targets.avgValueCents).toBe(12000);
+    expect(out.targets.targetCpbCents).toBeNull();
+    expect(out.setup.find((row) => row.key === "rules")?.done).toBe(false);
+  });
+
+  it("returns null targets when config is a non-object primitive", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      roster: { ...baseInputs.roster, config: "invalid" as unknown },
+    });
+    expect(out.targets.avgValueCents).toBeNull();
+    expect(out.targets.targetCpbCents).toBeNull();
+  });
+
+  it("falls back to '(unnamed organization)' when org.name missing", () => {
+    const out = buildRileyMissionResponse({
+      ...baseInputs,
+      org: { id: "org-1", name: "" },
+    });
+    expect(out.mission.brand).toBe("(unnamed organization) · —");
+  });
+});
+
 type PrismaStub = {
   agentRoster: { findFirst: ReturnType<typeof vi.fn> };
   organizationConfig: { findUnique: ReturnType<typeof vi.fn> };
@@ -209,11 +338,54 @@ async function buildApp(prisma: PrismaStub | null) {
 }
 
 describe("mission route", () => {
-  it("404 for non-Alex agents at A.2", async () => {
-    const app = await buildApp(buildPrismaStub({}));
+  it("200 returns Riley aggregator on /agents/riley/mission", async () => {
+    const prisma = buildPrismaStub({
+      roster: {
+        id: "ros-riley-1",
+        organizationId: "org-1",
+        agentRole: "optimizer",
+        displayName: "Riley",
+        description: "",
+        status: "active",
+        tier: "starter",
+        config: { avgValueCents: 12000, targetCpbCents: 2500 },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      org: { id: "org-1", name: "HotPod Yoga" },
+      connections: [
+        { serviceId: "meta-ads", status: "connected" },
+        { serviceId: "crm-data-provider", status: "connected" },
+      ],
+    });
+    const app = await buildApp(prisma);
     const res = await app.inject({
       method: "GET",
       url: "/api/dashboard/agents/riley/mission",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      agentKey: string;
+      mission: { role: string; brand: string; channels: Array<{ kind: string }> };
+      targets: { roasSource: string };
+    };
+    expect(body.agentKey).toBe("riley");
+    expect(body.mission.role).toBe(
+      "Ad optimizer · score, recommend, never act without your approval",
+    );
+    expect(body.mission.brand).toBe("HotPod Yoga · —");
+    expect(body.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
+    expect(body.targets.roasSource).toBe("crm");
+    // Riley aggregator does NOT call managedChannel.findMany.
+    expect(prisma.managedChannel.findMany).not.toHaveBeenCalled();
+  });
+
+  it("404 for agents that are not Alex or Riley (e.g. Mira)", async () => {
+    const app = await buildApp(buildPrismaStub({}));
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/mission",
       headers: { "x-org-id": "org-1" },
     });
     expect(res.statusCode).toBe(404);

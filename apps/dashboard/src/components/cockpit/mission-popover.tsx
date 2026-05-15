@@ -27,9 +27,10 @@ type Props = {
   open: boolean;
   onClose: () => void;
   mission: MissionAggregatorResponse["mission"];
+  agentLabel?: string;
 };
 
-export function MissionPopover({ open, onClose, mission }: Props) {
+export function MissionPopover({ open, onClose, mission, agentLabel = "Alex" }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -62,7 +63,7 @@ export function MissionPopover({ open, onClose, mission }: Props) {
     <div
       ref={containerRef}
       role="dialog"
-      aria-label="Alex mission"
+      aria-label={`${agentLabel} mission`}
       className="absolute z-30 mt-2 w-[min(420px,calc(100vw-2rem))] rounded-lg border shadow-lg"
       style={{ background: T.paper, borderColor: T.hair, color: T.ink }}
     >

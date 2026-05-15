@@ -68,6 +68,11 @@ const ALEX_ROLE = "SDR · qualify inbound leads, book tours";
 const ALEX_PIPELINE = "Tours pipeline · single funnel";
 const ALEX_COMPOSER_PLACEHOLDER = "Tell Alex what to do — coming soon";
 
+const RILEY_ROLE = "Ad optimizer · score, recommend, never act without your approval";
+const RILEY_PIPELINE = "Ad sets · all campaigns";
+const RILEY_COMPOSER_PLACEHOLDER = "Tell Riley what to do — coming soon";
+const CRM_PROVIDER_SERVICE_ID = "crm-data-provider";
+
 function mapConnectionStatus(status: string): MissionChannelStatus {
   if (status === "connected") return "ok";
   if (status === "degraded") return "warn";
@@ -165,6 +170,52 @@ export function buildAlexMissionResponse(inputs: {
   };
 }
 
+export function buildRileyMissionResponse(inputs: {
+  roster: RosterInput;
+  org: OrgInput;
+  connections: ConnectionInput[];
+}): MissionAggregatorResponse {
+  const { roster, org, connections } = inputs;
+
+  const metaConnection = connections.find((c) => c.serviceId === "meta-ads");
+  const metaDone = !!metaConnection;
+  const metaStatus: MissionChannelStatus = metaConnection
+    ? mapConnectionStatus(metaConnection.status)
+    : "off";
+
+  const crmConnection = connections.find((c) => c.serviceId === CRM_PROVIDER_SERVICE_ID);
+  const roasSource: "deterministic" | "crm" = crmConnection ? "crm" : "deterministic";
+
+  const avgValueCents = readNumberKey(roster.config, "avgValueCents");
+  const targetCpbCents = readNumberKey(roster.config, "targetCpbCents");
+  const targetsDone = avgValueCents !== null && targetCpbCents !== null;
+
+  const brandName = org.name.trim().length > 0 ? org.name : "(unnamed organization)";
+
+  const setupRows: MissionSetupRow[] = [
+    { key: "meta", done: metaDone },
+    { key: "rules", done: targetsDone },
+  ];
+  const firstUndone = setupRows.find((row) => !row.done);
+  if (firstUndone) firstUndone.primary = true;
+
+  return {
+    agentKey: "riley",
+    displayName: roster.displayName,
+    mission: {
+      role: RILEY_ROLE,
+      pipeline: RILEY_PIPELINE,
+      brand: `${brandName} · —`,
+      channels: [{ kind: "meta-ads", label: "Meta Ads", status: metaStatus }],
+      rules: null,
+    },
+    composerPlaceholder: RILEY_COMPOSER_PLACEHOLDER,
+    commands: [],
+    targets: { avgValueCents, targetCpbCents, roasSource },
+    setup: setupRows,
+  };
+}
+
 const ALEX_RILEY_ONLY = ["alex", "riley"] as const;
 
 export const missionRoute: FastifyPluginAsync = async (app) => {
@@ -190,10 +241,6 @@ export const missionRoute: FastifyPluginAsync = async (app) => {
     if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
       return reply.code(404).send({ error: "Agent not available on home" });
     }
-    if (agentId !== "alex") {
-      // Riley wiring lands in its own slice; A.2 ships Alex only.
-      return reply.code(404).send({ error: "Mission aggregator not available for this agent yet" });
-    }
 
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
@@ -203,31 +250,44 @@ export const missionRoute: FastifyPluginAsync = async (app) => {
     }
 
     try {
+      const rosterRole = agentId === "alex" ? "responder" : "optimizer";
       const [roster, org, connections, managedChannels] = await Promise.all([
         app.prisma.agentRoster.findFirst({
-          where: { organizationId: orgId, agentRole: "responder" },
+          where: { organizationId: orgId, agentRole: rosterRole },
         }),
         app.prisma.organizationConfig.findUnique({ where: { id: orgId } }),
         app.prisma.connection.findMany({
           where: { organizationId: orgId },
           select: { serviceId: true, status: true },
         }),
-        app.prisma.managedChannel.findMany({
-          where: { organizationId: orgId },
-          select: { channel: true, status: true },
-        }),
+        agentId === "alex"
+          ? app.prisma.managedChannel.findMany({
+              where: { organizationId: orgId },
+              select: { channel: true, status: true },
+            })
+          : Promise.resolve([] as Array<{ channel: string; status: string }>),
       ]);
 
       if (!roster) {
-        return reply.code(404).send({ error: "Alex roster not provisioned for this org" });
+        const label = agentId === "alex" ? "Alex" : "Riley";
+        return reply.code(404).send({ error: `${label} roster not provisioned for this org` });
       }
 
-      const response = buildAlexMissionResponse({
-        roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
-        org: { id: orgId, name: org?.name ?? "" },
-        connections,
-        managedChannels,
-      });
+      const response =
+        agentId === "alex"
+          ? buildAlexMissionResponse({
+              roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
+              org: { id: orgId, name: org?.name ?? "" },
+              connections,
+              managedChannels,
+            })
+          : buildRileyMissionResponse({
+              roster: roster as unknown as Parameters<
+                typeof buildRileyMissionResponse
+              >[0]["roster"],
+              org: { id: orgId, name: org?.name ?? "" },
+              connections,
+            });
       return reply.code(200).send(response);
     } catch (err) {
       app.log.error({ err }, "mission aggregator failed");

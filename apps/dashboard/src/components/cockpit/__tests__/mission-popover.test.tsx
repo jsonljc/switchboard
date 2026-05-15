@@ -79,4 +79,14 @@ describe("MissionPopover", () => {
     fireEvent.mouseDown(dialog);
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("uses 'Alex mission' as the default aria-label when agentLabel is omitted", () => {
+    render(<MissionPopover open onClose={() => {}} mission={baseMission} />);
+    expect(screen.getByRole("dialog", { name: "Alex mission" })).toBeInTheDocument();
+  });
+
+  it("uses the provided agentLabel in the aria-label", () => {
+    render(<MissionPopover open onClose={() => {}} mission={baseMission} agentLabel="Riley" />);
+    expect(screen.getByRole("dialog", { name: "Riley mission" })).toBeInTheDocument();
+  });
 });
