@@ -6,7 +6,7 @@ import { useHalt } from "@/components/layout/halt/halt-context";
 import { useToast } from "@/components/ui/use-toast";
 import { parseCommand } from "./parse-command";
 import { toastVoice } from "./alex-toast-voice";
-import type { RileyCommand } from "./riley/riley-config";
+import type { ParsedAction } from "@/components/cockpit/types";
 
 export interface UseRileyActionDispatcherOptions {
   /**
@@ -19,13 +19,31 @@ export interface UseRileyActionDispatcherOptions {
   onShowMission: () => void;
 }
 
-export type RileyActionDispatcher = (command: RileyCommand) => void;
+export type RileyActionDispatcher = (action: ParsedAction) => void;
+
+// Palette command-id → synthetic NL phrase. parseCommand projects the
+// phrase into a ParsedAction whose `pause` arm carries the wall-clock
+// detail (e.g. "until 3:23 PM"). Mirrors Alex's PER_ID_NL pattern.
+const PER_ID_NL: Record<string, string> = {
+  "pause-1h": "pause for 1h",
+  resume: "resume",
+};
+
+// Palette command-id → route + inline toast title. Per-id routes so
+// future Riley palette entries can declare their own settings deep
+// links without a new switch arm.
+const PER_ID_ROUTE: Record<string, { path: string; title: string }> = {
+  "open-meta": { path: "/settings?focus=channels", title: "Opening Meta connection." },
+  "open-rules": { path: "/settings?focus=rules", title: "Opening rules." },
+};
 
 /**
- * Single owner of the toast call for `/riley` palette actions. Mirrors
- * `useAlexActionDispatcher` (alex-action-dispatcher.ts). The shared
- * `<CommandPalette>` and `<Topbar>` MUST NOT import `useToast` directly;
- * double-toasts on dispatch are the failure mode this boundary prevents.
+ * Single owner of toast firing on /riley. Both the command palette (via
+ * { kind: "command", commandId }) and the live <Composer> (via parsed
+ * actions from parseCommand) flow through this hook. The shared
+ * <CommandPalette>, <Composer>, and <Topbar> MUST NOT import useToast
+ * directly — double-toasts on dispatch are the failure mode this
+ * boundary prevents.
  */
 export function useRileyActionDispatcher(
   options: UseRileyActionDispatcherOptions,
@@ -36,47 +54,99 @@ export function useRileyActionDispatcher(
   const { onShowMission } = options;
 
   return useCallback<RileyActionDispatcher>(
-    (command) => {
-      switch (command.id) {
-        case "open-meta":
-          router.push("/settings?focus=channels");
-          toast({ title: "Opening Meta connection." });
+    (action) => {
+      // Palette path — discriminated by kind === "command" + commandId.
+      if (action.kind === "command" && action.commandId) {
+        const nl = PER_ID_NL[action.commandId];
+        if (nl) {
+          handleParsedKind(parseCommand(nl), setHalted, router, toast);
           return;
-        case "open-rules":
-          router.push("/settings?focus=rules");
-          toast({ title: "Opening rules." });
+        }
+        const route = PER_ID_ROUTE[action.commandId];
+        if (route) {
+          router.push(route.path);
+          toast({ title: route.title });
           return;
-        case "open-targets":
+        }
+        if (action.commandId === "open-targets") {
           onShowMission();
           toast({ title: "Opened targets." });
           return;
-        case "pause-1h": {
-          // Reuse Alex's parser + voice helper so Riley's pause toast carries
-          // the same wall-clock projection (e.g. "until 3:23 PM"). The brand
-          // line "Paused — standing by." is identical across both agents.
-          const synthetic = parseCommand("pause for 1h");
-          setHalted(true);
-          toast(toastVoice(synthetic));
-          return;
         }
-        case "resume":
-          setHalted(false);
-          toast({ title: "Resumed — back to scanning." });
-          return;
-        case "brief-eod":
+        if (action.commandId === "brief-eod") {
           toast({
             title: "Noted — brief stub.",
             description: "I'll surface scheduled briefs when that ships.",
           });
           return;
-        case "cpl-30":
+        }
+        if (action.commandId === "cpl-30") {
           toast({
             title: "Noted — CPL stub.",
             description: "I'll surface CPL trends when that ships.",
           });
           return;
+        }
+        // Unmatched commandId — defensive fallthrough to instruction toast.
+        toast({
+          title: "Got it.",
+          description: `Acting on "${action.detail || action.label}".`,
+        });
+        return;
       }
+      // Composer path — ParsedAction from parseCommand.
+      handleParsedKind(action, setHalted, router, toast);
     },
     [setHalted, router, toast, onShowMission],
   );
+}
+
+function handleParsedKind(
+  action: ParsedAction,
+  setHalted: (next: boolean) => void,
+  router: ReturnType<typeof useRouter>,
+  toast: ReturnType<typeof useToast>["toast"],
+): void {
+  switch (action.kind) {
+    case "pause":
+      setHalted(true);
+      toast(toastVoice(action));
+      return;
+    case "resume":
+      setHalted(false);
+      // Riley-specific resume copy. toastVoice's Alex idiom ("picking up
+      // where I left off") reads wrong on /riley's scan mental model.
+      toast({ title: "Resumed — back to scanning." });
+      return;
+    case "halt":
+      setHalted(true);
+      toast(toastVoice(action));
+      return;
+    case "rule":
+      router.push("/settings?focus=rules");
+      toast(toastVoice(action));
+      return;
+    case "brief":
+      toast({
+        title: "Noted — brief stub.",
+        description: "I'll surface scheduled briefs when that ships.",
+      });
+      return;
+    case "followup":
+    case "handoff":
+    case "context":
+    case "instruction":
+      // Riley has no contact-thread surface; followup/handoff/context
+      // fold into the same honest "Got it." instruction toast. Same copy
+      // whether the operator typed "fu Maya" or "raise daily budget".
+      toast({
+        title: "Got it.",
+        description: `Acting on "${action.detail || action.label}".`,
+      });
+      return;
+    case "command":
+      // Unreachable — the top-level palette discriminator handles this
+      // kind. Defensive fallthrough avoids exhaustiveness errors.
+      return;
+  }
 }
