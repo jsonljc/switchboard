@@ -68,6 +68,11 @@ const ALEX_ROLE = "SDR · qualify inbound leads, book tours";
 const ALEX_PIPELINE = "Tours pipeline · single funnel";
 const ALEX_COMPOSER_PLACEHOLDER = "Tell Alex what to do — coming soon";
 
+const RILEY_ROLE = "Ad optimizer · score, recommend, never act without your approval";
+const RILEY_PIPELINE = "Ad sets · all campaigns";
+const RILEY_COMPOSER_PLACEHOLDER = "Tell Riley what to do — coming soon";
+const CRM_PROVIDER_SERVICE_ID = "crm-data-provider";
+
 function mapConnectionStatus(status: string): MissionChannelStatus {
   if (status === "connected") return "ok";
   if (status === "degraded") return "warn";
@@ -161,6 +166,52 @@ export function buildAlexMissionResponse(inputs: {
     composerPlaceholder: ALEX_COMPOSER_PLACEHOLDER,
     commands: [],
     targets: { ...getAgentTargets(roster), roasSource: "deterministic" },
+    setup: setupRows,
+  };
+}
+
+export function buildRileyMissionResponse(inputs: {
+  roster: RosterInput;
+  org: OrgInput;
+  connections: ConnectionInput[];
+}): MissionAggregatorResponse {
+  const { roster, org, connections } = inputs;
+
+  const metaConnection = connections.find((c) => c.serviceId === "meta-ads");
+  const metaDone = !!metaConnection;
+  const metaStatus: MissionChannelStatus = metaConnection
+    ? mapConnectionStatus(metaConnection.status)
+    : "off";
+
+  const crmConnection = connections.find((c) => c.serviceId === CRM_PROVIDER_SERVICE_ID);
+  const roasSource: "deterministic" | "crm" = crmConnection ? "crm" : "deterministic";
+
+  const avgValueCents = readNumberKey(roster.config, "avgValueCents");
+  const targetCpbCents = readNumberKey(roster.config, "targetCpbCents");
+  const targetsDone = avgValueCents !== null && targetCpbCents !== null;
+
+  const brandName = org.name.trim().length > 0 ? org.name : "(unnamed organization)";
+
+  const setupRows: MissionSetupRow[] = [
+    { key: "meta", done: metaDone },
+    { key: "rules", done: targetsDone },
+  ];
+  const firstUndone = setupRows.find((row) => !row.done);
+  if (firstUndone) firstUndone.primary = true;
+
+  return {
+    agentKey: "riley",
+    displayName: roster.displayName,
+    mission: {
+      role: RILEY_ROLE,
+      pipeline: RILEY_PIPELINE,
+      brand: `${brandName} · —`,
+      channels: [{ kind: "meta-ads", label: "Meta Ads", status: metaStatus }],
+      rules: null,
+    },
+    composerPlaceholder: RILEY_COMPOSER_PLACEHOLDER,
+    commands: [],
+    targets: { avgValueCents, targetCpbCents, roasSource },
     setup: setupRows,
   };
 }
