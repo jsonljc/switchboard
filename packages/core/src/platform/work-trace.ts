@@ -62,9 +62,17 @@ export interface WorkTrace {
    *   the row did NOT pass through PlatformIngress and matches none of the standard
    *   governance modes. See ConversationStateStore (packages/core/src/platform/
    *   conversation-state-store.ts) for the only current writer of this kind.
+   * - "agent_recommendation_emission": persisted alongside a Recommendation row by an
+   *   agent-side scheduled emission (see emitRecommendation when called with a mirror).
+   *   These are advisory writes — they do NOT pass through PlatformIngress and do NOT
+   *   execute a tool. The corresponding executor traces, when an operator approves,
+   *   land separately as "platform_ingress" rows in Wave B PR-2.
    * Defaults to "platform_ingress" on existing rows via the DB column default.
    */
-  ingressPath: "platform_ingress" | "store_recorded_operator_mutation";
+  ingressPath:
+    | "platform_ingress"
+    | "store_recorded_operator_mutation"
+    | "agent_recommendation_emission";
   /**
    * Hash-input shape version. v1 = pre-ingressPath (rows persisted before this column
    * existed); v2 = includes ingressPath in canonical hash input. Pre-migration backfill
