@@ -17,7 +17,7 @@ import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 import { ALEX_COMMANDS, ALEX_COMPOSER_PLACEHOLDER } from "@/lib/cockpit/alex-commands";
 import { useAlexActionDispatcher } from "@/lib/cockpit/alex-action-dispatcher";
 import { AlexApprovalRow } from "@/lib/cockpit/alex/alex-approval-row";
-import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view";
+import { richPendingApprovalToApprovalView } from "@/lib/cockpit/rich-pending-approval-to-approval-view";
 import { metricsViewModelToLegacyKpiInput } from "@/lib/cockpit/metrics-to-kpi-input";
 import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
 import { usePendingApprovals } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
@@ -74,7 +74,7 @@ export function CockpitPage() {
     next_cycle: 2,
   };
   const approvals = (approvalsQ.data?.approvals ?? [])
-    .map((a) => ({ raw: a, view: legacyPendingApprovalToApprovalView(a, now) }))
+    .map((a) => ({ raw: a, view: richPendingApprovalToApprovalView(a, now) }))
     .sort((a, b) => {
       const urgencyDiff = URGENCY_ORDER[a.view.urgency] - URGENCY_ORDER[b.view.urgency];
       if (urgencyDiff !== 0) return urgencyDiff;
