@@ -85,3 +85,32 @@ export const LifecycleCommandSchema = z.enum([
   "record_dispatch_outcome",
 ]);
 export type LifecycleCommand = z.infer<typeof LifecycleCommandSchema>;
+
+// ---------------------------------------------------------------------------
+// PendingApprovalPayload — typed shape for the optional `payload` field on
+// ApprovalRequest. Emitters opt in by passing the payload via pendingApproval()
+// or by the orchestrator/approval-factory setting it directly. Consumers read
+// `payload.kind` to render the correct card variant (urgency + CTA) per
+// the approval-card variants table.
+//
+// Cross-package contract: ApprovalRequestSchema.payload?: PendingApprovalPayload
+// is consumed by reader adapters that match the six-string kind enum below.
+// ---------------------------------------------------------------------------
+
+export const PendingApprovalKindSchema = z.enum([
+  "pricing",
+  "refund",
+  "qualification",
+  "regulatory",
+  "safety-gate",
+  "escalation",
+]);
+export type PendingApprovalKind = z.infer<typeof PendingApprovalKindSchema>;
+
+export const pendingApprovalPayloadSchema = z.object({
+  kind: PendingApprovalKindSchema.optional(),
+  body: z.string().optional(),
+  quote: z.string().optional(),
+  quoteFrom: z.string().optional(),
+});
+export type PendingApprovalPayload = z.infer<typeof pendingApprovalPayloadSchema>;

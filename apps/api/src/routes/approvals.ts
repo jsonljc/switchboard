@@ -142,6 +142,15 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
           expiresAt: a.state.expiresAt,
           bindingHash: a.request.bindingHash,
           createdAt: a.request.createdAt,
+          // A.7c additions — optional payload fields forward when present.
+          // Older approvals (pre-A.7c) lack payload.kind; the dashboard's rich
+          // adapter falls through to legacyPendingApprovalToApprovalView.
+          // Each field is included only when truthy so absent fields stay out
+          // of the JSON response (avoiding noisy `null`s).
+          ...(a.request.payload?.kind ? { kind: a.request.payload.kind } : {}),
+          ...(a.request.payload?.body ? { body: a.request.payload.body } : {}),
+          ...(a.request.payload?.quote ? { quote: a.request.payload.quote } : {}),
+          ...(a.request.payload?.quoteFrom ? { quoteFrom: a.request.payload.quoteFrom } : {}),
         })),
       });
     },

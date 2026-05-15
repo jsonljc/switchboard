@@ -117,6 +117,20 @@ export const ApprovalRequestSchema = z.object({
     })
     .nullable()
     .default(null),
+  // Typed payload carrying the kind classification + presentation hints.
+  // Optional + structural: legacy approvals (pre-A.7c) omit it and the
+  // dashboard's rich adapter falls back to the legacy adapter.
+  // See packages/schemas/src/approval-lifecycle.ts for the Zod validator.
+  payload: z
+    .object({
+      kind: z
+        .enum(["pricing", "refund", "qualification", "regulatory", "safety-gate", "escalation"])
+        .optional(),
+      body: z.string().optional(),
+      quote: z.string().optional(),
+      quoteFrom: z.string().optional(),
+    })
+    .optional(),
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 

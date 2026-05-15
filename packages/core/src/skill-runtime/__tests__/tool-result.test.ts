@@ -59,6 +59,22 @@ describe("ToolResult helpers", () => {
     expect(result.error?.retryable).toBe(false);
   });
 
+  it("pendingApproval() forwards typed payload when provided", () => {
+    const result = pendingApproval("Regulatory review required", {
+      kind: "regulatory",
+      body: "Patient asked about FDA approval status.",
+    });
+    expect(result.status).toBe("pending_approval");
+    expect(result.error?.code).toBe("APPROVAL_REQUIRED");
+    expect(result.error?.payload?.kind).toBe("regulatory");
+    expect(result.error?.payload?.body).toBe("Patient asked about FDA approval status.");
+  });
+
+  it("pendingApproval() omits payload when called with message only", () => {
+    const result = pendingApproval("Requires approval");
+    expect(result.error?.payload).toBeUndefined();
+  });
+
   describe("fail() category-aware overload", () => {
     it("uses taxonomy defaults when category is provided", () => {
       const result = fail("execution", "TOOL_NOT_FOUND", "Unknown tool: foo.bar");

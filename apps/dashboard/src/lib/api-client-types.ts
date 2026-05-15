@@ -35,6 +35,14 @@ export interface PendingApproval {
   expiresAt: string;
   bindingHash: string;
   createdAt: string;
+  // A.7c — optional payload fields forwarded from /api/approvals/pending.
+  // Absent for legacy approvals (pre-A.7c). The cockpit's rich adapter reads
+  // these to render the correct card variant (urgency eyebrow + CTA copy)
+  // and falls back to the legacy adapter when kind is undefined.
+  kind?: "pricing" | "refund" | "qualification" | "regulatory" | "safety-gate" | "escalation";
+  body?: string;
+  quote?: string;
+  quoteFrom?: string;
 }
 
 export interface ApprovalDetail {
