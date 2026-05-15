@@ -69,6 +69,7 @@ import { cockpitActivityRoutes } from "../routes/agent-home/activity.js";
 import { buildCockpitActivityDeps } from "../lib/cockpit-activity-deps.js";
 import { registerLifecycleDisqualificationsRoutes } from "../routes/lifecycle-disqualifications.js";
 import type { LifecycleDisqualificationsRouteDeps } from "../routes/lifecycle-disqualifications.js";
+import { registerRileyOutcomesRoute } from "../routes/cockpit/riley/outcomes.js";
 
 export interface RegisterRoutesDeps {
   consentService?: ConsentService;
@@ -107,6 +108,14 @@ export async function registerRoutes(
     const cockpitActivityDeps = buildCockpitActivityDeps(app.prisma);
     await app.register(cockpitActivityRoutes(cockpitActivityDeps), {
       prefix: "/api/dashboard",
+    });
+    // Riley outcomes route: GET /api/cockpit/riley/outcomes
+    // Gated on Prisma; store filters cockpitRenderable=true at the SQL layer.
+    const { PrismaRecommendationOutcomeStore } = await import("@switchboard/db");
+    const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
+    await registerRileyOutcomesRoute(app, {
+      listRenderable: ({ orgId, limit }) =>
+        recommendationOutcomeStore.listRenderableForOrg({ orgId, agentRole: "riley", limit }),
     });
   }
   // greetingRoutes: GET /api/dashboard/agents/:agentKey/greeting — agent-home greeting block
