@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Delete the orphaned legacy `apps/dashboard/src/components/agent-home/` tree (umbrella consumer `agent-home-shell.tsx` + 5 block files + 3 internal helpers + 2 portrait sprites), the 2 colocated hooks that exit with it (`use-agent-wins.ts`, `use-agent-pipeline.ts`), and every colocated test for the above. 28 file deletions, 0 file modifications, 0 new files. After A.6 lands, Alex Cockpit Phase A is fully closed (6/6) and the umbrella spec is fully implemented.
+**Goal:** Delete the orphaned legacy `apps/dashboard/src/components/agent-home/` tree (umbrella consumer `agent-home-shell.tsx` + 5 block files + 3 internal helpers + 2 portrait sprites), the 2 colocated hooks that exit with it (`use-agent-wins.ts`, `use-agent-pipeline.ts`), and the orphaned `apps/dashboard/src/lib/cockpit/activity-kind-map.ts` translator, plus every colocated test for the above. 28 file deletions, 0 file modifications, 0 new files. After A.6 lands, Alex Cockpit Phase A is fully closed (6/6) and the umbrella spec is fully implemented.
 
-**Architecture:** **Pure deletion sweep.** Leaf-first traversal of a self-contained subgraph, with a zero-reference grep before each `rm`. The dependency graph (verified 2026-05-15) is `agent-home-shell.tsx` → 5 block files + agent-block-boundary → 3 internal helpers (prose-segments, sparkline, fixture-folio-badge) + portrait/{alex,riley}; `agent-home-shell.tsx` has zero external consumers; nothing outside `agent-home/` imports from `agent-home/`; `use-agent-wins.ts` + `use-agent-pipeline.ts` consume hooks only used by `agent-home-shell.tsx`. Deleting `agent-home-shell.tsx` first orphans the entire tree in one wave; subsequent deletions verify the cascade with a grep before each `rm`. No `HaltProvider` re-root. No `legacy-shapes.ts` / `activity-kind-map.ts` / `use-agent-activity.ts` deletion (still consumed by the cockpit). No `/team` precursor PR (`/team` consumes nothing from `agent-home/`). No backend touch.
+**Architecture:** **Pure deletion sweep.** Leaf-first traversal of two self-contained subgraphs, with a zero-reference grep before each `rm`. The first subgraph (verified 2026-05-15): `agent-home-shell.tsx` → 5 block files + agent-block-boundary → 3 internal helpers (prose-segments, sparkline, fixture-folio-badge) + portrait/{alex,riley}; `agent-home-shell.tsx` has zero external consumers; nothing outside `agent-home/` imports from `agent-home/`; `use-agent-wins.ts` + `use-agent-pipeline.ts` consume hooks only used by `agent-home-shell.tsx`. The second subgraph: `apps/dashboard/src/lib/cockpit/activity-kind-map.ts` exports `translatedActionToActivityRow` consumed only by its own test (the active activity-stream path uses `useAgentActivityCockpit` → dashboard proxy → server-side row mapping; `activity-kind-map.ts` is a vestige of an earlier client-side translation step). Deleting `agent-home-shell.tsx` first orphans the first subgraph in one wave; subsequent deletions verify the cascade with a grep before each `rm`. `activity-kind-map.ts` deletes independently as a 2-file pair (source + test). No `HaltProvider` re-root. No `legacy-shapes.ts` or `use-agent-activity.ts` deletion (still consumed by cockpit / Riley). No `/team` precursor PR (`/team` consumes nothing from `agent-home/`). No backend touch.
 
 **Tech Stack:** No new code. `pnpm` for test/lint/build/typecheck/format. `rg` for zero-reference grep. `git rm` for deletions.
 
@@ -27,7 +27,7 @@ These contracts are easy to violate accidentally. Executors must respect them ac
 
 3. **No `HaltProvider` re-root.** `apps/dashboard/src/components/layout/halt/halt-context.tsx` is **not modified** in A.6. `apps/dashboard/src/components/layout/editorial-auth-shell.tsx` is **not modified** in A.6. The architecture diverged from the spec's assumption — both `/alex` and `/riley` continue to wrap their cockpit in `EditorialAuthShell`, which all non-cockpit surfaces also rely on. Re-rooting belongs to its own slice if ever needed. See slice brief §Design Decisions §1.
 
-4. **No deletion of `legacy-shapes.ts`, `activity-kind-map.ts`, or `use-agent-activity.ts`.** The A.5 brief's "What comes after A.5" speculative sketch listed these; verification on `main` shows them as **active cockpit dependencies** (consumed by `kpi-strip.tsx`, `metrics-to-kpi-input.ts`, `cockpit-page.tsx`, `riley-activity-translator.ts`, `use-riley-status.ts`). The implementation plan does not delete them. See slice brief §Design Decisions §4.
+4. **No deletion of `legacy-shapes.ts` or `use-agent-activity.ts`.** The A.5 brief's "What comes after A.5" speculative sketch listed both; verification on `main` shows them as **active dependencies** — `legacy-shapes.ts` is consumed by `kpi-strip.tsx` + `metrics-to-kpi-input.ts`; `use-agent-activity.ts` is consumed by Riley-side hooks (`use-riley-activity.ts`, `use-riley-status.ts`) and the Riley translator + fixtures (`TranslatedAction` type). The implementation plan does not delete them. **The third file in that sketch — `activity-kind-map.ts` — IS a deletion candidate** (verified orphaned; only its own test consumes its export). See slice brief §Design Decisions §4 and Task 12 below (the dedicated activity-kind-map deletion task).
 
 5. **No backend touch.** Zero edits under `packages/**`, `apps/api/**`, `apps/chat/**`, `apps/mcp-server/**`. The orphaned API routes `/api/dashboard/agents/[agentId]/wins` + `/pipeline` and their `packages/core/src/agent-home/{wins,pipeline}.ts` backends survive A.6; a separate post-A.6 follow-up PR sweeps them with its own discipline. See slice brief §"What does NOT ship at A.6" + §Risks §5.
 
@@ -127,7 +127,7 @@ Pre-existing flakes that may surface (per `[[db-integrity-tests-pg-advisory-lock
 pnpm --filter @switchboard/dashboard test -- --coverage 2>&1 | tail -30
 ```
 
-Capture the four coverage percentages (statements / branches / functions / lines). The post-deletion gate at Task 11 asserts each stays at or above its floor; comparing to this baseline helps catch a marginal dip.
+Capture the four coverage percentages (statements / branches / functions / lines). The post-deletion gate at Task 13 asserts each stays at or above its floor; comparing to this baseline helps catch a marginal dip.
 
 ---
 
@@ -167,14 +167,16 @@ Capture the four coverage percentages (statements / branches / functions / lines
 | `apps/dashboard/src/hooks/__tests__/use-agent-wins.test.tsx` | Colocated test. |
 | `apps/dashboard/src/hooks/use-agent-pipeline.ts` | Only consumed by shell. |
 | `apps/dashboard/src/hooks/__tests__/use-agent-pipeline.test.tsx` | Colocated test. |
+| `apps/dashboard/src/lib/cockpit/activity-kind-map.ts` | Exports `translatedActionToActivityRow`; only consumer is its own test (verified 2026-05-15). |
+| `apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts` | Colocated test. |
 
-**Total: 26 file deletions in the manifest above. The two empty directories (`apps/dashboard/src/components/agent-home/portrait/` and `apps/dashboard/src/components/agent-home/`) disappear naturally — git does not track empty directories — but the implementation plan confirms with `ls`.**
+**Total: 28 file deletions in the manifest above. The two empty directories (`apps/dashboard/src/components/agent-home/portrait/` and `apps/dashboard/src/components/agent-home/`) disappear naturally — git does not track empty directories — but the implementation plan confirms with `ls`.**
 
 ### Files explicitly NOT modified
 
 - **A.1–A.5 cockpit artifacts** — `apps/dashboard/src/components/cockpit/**`, `apps/dashboard/src/lib/cockpit/**`, `apps/dashboard/src/hooks/use-cockpit-status.ts`, `apps/dashboard/src/hooks/use-agent-mission.ts`, `apps/dashboard/src/hooks/use-agent-greeting.ts`, `apps/dashboard/src/hooks/use-agent-metrics.ts`, `apps/dashboard/src/hooks/use-agent-activity.ts`. Active surface.
 - **Riley cockpit + adapters** — `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`, `riley-cockpit-page.test.tsx`, `apps/dashboard/src/lib/cockpit/riley/**`, `apps/dashboard/src/hooks/use-riley-*`. Independent surface.
-- **Cockpit-side library files mistakenly sketched for A.6 by the A.5 brief** — `apps/dashboard/src/lib/cockpit/legacy-shapes.ts`, `apps/dashboard/src/lib/cockpit/activity-kind-map.ts`, `apps/dashboard/src/hooks/use-agent-activity.ts`. All active cockpit dependencies. See slice brief §Design Decisions §4.
+- **Cockpit-side library files partially mistaken in the A.5 brief's "What comes after A.5" sketch** — `apps/dashboard/src/lib/cockpit/legacy-shapes.ts` and `apps/dashboard/src/hooks/use-agent-activity.ts` are NOT deleted; both are active dependencies (legacy-shapes powers the cockpit KPI strip via `kpi-strip.tsx` + `metrics-to-kpi-input.ts`; use-agent-activity is consumed by Riley-side hooks + translator). The third file in that sketch, `apps/dashboard/src/lib/cockpit/activity-kind-map.ts`, **IS deleted** in this slice (see Task 12 — the dedicated activity-kind-map deletion task). See slice brief §Design Decisions §4.
 - **Routes** — `apps/dashboard/src/app/(auth)/alex/page.tsx`, `apps/dashboard/src/app/(auth)/riley/page.tsx`, `apps/dashboard/src/app/(auth)/layout.tsx`. Untouched.
 - **Layout shell + halt provider** — `apps/dashboard/src/components/layout/editorial-auth-shell.tsx`, `apps/dashboard/src/components/layout/halt/halt-context.tsx`. No re-root.
 - **`/team`** — `apps/dashboard/src/components/team/**`, `apps/dashboard/src/app/(auth)/settings/team/**`. Verified clean of agent-home imports.
@@ -187,7 +189,7 @@ Capture the four coverage percentages (statements / branches / functions / lines
 
 A.6 adds **zero** new imports anywhere. The expected outcome is that the count of audit-domain imports inside `apps/dashboard/src/components/cockpit/**` and `apps/dashboard/src/hooks/**` goes **down** as the deleted hooks (`use-agent-wins.ts`, `use-agent-pipeline.ts`) take their `@switchboard/schemas` + view-model imports with them.
 
-Pre-merge grep gate (Task 11):
+Pre-merge grep gate (Task 13):
 
 ```bash
 rg "Recommendation|AuditEntry|@switchboard/db|@prisma" \
@@ -379,7 +381,7 @@ pnpm typecheck
 
 Expected: green. Block test files still exist; their imports of `agent-block-boundary` are now broken, but they will be removed in Tasks 4–8. Typecheck flags the broken imports inside the still-present block tests — **this is expected and resolved by Tasks 4–8**.
 
-> **Note on Task 3 typecheck:** If `pnpm typecheck` fails because the block-component tests import `AgentBlockBoundary` from this just-deleted file, that is the expected failure mode of a leaf-first sweep partway through. **Do not halt on this typecheck failure** — the broken imports are inside test files scheduled for deletion in Tasks 4–8. Continue. The slice's final gate at Task 11 asserts a clean typecheck after the full sweep. If you prefer a strict per-task typecheck, alternate execution order: combine Tasks 3–8 into a single delete-and-commit (still atomic, still leaf-first by construction since Task 2 already orphaned everything).
+> **Note on Task 3 typecheck:** If `pnpm typecheck` fails because the block-component tests import `AgentBlockBoundary` from this just-deleted file, that is the expected failure mode of a leaf-first sweep partway through. **Do not halt on this typecheck failure** — the broken imports are inside test files scheduled for deletion in Tasks 4–8. Continue. The slice's final gate at Task 13 asserts a clean typecheck after the full sweep. If you prefer a strict per-task typecheck, alternate execution order: combine Tasks 3–8 into a single delete-and-commit (still atomic, still leaf-first by construction since Task 2 already orphaned everything).
 
 - [ ] **Step 4: Commit.**
 
@@ -779,13 +781,81 @@ a separate post-A.6 follow-up under the same zero-reference discipline."
 
 ---
 
-### Task 12: Pre-merge gates
+### Task 12: Delete `activity-kind-map.ts` + its test
+
+`activity-kind-map.ts` exports `translatedActionToActivityRow`, consumed only by its own colocated test (verified 2026-05-15). The active activity-stream path uses `useAgentActivityCockpit` (from `use-agent-activity-cockpit.ts`, a different hook) → `/api/dashboard/agents/[agentId]/activity` → server-returned `ActivityRow[]`. `activity-kind-map.ts` is a vestige of an earlier client-side translation step now done server-side.
+
+Important boundary: `activity-kind-map.ts` imports `TranslatedAction` from `@/hooks/use-agent-activity` as a type-only import. Deleting `activity-kind-map.ts` does NOT orphan `use-agent-activity.ts` — that hook stays in place because Riley-side hooks and translator still consume it.
+
+**Files:**
+- Delete: `apps/dashboard/src/lib/cockpit/activity-kind-map.ts`
+- Delete: `apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts`
+
+- [ ] **Step 1: Re-verify orphaning.**
+
+```bash
+rg -l "translatedActionToActivityRow|lib/cockpit/activity-kind-map" \
+   apps/dashboard/src/ packages/ apps/api apps/chat apps/mcp-server \
+   -g '*.ts' -g '*.tsx' \
+   | grep -v "^apps/dashboard/src/lib/cockpit/activity-kind-map\.ts$" \
+   | grep -v "^apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map\.test\.ts$"
+```
+
+Expected: empty output. If a consumer has appeared since 2026-05-15, halt — re-open the brief; do not silently expand the slice.
+
+- [ ] **Step 2: Confirm `use-agent-activity.ts` remains consumed (sanity check the boundary).**
+
+```bash
+rg -l "use-agent-activity\b|useAgentActivity\b" \
+   apps/dashboard/src/ \
+   -g '*.ts' -g '*.tsx' \
+   | grep -v "^apps/dashboard/src/lib/cockpit/activity-kind-map\.ts$" \
+   | grep -v "^apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map\.test\.ts$" \
+   | grep -v "^apps/dashboard/src/hooks/use-agent-activity\.ts$"
+```
+
+Expected: at minimum, references in `apps/dashboard/src/hooks/use-riley-activity.ts`, `apps/dashboard/src/hooks/use-riley-status.ts`, `apps/dashboard/src/lib/cockpit/riley/riley-activity-translator.ts`, `apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-activity-fixtures.ts`. If this list is empty, the boundary has shifted — halt and re-verify the brief.
+
+- [ ] **Step 3: Delete both files.**
+
+```bash
+git rm apps/dashboard/src/lib/cockpit/activity-kind-map.ts
+git rm apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts
+```
+
+- [ ] **Step 4: Scoped test + typecheck.**
+
+```bash
+pnpm --filter @switchboard/dashboard test -- --run activity-kind-map
+pnpm typecheck
+```
+
+Expected: green. The `--run activity-kind-map` pattern matches nothing (Vitest reports "no test files found" — correct outcome). Typecheck remains green; `use-agent-activity.ts` and Riley consumers are unaffected.
+
+- [ ] **Step 5: Commit.**
+
+```bash
+git commit -m "refactor(cockpit): A.6 — delete orphaned activity-kind-map translator
+
+translatedActionToActivityRow was an earlier client-side translation
+step that the dashboard proxy now performs server-side. The active
+activity stream path is useAgentActivityCockpit -> /api/dashboard/
+agents/[agentId]/activity -> server-returned ActivityRow[].
+
+Zero-reference verified: only the file's own test referenced its
+export. use-agent-activity.ts stays — Riley-side hooks and translator
+still consume its TranslatedAction type."
+```
+
+---
+
+### Task 13: Pre-merge gates
 
 This task is the slice's final gate. It runs the full discipline from `[[ship-clean-not-followup]]` + `[[dashboard-build-not-in-ci]]` + `[[ci-prettier-not-in-local-lint]]` + the boundary locks at the top of this plan. Any failure halts the slice and re-opens the brief.
 
 - [ ] **Step 1: Zero-reference end-state grep.**
 
-The full `agent-home/` subgraph plus the two deleted hooks should have zero references anywhere in the repo:
+The full `agent-home/` subgraph plus the two deleted hooks plus `activity-kind-map.ts` should have zero references anywhere in the repo:
 
 ```bash
 rg "AgentHomeShell|AgentBlockBoundary|GreetingBlock|NeedsYouBlock|WinsBlock|MetricsBlock|PipelineBlock|ProseSegments|Sparkline|FixtureFolioBadge|PortraitAlex|PortraitRiley" \
@@ -799,9 +869,13 @@ rg "components/agent-home|agent-home/portrait" \
 rg "use-agent-wins|use-agent-pipeline|useAgentWins|useAgentPipeline" \
    apps/dashboard/src/ packages/ apps/api apps/chat apps/mcp-server \
    -g '*.ts' -g '*.tsx'
+
+rg "translatedActionToActivityRow|lib/cockpit/activity-kind-map" \
+   apps/dashboard/src/ packages/ apps/api apps/chat apps/mcp-server \
+   -g '*.ts' -g '*.tsx'
 ```
 
-Expected: all three return empty output. If any returns a match, halt — a consumer survived that should have been swept (or never existed; revisit the brief's investigation).
+Expected: all four return empty output. If any returns a match, halt — a consumer survived that should have been swept (or never existed; revisit the brief's investigation).
 
 - [ ] **Step 2: Adapter-boundary grep gate.**
 
@@ -904,12 +978,14 @@ If anything diverges, halt and investigate before declaring A.6 done.
 
 - **Dashboard component tree** — deleted `apps/dashboard/src/components/agent-home/` (umbrella shell + 5 blocks + 3 helpers + 2 portrait sprites + all colocated tests).
 - **Dashboard hooks** — deleted `use-agent-wins.ts` + `use-agent-pipeline.ts` (orphaned after the shell deletion).
-- **Total** — 26 file deletions in the implementation PR (plus 2 empty directories that disappear naturally). 0 file modifications. 0 new files.
+- **Cockpit library** — deleted `apps/dashboard/src/lib/cockpit/activity-kind-map.ts` (orphaned translator; only its own test consumed it).
+- **Total** — 28 file deletions in the implementation PR (plus 2 empty directories that disappear naturally). 0 file modifications. 0 new files.
 
 ### Decision locks
 
 - No `HaltProvider` re-root — provider stays in `EditorialAuthShell`; the architecture diverged from the spec's assumption.
-- No deletion of `legacy-shapes.ts` / `activity-kind-map.ts` / `use-agent-activity.ts` — all are active cockpit dependencies despite the A.5 brief's sketch.
+- No deletion of `legacy-shapes.ts` (cockpit KPI dep) or `use-agent-activity.ts` (Riley-side dep) — the A.5 brief's sketch was partially wrong.
+- `activity-kind-map.ts` IS deleted — the third file in the A.5 sketch is genuinely orphaned (only its own test consumes it; the active activity-stream path uses `useAgentActivityCockpit` with server-side row mapping).
 - No backend touch — orphaned API routes for `/wins` + `/pipeline` survive A.6; separate post-A.6 follow-up sweeps them.
 - No `/team` precursor PR — `/team` consumes nothing from `agent-home/` (verified).
 - No new surface, no test rewrites, no coverage-threshold lowering.
@@ -950,16 +1026,16 @@ These are the slice brief's risks, with the implementation-side mitigations call
 | # | Risk | Mitigation | Task |
 |---|---|---|---|
 | 1 | Hidden caller has landed since 2026-05-15 | Per-file zero-reference grep before every `rm`; full-subgraph grep at Step 0f as a precondition | 0f, 1, 2–10 |
-| 2 | Coverage dips below thresholds after deletion | Coverage gate compares against baseline (Step 0h); slice halts on dip; no "lower the floor" | 0h, 11.6 |
+| 2 | Coverage dips below thresholds after deletion | Coverage gate compares against baseline (Step 0h); slice halts on dip; no "lower the floor" | 0h, 13.6 |
 | 3 | Test fixture imports from a deleted file | Scoped test run after each deletion; broken-import surfaces fast | 2–10 |
 | 4 | HaltProvider re-root edge case re-emerges | Boundary lock #3; no edit to `halt-context.tsx` or `editorial-auth-shell.tsx` | All |
-| 5 | Backend API routes orphaned but not deleted | Documented in PR description; separate follow-up PR sweeps them | 11.9 |
+| 5 | Backend API routes orphaned but not deleted | Documented in PR description; separate follow-up PR sweeps them | 13.9 |
 | 6 | `lib/agent-home/types.ts` orphan exports | Documented in brief; out of scope for A.6; future opportunistic trim | (none) |
-| 7 | Pre-existing test flakes (`prisma-work-trace-store-integrity` etc.) | Baseline capture at Step 0g identifies them; do not block on them per `[[db-integrity-tests-pg-advisory-lock]]` | 0g, 11.5 |
+| 7 | Pre-existing test flakes (`prisma-work-trace-store-integrity` etc.) | Baseline capture at Step 0g identifies them; do not block on them per `[[db-integrity-tests-pg-advisory-lock]]` | 0g, 13.5 |
 | 8 | Auto-merge captures stale HEAD | Manual `gh pr merge --squash` after CI is green; do not use `--auto` | 11 |
 | 9 | Empty directories confuse readers | Step 10.3 confirms directories disappear naturally | 10 |
 | 10 | Subagent dispatch drifts cwd | Branch verification (`git branch --show-current`) before each commit | 2–11 |
-| 11 | Mid-sweep typecheck failure in Task 3–7 from broken block-test imports | Expected; continue per Task 3's "Note on Task 3 typecheck" callout; final gate at Task 11.5 confirms clean typecheck after full sweep | 3–7 |
+| 11 | Mid-sweep typecheck failure in Task 3–7 from broken block-test imports | Expected; continue per Task 3's "Note on Task 3 typecheck" callout; final gate at Task 13.5 confirms clean typecheck after full sweep | 3–7 |
 
 ---
 
@@ -972,13 +1048,13 @@ Carry-over from prior cockpit slices and `CLAUDE.md` memories:
 - **Test alignment (`feedback_api_test_mocked_prisma.md`):** Not relevant — A.6 ships no API or DB tests.
 - **Migrate discipline (`feedback_prisma_migrate_dev_tty.md`):** Not relevant — A.6 ships no migration.
 - **Module size (`CLAUDE.md`):** Not relevant — A.6 is pure deletion. Every file the slice touches becomes 0 lines (deleted).
-- **Reset before typecheck (`CLAUDE.md`):** `pnpm reset` runs at Step 0g and Step 11.5. Load-bearing because turbo's `dist/` cache may still hold artifacts for the deleted hooks; a stale `dist/` can mask a real failure or surface a false one.
-- **Dashboard imports omit `.js` (`feedback_dashboard_no_js_on_any_import.md`):** Not directly relevant — A.6 is deletion-only. The dashboard build at Step 11.5 catches any latent regression.
+- **Reset before typecheck (`CLAUDE.md`):** `pnpm reset` runs at Step 0g and Step 13.5. Load-bearing because turbo's `dist/` cache may still hold artifacts for the deleted hooks; a stale `dist/` can mask a real failure or surface a false one.
+- **Dashboard imports omit `.js` (`feedback_dashboard_no_js_on_any_import.md`):** Not directly relevant — A.6 is deletion-only. The dashboard build at Step 13.5 catches any latent regression.
 - **Dashboard build is not in CI (`[[dashboard-build-not-in-ci]]`):** `pnpm --filter @switchboard/dashboard build` is the only way to catch a `.js`-extension regression — run it locally before opening the PR.
-- **Prettier (`[[ci-prettier-not-in-local-lint]]`):** Run `pnpm format:check` at Step 11.7 before pushing.
+- **Prettier (`[[ci-prettier-not-in-local-lint]]`):** Run `pnpm format:check` at Step 13.7 before pushing.
 - **Modes not knobs (`[[modes-not-knobs]]`):** Not relevant — A.6 ships no new behavior.
-- **Adapter-boundary invariant:** Step 11.2 asserts zero new audit-domain imports under `components/cockpit/**` or `hooks/`.
-- **Surface-agnostic backend invariant:** Step 11.3 asserts empty diff under `packages/**`, `apps/api/**`, `apps/chat/**`, `apps/mcp-server/**`.
+- **Adapter-boundary invariant:** Step 13.2 asserts zero new audit-domain imports under `components/cockpit/**` or `hooks/`.
+- **Surface-agnostic backend invariant:** Step 13.3 asserts empty diff under `packages/**`, `apps/api/**`, `apps/chat/**`, `apps/mcp-server/**`.
 - **Ship clean, don't defer (`[[ship-clean-not-followup]]`):** If the sweep can't go clean (hidden consumer, coverage dip, fixture break), halt — do not merge with a "fix in follow-up" TODO. The one exception (backend API route cleanup) is structurally out of A.6's scope per user instruction and is documented up-front, not deferred mid-PR.
 - **Verify against codebase, not mental model (`[[verify-against-codebase]]`):** Step 0f re-runs the brief's zero-reference investigation against current `main`; the brief's snapshot is from 2026-05-15 and may have drifted.
 - **Auto-merge caveat (`[[auto-merge-captures-head-early]]`):** Manual `gh pr merge --squash` after CI is green; do not use `--auto`.
@@ -987,4 +1063,4 @@ Carry-over from prior cockpit slices and `CLAUDE.md` memories:
 
 ## Estimated effort
 
-11 implementation tasks (12 including the precondition checks "task" §Precondition checks). Estimated 1–2 hours for a focused executor using `superpowers:subagent-driven-development`. Risk concentration is at Task 2 (orphaning the entire tree in one wave; the rest cascade) and Task 11 (full-suite pre-merge sweep, including coverage). Subsequent tasks are mechanical `git rm` pairs with a guarded grep — fast.
+13 implementation tasks (14 including the precondition checks "task" §Precondition checks). Estimated 1–2 hours for a focused executor using `superpowers:subagent-driven-development`. Risk concentration is at Task 2 (orphaning the agent-home tree in one wave; the rest cascade) and Task 13 (full-suite pre-merge sweep, including coverage). Subsequent tasks are mechanical `git rm` pairs with a guarded grep — fast.
