@@ -52,7 +52,12 @@ export function CommandPalette({
       const hay = `${c.label.toLowerCase()} ${c.id.toLowerCase()}`;
       return tokens.every((t) => hay.includes(t));
     };
-    const isEnabled = (c: Command) => c.group !== "thread" || threadContext !== undefined;
+    // Gate enablement on whether the label needs contact interpolation, not on
+    // group membership. Alex's `fu-named`/`reply-named`/`hold-named` labels
+    // contain `{contact}` and stay disabled until threadContext lands. Riley's
+    // thread-group commands (`brief-eod`, `cpl-30`) carry no `{…}` placeholders
+    // and are always enabled.
+    const isEnabled = (c: Command) => !c.label.includes("{") || threadContext !== undefined;
     const byGroup = new Map<CommandGroup, Command[]>();
     for (const c of commands) {
       if (!matchesQuery(c)) continue;

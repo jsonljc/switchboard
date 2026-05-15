@@ -91,4 +91,12 @@ describe("<CommandPalette>", () => {
     expect(screen.getByText("Open Meta")).toBeInTheDocument();
     expect(screen.getByText("Pause Riley for 1h")).toBeInTheDocument();
   });
+
+  it("Riley thread-group commands without {…} placeholders are enabled even when threadContext is undefined", () => {
+    render(<CommandPalette open onClose={noop} commands={RILEY_COMMANDS} onSelect={noop} />);
+    const brief = screen.getByText("Brief me at EOD").closest("button");
+    const cpl = screen.getByText("Show CPL — last 30d").closest("button");
+    expect(brief).not.toBeDisabled();
+    expect(cpl).not.toBeDisabled();
+  });
 });

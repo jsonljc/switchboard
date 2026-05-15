@@ -20,6 +20,11 @@ export interface TopbarProps {
   compact?: boolean;
   /** Per-route tab list. Defaults to `ALEX_CONFIG.tabs` for backward compat. */
   tabs?: readonly TopbarTab[];
+  /**
+   * Label rendered on the palette-affordance button. Defaults to "Tell Alex…"
+   * so Alex's cockpit-page need not pass this prop. Riley passes "Tell Riley…".
+   */
+  paletteLabel?: string;
 }
 
 function Mark() {
@@ -62,6 +67,7 @@ export function Topbar({
   onOpenPalette,
   compact = false,
   tabs = ALEX_CONFIG.tabs,
+  paletteLabel = "Tell Alex…",
 }: TopbarProps) {
   return (
     <header
@@ -111,7 +117,7 @@ export function Topbar({
             fontFamily: "inherit",
           }}
         >
-          <span style={{ fontSize: 12.5, color: T.ink3 }}>Tell Alex…</span>
+          <span style={{ fontSize: 12.5, color: T.ink3 }}>{paletteLabel}</span>
           <span
             style={{
               fontFamily: "JetBrains Mono",

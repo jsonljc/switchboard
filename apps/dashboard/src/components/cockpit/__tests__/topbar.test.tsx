@@ -27,4 +27,17 @@ describe("Topbar", () => {
     expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute("aria-disabled", "true");
   });
+
+  it("renders 'Tell Alex…' by default", () => {
+    render(<Topbar paletteEnabled compact={false} onOpenPalette={() => {}} />);
+    expect(screen.getByText("Tell Alex…")).toBeInTheDocument();
+  });
+
+  it("renders the custom paletteLabel when provided", () => {
+    render(
+      <Topbar paletteEnabled compact={false} onOpenPalette={() => {}} paletteLabel="Tell Riley…" />,
+    );
+    expect(screen.getByText("Tell Riley…")).toBeInTheDocument();
+    expect(screen.queryByText("Tell Alex…")).not.toBeInTheDocument();
+  });
 });
