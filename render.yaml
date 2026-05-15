@@ -40,6 +40,10 @@ services:
         - packages/**
         - Dockerfile.api
         - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - package.json
+        - turbo.json
+        - tsconfig.base.json
         - render.yaml
     envVars:
       - key: NODE_ENV
@@ -69,8 +73,10 @@ services:
         sync: false
       - key: META_ADS_ACCOUNT_ID
         sync: false
+      # Public-safe — surfaced in browser-side Meta Pixel events. Operator fills
+      # in the pixel ID from their Meta Ads asset; not a secret.
       - key: META_PIXEL_ID
-        sync: false
+        value: <META_PIXEL_ID>
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -101,6 +107,10 @@ services:
         - packages/**
         - Dockerfile.chat
         - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - package.json
+        - turbo.json
+        - tsconfig.base.json
         - render.yaml
     envVars:
       - key: NODE_ENV

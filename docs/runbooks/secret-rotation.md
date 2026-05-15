@@ -78,6 +78,17 @@ For each provider below, the entry covers: where to rotate, what to do, and whic
   4. Redeploy Vercel.
   5. **Side effect:** all existing NextAuth sessions are invalidated. Pick a time when active users are minimal.
 
+## Meta Pixel ID (`META_PIXEL_ID`)
+
+> **Not a secret.** `META_PIXEL_ID` is the public identifier for a Meta Pixel asset and is surfaced in browser-side tracking code. It is **not typically rotated**.
+
+- **Source:** https://business.facebook.com → Events Manager → (relevant Pixel asset) → Settings → Pixel ID
+- **When to replace:** Only when migrating to a different Meta Pixel asset (e.g., consolidating accounts or replacing a deprecated pixel). There is no compromise-driven rotation — the value is non-sensitive by design.
+- **Replacement steps (if migrating):**
+  1. Capture the new pixel ID from Events Manager.
+  2. Update the `META_PIXEL_ID` value in Render for `switchboard-api`.
+  3. Verify the next ad event lands on the new pixel (Events Manager → Test Events).
+
 ## Credentials encryption key
 
 > **DO NOT ROTATE WITHOUT A MIGRATION PLAN.** Stored credentials in Postgres are encrypted with this key. Rotating it without re-encrypting renders existing credentials unreadable. See [[feedback_dev_stack]] — seed-vs-runtime encryption mismatch is a known footgun.
