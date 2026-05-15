@@ -59,14 +59,14 @@ jobs:
       - name: Run database migrations
         run: pnpm --filter @switchboard/db exec prisma migrate deploy
 
+      - name: Build
+        run: pnpm build
+
       - name: Seed development data
         run: pnpm db:seed
 
       - name: Verify seed counts
         run: pnpm exec tsx scripts/check-seed-counts.ts
-
-      - name: Build
-        run: pnpm build
 
       - name: Cache build artifacts
         uses: actions/cache/save@v5
