@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { projectMetrics, type MetricsSignalStore } from "@switchboard/core";
+import { projectMetrics, getAgentTargets, type MetricsSignalStore } from "@switchboard/core";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { getOrgTimezone } from "../../lib/org-timezone.js";
@@ -46,6 +46,19 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
     const reportStores = app.reportStores;
     const timezone = await getOrgTimezone(app.prisma, orgId);
 
+    // Load AgentRoster config for target values (avgValueCents, targetCpbCents).
+    // Falls back to empty config when no roster row exists (zero-config tenant).
+    const rosterRow = await app.prisma?.agentRoster.findUnique({
+      where: { organizationId_agentRole: { organizationId: orgId, agentRole: agentId } },
+      select: { config: true },
+    });
+    const targets = getAgentTargets(rosterRow ?? { config: {} });
+
+    // Wire Meta Ads spend provider — graceful no-op when not wired in bootstrap.
+    // TODO(A.3-follow-up): wire buildMetaSpendProvider(prisma, adsClientFactory) in
+    // apps/api bootstrap once credential decryption plumbing is verified.
+    const getMetaSpendCents = app.metaSpendProvider ?? (async () => null);
+
     const store: MetricsSignalStore = {
       countBookingsCreated: ({ orgId: o, excludeStatuses, from, to }) =>
         reportStores.bookings.countExcludingStatuses({
@@ -56,6 +69,7 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
         }),
       countConversionsByType: ({ orgId: o, type, from, to }) =>
         reportStores.conversions.countByType(o, type, from, to),
+      getMetaSpendCents: ({ orgId: o, from, to }) => getMetaSpendCents({ orgId: o, from, to }),
     };
 
     try {
@@ -65,6 +79,7 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
         now: new Date(),
         timezone,
         store,
+        targets,
       });
       return reply.code(200).send({ vm });
     } catch (err) {
