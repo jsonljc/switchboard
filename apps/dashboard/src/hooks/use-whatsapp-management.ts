@@ -9,10 +9,11 @@ import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 
 export interface WhatsAppAccountData {
   connection: {
-    status: "connected" | "incomplete" | "needs_attention";
+    status: "connected" | "incomplete" | "needs_attention" | "not_connected";
     externalAccountId: string | null;
     primaryPhoneNumberId: string | null;
     connectedAt: string | null;
+    testRecipients: string[];
   };
   account: {
     id: string | null;

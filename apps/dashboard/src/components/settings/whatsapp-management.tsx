@@ -25,6 +25,7 @@ import {
   FileText,
 } from "lucide-react";
 import Link from "next/link";
+import { WhatsAppSendTest } from "./whatsapp-send-test";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -463,6 +464,11 @@ export function WhatsAppManagement() {
       <ReadinessBanner readiness={readiness} />
       <SetupSection data={account.data} />
       <PhoneNumbersSection data={phones.data} isLoading={phones.isLoading} error={phones.error} />
+      <WhatsAppSendTest
+        phoneNumbers={phones.data?.phoneNumbers ?? []}
+        templates={templates.data?.templates ?? []}
+        allowedRecipients={account.data.connection.testRecipients}
+      />
       <TemplatesSection
         data={templates.data}
         isLoading={templates.isLoading}
