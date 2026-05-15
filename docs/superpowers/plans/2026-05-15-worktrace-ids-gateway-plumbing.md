@@ -546,12 +546,12 @@ EOF
 
 ## Task 4: ChannelGateway — pass `workTraceId` on assistant `onMessageRecorded` callback
 
-The assistant-turn site has `response.result.traceId` in scope; pass it through. The user-turn site stays unchanged (user turns have no trace).
+The assistant-turn site has `response.result.traceId` in scope; pass it through. The user-turn site stays unchanged (user turns have no trace). This task includes a unit test directly against `ChannelGateway` so the negative invariant ("user-turn `onMessageRecorded` never carries `workTraceId`") is pinned at the layer where the emission decision is actually made — not just downstream at the bridge.
 
 **Files:**
 - Modify: `packages/core/src/channel-gateway/types.ts`
 - Modify: `packages/core/src/channel-gateway/channel-gateway.ts`
-- Test deferred to Task 5 (the bridge-level integration test covers both gateway plumbing and forwarding in one)
+- Test: `packages/core/src/channel-gateway/__tests__/channel-gateway.test.ts` (existing — `createMockConfig` harness exists; cost of extension is low)
 
 - [ ] **Step 4.1: Widen `onMessageRecorded` callback type**
 
@@ -608,9 +608,90 @@ In the same file, the user-turn `onMessageRecorded` call (around lines 140-148) 
     });
 ```
 
-If `workTraceId` accidentally appears here, remove it. The negative invariant test in Task 5 will catch it if missed.
+If `workTraceId` accidentally appears here, remove it. Step 4.4 below adds the unit test that catches it.
 
-- [ ] **Step 4.4: Run typecheck — expect pass**
+- [ ] **Step 4.4: Add positive + negative unit tests in `channel-gateway.test.ts`**
+
+Open `packages/core/src/channel-gateway/__tests__/channel-gateway.test.ts`. Two changes:
+
+**Change A: extend the `platformIngress.submit` mock in `createMockConfig`** so `result.traceId` is set (the existing mock at lines 42-50 puts `traceId` on `workUnit` only — the production code reads `result.traceId` per `execution-result.ts:10`):
+
+```typescript
+    platformIngress: {
+      submit: vi.fn().mockResolvedValue({
+        ok: true,
+        result: {
+          outcome: "completed",
+          outputs: { response: "Hello from agent" },
+          summary: "Responded to user",
+          traceId: "trace-1",
+        },
+        workUnit: { id: "wu-1", traceId: "trace-1" },
+      }),
+    },
+```
+
+**Change B: append two new `it(...)` blocks inside the existing `describe("ChannelGateway", () => { ... })`** (insert before line ~310's closing `});`):
+
+```typescript
+  it("emits workTraceId on the assistant-turn onMessageRecorded callback", async () => {
+    const onMessageRecordedSpy = vi.fn();
+    const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid123",
+      sessionId: "sess-1",
+      text: "Hello",
+    };
+    const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
+
+    await gateway.handleIncoming(message, replySink);
+
+    // Two calls: one for the user turn, one for the assistant turn.
+    // The assistant call carries result.traceId.
+    expect(onMessageRecordedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        workTraceId: "trace-1",
+      }),
+    );
+  });
+
+  it("does NOT emit workTraceId on the user-turn onMessageRecorded callback (invariant: user turns are text events)", async () => {
+    const onMessageRecordedSpy = vi.fn();
+    const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid123",
+      sessionId: "sess-1",
+      text: "Hello",
+    };
+    const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
+
+    await gateway.handleIncoming(message, replySink);
+
+    // First call (user turn) must not carry workTraceId.
+    const userCallArg = onMessageRecordedSpy.mock.calls.find(
+      (c) => (c[0] as { role: string }).role === "user",
+    )?.[0] as { workTraceId?: string } | undefined;
+    expect(userCallArg).toBeDefined();
+    expect(userCallArg!.workTraceId).toBeUndefined();
+  });
+```
+
+- [ ] **Step 4.5: Run tests — expect 2 new tests pass**
+
+```bash
+pnpm --filter @switchboard/core test channel-gateway.test
+```
+
+Expected: 2 new tests pass alongside the existing ones. The positive assertion proves the gateway threads `response.result.traceId` to the assistant callback; the negative invariant proves the user-turn callback never carries `workTraceId`.
+
+If the existing "processes message and delivers reply via replySink" test (line ~114) regresses because of the Change A mock update, that's expected only if a stale snapshot asserted exact equality on the result shape — fix by extending the snapshot, NOT by reverting the mock change. The mock now matches the production contract (`ExecutionResult.traceId` is required).
+
+- [ ] **Step 4.6: Run typecheck — expect pass**
 
 ```bash
 pnpm typecheck
@@ -618,10 +699,10 @@ pnpm typecheck
 
 Expected: 18/18 packages succeed.
 
-- [ ] **Step 4.5: Commit**
+- [ ] **Step 4.7: Commit**
 
 ```bash
-git add packages/core/src/channel-gateway/types.ts packages/core/src/channel-gateway/channel-gateway.ts
+git add packages/core/src/channel-gateway/types.ts packages/core/src/channel-gateway/channel-gateway.ts packages/core/src/channel-gateway/__tests__/channel-gateway.test.ts
 git commit -m "$(cat <<'EOF'
 feat(core): channel-gateway passes workTraceId on assistant onMessageRecorded
 
@@ -630,7 +711,14 @@ workTraceId, and the assistant-turn dispatch in handleSubmitResponse
 now passes response.result.traceId. User-turn dispatch is intentionally
 unchanged — user turns are text events, not execution events.
 
-Integration tests in Task 5 (bridge layer) pin both shapes.
+Two new unit tests in channel-gateway.test.ts pin both shapes at the
+layer where the emission decision is made:
+- positive: assistant-turn onMessageRecorded carries result.traceId
+- negative invariant: user-turn onMessageRecorded never carries workTraceId
+
+The bridge-layer test in Task 5 additionally pins that the bridge does
+not introduce a workTraceId during forwarding of user-shaped input —
+defense in depth at both layers.
 
 Spec: docs/superpowers/specs/2026-05-15-worktrace-ids-gateway-plumbing-design.md
 EOF
@@ -649,7 +737,9 @@ The bridge's `onMessageRecorded` callback receives `info` from the gateway and f
 
 - [ ] **Step 5.1: Add the failing integration tests (positive + negative)**
 
-Open `apps/chat/src/gateway/__tests__/gateway-bridge-attribution.test.ts`. Two changes:
+Open `apps/chat/src/gateway/__tests__/gateway-bridge-attribution.test.ts`. Two changes.
+
+**Important — keep existing assertions green.** The mock-rewrite below is intentionally minimal: it captures `onMessageRecorded` and routes `recordMessage` through a named spy, but does NOT change any return shape that prior tests depend on. If the existing two assertions (lines ~49-64 and ~66-97) regress after Change A, prefer the smallest mock extension that captures `onMessageRecorded` over a broader rewrite. The goal is to add the new assertions, not to refactor the existing ones.
 
 **Change A: extend the `vi.mock("@switchboard/core", ...)` block** to capture the `onMessageRecorded` callback the bridge installs on ChannelGateway. Replace the existing `ChannelGateway` mock line with:
 
@@ -732,7 +822,7 @@ vi.mock("@switchboard/core", async () => {
     );
   });
 
-  it("user-turn onMessageRecorded does NOT carry workTraceId (negative invariant — Task 5 reviewer-requested)", async () => {
+  it("does not add workTraceId when forwarding a user-turn message to lifecycleTracker.recordMessage", async () => {
     const { createGatewayBridge } = await import("../gateway-bridge.js");
     const fakePrisma = {} as never;
     const fakeIngress = { submit: vi.fn() };
@@ -817,11 +907,11 @@ Bridge's onMessageRecorded callback now forwards info.workTraceId to
 lifecycleTracker.recordMessage, completing the gateway → lifecycle
 plumbing for the strong-tier outcome-attribution path.
 
-Adds two integration tests:
+Adds two bridge-layer integration tests:
 - positive: assistant turn → workTraceId reaches recordMessage spy
-- negative invariant: user turn → workTraceId is undefined on
-  recordMessage (pins "user turns are text events, assistant turns
-  are execution events" per spec reviewer request)
+- bridge does not add workTraceId when forwarding a user-turn
+  message (defense in depth — the gateway-layer negative invariant
+  is pinned in Task 4's channel-gateway.test.ts)
 
 Spec: docs/superpowers/specs/2026-05-15-worktrace-ids-gateway-plumbing-design.md
 EOF
