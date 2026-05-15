@@ -1,6 +1,27 @@
 import { z } from "zod";
 
 /**
+ * Maps "empty-ish" inputs to undefined so the wrapped schema's `.default()`
+ * fires instead of `z.coerce.number()` silently producing `0`. Specifically:
+ * `""`, `"  "` (whitespace), `null`, `undefined`. `false` / `[]` and other
+ * non-string falsy values fall through to the inner schema, where coercion
+ * (and `.nonnegative()`) decides their fate — typically rejecting them.
+ *
+ * Needed because operator-form values land in inputConfig as strings (the
+ * marketplace listing form declares these fields as `type: "text"`), and a
+ * cleared form field comes through as `""`. Without this preprocess,
+ * `z.coerce.number("")` is `0` and the `.default(N)` never runs.
+ */
+const numericWithDefault = (fallback: number) =>
+  z.preprocess(
+    (v) =>
+      v === "" || v === null || v === undefined || (typeof v === "string" && v.trim() === "")
+        ? undefined
+        : v,
+    z.coerce.number().nonnegative().default(fallback),
+  );
+
+/**
  * Per-deployment ad-optimizer config. Lives at the top level of
  * AgentDeployment.inputConfig (e.g. inputConfig.targetCPA), not nested
  * under inputConfig.adOptimizer — top-level placement matches the existing
@@ -9,12 +30,14 @@ import { z } from "zod";
  * this typed overlay is opt-in: callers run resolveAdOptimizerConfig(inputConfig)
  * to read the fields with defaults filled.
  *
- * `z.coerce.number()` accepts both numeric and numeric-string inputs.
- * The marketplace listing form (`packages/db/prisma/seed-marketplace.ts`)
- * declares these fields as `type: "text"`, so operator-entered values are
- * stored as strings in inputConfig. Coercion normalizes to number — the
- * shape that downstream consumers (inngest crons, dashboard, the LLM
- * prompt template) actually want.
+ * Each numeric field is wrapped in `numericWithDefault(N)` (preprocess →
+ * coerce → nonnegative → default). The preprocess strips empty/null/
+ * whitespace inputs so cleared form values fall back to the default
+ * instead of silently coercing to `0`. The marketplace listing form
+ * (`packages/db/prisma/seed-marketplace.ts`) declares these fields as
+ * `type: "text"`, so operator-entered values arrive as strings; coercion
+ * normalizes them to the number shape that downstream consumers
+ * (inngest crons, dashboard, the LLM prompt template) expect.
  *
  * `.passthrough()` keeps any non-schema keys in the result so the parsed
  * bag can flow into DEPLOYMENT_CONFIG for the ad-optimizer LLM prompt
@@ -26,9 +49,9 @@ import { z } from "zod";
  */
 export const AdOptimizerConfigSchema = z
   .object({
-    targetCPA: z.coerce.number().nonnegative().default(100),
-    targetROAS: z.coerce.number().nonnegative().default(3),
-    monthlyBudget: z.coerce.number().nonnegative().default(0),
+    targetCPA: numericWithDefault(100),
+    targetROAS: numericWithDefault(3),
+    monthlyBudget: numericWithDefault(0),
   })
   .passthrough()
   .default({});
