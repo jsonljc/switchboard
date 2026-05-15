@@ -25,6 +25,52 @@ export function filterSurfaceablePatterns(patterns: OutcomePattern[]): OutcomePa
   );
 }
 
+// PR-3.2e: pilot-scale surfacing thresholds. Pilot deployments learn faster
+// because the cohort is small — a pattern with two corroborations + moderate
+// confidence is enough to surface, and any pattern with ≥2 independent
+// booking-id evidence rows surfaces even at sourceCount=1.
+export const PILOT_SURFACING_MIN_SOURCE_COUNT = 2;
+export const PILOT_SURFACING_MIN_CONFIDENCE = 0.6;
+export const PILOT_MULTI_BOOKING_MIN_DISTINCT = 2;
+
+export interface PilotEvidenceLookup {
+  countDistinctBookingIds(deploymentMemoryId: string): Promise<number>;
+}
+
+export async function filterPilotModeSurfaceable(
+  patterns: OutcomePattern[],
+  evidenceStore?: PilotEvidenceLookup,
+): Promise<OutcomePattern[]> {
+  // Two passes: threshold first (cheap, no DB), then parallel evidence lookups
+  // for the remainder. Preserves input ordering in the output.
+  const thresholdPass = new Set<string>();
+  const needsEvidence: OutcomePattern[] = [];
+  for (const p of patterns) {
+    if (
+      p.sourceCount >= PILOT_SURFACING_MIN_SOURCE_COUNT &&
+      p.confidence >= PILOT_SURFACING_MIN_CONFIDENCE
+    ) {
+      thresholdPass.add(p.id);
+    } else if (evidenceStore) {
+      needsEvidence.push(p);
+    }
+  }
+
+  const evidencePass = new Set<string>();
+  if (evidenceStore && needsEvidence.length > 0) {
+    const counts = await Promise.all(
+      needsEvidence.map((p) => evidenceStore.countDistinctBookingIds(p.id)),
+    );
+    needsEvidence.forEach((p, i) => {
+      if ((counts[i] ?? 0) >= PILOT_MULTI_BOOKING_MIN_DISTINCT) {
+        evidencePass.add(p.id);
+      }
+    });
+  }
+
+  return patterns.filter((p) => thresholdPass.has(p.id) || evidencePass.has(p.id));
+}
+
 // Pattern content originates from LLM extraction of customer message content,
 // which means it is partially attacker-influenced — a customer could write
 // "Ignore prior instructions" into a chat and have that string surface as a

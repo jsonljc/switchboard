@@ -1,7 +1,9 @@
 import { SURFACING_THRESHOLD } from "@switchboard/schemas";
 import { getMetrics } from "../telemetry/metrics.js";
 import {
+  filterPilotModeSurfaceable,
   filterSurfaceablePatterns,
+  PILOT_SURFACING_MIN_CONFIDENCE,
   renderOutcomePatternsForContext,
   type OutcomePattern,
 } from "./outcome-pattern-extractor.js";
@@ -45,6 +47,12 @@ export interface ContextBuildInput {
   query: string;
   contactId?: string;
   tokenBudget?: number;
+  // PR-3.2e: when true, ContextBuilder uses relaxed pattern-surfacing thresholds
+  // (sourceCount>=2 AND confidence>=0.6, OR >=2 distinct booking-ids in evidence)
+  // and lowers the listHighConfidence query so low-source patterns are visible
+  // to the pilot filter. Defaults to false; flipped per-deployment via
+  // AgentDeployment.inputConfig.outcomePatterns.pilotMode.
+  pilotMode?: boolean;
 }
 
 export interface ContextBuilderKnowledgeRetriever {
@@ -84,10 +92,18 @@ export interface ContextBuilderInteractionSummaryStore {
   ): Promise<Array<{ id: string; summary: string; outcome: string; createdAt: Date }>>;
 }
 
+// PR-3.2e: optional evidence-store lookup so pilot-mode surfacing can check
+// independent booking-id counts. Without it, pilot-mode degrades to the
+// threshold-only branch (sourceCount>=2 AND confidence>=0.6).
+export interface ContextBuilderEvidenceStore {
+  countDistinctBookingIds(deploymentMemoryId: string): Promise<number>;
+}
+
 export interface ContextBuilderDeps {
   knowledgeRetriever: ContextBuilderKnowledgeRetriever;
   deploymentMemoryStore: ContextBuilderDeploymentMemoryStore;
   interactionSummaryStore: ContextBuilderInteractionSummaryStore;
+  evidenceStore?: ContextBuilderEvidenceStore;
 }
 
 const DEFAULT_TOKEN_BUDGET = 4000;
@@ -110,6 +126,17 @@ export class ContextBuilder {
     const budget = input.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
     let tokensUsed = 0;
 
+    // PR-3.2e: pilot mode lowers the DB-side threshold so patterns at
+    // sourceCount=1 (multi-booking branch) and at the relaxed confidence
+    // floor are visible to the pilot filter below. The pilot filter does
+    // the actual rule check; this lookup just widens the candidate set.
+    // Facts surfaced at this lower bar in pilot mode are intentional —
+    // operators flip pilotMode to learn faster, which includes facts.
+    const memoryMinConfidence = input.pilotMode
+      ? PILOT_SURFACING_MIN_CONFIDENCE
+      : SURFACING_THRESHOLD.minConfidence;
+    const memoryMinSourceCount = input.pilotMode ? 1 : SURFACING_THRESHOLD.minSourceCount;
+
     const [chunks, memories, summaries] = await Promise.all([
       this.deps.knowledgeRetriever.retrieve(input.query, {
         organizationId: input.organizationId,
@@ -119,8 +146,8 @@ export class ContextBuilder {
       this.deps.deploymentMemoryStore.listHighConfidence(
         input.organizationId,
         input.deploymentId,
-        SURFACING_THRESHOLD.minConfidence,
-        SURFACING_THRESHOLD.minSourceCount,
+        memoryMinConfidence,
+        memoryMinSourceCount,
       ),
       input.contactId
         ? this.deps.interactionSummaryStore.listByDeployment(
@@ -184,7 +211,9 @@ export class ContextBuilder {
         sourceCount: m.sourceCount,
         lastSeenAt: m.lastSeenAt,
       }));
-    const surfaceable = filterSurfaceablePatterns(outcomePatterns);
+    const surfaceable = input.pilotMode
+      ? await filterPilotModeSurfaceable(outcomePatterns, this.deps.evidenceStore)
+      : filterSurfaceablePatterns(outcomePatterns);
     const { rendered: outcomePatternContext, renderedIds: injectedPatternIds } =
       renderOutcomePatternsForContext(surfaceable);
     if (outcomePatternContext.length > 0) {

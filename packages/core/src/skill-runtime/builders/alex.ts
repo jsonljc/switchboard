@@ -23,6 +23,11 @@ export const alexBuilder = async (
     phone?: string;
     channel?: string;
     message?: string;
+    // PR-3.2e: resolved from
+    // AgentDeployment.inputConfig.outcomePatterns.pilotMode at the caller
+    // (skill-mode.ts) via resolveOutcomePatternsConfig(). When true,
+    // ContextBuilder surfaces patterns at the relaxed pilot bar.
+    pilotMode?: boolean;
   },
   stores: SkillStores,
   services?: SkillServices,
@@ -106,6 +111,7 @@ export const alexBuilder = async (
       deploymentId: config.deploymentId,
       query: config.message ?? "",
       contactId: config.contactId,
+      pilotMode: config.pilotMode ?? false,
     });
     OUTCOME_PATTERNS = builtCtx.outcomePatternContext;
     injectedPatternIds = builtCtx.injectedPatternIds;

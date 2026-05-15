@@ -41,5 +41,6 @@ export function toDeploymentContext(result: DeploymentResolverResult): Deploymen
     trustScore: result.trustScore,
     persona: result.persona,
     policyOverrides: result.policyOverrides,
+    deploymentConfig: result.deploymentConfig,
   };
 }

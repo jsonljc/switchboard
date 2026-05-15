@@ -280,12 +280,18 @@ export async function buildServer() {
   let contextBuilder: import("@switchboard/core").ContextBuilder | undefined;
   if (prismaClient && conversationDeps && knowledgeStore) {
     const { ContextBuilder } = await import("@switchboard/core");
-    const { PrismaDeploymentMemoryStore, PrismaInteractionSummaryStore } =
-      await import("@switchboard/db");
+    const {
+      PrismaDeploymentMemoryStore,
+      PrismaInteractionSummaryStore,
+      PrismaDeploymentMemoryEvidenceStore,
+    } = await import("@switchboard/db");
     contextBuilder = new ContextBuilder({
       knowledgeRetriever: conversationDeps.retriever,
       deploymentMemoryStore: new PrismaDeploymentMemoryStore(prismaClient),
       interactionSummaryStore: new PrismaInteractionSummaryStore(prismaClient),
+      // PR-3.2e: evidenceStore powers the multi-booking surfacing branch
+      // when AgentDeployment.inputConfig.outcomePatterns.pilotMode = true.
+      evidenceStore: new PrismaDeploymentMemoryEvidenceStore(prismaClient),
     });
     app.log.info("ContextBuilder wired (outcome-informed skill context)");
   }
