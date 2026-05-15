@@ -26,13 +26,13 @@
   "dependencies": {
     "@prisma/client": "^6.3.0",
     "@switchboard/core": "workspace:*",
-    "@switchboard/schemas": "workspace:*"
+    "@switchboard/schemas": "workspace:*",
+    "prisma": "^6.3.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^25",
     "bcryptjs": "^3.0.3",
-    "prisma": "^6.3.0",
     "tsx": "^4.7.0",
     "typescript": "^6.0.3",
     "vitest": "^2.1.0"
