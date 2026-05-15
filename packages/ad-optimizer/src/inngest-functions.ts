@@ -6,6 +6,7 @@ import { AuditRunner } from "./audit-runner.js";
 import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
+import type { RecommendationEmitter } from "./recommendation-sink.js";
 
 interface DeploymentInfo {
   id: string;
@@ -40,6 +41,17 @@ export interface CronDependencies {
    */
   getDeploymentPixelId?: (deploymentId: string) => Promise<string | null>;
   createSignalHealthChecker?: (creds: DeploymentCredentials) => SignalHealthCheckerLike;
+  /**
+   * Optional. When provided, the weekly audit's AuditRunner forwards every
+   * scored recommendation candidate through this emitter for routing into the
+   * v1 pipeline (queue / shadow_action / dropped). When absent, the audit runs
+   * as a pure analyzer — back-compatible with callers that have not yet been
+   * re-wired. Production wiring lives in apps/api/src/bootstrap/inngest.ts and
+   * closes over both the RecommendationStore and the
+   * PrismaRecommendationEmissionMirror so each emission writes a Recommendation
+   * row + a paired WorkTrace row atomically (Wave B PR-1 substrate).
+   */
+  recommendationEmitter?: RecommendationEmitter;
 }
 
 interface StepTools {
@@ -116,6 +128,9 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         insightsProvider: deps.createInsightsProvider(adsClient),
         config,
         ...(signalHealthChecker ? { signalHealthChecker } : {}),
+        ...(deps.recommendationEmitter
+          ? { recommendationEmitter: deps.recommendationEmitter }
+          : {}),
       });
       const report = await runner.run(dateRanges);
       await deps.saveAuditReport(deployment.id, report);

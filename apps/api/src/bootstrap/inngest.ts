@@ -19,6 +19,8 @@ import {
   PrismaAssetRecordStore,
   PrismaCrmFunnelStore,
   PrismaDeploymentMemoryStore,
+  PrismaRecommendationStore,
+  PrismaRecommendationEmissionMirror,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -27,9 +29,11 @@ import {
   resolveLifecycleTaggingMechanicalConfig,
 } from "@switchboard/schemas";
 import {
+  emitRecommendation,
   executeDailyPatternDecay,
   getMetrics,
   type PatternDecayDependencies,
+  type RecommendationInput,
   type StepTools as PatternDecayStepTools,
 } from "@switchboard/core";
 import { bootstrapLifecycle } from "./lifecycle.js";
@@ -150,6 +154,23 @@ export async function registerInngest(
   const createSignalHealthChecker = (creds: { accessToken: string }) =>
     new SignalHealthChecker({ accessToken: creds.accessToken });
 
+  // Riley emission wiring (Wave B PR-1 substrate). Construct one mirror that
+  // the weekly-audit cron's recommendationEmitter callback closes over. Every
+  // emission performs an atomic dual-write: PendingActionRecord row + paired
+  // WorkTrace row inside a single prisma.$transaction. The cronId below is
+  // hardcoded to "ad-optimizer-weekly-audit" because executeWeeklyAudit is the
+  // only Riley-emission path today (executeDailyCheck just polls account
+  // summary; executeDailySignalHealthCheck does not emit recommendations).
+  const recommendationStore = new PrismaRecommendationStore(app.prisma);
+  const recommendationEmissionMirror = new PrismaRecommendationEmissionMirror(app.prisma);
+  const rileyRecommendationEmitter = async (input: RecommendationInput) => {
+    const result = await emitRecommendation(recommendationStore, input, {
+      mirror: recommendationEmissionMirror,
+      cronId: "ad-optimizer-weekly-audit",
+    });
+    return { surface: result.surface };
+  };
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -208,6 +229,7 @@ export async function registerInngest(
     },
     getDeploymentPixelId,
     createSignalHealthChecker,
+    recommendationEmitter: rileyRecommendationEmitter,
   };
 
   // Signal-health daily cron uses a slimmer dep set than the audit cron —
