@@ -4,9 +4,11 @@
 
 **Prerequisite:** Slice 2A backend PR is merged. The `POST /api/dashboard/whatsapp/send-test` and `GET /api/dashboard/whatsapp/test-sends` endpoints exist and are tested.
 
-**Goal:** Dashboard surface for the send-test feature. Operator opens `/settings/channels/whatsapp`, sees a new "Send test" panel between Phone Numbers and Templates, picks an active phone + an APPROVED template + an allowlisted recipient, hits Send, and sees the returned `messageId` + progressive webhook status updates inline.
+**Goal:** Dashboard surface for the send-test feature. Operator opens `/settings/channels/whatsapp`, sees a new "Send test" panel between Phone Numbers and Templates, picks an active phone + an APPROVED template + an allowlisted recipient, hits Send, and sees an inline result — either the returned `messageId` (accepted by WhatsApp) or an error message.
 
-**Architecture:** New `whatsapp-send-test.tsx` component injected into the existing management page. React Query for the mutation + the recent-tests list (5s refetch interval; invalidates on send-success). No new visual register — uses the same shadcn primitives as the rest of the management page.
+**Architecture:** New `whatsapp-send-test.tsx` component injected into the existing management page. React Query for the send mutation; the mutation's `data` / `error` drive the inline result pane. No new visual register — uses the same shadcn primitives as the rest of the management page.
+
+**Out of scope for 2B (may follow as a separate slice if delivery monitoring becomes a real need):** a persistent recent-tests history list, polling for webhook status, progressive status pills (sent → delivered → read). The `GET /test-sends` endpoint and webhook bridge from 2A still write the data — 2B just doesn't surface it.
 
 **Tech Stack:** Next.js 14 App Router, React Query, shadcn/ui, Tailwind, Vitest + Testing Library.
 
@@ -18,7 +20,7 @@
 
 - ❌ Any backend changes beyond extending the existing `/account` response (Task 1 below).
 - ❌ A UI to **edit** `testRecipients` (admin seeds via SQL; documented in Slice 2A PR body).
-- ❌ Optimistic insertion of test rows in the cache (5s refetch is good enough and simpler).
+- ❌ **Recent-tests history list / polling / status pills.** The send-test panel is a smoke-test surface, not a delivery-monitoring tool. The inline mutation result (success `messageId` or error message) is the entire result UX. If delivery monitoring becomes a real operator need, ship it as its own slice with its own design.
 - ❌ Modal-stacking — the panel is inline.
 - ❌ Pricing / cost projection — out of scope for Slice 2.
 
@@ -27,7 +29,7 @@
 - Dashboard imports never use `.js` extensions (Next.js, per `feedback_dashboard_no_js_on_any_import.md`).
 - Existing hooks live in `apps/dashboard/src/hooks/use-whatsapp-management.ts`. New hooks go in a sibling file `use-whatsapp-send-test.ts`.
 - **Hook import path for `useScopedQueryKeys`**: import from `@/hooks/use-query-keys`, **not** from `@/lib/query-keys` (which only re-exports the keys factory, not the hook). Mirror `use-whatsapp-management.ts:4`: `import { useScopedQueryKeys } from "@/hooks/use-query-keys";`.
-- Query keys factory lives in `apps/dashboard/src/lib/query-keys.ts` under `whatsappManagement`. Add `testSends` alongside `account/phoneNumbers/templates` there.
+- Query keys factory lives in `apps/dashboard/src/lib/query-keys.ts` under `whatsappManagement`. The trimmed 2B does not add a new key — the send mutation does not need cache invalidation since there is no list view to refresh.
 - `WhatsAppManagement` component composes child sections (Setup → PhoneNumbers → Templates). Inject `<WhatsAppSendTest />` between PhoneNumbers and Templates. The component early-returns on `readiness.status === "not_connected"`, so the injected panel is only rendered when there's a connected account.
 - `pnpm --filter @switchboard/dashboard build` is **not in CI**. Must run locally before merge per `feedback_dashboard_build_not_in_ci.md`. Clear `.next/` first.
 
@@ -44,7 +46,6 @@
 - `apps/api/src/routes/whatsapp-management.ts` — extend `/account` to include `connection.testRecipients`
 - `apps/api/src/routes/__tests__/whatsapp-management.test.ts` — assert new field
 - `apps/dashboard/src/hooks/use-whatsapp-management.ts` — extend the connection type
-- `apps/dashboard/src/lib/query-keys.ts` — add `testSends` key
 - `apps/dashboard/src/components/settings/whatsapp-management.tsx` — inject the panel
 
 ---
@@ -148,30 +149,18 @@ git commit -m "feat(api,dashboard): /account exposes connection.testRecipients a
 
 ---
 
-## Task 2 — Query keys + hooks
+## Task 2 — Send-test mutation hook
 
 **Files:**
 
-- Modify: `apps/dashboard/src/lib/query-keys.ts`
 - Create: `apps/dashboard/src/hooks/use-whatsapp-send-test.ts`
 
-- [ ] **Step 1: Add `testSends` key** in `query-keys.ts`:
+The trimmed 2B does **not** add a query key or a recent-tests query hook — only the send mutation.
+
+- [ ] **Step 1: Create the hooks file** (no `.js` extensions in dashboard imports):
 
 ```typescript
-whatsappManagement: {
-  all: () => [orgId, "whatsappManagement"] as const,
-  account: () => [orgId, "whatsappManagement", "account"] as const,
-  phoneNumbers: () => [orgId, "whatsappManagement", "phoneNumbers"] as const,
-  templates: () => [orgId, "whatsappManagement", "templates"] as const,
-  testSends: () => [orgId, "whatsappManagement", "testSends"] as const,
-},
-```
-
-- [ ] **Step 2: Create the hooks file** (no `.js` extensions in dashboard imports; `useScopedQueryKeys` comes from the `hooks` path):
-
-```typescript
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { useMutation } from "@tanstack/react-query";
 
 export interface SendTestRequest {
   phoneNumberId: string;
@@ -184,20 +173,6 @@ export interface SendTestResult {
   messageId: string;
   status: "sent" | "failed";
   sentAt: string;
-}
-
-export interface TestSendRow {
-  id: string;
-  messageId: string;
-  phoneNumberId: string;
-  templateName: string;
-  languageCode: string;
-  toNumber: string;
-  sentBy: string;
-  sentAt: string;
-  apiStatus: "sent" | "failed";
-  lastWebhookStatus: "sent" | "delivered" | "read" | "failed" | null;
-  lastWebhookAt: string | null;
 }
 
 interface ApiError {
@@ -217,48 +192,23 @@ async function postSendTest(body: SendTestRequest): Promise<SendTestResult> {
   return (await res.json()) as SendTestResult;
 }
 
-async function fetchTestSends(): Promise<TestSendRow[]> {
-  const res = await fetch("/api/dashboard/whatsapp/test-sends");
-  if (!res.ok) throw new Error(`Failed to load recent tests (${res.status})`);
-  const body = (await res.json()) as { tests: TestSendRow[] };
-  return body.tests;
-}
-
 export function useSendWhatsAppTest() {
-  const keys = useScopedQueryKeys();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: postSendTest,
-    onSuccess: () => {
-      if (keys) qc.invalidateQueries({ queryKey: keys.whatsappManagement.testSends() });
-    },
-  });
-}
-
-export function useWhatsAppRecentTests(enabled = true) {
-  const keys = useScopedQueryKeys();
-  return useQuery({
-    queryKey: keys?.whatsappManagement.testSends() ?? ["unscoped", "testSends"],
-    queryFn: fetchTestSends,
-    enabled: enabled && !!keys,
-    refetchInterval: 5000,
-    staleTime: 1000,
-  });
+  return useMutation({ mutationFn: postSendTest });
 }
 ```
 
-- [ ] **Step 3: Typecheck**
+- [ ] **Step 2: Typecheck**
 
 ```bash
 rm -rf apps/dashboard/.next
 pnpm --filter @switchboard/dashboard typecheck
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add apps/dashboard/src/lib/query-keys.ts apps/dashboard/src/hooks/use-whatsapp-send-test.ts
-git commit -m "feat(dashboard): send-test query keys + useSendWhatsAppTest / useWhatsAppRecentTests hooks"
+git add apps/dashboard/src/hooks/use-whatsapp-send-test.ts
+git commit -m "feat(dashboard): useSendWhatsAppTest mutation hook"
 ```
 
 ---
@@ -272,11 +222,13 @@ git commit -m "feat(dashboard): send-test query keys + useSendWhatsAppTest / use
 
 - [ ] **Step 1: Failing component tests**
 
-Mock the hooks and assert:
+Mock the `useSendWhatsAppTest` hook and assert:
 
 - Renders a heading "Send test" and a Submit button.
 - Submit button is disabled when there are zero APPROVED templates.
 - Submit button is disabled when `allowedRecipients` is empty AND a hint "Add a test recipient to this channel..." is visible.
+- After a successful send, an inline success pane appears with the returned `messageId`.
+- After a failed send, an inline error pane appears with the error message.
 
 - [ ] **Step 2: Implement** — create `apps/dashboard/src/components/settings/whatsapp-send-test.tsx`:
 
@@ -286,13 +238,8 @@ Mock the hooks and assert:
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
-import {
-  useSendWhatsAppTest,
-  useWhatsAppRecentTests,
-  type TestSendRow,
-} from "@/hooks/use-whatsapp-send-test";
+import { useSendWhatsAppTest } from "@/hooks/use-whatsapp-send-test";
 
 export interface SendTestPhoneNumber {
   id: string;
@@ -313,36 +260,6 @@ interface Props {
   allowedRecipients: string[];
 }
 
-const DELIVERED_STATES = new Set(["delivered", "read"]);
-
-function StatusCell({ row }: { row: TestSendRow }) {
-  // Show "Accepted by WhatsApp · awaiting delivery webhook" until first webhook arrives.
-  if (row.lastWebhookStatus === null && row.apiStatus === "sent") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Badge className="bg-amber-100 text-amber-800">accepted</Badge>
-        <span>awaiting delivery webhook</span>
-      </span>
-    );
-  }
-  if (row.apiStatus === "failed") {
-    return <Badge className="bg-red-100 text-red-800">failed</Badge>;
-  }
-  const label = row.lastWebhookStatus ?? row.apiStatus;
-  const tone =
-    label === "failed"
-      ? "bg-red-100 text-red-800"
-      : DELIVERED_STATES.has(label)
-        ? "bg-green-100 text-green-800"
-        : "bg-amber-100 text-amber-800";
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {DELIVERED_STATES.has(label) && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
-      <Badge className={tone}>{label}</Badge>
-    </span>
-  );
-}
-
 export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }: Props) {
   const activeNumbers = useMemo(
     () => phoneNumbers.filter((p) => p.status === "active"),
@@ -360,7 +277,6 @@ export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }:
   const [error, setError] = useState<string | null>(null);
 
   const send = useSendWhatsAppTest();
-  const recent = useWhatsAppRecentTests();
 
   const disabled =
     !phoneNumberId ||
@@ -390,8 +306,8 @@ export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }:
       <CardHeader>
         <CardTitle className="text-base">Send test</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Send an approved template to an allowlisted recipient. Meta accepts immediately; delivery
-          and read receipts arrive via webhook.
+          Send an approved template to an allowlisted recipient to verify the integration is wired
+          up correctly.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -473,55 +389,27 @@ export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }:
           </Button>
         </div>
 
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium">Recent tests</h3>
-          {recent.isLoading && (
-            <p className="text-sm text-muted-foreground">Loading recent tests…</p>
-          )}
-          {recent.error && (
-            <p className="text-sm text-destructive">Failed to load recent tests.</p>
-          )}
-          {recent.data && recent.data.length === 0 && (
-            <p className="text-sm text-muted-foreground">No tests sent yet.</p>
-          )}
-          {recent.data && recent.data.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Template</th>
-                    <th className="pb-2 pr-4 font-medium">To</th>
-                    <th className="pb-2 pr-4 font-medium">Sent</th>
-                    <th className="pb-2 pr-4 font-medium">Message ID</th>
-                    <th className="pb-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.data.map((row) => (
-                    <tr key={row.id} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-mono text-xs">{row.templateName}</td>
-                      <td className="py-2 pr-4 font-mono text-xs">{row.toNumber}</td>
-                      <td className="py-2 pr-4 text-xs text-muted-foreground">
-                        {new Date(row.sentAt).toLocaleTimeString()}
-                      </td>
-                      <td className="py-2 pr-4 font-mono text-[10px] text-muted-foreground">
-                        {row.messageId.slice(0, 10)}…{row.messageId.slice(-4)}
-                      </td>
-                      <td className="py-2">
-                        <StatusCell row={row} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {send.data && (
+          <div className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-600" />
+            <div className="space-y-0.5">
+              <div>Accepted by WhatsApp.</div>
+              <div className="font-mono text-xs text-green-800">
+                messageId: {send.data.messageId}
+              </div>
+              <div className="text-xs text-green-700">
+                Sent at {new Date(send.data.sentAt).toLocaleString()}
+              </div>
             </div>
-          )}
-        </section>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 ```
+
+The result pane reads `send.data` (last successful mutation result) and `error` (local state set in the catch block). No separate query, no polling, no persistence in the component. Sending again replaces `send.data` with the new result.
 
 - [ ] **Step 3: Run, pass, commit**
 
@@ -529,7 +417,7 @@ export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }:
 cd apps/dashboard && pnpm exec vitest run src/components/settings/__tests__/whatsapp-send-test
 git add apps/dashboard/src/components/settings/whatsapp-send-test.tsx \
         apps/dashboard/src/components/settings/__tests__/whatsapp-send-test.test.tsx
-git commit -m "feat(dashboard): WhatsAppSendTest panel — form + recent tests with accepted/delivered states"
+git commit -m "feat(dashboard): WhatsAppSendTest panel — form + inline accepted/error result"
 ```
 
 ---
@@ -588,7 +476,7 @@ rm -rf apps/dashboard/.next
 pnpm --filter @switchboard/dashboard build
 ```
 
-- [ ] **Step 3: Manual staging smoke** — seed the allowlist via SQL, navigate to `/settings/channels/whatsapp`, send a test, verify the recent-tests row appears with `accepted · awaiting delivery webhook` within 5s and progresses through `delivered` → `read` within ~30s.
+- [ ] **Step 3: Manual staging smoke** — seed the allowlist via SQL, navigate to `/settings/channels/whatsapp`, send a test. Verify the inline success pane appears within ~2s showing "Accepted by WhatsApp" + the returned `messageId`. Send a second test with a deliberately wrong template name to verify the inline error pane renders the upstream Graph error message.
 
 - [ ] **Step 4: Open PR**
 
