@@ -16,6 +16,8 @@
     "typecheck": "tsc --noEmit",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
     "seed": "tsx prisma/seed.ts",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
