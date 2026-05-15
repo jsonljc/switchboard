@@ -6,7 +6,9 @@
 
 **Architecture:** Sequential batches (A → B → C); within each batch, all lanes are dispatched in a single message with multiple `Agent` tool calls so they run in parallel. The orchestrating session re-baselines numeric assertions in a pre-dispatch step, dispatches each batch, persists each subagent's returned findings to a per-lane report file (subagents are read-only; orchestrator does all writes), performs lightweight per-batch synthesis, and at the end produces a final ranked backlog with severity-prioritized HEAD re-verification.
 
-**Tech Stack:** Claude Code CLI with the `Agent` tool (`subagent_type: "Explore"`) for Wave 1 lanes; `Bash`, `Read`, and `Write` for orchestration; `git` + `gh` CLI for branch/PR management. No new dependencies.
+**Tech Stack:** Claude Code CLI with the `Agent` tool (`subagent_type: "Explore"`) for Wave 1 lanes; `Bash`, `Read`, and `Write` for orchestration; `git` + `gh` CLI for branch/PR management.
+
+**Setup vs lane execution boundary:** Worktree creation in Task 1 may run existing workspace bootstrap (`pnpm worktree:init`, which may invoke `pnpm db:migrate` if Postgres is reachable and may refresh installed dependencies). This is **pre-audit environment setup**, not part of Wave 1 lane execution. After setup completes, every Wave 1 lane is strictly read-only as defined in the design doc: no code edits, no commits inside subagent contexts, no migrations triggered by lanes, no new dependencies added. Existing workspace bootstrap/install behavior is allowed only during the Task 1 setup phase.
 
 **Precondition:** PR #544 (which carries both the spec and this plan) has merged to `main` before execution starts. The plan reads the spec for charter templates and severity ladder — both must be on `main`.
 
@@ -400,11 +402,13 @@ EOF
 
 Expected: one commit with 5 files added.
 
-- [ ] **Step 7: Optional user check-in**
+- [ ] **Step 7: Surface tallies and continue**
 
-If running the first execution of this plan, pause here. Surface the severity tallies from Step 5 to the user. Ask: "Batch A complete. Continue to Batch B (code health), or pause to review?" If the user says continue, proceed. If they request changes (e.g., re-run a lane with different scope), apply the change before moving on.
+Wave 1 is discovery-only — there is no risk of accidental code mutation, so do NOT pause for confirmation by default. After Step 5's tallies, post a single status line to the operator:
 
-For subsequent executions or if running unattended, skip this step.
+> "Batch A complete: <CRITICAL count> CRITICAL / <HIGH count> HIGH / <MED count> MED / <LOW count> LOW across 5 lanes; <N> collision-tagged. Proceeding to Batch B."
+
+Then proceed to Task 4 immediately. Only stop if the operator explicitly interrupts.
 
 ---
 
@@ -491,11 +495,13 @@ EOF
 )"
 ```
 
-- [ ] **Step 7: Optional user check-in**
+- [ ] **Step 7: Surface tallies and continue**
 
-If running the first execution of this plan, pause here. Surface the severity tallies from Step 5 to the user. Ask: "Batch B complete. Continue to Batch C (data/infra/tests/docs), or pause to review?" If the user says continue, proceed. If they request changes (e.g., re-run a lane with different scope), apply the change before moving on.
+Same non-blocking pattern. Post:
 
-For subsequent executions or if running unattended, skip this step.
+> "Batch B complete: <CRITICAL count> CRITICAL / <HIGH count> HIGH / <MED count> MED / <LOW count> LOW across 5 lanes; <N> collision-tagged. Proceeding to Batch C."
+
+Then proceed to Task 5 immediately. Only stop if the operator explicitly interrupts.
 
 ---
 
@@ -524,7 +530,7 @@ For **lane 13 (`prisma-hygiene`)**:
 
 For **lane 15 (`fixture-schema-alignment`)**:
 - Charter: copy from spec lane 15
-- Method hints: "Read `packages/db/prisma/seed-marketplace.ts` and `packages/db/prisma/seed.ts`. Verify (a) seed runs against current schema (try `pnpm db:seed` if Postgres reachable), (b) demo agent slugs match Alex/Riley/Mira — no `nova`/`jordan`, (c) no references to removed columns or stale enums."
+- Method hints: "**Static verification only by default — do NOT run mutating seed commands** (`pnpm db:seed` and friends mutate local/dev DB state and are out of scope for read-only Wave 1). Statically verify: (a) every model/field referenced by `packages/db/prisma/seed-marketplace.ts` and `packages/db/prisma/seed.ts` still exists in `packages/db/prisma/schema.prisma` (no removed columns, no stale enums); (b) demo agent slugs/names align with canonical Alex/Riley/Mira — flag any lingering `nova`/`jordan`/legacy strings; (c) seed-referenced relations resolve. If actual seed execution is genuinely required to surface a finding, only run against an explicitly disposable local DB and record that condition in the report's Method section."
 - Existing-audit deltas: none.
 
 For **lane 17 (`deploy-infra-parity`)**:
@@ -677,8 +683,8 @@ Use the `Write` tool to create `docs/superpowers/specs/2026-05-15-architecture-c
 
 ## Deferred lanes
 
-- **ci-gate-gaps:** re-run after local-readiness PR-1 merges OR by 2026-05-29.
-- **spec-plan-rot:** re-run after named workstreams merge OR by 2026-05-29 with narrower scope.
+- **ci-gate-gaps:** re-run after local-readiness PR-1 merges, or by 2026-05-29, whichever comes first.
+- **spec-plan-rot:** re-run after the named in-flight workstreams merge, or by 2026-05-29 with narrower scope, whichever comes first.
 
 ## Source reports
 
@@ -744,7 +750,7 @@ Wave 1 of the architecture/codebase cleanup audit defined in `docs/superpowers/s
 ## What's NOT in this PR
 
 - No code changes. Wave 1 is discovery-only.
-- 2 lanes deferred by design (`ci-gate-gaps`, `spec-plan-rot`) — re-run after 2026-05-29.
+- 2 lanes deferred by design (`ci-gate-gaps`, `spec-plan-rot`) — re-run after relevant in-flight workstreams merge, or by 2026-05-29, whichever comes first.
 
 ## Test plan
 
