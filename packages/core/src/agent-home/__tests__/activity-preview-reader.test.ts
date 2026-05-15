@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type {
-  ActivityPreviewReader,
-  ThreadMessageRecord,
-} from "../activity-preview-reader.js";
+import type { ActivityPreviewReader, ThreadMessageRecord } from "../activity-preview-reader.js";
 
 function makeStub(): ActivityPreviewReader {
   return {
