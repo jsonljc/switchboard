@@ -280,6 +280,133 @@ describe("SkillExecutorImpl", () => {
     expect(result.trace.status).toBe("success");
   });
 
+  it("forwards HookResult.payload to pendingApproval ToolResult (A.7c-followup)", async () => {
+    // Custom hook returning decision=pending_approval with typed payload.
+    // The executor must forward payload to the synthesized ToolResult.error.payload.
+    const toolSkill: SkillDefinition = {
+      ...mockSkill,
+      tools: ["test-tool"],
+      body: "Use test-tool.do {{NAME}}",
+    };
+    const mockTool: SkillTool = {
+      id: "test-tool",
+      operations: {
+        do: {
+          description: "do",
+          inputSchema: { type: "object", properties: {} },
+          effectCategory: "read" as const,
+          execute: vi.fn().mockResolvedValue(ok({ ok: true })),
+        },
+      },
+    };
+
+    const payloadEmittingHook = {
+      name: "regulatory-gate",
+      async beforeToolCall() {
+        return {
+          proceed: false,
+          decision: "pending_approval" as const,
+          reason: "Regulatory review required",
+          payload: {
+            kind: "regulatory" as const,
+            body: "Patient asked about FDA approval status.",
+          },
+        };
+      },
+    };
+
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "test-tool.do", input: {} }],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "Pending approval." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const executor = new SkillExecutorImpl(adapter, new Map([["test-tool", mockTool]]), undefined, [
+      payloadEmittingHook,
+    ]);
+    const result = await executor.execute({
+      skill: toolSkill,
+      parameters: { NAME: "X" },
+      messages: [{ role: "user", content: "do it" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0]!.governanceDecision).toBe("require-approval");
+    expect(result.toolCalls[0]!.result.status).toBe("pending_approval");
+    expect(result.toolCalls[0]!.result.error?.payload?.kind).toBe("regulatory");
+    expect(result.toolCalls[0]!.result.error?.payload?.body).toBe(
+      "Patient asked about FDA approval status.",
+    );
+  });
+
+  it("synthesizes pendingApproval without payload when hook omits it (A.7c-followup)", async () => {
+    // Backward-compat: hook returns decision=pending_approval but no payload.
+    // ToolResult.error.payload must be undefined (legacy fallback path).
+    const toolSkill: SkillDefinition = {
+      ...mockSkill,
+      tools: ["test-tool"],
+      body: "Use test-tool.do {{NAME}}",
+    };
+    const mockTool: SkillTool = {
+      id: "test-tool",
+      operations: {
+        do: {
+          description: "do",
+          inputSchema: { type: "object", properties: {} },
+          effectCategory: "read" as const,
+          execute: vi.fn().mockResolvedValue(ok({ ok: true })),
+        },
+      },
+    };
+
+    const noPayloadHook = {
+      name: "legacy-gate",
+      async beforeToolCall() {
+        return {
+          proceed: false,
+          decision: "pending_approval" as const,
+          reason: "Requires approval",
+        };
+      },
+    };
+
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "test-tool.do", input: {} }],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "Pending." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const executor = new SkillExecutorImpl(adapter, new Map([["test-tool", mockTool]]), undefined, [
+      noPayloadHook,
+    ]);
+    const result = await executor.execute({
+      skill: toolSkill,
+      parameters: { NAME: "X" },
+      messages: [{ role: "user", content: "do it" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+
+    expect(result.toolCalls[0]!.result.status).toBe("pending_approval");
+    expect(result.toolCalls[0]!.result.error?.payload).toBeUndefined();
+  });
+
   it("enforces token budget", async () => {
     const toolSkill: SkillDefinition = {
       ...mockSkill,

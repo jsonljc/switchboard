@@ -176,4 +176,62 @@ describe("PrismaApprovalStore", () => {
       });
     });
   });
+
+  describe("payload round-trip (A.7c-followup)", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Partial test data
+    const REQUEST_WITH_PAYLOAD: any = {
+      ...TEST_REQUEST,
+      payload: {
+        kind: "regulatory",
+        body: "Patient asked about FDA approval status.",
+        quote: "Our laser is FDA approved.",
+        quoteFrom: "Alex (draft)",
+      },
+    };
+
+    it("persists request.payload via Json column on save", async () => {
+      prisma.approvalRecord.create.mockResolvedValue({});
+
+      await store.save({
+        request: REQUEST_WITH_PAYLOAD,
+        state: TEST_STATE,
+        envelopeId: "env_1",
+        organizationId: "org_1",
+      });
+
+      // Prisma persists the entire `request` shape as Json — payload survives
+      // unchanged. No top-level Approval.payload column is needed.
+      const callArgs = prisma.approvalRecord.create.mock.calls[0]![0];
+      expect(callArgs.data.request).toBe(REQUEST_WITH_PAYLOAD);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Asserting shape
+      expect((callArgs.data.request as any).payload.kind).toBe("regulatory");
+    });
+
+    it("returns request.payload on getById when present", async () => {
+      prisma.approvalRecord.findUnique.mockResolvedValue({
+        ...TEST_DB_ROW,
+        request: REQUEST_WITH_PAYLOAD,
+      });
+
+      const result = await store.getById("apr_1");
+      expect(result?.request.payload?.kind).toBe("regulatory");
+      expect(result?.request.payload?.body).toBe("Patient asked about FDA approval status.");
+    });
+
+    it("returns request.payload on listPending when present", async () => {
+      prisma.approvalRecord.findMany.mockResolvedValue([
+        { ...TEST_DB_ROW, request: REQUEST_WITH_PAYLOAD },
+      ]);
+
+      const result = await store.listPending();
+      expect(result[0]!.request.payload?.kind).toBe("regulatory");
+    });
+
+    it("returns undefined payload on listPending for legacy approvals", async () => {
+      prisma.approvalRecord.findMany.mockResolvedValue([TEST_DB_ROW]);
+
+      const result = await store.listPending();
+      expect(result[0]!.request.payload).toBeUndefined();
+    });
+  });
 });

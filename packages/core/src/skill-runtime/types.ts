@@ -8,6 +8,7 @@ import type {
 import type {
   ContextRequirement,
   IntentClass,
+  PendingApprovalPayload,
   QualificationSignals,
   ReferenceMetadata,
   WorkTraceQualificationSignals,
@@ -253,6 +254,18 @@ export interface HookResult {
   decision?: "denied" | "pending_approval";
   /** When set with proceed=false and decision=undefined, executor uses this instead of denied/pendingApproval. */
   substituteResult?: ToolResult;
+  /**
+   * Typed payload forwarded to ToolResult.error.payload when
+   * decision === "pending_approval" (A.7c-followup). Absent payload preserves
+   * legacy behavior — the dashboard's rich approval adapter falls back to
+   * legacy-pending-approval-to-approval-view, rendering as kind: "pricing".
+   * Only meaningful when decision === "pending_approval"; ignored otherwise.
+   *
+   * Merge semantics in runBeforeToolCallHooks: first-payload-wins. The
+   * aggregator short-circuits on the first hook returning proceed=false, so
+   * later hooks' payloads (if any) never propagate.
+   */
+  payload?: PendingApprovalPayload;
 }
 
 export interface LlmHookResult extends HookResult {
