@@ -40,7 +40,8 @@ async function buildApp(deps: OutcomesRouteDeps) {
   const app = Fastify({ logger: false });
   app.setErrorHandler((error, _req, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
-    return reply.code(statusCode).send({ error: error.message, statusCode });
+    const message = error instanceof Error ? error.message : String(error);
+    return reply.code(statusCode).send({ error: message, statusCode });
   });
   await registerRileyOutcomesRoute(app, deps);
   return app;
