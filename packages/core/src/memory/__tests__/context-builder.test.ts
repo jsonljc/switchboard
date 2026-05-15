@@ -491,12 +491,14 @@ describe("ContextBuilder", () => {
     expect(result.injectedPatternIds).toEqual(["p1"]);
   });
 
-  it("pilotMode=true surfaces facts at the lowered DB threshold ('pilot deployments learn faster')", async () => {
-    // Locks in the documented side-effect of the DB-threshold lowering:
-    // facts at sourceCount=2, confidence=0.62 (below steady-state) reach
-    // learnedFacts in pilot mode because the listHighConfidence call uses
-    // the relaxed thresholds. Guards future refactors from silently
-    // re-tightening the fact filter.
+  // DOCUMENTED SIDE-EFFECT (not a plan-level invariant):
+  // The PR-3.2 plan defines pilot-mode invariants only for pattern surfacing.
+  // The DB-side listHighConfidence threshold lowering is an implementation
+  // choice that *also* widens learnedFacts as a side-effect. This test pins
+  // that side-effect so it's visible, not silent — a future revision that
+  // intentionally narrows facts back to steady-state (e.g. by splitting the
+  // DB query) should update this test alongside the change.
+  it("[side-effect] pilotMode=true currently widens learnedFacts at the lowered DB threshold", async () => {
     deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
       {
         id: "f1",
