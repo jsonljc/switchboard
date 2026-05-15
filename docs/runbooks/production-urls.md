@@ -14,8 +14,8 @@
 
 ## Render region
 
-- **Chosen region:** `<TBD>`
-- **Rationale:** <fill in: closest to primary pilot users + webhook traffic per spec §3>
+- **Chosen region:** `oregon` (pinned in `render.yaml`, 2026-05-15)
+- **Rationale:** Defensible US default — Render's most established region, full service-type parity (Web Service, Postgres, KeyValue), acceptable Meta-webhook latency for pilot scale. Re-evaluate per spec §3 if pilot users cluster outside US West.
 
 ## Webhook callback URLs (registered with providers)
 
