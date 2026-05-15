@@ -6,8 +6,10 @@ import {
   executeDailySignalHealthCheck,
   createWeeklyAuditDispatcher,
   createDailyCheckDispatcher,
+  executeRileyOutcomeAttributionDispatch,
   type CronDependencies,
   type SignalHealthCronDependencies,
+  type RileyOutcomeAttributionDispatchDeps,
 } from "../inngest-functions.js";
 import type { SignalHealthReport } from "../signal-health-checker.js";
 
@@ -438,5 +440,50 @@ describe("createDailyCheckDispatcher", () => {
         data: expect.objectContaining({ trigger: "daily_check" }),
       }),
     );
+  });
+});
+
+describe("executeRileyOutcomeAttributionDispatch", () => {
+  function makeRileyStep() {
+    return {
+      run: vi.fn((_name: string, fn: () => unknown) => fn()),
+    };
+  }
+
+  it("emits one riley.outcome.attribute event per Riley-active org", async () => {
+    const step = makeRileyStep();
+    const sendEvent = vi.fn().mockResolvedValue(undefined);
+    const deps: RileyOutcomeAttributionDispatchDeps = {
+      listRileyOrgs: vi.fn().mockResolvedValue(["org-1", "org-2"]),
+      sendEvent,
+    };
+
+    const result = await executeRileyOutcomeAttributionDispatch(step as never, deps);
+
+    expect(deps.listRileyOrgs).toHaveBeenCalledTimes(1);
+    expect(sendEvent).toHaveBeenCalledTimes(2);
+    expect(sendEvent).toHaveBeenNthCalledWith(1, {
+      name: "riley.outcome.attribute",
+      data: { orgId: "org-1" },
+    });
+    expect(sendEvent).toHaveBeenNthCalledWith(2, {
+      name: "riley.outcome.attribute",
+      data: { orgId: "org-2" },
+    });
+    expect(result).toEqual({ dispatched: 2 });
+  });
+
+  it("returns dispatched: 0 when there are no Riley-active orgs", async () => {
+    const step = makeRileyStep();
+    const sendEvent = vi.fn().mockResolvedValue(undefined);
+    const deps: RileyOutcomeAttributionDispatchDeps = {
+      listRileyOrgs: vi.fn().mockResolvedValue([]),
+      sendEvent,
+    };
+
+    const result = await executeRileyOutcomeAttributionDispatch(step as never, deps);
+
+    expect(sendEvent).not.toHaveBeenCalled();
+    expect(result).toEqual({ dispatched: 0 });
   });
 });
