@@ -79,11 +79,6 @@ export const scopedKeys = (orgId: string) => ({
     list: () => [orgId, "inbox", "list"] as const,
     count: () => [orgId, "inbox", "count"] as const,
   },
-  operatorConfig: {
-    all: () => [orgId, "operatorConfig"] as const,
-    current: () => [orgId, "operatorConfig", "current"] as const,
-    autonomy: () => [orgId, "operatorConfig", "autonomy"] as const,
-  },
   knowledge: {
     all: () => [orgId, "knowledge"] as const,
     documents: (agentId?: string) => [orgId, "knowledge", "documents", agentId] as const,
