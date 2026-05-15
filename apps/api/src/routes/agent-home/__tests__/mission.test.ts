@@ -178,7 +178,7 @@ describe("buildRileyMissionResponse", () => {
     roster: {
       id: "ros-riley-1",
       organizationId: "org-1",
-      agentRole: "ad-optimizer",
+      agentRole: "optimizer",
       displayName: "Riley",
       description: "",
       status: "active",
@@ -343,7 +343,7 @@ describe("mission route", () => {
       roster: {
         id: "ros-riley-1",
         organizationId: "org-1",
-        agentRole: "ad-optimizer",
+        agentRole: "optimizer",
         displayName: "Riley",
         description: "",
         status: "active",

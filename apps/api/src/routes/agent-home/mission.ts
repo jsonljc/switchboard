@@ -250,7 +250,7 @@ export const missionRoute: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      const rosterRole = agentId === "alex" ? "responder" : "ad-optimizer";
+      const rosterRole = agentId === "alex" ? "responder" : "optimizer";
       const [roster, org, connections, managedChannels] = await Promise.all([
         app.prisma.agentRoster.findFirst({
           where: { organizationId: orgId, agentRole: rosterRole },
