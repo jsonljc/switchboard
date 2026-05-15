@@ -1,4 +1,7 @@
 // apps/dashboard/src/components/cockpit/activity-stream.tsx
+"use client";
+
+import { useState, useCallback } from "react";
 import { T } from "./tokens";
 import { ActivityRow as ActivityRowComponent } from "./activity-row";
 import type { ActivityRow } from "./types";
@@ -21,7 +24,21 @@ function matchesFilter(row: ActivityRow, filter: ActivityFilter): boolean {
   return true;
 }
 
+function rowKey(row: ActivityRow, index: number): string {
+  return row.id ?? `${row.time}-${row.head}-${index}`;
+}
+
 export function ActivityStream({ rows, filter, setFilter, compact = false }: ActivityStreamProps) {
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const toggle = useCallback((key: string) => {
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   const filtered = rows.filter((r) => matchesFilter(r, filter));
   return (
     <section
@@ -71,15 +88,18 @@ export function ActivityStream({ rows, filter, setFilter, compact = false }: Act
         </div>
       </div>
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {filtered.map((row, i) => (
-          <ActivityRowComponent
-            key={`${row.time}-${row.head}-${i}`}
-            item={row}
-            open={false}
-            toggle={() => {}}
-            compact={compact}
-          />
-        ))}
+        {filtered.map((row, i) => {
+          const key = rowKey(row, i);
+          return (
+            <ActivityRowComponent
+              key={key}
+              item={row}
+              open={open.has(key)}
+              toggle={() => toggle(key)}
+              compact={compact}
+            />
+          );
+        })}
         {filtered.length === 0 && (
           <li
             style={{
