@@ -81,51 +81,45 @@ describe("POST /api/recommendations/:id/act — PlatformIngress migration (Phase
     expect(last!.outcome).toBe("failed");
   });
 
-  it("idempotency replay: PlatformIngress deduplicates on same key — second submit returns cached result", async () => {
+  it("idempotency path: same Idempotency-Key + payload returns the cached result on second call", async () => {
     const rec = await seedQueueRec();
     const idempotencyKey = `test-idempotency-key-rec-${rec.id}`;
 
-    // Exercise PlatformIngress idempotency directly (bypasses the HTTP-layer
-    // idempotency middleware, which has a fingerprint-ordering issue on POST routes
-    // with route-scoped auth setup — orgId is set by route preHandler after global
-    // idempotency preHandler fires, causing a fingerprint mismatch on replay).
-    // PlatformIngress.submit deduplicates via traceStore.getByIdempotencyKey — this
-    // is the canonical platform-level idempotency guarantee.
-    const first = await app.platformIngress.submit({
-      organizationId: "default",
-      actor: { id: "default", type: "user" },
-      intent: "operator.act_on_recommendation",
-      parameters: { recommendationId: rec.id, action: "primary" },
-      trigger: "api",
-      surface: { surface: "api" },
-      idempotencyKey,
+    // The idempotency middleware fingerprint uses organizationIdFromAuth and
+    // principalIdFromAuth, which are set by the route's preHandler AFTER the
+    // global idempotency preHandler fires. Supplying x-organization-id and
+    // x-principal-id ensures the fingerprint is stable across both calls (the
+    // middleware falls back to these headers when the auth fields are not yet set).
+    const commonHeaders = {
+      "content-type": "application/json",
+      "idempotency-key": idempotencyKey,
+      "x-organization-id": "default",
+      "x-principal-id": "default",
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/api/recommendations/${rec.id}/act`,
+      headers: commonHeaders,
+      payload: { action: "primary" },
     });
+    expect(first.statusCode).toBe(200);
+    const firstBody = first.json() as {
+      recommendation: { status: string; actedAt: string | null };
+    };
+    expect(firstBody.recommendation.status).toBe("acted");
 
-    expect(first.ok).toBe(true);
-    if (!first.ok) throw new Error("first submit failed");
-    expect(first.result.outcome).toBe("completed");
-
-    // Second submit with same key — the recommendation is already "acted" but
-    // PlatformIngress should return the cached trace, not re-execute the handler.
-    const second = await app.platformIngress.submit({
-      organizationId: "default",
-      actor: { id: "default", type: "user" },
-      intent: "operator.act_on_recommendation",
-      parameters: { recommendationId: rec.id, action: "primary" },
-      trigger: "api",
-      surface: { surface: "api" },
-      idempotencyKey,
+    const second = await app.inject({
+      method: "POST",
+      url: `/api/recommendations/${rec.id}/act`,
+      headers: commonHeaders,
+      payload: { action: "primary" },
     });
-
-    expect(second.ok).toBe(true);
-    if (!second.ok) throw new Error("second submit failed");
-    // Cached replay returns same workUnitId (not a new execution).
-    expect(second.result.workUnitId).toBe(first.result.workUnitId);
-    expect(second.result.outcome).toBe("completed");
-
-    // WorkTrace was only persisted once (first call) — second was a cache hit.
-    const last = app.lastIngressTrace;
-    expect(last?.intent).toBe("operator.act_on_recommendation");
-    expect(last?.outcome).toBe("completed");
+    expect(second.statusCode).toBe(200);
+    const secondBody = second.json() as {
+      recommendation: { status: string; actedAt: string | null };
+    };
+    // Cached replay returns the exact same recommendation payload (actedAt unchanged).
+    expect(secondBody.recommendation.actedAt).toBe(firstBody.recommendation.actedAt);
   });
 });
