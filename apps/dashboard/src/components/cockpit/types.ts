@@ -75,40 +75,7 @@ export type RileyApprovalView = ApprovalViewBase & {
 
 export type ApprovalView = AlexApprovalView | RileyApprovalView;
 
-export interface ThreadMessage {
-  from: string;
-  text: string;
-}
-
-export type ActivityKind =
-  | "booked"
-  | "qualified"
-  | "replied"
-  | "sent"
-  | "started"
-  | "connected"
-  | "waiting"
-  | "escalated"
-  | "passed"
-  | "watching"
-  | "reviewing"
-  | "paused"
-  | "scaled"
-  | "rotated"
-  | "shifted"
-  | "restructured"
-  | "alert";
-
-export interface ActivityRow {
-  time: string;
-  kind: ActivityKind;
-  head: string;
-  body?: string;
-  who?: string;
-  preview?: ThreadMessage[];
-  replyable?: boolean;
-  tag?: string;
-}
+export type { ActivityKind, ActivityRow, ThreadMessage } from "@switchboard/schemas";
 
 // ─── A.3 KPI Strip + ROI Bar ──────────────────────────────────
 

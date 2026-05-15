@@ -55,3 +55,11 @@ export type {
 } from "./metrics-types.js";
 export { buildWeekContext, type WeekContext } from "./metrics-buckets.js";
 export { getAgentTargets, type AgentTargets } from "./targets.js";
+export type { ActivityPreviewReader, ThreadMessageRecord } from "./activity-preview-reader.js";
+export { extractContactRef } from "./contact-snapshot-extractors.js";
+export type { ContactRef } from "./contact-snapshot-extractors.js";
+export { translateAuditToCockpitActivity } from "./cockpit-activity-translator.js";
+export type {
+  AuditEntryForTranslator,
+  TranslateAuditToCockpitActivityArgs,
+} from "./cockpit-activity-translator.js";

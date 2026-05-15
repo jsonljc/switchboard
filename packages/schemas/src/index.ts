@@ -14,6 +14,9 @@ export * from "./cartridge.js";
 export * from "./cartridge-types.js";
 export * from "./audit.js";
 
+// Cockpit activity wire shape (ActivityKindSchema, ThreadMessageSchema, ActivityRowSchema)
+export * from "./cockpit-activity.js";
+
 // Chat types
 export * from "./chat.js";
 

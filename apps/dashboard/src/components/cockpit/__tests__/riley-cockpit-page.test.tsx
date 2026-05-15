@@ -83,6 +83,11 @@ vi.mock("@/components/ui/use-toast", () => ({
   useToast: () => ({ toast }),
 }));
 
+// ActivityRow now calls useRouter() for the "Tell Alex about" deep-link.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 // ---------------------------------------------------------------------------
 // Static imports (used by B.1 tests)
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import type { AuditEntry, Policy } from "@switchboard/schemas";
+import type { AuditEntry, Policy, ActivityRow } from "@switchboard/schemas";
 import type {
   PendingApproval,
   ApprovalDetail,
@@ -345,6 +345,19 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   async getMission(agentKey: string): Promise<MissionAggregatorResponse> {
     return this.request<MissionAggregatorResponse>(
       `/api/dashboard/agents/${encodeURIComponent(agentKey)}/mission`,
+    );
+  }
+
+  async getAgentActivityCockpit(
+    agentKey: string,
+    opts: { limit?: number; expandPreview?: boolean } = {},
+  ): Promise<{ rows: ActivityRow[] }> {
+    const qs = new URLSearchParams();
+    if (typeof opts.limit === "number") qs.set("limit", String(opts.limit));
+    if (opts.expandPreview === false) qs.set("expandPreview", "false");
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return this.request<{ rows: ActivityRow[] }>(
+      `/api/dashboard/agents/${encodeURIComponent(agentKey)}/activity${suffix}`,
     );
   }
 
