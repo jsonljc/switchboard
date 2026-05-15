@@ -168,6 +168,126 @@ describe("Approvals API", () => {
       expect(body.approvals.length).toBeGreaterThanOrEqual(1);
       expect(body.approvals[0].status).toBe("pending");
     });
+
+    it("forwards payload.kind/body/quote/quoteFrom when present (A.7c)", async () => {
+      // Seed an approval directly via the in-memory store with a typed payload.
+      const now = new Date();
+      const futureDate = new Date(now.getTime() + 60 * 60 * 1000);
+      await app.storageContext.approvals.save({
+        request: {
+          id: "appr_reg",
+          actionId: "act_reg",
+          envelopeId: "env_reg",
+          conversationId: null,
+          summary: "Regulatory review required",
+          riskCategory: "critical",
+          bindingHash: "h-reg",
+          evidenceBundle: {
+            decisionTrace: null,
+            contextSnapshot: {},
+            identitySnapshot: {},
+          },
+          suggestedButtons: [{ label: "Approve", action: "approve" }],
+          approvers: ["reviewer_1"],
+          fallbackApprover: null,
+          status: "pending",
+          respondedBy: null,
+          respondedAt: null,
+          patchValue: null,
+          expiresAt: futureDate,
+          expiredBehavior: "deny",
+          createdAt: now,
+          quorum: null,
+          payload: {
+            kind: "regulatory",
+            body: "Patient asked about FDA approval status.",
+            quote: "Our laser treatment is FDA approved.",
+            quoteFrom: "Alex (draft)",
+          },
+        },
+        state: {
+          status: "pending",
+          expiresAt: futureDate,
+          respondedAt: null,
+          respondedBy: null,
+          patchValue: null,
+          quorum: null,
+          version: 1,
+        },
+        envelopeId: "env_reg",
+        organizationId: "default",
+      });
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/approvals/pending",
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      const regulatory = body.approvals.find((a: { id: string }) => a.id === "appr_reg");
+      expect(regulatory).toBeDefined();
+      expect(regulatory.kind).toBe("regulatory");
+      expect(regulatory.body).toBe("Patient asked about FDA approval status.");
+      expect(regulatory.quote).toBe("Our laser treatment is FDA approved.");
+      expect(regulatory.quoteFrom).toBe("Alex (draft)");
+    });
+
+    it("omits kind/body when payload absent (legacy approval)", async () => {
+      // Seed a legacy approval (no payload).
+      const now = new Date();
+      const futureDate = new Date(now.getTime() + 60 * 60 * 1000);
+      await app.storageContext.approvals.save({
+        request: {
+          id: "appr_legacy",
+          actionId: "act_legacy",
+          envelopeId: "env_legacy",
+          conversationId: null,
+          summary: "Pricing change",
+          riskCategory: "medium",
+          bindingHash: "h-leg",
+          evidenceBundle: {
+            decisionTrace: null,
+            contextSnapshot: {},
+            identitySnapshot: {},
+          },
+          suggestedButtons: [{ label: "Approve", action: "approve" }],
+          approvers: ["reviewer_1"],
+          fallbackApprover: null,
+          status: "pending",
+          respondedBy: null,
+          respondedAt: null,
+          patchValue: null,
+          expiresAt: futureDate,
+          expiredBehavior: "deny",
+          createdAt: now,
+          quorum: null,
+        },
+        state: {
+          status: "pending",
+          expiresAt: futureDate,
+          respondedAt: null,
+          respondedBy: null,
+          patchValue: null,
+          quorum: null,
+          version: 1,
+        },
+        envelopeId: "env_legacy",
+        organizationId: "default",
+      });
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/approvals/pending",
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      const legacy = body.approvals.find((a: { id: string }) => a.id === "appr_legacy");
+      expect(legacy).toBeDefined();
+      expect(legacy.kind).toBeUndefined();
+      expect(legacy.body).toBeUndefined();
+      expect(legacy.quote).toBeUndefined();
+      expect(legacy.quoteFrom).toBeUndefined();
+    });
   });
 
   describe("GET /api/approvals/:id", () => {
