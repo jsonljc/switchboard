@@ -1,12 +1,16 @@
 import { transitionOpportunityStage, OpportunityNotFoundError } from "@switchboard/core/lifecycle";
-import type { OpportunityStore } from "@switchboard/core";
+import type { OpportunityStore, RecommendationStore } from "@switchboard/core";
+import { actOnRecommendation } from "@switchboard/core";
 import {
   OperatorMutationMode,
   type ExecutionModeRegistry,
   type IntentRegistry,
   type OperatorMutationHandler,
 } from "@switchboard/core/platform";
-import { TransitionOpportunityStageParametersSchema } from "../routes/operator-intents-schemas.js";
+import {
+  TransitionOpportunityStageParametersSchema,
+  ActOnRecommendationParametersSchema,
+} from "../routes/operator-intents-schemas.js";
 
 /**
  * Wires operator-direct intents (Wave 2 Phase 1b migrations) into the
@@ -24,10 +28,12 @@ interface OperatorIntentsBootstrapDeps {
   intentRegistry: IntentRegistry;
   modeRegistry: ExecutionModeRegistry;
   opportunityStore: OpportunityStore;
+  recommendationStore?: RecommendationStore;
   logger?: { info(msg: string): void };
 }
 
 export const TRANSITION_OPPORTUNITY_STAGE_INTENT = "operator.transition_opportunity_stage";
+export const ACT_ON_RECOMMENDATION_INTENT = "operator.act_on_recommendation";
 
 /**
  * Error codes returned by operator-mutation handlers. Routes and handlers
@@ -36,6 +42,8 @@ export const TRANSITION_OPPORTUNITY_STAGE_INTENT = "operator.transition_opportun
  */
 export const OPERATOR_INTENT_ERROR_CODES = {
   OPPORTUNITY_NOT_FOUND: "OPPORTUNITY_NOT_FOUND",
+  RECOMMENDATION_NOT_FOUND: "RECOMMENDATION_NOT_FOUND",
+  RECOMMENDATION_INVALID_ACTION: "RECOMMENDATION_INVALID_ACTION",
 } as const;
 
 export function buildTransitionOpportunityStageHandler(
@@ -76,12 +84,59 @@ export function buildTransitionOpportunityStageHandler(
   };
 }
 
+export function buildActOnRecommendationHandler(
+  recommendationStore: RecommendationStore,
+): OperatorMutationHandler {
+  return {
+    async execute(workUnit) {
+      const params = ActOnRecommendationParametersSchema.parse(workUnit.parameters);
+      try {
+        const result = await actOnRecommendation(recommendationStore, {
+          recommendationId: params.recommendationId,
+          orgId: workUnit.organizationId,
+          actor: { principalId: workUnit.actor.id, type: "operator" },
+          action: params.action,
+          note: params.note,
+        });
+        return {
+          outcome: "completed" as const,
+          summary: `Recommendation ${params.recommendationId} acted on with ${params.action}`,
+          outputs: { result },
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("surface accepts")) {
+          return {
+            outcome: "failed" as const,
+            summary: "Invalid action for recommendation surface",
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.RECOMMENDATION_INVALID_ACTION,
+              message: msg,
+            },
+          };
+        }
+        // "not found" and "org mismatch" are made unreachable by the pre-flight
+        // checks in the route. If they surface here despite that, treat as
+        // unexpected — rethrow so the global handler returns a scrubbed 500.
+        throw err;
+      }
+    },
+  };
+}
+
 export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): void {
-  const { intentRegistry, modeRegistry, opportunityStore, logger } = deps;
+  const { intentRegistry, modeRegistry, opportunityStore, recommendationStore, logger } = deps;
 
   const handlers = new Map<string, OperatorMutationHandler>([
     [TRANSITION_OPPORTUNITY_STAGE_INTENT, buildTransitionOpportunityStageHandler(opportunityStore)],
   ]);
+
+  if (recommendationStore) {
+    handlers.set(
+      ACT_ON_RECOMMENDATION_INTENT,
+      buildActOnRecommendationHandler(recommendationStore),
+    );
+  }
 
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
@@ -101,5 +156,26 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     retryable: false,
   });
 
-  logger?.info("Operator mutation mode registered with 1 operator intent");
+  if (recommendationStore) {
+    intentRegistry.register({
+      intent: ACT_ON_RECOMMENDATION_INTENT,
+      defaultMode: "operator_mutation",
+      allowedModes: ["operator_mutation"],
+      executor: { mode: "operator_mutation" },
+      parameterSchema: {},
+      mutationClass: "write",
+      budgetClass: "cheap",
+      approvalPolicy: "none",
+      approvalMode: "system_auto_approved",
+      idempotent: true,
+      allowedTriggers: ["api"],
+      timeoutMs: 30_000,
+      retryable: false,
+    });
+  }
+
+  const intentCount = recommendationStore ? 2 : 1;
+  logger?.info(
+    `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
+  );
 }

@@ -167,8 +167,6 @@
 # genuine mutator that should eventually route through PlatformIngress.submit;
 # remediation is intentionally out of PR-2 scope (CI enforcement first).
 
-- path: "apps/api/src/routes/recommendations.ts"
-  reason: "Temporarily justified: POST /:id/act calls actOnRecommendation — operator acting on an AI recommendation is a governed mutator with revenue impact. Follow-up: route-governance-cleanup (#562)."
 - path: "apps/api/src/routes/lifecycle-disqualifications.ts"
   reason: "Temporarily justified: confirm/dismiss endpoints call DisqualificationResolutionHook which advances lifecycle state affecting lead qualification and revenue. Follow-up: route-governance-cleanup (#562)."
 - path: "apps/api/src/routes/dashboard-opportunities.ts"
