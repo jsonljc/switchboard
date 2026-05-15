@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { T } from "./tokens";
+import { T, type AccentTokens } from "./tokens";
 import type { RoiBar } from "./types";
 
 const eyebrowStyle: CSSProperties = {
@@ -16,13 +16,15 @@ const comparatorBaseStyle: CSSProperties = {
   fontWeight: 600,
 };
 
-export interface AccentTokens {
-  base: string;
-  deep: string;
-  soft: string;
-  paper: string;
-}
-
+// `accent?:` (optional, no default) — not the `accent = ALEX_*_ACCENT`
+// default-value pattern used by <ApprovalCard>. Reason: <ROIBar>'s two render
+// modes (degraded chip + live fill) have asymmetric Alex defaults — degraded
+// chip uses T.hair/T.paper (neutral white), live mode uses T.amberSoft/T.amber
+// (amber). The `soft` slot would need to be both T.hair (for degraded) and
+// T.amberSoft (for live) at the same time, which a single AccentTokens
+// constant can't express without changing Alex's rendered look. Keeping the
+// per-site ternary preserves Alex byte-for-byte while letting Riley pass a
+// uniform clay accent.
 interface ROIBarProps {
   roi: RoiBar;
   accent?: AccentTokens;

@@ -1,8 +1,8 @@
 "use client";
 
-import { T } from "./tokens";
+import { T, type AccentTokens } from "./tokens";
 import { KpiTile } from "./kpi-tile";
-import { ROIBar, type AccentTokens } from "./roi-bar";
+import { ROIBar } from "./roi-bar";
 import {
   legacyTiles,
   legacyRoi,

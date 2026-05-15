@@ -11,7 +11,7 @@ export function metricsViewModelToRileyKpiData(vm: MetricsViewModelWire): Cockpi
   if (!vm.tiles || !vm.roi) return null;
   return {
     range: `This week · ${vm.folioRange}`,
-    tiles: [...vm.tiles],
+    tiles: vm.tiles,
     roi: vm.roi,
   };
 }

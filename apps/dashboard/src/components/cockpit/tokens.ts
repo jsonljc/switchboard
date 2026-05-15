@@ -18,3 +18,13 @@ export const T = {
 } as const;
 
 export type CockpitToken = keyof typeof T;
+
+// Shared accent shape for per-agent cockpit theming. Used by <ApprovalCard>
+// (B.3) and <ROIBar> / <KPIStrip> (B.2b). Each agent exports its own
+// `*_ACCENT` constant of this shape (e.g. ALEX_APPROVAL_ACCENT, RILEY_ACCENT).
+export interface AccentTokens {
+  base: string;
+  deep: string;
+  soft: string;
+  paper: string;
+}
