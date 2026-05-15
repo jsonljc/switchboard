@@ -1,0 +1,81 @@
+# API-only Dockerfile for Render.
+#
+# The repo's root Dockerfile is a multi-stage build with targets `api`, `chat`,
+# `dashboard`, and `mcp-server`. Render's Blueprint v2 spec does NOT support a
+# multi-stage `--target` selection field as of 2026-05-15 (verified against
+# https://render.com/docs/blueprint-spec); each web service therefore points at
+# its own per-service Dockerfile. The root Dockerfile is retained for local
+# integration testing via docker-compose.prod.yml.
+
+# ---- Base stage: install dependencies ----
+FROM node:20-slim AS base
+
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+WORKDIR /app
+
+# Copy dependency manifests first (optimizes Docker layer caching)
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+COPY packages/schemas/package.json packages/schemas/
+COPY packages/core/package.json packages/core/
+COPY packages/db/package.json packages/db/
+COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
+COPY packages/creative-pipeline/package.json packages/creative-pipeline/
+COPY packages/ad-optimizer/package.json packages/ad-optimizer/
+COPY packages/sdk/package.json packages/sdk/
+COPY apps/api/package.json apps/api/
+COPY apps/chat/package.json apps/chat/
+COPY apps/mcp-server/package.json apps/mcp-server/
+COPY apps/dashboard/package.json apps/dashboard/
+
+RUN pnpm install --frozen-lockfile
+
+# ---- Build stage: compile TypeScript ----
+FROM base AS build
+
+COPY . .
+RUN pnpm db:generate
+RUN pnpm build
+
+# ---- Production stage: API server ----
+FROM node:20-slim AS api
+
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+WORKDIR /app
+
+COPY --chown=node:node --from=build /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/package.json /app/turbo.json ./
+
+COPY --chown=node:node --from=build /app/packages/schemas/package.json packages/schemas/package.json
+COPY --chown=node:node --from=build /app/packages/schemas/dist/ packages/schemas/dist/
+
+COPY --chown=node:node --from=build /app/packages/core/package.json packages/core/package.json
+COPY --chown=node:node --from=build /app/packages/core/dist/ packages/core/dist/
+
+COPY --chown=node:node --from=build /app/packages/db/package.json packages/db/package.json
+COPY --chown=node:node --from=build /app/packages/db/dist/ packages/db/dist/
+COPY --chown=node:node --from=build /app/packages/db/prisma/ packages/db/prisma/
+
+COPY --chown=node:node --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
+COPY --chown=node:node --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
+
+COPY --chown=node:node --from=build /app/packages/sdk/package.json packages/sdk/package.json
+COPY --chown=node:node --from=build /app/packages/sdk/dist/ packages/sdk/dist/
+
+COPY --chown=node:node --from=build /app/packages/creative-pipeline/package.json packages/creative-pipeline/package.json
+COPY --chown=node:node --from=build /app/packages/creative-pipeline/dist/ packages/creative-pipeline/dist/
+
+COPY --chown=node:node --from=build /app/packages/ad-optimizer/package.json packages/ad-optimizer/package.json
+COPY --chown=node:node --from=build /app/packages/ad-optimizer/dist/ packages/ad-optimizer/dist/
+
+COPY --chown=node:node --from=build /app/apps/api/package.json apps/api/package.json
+COPY --chown=node:node --from=build /app/apps/api/dist/ apps/api/dist/
+COPY --chown=node:node --from=build /app/skills/ skills/
+
+RUN pnpm install --frozen-lockfile --prod
+
+USER node
+
+EXPOSE 3000
+ENV NODE_ENV=production
+CMD ["node", "apps/api/dist/server.js"]
