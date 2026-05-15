@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -49,6 +49,15 @@ const metricsState: {
 };
 vi.mock("@/hooks/use-agent-metrics", () => ({
   useAgentMetrics: () => metricsState,
+}));
+
+// B.2a mock — use-agent-mission.
+import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
+
+let missionData: MissionAggregatorResponse | undefined = undefined;
+
+vi.mock("@/hooks/use-agent-mission", () => ({
+  useAgentMission: () => ({ data: missionData, isLoading: false, isError: false }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -402,5 +411,94 @@ describe("RileyCockpitPage — B.2b KPI strip", () => {
     wrap(<RileyCockpitPage />);
     const pill = screen.getByTestId("roi-comparator");
     expect(pill).toHaveStyle({ background: "#F6E7DE" }); // RILEY_ACCENT.paper
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B.2a tests — mission popover wiring
+// ---------------------------------------------------------------------------
+
+const RILEY_MISSION_DATA: MissionAggregatorResponse = {
+  agentKey: "riley",
+  displayName: "Riley",
+  mission: {
+    role: "Ad optimizer · score, recommend, never act without your approval",
+    pipeline: "Ad sets · all campaigns",
+    brand: "HotPod Yoga · —",
+    channels: [{ kind: "meta-ads", label: "Meta Ads", status: "ok" }],
+    rules: null,
+  },
+  composerPlaceholder: "Tell Riley what to do — coming soon",
+  commands: [],
+  targets: { avgValueCents: 12000, targetCpbCents: 2500, roasSource: "deterministic" },
+  setup: [
+    { key: "meta", done: true },
+    { key: "rules", done: true },
+  ],
+};
+
+describe("RileyCockpitPage — B.2a mission popover", () => {
+  beforeEach(() => {
+    rileyApprovalsState.approvals = [];
+    rileyActivityState.rows = [];
+    metricsState.data = null;
+    metricsState.isLoading = false;
+    metricsState.isError = false;
+    metricsState.error = null;
+  });
+
+  it("keeps the subtitle non-interactive while mission data is undefined", () => {
+    missionData = undefined;
+    wrap(<RileyCockpitPage />);
+    // The subtitle text is rendered as plain text, not a button.
+    expect(screen.queryByRole("button", { name: /Optimizing Meta Ads/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Optimizing Meta Ads/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("makes the subtitle clickable once mission data loads and toggles the popover", async () => {
+    missionData = RILEY_MISSION_DATA;
+    wrap(<RileyCockpitPage />);
+    const subtitle = await screen.findByRole("button", { name: /Optimizing Meta Ads/i });
+    fireEvent.click(subtitle);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: /Riley mission/i })).toBeInTheDocument(),
+    );
+    // Click again — popover closes.
+    fireEvent.click(subtitle);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /Riley mission/i })).not.toBeInTheDocument(),
+    );
+    missionData = undefined;
+  });
+
+  it("renders Riley-shaped mission rows inside the popover", async () => {
+    missionData = RILEY_MISSION_DATA;
+    wrap(<RileyCockpitPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Optimizing Meta Ads/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: /Riley mission/i })).toBeInTheDocument(),
+    );
+    // Each eyebrow appears verbatim.
+    expect(
+      screen.getByText(/Ad optimizer · score, recommend, never act without your approval/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Ad sets · all campaigns/i)).toBeInTheDocument();
+    expect(screen.getByText(/HotPod Yoga · —/i)).toBeInTheDocument();
+    // No RULES row for Riley (mission.rules is null).
+    expect(screen.queryByText(/^RULES$/)).not.toBeInTheDocument();
+    missionData = undefined;
+  });
+
+  it("does NOT render the Day-1 EmptyState (Riley uses synthetic activity rows for cold state)", () => {
+    missionData = {
+      ...RILEY_MISSION_DATA,
+      setup: [
+        { key: "meta", done: false, primary: true },
+        { key: "rules", done: false },
+      ],
+    };
+    wrap(<RileyCockpitPage />);
+    expect(screen.queryByTestId("cockpit-empty-state")).not.toBeInTheDocument();
+    missionData = undefined;
   });
 });

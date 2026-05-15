@@ -10,6 +10,7 @@ import type { ApprovalAccent } from "./approval-card";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { ComposerPlaceholder } from "./composer-placeholder";
 import { KPIStrip } from "./kpi-strip";
+import { MissionPopover } from "./mission-popover";
 import {
   RILEY_ACCENT,
   RILEY_COMPOSER_PLACEHOLDER,
@@ -23,6 +24,7 @@ import { useRileyApprovals } from "@/hooks/use-riley-approvals";
 import { useRileyStatus } from "@/hooks/use-riley-status";
 import { useRileyActivity } from "@/hooks/use-riley-activity";
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
+import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
 import { useToast } from "@/components/ui/use-toast";
 import { useHalt } from "@/components/layout/halt/halt-context";
@@ -81,7 +83,9 @@ export function RileyCockpitPage() {
   const statusKey = useRileyStatus();
   const { rows: activityRows } = useRileyActivity();
   const metricsQ = useAgentMetrics("riley");
+  const mission = useAgentMission("riley");
   const [filter, setFilter] = useState<ActivityFilter>("all");
+  const [missionOpen, setMissionOpen] = useState(false);
 
   // Adapter returns null when the wire VM is missing tiles or roi — the page
   // mount gates on this and renders no KPI strip rather than falling back to
@@ -105,15 +109,27 @@ export function RileyCockpitPage() {
     >
       <Topbar paletteEnabled={false} compact tabs={RILEY_TABS} />
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <Identity
-          statusKey={statusKey}
-          halted={haltCtx.halted}
-          subtitle={RILEY_MISSION_SUBTITLE}
-          line={null}
-          onHaltToggle={haltCtx.toggleHalt}
-          colorFor={statusColor}
-          pulseFor={statusPulse}
-        />
+        <div style={{ position: "relative" }}>
+          <Identity
+            statusKey={statusKey}
+            halted={haltCtx.halted}
+            subtitle={RILEY_MISSION_SUBTITLE}
+            line={null}
+            onHaltToggle={haltCtx.toggleHalt}
+            colorFor={statusColor}
+            pulseFor={statusPulse}
+            missionInteractive={!!mission.data}
+            onOpenMission={() => setMissionOpen((o) => !o)}
+          />
+          {mission.data ? (
+            <MissionPopover
+              open={missionOpen}
+              onClose={() => setMissionOpen(false)}
+              mission={mission.data.mission}
+              agentLabel="Riley"
+            />
+          ) : null}
+        </div>
         {kpis ? (
           <KPIStrip kpis={kpis} collapsed={approvals.length > 0} accent={RILEY_ACCENT} />
         ) : null}
