@@ -5,6 +5,8 @@ import {
   RILEY_MISSION_SUBTITLE,
   statusColor,
   statusPulse,
+  RILEY_COMPOSER_PLACEHOLDER,
+  RILEY_COMMANDS,
 } from "../riley-config";
 
 describe("riley-config", () => {
@@ -43,5 +45,30 @@ describe("riley-config", () => {
     expect(statusPulse("IDLE")).toBe(false);
     expect(statusPulse("HALTED")).toBe(false);
     expect(statusPulse("REVIEWING")).toBe(true);
+  });
+
+  it("RILEY_COMPOSER_PLACEHOLDER carries the locked Riley voice placeholder", () => {
+    expect(RILEY_COMPOSER_PLACEHOLDER).toBe(
+      "Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…",
+    );
+  });
+
+  it("RILEY_COMMANDS exports the locked Riley command catalog grouped into control / thread / rules / nav", () => {
+    const ids = RILEY_COMMANDS.map((c) => c.id);
+    expect(ids).toEqual([
+      "open-meta",
+      "open-rules",
+      "open-targets",
+      "pause-1h",
+      "resume",
+      "brief-eod",
+      "cpl-30",
+    ]);
+    const groups = new Set(RILEY_COMMANDS.map((c) => c.group));
+    expect([...groups].sort()).toEqual(["control", "nav", "rules", "thread"]);
+    RILEY_COMMANDS.forEach((c) => {
+      expect(c.label.length).toBeGreaterThan(2);
+      expect(["control", "thread", "rules", "nav"]).toContain(c.group);
+    });
   });
 });
