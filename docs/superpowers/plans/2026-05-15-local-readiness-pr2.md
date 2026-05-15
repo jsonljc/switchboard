@@ -59,7 +59,7 @@ The 7 routes to audit (preliminary first-read characterizations — sharpen by r
 2. `apps/api/src/routes/recommendations.ts` — `POST /:id/act` calls `actOnRecommendation` (governed mutator).
 3. `apps/api/src/routes/meta-deletion.ts` — Meta GDPR `signed_request` deletion webhook (HMAC-verified, no operator).
 4. `apps/api/src/routes/lifecycle-disqualifications.ts` — operator-facing Phase 3b confirm/dismiss; calls `disqualificationHook.confirm/dismiss`.
-5. `apps/api/src/routes/dashboard-reports.ts` — mostly reads; one mutating endpoint (~line 168).
+5. `apps/api/src/routes/dashboard-reports.ts` — one mutating endpoint at ~line 168; verify whether it is governance-relevant state or cache invalidation only.
 6. `apps/api/src/routes/dashboard-opportunities.ts` — `PATCH .../stage` calls `transitionOpportunityStage` (governed mutator).
 7. `apps/api/src/routes/admin-consent.ts` — PDPA consent grant/revoke/clear writes.
 
@@ -276,11 +276,13 @@ EOF
 
 **Files:**
 
-- Modify: `.github/workflows/ci.yml` — add two steps to the `setup` job, AFTER `Run database migrations` and BEFORE `Build`.
+- Modify: `.github/workflows/ci.yml` — add two steps to the `setup` job, AFTER `Build`.
+
+**Why after Build (not after migrate deploy):** `pnpm db:seed` runs `tsx prisma/seed.ts`, which imports from `@switchboard/db` and transitively `@switchboard/schemas`. Those workspace packages are only resolvable after `pnpm build` produces their `dist/` outputs. Placing the seed step between `migrate deploy` and `Build` would fail with `ERR_MODULE_NOT_FOUND` on `packages/db/node_modules/@switchboard/schemas/dist/index.js` (caught + fixed during the original PR-2 execution in commit `ac3307c7`).
 
 - [ ] **Step 1: Add seed + seed-count steps**
 
-Insert AFTER `- name: Run database migrations` and BEFORE `- name: Build` in the `setup` job:
+Insert AFTER `- name: Build` in the `setup` job (i.e. after the build step, before `Cache build artifacts`):
 
 ```yaml
 - name: Seed development data
@@ -391,6 +393,8 @@ Total Δ must be ≤3 min per spec §2.3. If exceeded:
 - Most likely culprit: dashboard build in test job (can take 60–90s).
 - Mitigation 1: move dashboard build to its own parallel job (depends on `setup`, no other dependents). Restores test job to baseline runtime; dashboard build runs in parallel.
 - Mitigation 2: re-check whether `apps/*/.next` cache from setup is being restored correctly — incremental builds are far faster than cold.
+
+If `prisma-work-trace-store-integrity`, `prisma-ledger-storage`, or `prisma-greeting-signal-store` flake (`pg_advisory_xact_lock void` errors), that's the documented pre-existing issue from `feedback_db_integrity_tests_pg_advisory_lock.md` — re-run the affected job, don't dig.
 
 - [ ] **Step 4: Mark PR ready for review**
 
