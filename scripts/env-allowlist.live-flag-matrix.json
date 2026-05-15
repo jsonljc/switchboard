@@ -1,0 +1,25 @@
+{
+  "$schema-note": "Encodes the live-flag decision matrix from docs/superpowers/specs/2026-05-15-local-readiness-and-ci-gates-design.md §1.4. check-live-flag-manifest.ts fails if .env.example drifts from these defaults.",
+  "flags": {
+    "NEXT_PUBLIC_CONTACTS_LIVE": {
+      "default": "true",
+      "rationale": "Backend shipped PR-C2 #486; seed populates rows"
+    },
+    "NEXT_PUBLIC_AUTOMATIONS_LIVE": {
+      "default": "true",
+      "rationale": "Backend shipped #406; seed populates rows"
+    },
+    "NEXT_PUBLIC_ACTIVITY_LIVE": {
+      "default": "true",
+      "rationale": "Audit-log surface; seed backfills entries"
+    },
+    "NEXT_PUBLIC_REPORTS_LIVE": {
+      "default": "false",
+      "rationale": "Launch blocked on Meta Ads Connection + issue #472"
+    },
+    "NEXT_PUBLIC_APPROVALS_LIVE": {
+      "default": "true",
+      "rationale": "First-class architecture per DOCTRINE.md"
+    }
+  }
+}

@@ -15,6 +15,7 @@ import { Campaigns } from "./components/campaigns";
 import { CostVsValue } from "./components/cost-vs-value";
 import { ManagedComparison } from "./components/managed-comparison";
 import { Colophon } from "./components/colophon";
+import { FixtureModeBanner } from "./components/fixture-mode-banner";
 import styles from "./reports.module.css";
 
 // Org and current-user wiring. These are placeholders until session/org context
@@ -67,6 +68,7 @@ export function ReportsPage() {
 
   return (
     <div className={styles.reportsPage}>
+      <FixtureModeBanner />
       <Topbar org={ORG_PLACEHOLDER} currentUser={USER_PLACEHOLDER} liveMode={liveMode} />
 
       <PageHead
