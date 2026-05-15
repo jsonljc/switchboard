@@ -47,9 +47,12 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
     const timezone = await getOrgTimezone(app.prisma, orgId);
 
     // Load AgentRoster config for target values (avgValueCents, targetCpbCents).
+    // agentId is the URL slug ("alex" | "riley"); AgentRoster.agentRole stores
+    // the canonical role ("responder" | "optimizer"). Mirror mission.ts:253.
     // Falls back to empty config when no roster row exists (zero-config tenant).
+    const rosterRole = agentId === "alex" ? "responder" : "optimizer";
     const rosterRow = await app.prisma?.agentRoster.findUnique({
-      where: { organizationId_agentRole: { organizationId: orgId, agentRole: agentId } },
+      where: { organizationId_agentRole: { organizationId: orgId, agentRole: rosterRole } },
       select: { config: true },
     });
     const targets = getAgentTargets(rosterRow ?? { config: {} });
