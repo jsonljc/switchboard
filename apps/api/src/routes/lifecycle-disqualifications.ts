@@ -25,6 +25,7 @@ import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import {
   CONFIRM_DISQUALIFICATION_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
+  OPERATOR_INTENT_ERROR_CODES,
 } from "../bootstrap/operator-intents.js";
 
 export interface LifecycleDisqualificationsRouteDeps {
@@ -159,32 +160,36 @@ export async function registerLifecycleDisqualificationsRoutes(
 
       const { result } = response;
       if (result.outcome === "failed") {
-        // Unexpected handler failure — throw so global error handler returns scrubbed 500.
-        // Map to 404 to preserve prior route behavior for the not_found case
-        // (hook result never reaches here; outcome:failed means an unexpected throw).
-        return reply.code(404).send({ reason: "not_found" });
+        const code = result.error?.code;
+        if (
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_NOT_FOUND ||
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_HOOK_THROW
+        ) {
+          return reply.code(404).send({ reason: "not_found" });
+        }
+        if (code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_CONFLICT) {
+          const reason = (result.outputs as { reason?: string } | undefined)?.reason;
+          return reply.code(409).send({ reason });
+        }
+        // Any other handler failure is an unexpected execution error — throw so
+        // the global error handler returns a scrubbed 500.
+        throw new Error(result.error?.message ?? "Operator mutation execution failed");
       }
 
-      // outcome === "completed" — unwrap hook result from outputs
-      const hookResult = (
-        result.outputs as { result?: { result: string; reason?: string; restoredStatus?: string } }
-      ).result;
+      // outcome === "completed" — unwrap result from outputs
+      const outputs = result.outputs as {
+        result?: string;
+        alreadyApplied?: boolean;
+      };
 
-      if (!hookResult) {
+      if (!outputs?.result) {
         throw new Error("Disqualification confirm handler returned no result output");
       }
 
-      if (hookResult.result === "confirmed") {
-        return reply.code(200).send({ result: "confirmed" });
-      }
-      if (hookResult.result === "already_applied") {
+      if (outputs.alreadyApplied) {
         return reply.code(200).send({ result: "confirmed", alreadyApplied: true });
       }
-      if (hookResult.result === "not_found" || hookResult.result === "capability_disabled") {
-        return reply.code(404).send({ reason: "not_found" });
-      }
-      // conflict — hookResult.reason is "already_booked" | "not_proposed" | "already_disqualified"
-      return reply.code(409).send({ reason: hookResult.reason });
+      return reply.code(200).send({ result: "confirmed" });
     },
   );
 
@@ -252,28 +257,33 @@ export async function registerLifecycleDisqualificationsRoutes(
 
       const { result } = response;
       if (result.outcome === "failed") {
-        return reply.code(404).send({ reason: "not_found" });
+        const code = result.error?.code;
+        if (
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_NOT_FOUND ||
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_HOOK_THROW
+        ) {
+          return reply.code(404).send({ reason: "not_found" });
+        }
+        if (code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_CONFLICT) {
+          const reason = (result.outputs as { reason?: string } | undefined)?.reason;
+          return reply.code(409).send({ reason });
+        }
+        // Any other handler failure is an unexpected execution error — throw so
+        // the global error handler returns a scrubbed 500.
+        throw new Error(result.error?.message ?? "Operator mutation execution failed");
       }
 
-      // outcome === "completed" — unwrap hook result from outputs
-      const hookResult = (
-        result.outputs as { result?: { result: string; reason?: string; restoredStatus?: string } }
-      ).result;
+      // outcome === "completed" — unwrap result from outputs
+      const outputs = result.outputs as {
+        result?: string;
+        restoredStatus?: string;
+      };
 
-      if (!hookResult) {
+      if (!outputs?.result) {
         throw new Error("Disqualification dismiss handler returned no result output");
       }
 
-      if (hookResult.result === "dismissed") {
-        return reply
-          .code(200)
-          .send({ result: "dismissed", restoredStatus: hookResult.restoredStatus });
-      }
-      if (hookResult.result === "not_found" || hookResult.result === "capability_disabled") {
-        return reply.code(404).send({ reason: "not_found" });
-      }
-      // conflict — hookResult.reason is "not_proposed"
-      return reply.code(409).send({ reason: hookResult.reason });
+      return reply.code(200).send({ result: "dismissed", restoredStatus: outputs.restoredStatus });
     },
   );
 }

@@ -77,7 +77,10 @@ declare module "fastify" {
     reportCacheStore?: import("@switchboard/core/reports").ReportCacheStore;
     reportStores?: import("@switchboard/core/reports").ReportStores;
     baselineStore?: import("@switchboard/core/reports").BaselineStore;
-    disqualificationHook?: import("@switchboard/core").DisqualificationResolutionHook | null;
+    disqualificationHook?: Pick<
+      import("@switchboard/core").DisqualificationResolutionHook,
+      "confirm" | "dismiss"
+    > | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -694,7 +697,11 @@ export async function buildServer() {
   }
 
   // --- Operator-direct ingress mode (Wave 2 Phase 1b) ---
-  if (app.opportunityStore) {
+  // Gate on prismaClient (the actual underlying condition) rather than app.opportunityStore,
+  // which is only set when prismaClient is available anyway. bootstrapOperatorIntents
+  // conditionally registers each store's handler+intent internally so passing
+  // potentially-undefined stores is safe.
+  if (prismaClient) {
     const { bootstrapOperatorIntents } = await import("./bootstrap/operator-intents.js");
     bootstrapOperatorIntents({
       intentRegistry,

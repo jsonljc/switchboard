@@ -84,7 +84,10 @@ declare module "fastify" {
     reportStores?: import("@switchboard/core/reports").ReportStores;
     reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
     greetingSignalStore?: import("@switchboard/core").agentHome.GreetingSignalStore;
-    disqualificationHook?: import("@switchboard/core").DisqualificationResolutionHook | null;
+    disqualificationHook?: Pick<
+      import("@switchboard/core").DisqualificationResolutionHook,
+      "confirm" | "dismiss"
+    > | null;
     /** Test-only observer for the most recent ingress-persisted WorkTrace. */
     lastIngressTrace?: {
       intent: string;
@@ -106,8 +109,13 @@ export interface TestContext {
 export interface BuildTestServerOptions {
   /** Override the opportunityStore decorator. Pass `null` to skip decoration entirely (tests the 503 path). */
   opportunityStore?: OpportunityStore | null;
-  /** Provide a mock disqualificationHook for lifecycle-disqualifications ingress tests (Phase 1b.3). */
-  disqualificationHook?: import("@switchboard/core").DisqualificationResolutionHook | null;
+  /** Provide a mock disqualificationHook for lifecycle-disqualifications ingress tests (Phase 1b.3).
+   * Accepts Pick<DisqualificationResolutionHook,"confirm"|"dismiss"> so test mocks don't need
+   * awkward `as unknown as InstanceType<...>` casts. */
+  disqualificationHook?: Pick<
+    import("@switchboard/core").DisqualificationResolutionHook,
+    "confirm" | "dismiss"
+  > | null;
 }
 
 export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
@@ -403,18 +411,19 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   // Operator-direct ingress bootstrap — registers OperatorMutationMode +
   // operator.transition_opportunity_stage + operator.act_on_recommendation +
   // operator.confirm_disqualification + operator.dismiss_disqualification handlers.
+  // All stores are optional; bootstrapOperatorIntents conditionally registers each
+  // handler+intent internally. Always call so disqualification intents are wired
+  // even when opportunityStore is absent (e.g. tests that pass null to skip 503 path).
   // Must run AFTER opportunityStore/recommendationStore/disqualificationHook decoration
   // and PlatformIngress wiring.
-  if (app.opportunityStore) {
-    const { bootstrapOperatorIntents } = await import("../bootstrap/operator-intents.js");
-    bootstrapOperatorIntents({
-      intentRegistry,
-      modeRegistry,
-      opportunityStore: app.opportunityStore,
-      recommendationStore: app.recommendationStore,
-      disqualificationHook: app.disqualificationHook ?? undefined,
-    });
-  }
+  const { bootstrapOperatorIntents } = await import("../bootstrap/operator-intents.js");
+  bootstrapOperatorIntents({
+    intentRegistry,
+    modeRegistry,
+    opportunityStore: app.opportunityStore ?? undefined,
+    recommendationStore: app.recommendationStore,
+    disqualificationHook: app.disqualificationHook ?? undefined,
+  });
 
   const platformLifecycle = new PlatformLifecycle({
     approvalStore: storage.approvals,
