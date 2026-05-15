@@ -9,60 +9,7 @@ import {
   computeWorkTraceContentHash,
   WORK_TRACE_HASH_VERSION_LATEST,
 } from "@switchboard/core/platform";
-
-interface RecommendationRowFromPrisma {
-  id: string;
-  organizationId: string;
-  sourceAgent: string;
-  intent: string;
-  humanSummary: string;
-  confidence: number;
-  dollarsAtRisk: number;
-  riskLevel: string;
-  surface: string;
-  status: string;
-  parameters: unknown;
-  targetEntities: unknown;
-  sourceWorkflow: string | null;
-  resolvedBy: string | null;
-  resolvedAt: Date | null;
-  createdAt: Date;
-  expiresAt: Date | null;
-  undoableUntil: Date | null;
-}
-
-interface RecommendationParams {
-  __recommendation?: { action?: string; note?: string | null; presentation?: unknown };
-  [key: string]: unknown;
-}
-
-function rowToRecommendation(row: RecommendationRowFromPrisma): Recommendation {
-  const params = (row.parameters ?? {}) as RecommendationParams;
-  const meta = params.__recommendation ?? {};
-  return {
-    id: row.id,
-    orgId: row.organizationId,
-    agentKey: row.sourceAgent as Recommendation["agentKey"],
-    intent: row.intent,
-    action: meta.action ?? "",
-    humanSummary: row.humanSummary,
-    confidence: row.confidence,
-    dollarsAtRisk: row.dollarsAtRisk,
-    riskLevel: row.riskLevel as Recommendation["riskLevel"],
-    surface: row.surface as Recommendation["surface"],
-    status: row.status as Recommendation["status"],
-    parameters: params,
-    targetEntities: (row.targetEntities ?? null) as Record<string, unknown> | null,
-    sourceAgent: row.sourceAgent,
-    sourceWorkflow: row.sourceWorkflow,
-    actedBy: row.resolvedBy,
-    actedAt: row.resolvedAt,
-    note: meta.note ?? null,
-    createdAt: row.createdAt,
-    expiresAt: row.expiresAt,
-    undoableUntil: row.undoableUntil,
-  };
-}
+import { rowToRecommendation } from "../recommendation-store.js";
 
 /**
  * Production mirror: opens prisma.$transaction, creates the PendingActionRecord
@@ -87,7 +34,7 @@ export class PrismaRecommendationEmissionMirror implements RecommendationEmissio
     const contentHash = computeWorkTraceContentHash(workTrace, traceVersion);
 
     return this.prisma.$transaction(async (tx) => {
-      let recommendationRow: RecommendationRowFromPrisma;
+      let recommendationRow: Awaited<ReturnType<typeof tx.pendingActionRecord.create>>;
       try {
         recommendationRow = await tx.pendingActionRecord.create({
           data: {

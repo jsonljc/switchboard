@@ -157,16 +157,20 @@ export async function registerInngest(
   // Riley emission wiring (Wave B PR-1 substrate). Construct one mirror that
   // the weekly-audit cron's recommendationEmitter callback closes over. Every
   // emission performs an atomic dual-write: PendingActionRecord row + paired
-  // WorkTrace row inside a single prisma.$transaction. The cronId below is
-  // hardcoded to "ad-optimizer-weekly-audit" because executeWeeklyAudit is the
-  // only Riley-emission path today (executeDailyCheck just polls account
-  // summary; executeDailySignalHealthCheck does not emit recommendations).
+  // WorkTrace row inside a single prisma.$transaction. The emission context
+  // (cronId + deploymentId) is bound at the cron call site per loop iteration —
+  // see executeWeeklyAudit's per-deployment EmissionContext — so this closure
+  // does not hardcode either field.
   const recommendationStore = new PrismaRecommendationStore(app.prisma);
   const recommendationEmissionMirror = new PrismaRecommendationEmissionMirror(app.prisma);
-  const rileyRecommendationEmitter = async (input: RecommendationInput) => {
+  const rileyRecommendationEmitter = async (
+    input: RecommendationInput,
+    ctx: { cronId: string; deploymentId?: string },
+  ) => {
     const result = await emitRecommendation(recommendationStore, input, {
       mirror: recommendationEmissionMirror,
-      cronId: "ad-optimizer-weekly-audit",
+      cronId: ctx.cronId,
+      ...(ctx.deploymentId ? { deploymentId: ctx.deploymentId } : {}),
     });
     return { surface: result.surface };
   };

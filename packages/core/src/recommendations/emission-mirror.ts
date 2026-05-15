@@ -30,6 +30,13 @@ export interface BuildRileyEmissionWorkTraceArgs {
   insert: PersistRecommendationInput;
   now: Date;
   cronId: string;
+  /**
+   * Optional. When present, set as `WorkTrace.deploymentId` so per-deployment
+   * outcome attribution (Wave B PR-3) joins cleanly. The cron loop in
+   * `apps/api/src/bootstrap/inngest.ts` populates this from the active
+   * `deployment.id`.
+   */
+  deploymentId?: string;
 }
 
 /**
@@ -48,7 +55,7 @@ export interface BuildRileyEmissionWorkTraceArgs {
  *   - completedAt = governanceCompletedAt = requestedAt = now
  */
 export function buildRileyEmissionWorkTrace(args: BuildRileyEmissionWorkTraceArgs): WorkTrace {
-  const { insert, now, cronId } = args;
+  const { insert, now, cronId, deploymentId } = args;
   const nowIso = now.toISOString();
   const isQueue = insert.surface === "queue";
   return {
@@ -57,6 +64,7 @@ export function buildRileyEmissionWorkTrace(args: BuildRileyEmissionWorkTraceArg
     intent: insert.intent,
     mode: "pipeline",
     organizationId: insert.orgId,
+    ...(deploymentId ? { deploymentId } : {}),
     actor: { type: "service", id: "ad-optimizer" },
     trigger: "schedule",
     idempotencyKey: insert.idempotencyKey,

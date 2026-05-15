@@ -219,6 +219,25 @@ describe("buildRileyEmissionWorkTrace", () => {
     expect(a.workUnitId).not.toBe(b.workUnitId);
     expect(a.traceId).not.toBe(b.traceId);
   });
+
+  it("populates WorkTrace.deploymentId when provided in args", () => {
+    const trace = buildRileyEmissionWorkTrace({
+      insert: baseInsert,
+      now: NOW,
+      cronId: "ad-optimizer-weekly-audit",
+      deploymentId: "dep-42",
+    });
+    expect(trace.deploymentId).toBe("dep-42");
+  });
+
+  it("omits WorkTrace.deploymentId when not provided", () => {
+    const trace = buildRileyEmissionWorkTrace({
+      insert: baseInsert,
+      now: NOW,
+      cronId: "ad-optimizer-weekly-audit",
+    });
+    expect(trace.deploymentId).toBeUndefined();
+  });
 });
 
 describe("createInMemoryEmissionMirror", () => {

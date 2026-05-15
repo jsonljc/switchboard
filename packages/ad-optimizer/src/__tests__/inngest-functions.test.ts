@@ -199,6 +199,36 @@ describe("executeWeeklyAudit", () => {
 
     warnSpy.mockRestore();
   });
+
+  it("AuditRunner construction throws when emitter is provided without context", async () => {
+    // Bypass executeWeeklyAudit (which always provides ctx alongside the
+    // emitter) and test the runner's invariant directly. This pins the safety
+    // net the constructor enforces: misconfiguration surfaces loudly, not
+    // silently as orphan WorkTrace rows.
+    const { AuditRunner } = await import("../audit-runner.js");
+    const adsClient = deps.createAdsClient({ accessToken: "token", accountId: "act_123" });
+    expect(
+      () =>
+        new AuditRunner({
+          adsClient,
+          crmDataProvider: deps.createCrmProvider("dep-1"),
+          insightsProvider: deps.createInsightsProvider(adsClient),
+          config: {
+            accountId: "act_123",
+            orgId: "org-1",
+            targetCPA: 100,
+            targetROAS: 3,
+            mediaBenchmarks: {
+              inlineLinkClickCtr: 2.0,
+              landingPageViewRate: 0.85,
+              clickToLeadRate: 0.05,
+            },
+          },
+          recommendationEmitter: vi.fn().mockResolvedValue({ surface: "queue" }),
+          // recommendationEmissionContext intentionally omitted — should throw.
+        }),
+    ).toThrow(/recommendationEmissionContext is required/);
+  });
 });
 
 describe("executeDailyCheck", () => {

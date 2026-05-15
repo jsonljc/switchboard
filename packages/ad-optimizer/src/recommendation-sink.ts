@@ -35,17 +35,33 @@ export interface EmitOutcome {
 }
 
 /**
- * Caller-injected emitter. In production this wraps
- * `emitRecommendation(store, input)` from `@switchboard/core`; in tests it can
- * be a vi.fn().
+ * Per-emission context the sink threads to the caller-injected emitter. Bound
+ * at the call site of the runner (e.g., executeWeeklyAudit knows both the
+ * cronId and the deploymentId for each loop iteration). The emitter uses these
+ * to enrich the WorkTrace mirror with provenance so downstream consumers can
+ * answer "which deployment / cron originated this row" without joining audit logs.
  */
-export type RecommendationEmitter = (input: RecommendationInput) => Promise<EmitOutcome>;
+export interface EmissionContext {
+  cronId: string;
+  deploymentId?: string;
+}
+
+/**
+ * Caller-injected emitter. In production this wraps
+ * `emitRecommendation(store, input, { mirror, cronId, deploymentId })` from
+ * `@switchboard/core`; in tests it can be a vi.fn().
+ */
+export type RecommendationEmitter = (
+  input: RecommendationInput,
+  ctx: EmissionContext,
+) => Promise<EmitOutcome>;
 
 export interface RunRecommendationSinkArgs {
   orgId: string;
   auditRunId: string;
   recommendations: RecommendationOutput[];
   emit: RecommendationEmitter;
+  emissionContext: EmissionContext;
 }
 
 export interface RunRecommendationSinkResult {
@@ -257,21 +273,24 @@ export async function runRecommendationSink(
 
   for (const rec of args.recommendations) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
-    const result = await args.emit({
-      orgId: args.orgId,
-      agentKey: "riley",
-      intent: `recommendation.${rec.action}`,
-      action: rec.action,
-      humanSummary: humanizeRecommendation(rec),
-      confidence: rec.confidence,
-      dollarsAtRisk: estimateRisk(rec),
-      riskLevel: URGENCY_TO_RISK[rec.urgency],
-      parameters: { ...((rec as { params?: Record<string, unknown> }).params ?? {}) },
-      presentation: buildPresentation(rec),
-      targetEntities: { campaignId: rec.campaignId, campaignName: rec.campaignName },
-      expiresAt,
-      sourceWorkflow: args.auditRunId,
-    });
+    const result = await args.emit(
+      {
+        orgId: args.orgId,
+        agentKey: "riley",
+        intent: `recommendation.${rec.action}`,
+        action: rec.action,
+        humanSummary: humanizeRecommendation(rec),
+        confidence: rec.confidence,
+        dollarsAtRisk: estimateRisk(rec),
+        riskLevel: URGENCY_TO_RISK[rec.urgency],
+        parameters: { ...((rec as { params?: Record<string, unknown> }).params ?? {}) },
+        presentation: buildPresentation(rec),
+        targetEntities: { campaignId: rec.campaignId, campaignName: rec.campaignName },
+        expiresAt,
+        sourceWorkflow: args.auditRunId,
+      },
+      args.emissionContext,
+    );
     if (result.surface === "dropped") dropped++;
     else if (result.surface === "shadow_action") routedShadow++;
     else routedQueue++;
