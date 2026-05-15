@@ -30,6 +30,8 @@ export const RecommendationPresentationSchema = z.object({
   secondaryLabel: z.string().min(1),
   dismissLabel: z.string().min(1),
   dataLines: z.array(z.unknown()),
+  acceptToast: z.string().min(1).optional(),
+  declineToast: z.string().min(1).optional(),
 });
 export type RecommendationPresentation = z.infer<typeof RecommendationPresentationSchema>;
 
