@@ -24,12 +24,19 @@ export interface ProjectMetricsInput {
   now: Date;
   timezone: string;
   store: MetricsSignalStore;
+  targets: { avgValueCents: number | null; targetCpbCents: number | null };
 }
 
 export async function projectMetrics(input: ProjectMetricsInput): Promise<MetricsViewModel> {
   const week = buildWeekContext(input.now, input.timezone);
+  const builderInput = {
+    orgId: input.orgId,
+    week,
+    store: input.store,
+    targets: input.targets,
+  };
   if (input.agentKey === "alex") {
-    return buildAlexMetricsViewModel({ orgId: input.orgId, week, store: input.store });
+    return buildAlexMetricsViewModel(builderInput);
   }
-  return buildRileyMetricsViewModel({ orgId: input.orgId, week, store: input.store });
+  return buildRileyMetricsViewModel(builderInput);
 }

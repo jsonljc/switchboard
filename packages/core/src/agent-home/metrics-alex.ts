@@ -6,6 +6,7 @@ import type {
   SparkPoint,
   StatCell,
 } from "./metrics-types.js";
+import { formatNumericDelta, formatPercentPointsDelta } from "./metrics-deltas.js";
 
 const ALEX_VOICE = {
   up: (prev: number) => `Up from ${prev} last week.`,
@@ -18,16 +19,13 @@ const EXCLUDE_STATUSES = ["cancelled"] as const;
 export async function buildAlexMetricsViewModel(
   input: PerAgentBuilderInput,
 ): Promise<MetricsViewModel> {
-  const { orgId, week, store } = input;
+  const { orgId, week, store, targets } = input;
 
   const heroValueP = countBookings(store, orgId, week.weekStart, week.weekEnd);
   const heroPrevP = countBookings(store, orgId, week.prevWeekStart, week.prevWeekEnd);
-  const leadsP = store.countConversionsByType({
-    orgId,
-    type: "lead",
-    from: week.weekStart,
-    to: week.weekEnd,
-  });
+  const leadsP = countLeads(store, orgId, week.weekStart, week.weekEnd);
+  const leadsPrevP = countLeads(store, orgId, week.prevWeekStart, week.prevWeekEnd);
+  const spendCentsP = store.getMetaSpendCents({ orgId, from: week.weekStart, to: week.weekEnd });
   const weeklyCountsP = Promise.all(
     week.weeklyBuckets.map((b) => countBookings(store, orgId, b.from, b.to)),
   );
@@ -35,13 +33,16 @@ export async function buildAlexMetricsViewModel(
     week.dailyBuckets.map((b) => countBookings(store, orgId, b.from, b.to)),
   );
 
-  const [heroValue, heroPrev, leads, weeklyCounts, dailyCounts] = await Promise.all([
-    heroValueP,
-    heroPrevP,
-    leadsP,
-    weeklyCountsP,
-    dailyCountsP,
-  ]);
+  const [heroValue, heroPrev, leads, leadsPrev, spendCents, weeklyCounts, dailyCounts] =
+    await Promise.all([
+      heroValueP,
+      heroPrevP,
+      leadsP,
+      leadsPrevP,
+      spendCentsP,
+      weeklyCountsP,
+      dailyCountsP,
+    ]);
 
   const spark: SparkPoint[] = [
     ...week.weeklyBuckets.map((b, i) => ({ label: b.label, value: weeklyCounts[i] ?? 0 })),
@@ -55,6 +56,26 @@ export async function buildAlexMetricsViewModel(
   const subprose: ProseSegment[] = [{ kind: "text", text: voiceText(heroValue, heroPrev) }];
 
   const conversion = leads > 0 ? heroValue / leads : 0;
+  const qualifiedPct = leads > 0 ? Math.round((heroValue / leads) * 100) : 0;
+  const qualifiedPrev = leadsPrev > 0 ? Math.round((heroPrev / leadsPrev) * 100) : null;
+
+  const spendCell: StatCell =
+    spendCents !== null
+      ? {
+          label: "Spend",
+          display: `$${Math.round(spendCents / 100)}`,
+          rawValue: spendCents,
+          unit: "currency",
+          unavailable: false,
+        }
+      : {
+          label: "Spend",
+          display: "—",
+          rawValue: null,
+          unit: "currency",
+          unavailable: true,
+        };
+
   const stats: readonly [StatCell, StatCell, StatCell] = [
     {
       label: "Leads",
@@ -68,13 +89,7 @@ export async function buildAlexMetricsViewModel(
       rawValue: conversion,
       unit: "percent",
     },
-    {
-      label: "Spend",
-      display: "—",
-      rawValue: null,
-      unit: "currency",
-      unavailable: true,
-    },
+    spendCell,
   ];
 
   return {
@@ -90,9 +105,16 @@ export async function buildAlexMetricsViewModel(
       generatedAt: week.now.toISOString(),
       window: "week",
       dataSource: "live",
-      unavailableSources: ["ad-platform-spend"],
+      ...(spendCents === null ? { unavailableSources: ["ad-platform-spend"] as const } : {}),
     },
     folioRange: week.folioRange,
+    targets,
+    spendCents,
+    leads,
+    qualifiedPct,
+    bookedDelta: formatNumericDelta(heroValue, heroPrev),
+    leadsDelta: formatNumericDelta(leads, leadsPrev),
+    qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),
   };
 }
 
@@ -108,6 +130,15 @@ function countBookings(
     from,
     to,
   });
+}
+
+function countLeads(
+  store: MetricsSignalStore,
+  orgId: string,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  return store.countConversionsByType({ orgId, type: "lead", from, to });
 }
 
 function voiceText(current: number, prev: number): string {

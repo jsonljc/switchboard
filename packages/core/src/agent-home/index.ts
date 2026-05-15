@@ -54,3 +54,4 @@ export type {
   StatCell,
 } from "./metrics-types.js";
 export { buildWeekContext, type WeekContext } from "./metrics-buckets.js";
+export { getAgentTargets, type AgentTargets } from "./targets.js";

@@ -49,6 +49,13 @@ export interface MetricsViewModel {
   stats: readonly [StatCell, StatCell, StatCell];
   freshness: DataFreshness;
   folioRange: string;
+  targets: { avgValueCents: number | null; targetCpbCents: number | null };
+  spendCents: number | null;
+  leads: number;
+  qualifiedPct: number;
+  bookedDelta: string | null;
+  leadsDelta: string | null;
+  qualifiedDelta: string | null;
 }
 
 export interface MetricsSignalStore {
@@ -65,10 +72,13 @@ export interface MetricsSignalStore {
     from: Date;
     to: Date;
   }): Promise<number>;
+
+  getMetaSpendCents(input: { orgId: string; from: Date; to: Date }): Promise<number | null>;
 }
 
 export interface PerAgentBuilderInput {
   orgId: string;
   week: WeekContext;
   store: MetricsSignalStore;
+  targets: { avgValueCents: number | null; targetCpbCents: number | null };
 }

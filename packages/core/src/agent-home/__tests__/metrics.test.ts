@@ -4,11 +4,13 @@ import { projectMetrics } from "../metrics.js";
 
 const TZ = "Asia/Singapore";
 const NOW = new Date("2026-05-06T07:30:00.000Z"); // Wed 15:30 SGT
+const DEFAULT_TARGETS = { avgValueCents: null, targetCpbCents: null };
 
 function makeStore(): MetricsSignalStore {
   return {
     countBookingsCreated: vi.fn(async () => 0),
     countConversionsByType: vi.fn(async () => 0),
+    getMetaSpendCents: vi.fn(async () => null),
   };
 }
 
@@ -20,6 +22,7 @@ describe("projectMetrics orchestrator", () => {
       now: NOW,
       timezone: TZ,
       store: makeStore(),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.hero.kind).toBe("tours-booked");
   });
@@ -31,6 +34,7 @@ describe("projectMetrics orchestrator", () => {
       now: NOW,
       timezone: TZ,
       store: makeStore(),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.hero.kind).toBe("ad-leads");
   });
@@ -42,6 +46,7 @@ describe("projectMetrics orchestrator", () => {
       now: NOW,
       timezone: TZ,
       store: makeStore(),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.freshness.dataSource).toBe("live");
     expect(vm.freshness.window).toBe("week");
@@ -54,6 +59,7 @@ describe("projectMetrics orchestrator", () => {
       now: NOW,
       timezone: TZ,
       store: makeStore(),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.folioRange).toBe("Mon — Wed");
   });

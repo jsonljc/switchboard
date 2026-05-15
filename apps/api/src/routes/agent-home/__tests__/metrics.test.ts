@@ -129,6 +129,7 @@ describe("metrics route", () => {
     });
     const mockPrisma = {
       organizationConfig: { findFirst: mockFindFirst },
+      agentRoster: { findUnique: vi.fn(async () => null) },
     } as unknown as import("@switchboard/db").PrismaClient;
 
     const app = await buildApp({ withStores: true, prisma: mockPrisma });

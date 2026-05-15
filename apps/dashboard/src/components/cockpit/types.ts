@@ -109,3 +109,51 @@ export interface ActivityRow {
   replyable?: boolean;
   tag?: string;
 }
+
+// ─── A.3 KPI Strip + ROI Bar ──────────────────────────────────
+
+export interface KpiTile {
+  label: string;
+  value: number | string;
+  unit?: string;
+  trend?: string;
+  unavailable?: boolean;
+  hint?: string;
+}
+
+export interface RoiBarFull {
+  label: string;
+  leftMeta: string;
+  rightMeta: { value: string; suffix: string };
+  fillPct: number;
+  breakEvenPct: number;
+  breakEvenLabel: string;
+  scaleLeft: string;
+  scaleRight: string;
+  comparator: { value: string; target: string; onTarget: boolean };
+}
+
+export interface RoiBarDegraded {
+  degraded: true;
+  degradedHint: string;
+  label?: string;
+  comparator: { value: string; target: string; onTarget?: false };
+}
+
+export type RoiBar = RoiBarFull | RoiBarDegraded;
+
+export interface CockpitKpiData {
+  range: string;
+  tiles?: KpiTile[];
+  roi?: RoiBar;
+  // legacy flat shape (Alex-side adapter)
+  booked?: number | null;
+  bookedDelta?: string | null;
+  leads?: number | null;
+  leadsDelta?: string | null;
+  qualifiedPct?: number | null;
+  qualifiedDelta?: string | null;
+  spend?: number | null;
+  avgValue?: number | null;
+  target?: number | null;
+}
