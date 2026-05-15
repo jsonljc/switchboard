@@ -55,15 +55,16 @@ describe("alexBuilder", () => {
     const stores = createMockStores();
     const result = await alexBuilder(ctx, config, stores);
 
-    expect(result.BUSINESS_NAME).toBe("Glow Aesthetics");
-    expect(result.OPPORTUNITY_ID).toBe("opp_1");
-    expect(result.LEAD_PROFILE).toEqual(expect.objectContaining({ name: "Sarah" }));
-    expect(result.PERSONA_CONFIG).toEqual(
+    expect(result.parameters.BUSINESS_NAME).toBe("Glow Aesthetics");
+    expect(result.parameters.OPPORTUNITY_ID).toBe("opp_1");
+    expect(result.parameters.LEAD_PROFILE).toEqual(expect.objectContaining({ name: "Sarah" }));
+    expect(result.parameters.PERSONA_CONFIG).toEqual(
       expect.objectContaining({
         tone: "friendly",
         bookingLink: "https://cal.com/glow-aesthetics",
       }),
     );
+    expect(result.injectedPatternIds).toEqual([]);
   });
 
   it("throws ParameterResolutionError when no active opportunity exists", async () => {
@@ -88,7 +89,7 @@ describe("alexBuilder", () => {
     });
 
     const result = await alexBuilder(ctx, config, stores);
-    expect(result.OPPORTUNITY_ID).toBe("opp_new");
+    expect(result.parameters.OPPORTUNITY_ID).toBe("opp_new");
   });
 
   it("does not include PIPELINE_STAGE parameter", async () => {
@@ -96,7 +97,7 @@ describe("alexBuilder", () => {
     const stores = createMockStores();
     const result = await alexBuilder(ctx, config, stores);
 
-    expect(result).not.toHaveProperty("PIPELINE_STAGE");
+    expect(result.parameters).not.toHaveProperty("PIPELINE_STAGE");
   });
 
   it("auto-creates Contact and Opportunity when none exists for a new lead", async () => {
@@ -149,7 +150,7 @@ describe("alexBuilder", () => {
         contactId: "contact_new",
       }),
     );
-    expect(result.OPPORTUNITY_ID).toBe("opp_auto");
+    expect(result.parameters.OPPORTUNITY_ID).toBe("opp_auto");
   });
 
   it("does not set messaging opt-in when auto-creating Contact for non-WhatsApp channel", async () => {
@@ -219,34 +220,35 @@ describe("alexBuilder", () => {
         contactId: "contact_1",
       }),
     );
-    expect(result.OPPORTUNITY_ID).toBe("opp_auto");
+    expect(result.parameters.OPPORTUNITY_ID).toBe("opp_auto");
   });
 
   it("builder always supplies OUTCOME_PATTERNS as a string (empty when no services)", async () => {
     const ctx = createMockCtx();
     const stores = createMockStores();
-    const params = await alexBuilder(ctx, config, stores);
-    expect(typeof params.OUTCOME_PATTERNS).toBe("string");
-    expect(params.OUTCOME_PATTERNS).toBe("");
+    const result = await alexBuilder(ctx, config, stores);
+    expect(typeof result.parameters.OUTCOME_PATTERNS).toBe("string");
+    expect(result.parameters.OUTCOME_PATTERNS).toBe("");
+    expect(result.injectedPatternIds).toEqual([]);
   });
 
   it("interpolate() leaves no unresolved {{OUTCOME_PATTERNS}} or Mustache section markers", async () => {
     const ctx = createMockCtx();
     const stores = createMockStores();
-    const params = await alexBuilder(ctx, config, stores);
+    const result = await alexBuilder(ctx, config, stores);
     const template = "Before.\n{{OUTCOME_PATTERNS}}\nAfter.";
     const declarations: import("../types.js").ParameterDeclaration[] = [
       { name: "OUTCOME_PATTERNS", required: false, type: "string" },
     ];
 
-    const rendered = interpolate(template, params, declarations);
+    const rendered = interpolate(template, result.parameters, declarations);
 
     expect(rendered).not.toMatch(/\{\{/);
     expect(rendered).not.toMatch(/\{\{#|\{\{\//);
     expect(rendered).toBe("Before.\n\nAfter.");
   });
 
-  it("OUTCOME_PATTERNS is populated from ContextBuilder when services are provided", async () => {
+  it("OUTCOME_PATTERNS and injectedPatternIds are populated from ContextBuilder when services are provided", async () => {
     const ctx = createMockCtx();
     const stores = createMockStores();
     const mockContextBuilder = {
@@ -254,19 +256,20 @@ describe("alexBuilder", () => {
         retrievedChunks: [],
         learnedFacts: [],
         recentSummaries: [],
-        outcomePatternContext: "<|outcome-patterns|>Test pattern content</|outcome-patterns|>",
+        outcomePatternContext:
+          '<outcome-patterns>\n<pattern id="pat_x">x</pattern>\n</outcome-patterns>',
+        injectedPatternIds: ["pat_x"],
         totalTokenEstimate: 10,
       }),
     };
 
-    const params = await alexBuilder(ctx, config, stores, {
+    const result = await alexBuilder(ctx, config, stores, {
       contextBuilder:
         mockContextBuilder as unknown as import("../parameter-builder.js").SkillServices["contextBuilder"],
     });
 
-    expect(params.OUTCOME_PATTERNS).toBe(
-      "<|outcome-patterns|>Test pattern content</|outcome-patterns|>",
-    );
+    expect(result.parameters.OUTCOME_PATTERNS).toMatch(/<outcome-patterns>/);
+    expect(result.injectedPatternIds).toEqual(["pat_x"]);
     expect(mockContextBuilder.build).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: config.orgId,

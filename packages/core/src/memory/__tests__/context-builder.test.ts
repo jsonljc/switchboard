@@ -149,6 +149,7 @@ describe("ContextBuilder", () => {
         id: "m1",
         content: "Customers ask about downtime before booking laser treatment",
         category: "pattern",
+        canonicalKey: "objection:downtime_work",
         confidence: 0.85,
         sourceCount: 5,
         lastSeenAt: new Date(),
@@ -162,8 +163,99 @@ describe("ContextBuilder", () => {
       query: "Tell me about laser",
     });
 
-    expect(result.outcomePatternContext).toContain("advisory");
+    expect(result.outcomePatternContext).toMatch(/<outcome-patterns>/);
     expect(result.outcomePatternContext).toContain("downtime");
+  });
+
+  it("returns injectedPatternIds matching the rendered <pattern id> attributes", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "pat_abc",
+        content: "Customers ask about downtime",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.78,
+        sourceCount: 4,
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "downtime question",
+    });
+
+    expect(result.injectedPatternIds).toEqual(["pat_abc"]);
+    expect(result.outcomePatternContext).toMatch(/id="pat_abc"/);
+  });
+
+  it("returns [] for injectedPatternIds when no patterns surface", async () => {
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "anything",
+    });
+    expect(result.injectedPatternIds).toEqual([]);
+  });
+
+  it("excludes IDs of patterns that collapsed during escape from injectedPatternIds (mixed case)", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "pat_renders",
+        content: "Customers ask about downtime",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.85,
+        sourceCount: 5,
+        lastSeenAt: new Date(),
+      },
+      {
+        id: "pat_collapses",
+        content: "\x00\x01\x02",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.85,
+        sourceCount: 5,
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "x",
+    });
+
+    expect(result.outcomePatternContext).toMatch(/id="pat_renders"/);
+    expect(result.outcomePatternContext).not.toMatch(/id="pat_collapses"/);
+    expect(result.injectedPatternIds).toEqual(["pat_renders"]);
+  });
+
+  it("returns [] for injectedPatternIds when patterns collapse to empty after escaping", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "pat_collapse",
+        content: "\x00\x01\x02",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.85,
+        sourceCount: 5,
+        lastSeenAt: new Date(),
+      },
+    ]);
+
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "x",
+    });
+    expect(result.outcomePatternContext).toBe("");
+    expect(result.injectedPatternIds).toEqual([]);
   });
 
   it("excludes category:'pattern' rows from learnedFacts even when high-confidence", async () => {

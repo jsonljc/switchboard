@@ -1810,6 +1810,12 @@ model WorkTrace {
   // present, regardless of lifecycleTagging.qualification flag state.
   qualificationSignals String? @db.Text
 
+  // PR-3.2c: IDs of DeploymentMemory patterns that landed in the
+  // <outcome-patterns> envelope for this turn. Empty array when no
+  // patterns surfaced. Enables per-pattern conversion-lift analysis
+  // via unnest() against ConversionRecord.
+  injectedPatternIds String[] @default([])
+
   // Timestamps
   requestedAt           DateTime
   governanceCompletedAt DateTime

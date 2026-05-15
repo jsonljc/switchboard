@@ -391,6 +391,7 @@ export class PlatformLifecycle {
         executionOutputs: executionResult.outputs,
         executionStartedAt,
         completedAt,
+        injectedPatternIds: executionResult.injectedPatternIds ?? [],
       },
       { caller: "platform_lifecycle.executeAfterApproval" },
     );

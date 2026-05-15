@@ -102,6 +102,41 @@ describe("PrismaWorkTraceStore", () => {
   });
 });
 
+describe("PrismaWorkTraceStore.persist — injectedPatternIds (PR-3.2c)", () => {
+  it("writes injectedPatternIds when present on the trace", async () => {
+    const create = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create } };
+    const prisma = {
+      $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    await store.persist(makeTrace({ injectedPatternIds: ["pat_a", "pat_b"] }));
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0]![0].data.injectedPatternIds).toEqual(["pat_a", "pat_b"]);
+  });
+
+  it("defaults to [] when injectedPatternIds is omitted from the trace", async () => {
+    const create = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create } };
+    const prisma = {
+      $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    await store.persist(makeTrace());
+
+    expect(create.mock.calls[0]![0].data.injectedPatternIds).toEqual([]);
+  });
+});
+
 describe("PrismaWorkTraceStore.persist — new columns", () => {
   it("writes ingressPath and hashInputVersion to the row", async () => {
     const create = vi.fn().mockResolvedValue(undefined);

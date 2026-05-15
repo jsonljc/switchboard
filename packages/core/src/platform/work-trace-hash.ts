@@ -10,7 +10,17 @@ export const WORK_TRACE_HASH_VERSION_LATEST = WORK_TRACE_HASH_VERSION_V2;
 // Equals the latest version (operator-mutation rows persist at v2).
 export const WORK_TRACE_HASH_VERSION = WORK_TRACE_HASH_VERSION_LATEST;
 
-const EXCLUDED_BASE = ["contentHash", "traceVersion", "lockedAt"] as const;
+const EXCLUDED_BASE = [
+  "contentHash",
+  "traceVersion",
+  "lockedAt",
+  // PR-3.2c: analytics-only metadata. Persisted on the row for
+  // per-pattern conversion-lift queries, but not part of trace integrity —
+  // it is downstream-derivable from BuiltContext, never operator-input.
+  // Excluded so the column's @default([]) backfill on pre-PR-3.2c rows does
+  // not break their original contentHash verification.
+  "injectedPatternIds",
+] as const;
 
 export const WORK_TRACE_HASH_EXCLUDED_FIELDS_V1 = [
   ...EXCLUDED_BASE,

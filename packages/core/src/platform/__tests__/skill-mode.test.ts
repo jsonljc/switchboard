@@ -211,6 +211,55 @@ describe("SkillMode with BuilderRegistry", () => {
     });
   });
 
+  it("threads injectedPatternIds from rich builder result onto ExecutionResult", async () => {
+    builderRegistry.register("sales-pipeline", async (_ctx: BuilderContext) => ({
+      parameters: { BUSINESS_NAME: "Test Co" },
+      metadata: { injectedPatternIds: ["pat_a", "pat_b"] },
+    }));
+
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({
+      executor,
+      skillsBySlug,
+      builderRegistry,
+      stores: {
+        opportunityStore: { findActiveByContact: vi.fn().mockResolvedValue([]) },
+        contactStore: { findById: vi.fn().mockResolvedValue(null) },
+        activityStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
+      },
+    });
+
+    const workUnit = makeWorkUnit();
+    const result = await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.parameters).toEqual({ BUSINESS_NAME: "Test Co" });
+    expect(result.injectedPatternIds).toEqual(["pat_a", "pat_b"]);
+  });
+
+  it("defaults injectedPatternIds to [] for builders that return the flat shape", async () => {
+    builderRegistry.register("sales-pipeline", async (_ctx: BuilderContext) => ({
+      BUSINESS_NAME: "Flat Co",
+    }));
+
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({
+      executor,
+      skillsBySlug,
+      builderRegistry,
+      stores: {
+        opportunityStore: { findActiveByContact: vi.fn().mockResolvedValue([]) },
+        contactStore: { findById: vi.fn().mockResolvedValue(null) },
+        activityStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
+      },
+    });
+
+    const workUnit = makeWorkUnit();
+    const result = await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.parameters).toEqual({ BUSINESS_NAME: "Flat Co" });
+    expect(result.injectedPatternIds).toEqual([]);
+  });
+
   it("passes through workUnit.parameters when no builder is registered", async () => {
     const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
     const mode = new SkillMode({
