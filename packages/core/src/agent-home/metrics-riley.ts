@@ -99,9 +99,11 @@ export async function buildRileyMetricsViewModel(
   if (cpl !== null) cplDisplay = cpl === 0 ? "<$1 per lead" : `$${cpl} per lead`;
   // Riley v1 reinterprets `targetCpbCents` as **target cost per lead** for the
   // ROI comparator. The config key is shared with Alex (target cost per
-  // booking) for storage symmetry — `AgentRoster.config.targetCpbCents` is a
-  // single value; the meaning is agent-side. Do not treat Riley's target as
-  // booking economics until Riley has booking attribution (future slice).
+  // booking) for storage symmetry — one targetCpbCents value lives in
+  // AgentRoster's config column; the meaning is agent-side. Do not treat
+  // Riley's target as booking economics until Riley has booking attribution
+  // (future slice). Read via `getAgentTargets`; this file consumes the typed
+  // result, never reaches into config keys directly.
   const targetDollars =
     targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
   const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
