@@ -1,5 +1,6 @@
 import { ERROR_CATEGORIES, DEFAULT_REMEDIATIONS } from "./error-taxonomy.js";
 import type { ErrorCategory } from "./error-taxonomy.js";
+import type { PendingApprovalPayload } from "@switchboard/schemas";
 
 export interface ToolResult {
   status: "success" | "error" | "denied" | "pending_approval";
@@ -10,6 +11,13 @@ export interface ToolResult {
     modelRemediation?: string;
     operatorRemediation?: string;
     retryable: boolean;
+    /**
+     * Typed payload for pending_approval results. Carries the kind
+     * classification + presentation hints (body/quote/quoteFrom) that the
+     * dashboard's rich approval adapter reads to render the correct card
+     * variant. Absent on legacy approvals (pre-A.7c).
+     */
+    payload?: PendingApprovalPayload;
   };
   entityState?: Record<string, unknown>;
   nextActions?: string[];
@@ -96,13 +104,14 @@ export function denied(message: string, modelRemediation?: string): ToolResult {
   };
 }
 
-export function pendingApproval(message: string): ToolResult {
+export function pendingApproval(message: string, payload?: PendingApprovalPayload): ToolResult {
   return {
     status: "pending_approval",
     error: {
       code: "APPROVAL_REQUIRED",
       message,
       retryable: false,
+      ...(payload ? { payload } : {}),
     },
   };
 }
