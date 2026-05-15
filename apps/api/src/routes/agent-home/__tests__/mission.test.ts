@@ -338,11 +338,54 @@ async function buildApp(prisma: PrismaStub | null) {
 }
 
 describe("mission route", () => {
-  it("404 for non-Alex agents at A.2", async () => {
-    const app = await buildApp(buildPrismaStub({}));
+  it("200 returns Riley aggregator on /agents/riley/mission", async () => {
+    const prisma = buildPrismaStub({
+      roster: {
+        id: "ros-riley-1",
+        organizationId: "org-1",
+        agentRole: "ad-optimizer",
+        displayName: "Riley",
+        description: "",
+        status: "active",
+        tier: "starter",
+        config: { avgValueCents: 12000, targetCpbCents: 2500 },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      org: { id: "org-1", name: "HotPod Yoga" },
+      connections: [
+        { serviceId: "meta-ads", status: "connected" },
+        { serviceId: "crm-data-provider", status: "connected" },
+      ],
+    });
+    const app = await buildApp(prisma);
     const res = await app.inject({
       method: "GET",
       url: "/api/dashboard/agents/riley/mission",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      agentKey: string;
+      mission: { role: string; brand: string; channels: Array<{ kind: string }> };
+      targets: { roasSource: string };
+    };
+    expect(body.agentKey).toBe("riley");
+    expect(body.mission.role).toBe(
+      "Ad optimizer · score, recommend, never act without your approval",
+    );
+    expect(body.mission.brand).toBe("HotPod Yoga · —");
+    expect(body.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
+    expect(body.targets.roasSource).toBe("crm");
+    // Riley aggregator does NOT call managedChannel.findMany.
+    expect(prisma.managedChannel.findMany).not.toHaveBeenCalled();
+  });
+
+  it("404 for agents that are not Alex or Riley (e.g. Mira)", async () => {
+    const app = await buildApp(buildPrismaStub({}));
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/mission",
       headers: { "x-org-id": "org-1" },
     });
     expect(res.statusCode).toBe(404);

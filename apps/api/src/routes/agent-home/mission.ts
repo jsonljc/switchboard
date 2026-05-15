@@ -241,10 +241,6 @@ export const missionRoute: FastifyPluginAsync = async (app) => {
     if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
       return reply.code(404).send({ error: "Agent not available on home" });
     }
-    if (agentId !== "alex") {
-      // Riley wiring lands in its own slice; A.2 ships Alex only.
-      return reply.code(404).send({ error: "Mission aggregator not available for this agent yet" });
-    }
 
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
@@ -254,31 +250,44 @@ export const missionRoute: FastifyPluginAsync = async (app) => {
     }
 
     try {
+      const rosterRole = agentId === "alex" ? "responder" : "ad-optimizer";
       const [roster, org, connections, managedChannels] = await Promise.all([
         app.prisma.agentRoster.findFirst({
-          where: { organizationId: orgId, agentRole: "responder" },
+          where: { organizationId: orgId, agentRole: rosterRole },
         }),
         app.prisma.organizationConfig.findUnique({ where: { id: orgId } }),
         app.prisma.connection.findMany({
           where: { organizationId: orgId },
           select: { serviceId: true, status: true },
         }),
-        app.prisma.managedChannel.findMany({
-          where: { organizationId: orgId },
-          select: { channel: true, status: true },
-        }),
+        agentId === "alex"
+          ? app.prisma.managedChannel.findMany({
+              where: { organizationId: orgId },
+              select: { channel: true, status: true },
+            })
+          : Promise.resolve([] as Array<{ channel: string; status: string }>),
       ]);
 
       if (!roster) {
-        return reply.code(404).send({ error: "Alex roster not provisioned for this org" });
+        const label = agentId === "alex" ? "Alex" : "Riley";
+        return reply.code(404).send({ error: `${label} roster not provisioned for this org` });
       }
 
-      const response = buildAlexMissionResponse({
-        roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
-        org: { id: orgId, name: org?.name ?? "" },
-        connections,
-        managedChannels,
-      });
+      const response =
+        agentId === "alex"
+          ? buildAlexMissionResponse({
+              roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
+              org: { id: orgId, name: org?.name ?? "" },
+              connections,
+              managedChannels,
+            })
+          : buildRileyMissionResponse({
+              roster: roster as unknown as Parameters<
+                typeof buildRileyMissionResponse
+              >[0]["roster"],
+              org: { id: orgId, name: org?.name ?? "" },
+              connections,
+            });
       return reply.code(200).send(response);
     } catch (err) {
       app.log.error({ err }, "mission aggregator failed");
