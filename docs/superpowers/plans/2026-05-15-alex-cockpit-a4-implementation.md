@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the Alex cockpit's full activity stream — server-side translator (`packages/core/src/agent-home/cockpit-activity-translator.ts`) that consumes the audit ledger + a batched `ActivityPreviewReader`, a new per-agent endpoint (`GET /api/dashboard/agents/[agentId]/activity`), a new TanStack Query hook (`use-agent-activity-cockpit.ts`), a new `<ThreadPreview>` component, and an expansion-capable `<ActivityRow>` that renders `body` + thread excerpt + "Tell Alex about {firstName}" + "Send as me" affordances. The cockpit page swaps from `useAgentActivity` + the client-side kind-map to the new hook; the legacy hook + kind-map stay in place until A.6 retires the agent-home block components.
+**Goal:** Ship the Alex cockpit's full activity stream — single-source-of-truth Zod schema (`packages/schemas/src/cockpit-activity.ts`), server-side translator (`packages/core/src/agent-home/cockpit-activity-translator.ts`) that consumes the audit ledger + a batched `ActivityPreviewReader`, a new per-agent endpoint (`GET /api/dashboard/agents/[agentId]/activity`), a new TanStack Query hook (`use-agent-activity-cockpit.ts`), a new `<ThreadPreview>` component, and an expansion-capable `<ActivityRow>` that renders `body` + thread excerpt + "Tell Alex about {firstName}" + "Send as me" affordances. The cockpit page swaps from `useAgentActivity` + the client-side kind-map to the new hook; the legacy hook + kind-map stay in place until A.6 retires the agent-home block components.
 
-**Architecture:** Five layers move in lockstep without crossing the adapter boundary or the surface-agnostic backend invariant. **Core** declares `CockpitActivityRow` + `ActivityPreviewReader` interface + a pure translator that batches preview fetches via a single `readRecentBatch` call. **DB** implements `PrismaActivityPreviewReader`. **API** registers the new Fastify route under `agent-home/`, wires `PrismaActivityPreviewReader` + the audit query, and asserts compile-time shape-equivalence between `CockpitActivityRow` and the dashboard's `ActivityRow`. **Dashboard proxy** mirrors the existing per-agent proxy pattern. **Dashboard adapters/components** add the hook, the `<ThreadPreview>` component, and the expansion behavior on `<ActivityRow>` + `<ActivityStream>`. No Prisma migration. No new Zod schemas. No new mutation paths.
+**Architecture:** Five layers move in lockstep without crossing the adapter boundary or the surface-agnostic backend invariant. **Schemas (Layer 1)** declares `ActivityRowSchema` + `ThreadMessageSchema` as the single source of truth for the cockpit activity wire shape. **Core (Layer 3)** declares `ActivityPreviewReader` interface + a pure translator that imports `ActivityRow` from schemas, filters audit entries via the legacy agentRole convention (`actorId === agentKey || snapshot.agentRole === agentKey || UUID-actorId-→-alex`), batches preview fetches via a single `readRecentBatch` call, and populates `timestampIso` from the source audit entry. **DB (Layer 4)** implements `PrismaActivityPreviewReader`. **API (Layer 5)** registers the new Fastify route under `agent-home/`, wires `PrismaActivityPreviewReader` + the audit query (scoped by `organizationId` AND agent-actor for two-layer org isolation), and returns `{ rows: ActivityRow[] }` consuming the schemas type. **Dashboard proxy** mirrors the existing per-agent proxy pattern. **Dashboard adapters/components** add the hook, the `<ThreadPreview>` component, and the expansion behavior on `<ActivityRow>` + `<ActivityStream>`. No Prisma migration. No new mutation paths. The dashboard's `types.ts` drops its local `ActivityRow` + `ThreadMessage` declarations and re-exports from `@switchboard/schemas`.
 
 **Tech Stack:** Vitest (all layers), TypeScript ESM (relative imports carry `.js` per `CLAUDE.md`; dashboard imports omit `.js` per `feedback_dashboard_no_js_on_any_import`), Next.js 14 App Router + React 18 + `@tanstack/react-query` (dashboard), Fastify (api), Prisma (db). All five layers use the mocked-Prisma test pattern (`feedback_api_test_mocked_prisma.md`).
 
@@ -103,20 +103,20 @@ Expected: clean. `pnpm reset` clears stale `dist/` + regenerates Prisma + rebuil
 
 | Path | Responsibility |
 |---|---|
-| `packages/core/src/agent-home/activity-preview-reader.ts` | `ActivityPreviewReader` interface + `ThreadMessageRecord` type. Pure types, no runtime. |
+| `packages/schemas/src/cockpit-activity.ts` | **Single source of truth.** Zod schemas: `ActivityKindSchema`, `ThreadMessageSchema`, `ActivityRowSchema`. Exports inferred TS types: `ActivityKind`, `ThreadMessage`, `ActivityRow`. |
+| `packages/schemas/src/__tests__/cockpit-activity.test.ts` | Parses populated row, contact-less row, missing-optional-fields row; rejects empty-string head; accepts `timestampIso`. |
+| `packages/core/src/agent-home/activity-preview-reader.ts` | `ActivityPreviewReader` interface + `ThreadMessageRecord` type (= `ThreadMessage & { createdAt: string }`). Pure types, no runtime. |
 | `packages/core/src/agent-home/__tests__/activity-preview-reader.test.ts` | In-memory stub asserting interface shape compiles. |
 | `packages/core/src/agent-home/contact-snapshot-extractors.ts` | Per-event-type pure functions: `extractContactRef(eventType, snapshot)` returning `{ contactId, displayName } \| null`. |
 | `packages/core/src/agent-home/__tests__/contact-snapshot-extractors.test.ts` | One case per event type + unknown-event fallback + malformed-snapshot tolerance. |
-| `packages/core/src/agent-home/cockpit-activity-row.ts` | `CockpitActivityRow` + `CockpitThreadMessage` type declarations (Layer 3 mirror of the dashboard's `ActivityRow` / `ThreadMessage`). |
-| `packages/core/src/agent-home/cockpit-activity-translator.ts` | `translateAuditToCockpitActivity(args)`: audit entries + preview reader → `CockpitActivityRow[]`. Owns batched preview fetch, kind classification, body templates, `who` resolution. |
-| `packages/core/src/agent-home/__tests__/cockpit-activity-translator.test.ts` | Per-kind translation, batched fetch, `expandPreview=false` short-circuit, missing-contact fallback, malformed-audit tolerance. |
+| `packages/core/src/agent-home/cockpit-activity-translator.ts` | `translateAuditToCockpitActivity(args)`: audit entries + preview reader → `ActivityRow[]` (imported from `@switchboard/schemas`). Owns agent filtering (via legacy convention), batched preview fetch, kind classification, head/body templates, `who` resolution, `timestampIso` population. |
+| `packages/core/src/agent-home/__tests__/cockpit-activity-translator.test.ts` | Per-kind translation, batched fetch, `expandPreview=false` short-circuit, missing-contact fallback, agentRole-via-snapshot match, UUID-actorId-fallback, malformed-audit tolerance. |
 | `packages/db/src/prisma-activity-preview-reader.ts` | `class PrismaActivityPreviewReader implements ActivityPreviewReader` — Prisma impl with batched `readRecentBatch`. |
 | `packages/db/src/__tests__/prisma-activity-preview-reader.test.ts` | Mocked-Prisma single + batch reads. |
-| `apps/api/src/lib/cockpit-activity-deps.ts` | Dependency wiring: builds an `ActivityPreviewReader` from a `PrismaClient` + binds the audit query function. |
-| `apps/api/src/routes/agent-home/activity.ts` | Fastify route `GET /agents/:agentId/activity`. |
+| `apps/api/src/lib/cockpit-activity-deps.ts` | Dependency wiring: builds an `ActivityPreviewReader` from a `PrismaClient` + binds the org-scoped audit query function. |
+| `apps/api/src/routes/agent-home/activity.ts` | Fastify route `GET /agents/:agentId/activity` returning `{ rows: ActivityRow[] }`. |
 | `apps/api/src/routes/agent-home/__tests__/activity.test.ts` | Route unit test using in-memory audit fixture + mocked Prisma. |
-| `apps/api/src/__tests__/api-cockpit-activity.test.ts` | Server-level integration via `buildTestServer`. |
-| `apps/api/src/__tests__/cockpit-activity-row-mirror.test.ts` | Compile-time shape-equivalence assertion: `CockpitActivityRow` (core) ≡ `ActivityRow` (dashboard). |
+| `apps/api/src/__tests__/api-cockpit-activity.test.ts` | Server-level integration via `buildTestServer`. Includes a cross-org isolation case. |
 | `apps/dashboard/src/app/api/dashboard/agents/[agentId]/activity/route.ts` | Next.js proxy. |
 | `apps/dashboard/src/app/api/dashboard/agents/[agentId]/activity/__tests__/route.test.ts` | Proxy auth + happy path. |
 | `apps/dashboard/src/hooks/use-agent-activity-cockpit.ts` | TanStack Query hook returning `{ rows: ActivityRow[] }`. |
@@ -124,14 +124,17 @@ Expected: clean. `pnpm reset` clears stale `dist/` + regenerates Prisma + rebuil
 | `apps/dashboard/src/components/cockpit/thread-preview.tsx` | `<ThreadPreview messages who contactId />` component. |
 | `apps/dashboard/src/components/cockpit/__tests__/thread-preview.test.tsx` | Render + "Send as me" navigation. |
 
+> The previous draft of this plan included a separate `packages/core/src/agent-home/cockpit-activity-row.ts` type file plus a `apps/api/src/__tests__/cockpit-activity-row-mirror.test.ts` compile-time mirror test. Both are dropped in favor of the `packages/schemas/src/cockpit-activity.ts` single-source-of-truth approach after code-review feedback identified (a) a fragile cross-package relative import in the mirror test path and (b) a bidirectional union mismatch between core's narrow `from` union and the dashboard's existing `from: string` declaration.
+
 ### Files modified
 
 | Path | Change | Why touched |
 |---|---|---|
-| `packages/core/src/index.ts` | Add barrel exports for `ActivityPreviewReader`, `CockpitActivityRow`, `CockpitThreadMessage`, `translateAuditToCockpitActivity`, `extractContactRef`. | Layer 3 surface. |
+| `packages/schemas/src/index.ts` | Add barrel export for the `cockpit-activity` module (Zod schemas + inferred types). | Layer 1 surface. |
+| `packages/core/src/index.ts` | Add barrel exports for `ActivityPreviewReader`, `ThreadMessageRecord`, `translateAuditToCockpitActivity`, `extractContactRef`. **No** `CockpitActivityRow` (lives in schemas). | Layer 3 surface. |
 | `packages/db/src/index.ts` | Add barrel export for `PrismaActivityPreviewReader`. | Layer 4 surface. |
 | `apps/api/src/bootstrap/routes.ts` | Register the new `agent-home/activity.ts` route under the existing `agent-home` group. | Wiring. |
-| `apps/dashboard/src/components/cockpit/types.ts` | Add optional `id?: string` field and `contactId?: string` field to `ActivityRow`. | Wire-shape extension. |
+| `apps/dashboard/src/components/cockpit/types.ts` | Delete the local `ThreadMessage` (lines 78-81) + `ActivityRow` (lines 102-111) + `ActivityKind` (lines 83-100) declarations. Replace with `export type { ActivityKind, ActivityRow, ThreadMessage } from "@switchboard/schemas";`. | Single-source-of-truth lift. |
 | `apps/dashboard/src/components/cockpit/activity-row.tsx` | Replace unused `_open` / `_toggle` with real expansion state. Render `body`, `<ThreadPreview>`, "Tell Alex about" affordance, chevron. | Core of the slice. |
 | `apps/dashboard/src/components/cockpit/__tests__/activity-row.test.tsx` | Extend / create. | Coverage. |
 | `apps/dashboard/src/components/cockpit/activity-stream.tsx` | Manage per-row open state keyed by `row.id ?? legacy-key`. Forward `open` + `toggle` to `<ActivityRow>`. | Open-state owner. |
@@ -170,7 +173,7 @@ Expected: same set of matches as `main` before A.4 — no new matches.
 
 ## Surface-agnostic backend invariant (per `feedback_surface_agnostic_backend.md`)
 
-Core / schemas / db packages do not reference UI surfaces. The translator lives in `packages/core/src/agent-home/` and consumes audit-domain types + the `ActivityPreviewReader` interface — no `apps/dashboard` imports. The Prisma reader lives in `packages/db/src/` and depends only on `@switchboard/core`. `CockpitActivityRow` is declared in core; the dashboard's `ActivityRow` is a parallel declaration. The mirror assertion lives in **`apps/api`** (Layer 5), where cross-layer imports are permitted.
+Core / schemas / db packages do not reference UI surfaces. The translator lives in `packages/core/src/agent-home/` and consumes audit-domain types + the `ActivityPreviewReader` interface + `ActivityRow` from `@switchboard/schemas` — no `apps/dashboard` imports. The Prisma reader lives in `packages/db/src/` and depends only on `@switchboard/core`. `ActivityRow` is defined once in `packages/schemas` (Layer 1) and consumed by both the translator (core) and the dashboard components — single source of truth.
 
 ---
 
@@ -489,73 +492,185 @@ contact-less row.
 
 ---
 
-### Task 3: Declare `CockpitActivityRow` type in core
+### Task 3: Declare cockpit activity Zod schemas in `packages/schemas`
 
 **Files:**
-- Create: `packages/core/src/agent-home/cockpit-activity-row.ts`
+- Create: `packages/schemas/src/cockpit-activity.ts`
+- Create: `packages/schemas/src/__tests__/cockpit-activity.test.ts`
+- Modify: `packages/schemas/src/index.ts`
 
-- [ ] **Step 1: Create the type file.**
+- [ ] **Step 1: Write the failing test.**
 
-```ts
-export type CockpitActivityKind =
-  | "booked"
-  | "qualified"
-  | "replied"
-  | "sent"
-  | "started"
-  | "connected"
-  | "waiting"
-  | "escalated"
-  | "passed"
-  | "watching"
-  | "reviewing"
-  | "paused"
-  | "scaled"
-  | "rotated"
-  | "shifted"
-  | "restructured"
-  | "alert";
-
-export interface CockpitThreadMessage {
-  from: "contact" | "alex" | "operator";
-  text: string;
-}
-
-export interface CockpitActivityRow {
-  id?: string;
-  time: string;
-  kind: CockpitActivityKind;
-  head: string;
-  body?: string;
-  who?: string;
-  contactId?: string;
-  preview?: CockpitThreadMessage[];
-  replyable?: boolean;
-  tag?: string;
-}
-```
-
-> Note: `CockpitThreadMessage` deliberately omits `createdAt` because the cockpit UI does not render per-message timestamps. The Prisma reader returns `createdAt` (used for ordering); the translator drops it from the row shape.
-
-- [ ] **Step 2: Add barrel export.**
+Create `packages/schemas/src/__tests__/cockpit-activity.test.ts`:
 
 ```ts
-export type {
-  CockpitActivityKind,
-  CockpitActivityRow,
-  CockpitThreadMessage,
-} from "./agent-home/cockpit-activity-row.js";
+import { describe, expect, it } from "vitest";
+import {
+  ActivityRowSchema,
+  ThreadMessageSchema,
+  ActivityKindSchema,
+} from "../cockpit-activity.js";
+
+describe("ThreadMessageSchema", () => {
+  it("accepts contact / alex / operator from values", () => {
+    for (const from of ["contact", "alex", "operator"] as const) {
+      expect(ThreadMessageSchema.parse({ from, text: "hi" })).toEqual({ from, text: "hi" });
+    }
+  });
+
+  it("rejects unknown from values", () => {
+    expect(() => ThreadMessageSchema.parse({ from: "system", text: "hi" })).toThrow();
+  });
+
+  it("rejects empty text", () => {
+    expect(() => ThreadMessageSchema.parse({ from: "alex", text: "" })).toThrow();
+  });
+});
+
+describe("ActivityKindSchema", () => {
+  it("accepts canonical Alex kinds", () => {
+    for (const k of [
+      "booked",
+      "qualified",
+      "replied",
+      "sent",
+      "started",
+      "connected",
+      "waiting",
+      "escalated",
+      "passed",
+    ] as const) {
+      expect(ActivityKindSchema.parse(k)).toBe(k);
+    }
+  });
+});
+
+describe("ActivityRowSchema", () => {
+  it("parses a populated row", () => {
+    const row = ActivityRowSchema.parse({
+      id: "a1",
+      time: "11:58",
+      kind: "booked",
+      head: "Maya Lin confirmed Pilates Sat 2pm",
+      body: "Calendar held.",
+      who: "Maya Lin",
+      contactId: "c-1",
+      preview: [{ from: "contact", text: "hi" }],
+      replyable: true,
+      tag: "+3",
+      timestampIso: "2026-05-15T11:58:00.000Z",
+    });
+    expect(row.preview).toHaveLength(1);
+    expect(row.replyable).toBe(true);
+  });
+
+  it("parses a minimal row (time + kind + head only)", () => {
+    const row = ActivityRowSchema.parse({
+      time: "Fri",
+      kind: "started",
+      head: "Daily run begins",
+    });
+    expect(row.preview).toBeUndefined();
+    expect(row.replyable).toBeUndefined();
+    expect(row.timestampIso).toBeUndefined();
+  });
+
+  it("rejects empty head", () => {
+    expect(() =>
+      ActivityRowSchema.parse({ time: "11:58", kind: "booked", head: "" }),
+    ).toThrow();
+  });
+
+  it("accepts timestampIso as ISO-8601 datetime string", () => {
+    const row = ActivityRowSchema.parse({
+      time: "11:58",
+      kind: "booked",
+      head: "x",
+      timestampIso: "2026-05-15T11:58:00Z",
+    });
+    expect(row.timestampIso).toBe("2026-05-15T11:58:00Z");
+  });
+});
 ```
 
-- [ ] **Step 3: Commit.**
+Run: `pnpm --filter @switchboard/schemas test -- --run cockpit-activity` — expect compile error.
+
+- [ ] **Step 2: Create `packages/schemas/src/cockpit-activity.ts`.**
+
+```ts
+import { z } from "zod";
+
+export const ActivityKindSchema = z.enum([
+  "booked",
+  "qualified",
+  "replied",
+  "sent",
+  "started",
+  "connected",
+  "waiting",
+  "escalated",
+  "passed",
+  "watching",
+  "reviewing",
+  "paused",
+  "scaled",
+  "rotated",
+  "shifted",
+  "restructured",
+  "alert",
+]);
+
+export type ActivityKind = z.infer<typeof ActivityKindSchema>;
+
+export const ThreadMessageSchema = z.object({
+  from: z.enum(["contact", "alex", "operator"]),
+  text: z.string().min(1),
+});
+
+export type ThreadMessage = z.infer<typeof ThreadMessageSchema>;
+
+export const ActivityRowSchema = z.object({
+  id: z.string().optional(),
+  time: z.string().min(1),
+  kind: ActivityKindSchema,
+  head: z.string().min(1),
+  body: z.string().optional(),
+  who: z.string().optional(),
+  contactId: z.string().optional(),
+  preview: z.array(ThreadMessageSchema).optional(),
+  replyable: z.boolean().optional(),
+  tag: z.string().optional(),
+  timestampIso: z.string().optional(),
+});
+
+export type ActivityRow = z.infer<typeof ActivityRowSchema>;
+```
+
+Run: expect green.
+
+- [ ] **Step 3: Add barrel export.**
+
+Edit `packages/schemas/src/index.ts` (append near the other core types, e.g., after `export * from "./audit.js";`):
+
+```ts
+export * from "./cockpit-activity.js";
+```
+
+Verify: `pnpm --filter @switchboard/schemas typecheck` clean.
+
+- [ ] **Step 4: Commit.**
+
+Commit message:
 
 ```
-feat(core): A.4 — CockpitActivityRow type mirror
+feat(schemas): A.4 — ActivityRowSchema single source of truth
 
-Layer 3 mirror of the dashboard's ActivityRow shape. Translator emits
-this type; dashboard types.ts maintains the structurally-identical
-ActivityRow. apps/api enforces shape equivalence at compile time
-(task 13).
+Zod schemas for the cockpit activity wire shape: ActivityKindSchema,
+ThreadMessageSchema, ActivityRowSchema. Consumed by packages/core
+(translator), apps/api (route response), and apps/dashboard
+(components). ThreadMessage.from narrows to "contact"|"alex"|"operator"
+union; ActivityRow.timestampIso is optional ISO-8601 string used by the
+cockpit page to derive recentActivityAt for the WORKING status pill.
 ```
 
 ---
@@ -975,13 +1090,14 @@ Run: expect compile error.
 - [ ] **Step 2: Create `packages/core/src/agent-home/cockpit-activity-translator.ts`.**
 
 ```ts
+import type {
+  ActivityKind,
+  ActivityRow,
+  ThreadMessage,
+} from "@switchboard/schemas";
+import type { AgentKey } from "@switchboard/schemas";
 import type { ActivityPreviewReader } from "./activity-preview-reader.js";
 import { extractContactRef } from "./contact-snapshot-extractors.js";
-import type {
-  CockpitActivityKind,
-  CockpitActivityRow,
-  CockpitThreadMessage,
-} from "./cockpit-activity-row.js";
 
 export interface AuditEntryForTranslator {
   id: string;
@@ -996,14 +1112,32 @@ export interface TranslateAuditToCockpitActivityArgs {
   entries: readonly AuditEntryForTranslator[];
   previewReader: ActivityPreviewReader;
   orgId: string;
+  agentKey: AgentKey;
   limit: number;
   expandPreview: boolean;
   now?: Date;
 }
 
+// Legacy actor-to-agent convention (verified against
+// apps/dashboard/src/hooks/use-agent-activity.ts:44 +
+// apps/api/src/services/activity-translator.ts:25-31).
+const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-/i;
+
+function actorMatchesAgent(entry: AuditEntryForTranslator, agentKey: AgentKey): boolean {
+  if (entry.actorType !== "agent") return false;
+  if (entry.actorId === agentKey) return true;
+  const snapshotRole = typeof entry.snapshot.agentRole === "string" ? entry.snapshot.agentRole : null;
+  if (snapshotRole === agentKey) return true;
+  // Legacy fallback: agent emitters that wrote a UUID actorId pre-date the
+  // canonical-key convention. Treat UUID actorId as alex (matches
+  // apps/api/src/services/activity-translator.ts UUID_PATTERN fallback).
+  if (agentKey === "alex" && UUID_PATTERN.test(entry.actorId)) return true;
+  return false;
+}
+
 const KIND_RULES: Array<{
   test: (e: string) => boolean;
-  kind: CockpitActivityKind;
+  kind: ActivityKind;
 }> = [
   { test: (e) => e.startsWith("booking."), kind: "booked" },
   {
@@ -1022,7 +1156,7 @@ const KIND_RULES: Array<{
   { test: (e) => e === "lead.created" || e === "leads.ingested", kind: "connected" },
 ];
 
-function classify(eventType: string): CockpitActivityKind {
+function classify(eventType: string): ActivityKind {
   for (const rule of KIND_RULES) if (rule.test(eventType)) return rule.kind;
   return "replied";
 }
@@ -1060,7 +1194,7 @@ function asNumber(value: unknown): number | null {
 }
 
 function buildHead(
-  kind: CockpitActivityKind,
+  kind: ActivityKind,
   snapshot: Record<string, unknown>,
   contactName: string | null,
 ): string {
@@ -1124,9 +1258,9 @@ function buildHead(
 }
 
 function buildBody(
-  kind: CockpitActivityKind,
+  kind: ActivityKind,
   snapshot: Record<string, unknown>,
-  preview: CockpitThreadMessage[] | undefined,
+  preview: ThreadMessage[] | undefined,
 ): string | undefined {
   switch (kind) {
     case "booked": {
@@ -1185,7 +1319,7 @@ function buildBody(
   }
 }
 
-function buildTag(kind: CockpitActivityKind, snapshot: Record<string, unknown>): string | undefined {
+function buildTag(kind: ActivityKind, snapshot: Record<string, unknown>): string | undefined {
   if (kind === "sent") {
     const n = asNumber(deepKey(snapshot, "message", "count") as unknown) ?? asNumber(snapshot.count);
     if (n) return `+${n}`;
@@ -1193,22 +1327,26 @@ function buildTag(kind: CockpitActivityKind, snapshot: Record<string, unknown>):
   return undefined;
 }
 
-function dropCreatedAt(records: Array<{ from: "contact" | "alex" | "operator"; text: string; createdAt: string }>): CockpitThreadMessage[] {
+function dropCreatedAt(records: Array<{ from: "contact" | "alex" | "operator"; text: string; createdAt: string }>): ThreadMessage[] {
   return records.map((r) => ({ from: r.from, text: r.text }));
 }
 
 export async function translateAuditToCockpitActivity(
   args: TranslateAuditToCockpitActivityArgs,
-): Promise<CockpitActivityRow[]> {
+): Promise<ActivityRow[]> {
   const now = args.now ?? new Date();
-  const sliced = args.entries.slice(0, args.limit);
+
+  // Filter to entries matching the requested agent. Limit clamping is
+  // owned by the API route (which passes a Prisma `take`), so the
+  // translator does not re-clamp — it consumes whatever it's given.
+  const matching = args.entries.filter((e) => actorMatchesAgent(e, args.agentKey));
 
   type Staged = {
     entry: AuditEntryForTranslator;
-    kind: CockpitActivityKind;
+    kind: ActivityKind;
     contactRef: ReturnType<typeof extractContactRef>;
   };
-  const staged: Staged[] = sliced.map((entry) => ({
+  const staged: Staged[] = matching.map((entry) => ({
     entry,
     kind: classify(entry.eventType),
     contactRef: extractContactRef(entry.eventType, entry.snapshot),
@@ -1218,7 +1356,7 @@ export async function translateAuditToCockpitActivity(
     new Set(staged.map((s) => s.contactRef?.contactId).filter((v): v is string => !!v)),
   );
 
-  const previews: Record<string, CockpitThreadMessage[]> = {};
+  const previews: Record<string, ThreadMessage[]> = {};
   if (args.expandPreview && uniqueContactIds.length > 0) {
     const batch = await args.previewReader.readRecentBatch({
       contactIds: uniqueContactIds,
@@ -1232,11 +1370,12 @@ export async function translateAuditToCockpitActivity(
 
   return staged.map(({ entry, kind, contactRef }) => {
     const preview = contactRef ? previews[contactRef.contactId] : undefined;
-    const row: CockpitActivityRow = {
+    const row: ActivityRow = {
       id: entry.id,
       time: formatTime(entry.timestamp, now),
       kind,
       head: buildHead(kind, entry.snapshot, contactRef?.displayName ?? null),
+      timestampIso: entry.timestamp,
     };
     const body = buildBody(kind, entry.snapshot, preview);
     if (body) row.body = body;
@@ -1259,7 +1398,133 @@ export async function translateAuditToCockpitActivity(
 
 Run: expect green.
 
-- [ ] **Step 3: Add barrel export + commit.**
+- [ ] **Step 3: Update the test fixture for the actor-filter cases.**
+
+Append to `packages/core/src/agent-home/__tests__/cockpit-activity-translator.test.ts`:
+
+```ts
+  it("includes entry with actorId === agentKey", async () => {
+    const audit: AuditEntryForTranslator[] = [
+      {
+        id: "a1",
+        eventType: "booking.create",
+        timestamp: NOW.toISOString(),
+        actorType: "agent",
+        actorId: "alex",
+        snapshot: { booking: { contactId: "c1", contactDisplayName: "A" } },
+      },
+    ];
+    const r = reader({});
+    const rows = await translateAuditToCockpitActivity({
+      entries: audit, previewReader: r.reader, orgId: "o", agentKey: "alex",
+      limit: 50, expandPreview: false, now: NOW,
+    });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("includes entry with snapshot.agentRole === agentKey (actorId is UUID)", async () => {
+    const audit: AuditEntryForTranslator[] = [
+      {
+        id: "a1",
+        eventType: "booking.create",
+        timestamp: NOW.toISOString(),
+        actorType: "agent",
+        actorId: "11111111-2222-3333-4444-555555555555",
+        snapshot: {
+          agentRole: "alex",
+          booking: { contactId: "c1", contactDisplayName: "A" },
+        },
+      },
+    ];
+    const r = reader({});
+    const rows = await translateAuditToCockpitActivity({
+      entries: audit, previewReader: r.reader, orgId: "o", agentKey: "alex",
+      limit: 50, expandPreview: false, now: NOW,
+    });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("UUID actorId without agentRole falls back to alex (legacy convention)", async () => {
+    const audit: AuditEntryForTranslator[] = [
+      {
+        id: "a1",
+        eventType: "message.sent",
+        timestamp: NOW.toISOString(),
+        actorType: "agent",
+        actorId: "11111111-2222-3333-4444-555555555555",
+        snapshot: {},
+      },
+    ];
+    const r = reader({});
+    const rows = await translateAuditToCockpitActivity({
+      entries: audit, previewReader: r.reader, orgId: "o", agentKey: "alex",
+      limit: 50, expandPreview: false, now: NOW,
+    });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("UUID actorId without agentRole does NOT match riley (no UUID-to-riley fallback)", async () => {
+    const audit: AuditEntryForTranslator[] = [
+      {
+        id: "a1",
+        eventType: "message.sent",
+        timestamp: NOW.toISOString(),
+        actorType: "agent",
+        actorId: "11111111-2222-3333-4444-555555555555",
+        snapshot: {},
+      },
+    ];
+    const r = reader({});
+    const rows = await translateAuditToCockpitActivity({
+      entries: audit, previewReader: r.reader, orgId: "o", agentKey: "riley",
+      limit: 50, expandPreview: false, now: NOW,
+    });
+    expect(rows).toHaveLength(0);
+  });
+
+  it("excludes non-agent actorType entries", async () => {
+    const audit: AuditEntryForTranslator[] = [
+      {
+        id: "a1",
+        eventType: "system.daily_scan_started",
+        timestamp: NOW.toISOString(),
+        actorType: "system",
+        actorId: "cron",
+        snapshot: {},
+      },
+    ];
+    const r = reader({});
+    const rows = await translateAuditToCockpitActivity({
+      entries: audit, previewReader: r.reader, orgId: "o", agentKey: "alex",
+      limit: 50, expandPreview: false, now: NOW,
+    });
+    expect(rows).toHaveLength(0);
+  });
+
+  it("populates timestampIso from entry.timestamp", async () => {
+    const ts = "2026-05-15T11:58:00.000Z";
+    const audit: AuditEntryForTranslator[] = [
+      {
+        id: "a1",
+        eventType: "booking.create",
+        timestamp: ts,
+        actorType: "agent",
+        actorId: "alex",
+        snapshot: { booking: { contactId: "c1", contactDisplayName: "A" } },
+      },
+    ];
+    const r = reader({});
+    const rows = await translateAuditToCockpitActivity({
+      entries: audit, previewReader: r.reader, orgId: "o", agentKey: "alex",
+      limit: 50, expandPreview: false, now: NOW,
+    });
+    expect(rows[0]!.timestampIso).toBe(ts);
+  });
+```
+
+> **Note:** the earlier tests in the same file (Step 1 of this task in the original draft) need `agentKey: "alex"` passed into every `translateAuditToCockpitActivity` call site — the function's `TranslateAuditToCockpitActivityArgs` interface now requires it. Update those fixtures during this step.
+
+- [ ] **Step 4: Add barrel export + commit.**
 
 Add to `packages/core/src/index.ts`:
 
@@ -1279,11 +1544,14 @@ Commit:
 feat(core): A.4 — cockpit activity translator with batched preview fetch
 
 translateAuditToCockpitActivity consumes audit entries + an
-ActivityPreviewReader, classifies kind, extracts contact refs, fetches
-previews in one batched call per request, and emits the cockpit-shape
-ActivityRow. expandPreview=false short-circuits the reader entirely;
-rows without an extractable contactId surface as contact-less
-(replyable=false, no preview).
+ActivityPreviewReader, filters to entries matching the requested agent
+(via the legacy convention: actorId === agentKey, OR snapshot.agentRole
+=== agentKey, OR UUID-actorId-→-alex), classifies kind, extracts contact
+refs, fetches previews in one batched call per request, populates
+timestampIso from the source entry, and emits ActivityRow (imported
+from @switchboard/schemas). expandPreview=false short-circuits the
+reader entirely; rows without an extractable contactId surface as
+contact-less (replyable=false, no preview).
 ```
 
 ---
@@ -1303,9 +1571,7 @@ Create `apps/api/src/lib/cockpit-activity-deps.ts`:
 
 ```ts
 import type { PrismaClient } from "@prisma/client";
-import {
-  PrismaActivityPreviewReader,
-} from "@switchboard/db";
+import { PrismaActivityPreviewReader } from "@switchboard/db";
 import type {
   ActivityPreviewReader,
   AuditEntryForTranslator,
@@ -1313,30 +1579,46 @@ import type {
 
 export interface CockpitActivityDeps {
   previewReader: ActivityPreviewReader;
+  // Fetches all audit entries for the org with actorType === "agent",
+  // up to `limit`. The translator filters down to entries matching the
+  // requested agentKey via the legacy convention (actorId === agentKey
+  // OR snapshot.agentRole === agentKey OR UUID-actorId-→-alex). We
+  // over-fetch here because the agent filter is in TS, not Prisma —
+  // some entries in the over-fetched window will be filtered out.
   fetchAuditEntries: (args: {
     orgId: string;
-    agentActorId: string;
     limit: number;
   }) => Promise<AuditEntryForTranslator[]>;
 }
+
+// Verified against packages/db/prisma/schema.prisma:150-182:
+//   AuditEntry.organizationId  (String?, NOT `orgId`)
+//   AuditEntry.timestamp       (DateTime, canonical event time)
+//   AuditEntry.createdAt       (DateTime, row creation; co-existing field)
+// AuditEntry has both `timestamp` and `createdAt`; we use `timestamp`
+// to match the legacy translator at apps/api/src/services/
+// activity-translator.ts:71 and to avoid silent drift on back-dated
+// entries.
+
+const AGENT_OVERFETCH_MULTIPLIER = 4; // pre-filter widening factor
 
 export function buildCockpitActivityDeps(
   prisma: PrismaClient,
 ): CockpitActivityDeps {
   return {
     previewReader: new PrismaActivityPreviewReader(prisma),
-    async fetchAuditEntries({ orgId, agentActorId, limit }) {
+    async fetchAuditEntries({ orgId, limit }) {
       const rows = await prisma.auditEntry.findMany({
         where: {
-          orgId,
-          actorId: agentActorId,
+          organizationId: orgId,
+          actorType: "agent",
         },
-        orderBy: { createdAt: "desc" },
-        take: limit,
+        orderBy: { timestamp: "desc" },
+        take: limit * AGENT_OVERFETCH_MULTIPLIER,
         select: {
           id: true,
           eventType: true,
-          createdAt: true,
+          timestamp: true,
           actorType: true,
           actorId: true,
           snapshot: true,
@@ -1345,7 +1627,7 @@ export function buildCockpitActivityDeps(
       return rows.map((r) => ({
         id: r.id,
         eventType: r.eventType,
-        timestamp: r.createdAt.toISOString(),
+        timestamp: r.timestamp.toISOString(),
         actorType: r.actorType,
         actorId: r.actorId,
         snapshot: r.snapshot as Record<string, unknown>,
@@ -1355,7 +1637,22 @@ export function buildCockpitActivityDeps(
 }
 ```
 
-> **Note:** The `agentActorId` parameter is the canonical actor handle for Alex (`"alex"`) or Riley (`"riley"`). Today's audit emitters use these literal strings; verify with `grep -n "actorId.*\"alex\"\\|actorId.*\"riley\"" apps/api/src apps/chat/src packages/core/src` and confirm before implementing. If the canonical handle is a UUID instead, swap to an `agentRole` filter or join through `AgentRoster`. Plan executor: **verify and lock at task time, do not assume.**
+> **Pre-task verification (RUN THIS BEFORE WRITING CODE):**
+>
+> ```bash
+> # Verify AuditEntry field names match the locked code.
+> grep -A 25 "^model AuditEntry " packages/db/prisma/schema.prisma | grep -E "organizationId|timestamp|createdAt|actorType|actorId|snapshot"
+> ```
+>
+> Expected output includes: `organizationId  String?`, `timestamp  DateTime`, `createdAt  DateTime`, `actorType  String`, `actorId  String`, `snapshot  Json`. If any field is named differently, update the locked Prisma `select` accordingly.
+>
+> ```bash
+> # Verify agent emitters' actorId conventions today.
+> grep -rn "actorId.*\"alex\"\|actorId.*\"riley\"\|actorId.*agentRole" apps/api/src apps/chat/src packages/core/src | head -10
+> grep -rn "snapshot.*agentRole\|agentRole:" apps/api/src apps/chat/src packages/core/src | head -10
+> ```
+>
+> Expected: at least some emitters write `actorId: "alex"` literal; many also pass `agentRole` into the snapshot. The translator's three-way filter covers both. If neither convention is found (extremely unlikely given the legacy hook works today), pause and re-verify before continuing.
 
 - [ ] **Step 2: Write the route + failing test.**
 
@@ -1401,13 +1698,14 @@ describe("GET /api/dashboard/agents/:agentId/activity", () => {
     expect(res.json()).toEqual({ rows: [] });
   });
 
-  it("clamps limit to max 200", async () => {
+  it("clamps limit to max 200 (audit fetch gets limit×4 over-fetch)", async () => {
     const { deps, fetchSpy } = buildDeps();
     const app = await buildApp(deps);
     await app.inject({
       method: "GET",
       url: "/api/dashboard/agents/alex/activity?limit=9999",
     });
+    // route clamps to 200, deps over-fetches by ×4 → 800
     expect(fetchSpy.mock.calls[0]![0].limit).toBe(200);
   });
 
@@ -1443,19 +1741,36 @@ describe("GET /api/dashboard/agents/:agentId/activity", () => {
     expect(res.json().rows[0].preview).toBeUndefined();
     expect(res.json().rows[0].replyable).toBe(false);
   });
+
+  it("filters out entries belonging to a different agent (e.g. riley)", async () => {
+    const { deps, fetchSpy } = buildDeps();
+    fetchSpy.mockResolvedValueOnce([
+      {
+        id: "a1",
+        eventType: "message.sent",
+        timestamp: new Date().toISOString(),
+        actorType: "agent",
+        actorId: "riley",
+        snapshot: { agentRole: "riley", message: { contactId: "c1", contactDisplayName: "X" } },
+      },
+    ]);
+    const app = await buildApp(deps);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/alex/activity",
+    });
+    expect(res.json().rows).toEqual([]);
+  });
 });
 ```
 
 - [ ] **Step 3: Implement `apps/api/src/routes/agent-home/activity.ts`.**
 
 ```ts
-import type { FastifyPluginAsync, FastifyPluginCallback } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import {
-  translateAuditToCockpitActivity,
-  type CockpitActivityRow,
-} from "@switchboard/core";
-import { AgentKeySchema } from "@switchboard/schemas";
+import { translateAuditToCockpitActivity } from "@switchboard/core";
+import { AgentKeySchema, type ActivityRow } from "@switchboard/schemas";
 import type { CockpitActivityDeps } from "../../lib/cockpit-activity-deps.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
@@ -1492,19 +1807,20 @@ export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginA
           ? false
           : true;
 
-      const entries = await deps.fetchAuditEntries({
-        orgId,
-        agentActorId: params.data.agentId,
-        limit,
-      });
+      // Audit query is org-scoped at the Prisma layer (cockpit-activity-deps.ts);
+      // the translator filters down to entries matching `agentKey`. Limit is
+      // applied as a post-filter slice below — over-fetch happens in deps.
+      const entries = await deps.fetchAuditEntries({ orgId, limit });
 
-      const rows: CockpitActivityRow[] = await translateAuditToCockpitActivity({
+      const filtered = await translateAuditToCockpitActivity({
         entries,
         previewReader: deps.previewReader,
         orgId,
+        agentKey: params.data.agentId,
         limit,
         expandPreview,
       });
+      const rows: ActivityRow[] = filtered.slice(0, limit);
 
       return reply.code(200).send({ rows });
     });
@@ -1512,6 +1828,8 @@ export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginA
   return plugin;
 }
 ```
+
+> The translator does not internally clamp by `limit` (over-fetched audit rows may include other-agent entries that get filtered out). The route applies the final `.slice(0, limit)` after translation so the response honors the caller's cap.
 
 Run: `pnpm --filter @switchboard/api test -- --run agent-home/activity` — expect green.
 
@@ -1532,110 +1850,83 @@ await app.register(cockpitActivityRoutes(cockpitActivityDeps), {
 
 - [ ] **Step 5: Write the server-level integration test.**
 
-Create `apps/api/src/__tests__/api-cockpit-activity.test.ts` mirroring the existing `api-metrics.test.ts` pattern. Use mocked Prisma; assert end-to-end `GET /api/dashboard/agents/alex/activity` returns `{ rows: CockpitActivityRow[] }` with `preview` populated when ConversationMessage rows exist.
+Create `apps/api/src/__tests__/api-cockpit-activity.test.ts` mirroring the existing `api-metrics.test.ts` pattern. Use mocked Prisma; assert end-to-end `GET /api/dashboard/agents/alex/activity` returns `{ rows: ActivityRow[] }` with `preview` populated when ConversationMessage rows exist. Add a **cross-org isolation case**: audit fixture spans two `organizationId` values; the request's `organizationIdFromAuth` is set to one; assert the response excludes rows from the other org (Risk #11).
 
 - [ ] **Step 6: Commit.**
 
 ```
 feat(api): A.4 — GET /api/dashboard/agents/:agentId/activity
 
-New per-agent endpoint emitting CockpitActivityRow[] directly. Reads
-audit entries scoped to the agent's actorId, batches preview fetches
-via ActivityPreviewReader (one Prisma findMany per request),
-short-circuits the reader when expandPreview=false. Limit clamps to
-[1, 200] with default 50. agentId validates against AgentKeySchema.
+New per-agent endpoint emitting ActivityRow[] (from @switchboard/
+schemas) directly. Audit query is org-scoped at the Prisma layer
+(AuditEntry.organizationId === orgId, actorType === "agent"),
+over-fetched ×4 to give the in-TS agent filter room to discard
+non-matching rows. Translator filters by the legacy actor convention
+(actorId === agentKey OR snapshot.agentRole === agentKey OR
+UUID-actorId-→-alex), batches preview fetches via
+ActivityPreviewReader (one Prisma findMany per request), short-circuits
+the reader when expandPreview=false. Limit clamps to [1, 200] with
+default 50; route slices the post-translate rows to honor the cap.
 ```
 
 ---
 
-### Task 7: Add the compile-time shape-equivalence test in `apps/api`
+### Task 7: (Reserved — was compile-time mirror test; now obsoleted by Task 3's schemas-package single source of truth.)
 
-**Files:**
-- Create: `apps/api/src/__tests__/cockpit-activity-row-mirror.test.ts`
+The previous draft of this plan added a compile-time `expectTypeOf` assertion in `apps/api` to enforce shape equivalence between a core-declared `CockpitActivityRow` and the dashboard's `ActivityRow`. With Task 3 lifting the type into `packages/schemas` as the single import point, the mirror is unnecessary — both layers consume the same type. Skip this task.
 
-- [ ] **Step 1: Create the test.**
-
-```ts
-import { describe, it, expectTypeOf } from "vitest";
-import type { CockpitActivityRow } from "@switchboard/core";
-// Cross-layer import permitted under apps/* per CLAUDE.md §Dependency Layers.
-// This is the only place the mirror is enforced.
-import type { ActivityRow as DashboardActivityRow } from "../../../../apps/dashboard/src/components/cockpit/types.js";
-
-describe("CockpitActivityRow ≡ ActivityRow (dashboard)", () => {
-  it("core type is assignable to dashboard type", () => {
-    expectTypeOf<CockpitActivityRow>().toMatchTypeOf<DashboardActivityRow>();
-  });
-
-  it("dashboard type is assignable to core type", () => {
-    expectTypeOf<DashboardActivityRow>().toMatchTypeOf<CockpitActivityRow>();
-  });
-});
-```
-
-> **Plan executor note:** if the cross-layer relative import path resolves incorrectly (Next.js path aliases, tsconfig isolation), an alternative is to declare a sibling test in `apps/dashboard` that imports `CockpitActivityRow` from `@switchboard/core` and runs the same assertion. The location does not matter — the assertion must exist *somewhere* in the build to catch drift. Pick whichever resolves cleanly under `pnpm --filter ... typecheck`.
-
-- [ ] **Step 2: Run + verify.**
-
-```bash
-pnpm --filter @switchboard/api typecheck
-pnpm --filter @switchboard/api test -- --run cockpit-activity-row-mirror
-```
-
-Both clean. If they fail, the type drift must be resolved before continuing.
-
-- [ ] **Step 3: Commit.**
-
-```
-test(api): A.4 — compile-time mirror between CockpitActivityRow and dashboard ActivityRow
-
-Enforces shape equivalence at typecheck time. Drift in either direction
-fails the build.
-```
+If, during implementation, you discover that schemas can't host this type for some unexpected reason (e.g., it would create a circular dependency that surfaces only at build time), fall back to the mirror approach — but resolve the schemas-side problem first, since the layer hierarchy in `CLAUDE.md` explicitly designates schemas as Layer 1 with no internal dependencies.
 
 ---
 
-### Task 8: Extend dashboard `ActivityRow` type with `id` + `contactId`
+### Task 8: Replace dashboard `ActivityRow` / `ThreadMessage` declarations with schemas re-exports
 
 **Files:**
 - Modify: `apps/dashboard/src/components/cockpit/types.ts`
 
-- [ ] **Step 1: Add the fields.**
+- [ ] **Step 1: Replace the local declarations.**
 
-Edit `apps/dashboard/src/components/cockpit/types.ts:102-111` to add `id?: string;` and `contactId?: string;` to the `ActivityRow` interface. Final shape:
+In `apps/dashboard/src/components/cockpit/types.ts`, delete:
+
+- The `ThreadMessage` interface at lines 78-81 (`from: string; text: string;`).
+- The `ActivityKind` type at lines 83-100.
+- The `ActivityRow` interface at lines 102-111.
+
+Replace with one line:
 
 ```ts
-export interface ActivityRow {
-  id?: string;
-  time: string;
-  kind: ActivityKind;
-  head: string;
-  body?: string;
-  who?: string;
-  contactId?: string;
-  preview?: ThreadMessage[];
-  replyable?: boolean;
-  tag?: string;
-}
+export type { ActivityKind, ActivityRow, ThreadMessage } from "@switchboard/schemas";
 ```
 
-- [ ] **Step 2: Verify mirror test still passes.**
+The rest of the file (`CockpitStatus`, `MissionViewModel`, `AlexApprovalKind`, …, `ApprovalView`, `KpiTile`, `RoiBar`, `CockpitKpiData`) stays exactly as today.
+
+- [ ] **Step 2: Verify no caller passes a non-canonical `from` value.**
 
 ```bash
-pnpm --filter @switchboard/api test -- --run cockpit-activity-row-mirror
+grep -rn "from:\s*['\"]" apps/dashboard/src/components/cockpit apps/dashboard/src/lib/cockpit | grep -v "test\|spec"
 ```
 
-Both directions clean.
+Expected: every match assigns one of `"contact" | "alex" | "operator"`. If any caller passes a different literal (or a `string` variable), narrow it or audit before continuing. The `ThreadMessage.from` was previously `string`; narrowing to a 3-member union is the breaking change. The only known consumers are the new `<ThreadPreview>` (Task 11, locked to the union) and the new server-side translator (Task 5, also locked).
 
-- [ ] **Step 3: Commit.**
+- [ ] **Step 3: Typecheck.**
+
+```bash
+pnpm --filter @switchboard/dashboard typecheck
+```
+
+Clean. If a previously-existing call site emerges that passes `from: string`, the executor decides: narrow the call site (preferred) or temporarily re-introduce a local widened type (last resort; document in PR).
+
+- [ ] **Step 4: Commit.**
 
 ```
-feat(dashboard): A.4 — ActivityRow gains optional id + contactId
+feat(dashboard): A.4 — types.ts re-exports cockpit activity types from schemas
 
-id is the stable React key for per-row open state across refetches.
-contactId drives the /contacts/[contactId]?note=open deep link
-("Tell Alex about {firstName}" affordance, rendered when contactId is
-present).
+Drops the local ActivityKind / ActivityRow / ThreadMessage declarations
+(lines 78-111 of types.ts) and re-exports from @switchboard/schemas.
+ThreadMessage.from narrows from `string` to `"contact"|"alex"|"operator"`
+— a deliberate breaking change verified to have no existing
+non-canonical call sites. id, contactId, and timestampIso ride along
+on the new ActivityRow (declared schema-side at Task 3).
 ```
 
 ---
@@ -1652,22 +1943,31 @@ Mirror `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/__tests__/
 
 - [ ] **Step 2: Implement the route.**
 
+Mirror the existing per-agent proxy at `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/route.ts` exactly:
+
 ```ts
 import { NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
-import { requireSession } from "@/lib/session";
-import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
+
+function errorResponse(err: unknown) {
+  const status = err instanceof Error && err.message === "Unauthorized" ? 401 : 500;
+  return NextResponse.json(
+    err instanceof Error ? { error: err.message } : { error: "unknown" },
+    { status },
+  );
+}
 
 export async function GET(
   request: Request,
   { params }: { params: { agentId: string } },
 ) {
   try {
-    await requireSession();
+    await requireDashboardSession();
     const client = await getApiClient();
     const url = new URL(request.url);
-    const limit = url.searchParams.get("limit") ?? undefined;
-    const expandPreview = url.searchParams.get("expandPreview") ?? undefined;
+    const limit = url.searchParams.get("limit");
+    const expandPreview = url.searchParams.get("expandPreview");
 
     const data = await client.getAgentActivityCockpit(params.agentId, {
       limit: limit ? Number(limit) : undefined,
@@ -1676,31 +1976,40 @@ export async function GET(
 
     return NextResponse.json(data);
   } catch (err: unknown) {
-    return proxyError(
-      err instanceof Error ? { error: err.message } : {},
-      err instanceof Error && err.message === "Unauthorized" ? 401 : 500,
-    );
+    return errorResponse(err);
   }
 }
 ```
 
+> **Pre-task verification:** confirm `apps/dashboard/src/lib/require-dashboard-session.ts` exists and exports `requireDashboardSession`. The legacy `apps/dashboard/src/lib/session.ts`'s `requireSession` is a different helper used elsewhere. Mirror what `mission/route.ts` does.
+
 - [ ] **Step 3: Add `getAgentActivityCockpit` to the API client.**
 
-Locate the client at `apps/dashboard/src/lib/api-client.ts` (or wherever `getAgentMission` lives). Add:
+The client surface is split across `apps/dashboard/src/lib/api-client/*.ts`. The existing `getMission(agentKey)` lives at **`apps/dashboard/src/lib/api-client/governance.ts:345`**. Add `getAgentActivityCockpit` immediately below, mirroring the same pattern:
 
 ```ts
+// In apps/dashboard/src/lib/api-client/governance.ts, near getMission:
 async getAgentActivityCockpit(
-  agentId: string,
+  agentKey: string,
   opts: { limit?: number; expandPreview?: boolean } = {},
 ): Promise<{ rows: ActivityRow[] }> {
   const qs = new URLSearchParams();
   if (typeof opts.limit === "number") qs.set("limit", String(opts.limit));
   if (opts.expandPreview === false) qs.set("expandPreview", "false");
-  return this.fetch(`/api/dashboard/agents/${encodeURIComponent(agentId)}/activity?${qs.toString()}`);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return this.request<{ rows: ActivityRow[] }>(
+    `/api/dashboard/agents/${encodeURIComponent(agentKey)}/activity${suffix}`,
+  );
 }
 ```
 
-> **Plan executor note:** the existing API client surface may use a different method-naming or fetch-helper pattern. Match the existing pattern for `getAgentMission` / `getAgentMetrics` exactly. Do not introduce a new shape.
+Import `ActivityRow` from `@switchboard/schemas` at the top of `governance.ts`:
+
+```ts
+import type { ActivityRow } from "@switchboard/schemas";
+```
+
+> **Pre-task verification:** run `grep -n "async getMission\|this.request" apps/dashboard/src/lib/api-client/governance.ts` and confirm the existing helper uses `this.request<T>(path)` (not `this.fetch`). Mirror its method-naming pattern. Do not introduce a new shape.
 
 - [ ] **Step 4: Commit.**
 
@@ -2490,32 +2799,10 @@ Edit `apps/dashboard/src/components/cockpit/cockpit-page.tsx`:
 
 ```ts
 const activityRows = activityQ.data?.rows ?? [];
-const recentActivityAt =
-  activityRows.length > 0
-    ? // The new wire shape carries `time` (formatted) but not `timestamp`.
-      // recentActivityAt is used by useCockpitStatusAlex to drive WORKING.
-      // Server emits rows sorted desc by entry timestamp, so the first
-      // row's timestamp is the most recent.
-      // We need a raw timestamp here — extend the wire shape if status
-      // derivation matters. For A.4, derive a Date from the formatted
-      // string when same-day (HH:MM), else fall back to `now`.
-      parseTimeOrNow(activityRows[0]!.time, now)
-    : null;
-```
-
-> **Plan executor note:** `recentActivityAt` feeds `useCockpitStatusAlex` to drive the `WORKING` status pill. The current implementation reads `rawAlexActions[0].timestamp` directly. After the swap, the wire shape only carries formatted `time` strings. Two clean options:
->
-> 1. **Extend wire shape:** add `timestampIso: string` to `CockpitActivityRow` (and the dashboard mirror) so the page can read it directly. Cleanest; one schema delta.
-> 2. **Re-fetch raw audit:** keep `useAgentActivity` mounted *only* to drive status (it returns `TranslatedAction.timestamp`). Adds a duplicate query.
->
-> Pick **option 1.** It's a 1-line wire shape extension; the translator already has the ISO timestamp in scope. The mirror test catches drift.
->
-> **Action:** edit `packages/core/src/agent-home/cockpit-activity-row.ts` to add `timestampIso?: string;`, edit the translator to populate it from `entry.timestamp`, edit `apps/dashboard/src/components/cockpit/types.ts` to add the same field, and use `new Date(activityRows[0]!.timestampIso!)` directly. Drop the `parseTimeOrNow` helper.
-
-After the swap, the page reads:
-
-```ts
-const activityRows = activityQ.data?.rows ?? [];
+// timestampIso is populated by the server-side translator (Task 5,
+// driven by ActivityRowSchema.timestampIso from Task 3). The cockpit
+// page only reads `now` and the most-recent row's timestampIso for
+// the WORKING-pill window calculation in useCockpitStatusAlex.
 const recentActivityAt =
   activityRows.length > 0 && activityRows[0]!.timestampIso
     ? new Date(activityRows[0]!.timestampIso!)
@@ -2567,14 +2854,14 @@ rg "apps/dashboard|@/components|@/hooks" packages/core packages/db packages/sche
 
 Expected: no matches. Core/db/schemas never reference UI surfaces.
 
-- [ ] **Step 3: Mirror assertion.**
+- [ ] **Step 3: Schema-package test.**
 
 ```bash
-pnpm --filter @switchboard/api typecheck
-pnpm --filter @switchboard/api test -- --run cockpit-activity-row-mirror
+pnpm --filter @switchboard/schemas test -- --run cockpit-activity
+pnpm --filter @switchboard/schemas typecheck
 ```
 
-Expected: clean.
+Expected: clean. (The single-source-of-truth schemas-package test from Task 3 replaces the prior draft's compile-time mirror assertion.)
 
 - [ ] **Step 4: Full test sweep.**
 
@@ -2614,9 +2901,10 @@ If `/alex` shows "Couldn't load org config" or a blank stream, check `feedback_d
 
 ### Layers shipped
 
-- **Core** — `ActivityPreviewReader` interface + `extractContactRef` + `CockpitActivityRow` type + `translateAuditToCockpitActivity` batched translator.
+- **Schemas** — `ActivityKindSchema`, `ThreadMessageSchema`, `ActivityRowSchema` (single source of truth, consumed by core + api + dashboard).
+- **Core** — `ActivityPreviewReader` interface + `extractContactRef` + `translateAuditToCockpitActivity` batched translator (returns the schemas-package `ActivityRow`).
 - **DB** — `PrismaActivityPreviewReader` with a single batched `findMany` per request.
-- **API** — `GET /api/dashboard/agents/:agentId/activity?limit=N&expandPreview=true/false`; bootstrap registration; `apps/api/src/lib/cockpit-activity-deps.ts` wiring helper; compile-time mirror between `CockpitActivityRow` (core) and `ActivityRow` (dashboard).
+- **API** — `GET /api/dashboard/agents/:agentId/activity?limit=N&expandPreview=true/false`; bootstrap registration; `apps/api/src/lib/cockpit-activity-deps.ts` wiring helper (org-scoped audit query).
 - **Dashboard proxy + hook** — `apps/dashboard/src/app/api/dashboard/agents/[agentId]/activity/route.ts`; `useAgentActivityCockpit`; `agents.activityCockpit(agentId)` query key.
 - **Components** — `<ThreadPreview>`; expansion + body + preview + "Tell Alex about {firstName}" affordance on `<ActivityRow>`; per-row open-state Set in `<ActivityStream>`; `<CockpitPage>` consumes the new hook.
 
@@ -2643,7 +2931,8 @@ If `/alex` shows "Couldn't load org config" or a blank stream, check `feedback_d
 - [ ] API route green (happy path, limit clamp, agent filter, expandPreview off)
 - [ ] Dashboard proxy + hook green
 - [ ] ThreadPreview + ActivityRow + ActivityStream + CockpitPage green
-- [ ] Mirror assertion green (CockpitActivityRow ≡ ActivityRow)
+- [ ] Schemas package test green (`ActivityRowSchema` parses populated + minimal + rejects empty head)
+- [ ] Cross-org isolation case green (audit fixture spanning two orgs returns only the requester's rows)
 - [ ] Pre-merge adapter-boundary grep gate clean
 - [ ] Pre-merge surface-agnostic grep gate clean
 - [ ] `pnpm --filter @switchboard/dashboard build` clean (per `feedback_dashboard_build_not_in_ci.md`)
@@ -2679,8 +2968,9 @@ These are the same risks listed in the slice brief, with the implementation-side
 | 6 | Narrow-viewport thread preview | Reuses cockpit content width; preview text wraps; "Send as me" full-width. | 11 |
 | 7 | Honest-impact language regression | Locked body/head template tables; copy review in PR checklist. | 5 (tables) |
 | 8 | `/contacts/[id]?takeover=true` route | Pre-existing route; verified-stable; A.4 only ships the link. | 11 |
-| 9 | `recentActivityAt` loses raw timestamp | Add `timestampIso` to the wire shape (1-line schema delta; mirror test catches drift). | 5, 14 |
-| 10 | `agentActorId` resolution (Alex vs Riley) | Locked at task time per `apps/api/src/lib/cockpit-activity-deps.ts` note; verify against existing audit emitter actorId conventions before implementation. | 6 |
+| 9 | `recentActivityAt` loses raw timestamp | `timestampIso` is declared in `ActivityRowSchema` (Task 3), populated by the translator (Task 5), and consumed at the page swap (Task 14). Single field, single owner. | 3, 5, 14 |
+| 10 | Actor convention divergence (`actorId` literal vs `snapshot.agentRole` vs UUID fallback) | Translator's `actorMatchesAgent` filter implements all three legacy paths (Task 5); three explicit unit cases lock the convention. Pre-task `grep` step in Task 6 verifies emitter shapes before code lands. | 5, 6 |
+| 11 | Cross-org PII leak via `contactId` reuse | Two-layer org scoping: audit query in `cockpit-activity-deps.ts` filters `where: { organizationId: orgId, actorType: "agent" }`; preview reader independently filters `where: { orgId, contactId IN [...] }`. Integration test in Task 6 asserts cross-org-isolation (an audit fixture spanning two orgs returns only the requester's rows). | 4, 6 |
 
 ---
 
