@@ -41,23 +41,34 @@ export async function filterPilotModeSurfaceable(
   patterns: OutcomePattern[],
   evidenceStore?: PilotEvidenceLookup,
 ): Promise<OutcomePattern[]> {
-  const surfaceable: OutcomePattern[] = [];
+  // Two passes: threshold first (cheap, no DB), then parallel evidence lookups
+  // for the remainder. Preserves input ordering in the output.
+  const thresholdPass = new Set<string>();
+  const needsEvidence: OutcomePattern[] = [];
   for (const p of patterns) {
     if (
       p.sourceCount >= PILOT_SURFACING_MIN_SOURCE_COUNT &&
       p.confidence >= PILOT_SURFACING_MIN_CONFIDENCE
     ) {
-      surfaceable.push(p);
-      continue;
-    }
-    if (evidenceStore) {
-      const distinct = await evidenceStore.countDistinctBookingIds(p.id);
-      if (distinct >= PILOT_MULTI_BOOKING_MIN_DISTINCT) {
-        surfaceable.push(p);
-      }
+      thresholdPass.add(p.id);
+    } else if (evidenceStore) {
+      needsEvidence.push(p);
     }
   }
-  return surfaceable;
+
+  const evidencePass = new Set<string>();
+  if (evidenceStore && needsEvidence.length > 0) {
+    const counts = await Promise.all(
+      needsEvidence.map((p) => evidenceStore.countDistinctBookingIds(p.id)),
+    );
+    needsEvidence.forEach((p, i) => {
+      if ((counts[i] ?? 0) >= PILOT_MULTI_BOOKING_MIN_DISTINCT) {
+        evidencePass.add(p.id);
+      }
+    });
+  }
+
+  return patterns.filter((p) => thresholdPass.has(p.id) || evidencePass.has(p.id));
 }
 
 // Pattern content originates from LLM extraction of customer message content,

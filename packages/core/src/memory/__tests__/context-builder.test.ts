@@ -491,6 +491,79 @@ describe("ContextBuilder", () => {
     expect(result.injectedPatternIds).toEqual(["p1"]);
   });
 
+  it("pilotMode=true surfaces facts at the lowered DB threshold ('pilot deployments learn faster')", async () => {
+    // Locks in the documented side-effect of the DB-threshold lowering:
+    // facts at sourceCount=2, confidence=0.62 (below steady-state) reach
+    // learnedFacts in pilot mode because the listHighConfidence call uses
+    // the relaxed thresholds. Guards future refactors from silently
+    // re-tightening the fact filter.
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "f1",
+        content: "Numbing cream onset is 20 minutes",
+        category: "treatment_protocol",
+        confidence: 0.62,
+        sourceCount: 2,
+        lastSeenAt: new Date(),
+      },
+    ]);
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: true,
+    });
+    expect(result.learnedFacts).toHaveLength(1);
+    expect(result.learnedFacts[0]?.content).toBe("Numbing cream onset is 20 minutes");
+  });
+
+  it("pilotMode=true batches evidence lookups in parallel for below-threshold patterns", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      // Two below-threshold patterns — both must trigger evidence lookups.
+      {
+        id: "p1",
+        content: "weak1",
+        category: "pattern",
+        canonicalKey: "objection:pain",
+        confidence: 0.55,
+        sourceCount: 1,
+        lastSeenAt: new Date(),
+      },
+      {
+        id: "p2",
+        content: "weak2",
+        category: "pattern",
+        canonicalKey: "objection:price",
+        confidence: 0.55,
+        sourceCount: 1,
+        lastSeenAt: new Date(),
+      },
+      // One above-threshold — must NOT trigger an evidence lookup.
+      {
+        id: "p3",
+        content: "strong",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.7,
+        sourceCount: 2,
+        lastSeenAt: new Date(),
+      },
+    ]);
+    deps.evidenceStore.countDistinctBookingIds.mockResolvedValue(0);
+    await builder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: true,
+    });
+    expect(deps.evidenceStore.countDistinctBookingIds).toHaveBeenCalledTimes(2);
+    expect(deps.evidenceStore.countDistinctBookingIds).toHaveBeenCalledWith("p1");
+    expect(deps.evidenceStore.countDistinctBookingIds).toHaveBeenCalledWith("p2");
+    expect(deps.evidenceStore.countDistinctBookingIds).not.toHaveBeenCalledWith("p3");
+  });
+
   it("pilotMode=true lowers the DB query threshold so low-source patterns can reach the filter", async () => {
     await builder.build({
       organizationId: "org-1",
