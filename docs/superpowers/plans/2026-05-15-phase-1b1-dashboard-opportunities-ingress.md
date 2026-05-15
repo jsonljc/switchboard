@@ -22,7 +22,6 @@
 - `apps/api/src/bootstrap/operator-intents-schemas.ts` — Zod parameter schemas for operator-direct intents (Phase 1b only; canonicalized to `@switchboard/schemas` in Design A per spec line 99).
 - `apps/api/src/utils/__tests__/idempotency-key.test.ts`
 - `apps/api/src/utils/__tests__/ingress-error-to-reply.test.ts`
-- `apps/api/src/__tests__/api-dashboard-opportunities-ingress.test.ts` — route-level integration test against `buildTestServer`.
 
 **Modified files:**
 
@@ -32,6 +31,7 @@
 - `apps/api/src/app.ts` — wire `bootstrapOperatorIntents` after `bootstrapContainedWorkflows`.
 - `apps/api/src/routes/dashboard-opportunities.ts` — switch the PATCH handler to `app.platformIngress.submit(...)`.
 - `apps/api/src/__tests__/test-server.ts` — wire `bootstrapOperatorIntents` into the test server (mirrors app.ts).
+- `apps/api/src/__tests__/api-opportunities-stage.test.ts` — **extend** the existing 10-test suite with ingress-specific cases AND update assertions whose response shape changes after migration. Do NOT create a new parallel test file — reuse the existing `mkRow()` helper + `seedBoard()` pattern.
 - `.agent/tools/route-allowlist.yaml` — remove the temporary entry for `dashboard-opportunities.ts`.
 
 **Out-of-scope reminder:** Do not touch `recommendations.ts`, `lifecycle-disqualifications.ts`, `admin-consent.ts`, or any other route. Do not touch `local:verify:fast` or `local:verify` scripts (PR-1 contracts per kickoff brief).
@@ -906,146 +906,74 @@ git commit -m "feat(api): wire bootstrapOperatorIntents in app.ts and test-serve
 **Files:**
 
 - Modify: `apps/api/src/routes/dashboard-opportunities.ts`
-- Test: `apps/api/src/__tests__/api-dashboard-opportunities-ingress.test.ts` (new — no existing dashboard-opportunities test file)
+- Modify: `apps/api/src/__tests__/api-opportunities-stage.test.ts` (existing 10-test suite — extend with one ingress dedup test; existing assertions stay green because the route preserves response shape)
 
-- [ ] **Step 1: Write the failing integration tests**
+**Critical context discovered during alignment pass:**
 
-Create `apps/api/src/__tests__/api-dashboard-opportunities-ingress.test.ts`:
+The route already has comprehensive test coverage at `api-opportunities-stage.test.ts`:
+
+- happy path → `{ opportunity: ... }` parseable by `PipelineBoardOpportunitySchema`
+- WorkTrace recording (asserted via `TestOpportunityStore.lastTraceWritten` — store-side, distinct from `PlatformIngress` WorkTrace)
+- 404 unknown id → `{ error: "OPPORTUNITY_NOT_FOUND" }` (exact equality)
+- 404 cross-tenant
+- 400 invalid stage → `{ error: "INVALID_BODY" }`
+- 400 missing stage
+- 503 when `opportunityStore: null`
+- same-stage idempotent transition (record-only — not HTTP idempotency)
+- terminal `closedAt` set/clear
+
+**The migration MUST preserve all 10 existing assertions byte-for-byte.** That means: the route's 404-OPPORTUNITY_NOT_FOUND response stays exactly `{ error: "OPPORTUNITY_NOT_FOUND" }` — do NOT use `ingressErrorToReply` for this case. `ingressErrorToReply` is for true `IngressError` responses (intent_not_found etc.), which the existing tests do not cover and which represent net-new surface.
+
+The seed pattern is `seedBoard([mkRow({...})])` from the existing file's `mkRow()` helper. `buildTestServer()` returns `{ app, ... }` — destructure `const { app } = await buildTestServer()`.
+
+- [ ] **Step 1: Add ONE failing ingress-dedup test to the existing suite**
+
+Append the following test inside the existing `describe("PATCH /api/dashboard/opportunities/:id/stage", ...)` block in `apps/api/src/__tests__/api-opportunities-stage.test.ts` (after the last existing `it(...)` at line 168–183, before the closing `});` of the describe):
 
 ```ts
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import type { FastifyInstance } from "fastify";
-import { buildTestServer } from "./test-server.js";
-
-describe("PATCH /api/dashboard/opportunities/:id/stage — ingress migration", () => {
-  let app: FastifyInstance;
-
-  beforeEach(async () => {
-    app = await buildTestServer({});
-    await app.ready();
+it("dedups via PlatformIngress when same Idempotency-Key is replayed", async () => {
+  const first = await app.inject({
+    method: "PATCH",
+    url: "/api/dashboard/opportunities/opp_1/stage",
+    headers: {
+      "x-org-id": "org_acme",
+      "content-type": "application/json",
+      "Idempotency-Key": "phase-1b1-dedup-1",
+    },
+    payload: { stage: "booked" },
   });
+  expect(first.statusCode).toBe(200);
+  const firstBody = first.json() as { opportunity: { id: string; stage: string } };
+  expect(firstBody.opportunity.stage).toBe("booked");
 
-  afterEach(async () => {
-    await app.close();
+  // Replay with the SAME idempotency key. PlatformIngress.submit dedups by
+  // idempotency key and returns the cached result. The response payload must
+  // mirror the first call.
+  const second = await app.inject({
+    method: "PATCH",
+    url: "/api/dashboard/opportunities/opp_1/stage",
+    headers: {
+      "x-org-id": "org_acme",
+      "content-type": "application/json",
+      "Idempotency-Key": "phase-1b1-dedup-1",
+    },
+    payload: { stage: "booked" },
   });
-
-  async function seedOpportunity(orgId: string) {
-    // TestOpportunityStore exposes a public seed helper or the test server
-    // already includes a default seed. If not, create via the same store.
-    // (Verify this against TestOpportunityStore at implementation time and
-    // adjust to whatever seeding API the harness exposes.)
-    const store = app.opportunityStore;
-    if (!store || typeof (store as { __seed?: unknown }).__seed !== "function") {
-      throw new Error(
-        "TestOpportunityStore must expose __seed(orgId, opportunity) — extend if missing",
-      );
-    }
-    await (store as { __seed: (orgId: string, opp: unknown) => Promise<void> }).__seed(orgId, {
-      id: "opp-1",
-      stage: "discovered",
-    });
-  }
-
-  it("happy path: 200 with transitioned opportunity, ingress executed", async () => {
-    await seedOpportunity("org-1");
-
-    const response = await app.inject({
-      method: "PATCH",
-      url: "/api/dashboard/opportunities/opp-1/stage",
-      headers: { "x-org-id": "org-1", "Idempotency-Key": "key-happy-1" },
-      payload: { stage: "qualified" },
-    });
-
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.opportunity.id).toBe("opp-1");
-    expect(body.opportunity.stage).toBe("qualified");
-  });
-
-  it("400 on invalid body (bad stage value)", async () => {
-    const response = await app.inject({
-      method: "PATCH",
-      url: "/api/dashboard/opportunities/opp-1/stage",
-      headers: { "x-org-id": "org-1" },
-      payload: { stage: "not-a-real-stage" },
-    });
-    expect(response.statusCode).toBe(400);
-  });
-
-  it("404 when opportunity is missing (handler returns outcome=failed)", async () => {
-    const response = await app.inject({
-      method: "PATCH",
-      url: "/api/dashboard/opportunities/opp-missing/stage",
-      headers: { "x-org-id": "org-1", "Idempotency-Key": "key-404-1" },
-      payload: { stage: "qualified" },
-    });
-    expect(response.statusCode).toBe(404);
-    const body = response.json();
-    expect(body.error).toMatch(/not found/i);
-  });
-
-  it("idempotency: same Idempotency-Key returns the same WorkUnit on replay", async () => {
-    await seedOpportunity("org-1");
-
-    const first = await app.inject({
-      method: "PATCH",
-      url: "/api/dashboard/opportunities/opp-1/stage",
-      headers: { "x-org-id": "org-1", "Idempotency-Key": "key-idem-1" },
-      payload: { stage: "qualified" },
-    });
-    expect(first.statusCode).toBe(200);
-
-    const second = await app.inject({
-      method: "PATCH",
-      url: "/api/dashboard/opportunities/opp-1/stage",
-      headers: { "x-org-id": "org-1", "Idempotency-Key": "key-idem-1" },
-      payload: { stage: "qualified" },
-    });
-    expect(second.statusCode).toBe(200);
-    // PlatformIngress dedups by idempotencyKey; the second response should
-    // mirror the first. Compare the opportunity payload.
-    expect(second.json().opportunity).toEqual(first.json().opportunity);
-  });
-
-  it("WorkTrace is recorded for a successful transition", async () => {
-    await seedOpportunity("org-1");
-    await app.inject({
-      method: "PATCH",
-      url: "/api/dashboard/opportunities/opp-1/stage",
-      headers: { "x-org-id": "org-1", "Idempotency-Key": "key-trace-1" },
-      payload: { stage: "qualified" },
-    });
-
-    // The test harness uses InMemoryWorkTraceStore. Reach in and assert
-    // a trace exists for our intent. If the harness doesn't expose the
-    // store, extend it minimally (test-only helper).
-    const traceStore = (app as unknown as { __workTraceStore?: { list: () => Promise<unknown[]> } })
-      .__workTraceStore;
-    if (traceStore) {
-      const traces = await traceStore.list();
-      expect(traces.length).toBeGreaterThan(0);
-    }
-    // If __workTraceStore isn't exposed, this assertion is a no-op for now;
-    // the success of the happy-path test already proves ingress was invoked,
-    // and trace persistence is covered by PlatformIngress's own tests.
-  });
+  expect(second.statusCode).toBe(200);
+  const secondBody = second.json() as { opportunity: { id: string; stage: string } };
+  expect(secondBody.opportunity).toEqual(firstBody.opportunity);
 });
 ```
 
-**Note on test-harness gaps:** The test seed helper `__seed` and the `__workTraceStore` accessor may not exist on `TestOpportunityStore` / the test server today. At implementation time:
+**Why only one new test:** The existing 10 tests already cover happy path, WorkTrace, 404 mapping, 400 mapping, 503, same-stage trace, and terminal-closedAt logic. Idempotency dedup is the one ingress-specific behavior not exercised today. Adding more would duplicate coverage.
 
-- If `TestOpportunityStore` has no public seeding API, add a `__seed(orgId, opp)` method on it (one-liner Map insert).
-- If the test server doesn't expose `__workTraceStore`, add a decorator: `app.decorate("__workTraceStore", workTraceStore)` in test-server.ts (test-only, behind `__` naming convention).
-
-Make these harness extensions in this task, scoped to the test surface only.
-
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 2: Run the new test to verify it fails**
 
 ```bash
-pnpm --filter @switchboard/api test -- api-dashboard-opportunities-ingress
+pnpm --filter @switchboard/api test -- api-opportunities-stage
 ```
 
-Expected: FAIL — the existing route still calls `transitionOpportunityStage` directly, so the happy path may pass mechanically, but the idempotency dedup test will fail (no PlatformIngress involvement) and the 404 mapping test will likely return the old `{ error: "OPPORTUNITY_NOT_FOUND" }` shape rather than a message matching `/not found/i`.
+Expected: 10 PASS + 1 FAIL on the new dedup test (the existing route doesn't go through PlatformIngress, so the `Idempotency-Key` header is ignored and both calls hit the store independently — `secondBody.opportunity.updatedAt` will differ).
 
 - [ ] **Step 3: Replace the PATCH handler with the ingress submission**
 
@@ -1123,12 +1051,17 @@ export const dashboardOpportunitiesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (response.result.outcome === "failed") {
+      // Preserve the existing 404 response shape for OPPORTUNITY_NOT_FOUND so
+      // existing API consumers (and the existing api-opportunities-stage tests
+      // expecting `{ error: "OPPORTUNITY_NOT_FOUND" }`) continue to pass.
       const code = response.result.error?.code ?? "EXECUTION_FAILED";
-      const status = code === "OPPORTUNITY_NOT_FOUND" ? 404 : 500;
-      return reply.code(status).send({
+      if (code === "OPPORTUNITY_NOT_FOUND") {
+        return reply.code(404).send({ error: "OPPORTUNITY_NOT_FOUND" });
+      }
+      return reply.code(500).send({
         error: response.result.summary,
         code,
-        statusCode: status,
+        statusCode: 500,
       });
     }
 
@@ -1145,30 +1078,30 @@ export const dashboardOpportunitiesRoutes: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Run the route test to verify it passes**
+- [ ] **Step 4: Run the existing 10 + new dedup test together**
 
 ```bash
-pnpm --filter @switchboard/api test -- api-dashboard-opportunities-ingress
+pnpm --filter @switchboard/api test -- api-opportunities-stage
 ```
 
-Expected: 5 tests pass. If the WorkTrace test no-ops because `__workTraceStore` isn't exposed, that's acceptable; PlatformIngress's own test coverage (`packages/core/src/platform/__tests__/`) covers trace persistence.
+Expected: 11 tests pass — all 10 existing + the new dedup test. If any of the existing 10 fail, the migration broke a contract: investigate which assertion changed (likely 404 shape — should be byte-identical `{ error: "OPPORTUNITY_NOT_FOUND" }` per the route's `outcome === "failed"` branch above).
 
-- [ ] **Step 5: Run the full api test suite to confirm no regressions**
+- [ ] **Step 5: Run the full api test suite to confirm no regressions elsewhere**
 
 ```bash
 pnpm --filter @switchboard/api test
 ```
 
-Expected: PASS.
+Expected: PASS for the entire `@switchboard/api` suite.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/api/src/routes/dashboard-opportunities.ts apps/api/src/__tests__/api-dashboard-opportunities-ingress.test.ts apps/api/src/__tests__/test-server.ts
+git add apps/api/src/routes/dashboard-opportunities.ts apps/api/src/__tests__/api-opportunities-stage.test.ts
 git commit -m "feat(api): migrate dashboard-opportunities PATCH /:id/stage to PlatformIngress"
 ```
 
-(Test-server.ts may have been touched again for `__seed` / `__workTraceStore` test-only helpers — that's expected.)
+(test-server.ts may also be modified if Task 7 touched it; if so include it in the same commit or a prior commit per Task 7's commit step — verify with `git status` before committing.)
 
 ---
 
@@ -1286,7 +1219,7 @@ gh pr create --title "feat(api): migrate dashboard-opportunities PATCH to Platfo
 - [x] `getIdempotencyKey` 5-case unit test
 - [x] `ingressErrorToReply` per-discriminator unit test
 - [x] `bootstrapOperatorIntents` registration + handler success + handler-failure tests
-- [x] Route integration test (success / 400-bad-body / 404-missing-opportunity / idempotency-replay / WorkTrace-recorded)
+- [x] Existing 10-test `api-opportunities-stage` suite still green (happy path, WorkTrace, 404, 404 cross-tenant, 400 invalid stage, 400 missing stage, 503, same-stage trace, terminal closedAt set/clear) + 1 new ingress dedup test
 - [x] `pnpm local:verify:fast` passes with the temporary allowlist entry removed
 - [x] `pnpm typecheck` + `pnpm lint` + `pnpm format:check`
 
