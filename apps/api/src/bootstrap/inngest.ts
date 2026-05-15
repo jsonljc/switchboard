@@ -23,6 +23,7 @@ import {
   executeDailyPatternDecay,
   getMetrics,
   type PatternDecayDependencies,
+  type StepTools as PatternDecayStepTools,
 } from "@switchboard/core";
 import { bootstrapLifecycle } from "./lifecycle.js";
 import {
@@ -250,7 +251,7 @@ export async function registerInngest(
       idempotency: `pattern-decay-{event.ts | dateMath "yyyy-MM-dd"}`,
     },
     async ({ step }) => {
-      await executeDailyPatternDecay(step as never, patternDecayDeps);
+      await executeDailyPatternDecay(step as unknown as PatternDecayStepTools, patternDecayDeps);
     },
   );
 

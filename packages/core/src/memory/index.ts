@@ -33,4 +33,5 @@ export {
   executeDailyPatternDecay,
   type PatternDecayDependencies,
   type PatternDecayMemoryStore,
+  type StepTools,
 } from "./inngest-functions.js";

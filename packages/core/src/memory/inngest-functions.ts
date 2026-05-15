@@ -23,7 +23,7 @@ export interface PatternDecayDependencies {
   metrics: { outcomePatternsDecayed: Counter };
 }
 
-interface StepTools {
+export interface StepTools {
   run<T>(id: string, fn: () => Promise<T>): Promise<T>;
 }
 
@@ -52,17 +52,9 @@ export async function executeDailyPatternDecay(
     }),
   );
 
-  // Aggregate label values: decayStale currently returns a single scalar
-  // (Prisma updateMany count), so the labels read "aggregate"/"all" rather
-  // than splitting by tier and canonical category. The spec only forbids
-  // deploymentId on this counter; "aggregate"/"all" honors that contract
-  // but collapses the cohort.
-  //
-  // GA follow-up: widen decayStale to return Array<{ canonicalCategory,
-  // count }> (extract category from canonicalKey's namespace prefix on
-  // the row) AND join deployment-tier metadata before emitting. Tracked
-  // separately — not in scope for PR-3.2d, where the goal is just
-  // shipping the cron with an idempotent floor.
+  // decayStale returns a single scalar (Prisma updateMany count), so the
+  // counter emits aggregate labels rather than splitting by tier/category.
+  // Spec only forbids deploymentId on this counter; aggregate/all honors it.
   deps.metrics.outcomePatternsDecayed.inc(
     { deploymentTier: "aggregate", canonicalCategory: "all" },
     decayedCount,
