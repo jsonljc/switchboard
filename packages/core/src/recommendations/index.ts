@@ -47,3 +47,10 @@ export type {
   RileyOutcomeRow,
   RecommendationOutcomeStore,
 } from "./outcome-attribution-types.js";
+export {
+  attributeOneRecommendation,
+  runRileyOutcomeAttribution,
+  type AttributeOneInput,
+  type RileyOutcomeRunSummary,
+  type RunRileyOutcomeAttributionInput,
+} from "./outcome-attribution.js";
