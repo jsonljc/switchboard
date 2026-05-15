@@ -20,5 +20,5 @@ export interface ActivityPreviewReader {
     contactIds: readonly string[];
     orgId: string;
     limit: number;
-  }): Promise<Record<string, ThreadMessageRecord[]>>;
+  }): Promise<Record<string, readonly ThreadMessageRecord[]>>;
 }
