@@ -1,4 +1,4 @@
-# WhatsApp Send-Test (Slice 2B — Dashboard) Implementation Plan
+# WhatsApp Send-Test (Slice 2B — Dashboard Surface + `/account` Allowlist Exposure) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -113,8 +113,10 @@ connection: {
   // ...existing fields
   testRecipients,
 }
-// In the "not_connected" branch: either include `testRecipients: []` for consistency,
-// or omit entirely (dashboard's send-test panel only renders when readiness !== "not_connected").
+// In the "not_connected" branch, include `testRecipients: []` (do NOT omit).
+// The dashboard type is required (not optional), so every branch must emit
+// the field. This keeps `account.data.connection.testRecipients` safe to read
+// directly without `?? []` fallbacks.
 ```
 
 Touch all four branches; do not split this across PRs.
@@ -550,7 +552,7 @@ Inside `WhatsAppManagement()`'s return JSX, between `<PhoneNumbersSection />` an
 <WhatsAppSendTest
   phoneNumbers={phones.data?.phoneNumbers ?? []}
   templates={templates.data?.templates ?? []}
-  allowedRecipients={account.data.connection.testRecipients ?? []}
+  allowedRecipients={account.data.connection.testRecipients}
 />
 ```
 
@@ -593,7 +595,7 @@ pnpm --filter @switchboard/dashboard build
 ```bash
 git push -u origin <branch-name>
 gh pr create --base main \
-  --title "feat(whatsapp): Slice 2B — dashboard send-test surface" \
+  --title "feat(whatsapp): Slice 2B — dashboard surface + /account allowlist exposure" \
   --body "<see PR body template — references Slice 2A, allowlist-via-SQL, App-Review screencast readiness>"
 ```
 
