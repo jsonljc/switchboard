@@ -171,8 +171,9 @@ describe("GET /api/dashboard/agents/:agentId/activity — server-level", () => {
   });
 
   it("cross-agent isolation (Risk #10): /agents/alex excludes riley rows", async () => {
-    // UUID v4 for the legacy-emitter case below
+    // UUID v4 for the legacy-emitter cases below
     const RILEY_UUID = "11111111-2222-4333-8444-555555555555";
+    const LEGACY_UUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
     const prisma = buildMockPrisma({
       audit: [
         {
@@ -194,12 +195,24 @@ describe("GET /api/dashboard/agents/:agentId/activity — server-level", () => {
           organizationId: "org-1",
         },
         {
+          // UUID actorId + explicit snapshot.agentRole="riley":
+          // must NOT appear in alex's stream (UUID fallback requires absent agentRole).
           id: "riley-via-snapshot",
           eventType: "message.sent",
           timestamp: new Date("2026-05-15T11:00:00.000Z"),
           actorType: "agent",
           actorId: RILEY_UUID,
           snapshot: { agentRole: "riley" },
+          organizationId: "org-1",
+        },
+        {
+          // UUID actorId with NO agentRole: legacy fallback assigns it to alex.
+          id: "alex-via-uuid-legacy",
+          eventType: "message.sent",
+          timestamp: new Date("2026-05-15T10:30:00.000Z"),
+          actorType: "agent",
+          actorId: LEGACY_UUID,
+          snapshot: {},
           organizationId: "org-1",
         },
       ],
@@ -213,17 +226,12 @@ describe("GET /api/dashboard/agents/:agentId/activity — server-level", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as { rows: Array<{ id: string }> };
     const ids = body.rows.map((r) => r.id);
+    // Alex sees: literal actorId "alex" + UUID with no agentRole (legacy fallback)
     expect(ids).toContain("alex-literal");
+    expect(ids).toContain("alex-via-uuid-legacy");
+    // Alex does NOT see: literal "riley", or UUID entry attributed to riley via snapshot
     expect(ids).not.toContain("riley-literal");
-    // NOTE: the UUID-actorId + snapshot.agentRole="riley" entry currently leaks
-    // into alex view because the translator's third check
-    // (agentKey === "alex" && UUID_PATTERN.test(actorId)) fires even when
-    // snapshot.agentRole is set to a different agent. This is existing
-    // translator behavior (see packages/core/.../cockpit-activity-translator.ts).
-    // The asymmetric risk lives on alex's side only — riley never gets UUID
-    // fallback. Tightening this would require gating the UUID fallback on
-    // "snapshot.agentRole is absent". Captured here as a behavioral baseline.
-    expect(ids).toContain("riley-via-snapshot");
+    expect(ids).not.toContain("riley-via-snapshot");
   });
 
   it("cross-agent isolation (Risk #10): /agents/riley excludes alex rows", async () => {

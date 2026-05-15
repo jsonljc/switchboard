@@ -33,10 +33,12 @@ function actorMatchesAgent(entry: AuditEntryForTranslator, agentKey: AgentKey): 
   const snapshotRole =
     typeof entry.snapshot.agentRole === "string" ? entry.snapshot.agentRole : null;
   if (snapshotRole === agentKey) return true;
-  // Legacy fallback: agent emitters that wrote a UUID actorId pre-date the
-  // canonical-key convention. Treat UUID actorId as alex (matches
-  // apps/api/src/services/activity-translator.ts UUID_PATTERN fallback).
-  if (agentKey === "alex" && UUID_PATTERN.test(entry.actorId)) return true;
+  // Legacy fallback: agent emitters that wrote a UUID actorId AND no
+  // agentRole signal pre-date the canonical-key convention. Treat as
+  // alex only when there's no other agent attribution at all.
+  if (agentKey === "alex" && snapshotRole === null && UUID_PATTERN.test(entry.actorId)) {
+    return true;
+  }
   return false;
 }
 

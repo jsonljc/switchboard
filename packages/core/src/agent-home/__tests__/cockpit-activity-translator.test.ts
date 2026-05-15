@@ -296,6 +296,34 @@ describe("translateAuditToCockpitActivity", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("UUID actorId WITH explicit snapshot.agentRole does NOT fall back to alex", async () => {
+    // Regression for cross-agent leak: a UUID actorId that has an explicit
+    // snapshot.agentRole for a different agent must not also match alex via
+    // the UUID fallback. The fallback only fires when there's no other
+    // agent attribution at all.
+    const audit: AuditEntryForTranslator[] = [
+      {
+        id: "a1",
+        eventType: "message.sent",
+        timestamp: NOW.toISOString(),
+        actorType: "agent",
+        actorId: "11111111-2222-3333-4444-555555555555",
+        snapshot: { agentRole: "riley" },
+      },
+    ];
+    const r = reader({});
+    const rows = await translateAuditToCockpitActivity({
+      entries: audit,
+      previewReader: r.reader,
+      orgId: "o",
+      agentKey: "alex",
+      limit: 50,
+      expandPreview: false,
+      now: NOW,
+    });
+    expect(rows).toHaveLength(0);
+  });
+
   it("excludes non-agent actorType entries", async () => {
     const audit: AuditEntryForTranslator[] = [
       {
