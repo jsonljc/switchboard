@@ -16,15 +16,23 @@ const comparatorBaseStyle: CSSProperties = {
   fontWeight: 600,
 };
 
+export interface AccentTokens {
+  base: string;
+  deep: string;
+  soft: string;
+  paper: string;
+}
+
 interface ROIBarProps {
   roi: RoiBar;
+  accent?: AccentTokens;
 }
 
 function isDegraded(roi: RoiBar): roi is Extract<RoiBar, { degraded: true }> {
   return "degraded" in roi && roi.degraded === true;
 }
 
-export function ROIBar({ roi }: ROIBarProps) {
+export function ROIBar({ roi, accent }: ROIBarProps) {
   if (isDegraded(roi)) {
     return (
       <div
@@ -49,8 +57,8 @@ export function ROIBar({ roi }: ROIBarProps) {
             fontWeight: 500,
             padding: "4px 10px",
             borderRadius: 999,
-            border: `1px solid ${T.hair}`,
-            background: T.paper,
+            border: `1px solid ${accent ? accent.soft : T.hair}`,
+            background: accent ? accent.paper : T.paper,
           }}
         >
           {roi.comparator.value}
@@ -83,7 +91,7 @@ export function ROIBar({ roi }: ROIBarProps) {
           data-on-target={String(onTarget)}
           style={{
             ...comparatorBaseStyle,
-            color: onTarget ? T.green : T.amberDeep,
+            color: onTarget ? T.green : accent ? accent.deep : T.amberDeep,
           }}
         >
           {roi.comparator.value}
@@ -108,7 +116,7 @@ export function ROIBar({ roi }: ROIBarProps) {
             top: 0,
             bottom: 0,
             width: `${fillPctClamped}%`,
-            background: `linear-gradient(90deg, ${T.amberSoft} 0%, ${T.amber} 100%)`,
+            background: `linear-gradient(90deg, ${accent ? accent.soft : T.amberSoft} 0%, ${accent ? accent.base : T.amber} 100%)`,
           }}
         />
         <div

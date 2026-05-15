@@ -83,4 +83,65 @@ describe("<ROIBar>", () => {
     const pill = screen.getByTestId("roi-comparator");
     expect(pill).toHaveAttribute("data-on-target", "false");
   });
+
+  it("default accent renders Alex amber on degraded chip", () => {
+    render(
+      <ROIBar
+        roi={{
+          degraded: true,
+          degradedHint: "",
+          label: "cost per lead",
+          comparator: { value: "$4 per lead", target: "target $5" },
+        }}
+      />,
+    );
+    const pill = screen.getByTestId("roi-comparator");
+    // Default border/background come from T.hair / T.paper — no accent override.
+    expect(pill).toHaveAttribute("data-on-target", "false");
+  });
+
+  it("Riley accent applies clay tokens to degraded chip border + background", () => {
+    const RILEY_ACCENT = {
+      base: "#B86C50",
+      deep: "#7E4533",
+      soft: "#ECD4C8",
+      paper: "#F6E7DE",
+    };
+    render(
+      <ROIBar
+        roi={{
+          degraded: true,
+          degradedHint: "",
+          label: "cost per lead",
+          comparator: { value: "$4 per lead", target: "target $5" },
+        }}
+        accent={RILEY_ACCENT}
+      />,
+    );
+    const pill = screen.getByTestId("roi-comparator");
+    expect(pill).toHaveStyle({
+      background: RILEY_ACCENT.paper,
+      borderColor: RILEY_ACCENT.soft,
+    });
+  });
+
+  it("Riley accent applies clay deep to live 'off-target' comparator color", () => {
+    const RILEY_ACCENT = {
+      base: "#B86C50",
+      deep: "#7E4533",
+      soft: "#ECD4C8",
+      paper: "#F6E7DE",
+    };
+    render(
+      <ROIBar
+        roi={{
+          ...fullRoi,
+          comparator: { ...fullRoi.comparator, onTarget: false },
+        }}
+        accent={RILEY_ACCENT}
+      />,
+    );
+    const pill = screen.getByTestId("roi-comparator");
+    expect(pill).toHaveStyle({ color: RILEY_ACCENT.deep });
+  });
 });
