@@ -1,3 +1,10 @@
+/* eslint-disable max-lines -- bootstrap module: accumulates Prisma store
+   construction, Inngest function registration, and Fastify handler wiring
+   for the entire async-job surface. Crossed the 600-line guideline when
+   pattern-decay + canonical-merge crons were wired (PR-3.2b/PR-3.2d).
+   Splitting requires a real design pass (store-construction helper +
+   per-domain function registry); tracked as legacy debt for now, consistent
+   with apps/api/src/app.ts and packages/core/src/orchestrator/propose-pipeline.ts. */
 // apps/api/src/bootstrap/inngest.ts
 import type { FastifyInstance } from "fastify";
 import inngestFastify from "inngest/fastify";
