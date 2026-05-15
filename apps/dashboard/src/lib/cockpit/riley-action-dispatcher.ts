@@ -87,10 +87,11 @@ export function useRileyActionDispatcher(
           });
           return;
         }
-        // Unmatched commandId — defensive fallthrough to instruction toast.
+        // Unmatched commandId — defensive fallthrough to "not automated"
+        // honesty toast. Mirrors the instruction-fold copy below.
         toast({
-          title: "Got it.",
-          description: `Acting on "${action.detail || action.label}".`,
+          title: "Noted.",
+          description: `"${action.detail || action.label}" is not automated yet.`,
         });
         return;
       }
@@ -137,11 +138,12 @@ function handleParsedKind(
     case "context":
     case "instruction":
       // Riley has no contact-thread surface; followup/handoff/context
-      // fold into the same honest "Got it." instruction toast. Same copy
-      // whether the operator typed "fu Maya" or "raise daily budget".
+      // fold into the same "not automated yet" honesty toast as
+      // free-form ad-ops phrasing. "Acting on X" would overstate —
+      // Riley does not mutate ads from composer text in v1.
       toast({
-        title: "Got it.",
-        description: `Acting on "${action.detail || action.label}".`,
+        title: "Noted.",
+        description: `"${action.detail || action.label}" is not automated yet.`,
       });
       return;
     case "command":

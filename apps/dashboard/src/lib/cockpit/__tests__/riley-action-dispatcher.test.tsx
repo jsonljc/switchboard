@@ -180,40 +180,66 @@ describe("useRileyActionDispatcher — composer path (ParsedAction)", () => {
     expect(payload.title).toBe("Opening rules.");
   });
 
-  it("followup kind folds into instruction toast (no side effects)", () => {
+  it("followup kind folds into 'not automated yet' toast (no side effects)", () => {
     const { result } = renderHook(() => useRileyActionDispatcher({ onShowMission }));
     act(() => result.current(parseCommand("follow up with Maya tonight")));
     expect(setHalted).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
     const payload = toast.mock.calls[0]![0] as { title: string; description: string };
-    expect(payload.title).toBe("Got it.");
-    expect(payload.description).toMatch(/Acting on/);
+    expect(payload.title).toBe("Noted.");
+    expect(payload.description).toMatch(/is not automated yet\.$/);
   });
 
-  it("handoff kind folds into instruction toast (no side effects)", () => {
+  it("handoff kind folds into 'not automated yet' toast (no side effects)", () => {
     const { result } = renderHook(() => useRileyActionDispatcher({ onShowMission }));
     act(() => result.current(parseCommand("reply to Maya")));
     expect(setHalted).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
-    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Got it." });
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Noted." });
   });
 
-  it("context kind folds into instruction toast (no side effects)", () => {
+  it("context kind folds into 'not automated yet' toast (no side effects)", () => {
     const { result } = renderHook(() => useRileyActionDispatcher({ onShowMission }));
     act(() => result.current(parseCommand("tell alex about Maya")));
     expect(setHalted).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
-    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Got it." });
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Noted." });
   });
 
-  it("instruction kind (ad-ops free-form): toast-only, no side effects", () => {
+  it("instruction kind (ad-ops free-form): 'not automated yet' toast, no side effects", () => {
     const { result } = renderHook(() => useRileyActionDispatcher({ onShowMission }));
     act(() => result.current(parseCommand("raise daily budget to $200")));
     expect(setHalted).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
     const payload = toast.mock.calls[0]![0] as { title: string; description: string };
-    expect(payload.title).toBe("Got it.");
-    expect(payload.description).toContain('Acting on "raise daily budget to $200".');
+    expect(payload.title).toBe("Noted.");
+    expect(payload.description).toContain('"raise daily budget to $200" is not automated yet.');
+  });
+
+  it("campaign-targeted NL ('pause the Cold Interests adset') does not setHalted or push", () => {
+    const { result } = renderHook(() => useRileyActionDispatcher({ onShowMission }));
+    act(() => result.current(parseCommand("pause the Cold Interests adset")));
+    expect(setHalted).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    const payload = toast.mock.calls[0]![0] as { title: string; description: string };
+    expect(payload.title).toBe("Noted.");
+    expect(payload.description).toContain("is not automated yet.");
+  });
+
+  it("campaign-targeted NL ('scale BR-Whitening 20%') does not setHalted or push", () => {
+    const { result } = renderHook(() => useRileyActionDispatcher({ onShowMission }));
+    act(() => result.current(parseCommand("scale BR-Whitening 20%")));
+    expect(setHalted).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Noted." });
+  });
+
+  it("campaign-targeted NL ('shift budget to MED-Awareness') does not setHalted or push", () => {
+    const { result } = renderHook(() => useRileyActionDispatcher({ onShowMission }));
+    act(() => result.current(parseCommand("shift budget to MED-Awareness")));
+    expect(setHalted).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Noted." });
   });
 
   it("composer path fires exactly one toast per dispatch (single-owner doctrine)", () => {
