@@ -8,17 +8,17 @@
 
 ## PR Sequence
 
-Ship in dependency order. PR-1 and PR-2 are mechanical (no design decisions). PR-3 and PR-4 involve real decisions and are scoped conservatively.
+Ship in dependency order. PR-1 is mechanical (no design decisions). PR-3 and PR-4 involve real decisions and are scoped conservatively. PR-2 was scoped as mechanical but deferred — see the PR-2 section below for the deferral rationale.
 
-| PR     | Title                                                                                                                                                                                                     | Depends on | Risk          |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------- |
-| PR-1   | Wire knowledgeStore into ConversationCompoundingService                                                                                                                                                   | None       | Low-to-medium |
-| PR-2   | Parallel safe tool calls in skill executor                                                                                                                                                                | None       | Medium        |
-| PR-3   | Outcome-informed context injection (write + read sides)                                                                                                                                                   | PR-1       | Medium        |
-| PR-3.1 | Signal upgrade: booking-backed outcome attribution + bookingId propagation fix + C1 metrics                                                                                                               | PR-3       | Medium        |
-| PR-3.2 | Learning-quality controls: canonical keys, two-stage merge, decay cron, pattern IDs in trace, pilot thresholds — see [`2026-05-14-agent-infra-pr3.2-design.md`](./2026-05-14-agent-infra-pr3.2-design.md) | PR-3.1     | Medium-high   |
-| PR-4   | Provider-neutral executor boundary, no fallback                                                                                                                                                           | None       | Low-to-medium |
-| PR-4B  | Fallback router + retryable-error consumption + agent-runtime adapter migration (deferred)                                                                                                                | PR-4       | Medium        |
+| PR     | Title                                                                                                                                                                                                     | Depends on | Risk          | Status   |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------- | -------- |
+| PR-1   | Wire knowledgeStore into ConversationCompoundingService                                                                                                                                                   | None       | Low-to-medium | Shipped  |
+| PR-2   | Parallel safe tool calls in skill executor                                                                                                                                                                | None       | Medium        | Deferred |
+| PR-3   | Outcome-informed context injection (write + read sides)                                                                                                                                                   | PR-1       | Medium        | Shipped  |
+| PR-3.1 | Signal upgrade: booking-backed outcome attribution + bookingId propagation fix + C1 metrics                                                                                                               | PR-3       | Medium        | Shipped  |
+| PR-3.2 | Learning-quality controls: canonical keys, two-stage merge, decay cron, pattern IDs in trace, pilot thresholds — see [`2026-05-14-agent-infra-pr3.2-design.md`](./2026-05-14-agent-infra-pr3.2-design.md) | PR-3.1     | Medium-high   | Shipped  |
+| PR-4   | Provider-neutral executor boundary, no fallback                                                                                                                                                           | None       | Low-to-medium | Shipped  |
+| PR-4B  | Fallback router + retryable-error consumption + agent-runtime adapter migration                                                                                                                           | PR-4       | Medium        | Deferred |
 
 ---
 
@@ -57,6 +57,8 @@ Low-to-medium. The code path exists, but turning it on may reveal data-shape or 
 ---
 
 ## PR-2: Parallel safe tool calls in skill executor
+
+> **Status: Deferred (as of 2026-05-15).** The design below was preserved through code review and a full task decomposition in the implementation plan, but the implementation never landed. The skill executor at `packages/core/src/skill-runtime/skill-executor.ts` still serializes tool calls sequentially (`for (const toolUse of toolUseBlocks)`). Deferral was driven by launch-priority pressure on the memory-loop work (PR-3 / PR-3.1 / PR-3.2) and the provider-neutral boundary (PR-4); latency from serialized read-only tool calls has not been observed as a pilot-scale bottleneck. Pick this up when (a) Alex's tool repertoire grows past the current handful of mostly-serialized writes, or (b) tail latency on read-heavy turns becomes a measurable complaint.
 
 ### Goal
 
