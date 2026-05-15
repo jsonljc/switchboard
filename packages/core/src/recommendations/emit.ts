@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { RecommendationInputSchema } from "@switchboard/schemas";
 import { routeRecommendation } from "./router.js";
+import { buildRileyEmissionWorkTrace } from "./emission-mirror.js";
 import type { RecommendationStore } from "./interfaces.js";
-import type { RecommendationInput, EmitResult } from "./types.js";
+import type { RecommendationEmissionMirror } from "./emission-mirror.js";
+import type { PersistRecommendationInput, RecommendationInput, EmitResult } from "./types.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -20,9 +22,30 @@ function computeIdempotencyKey(input: RecommendationInput, now: Date): string {
   return createHash("sha256").update(raw).digest("hex").slice(0, 32);
 }
 
+export interface EmitRecommendationOptions {
+  /**
+   * When provided, every emission performs an atomic dual-write of the
+   * Recommendation row + a WorkTrace mirror row. When absent, only the
+   * Recommendation row is written (back-compat for callers that have not yet
+   * adopted the mirror).
+   */
+  mirror?: RecommendationEmissionMirror;
+  /**
+   * Cron identifier captured into the mirrored WorkTrace's parameters.cronId
+   * field. Required when `mirror` is provided so the WorkTrace records its
+   * emission origin. Ignored when `mirror` is absent.
+   */
+  cronId?: string;
+  /**
+   * Clock injection point. Defaults to `() => new Date()`.
+   */
+  now?: () => Date;
+}
+
 export async function emitRecommendation(
   store: RecommendationStore,
   input: RecommendationInput,
+  options: EmitRecommendationOptions = {},
 ): Promise<EmitResult> {
   // Validate.
   const validated = RecommendationInputSchema.parse(input);
@@ -38,7 +61,8 @@ export async function emitRecommendation(
     return { surface: "dropped", id: null, idempotent: false };
   }
 
-  const now = new Date();
+  const nowFn = options.now ?? (() => new Date());
+  const now = nowFn();
   const idempotencyKey = computeIdempotencyKey(validated, now);
   const expiresAt = validated.expiresAt ?? new Date(now.getTime() + ONE_DAY_MS);
   const undoableUntil = surface === "shadow_action" ? new Date(now.getTime() + ONE_DAY_MS) : null;
@@ -55,7 +79,7 @@ export async function emitRecommendation(
     },
   };
 
-  const { row, idempotent } = await store.insert({
+  const persistInput: PersistRecommendationInput = {
     orgId: rest.orgId,
     agentKey: rest.agentKey,
     intent: rest.intent,
@@ -71,7 +95,27 @@ export async function emitRecommendation(
     idempotencyKey,
     undoableUntil,
     expiresAt,
-  });
+  };
 
+  if (options.mirror) {
+    if (!options.cronId) {
+      throw new Error(
+        "emitRecommendation: options.cronId is required when options.mirror is provided",
+      );
+    }
+    const workTrace = buildRileyEmissionWorkTrace({
+      insert: persistInput,
+      now,
+      cronId: options.cronId,
+    });
+    const { row, idempotent } = await options.mirror.recordEmission({
+      recommendationInsert: persistInput,
+      workTrace,
+    });
+    return { surface, id: row.id, idempotent };
+  }
+
+  // Back-compat path: single-store insert, no WorkTrace mirror.
+  const { row, idempotent } = await store.insert(persistInput);
   return { surface, id: row.id, idempotent };
 }
