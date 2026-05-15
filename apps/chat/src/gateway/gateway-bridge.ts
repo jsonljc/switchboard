@@ -97,14 +97,12 @@ export function createGatewayBridge(
     interactionSummaryStore: new PrismaInteractionSummaryStore(prisma),
     deploymentMemoryStore: new PrismaDeploymentMemoryStore(prisma),
     knowledgeStore: new PrismaKnowledgeStore(prisma),
-    // Booking-backed outcome attribution (Task 20 / PR-3.1). Without this, the
-    // compounding service falls back to "none" tier and skips pattern
-    // extraction entirely — even when summarization labels the outcome
-    // "booked". `endedAt` is populated upstream in conversation-lifecycle's
-    // fireEnd(). `workTraceIds` is not populated yet — the session shape does
-    // not track executed-tool work-trace ids, so attribution falls through to
-    // the contact+window fallback tier (still booking-backed, weaker evidence).
-    // Strong-tier wiring stacks as PR-3.1.b.
+    // Booking-backed outcome attribution. Without this, the compounding
+    // service falls back to "none" tier and skips pattern extraction entirely
+    // — even when summarization labels the outcome "booked". Strong tier
+    // (PR-3.1.b) matches Booking.workTraceId against the workTraceIds
+    // threaded through onMessageRecorded below; fallback tier matches on
+    // contact+window.
     bookingStore: new PrismaBookingAttributionStore(prisma),
     // PR-3.2a: every booking-attributed pattern write records a
     // DeploymentMemoryEvidence row anchored on (deploymentMemoryId, bookingId).
