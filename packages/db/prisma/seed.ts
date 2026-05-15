@@ -4,6 +4,7 @@ import { createCipheriv, createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { seedMarketplace, seedDemoData } from "./seed-marketplace.js";
 import { seedKnowledge } from "./seed-knowledge.js";
+import { seedDevData } from "./seed-dev-data.js";
 import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
 
 const prisma = new PrismaClient();
@@ -599,6 +600,10 @@ async function main() {
   // ── Knowledge Entries ──
   console.log("\n--- Knowledge Entries ---");
   await seedKnowledge(prisma);
+
+  // ── Dev-only domain data ──
+  // Skipped in production. Idempotent — keyed on `dev_*` IDs.
+  await seedDevData(prisma);
 }
 
 main()
