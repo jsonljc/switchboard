@@ -85,3 +85,34 @@ export const LifecycleCommandSchema = z.enum([
   "record_dispatch_outcome",
 ]);
 export type LifecycleCommand = z.infer<typeof LifecycleCommandSchema>;
+
+// ---------------------------------------------------------------------------
+// PendingApprovalPayload — typed shape for the optional `payload` field on
+// ApprovalRequest. Emitters opt in by passing the payload via pendingApproval()
+// or by the orchestrator/approval-factory setting it directly. Dashboard
+// adapters read `payload.kind` to render the correct card variant (urgency
+// eyebrow + CTA copy) per the cockpit spec's "Card variants (one per kind)".
+//
+// Cross-package contract:
+//   - packages/schemas/src/chat.ts:ApprovalRequestSchema.payload?: PendingApprovalPayload
+//   - apps/dashboard/src/lib/api-client-types.ts:PendingApproval.kind?/body?/...
+//   - apps/dashboard/src/components/cockpit/types.ts:AlexApprovalKind (same 6 strings)
+// ---------------------------------------------------------------------------
+
+export const PendingApprovalKindSchema = z.enum([
+  "pricing",
+  "refund",
+  "qualification",
+  "regulatory",
+  "safety-gate",
+  "escalation",
+]);
+export type PendingApprovalKind = z.infer<typeof PendingApprovalKindSchema>;
+
+export const pendingApprovalPayloadSchema = z.object({
+  kind: PendingApprovalKindSchema.optional(),
+  body: z.string().optional(),
+  quote: z.string().optional(),
+  quoteFrom: z.string().optional(),
+});
+export type PendingApprovalPayload = z.infer<typeof pendingApprovalPayloadSchema>;
