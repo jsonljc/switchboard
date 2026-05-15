@@ -25,6 +25,9 @@ function createMockDeps() {
     interactionSummaryStore: {
       listByDeployment: vi.fn().mockResolvedValue([]),
     },
+    evidenceStore: {
+      countDistinctBookingIds: vi.fn().mockResolvedValue(0),
+    },
   };
 }
 
@@ -357,6 +360,150 @@ describe("ContextBuilder", () => {
     });
 
     expect(result.outcomePatternContext).toBe("");
+  });
+
+  it("pilotMode=false uses the steady-state SURFACING_THRESHOLD (minSourceCount=3, minConfidence=0.66)", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "Below steady-state but above pilot thresholds",
+        category: "pattern",
+        canonicalKey: "objection:pain",
+        confidence: 0.62,
+        sourceCount: 2,
+        lastSeenAt: new Date(),
+      },
+    ]);
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: false,
+    });
+    expect(result.outcomePatternContext).toBe("");
+    expect(result.injectedPatternIds).toEqual([]);
+  });
+
+  it("pilotMode=true surfaces patterns at sourceCount>=2 AND confidence>=0.6", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "Customers ask about downtime",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.62,
+        sourceCount: 2,
+        lastSeenAt: new Date(),
+      },
+    ]);
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: true,
+    });
+    expect(result.outcomePatternContext).toMatch(/id="p1"/);
+    expect(result.injectedPatternIds).toEqual(["p1"]);
+  });
+
+  it("pilotMode=true surfaces patterns with sourceCount<2 if >=2 distinct booking-ids in evidence", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "Customers ask about downtime",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.55,
+        sourceCount: 1,
+        lastSeenAt: new Date(),
+      },
+    ]);
+    deps.evidenceStore.countDistinctBookingIds.mockResolvedValue(2);
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: true,
+    });
+    expect(result.injectedPatternIds).toEqual(["p1"]);
+    expect(deps.evidenceStore.countDistinctBookingIds).toHaveBeenCalledWith("p1");
+  });
+
+  it("pilotMode=true does NOT surface a sourceCount=1 pattern with only 1 distinct booking-id", async () => {
+    deps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "weak",
+        category: "pattern",
+        canonicalKey: "objection:pain",
+        confidence: 0.55,
+        sourceCount: 1,
+        lastSeenAt: new Date(),
+      },
+    ]);
+    deps.evidenceStore.countDistinctBookingIds.mockResolvedValue(1);
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: true,
+    });
+    expect(result.injectedPatternIds).toEqual([]);
+  });
+
+  it("pilotMode=true with no evidenceStore falls back to threshold-only surfacing", async () => {
+    const noEvidenceDeps = {
+      ...deps,
+      evidenceStore: undefined,
+    };
+    noEvidenceDeps.deploymentMemoryStore.listHighConfidence.mockResolvedValue([
+      {
+        id: "p1",
+        content: "Customers ask about downtime",
+        category: "pattern",
+        canonicalKey: "objection:downtime_work",
+        confidence: 0.62,
+        sourceCount: 2,
+        lastSeenAt: new Date(),
+      },
+      {
+        id: "p2",
+        content: "weak signal",
+        category: "pattern",
+        canonicalKey: "objection:pain",
+        confidence: 0.55,
+        sourceCount: 1,
+        lastSeenAt: new Date(),
+      },
+    ]);
+    const noEvidenceBuilder = new ContextBuilder(noEvidenceDeps);
+    const result = await noEvidenceBuilder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: true,
+    });
+    expect(result.injectedPatternIds).toEqual(["p1"]);
+  });
+
+  it("pilotMode=true lowers the DB query threshold so low-source patterns can reach the filter", async () => {
+    await builder.build({
+      organizationId: "org-1",
+      agentId: "alex",
+      deploymentId: "dep-1",
+      query: "",
+      pilotMode: true,
+    });
+    const call = deps.deploymentMemoryStore.listHighConfidence.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, , minConfidence, minSourceCount] = call!;
+    expect(minConfidence).toBeLessThan(0.66);
+    expect(minSourceCount).toBeLessThan(3);
   });
 
   it("includes repeat customer summaries when contactId provided", async () => {

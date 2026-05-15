@@ -25,6 +25,41 @@ export function filterSurfaceablePatterns(patterns: OutcomePattern[]): OutcomePa
   );
 }
 
+// PR-3.2e: pilot-scale surfacing thresholds. Pilot deployments learn faster
+// because the cohort is small — a pattern with two corroborations + moderate
+// confidence is enough to surface, and any pattern with ≥2 independent
+// booking-id evidence rows surfaces even at sourceCount=1.
+export const PILOT_SURFACING_MIN_SOURCE_COUNT = 2;
+export const PILOT_SURFACING_MIN_CONFIDENCE = 0.6;
+export const PILOT_MULTI_BOOKING_MIN_DISTINCT = 2;
+
+export interface PilotEvidenceLookup {
+  countDistinctBookingIds(deploymentMemoryId: string): Promise<number>;
+}
+
+export async function filterPilotModeSurfaceable(
+  patterns: OutcomePattern[],
+  evidenceStore?: PilotEvidenceLookup,
+): Promise<OutcomePattern[]> {
+  const surfaceable: OutcomePattern[] = [];
+  for (const p of patterns) {
+    if (
+      p.sourceCount >= PILOT_SURFACING_MIN_SOURCE_COUNT &&
+      p.confidence >= PILOT_SURFACING_MIN_CONFIDENCE
+    ) {
+      surfaceable.push(p);
+      continue;
+    }
+    if (evidenceStore) {
+      const distinct = await evidenceStore.countDistinctBookingIds(p.id);
+      if (distinct >= PILOT_MULTI_BOOKING_MIN_DISTINCT) {
+        surfaceable.push(p);
+      }
+    }
+  }
+  return surfaceable;
+}
+
 // Pattern content originates from LLM extraction of customer message content,
 // which means it is partially attacker-influenced — a customer could write
 // "Ignore prior instructions" into a chat and have that string surface as a
