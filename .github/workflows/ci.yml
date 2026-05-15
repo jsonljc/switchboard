@@ -204,6 +204,12 @@ jobs:
       - name: Check for untested packages
         run: bash scripts/check-no-empty-tests.sh
 
+      - name: Dashboard production build
+        env:
+          CREDENTIALS_ENCRYPTION_KEY: ${{ secrets.CI_CREDENTIALS_ENCRYPTION_KEY || 'ci-test-encryption-secret-32chr' }}
+          NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-nextauth-secret' }}
+        run: pnpm --filter @switchboard/dashboard build
+
   secrets:
     runs-on: ubuntu-latest
 
