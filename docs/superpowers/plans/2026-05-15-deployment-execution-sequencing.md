@@ -122,7 +122,7 @@ Expected: no output.
 
 ## Task 3: Merge gate — confirm spec PR #504 and implementation-plan PR #506 are on `main`
 
-**Why:** Per `CLAUDE.md`'s branch doctrine, implementation branches must consume specs/plans from `main`. The phased PRs in Tasks 5–7 should not open until the spec and the implementation plan have landed. If they haven't merged yet, this task pauses execution.
+**Why:** Per `CLAUDE.md`'s branch doctrine, implementation branches must consume specs/plans from `main`. The phased PRs in Tasks 4–6 should not open until the spec and the implementation plan have landed. If they haven't merged yet, this task pauses execution.
 
 **Files:** none modified. Read-only check.
 
