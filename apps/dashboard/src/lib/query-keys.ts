@@ -72,6 +72,7 @@ export const scopedKeys = (orgId: string) => ({
     roster: () => [orgId, "agents", "roster"] as const,
     state: () => [orgId, "agents", "state"] as const,
     activity: () => [orgId, "agents", "activity"] as const,
+    activityCockpit: (agentId: string) => [orgId, "agents", "activity-cockpit", agentId] as const,
   },
   inbox: {
     all: () => [orgId, "inbox"] as const,
