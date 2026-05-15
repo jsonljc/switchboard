@@ -18,8 +18,10 @@
 # Values for envVars with `sync: false` are entered in the Render UI from
 # the master vault. This file declares only their *keys*.
 #
-# Region (3 occurrences) is set by the operator at provisioning per spec §3.
-# Replace <RENDER_REGION> with the chosen region before connecting to Render.
+# Region: `oregon` (chosen 2026-05-15). Defensible US default — Render's most
+# established region with full service-type parity (Web Service, Postgres,
+# KeyValue). Acceptable Meta-webhook latency at pilot scale. Document the
+# choice and rationale in `docs/runbooks/production-urls.md` per spec §3.
 
 services:
   - type: web
@@ -28,7 +30,7 @@ services:
     dockerfilePath: ./Dockerfile.api
     dockerContext: .
     plan: starter
-    region: <RENDER_REGION>
+    region: oregon
     numInstances: 1
     branch: main
     autoDeployTrigger: commit
@@ -98,7 +100,7 @@ services:
     dockerfilePath: ./Dockerfile.chat
     dockerContext: .
     plan: starter
-    region: <RENDER_REGION>
+    region: oregon
     numInstances: 1
     branch: main
     autoDeployTrigger: commit
@@ -164,12 +166,12 @@ services:
   - type: keyvalue
     name: switchboard-redis
     plan: starter
-    region: <RENDER_REGION>
+    region: oregon
     maxmemoryPolicy: allkeys-lru
     ipAllowList: [] # Empty list = private-network only, no public access.
 
 databases:
   - name: switchboard-postgres
     plan: starter
-    region: <RENDER_REGION>
+    region: oregon
     postgresMajorVersion: "16"
