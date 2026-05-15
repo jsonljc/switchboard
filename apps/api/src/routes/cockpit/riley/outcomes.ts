@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { renderOutcomeCopy } from "@switchboard/schemas";
 import type { ActivityRow } from "@switchboard/schemas";
 import type { RecommendationOutcomeReadModel } from "@switchboard/db";
+import { requireOrganizationScope } from "../../../utils/require-org.js";
 
 export interface OutcomesRouteDeps {
   listRenderable(args: { orgId: string; limit: number }): Promise<RecommendationOutcomeReadModel[]>;
@@ -18,12 +19,22 @@ export async function registerRileyOutcomesRoute(
   app: FastifyInstance,
   deps: OutcomesRouteDeps,
 ): Promise<void> {
-  app.get("/api/cockpit/riley/outcomes", async (req, reply) => {
-    const orgId = (req.query as { orgId?: string } | undefined)?.orgId;
-    if (!orgId) {
-      reply.code(400);
-      return { error: "orgId query param required" };
+  // Dev/test mode: allow `x-org-id` header to set the org scope.
+  // In production the auth middleware sets organizationIdFromAuth before handlers run.
+  app.addHook("preHandler", async (request) => {
+    if (app.authDisabled === true) {
+      const headerVal = request.headers["x-org-id"];
+      if (typeof headerVal === "string" && headerVal.trim()) {
+        request.organizationIdFromAuth = headerVal.trim();
+      } else if (!request.organizationIdFromAuth) {
+        request.organizationIdFromAuth = "default";
+      }
     }
+  });
+
+  app.get("/api/cockpit/riley/outcomes", async (req, reply) => {
+    const orgId = requireOrganizationScope(req, reply);
+    if (!orgId) return;
     const rows = await deps.listRenderable({ orgId, limit: DEFAULT_LIMIT });
     return { rows: rows.map(translateRow).filter((r): r is ActivityRow => r !== null) };
   });

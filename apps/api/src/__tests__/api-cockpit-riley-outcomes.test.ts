@@ -6,6 +6,11 @@
  * api-cockpit-activity.test.ts. The global buildTestServer harness does not
  * support outcome dep injection, so we bypass it here and wire the route
  * directly — the same approach used by cockpit activity route tests.
+ *
+ * Auth: the route uses requireOrganizationScope() — organizationIdFromAuth must
+ * be present on the request. In dev/test mode (authDisabled=true) the preHandler
+ * hook reads the `x-org-id` header. Tests decorate authDisabled=true and pass
+ * the header to exercise the full auth path.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Fastify from "fastify";
@@ -38,6 +43,7 @@ const SAMPLE_ROWS: RecommendationOutcomeReadModel[] = [
 
 async function buildApp(deps: OutcomesRouteDeps) {
   const app = Fastify({ logger: false });
+  app.decorate("authDisabled", true);
   app.setErrorHandler((error, _req, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
     const message = error instanceof Error ? error.message : String(error);
@@ -55,7 +61,8 @@ describe("GET /api/cockpit/riley/outcomes", () => {
     const app = await buildApp({ listRenderable });
     const res = await app.inject({
       method: "GET",
-      url: "/api/cockpit/riley/outcomes?orgId=org-1",
+      url: "/api/cockpit/riley/outcomes",
+      headers: { "x-org-id": "org-1" },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as {
@@ -95,21 +102,46 @@ describe("GET /api/cockpit/riley/outcomes", () => {
     const app = await buildApp({ listRenderable });
     const res = await app.inject({
       method: "GET",
-      url: "/api/cockpit/riley/outcomes?orgId=org-1",
+      url: "/api/cockpit/riley/outcomes",
+      headers: { "x-org-id": "org-1" },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { rows: unknown[] };
     expect(body.rows).toHaveLength(0);
   });
 
-  it("requires orgId query param", async () => {
+  it("requires org context — returns 403 when no x-org-id header and no auth", async () => {
+    // Build with authDisabled=false so the preHandler does NOT inject a default org.
+    // requireOrganizationScope() then returns null and sends 403.
+    const listRenderable = vi.fn().mockResolvedValue([]);
+    const app = Fastify({ logger: false });
+    app.decorate("authDisabled", false);
+    app.setErrorHandler((error, _req, reply) => {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(statusCode).send({ error: message, statusCode });
+    });
+    await registerRileyOutcomesRoute(app, { listRenderable });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/cockpit/riley/outcomes",
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("returns 200 when authenticated org matches (happy path auth)", async () => {
     const listRenderable = vi.fn().mockResolvedValue([]);
     const app = await buildApp({ listRenderable });
     const res = await app.inject({
       method: "GET",
       url: "/api/cockpit/riley/outcomes",
+      headers: { "x-org-id": "org-A" },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    // Verify the org was forwarded to the store
+    expect(listRenderable).toHaveBeenCalledWith(expect.objectContaining({ orgId: "org-A" }));
   });
 
   it("invokes the store's renderable-only list (contract — hidden rows never reach the wire)", async () => {
@@ -120,7 +152,8 @@ describe("GET /api/cockpit/riley/outcomes", () => {
     const app = await buildApp({ listRenderable });
     await app.inject({
       method: "GET",
-      url: "/api/cockpit/riley/outcomes?orgId=org-1",
+      url: "/api/cockpit/riley/outcomes",
+      headers: { "x-org-id": "org-1" },
     });
     expect(listRenderable).toHaveBeenCalledTimes(1);
     expect(listRenderable).toHaveBeenCalledWith(expect.objectContaining({ orgId: "org-1" }));
