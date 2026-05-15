@@ -27,7 +27,7 @@
     "@prisma/client": "^6.3.0",
     "@switchboard/core": "workspace:*",
     "@switchboard/schemas": "workspace:*",
-    "prisma": "^6.3.0"
+    "prisma": "^7.8.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
