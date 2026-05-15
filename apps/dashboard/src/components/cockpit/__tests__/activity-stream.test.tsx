@@ -4,6 +4,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { ActivityStream } from "../activity-stream";
 import type { ActivityRow } from "../types";
 
+// ActivityRow now calls useRouter() for the "Tell Alex about" deep-link.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 const rows: ActivityRow[] = [
   { time: "11:42", kind: "booked", head: "Maya R. confirmed" },
   { time: "10:55", kind: "replied", head: "Tom W. answered" },
