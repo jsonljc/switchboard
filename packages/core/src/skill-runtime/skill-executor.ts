@@ -373,7 +373,10 @@ export class SkillExecutorImpl implements SkillExecutor {
             result = toolHookResult.substituteResult;
             governanceOutcome = "simulated";
           } else if (toolHookResult.decision === "pending_approval") {
-            result = pendingApproval(toolHookResult.reason ?? "Requires approval");
+            result = pendingApproval(
+              toolHookResult.reason ?? "Requires approval",
+              toolHookResult.payload,
+            );
             governanceOutcome = "require-approval";
           } else {
             result = denied(toolHookResult.reason ?? "Denied by policy");
