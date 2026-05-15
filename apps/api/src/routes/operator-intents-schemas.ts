@@ -20,3 +20,11 @@ export const TransitionOpportunityStageParametersSchema = z.object({
 export type TransitionOpportunityStageParameters = z.infer<
   typeof TransitionOpportunityStageParametersSchema
 >;
+
+export const ActOnRecommendationParametersSchema = z.object({
+  recommendationId: z.string().min(1),
+  action: z.enum(["primary", "secondary", "dismiss", "confirm", "undo"]),
+  note: z.string().optional(),
+});
+
+export type ActOnRecommendationParameters = z.infer<typeof ActOnRecommendationParametersSchema>;

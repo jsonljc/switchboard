@@ -386,14 +386,15 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   });
 
   // Operator-direct ingress bootstrap — registers OperatorMutationMode +
-  // operator.transition_opportunity_stage handler. Must run AFTER
-  // opportunityStore decoration and PlatformIngress wiring.
+  // operator.transition_opportunity_stage + operator.act_on_recommendation handlers.
+  // Must run AFTER opportunityStore/recommendationStore decoration and PlatformIngress wiring.
   if (app.opportunityStore) {
     const { bootstrapOperatorIntents } = await import("../bootstrap/operator-intents.js");
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
       opportunityStore: app.opportunityStore,
+      recommendationStore: app.recommendationStore,
     });
   }
 

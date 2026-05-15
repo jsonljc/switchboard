@@ -663,6 +663,7 @@ export async function buildServer() {
       intentRegistry,
       modeRegistry,
       opportunityStore: app.opportunityStore,
+      recommendationStore: app.recommendationStore,
       logger: app.log,
     });
   }
