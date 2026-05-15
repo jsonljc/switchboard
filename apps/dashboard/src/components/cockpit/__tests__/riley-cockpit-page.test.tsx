@@ -577,10 +577,102 @@ describe("RileyCockpitPage — B.3-followup palette wiring", () => {
     );
     expect(toast).toHaveBeenCalledWith({ title: "Resumed — back to scanning." });
   });
+});
 
-  it("ComposerPlaceholder still renders (composer adoption deferred)", () => {
+describe("RileyCockpitPage — composer adoption", () => {
+  beforeEach(() => {
+    haltState.halted = false;
+    rileyApprovalsState.approvals = [];
+    rileyStatusState.status = "IDLE";
+    rileyActivityState.rows = [];
+    metricsState.data = null;
+    metricsState.isLoading = false;
+    metricsState.isError = false;
+    metricsState.error = null;
+    missionData = undefined;
+    actionCalls.length = 0;
+    toast.mockReset();
+    mockConfig.rejectPrimary = false;
+  });
+
+  it("renders the live Composer (not the placeholder)", () => {
     wrap(<RileyCockpitPage />);
-    // The placeholder copy is the locked Riley NL example.
-    expect(screen.getByText(/pause the Cold Interests adset/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Composer input" })).toBeInTheDocument();
+  });
+
+  it("Composer placeholder is Riley's locked copy", () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    expect(input).toHaveAttribute(
+      "placeholder",
+      "Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…",
+    );
+  });
+
+  it("typing 'pause for 1h' + Enter dispatches a pause toast", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "pause for 1h" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    const payload = toast.mock.calls[0]![0] as { title: string; description?: string };
+    expect(payload.title).toBe("Paused — standing by.");
+    expect(payload.description).toMatch(/^until /);
+  });
+
+  it("typing 'resume' + Enter fires Riley-specific resume copy", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "resume" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    expect(toast).toHaveBeenCalledWith({ title: "Resumed — back to scanning." });
+  });
+
+  it("ad-ops free-form ('raise daily budget to $200') falls through to instruction (no mutation)", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "raise daily budget to $200" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    const payload = toast.mock.calls[0]![0] as { title: string; description: string };
+    expect(payload.title).toBe("Got it.");
+    expect(payload.description).toContain('Acting on "raise daily budget to $200".');
+  });
+
+  it("'follow up with Maya tonight' folds into instruction toast", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "follow up with Maya tonight" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Got it." });
+  });
+
+  it("'stop offering free consults' + Enter routes to rules and toasts", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "stop offering free consults" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    const payload = toast.mock.calls[0]![0] as { title: string };
+    expect(payload.title).toBe("Opening rules.");
+  });
+
+  it("Escape clears the staged input without dispatching", () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "pause" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(input.value).toBe("");
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("Composer is disabled when halted", () => {
+    haltState.halted = true;
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute("placeholder", "Halted — resume to send instructions");
   });
 });
