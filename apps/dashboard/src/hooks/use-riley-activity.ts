@@ -9,8 +9,10 @@ import { coldStateActivityRows } from "@/lib/cockpit/riley/cold-state-activity-r
 import { mergeRileyActivityAndOutcomes } from "@/lib/cockpit/riley/merge-riley-outcomes";
 import type { ActivityRow } from "@/components/cockpit/types";
 
-async function fetchRileyOutcomes(orgId: string): Promise<ActivityRow[]> {
-  const res = await fetch(`/api/cockpit/riley/outcomes?orgId=${encodeURIComponent(orgId)}`);
+async function fetchRileyOutcomes(): Promise<ActivityRow[]> {
+  // Org is determined by requireOrganizationScope on the API side from the
+  // authenticated session — no need (and confusing) to pass orgId as a query param.
+  const res = await fetch(`/api/cockpit/riley/outcomes`);
   if (!res.ok) throw new Error(`Failed to fetch riley outcomes: ${res.status}`);
   const data: { rows: ActivityRow[] } = await res.json();
   return data.rows;
@@ -23,7 +25,7 @@ export function useRileyActivity(): { rows: ActivityRow[]; isLoading: boolean; i
 
   const outcomesQuery = useQuery({
     queryKey: tenant ? tenant.keys.rileyOutcomes.feed() : ["__disabled_riley_outcomes__"],
-    queryFn: () => fetchRileyOutcomes(tenant!.orgId),
+    queryFn: () => fetchRileyOutcomes(),
     refetchInterval: 60_000,
     enabled: !!tenant,
   });

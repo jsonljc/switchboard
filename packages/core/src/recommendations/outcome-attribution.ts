@@ -224,7 +224,20 @@ export async function runRileyOutcomeAttribution(
       overlaps,
     });
 
-    await outcomeStore.insert(row);
+    try {
+      await outcomeStore.insert(row);
+    } catch (err) {
+      // Race-condition handling: the pre-check above + DB @unique(recommendationId)
+      // are the two-layer idempotency guard. If a concurrent worker raced and inserted
+      // the row between our pre-check and our insert, the store rejects with a typed
+      // error named "RecommendationOutcomeAlreadyExistsError". Duck-type on name to
+      // preserve Layer-3 purity (core cannot import @switchboard/db for instanceof).
+      if (err instanceof Error && err.name === "RecommendationOutcomeAlreadyExistsError") {
+        summary.skippedExisting++;
+        continue;
+      }
+      throw err;
+    }
     summary.outcomesWritten++;
     if (row.cockpitRenderable) {
       summary.renderable++;

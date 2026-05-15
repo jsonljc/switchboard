@@ -129,6 +129,14 @@ export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeSt
     return row !== null;
   }
 
+  /**
+   * Returns renderable outcomes for the given org+agent, newest first.
+   *
+   * v1 returns up to `limit` rows; the spec also defined an optional `sinceMs`
+   * cutoff but v1 defers it (the API's 100-row cap is sufficient at pilot
+   * scale). When outcome history grows, add a `sinceMs?: number` arg that
+   * filters `windowEndedAt >= now - sinceMs`.
+   */
   async listRenderableForOrg(args: {
     orgId: string;
     agentRole: string;

@@ -704,14 +704,22 @@ async function listRileyActiveOrgs(prisma: {
       where: {
         sourceAgent: string;
         intent: { startsWith: string };
+        status: string;
       };
       distinct: ["organizationId"];
       select: { organizationId: true };
     }) => Promise<{ organizationId: string }[]>;
   };
 }): Promise<string[]> {
+  // Filter to status="acted" so we only dispatch to orgs that actually have
+  // attributable rows. Without this, orgs with only queued/shadow_action
+  // recommendations get noisy dispatch events that resolve to zero candidates.
   const rows = await prisma.pendingActionRecord.findMany({
-    where: { sourceAgent: "riley", intent: { startsWith: "recommendation." } },
+    where: {
+      sourceAgent: "riley",
+      intent: { startsWith: "recommendation." },
+      status: "acted",
+    },
     distinct: ["organizationId"],
     select: { organizationId: true },
   });
