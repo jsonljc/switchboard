@@ -119,6 +119,41 @@ describe("Identity — mission interactive subtitle (A.2)", () => {
   });
 });
 
+describe("Identity — per-agent name + avatar accent (B.3 cleanup)", () => {
+  it("defaults to 'Alex' when displayName is not provided", () => {
+    render(<Identity {...BASE_PROPS} />);
+    expect(screen.getByText("Alex")).toBeInTheDocument();
+  });
+
+  it("renders the provided displayName in place of the hardcoded 'Alex'", () => {
+    render(<Identity {...BASE_PROPS} displayName="Riley" />);
+    expect(screen.getByText("Riley")).toBeInTheDocument();
+    expect(screen.queryByText("Alex")).not.toBeInTheDocument();
+  });
+
+  it("avatar uses the first character of displayName when overridden", () => {
+    const { container } = render(<Identity {...BASE_PROPS} displayName="Riley" />);
+    // Avatar letter is rendered inside the AvatarFrame's span; query by exact text.
+    expect(container.textContent).toContain("R");
+  });
+
+  it("avatar honors avatarAccent override (soft → background, deep → letter color)", () => {
+    const { container } = render(
+      <Identity
+        {...BASE_PROPS}
+        displayName="Riley"
+        avatarAccent={{ soft: "#ECD4C8", deep: "#7E4533" }}
+      />,
+    );
+    // Find the AvatarFrame div — it's the first descendant with inline background.
+    const avatarDiv = container.querySelector('div[style*="background"]') as HTMLElement;
+    expect(avatarDiv).not.toBeNull();
+    expect(avatarDiv.getAttribute("style")).toContain("rgb(236, 212, 200)"); // #ECD4C8
+    const letterSpan = avatarDiv.querySelector("span") as HTMLElement;
+    expect(letterSpan.getAttribute("style")).toContain("rgb(126, 69, 51)"); // #7E4533
+  });
+});
+
 describe("Identity — colorFor / pulseFor pass-through (B.3 prep)", () => {
   it("forwards colorFor / pulseFor through to StatusPill", () => {
     const colorFor = vi.fn((_s: CockpitStatus, _halted: boolean) => "rgb(184, 108, 80)");

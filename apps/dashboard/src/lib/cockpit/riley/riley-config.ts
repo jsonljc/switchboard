@@ -25,7 +25,8 @@ export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";
 // exports are kept so that B.2 can wire them via pill parameterization
 // without re-deriving the color/pulse rules. In B.1, Riley renders Alex's
 // pill colors at runtime — this is the documented B.1 visual limitation.
-export function statusColor(statusKey: CockpitStatus): string {
+export function statusColor(statusKey: CockpitStatus, halted: boolean): string {
+  if (halted) return "#A03A2E";
   switch (statusKey) {
     case "WATCHING":
       return "#3F7A36";
@@ -42,7 +43,10 @@ export function statusColor(statusKey: CockpitStatus): string {
 
 // REVIEWING is the only state that pulses; WAITING is amber-but-static per
 // the slicing spec. REVIEWING is type-shipped but not derivation-wired in B.1.
-export function statusPulse(statusKey: CockpitStatus): boolean {
+// Halted state suppresses pulse — a halted agent should not draw attention
+// via animation.
+export function statusPulse(statusKey: CockpitStatus, halted: boolean): boolean {
+  if (halted) return false;
   return statusKey === "REVIEWING";
 }
 

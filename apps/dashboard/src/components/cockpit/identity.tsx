@@ -22,16 +22,32 @@ export interface IdentityProps {
   colorFor?: (s: CockpitStatus, halted: boolean) => string;
   /** B.3: override the pulse behaviour for the embedded StatusPill. */
   pulseFor?: (s: CockpitStatus, halted: boolean) => boolean;
+  /** B.3 cleanup: per-agent name. Defaults to ALEX_CONFIG.name. The avatar
+   * letter is derived from the first character of this value. */
+  displayName?: string;
+  /** B.3 cleanup: per-agent avatar tokens. `soft` paints the avatar
+   * background; `deep` paints the avatar letter. Defaults to Alex amber. */
+  avatarAccent?: { soft: string; deep: string };
 }
 
-function AvatarFrame({ size = 64 }: { size?: number }) {
+function AvatarFrame({
+  size = 64,
+  letter,
+  soft,
+  deep,
+}: {
+  size?: number;
+  letter: string;
+  soft: string;
+  deep: string;
+}) {
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius: Math.round(size * 0.18),
-        background: ALEX_CONFIG.accent.soft,
+        background: soft,
         border: `1px solid ${T.hair}`,
         display: "grid",
         placeItems: "center",
@@ -40,9 +56,7 @@ function AvatarFrame({ size = 64 }: { size?: number }) {
         overflow: "hidden",
       }}
     >
-      <span style={{ fontWeight: 700, fontSize: size * 0.42, color: ALEX_CONFIG.accent.deep }}>
-        {ALEX_CONFIG.name[0]}
-      </span>
+      <span style={{ fontWeight: 700, fontSize: size * 0.42, color: deep }}>{letter}</span>
     </div>
   );
 }
@@ -58,7 +72,10 @@ export function Identity({
   onOpenMission,
   colorFor,
   pulseFor,
+  displayName = ALEX_CONFIG.name,
+  avatarAccent = { soft: ALEX_CONFIG.accent.soft, deep: ALEX_CONFIG.accent.deep },
 }: IdentityProps) {
+  const avatarLetter = displayName[0] ?? "?";
   return (
     <div
       style={{
@@ -68,7 +85,12 @@ export function Identity({
         padding: compact ? "18px 18px 14px" : "24px 28px 18px",
       }}
     >
-      <AvatarFrame size={compact ? 52 : 64} />
+      <AvatarFrame
+        size={compact ? 52 : 64}
+        letter={avatarLetter}
+        soft={avatarAccent.soft}
+        deep={avatarAccent.deep}
+      />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <span
@@ -79,7 +101,7 @@ export function Identity({
               letterSpacing: "-0.015em",
             }}
           >
-            {ALEX_CONFIG.name}
+            {displayName}
           </span>
           <StatusPill
             statusKey={statusKey}

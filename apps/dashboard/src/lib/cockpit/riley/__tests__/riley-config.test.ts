@@ -33,18 +33,31 @@ describe("riley-config", () => {
   });
 
   it("statusColor maps WATCHING to green, WAITING to amber, IDLE to grey, HALTED to red", () => {
-    expect(statusColor("WATCHING")).toBe("#3F7A36");
-    expect(statusColor("WAITING")).toBe("#B8782E");
-    expect(statusColor("IDLE")).toBe("#A39786");
-    expect(statusColor("HALTED")).toBe("#A03A2E");
+    expect(statusColor("WATCHING", false)).toBe("#3F7A36");
+    expect(statusColor("WAITING", false)).toBe("#B8782E");
+    expect(statusColor("IDLE", false)).toBe("#A39786");
+    expect(statusColor("HALTED", false)).toBe("#A03A2E");
+  });
+
+  it("statusColor returns HALTED red when halted=true regardless of statusKey", () => {
+    expect(statusColor("WATCHING", true)).toBe("#A03A2E");
+    expect(statusColor("WAITING", true)).toBe("#A03A2E");
+    expect(statusColor("IDLE", true)).toBe("#A03A2E");
+    expect(statusColor("REVIEWING", true)).toBe("#A03A2E");
   });
 
   it("statusPulse does NOT pulse on WAITING in B.1 (REVIEWING is the only pulse case; deferred)", () => {
-    expect(statusPulse("WAITING")).toBe(false);
-    expect(statusPulse("WATCHING")).toBe(false);
-    expect(statusPulse("IDLE")).toBe(false);
-    expect(statusPulse("HALTED")).toBe(false);
-    expect(statusPulse("REVIEWING")).toBe(true);
+    expect(statusPulse("WAITING", false)).toBe(false);
+    expect(statusPulse("WATCHING", false)).toBe(false);
+    expect(statusPulse("IDLE", false)).toBe(false);
+    expect(statusPulse("HALTED", false)).toBe(false);
+    expect(statusPulse("REVIEWING", false)).toBe(true);
+  });
+
+  it("statusPulse never pulses when halted=true (even on REVIEWING)", () => {
+    expect(statusPulse("REVIEWING", true)).toBe(false);
+    expect(statusPulse("WATCHING", true)).toBe(false);
+    expect(statusPulse("WAITING", true)).toBe(false);
   });
 
   it("RILEY_COMPOSER_PLACEHOLDER carries the locked Riley voice placeholder", () => {
