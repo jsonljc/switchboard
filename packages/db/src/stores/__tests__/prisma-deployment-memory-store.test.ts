@@ -6,6 +6,7 @@ function createMockPrisma() {
     deploymentMemory: {
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
       delete: vi.fn(),
@@ -239,5 +240,46 @@ describe("PrismaDeploymentMemoryStore", () => {
     expect(prisma.deploymentMemory.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ canonicalKey: null }),
     });
+  });
+
+  it("decayStale updates only rows not yet decayed today AND stale by lastSeenAt", async () => {
+    const startOfDay = new Date("2026-05-14T00:00:00Z");
+    const cutoff = new Date("2026-04-14T07:00:00Z");
+    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 3,
+    });
+
+    const result = await store.decayStale({
+      cutoffDate: cutoff,
+      decayAmount: 0.1,
+      floor: 0.3,
+      startOfDay,
+    });
+
+    expect(result).toBe(3);
+    expect(prisma.deploymentMemory.updateMany).toHaveBeenCalledWith({
+      where: {
+        lastSeenAt: { lt: cutoff },
+        confidence: { gt: 0.3 },
+        OR: [{ lastDecayedAt: null }, { lastDecayedAt: { lt: startOfDay } }],
+      },
+      data: {
+        confidence: { decrement: 0.1 },
+        lastDecayedAt: expect.any(Date),
+      },
+    });
+  });
+
+  it("decayStale floor: rows already at floor are not decremented further", async () => {
+    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 0,
+    });
+    const result = await store.decayStale({
+      cutoffDate: new Date(),
+      decayAmount: 0.1,
+      floor: 0.3,
+      startOfDay: new Date(),
+    });
+    expect(result).toBe(0);
   });
 });

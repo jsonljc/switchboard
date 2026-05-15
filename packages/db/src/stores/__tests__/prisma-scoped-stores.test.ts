@@ -194,7 +194,12 @@ describe("PrismaAggregateMemoryStore", () => {
   it("decayStale decrements confidence", async () => {
     const cutoff = new Date();
     prisma.deploymentMemory.updateMany.mockResolvedValue({ count: 3 });
-    const count = await store.decayStale(cutoff, 0.1);
+    const count = await store.decayStale({
+      cutoffDate: cutoff,
+      decayAmount: 0.1,
+      floor: 0.3,
+      startOfDay: new Date(),
+    });
     expect(count).toBe(3);
   });
 });
