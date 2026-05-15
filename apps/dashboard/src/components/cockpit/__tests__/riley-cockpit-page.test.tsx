@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -30,6 +30,25 @@ vi.mock("@/hooks/use-riley-status", () => ({
 const rileyActivityState = { rows: [] as unknown[] };
 vi.mock("@/hooks/use-riley-activity", () => ({
   useRileyActivity: () => ({ rows: rileyActivityState.rows, isLoading: false, isError: false }),
+}));
+
+// B.2b mock — use-agent-metrics. Mirrors the four fields the real hook
+// returns (apps/dashboard/src/hooks/use-agent-metrics.ts:34-39): data,
+// isLoading, isError, error. A future refactor that reads metricsQ.error
+// will see a fresh null rather than undefined.
+const metricsState: {
+  data: unknown;
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+} = {
+  data: null,
+  isLoading: false,
+  isError: false,
+  error: null,
+};
+vi.mock("@/hooks/use-agent-metrics", () => ({
+  useAgentMetrics: () => metricsState,
 }));
 
 // ---------------------------------------------------------------------------
@@ -279,5 +298,109 @@ describe("RileyCockpitPage — B.3 voice + accent", () => {
     await Promise.resolve();
     expect(actionCalls).toEqual([{ id: "rec-1", verb: "primary" }]);
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B.2b tests — KPI strip mount
+// ---------------------------------------------------------------------------
+
+describe("RileyCockpitPage — B.2b KPI strip", () => {
+  // Local fixture builder — reused across cases. The wire shape mirrors
+  // MetricsViewModelWire; minimal fields populated to satisfy the page render.
+  function buildMetricsFixture(overrides: Partial<{ tiles: unknown; roi: unknown }> = {}) {
+    const base = {
+      hero: {
+        kind: "ad-leads" as const,
+        value: 27,
+        comparator: { window: "week" as const, value: 22 },
+      },
+      heroSubProseSegments: [],
+      spark: [],
+      stats: [],
+      freshness: { generatedAt: "x", window: "week" as const, dataSource: "live" as const },
+      folioRange: "Mon — Wed",
+      targets: { avgValueCents: null, targetCpbCents: null },
+      spendCents: 20000,
+      leads: 27,
+      qualifiedPct: 0,
+      bookedDelta: "+5",
+      leadsDelta: "+5",
+      qualifiedDelta: null,
+      tiles: [
+        { label: "leads", value: 27, trend: "+5" },
+        { label: "ctr", value: "—", unavailable: true },
+        { label: "ad spend", value: "$200" },
+      ],
+      roi: {
+        degraded: true as const,
+        degradedHint: "",
+        label: "cost per lead",
+        comparator: { value: "$7 per lead", target: "—" },
+      },
+    };
+    return { ...base, ...overrides };
+  }
+
+  beforeEach(() => {
+    rileyApprovalsState.approvals = [];
+    rileyActivityState.rows = []; // prevent activity-kind="qualified" rows from polluting the no-qualified assertion
+    metricsState.data = null;
+    metricsState.isLoading = false;
+    metricsState.isError = false;
+    metricsState.error = null;
+  });
+
+  it("renders <KPIStrip> in expanded mode when metrics data exists and no approvals", () => {
+    metricsState.data = buildMetricsFixture();
+    wrap(<RileyCockpitPage />);
+    const strip = screen.getByTestId("kpi-strip");
+    expect(within(strip).getByText("$200")).toBeInTheDocument();
+    expect(within(strip).getByText(/cost per lead/i)).toBeInTheDocument();
+    expect(within(strip).getByText("$7 per lead")).toBeInTheDocument();
+  });
+
+  it("collapses to single-line headline when approvals.length > 0", () => {
+    rileyApprovalsState.approvals = mapRecommendationsToApprovalViews([pauseFixture]);
+    metricsState.data = buildMetricsFixture();
+    wrap(<RileyCockpitPage />);
+    const strip = screen.getByTestId("kpi-strip");
+    // Collapsed headline is "27 leads · +5 from last week" (driven by collapsedHeadline()).
+    expect(within(strip).getByText(/27/)).toBeInTheDocument();
+    expect(within(strip).getByText(/leads/i)).toBeInTheDocument();
+  });
+
+  it("renders nothing for KPI strip when metrics is loading or errored", () => {
+    metricsState.isLoading = true;
+    wrap(<RileyCockpitPage />);
+    expect(screen.queryByTestId("kpi-strip")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing for KPI strip when wire VM is missing tiles (no Alex fallback)", () => {
+    // Adapter returns null when tiles is missing; page renders no strip.
+    const { tiles: _omit, ...withoutTiles } = buildMetricsFixture();
+    metricsState.data = withoutTiles;
+    wrap(<RileyCockpitPage />);
+    expect(screen.queryByTestId("kpi-strip")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("roi-comparator")).not.toBeInTheDocument();
+  });
+
+  it("hard regression: KPI strip never renders a 'qualified' label (no legacy leak)", () => {
+    // Even with full live data, no qualified tile should appear inside the
+    // strip — Riley is not qualifying leads. The assertion is scoped to the
+    // strip subtree via data-testid so it cannot false-pass on (a) the
+    // ActivityStream's `QUALIFIED` activity-kind label (kind-meta.ts:18), nor
+    // (b) an empty render where the strip never mounted.
+    metricsState.data = buildMetricsFixture();
+    wrap(<RileyCockpitPage />);
+    const strip = screen.getByTestId("kpi-strip"); // positive presence — fails fast if missing
+    expect(within(strip).queryByText(/qualified/i)).not.toBeInTheDocument();
+  });
+
+  it("applies RILEY_ACCENT to the ROI comparator chip", () => {
+    metricsState.data = buildMetricsFixture();
+    wrap(<RileyCockpitPage />);
+    const pill = screen.getByTestId("roi-comparator");
+    expect(pill).toHaveStyle({ background: "#F6E7DE" }); // RILEY_ACCENT.paper
   });
 });
