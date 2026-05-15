@@ -6,6 +6,7 @@ import type {
   SparkPoint,
   StatCell,
 } from "./metrics-types.js";
+import { formatNumericDelta, formatPercentPointsDelta } from "./metrics-deltas.js";
 
 const RILEY_VOICE = {
   up: (delta: number) => `+${delta} from last week.`,
@@ -16,10 +17,11 @@ const RILEY_VOICE = {
 export async function buildRileyMetricsViewModel(
   input: PerAgentBuilderInput,
 ): Promise<MetricsViewModel> {
-  const { orgId, week, store } = input;
+  const { orgId, week, store, targets } = input;
 
   const heroValueP = countLeads(store, orgId, week.weekStart, week.weekEnd);
   const heroPrevP = countLeads(store, orgId, week.prevWeekStart, week.prevWeekEnd);
+  const spendCentsP = store.getMetaSpendCents({ orgId, from: week.weekStart, to: week.weekEnd });
   const weeklyCountsP = Promise.all(
     week.weeklyBuckets.map((b) => countLeads(store, orgId, b.from, b.to)),
   );
@@ -27,9 +29,10 @@ export async function buildRileyMetricsViewModel(
     week.dailyBuckets.map((b) => countLeads(store, orgId, b.from, b.to)),
   );
 
-  const [heroValue, heroPrev, weeklyCounts, dailyCounts] = await Promise.all([
+  const [heroValue, heroPrev, spendCents, weeklyCounts, dailyCounts] = await Promise.all([
     heroValueP,
     heroPrevP,
+    spendCentsP,
     weeklyCountsP,
     dailyCountsP,
   ]);
@@ -45,6 +48,12 @@ export async function buildRileyMetricsViewModel(
 
   const delta = heroValue - heroPrev;
   const subprose: ProseSegment[] = [{ kind: "text", text: voiceText(delta) }];
+
+  // Riley's "leads" is the hero value (ad leads); qualifiedPct is not meaningful for Riley
+  // but the shape requires it. Use 0 as the neutral value.
+  const leads = heroValue;
+  const qualifiedPct = 0;
+  const qualifiedPrev: number | null = null;
 
   const stats: readonly [StatCell, StatCell, StatCell] = [
     {
@@ -85,6 +94,13 @@ export async function buildRileyMetricsViewModel(
       unavailableSources: ["ad-platform-ctr", "ad-platform-spend"],
     },
     folioRange: week.folioRange,
+    targets,
+    spendCents,
+    leads,
+    qualifiedPct,
+    bookedDelta: formatNumericDelta(heroValue, heroPrev),
+    leadsDelta: formatNumericDelta(heroValue, heroPrev),
+    qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),
   };
 }
 

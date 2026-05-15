@@ -7,6 +7,8 @@ import type { MetricsSignalStore } from "../metrics.js";
 const TZ = "Asia/Singapore";
 const WED_NOW = new Date("2026-05-06T07:30:00.000Z");
 
+const DEFAULT_TARGETS = { avgValueCents: null, targetCpbCents: null };
+
 function makeStore(opts: {
   leadsThisWeek?: number;
   leadsLastWeek?: number;
@@ -30,6 +32,7 @@ function makeStore(opts: {
       if (dailyIdx >= 0) return opts.leadsPerDailyBucket?.[dailyIdx] ?? 0;
       return 0;
     }),
+    getMetaSpendCents: vi.fn(async () => null),
   };
 }
 
@@ -40,6 +43,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({ leadsThisWeek: 86, leadsLastWeek: 71 }),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.hero.kind).toBe("ad-leads");
     if (vm.hero.kind !== "ad-leads") throw new Error();
@@ -53,6 +57,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({ leadsThisWeek: 86, leadsLastWeek: 71 }),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.heroSubProseSegments).toEqual([{ kind: "text", text: "+15 from last week." }]);
   });
@@ -63,6 +68,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({ leadsThisWeek: 50, leadsLastWeek: 62 }),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.heroSubProseSegments).toEqual([{ kind: "text", text: "12 fewer from last week." }]);
   });
@@ -73,6 +79,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({ leadsThisWeek: 71, leadsLastWeek: 71 }),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.heroSubProseSegments).toEqual([{ kind: "text", text: "Flat vs last week." }]);
   });
@@ -83,6 +90,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({ leadsThisWeek: 86 }),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.stats[0]).toEqual({
       label: "Leads",
@@ -98,6 +106,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({}),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.stats[1]).toEqual({
       label: "CTR",
@@ -114,6 +123,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({}),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.stats[2]).toEqual({
       label: "Spend",
@@ -130,6 +140,7 @@ describe("buildRileyMetricsViewModel", () => {
       orgId: "org-1",
       week,
       store: makeStore({}),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.freshness.unavailableSources).toEqual(["ad-platform-ctr", "ad-platform-spend"]);
   });
@@ -146,9 +157,25 @@ describe("buildRileyMetricsViewModel", () => {
         leadsPerWeeklyBucket: [52, 64, 71, 71],
         leadsPerDailyBucket: [12, 18, 22],
       }),
+      targets: DEFAULT_TARGETS,
     });
     expect(vm.spark.map((p) => p.value)).toEqual([52, 64, 71, 71, 12, 18, 22]);
     expect(vm.spark[vm.spark.length - 1]!.isProjection).toBe(true);
+  });
+
+  describe("A.3 echoes (Riley shares the shape)", () => {
+    it("echoes targets and spendCents on Riley path", async () => {
+      const store = makeStore({});
+      const vm = await buildRileyMetricsViewModel({
+        orgId: "org_1",
+        week: buildWeekContext(WED_NOW, TZ),
+        store,
+        targets: { avgValueCents: 12000, targetCpbCents: 4000 },
+      });
+      expect(vm.targets).toEqual({ avgValueCents: 12000, targetCpbCents: 4000 });
+      expect(vm.spendCents).toBeNull();
+      expect(vm.leads).toBeGreaterThanOrEqual(0);
+    });
   });
 });
 
@@ -165,7 +192,9 @@ describe("voice divergence (Alex vs Riley)", () => {
           return 0;
         }),
         countConversionsByType: vi.fn(async () => 0),
+        getMetaSpendCents: vi.fn(async () => null),
       },
+      targets: DEFAULT_TARGETS,
     });
     const rileyVm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -177,7 +206,9 @@ describe("voice divergence (Alex vs Riley)", () => {
           if (from.getTime() === week.prevWeekStart.getTime()) return 9;
           return 0;
         }),
+        getMetaSpendCents: vi.fn(async () => null),
       },
+      targets: DEFAULT_TARGETS,
     });
     expect(alexVm.heroSubProseSegments[0]?.text).toBe("Up from 9 last week.");
     expect(rileyVm.heroSubProseSegments[0]?.text).toBe("+5 from last week.");
