@@ -196,8 +196,8 @@ Estimated effort per route: ~half a day, including tests.
 
 ## Open risks
 
-- **GovernanceGate `autoApprove: true` short-circuit** — needs verification during the first implementation. If the gate still requires a policy lookup, we add a tiny auto-approve fast-path before merging the implementation PR.
-- **`platformIngress` not decorated on `app`** in some test paths — confirm the test harness wires it; otherwise add to `apps/api/src/__tests__/test-server.ts`.
+- **GovernanceGate `autoApprove: true` short-circuit** — needs verification during the first implementation. If the gate still requires a policy lookup, we add a tiny auto-approve fast-path before merging the implementation PR. **(Resolved in Phase 1b.1 verification — see Amendment 1 below.)**
+- **`platformIngress` not decorated on `app`** in some test paths — confirm the test harness wires it; otherwise add to `apps/api/src/__tests__/test-server.ts`. **(Resolved — test harness decorates `app.platformIngress` at `apps/api/src/__tests__/test-server.ts:369`. No change needed for the ingress decoration itself; see Amendment 2 for the related WorkflowMode/test-harness finding.)**
 - **`outputs` typing** in `WorkflowHandlerResult` is loose (`Record<string, unknown>`). Routes parse outputs at the boundary. Acceptable for Phase 1b; tighten in Design A.
 
 ## Success criteria
@@ -216,3 +216,75 @@ After user review and approval, merge this spec to main via focused PR. Then **P
 - Phase 1b.3: `admin-consent.ts` (3 intents grouped — same domain)
 
 `lifecycle-disqualifications.ts` migration tracks as **Phase 1c**, gated on PR #444 merging.
+
+---
+
+## Amendments
+
+### Amendment 1 — 2026-05-15: GovernanceGate approval behavior
+
+**Source:** Phase 1b.1 (`dashboard-opportunities.ts`) verification round.
+
+**Finding:** The shape proposed in Decision 3 (`{ riskCategory: "low", autoApprove: true }`) does not match the actual `IntentRegistration` interface. The current fields are `mutationClass`, `budgetClass`, `approvalPolicy: "none" | "threshold" | "always"`. `GovernanceGate.evaluate` always runs the policy engine end-to-end; `packages/core/src/engine/policy-engine.ts:589` defaults to `deny` when no policy matches the proposal. `approvalPolicy: "none"` alone is not a bypass — it is informational metadata threaded into the evaluation context. Trust-list (`resolvedIdentity.effectiveTrustBehaviors`) is the only existing short-circuit and is per-principal, which does not fit the per-intent contract this spec needs.
+
+**Resolution:** Add an explicit, audit-grade approval-mode field to `IntentRegistration`:
+
+```ts
+approvalMode: "policy" | "system_auto_approved"; // default: "policy"
+```
+
+`GovernanceGate.evaluate` short-circuits the policy/approval lookup **only** when `approvalMode === "system_auto_approved"`. The short-circuit returns `outcome: "execute"` with deterministic constraints and an empty `matchedPolicies` list; the gate produces a typed decision and the rest of the ingress pipeline runs unchanged.
+
+**Invariants the short-circuit MUST preserve (do not weaken):**
+
+- Auth (entitlement check at `platform-ingress.ts:144`)
+- Trigger validation
+- Idempotency (cached-replay path at `platform-ingress.ts:94`)
+- Deployment resolution
+- WorkTrace persistence (`persistTrace` runs after execute with full governance decision)
+- Audit ledger evidence
+- Execution dispatch through registered mode
+
+**Naming choice:** `approvalMode` as a string enum (not a boolean `autoApprove`) for grep/audit clarity and intentionality. `"system_auto_approved"` is a load-bearing string literal that should appear in incident searches as evidence of a deliberate registration.
+
+**Allowed callers:** `"system_auto_approved"` is reserved for operator-direct ingress bootstrap registrations migrated under this spec. It must not be applied to skill, cartridge, or agent-initiated intents.
+
+**Required test coverage (Phase 1b.1):**
+- `approvalMode: "policy"` (or omitted) still denies when no org policy matches.
+- `approvalMode: "system_auto_approved"` skips policy lookup and returns `outcome: "execute"`.
+- `approvalMode: "system_auto_approved"` still produces a persisted WorkTrace (governed execution evidence).
+- Idempotency cache replay still functions for `system_auto_approved` intents.
+
+### Amendment 2 — 2026-05-15: First-class `OperatorMutationMode`, not a WorkflowMode reuse
+
+**Source:** Phase 1b.1 (`dashboard-opportunities.ts`) verification round.
+
+**Finding:** Decision 1 prescribed reusing `WorkflowMode` with a thin handler. Verification surfaced two structural frictions:
+
+1. `bootstrapContainedWorkflows` (`apps/api/src/bootstrap/contained-workflows.ts:127`) instantiates a single `WorkflowMode` and registers it under the `"workflow"` mode name. `ExecutionModeRegistry.register` throws on duplicate mode names (`packages/core/src/platform/execution-mode-registry.ts:9`), so a second `WorkflowMode` cannot be added.
+2. The test harness (`apps/api/src/__tests__/test-server.ts`) does not register `WorkflowMode` at all — `bootstrapContainedWorkflows` is gated on `prismaClient` (`apps/api/src/app.ts:646`) and tests pass `prisma: null`.
+
+Sharing `WorkflowMode`'s handlers Map across `contained-workflows` and `operator-intents` would couple two bootstraps and contradict Decision 4 ("Adding operator intents to `bootstrap/contained-workflows.ts` muddies its scope").
+
+**Resolution:** Register operator-direct intents under the existing `ExecutionModeName` value `"operator_mutation"` (already declared at `packages/core/src/platform/types.ts:6`) via a new first-class `OperatorMutationMode` class.
+
+**Framing (not a workaround):** `OperatorMutationMode` is **the governed execution mode for operator-direct mutations submitted through `PlatformIngress`**. It is the architectural replacement for the legacy `"store_recorded_operator_mutation"` `ingressPath` — the pattern where stores (`prisma-opportunity-store.ts`, `prisma-deployment-lifecycle-store.ts`) wrote WorkTrace records directly to represent operator mutations that never entered ingress. That bypass is exactly what Wave 2 Phase 1 is eliminating; this mode is the canonical successor.
+
+**Contract:**
+
+- Mode name: `"operator_mutation"` (existing).
+- Dispatches only handlers registered through `bootstrap/operator-intents.ts`.
+- Each handler is a thin adapter to an existing service function; no direct store writes outside the registered handler path.
+- Emits `ExecutionResult` consistently with other modes; WorkTrace persistence happens upstream in `PlatformIngress.persistTrace`.
+- Test harness MUST register `OperatorMutationMode` with the same operator-intent handler set used in production bootstrap. Test-harness registration is non-optional and must not depend on `prismaClient`.
+
+**Rejected alternatives:**
+
+- **Shared handlers Map** (have `contained-workflows` and `operator-intents` both mutate the same Map) — too invasive; couples the two bootstraps.
+- **Return-and-merge** (`bootstrapContainedWorkflows` returns its Map for the operator bootstrap to consume) — inverts dependency for test-harness convenience.
+
+**Test harness requirement (Phase 1b.1):** add a regression test in `apps/api/src/routes/__tests__/dashboard-opportunities-ingress.test.ts` proving the migrated PATCH route enters through `PlatformIngress` → `GovernanceGate` (with `system_auto_approved` short-circuit) → `OperatorMutationMode` → registered handler → opportunity store, and that a WorkTrace is persisted with `mode: "operator_mutation"`.
+
+### Amendment scope
+
+These two amendments adjust Decisions 1 and 3 only. Decisions 2 (actor shape), 4 (intent registration site), and 5 (idempotency-key sourcing) stand unchanged. The Migration checklist remains correct; step 2 ("Define the WorkflowHandler") becomes "Define the OperatorMutationHandler" with the same shape (`execute(workUnit) → ExecutionResult`-compatible result).
