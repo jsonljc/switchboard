@@ -15,7 +15,9 @@ import type { ActivityRow } from "@switchboard/schemas";
  * ordered against timestamped rows.
  *
  * When two rows have the same `timestampIso` the activity rows appear before
- * outcome rows (stable — activity list is first in the concatenation).
+ * outcome rows (stable — activity list is first in the concatenation). Callers
+ * must NOT swap argument order: `mergeRileyActivityAndOutcomes(outcomes, activity)`
+ * would invert the tie-breaking contract.
  */
 export function mergeRileyActivityAndOutcomes(
   activity: ActivityRow[],
