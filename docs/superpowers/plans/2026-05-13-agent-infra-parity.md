@@ -228,6 +228,8 @@ EOF
 
 ## PR-2: Parallel safe tool calls in skill executor
 
+> **Status: Deferred (as of 2026-05-15).** Tasks 1–8 below are intact for whenever this work is picked up, but none of them shipped. See the spec's PR-2 section for the deferral rationale. The executor at `packages/core/src/skill-runtime/skill-executor.ts` still serializes tool calls sequentially.
+
 ### File Map
 
 - Create: `packages/core/src/skill-runtime/tool-call-scheduler.ts` — concurrency-aware scheduler
