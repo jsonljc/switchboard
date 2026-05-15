@@ -23,9 +23,13 @@ Run a thorough, parallelized audit of Switchboard's architecture, infrastructure
 
 ## Shape: Two Waves
 
-### Wave 1 — Discovery (read-only, parallel)
+### Wave 1 — Discovery (read-only, batched-parallel)
 
-Many Explore subagents dispatched in a single message. Each lane has a tight charter and produces a structured findings block. Wave 1 never writes outside `docs/audits/2026-05-15-cleanup/`. **Important:** Explore subagents are read-only and cannot Write files. Lanes return findings as text in their subagent reply; the **main agent** persists each lane's output to `docs/audits/2026-05-15-cleanup/<lane-slug>.md` after the subagent returns.
+Explore subagents are dispatched in batches (see "Dispatch batches" under Wave 1 Lanes below). Lanes within a batch run in parallel; batches run sequentially so synthesis load stays manageable. Each lane has a tight charter and produces a structured findings block.
+
+**"Read-only" defined strictly:** lanes may NOT do any of the following — no code edits, no commits, no migrations, no dependency installs, no generated artifacts, no Write/Edit tool calls of any kind. The ONLY file written during Wave 1 is the per-lane report at `docs/audits/2026-05-15-cleanup/<lane-slug>.md`, and that write is performed by the **orchestrator** (main agent) using the subagent's returned text — never by the Explore subagent itself. The orchestrator may additionally write `_pre-dispatch.md` (see Pre-Dispatch Verification) and the synthesis doc; Explore subagents may not write any files.
+
+Lanes return findings as text in their subagent reply; the orchestrator persists each lane's output after the subagent returns.
 
 ### Wave 2 — Cleanup (gated on user triage)
 
@@ -40,7 +44,7 @@ Only after user approves a prioritized backlog. Each approved item becomes eithe
 
 Spec numbers and file lists drift between writing and dispatch. Before dispatching Wave 1, the orchestrating session **must** re-baseline these counts and pin literal file lists into the dispatch prompts. Lane charters reference quantities (LOC, file counts, suppression counts) that are snapshots — they may be stale by the time dispatch happens.
 
-Run these greps from `/Users/jasonli/switchboard` and record results in `docs/audits/2026-05-15-cleanup/_pre-dispatch.md`:
+Run these greps from `/Users/jasonli/switchboard` and record results in `docs/audits/2026-05-15-cleanup/_pre-dispatch.md`. **The orchestrator (main agent) writes this file directly** — this is a pre-dispatch artifact, not a Wave 1 subagent output. Explore subagents may not write files at any point.
 
 ```bash
 # Lane 6 — current .ts/.tsx/.css files >400 LOC
@@ -70,6 +74,24 @@ Lane charters that include numeric assertions ("~264 instances", "6 files >400 L
 ## Wave 1 Lanes (20 total, 2 deferred at start)
 
 Each lane is run by an Explore subagent. Output is captured by the main agent and persisted to `docs/audits/2026-05-15-cleanup/<lane-slug>.md`.
+
+### Dispatch batches
+
+To keep synthesis load manageable and the run reviewable, the 18 active lanes are dispatched in **three sequential batches**. Lanes within a batch run in parallel (single message, multiple `Agent` tool calls); the orchestrator waits for the full batch to return before starting the next.
+
+After each batch the orchestrator:
+
+1. Persists each lane's report to `docs/audits/2026-05-15-cleanup/<lane-slug>.md`.
+2. Performs lightweight per-batch synthesis (severity counts, collision tags, obvious dedupes).
+3. Optionally pauses for user check-in before the next batch (recommended for first run).
+
+**Batch A — Architecture & contracts (5 lanes):** `doctrine-compliance`, `route-chain-integrity`, `layer-hygiene`, `api-consistency`, `security-sweep-delta`. These set the architectural baseline and surface invariant violations / contract drift first.
+
+**Batch B — Code health & cleanup readiness (5 lanes):** `dead-code`, `cartridge-sdk-removal-readiness`, `file-size-splits`, `type-safety`, `lint-debt`. Heavy file-traversal lanes; benefits from Batch A's findings (e.g., barrel-file flags from layer-hygiene inform dead-code dedupe).
+
+**Batch C — Data, infra, tests, docs (8 lanes):** `prisma-hygiene`, `fixture-schema-alignment`, `deploy-infra-parity`, `coverage-vs-threshold`, `missing-co-located-tests`, `test-stability-inventory`, `surface-agnostic-backend`, `doctrine-architecture-drift`. The largest batch by count but lowest per-lane synthesis cost (most return tight findings).
+
+If a Batch C run grows unwieldy in practice, split it after first execution. Don't pre-optimize.
 
 ### Architecture & invariants
 
@@ -211,11 +233,16 @@ Plus these always-excluded paths regardless of branch state (they're either shar
 
 Wave 1 lanes still **report** findings inside these paths (so we know what's there) but tag them `Collides with active work?: yes (<branch>)`. Wave 2 **skips** these paths entirely unless their branches have merged by then.
 
+**Hard rule for collision tagging:** any finding whose `Where:` path matches an exclusion-mask entry MUST carry `Collides with active work?: yes (<branch>)` — even if the finding is CRITICAL or HIGH. Severity does not override the collision tag; collision-tagged findings simply land in the "Deferred-collision" list at synthesis time and are released to Wave 2 once their branch merges. Inconsistent tagging here breaks the gate.
+
 ## Synthesis (main agent, after lanes return)
 
 1. Persist each lane's returned markdown block to `docs/audits/2026-05-15-cleanup/<lane>.md`.
 2. Dedupe overlapping findings (file-size + barrel-file + dead-code tend to collide; cartridge-sdk-removal-readiness will overlap dead-code; security-sweep-delta may overlap api-consistency on auth findings).
-3. Verify each finding's evidence still matches HEAD — flag stale items, do not auto-fix.
+3. **Re-verify evidence against HEAD with severity-prioritized depth:**
+   - **CRITICAL and HIGH:** fully re-verify every finding's `Where:` and `Evidence:` against current HEAD. File moved? Line shifted? Pattern still present? Stale items are flagged but not silently dropped — flag them as `STALE — re-snapshot before action` and keep in the backlog.
+   - **MED and LOW:** spot-check only at synthesis time. Full re-verification is deferred until the item is selected for Wave 2 execution (re-snapshot at the moment of fix-PR creation, not at synthesis).
+   This keeps synthesis tractable when 18 lanes return hundreds of findings — full re-verification of every MED/LOW would dominate the synthesis budget for low marginal value.
 4. Produce `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit.md` (the **synthesis doc**, not this design doc) containing:
    - Top 10 by impact (CRITICAL/HIGH first).
    - Full ranked backlog.
