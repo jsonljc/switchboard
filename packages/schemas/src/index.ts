@@ -160,3 +160,6 @@ export * from "./whatsapp-test-send.js";
 
 // Canonical-key enum + Zod refinement (PR-3.2a — outcome-pattern bucketing)
 export * from "./canonical-keys.js";
+
+// Outcome-pattern surfacing config (PR-3.2e — per-deployment pilotMode flag)
+export * from "./outcome-patterns-config.js";
