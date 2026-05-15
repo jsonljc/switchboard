@@ -73,10 +73,12 @@ services:
         sync: false
       - key: META_ADS_ACCOUNT_ID
         sync: false
-      # Public-safe — surfaced in browser-side Meta Pixel events. Operator fills
-      # in the pixel ID from their Meta Ads asset; not a secret.
+      # Public-safe — surfaced in browser-side Meta Pixel events.
+      # `sync: false` here is not about secrecy but about forcing the operator
+      # to enter the value via Render's UI at provisioning. Public-safe means
+      # it can leak; that doesn't change that we still need a real value.
       - key: META_PIXEL_ID
-        value: <META_PIXEL_ID>
+        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
