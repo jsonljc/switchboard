@@ -209,6 +209,159 @@ describe("buildRileyMetricsViewModel", () => {
   });
 });
 
+describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
+  const baseTargets = { avgValueCents: null, targetCpbCents: null };
+
+  function tilesOf(vm: {
+    tiles?: readonly {
+      label: string;
+      value: number | string;
+      unavailable?: boolean;
+      trend?: string;
+      hint?: string;
+    }[];
+  }) {
+    return vm.tiles ?? [];
+  }
+
+  it("emits exactly 3 tiles: leads / ctr / ad spend", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 27, leadsLastWeek: 22 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: baseTargets,
+    });
+    const tiles = tilesOf(vm);
+    expect(tiles).toHaveLength(3);
+    expect(tiles[0]).toEqual({ label: "leads", value: 27, trend: "+5" });
+    expect(tiles[1]).toEqual({ label: "ctr", value: "—", unavailable: true });
+    expect(tiles[2]).toEqual({ label: "ad spend", value: "$200" });
+  });
+
+  it("tile[2] degrades to unavailable + 'Connect Meta Ads' hint when spendCents is null", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 27, leadsLastWeek: 22 });
+    // store already returns null for spend by default
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: baseTargets,
+    });
+    expect(tilesOf(vm)[2]).toEqual({
+      label: "ad spend",
+      value: "—",
+      unavailable: true,
+      hint: "Connect Meta Ads",
+    });
+  });
+
+  it("roi rule 1: spendCents === null → 'Connect Meta Ads to see cost per lead'", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 27, leadsLastWeek: 22 });
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: 500 },
+    });
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "Connect Meta Ads to see cost per lead",
+      label: "cost per lead",
+      comparator: { value: "—", target: "target $5" },
+    });
+  });
+
+  it("roi rule 2: spendCents > 0 && leads === 0 → empty hint, comparator '—'", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 0, leadsLastWeek: 0 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: null },
+    });
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "",
+      label: "cost per lead",
+      comparator: { value: "—", target: "—" },
+    });
+  });
+
+  it("roi rule 3: spendCents > 0 && leads > 0 && targetCpbCents === null → comparator '$N per lead', target '—'", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 10, leadsLastWeek: 0 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: null },
+    });
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "",
+      label: "cost per lead",
+      comparator: { value: "$20 per lead", target: "—" },
+    });
+  });
+
+  it("roi sub-dollar guard: cpl rounds to 0 → '<$1 per lead', not '$0 per lead'", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 100, leadsLastWeek: 0 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(99);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: 500 },
+    });
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "",
+      label: "cost per lead",
+      comparator: { value: "<$1 per lead", target: "target $5" },
+    });
+  });
+
+  it("roi rule 4: spendCents > 0 && leads > 0 && targetCpbCents > 0 → live comparator + target", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 5, leadsLastWeek: 0 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(12345);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: 1000 },
+    });
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "",
+      label: "cost per lead",
+      comparator: { value: "$25 per lead", target: "target $10" },
+    });
+  });
+
+  it("preserves the flat-shape qualifiedPct=0 placeholder for backward compat", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store: makeStore({ leadsThisWeek: 27, leadsLastWeek: 22 }),
+      targets: baseTargets,
+    });
+    expect(vm.qualifiedPct).toBe(0);
+    // tiles must not surface qualified
+    expect(tilesOf(vm).map((t) => t.label)).not.toContain("qualified");
+  });
+});
+
 describe("voice divergence (Alex vs Riley)", () => {
   it("same +5 delta produces different prose", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
