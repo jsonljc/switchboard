@@ -11,14 +11,18 @@ import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { ComposerPlaceholder } from "./composer-placeholder";
 import { MissionPopover } from "./mission-popover";
 import { EmptyState, shouldRenderEmptyState } from "./empty-state";
+import { KPIStrip } from "./kpi-strip";
+import type { CockpitKpiData } from "./types";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view";
 import { translatedActionToActivityRow } from "@/lib/cockpit/activity-kind-map";
+import { metricsViewModelToLegacyKpiInput } from "@/lib/cockpit/metrics-to-kpi-input";
 import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
 import { usePendingApprovals } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentMission } from "@/hooks/use-agent-mission";
+import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useHalt } from "@/components/layout/halt/halt-context";
 
 export function CockpitPage() {
@@ -27,6 +31,7 @@ export function CockpitPage() {
   const activityQ = useAgentActivity(1);
   const greetingQ = useAgentGreeting("alex");
   const mission = useAgentMission("alex");
+  const metricsQ = useAgentMetrics("alex");
   const router = useRouter();
   const [filter, setFilter] = useState<ActivityFilter>("all");
   const [missionOpen, setMissionOpen] = useState(false);
@@ -58,6 +63,13 @@ export function CockpitPage() {
   });
 
   const coldState = mission.data ? shouldRenderEmptyState(mission.data.setup) : false;
+
+  const kpis: CockpitKpiData | null = metricsQ.data
+    ? {
+        range: `This week · ${metricsQ.data.folioRange}`,
+        ...metricsViewModelToLegacyKpiInput(metricsQ.data),
+      }
+    : null;
 
   const line = greetingQ.data?.segments
     ? greetingQ.data.segments
@@ -97,9 +109,7 @@ export function CockpitPage() {
             />
           ) : null}
         </div>
-        {/* A.3 inserts <KPIStrip kpis={kpis} collapsed={approvals.length > 0} />
-            here, between Identity and the approval block. A.1 renders nothing
-            in this region — no empty <div /> placeholder. */}
+        {!coldState && kpis ? <KPIStrip kpis={kpis} collapsed={approvals.length > 0} /> : null}
         {approvals.length > 0 && (
           <ApprovalBlock
             data={approvals}

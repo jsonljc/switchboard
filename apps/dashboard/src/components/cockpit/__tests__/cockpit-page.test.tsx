@@ -2,10 +2,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
+import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
 
 // Mock data hooks before importing the page.
 vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-approvals", () => ({
-  usePendingApprovals: () => ({ data: { approvals: [] }, isLoading: false }),
+  usePendingApprovals: () => ({
+    data: { approvals: pendingApprovalsData },
+    isLoading: false,
+  }),
 }));
 
 vi.mock("@/hooks/use-agent-activity", () => ({
@@ -15,6 +19,19 @@ vi.mock("@/hooks/use-agent-activity", () => ({
 vi.mock("@/hooks/use-agent-greeting", () => ({
   useAgentGreeting: () => ({ data: null, isLoading: false }),
 }));
+
+let metricsData: MetricsViewModelWire | undefined = undefined;
+
+vi.mock("@/hooks/use-agent-metrics", () => ({
+  useAgentMetrics: () => ({
+    data: metricsData,
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
+let pendingApprovalsData: unknown[] = [];
 
 const toggleHaltMock = vi.fn();
 let haltedState = false;
@@ -81,6 +98,8 @@ describe("CockpitPage", () => {
     pushMock.mockClear();
     haltedState = false;
     missionData = undefined;
+    metricsData = undefined;
+    pendingApprovalsData = [];
   });
 
   it("renders Topbar, Identity, and ActivityStream in the cold state", () => {
@@ -124,6 +143,8 @@ describe("CockpitPage — A.2 mission + empty-state", () => {
     pushMock.mockClear();
     haltedState = false;
     missionData = undefined;
+    metricsData = undefined;
+    pendingApprovalsData = [];
   });
 
   it("makes the subtitle clickable once mission data loads and toggles the popover", async () => {
@@ -150,5 +171,83 @@ describe("CockpitPage — A.2 mission + empty-state", () => {
     render(<CockpitPage />);
     expect(await screen.findByTestId("cockpit-activity-stream")).toBeInTheDocument();
     expect(screen.queryByTestId("cockpit-empty-state")).not.toBeInTheDocument();
+  });
+});
+
+const STEADY_METRICS: MetricsViewModelWire = {
+  hero: { kind: "tours-booked", value: 9, comparator: { window: "week", value: 6 } },
+  heroSubProseSegments: [],
+  spark: [],
+  stats: [
+    { label: "Leads", display: "47", rawValue: 47, unit: "count" },
+    { label: "Conversion", display: "28%", rawValue: 0.28, unit: "percent" },
+    { label: "Spend", display: "$214", rawValue: 21400, unit: "currency" },
+  ],
+  freshness: { generatedAt: new Date().toISOString(), window: "week", dataSource: "live" },
+  folioRange: "May 12 – May 18",
+  targets: { avgValueCents: 17900, targetCpbCents: 3000 },
+  spendCents: 21400,
+  leads: 47,
+  qualifiedPct: 28,
+  bookedDelta: "+3",
+  leadsDelta: "+12",
+  qualifiedDelta: "+4 pts",
+};
+
+describe("CockpitPage — A.3 KPI strip", () => {
+  beforeEach(() => {
+    toggleHaltMock.mockClear();
+    pushMock.mockClear();
+    haltedState = false;
+    missionData = undefined;
+    metricsData = undefined;
+    pendingApprovalsData = [];
+  });
+
+  it("renders KPIStrip in steady state (mission partial-done + metrics present)", async () => {
+    missionData = MISSION_PARTIAL_DONE;
+    metricsData = STEADY_METRICS;
+    render(<CockpitPage />);
+    expect(await screen.findByText(/bookings/i)).toBeInTheDocument();
+    expect(screen.getByText(/leads worked/i)).toBeInTheDocument();
+    expect(screen.getByText(/ad spend/i)).toBeInTheDocument();
+    expect(screen.getByText(/return on spend/i)).toBeInTheDocument();
+  });
+
+  it("does not render KPIStrip in cold state (all setup undone)", async () => {
+    missionData = FULL_MISSION_ALL_UNDONE;
+    metricsData = STEADY_METRICS;
+    render(<CockpitPage />);
+    expect(await screen.findByTestId("cockpit-empty-state")).toBeInTheDocument();
+    expect(screen.queryByText(/leads worked/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/return on spend/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render KPIStrip when metrics data has not loaded", () => {
+    missionData = MISSION_PARTIAL_DONE;
+    metricsData = undefined;
+    render(<CockpitPage />);
+    expect(screen.queryByText(/leads worked/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/return on spend/i)).not.toBeInTheDocument();
+  });
+
+  it("collapses KPIStrip to single-line headline when there is at least one pending approval", async () => {
+    missionData = MISSION_PARTIAL_DONE;
+    metricsData = STEADY_METRICS;
+    pendingApprovalsData = [
+      {
+        id: "appr-1",
+        bindingHash: "bh-1",
+        riskCategory: "medium",
+        summary: "Pricing decision",
+        createdAt: new Date().toISOString(),
+        agentRosterId: "alex",
+      },
+    ];
+    render(<CockpitPage />);
+    // ROI bar is hidden in collapsed mode
+    await waitFor(() => expect(screen.queryByText(/return on spend/i)).not.toBeInTheDocument());
+    // Open Report button is the collapsed signature
+    expect(screen.getByRole("button", { name: /Open report/i })).toBeInTheDocument();
   });
 });
