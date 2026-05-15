@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { SkillExecutorImpl } from "../skill-executor.js";
-import type { ToolCallingAdapter } from "../tool-calling-adapter.js";
+import type { ToolCallingLLMAdapter } from "../llm-types.js";
 import type { SkillDefinition, SkillToolFactory } from "../types.js";
 import { createCrmWriteToolFactory } from "../tools/crm-write.js";
 import { createCalendarBookToolFactory } from "../tools/calendar-book.js";
@@ -25,7 +25,7 @@ function makeAdapter(
     >;
     stop_reason: string;
   }>,
-): ToolCallingAdapter {
+): ToolCallingLLMAdapter {
   let i = 0;
   return {
     chatWithTools: vi.fn().mockImplementation(() => {
@@ -278,7 +278,7 @@ describe("Executor tool-output sentinels (AI-3 defense in depth)", () => {
 
     let capturedToolResultMessage: unknown = undefined;
     let callCount = 0;
-    const adapter: ToolCallingAdapter = {
+    const adapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockImplementation((args: { messages: unknown[] }) => {
         callCount++;
         if (callCount === 1) {
@@ -342,7 +342,7 @@ describe("Executor tool-output sentinels (AI-3 defense in depth)", () => {
 
     let capturedToolResultMessage: unknown = undefined;
     let callCount = 0;
-    const adapter: ToolCallingAdapter = {
+    const adapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockImplementation((args: { messages: unknown[] }) => {
         callCount++;
         if (callCount === 1) {

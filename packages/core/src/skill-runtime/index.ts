@@ -16,7 +16,9 @@ export { createAgentDeploymentGovernanceResolver } from "../governance/governanc
 export { InMemoryGovernancePostureCache } from "../governance/posture-cache.js";
 export { loadBannedPhrases } from "../governance/banned-phrases/index.js";
 export { loadEscalationTriggers } from "../governance/escalation-triggers/index.js";
+/** @deprecated Use `AnthropicToolAdapter` instead. Alias retained for out-of-tree consumers; removal scheduled for PR-4B follow-up. */
 export { AnthropicToolCallingAdapter } from "./tool-calling-adapter.js";
+export { AnthropicToolAdapter } from "./adapters/anthropic-tool-adapter.js";
 export { interpolate } from "./template-engine.js";
 export { getGovernanceConstraints } from "./governance-injector.js";
 export { ToolRegistry } from "./tool-registry.js";

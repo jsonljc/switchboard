@@ -32,7 +32,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   PdpaConsentGateHook: vi.fn().mockImplementation(() => ({ name: "pdpa-consent-gate" })),
   WhatsAppWindowGateHook: vi.fn().mockImplementation(() => ({ name: "whatsapp-window-gate" })),
   SimulationPolicyHook: vi.fn().mockImplementation(() => ({ name: "simulation" })),
-  AnthropicToolCallingAdapter: vi.fn().mockImplementation(() => ({})),
+  AnthropicToolAdapter: vi.fn().mockImplementation(() => ({})),
   BuilderRegistry: vi.fn().mockImplementation(() => ({
     register: vi.fn(),
     get: vi.fn(),

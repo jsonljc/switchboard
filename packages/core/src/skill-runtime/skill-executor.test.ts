@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { SkillExecutorImpl, parseIntentTag } from "./skill-executor.js";
-import type { ToolCallingAdapter } from "./tool-calling-adapter.js";
+import type { ToolCallingLLMAdapter } from "./llm-types.js";
 import type { SkillDefinition, SkillTool } from "./types.js";
 import { SkillParameterError, SkillExecutionBudgetError } from "./types.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
@@ -26,7 +26,7 @@ function createMockAdapter(
     >;
     stop_reason: string;
   }>,
-): ToolCallingAdapter {
+): ToolCallingLLMAdapter {
   let callIndex = 0;
   return {
     chatWithTools: vi.fn().mockImplementation(() => {
@@ -300,7 +300,7 @@ describe("SkillExecutorImpl", () => {
 
     // Each response reports 40K input tokens — second call will exceed 64K
     let callIndex = 0;
-    const bigAdapter: ToolCallingAdapter = {
+    const bigAdapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockImplementation(() => {
         callIndex++;
         return Promise.resolve({
@@ -327,7 +327,7 @@ describe("SkillExecutorImpl", () => {
   });
 
   it("enforces runtime timeout", async () => {
-    const slowAdapter: ToolCallingAdapter = {
+    const slowAdapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockImplementation(
         () =>
           new Promise((resolve) =>
