@@ -656,6 +656,17 @@ export async function buildServer() {
     instantFormAdapter = result.instantFormAdapter;
   }
 
+  // --- Operator-direct ingress mode (Wave 2 Phase 1b) ---
+  if (app.opportunityStore) {
+    const { bootstrapOperatorIntents } = await import("./bootstrap/operator-intents.js");
+    bootstrapOperatorIntents({
+      intentRegistry,
+      modeRegistry,
+      opportunityStore: app.opportunityStore,
+      logger: app.log,
+    });
+  }
+
   const { PlatformLifecycle } = await import("@switchboard/core/platform");
   const platformLifecycle = new PlatformLifecycle({
     approvalStore: storage.approvals,

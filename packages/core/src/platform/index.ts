@@ -35,6 +35,8 @@ export type { GovernanceDecision, ExecutionConstraints } from "./governance-type
 export type { ExecutionResult } from "./execution-result.js";
 export type { ExecutionContext, ExecutionMode } from "./execution-context.js";
 
+export type { ApprovalMode } from "./intent-registration.js";
+
 // Tracing
 export type { WorkTrace } from "./work-trace.js";
 export { buildWorkTrace } from "./work-trace-recorder.js";
@@ -108,6 +110,12 @@ export type {
   WorkflowHandlerResult,
   WorkflowRuntimeServices,
   ChildWorkRequest,
+} from "./modes/index.js";
+export { OperatorMutationMode } from "./modes/index.js";
+export type {
+  OperatorMutationModeConfig,
+  OperatorMutationHandler,
+  OperatorMutationHandlerResult,
 } from "./modes/index.js";
 
 // Registrars

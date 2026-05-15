@@ -53,7 +53,7 @@ import type {
 } from "@switchboard/core/platform";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 import {
-  InMemoryWorkTraceStore,
+  ObservableWorkTraceStore,
   TestContactStore,
   TestHandoffStore,
   TestThreadStore,
@@ -84,6 +84,13 @@ declare module "fastify" {
     reportStores?: import("@switchboard/core/reports").ReportStores;
     reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
     greetingSignalStore?: import("@switchboard/core").agentHome.GreetingSignalStore;
+    /** Test-only observer for the most recent ingress-persisted WorkTrace. */
+    lastIngressTrace?: {
+      intent: string;
+      mode: string;
+      outcome: string;
+      organizationId: string;
+    } | null;
   }
 }
 
@@ -353,7 +360,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     getGovernanceProfile: async (_orgId) => governanceProfileStore.get(_orgId),
   });
 
-  const workTraceStore = new InMemoryWorkTraceStore();
+  const workTraceStore = new ObservableWorkTraceStore();
 
   const { resolveAuthoritativeDeployment } =
     await import("../bootstrap/platform-deployment-resolver.js");
@@ -367,6 +374,28 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     entitlementResolver: undefined,
   });
   app.decorate("platformIngress", platformIngress);
+  app.decorate("workTraceStore", workTraceStore);
+
+  // Test-only ingress trace observer: the ObservableWorkTraceStore records the
+  // most recent persisted WorkTrace summary. Tests can read it via
+  // `app.lastIngressTrace` to verify ingress-path flow in operator-direct
+  // ingress route tests (Wave 2 Phase 1b).
+  Object.defineProperty(app, "lastIngressTrace", {
+    get: () => workTraceStore.lastPersistedSummary,
+    configurable: true,
+  });
+
+  // Operator-direct ingress bootstrap — registers OperatorMutationMode +
+  // operator.transition_opportunity_stage handler. Must run AFTER
+  // opportunityStore decoration and PlatformIngress wiring.
+  if (app.opportunityStore) {
+    const { bootstrapOperatorIntents } = await import("../bootstrap/operator-intents.js");
+    bootstrapOperatorIntents({
+      intentRegistry,
+      modeRegistry,
+      opportunityStore: app.opportunityStore,
+    });
+  }
 
   const platformLifecycle = new PlatformLifecycle({
     approvalStore: storage.approvals,

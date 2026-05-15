@@ -82,6 +82,19 @@ export class GovernanceGate {
     workUnit: WorkUnit,
     registration: IntentRegistration,
   ): Promise<GovernanceDecision> {
+    // Amendment 1 — system_auto_approved short-circuit.
+    // Skips the human approval-policy lookup only. Auth, idempotency,
+    // WorkTrace, audit, and execution dispatch all run unchanged downstream.
+    if (registration.approvalMode === "system_auto_approved") {
+      return {
+        outcome: "execute",
+        riskScore: 0,
+        budgetProfile: "cheap",
+        constraints: DEFAULT_CARTRIDGE_CONSTRAINTS,
+        matchedPolicies: [],
+      };
+    }
+
     // Derive cartridgeId from executor binding (first segment of action ID)
     const rawActionId =
       registration.executor.mode === "cartridge" ? registration.executor.actionId : undefined;
