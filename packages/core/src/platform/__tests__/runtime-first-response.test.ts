@@ -51,7 +51,7 @@ const DEPLOYMENT: DeploymentResolverResult = {
     bookingLink: DENTAL.personaConfig.bookingLink,
     customInstructions: DENTAL.personaConfig.customInstructions,
   },
-  deploymentConfig: {},
+  inputConfig: {},
   policyOverrides: undefined,
 };
 

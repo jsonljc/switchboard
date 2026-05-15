@@ -29,5 +29,5 @@ export interface DeploymentContext {
   // for the pilotMode surfacing flag). Optional because not every
   // DeploymentContext construction path resolves from a real AgentDeployment
   // row (e.g. api-direct fallback in resolve-deployment.ts).
-  deploymentConfig?: Record<string, unknown>;
+  inputConfig?: Record<string, unknown>;
 }

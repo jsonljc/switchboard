@@ -172,7 +172,7 @@ export class PrismaDeploymentResolver implements DeploymentResolver {
       trustScore: row.listing.trustScore,
       trustLevel: trustLevelFromScore(row.listing.trustScore),
       persona: extractPersona(inputConfig),
-      deploymentConfig: inputConfig,
+      inputConfig,
       policyOverrides: extractPolicyOverrides(row as unknown as Record<string, unknown>),
     };
   }

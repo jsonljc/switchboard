@@ -44,7 +44,7 @@ function makeDeploymentResult(slug: string): DeploymentResolverResult {
     trustScore: 42,
     trustLevel: "guided",
     persona: { businessName: "Test Co", tone: "friendly" },
-    deploymentConfig: {},
+    inputConfig: {},
     policyOverrides: undefined,
   };
 }

@@ -19,7 +19,7 @@ function createMockResolverResult(
     skillSlug: "alex",
     trustLevel: "guided",
     trustScore: 50,
-    deploymentConfig: {},
+    inputConfig: {},
     ...overrides,
   };
 }

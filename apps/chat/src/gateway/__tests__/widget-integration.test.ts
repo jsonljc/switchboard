@@ -14,7 +14,7 @@ describe("Widget integration", () => {
           skillSlug: "alex",
           trustLevel: "guided",
           trustScore: 50,
-          deploymentConfig: {},
+          inputConfig: {},
         }),
         resolveByDeploymentId: vi.fn(),
         resolveByOrgAndSlug: vi.fn(),

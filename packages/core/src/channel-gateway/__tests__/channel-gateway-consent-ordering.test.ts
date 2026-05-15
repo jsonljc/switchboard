@@ -99,7 +99,7 @@ describe("ChannelGateway — consent-before-escalation ordering", () => {
           skillSlug: "alex",
           trustLevel: "guided",
           trustScore: 50,
-          deploymentConfig: {},
+          inputConfig: {},
         }),
         resolveByDeploymentId: vi.fn(),
         resolveByOrgAndSlug: vi.fn(),
