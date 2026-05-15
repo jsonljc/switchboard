@@ -1,3 +1,5 @@
+import { resolveAdOptimizerConfig } from "@switchboard/schemas";
+
 import type { ParameterBuilder } from "../parameter-builder.js";
 
 /**
@@ -9,11 +11,11 @@ import type { ParameterBuilder } from "../parameter-builder.js";
  * based on the user's conversational request.
  */
 export const adOptimizerInteractiveBuilder: ParameterBuilder = async (ctx, _config, _stores) => {
-  const inputConfig = (ctx.deployment?.inputConfig ?? {}) as Record<string, unknown>;
+  const adConfig = resolveAdOptimizerConfig(ctx.deployment?.inputConfig);
 
   return {
     BUSINESS_NAME: ctx.persona.businessName,
-    DEPLOYMENT_CONFIG: inputConfig,
+    DEPLOYMENT_CONFIG: adConfig,
     PERSONA_CONFIG: {
       tone: ctx.persona.tone,
       customInstructions: ctx.persona.customInstructions ?? "",

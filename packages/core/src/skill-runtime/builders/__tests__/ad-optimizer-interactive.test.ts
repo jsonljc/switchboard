@@ -2,14 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import { adOptimizerInteractiveBuilder } from "../ad-optimizer-interactive.js";
 
 describe("adOptimizerInteractiveBuilder", () => {
-  it("returns DEPLOYMENT_CONFIG from inputConfig", async () => {
+  it("returns DEPLOYMENT_CONFIG resolved via resolveAdOptimizerConfig (typed fields + passthrough extras)", async () => {
     const ctx = {
       persona: { businessName: "Test Biz", tone: "professional" },
       deployment: {
         inputConfig: {
-          monthlyBudget: "5000",
-          targetCPA: "25",
-          targetROAS: "3.0",
+          monthlyBudget: 5000,
+          targetCPA: 25,
+          targetROAS: 3.0,
           auditFrequency: "weekly",
           pixelId: "123456",
         },
@@ -27,9 +27,9 @@ describe("adOptimizerInteractiveBuilder", () => {
     const result = await adOptimizerInteractiveBuilder(ctx, config, stores);
 
     expect(result.DEPLOYMENT_CONFIG).toEqual({
-      monthlyBudget: "5000",
-      targetCPA: "25",
-      targetROAS: "3.0",
+      monthlyBudget: 5000,
+      targetCPA: 25,
+      targetROAS: 3.0,
       auditFrequency: "weekly",
       pixelId: "123456",
     });
@@ -37,7 +37,7 @@ describe("adOptimizerInteractiveBuilder", () => {
     expect(result.PERSONA_CONFIG).toBeDefined();
   });
 
-  it("provides empty DEPLOYMENT_CONFIG when inputConfig is missing", async () => {
+  it("fills schema defaults when inputConfig is empty", async () => {
     const ctx = {
       persona: { businessName: "Empty Biz", tone: "casual" },
       deployment: { inputConfig: {} },
@@ -52,7 +52,11 @@ describe("adOptimizerInteractiveBuilder", () => {
     };
 
     const result = await adOptimizerInteractiveBuilder(ctx, config, stores);
-    expect(result.DEPLOYMENT_CONFIG).toEqual({});
+    expect(result.DEPLOYMENT_CONFIG).toEqual({
+      targetCPA: 100,
+      targetROAS: 3,
+      monthlyBudget: 0,
+    });
     expect(result.BUSINESS_NAME).toBe("Empty Biz");
   });
 });

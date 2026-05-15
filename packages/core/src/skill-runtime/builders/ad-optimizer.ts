@@ -1,3 +1,5 @@
+import { resolveAdOptimizerConfig } from "@switchboard/schemas";
+
 import type { BatchParameterBuilder, BatchContextContract } from "../batch-types.js";
 
 const INSIGHT_FIELDS = [
@@ -73,6 +75,6 @@ export const adOptimizerBuilder: BatchParameterBuilder = async (config, stores, 
     ACCOUNT_SUMMARY: accountSummary,
     CRM_FUNNEL: crmFunnel,
     BENCHMARKS: benchmarks,
-    DEPLOYMENT_CONFIG: dep?.inputConfig ?? {},
+    DEPLOYMENT_CONFIG: resolveAdOptimizerConfig(dep?.inputConfig),
   };
 };

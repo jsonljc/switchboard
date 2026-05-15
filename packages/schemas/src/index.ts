@@ -163,3 +163,6 @@ export * from "./canonical-keys.js";
 
 // Outcome-pattern surfacing config (PR-3.2e — per-deployment pilotMode flag)
 export * from "./outcome-patterns-config.js";
+
+// Ad-optimizer config (per-deployment targetCPA/targetROAS/monthlyBudget)
+export * from "./ad-optimizer-config.js";
