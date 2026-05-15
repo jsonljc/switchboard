@@ -1,5 +1,11 @@
 import { transitionOpportunityStage, OpportunityNotFoundError } from "@switchboard/core/lifecycle";
-import type { OpportunityStore, RecommendationStore } from "@switchboard/core";
+import type {
+  OpportunityStore,
+  RecommendationStore,
+  DisqualificationResolutionHook,
+  HookConfirmResult,
+  HookDismissResult,
+} from "@switchboard/core";
 import { actOnRecommendation } from "@switchboard/core";
 import {
   OperatorMutationMode,
@@ -10,6 +16,8 @@ import {
 import {
   TransitionOpportunityStageParametersSchema,
   ActOnRecommendationParametersSchema,
+  ConfirmDisqualificationParametersSchema,
+  DismissDisqualificationParametersSchema,
 } from "../routes/operator-intents-schemas.js";
 
 /**
@@ -29,11 +37,14 @@ interface OperatorIntentsBootstrapDeps {
   modeRegistry: ExecutionModeRegistry;
   opportunityStore: OpportunityStore;
   recommendationStore?: RecommendationStore;
+  disqualificationHook?: Pick<DisqualificationResolutionHook, "confirm" | "dismiss">;
   logger?: { info(msg: string): void };
 }
 
 export const TRANSITION_OPPORTUNITY_STAGE_INTENT = "operator.transition_opportunity_stage";
 export const ACT_ON_RECOMMENDATION_INTENT = "operator.act_on_recommendation";
+export const CONFIRM_DISQUALIFICATION_INTENT = "operator.confirm_disqualification";
+export const DISMISS_DISQUALIFICATION_INTENT = "operator.dismiss_disqualification";
 
 /**
  * Error codes returned by operator-mutation handlers. Routes and handlers
@@ -44,6 +55,8 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   OPPORTUNITY_NOT_FOUND: "OPPORTUNITY_NOT_FOUND",
   RECOMMENDATION_NOT_FOUND: "RECOMMENDATION_NOT_FOUND",
   RECOMMENDATION_INVALID_ACTION: "RECOMMENDATION_INVALID_ACTION",
+  DISQUALIFICATION_NOT_FOUND: "DISQUALIFICATION_NOT_FOUND",
+  DISQUALIFICATION_CONFLICT: "DISQUALIFICATION_CONFLICT",
 } as const;
 
 export function buildTransitionOpportunityStageHandler(
@@ -124,8 +137,57 @@ export function buildActOnRecommendationHandler(
   };
 }
 
+export function buildConfirmDisqualificationHandler(
+  hook: Pick<DisqualificationResolutionHook, "confirm">,
+): OperatorMutationHandler {
+  return {
+    async execute(workUnit) {
+      const params = ConfirmDisqualificationParametersSchema.parse(workUnit.parameters);
+      const result: HookConfirmResult = await hook.confirm({
+        organizationId: workUnit.organizationId,
+        conversationThreadId: params.conversationThreadId,
+        operatorId: workUnit.actor.id,
+        operatorNote: params.operatorNote,
+      });
+      return {
+        outcome: "completed" as const,
+        summary: `Disqualification confirm result: ${result.result}`,
+        outputs: { result },
+      };
+    },
+  };
+}
+
+export function buildDismissDisqualificationHandler(
+  hook: Pick<DisqualificationResolutionHook, "dismiss">,
+): OperatorMutationHandler {
+  return {
+    async execute(workUnit) {
+      const params = DismissDisqualificationParametersSchema.parse(workUnit.parameters);
+      const result: HookDismissResult = await hook.dismiss({
+        organizationId: workUnit.organizationId,
+        conversationThreadId: params.conversationThreadId,
+        operatorId: workUnit.actor.id,
+        operatorNote: params.operatorNote,
+      });
+      return {
+        outcome: "completed" as const,
+        summary: `Disqualification dismiss result: ${result.result}`,
+        outputs: { result },
+      };
+    },
+  };
+}
+
 export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): void {
-  const { intentRegistry, modeRegistry, opportunityStore, recommendationStore, logger } = deps;
+  const {
+    intentRegistry,
+    modeRegistry,
+    opportunityStore,
+    recommendationStore,
+    disqualificationHook,
+    logger,
+  } = deps;
 
   const handlers = new Map<string, OperatorMutationHandler>([
     [TRANSITION_OPPORTUNITY_STAGE_INTENT, buildTransitionOpportunityStageHandler(opportunityStore)],
@@ -135,6 +197,17 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     handlers.set(
       ACT_ON_RECOMMENDATION_INTENT,
       buildActOnRecommendationHandler(recommendationStore),
+    );
+  }
+
+  if (disqualificationHook) {
+    handlers.set(
+      CONFIRM_DISQUALIFICATION_INTENT,
+      buildConfirmDisqualificationHandler(disqualificationHook),
+    );
+    handlers.set(
+      DISMISS_DISQUALIFICATION_INTENT,
+      buildDismissDisqualificationHandler(disqualificationHook),
     );
   }
 
@@ -174,7 +247,40 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     });
   }
 
-  const intentCount = recommendationStore ? 2 : 1;
+  if (disqualificationHook) {
+    intentRegistry.register({
+      intent: CONFIRM_DISQUALIFICATION_INTENT,
+      defaultMode: "operator_mutation",
+      allowedModes: ["operator_mutation"],
+      executor: { mode: "operator_mutation" },
+      parameterSchema: {},
+      mutationClass: "write",
+      budgetClass: "cheap",
+      approvalPolicy: "none",
+      approvalMode: "system_auto_approved",
+      idempotent: true,
+      allowedTriggers: ["api"],
+      timeoutMs: 30_000,
+      retryable: false,
+    });
+    intentRegistry.register({
+      intent: DISMISS_DISQUALIFICATION_INTENT,
+      defaultMode: "operator_mutation",
+      allowedModes: ["operator_mutation"],
+      executor: { mode: "operator_mutation" },
+      parameterSchema: {},
+      mutationClass: "write",
+      budgetClass: "cheap",
+      approvalPolicy: "none",
+      approvalMode: "system_auto_approved",
+      idempotent: true,
+      allowedTriggers: ["api"],
+      timeoutMs: 30_000,
+      retryable: false,
+    });
+  }
+
+  const intentCount = 1 + (recommendationStore ? 1 : 0) + (disqualificationHook ? 2 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

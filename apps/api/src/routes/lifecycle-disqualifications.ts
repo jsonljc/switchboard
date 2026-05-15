@@ -11,19 +11,25 @@
 // set via preHandler hook from `x-org-id` header in dev/test — mirrors the
 // decisions route pattern). principalIdFromAuth supplies the operatorId; falls
 // back to "system:unknown" in dev mode where no API key is bound to a principal.
+//
+// POST routes use PlatformIngress.submit (Wave 2 Phase 1b.3 migration).
 // ---------------------------------------------------------------------------
 import type { FastifyInstance } from "fastify";
 import {
   isPendingDisqualification,
   type LifecycleSnapshotStore,
   type LifecycleTransitionStore,
-  type DisqualificationResolutionHook,
 } from "@switchboard/core";
+import { getIdempotencyKey } from "../utils/idempotency-key.js";
+import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
+import {
+  CONFIRM_DISQUALIFICATION_INTENT,
+  DISMISS_DISQUALIFICATION_INTENT,
+} from "../bootstrap/operator-intents.js";
 
 export interface LifecycleDisqualificationsRouteDeps {
   snapshotStore: Pick<LifecycleSnapshotStore, "listPendingDisqualifications">;
   transitionStore: Pick<LifecycleTransitionStore, "findLatestProposal">;
-  disqualificationHook: Pick<DisqualificationResolutionHook, "confirm" | "dismiss">;
 }
 
 export async function registerLifecycleDisqualificationsRoutes(
@@ -123,36 +129,62 @@ export async function registerLifecycleDisqualificationsRoutes(
         });
       }
 
-      let out;
-      try {
-        out = await deps.disqualificationHook.confirm({
-          organizationId: orgId,
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
+      if (!app.disqualificationHook) {
+        return reply
+          .code(503)
+          .send({ error: "Disqualification capability not available", statusCode: 503 });
+      }
+
+      const idempotencyKey = getIdempotencyKey(request);
+
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: operatorId, type: "user" },
+        intent: CONFIRM_DISQUALIFICATION_INTENT,
+        parameters: {
           conversationThreadId: request.params.threadId,
-          operatorId,
           operatorNote: request.body?.operatorNote,
-        });
-      } catch (err) {
-        console.warn("[lifecycle] disqualification confirm threw unexpectedly", {
-          threadId: request.params.threadId,
-          error: err instanceof Error ? err.message : String(err),
-        });
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      });
+
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
+      }
+
+      const { result } = response;
+      if (result.outcome === "failed") {
+        // Unexpected handler failure — throw so global error handler returns scrubbed 500.
+        // Map to 404 to preserve prior route behavior for the not_found case
+        // (hook result never reaches here; outcome:failed means an unexpected throw).
         return reply.code(404).send({ reason: "not_found" });
       }
 
-      if (out.result === "confirmed") {
+      // outcome === "completed" — unwrap hook result from outputs
+      const hookResult = (
+        result.outputs as { result?: { result: string; reason?: string; restoredStatus?: string } }
+      ).result;
+
+      if (!hookResult) {
+        throw new Error("Disqualification confirm handler returned no result output");
+      }
+
+      if (hookResult.result === "confirmed") {
         return reply.code(200).send({ result: "confirmed" });
       }
-      if (out.result === "already_applied") {
+      if (hookResult.result === "already_applied") {
         return reply.code(200).send({ result: "confirmed", alreadyApplied: true });
       }
-      if (out.result === "not_found") {
+      if (hookResult.result === "not_found" || hookResult.result === "capability_disabled") {
         return reply.code(404).send({ reason: "not_found" });
       }
-      if (out.result === "capability_disabled") {
-        return reply.code(404).send({ reason: "not_found" });
-      }
-      // conflict — out.reason is "already_booked" | "not_proposed" | "already_disqualified"
-      return reply.code(409).send({ reason: out.reason });
+      // conflict — hookResult.reason is "already_booked" | "not_proposed" | "already_disqualified"
+      return reply.code(409).send({ reason: hookResult.reason });
     },
   );
 
@@ -190,33 +222,58 @@ export async function registerLifecycleDisqualificationsRoutes(
         });
       }
 
-      let out;
-      try {
-        out = await deps.disqualificationHook.dismiss({
-          organizationId: orgId,
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
+      if (!app.disqualificationHook) {
+        return reply
+          .code(503)
+          .send({ error: "Disqualification capability not available", statusCode: 503 });
+      }
+
+      const idempotencyKey = getIdempotencyKey(request);
+
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: operatorId, type: "user" },
+        intent: DISMISS_DISQUALIFICATION_INTENT,
+        parameters: {
           conversationThreadId: request.params.threadId,
-          operatorId,
           operatorNote: request.body?.operatorNote,
-        });
-      } catch (err) {
-        console.warn("[lifecycle] disqualification dismiss threw unexpectedly", {
-          threadId: request.params.threadId,
-          error: err instanceof Error ? err.message : String(err),
-        });
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      });
+
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
+      }
+
+      const { result } = response;
+      if (result.outcome === "failed") {
         return reply.code(404).send({ reason: "not_found" });
       }
 
-      if (out.result === "dismissed") {
-        return reply.code(200).send({ result: "dismissed", restoredStatus: out.restoredStatus });
+      // outcome === "completed" — unwrap hook result from outputs
+      const hookResult = (
+        result.outputs as { result?: { result: string; reason?: string; restoredStatus?: string } }
+      ).result;
+
+      if (!hookResult) {
+        throw new Error("Disqualification dismiss handler returned no result output");
       }
-      if (out.result === "not_found") {
+
+      if (hookResult.result === "dismissed") {
+        return reply
+          .code(200)
+          .send({ result: "dismissed", restoredStatus: hookResult.restoredStatus });
+      }
+      if (hookResult.result === "not_found" || hookResult.result === "capability_disabled") {
         return reply.code(404).send({ reason: "not_found" });
       }
-      if (out.result === "capability_disabled") {
-        return reply.code(404).send({ reason: "not_found" });
-      }
-      // conflict — out.reason is "not_proposed"
-      return reply.code(409).send({ reason: out.reason });
+      // conflict — hookResult.reason is "not_proposed"
+      return reply.code(409).send({ reason: hookResult.reason });
     },
   );
 }

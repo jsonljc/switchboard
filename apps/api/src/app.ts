@@ -77,6 +77,7 @@ declare module "fastify" {
     reportCacheStore?: import("@switchboard/core/reports").ReportCacheStore;
     reportStores?: import("@switchboard/core/reports").ReportStores;
     baselineStore?: import("@switchboard/core/reports").BaselineStore;
+    disqualificationHook?: import("@switchboard/core").DisqualificationResolutionHook | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -652,6 +653,46 @@ export async function buildServer() {
     instantFormAdapter = result.instantFormAdapter;
   }
 
+  // --- Phase 3b: lifecycle disqualification hook + store decoration (Wave 2 Phase 1b.3) ---
+  // Bootstraps the lifecycle IoC tree once and captures snapshotStore, transitionStore, and
+  // disqualificationHook. The hook is decorated on app here so bootstrapOperatorIntents
+  // (below) can register operator.confirm_disqualification / operator.dismiss_disqualification
+  // intent handlers. The stores are carried forward to registerRoutes for the GET route.
+  let _lsSnapshotStore: import("@switchboard/core").LifecycleSnapshotStore | undefined = undefined;
+  let _lsTransitionStore: import("@switchboard/core").LifecycleTransitionStore | undefined =
+    undefined;
+  if (prismaClient) {
+    try {
+      const { bootstrapLifecycle } = await import("./bootstrap/lifecycle.js");
+      const { createLifecycleGovernanceConfigResolver } =
+        await import("./bootstrap/governance-resolver-adapter.js");
+      const {
+        snapshotStore: lsSnapshotStore,
+        transitionStore: lsTransitionStore,
+        disqualificationHook: lsDisqualificationHook,
+      } = bootstrapLifecycle({
+        prisma: prismaClient,
+        readMode: async () => "off" as const,
+        registerVerdictWriteHook: () => {},
+        registerBookingCreateHook: () => {},
+        registerInboundMessageHook: () => {},
+        registerOperatorTakeoverHook: () => {},
+        registerThreadInitHook: () => {},
+        registerCron: () => {},
+        playbookReader: { readForOrganization: async () => null },
+        governanceConfigResolver: createLifecycleGovernanceConfigResolver(prismaClient),
+      });
+      app.decorate("disqualificationHook", lsDisqualificationHook);
+      _lsSnapshotStore = lsSnapshotStore;
+      _lsTransitionStore = lsTransitionStore;
+    } catch (err) {
+      app.log.error(
+        `Failed to bootstrap lifecycle disqualification hook: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      app.decorate("disqualificationHook", null);
+    }
+  }
+
   // --- Operator-direct ingress mode (Wave 2 Phase 1b) ---
   if (app.opportunityStore) {
     const { bootstrapOperatorIntents } = await import("./bootstrap/operator-intents.js");
@@ -660,6 +701,7 @@ export async function buildServer() {
       modeRegistry,
       opportunityStore: app.opportunityStore,
       recommendationStore: app.recommendationStore,
+      disqualificationHook: app.disqualificationHook ?? undefined,
       logger: app.log,
     });
   }
@@ -773,43 +815,17 @@ export async function buildServer() {
   await registerInngest(app, { instantFormAdapter });
 
   // --- Phase 3b: lifecycle disqualification route deps ---
-  // bootstrapLifecycle creates the full IoC tree; here we only need the stores
-  // and hook that back the disqualification API. The inngest bootstrap (above)
-  // has its own separate bootstrapLifecycle call used only for writer/history.
+  // The lifecycle hook was already bootstrapped and decorated on app earlier
+  // (before bootstrapOperatorIntents). Here we only need to wire the stores for
+  // the GET route; the POST routes now read app.disqualificationHook directly.
   let lifecycleDisqualificationsDeps:
     | import("./routes/lifecycle-disqualifications.js").LifecycleDisqualificationsRouteDeps
     | undefined;
-  if (prismaClient) {
-    try {
-      const { bootstrapLifecycle } = await import("./bootstrap/lifecycle.js");
-      const { createLifecycleGovernanceConfigResolver } =
-        await import("./bootstrap/governance-resolver-adapter.js");
-      const {
-        snapshotStore: lsSnapshotStore,
-        transitionStore: lsTransitionStore,
-        disqualificationHook: lsDisqualificationHook,
-      } = bootstrapLifecycle({
-        prisma: prismaClient,
-        readMode: async () => "off" as const,
-        registerVerdictWriteHook: () => {},
-        registerBookingCreateHook: () => {},
-        registerInboundMessageHook: () => {},
-        registerOperatorTakeoverHook: () => {},
-        registerThreadInitHook: () => {},
-        registerCron: () => {},
-        playbookReader: { readForOrganization: async () => null },
-        governanceConfigResolver: createLifecycleGovernanceConfigResolver(prismaClient),
-      });
-      lifecycleDisqualificationsDeps = {
-        snapshotStore: lsSnapshotStore,
-        transitionStore: lsTransitionStore,
-        disqualificationHook: lsDisqualificationHook,
-      };
-    } catch (err) {
-      app.log.error(
-        `Failed to bootstrap lifecycle disqualification routes: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+  if (_lsSnapshotStore && _lsTransitionStore) {
+    lifecycleDisqualificationsDeps = {
+      snapshotStore: _lsSnapshotStore,
+      transitionStore: _lsTransitionStore,
+    };
   }
 
   // --- Register all API routes ---
