@@ -150,6 +150,9 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      - name: Local readiness pre-flight (fast)
+        run: pnpm local:verify:fast
+
   test:
     needs: setup
     runs-on: ubuntu-latest
