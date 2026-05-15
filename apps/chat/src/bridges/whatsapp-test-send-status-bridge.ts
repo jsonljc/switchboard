@@ -24,12 +24,13 @@ export interface WhatsAppStatusBridge {
 
 export function buildWhatsAppStatusBridge(deps: BridgeDeps): WhatsAppStatusBridge {
   return {
-    async onStatusUpdate(update: StatusUpdate, _orgId: string): Promise<void> {
+    async onStatusUpdate(update: StatusUpdate, orgId: string): Promise<void> {
       if (!ACCEPTED.has(update.status as WebhookStatus)) return;
       await deps.testSendStore.updateWebhookStatus({
         messageId: update.messageId,
         status: update.status as WebhookStatus,
         at: update.timestamp,
+        ...(orgId ? { organizationId: orgId } : {}),
       });
     },
   };

@@ -20,6 +20,12 @@ export const WhatsAppSendTestGraphErrorSchema = z.object({
 });
 
 // apiStatus is terminal: "sent" means Graph returned a messageId; "failed" means it didn't.
+// Slice 2A note: the live POST /send-test handler emits the "sent" branch on success and
+// the standard `{ error: { code, message, retryable } }` envelope on failure — it does not
+// return or persist the "failed" branch of this schema today. The branch is reserved for a
+// future iteration (likely Slice 2B+) that surfaces failed attempts in the UI. Do not
+// consume `status: "failed"` from /send-test responses without first verifying the handler
+// has been updated.
 export const WhatsAppSendTestResultSchema = z.object({
   messageId: z.string().nullable(),
   status: z.enum(["sent", "failed"]),

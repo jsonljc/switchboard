@@ -338,7 +338,16 @@ async function main() {
       dedup: { checkDedup },
       ...(statusBridge
         ? {
-            onStatusUpdate: (update, orgId) => statusBridge.onStatusUpdate(update, orgId ?? ""),
+            onStatusUpdate: async (update, orgId) => {
+              if (!orgId) {
+                app.log.warn(
+                  { messageId: update.messageId },
+                  "WhatsApp status webhook arrived without orgId; skipping test-send bridge",
+                );
+                return;
+              }
+              await statusBridge.onStatusUpdate(update, orgId);
+            },
           }
         : {}),
     });

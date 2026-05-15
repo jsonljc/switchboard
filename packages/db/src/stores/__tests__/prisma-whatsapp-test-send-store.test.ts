@@ -136,5 +136,34 @@ describe("PrismaWhatsAppTestSendStore", () => {
         data: { lastWebhookStatus: "delivered", lastWebhookAt: updatedAt },
       });
     });
+
+    it("returns null and does not call update when organizationId guard mismatches", async () => {
+      const existing = {
+        id: "wts_4",
+        organizationId: "org_owner",
+        managedChannelId: "mc_1",
+        messageId: "wamid.cross",
+        phoneNumberId: "pn_1",
+        templateName: "hello_world",
+        languageCode: "en_US",
+        toNumber: "15551234570",
+        sentBy: "user_1",
+        sentAt: new Date("2026-05-15T14:00:00Z"),
+        apiStatus: "sent",
+        lastWebhookStatus: null,
+        lastWebhookAt: null,
+      };
+      (prisma.whatsAppTestSend.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(existing);
+
+      const result = await store.updateWebhookStatus({
+        messageId: "wamid.cross",
+        status: "delivered",
+        at: new Date("2026-05-15T14:00:05Z"),
+        organizationId: "org_other",
+      });
+
+      expect(result).toBeNull();
+      expect(prisma.whatsAppTestSend.update).not.toHaveBeenCalled();
+    });
   });
 });

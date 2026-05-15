@@ -29,6 +29,7 @@ describe("WhatsApp test-send status bridge", () => {
       messageId: "wamid.abc123",
       status: "delivered",
       at: timestamp,
+      organizationId: "org_test",
     });
   });
 
@@ -69,6 +70,7 @@ describe("WhatsApp test-send status bridge", () => {
       messageId: `wamid.${status}`,
       status,
       at: timestamp,
+      organizationId: "org_test",
     });
   });
 
@@ -86,5 +88,43 @@ describe("WhatsApp test-send status bridge", () => {
     );
 
     expect(updateWebhookStatus).not.toHaveBeenCalled();
+  });
+
+  it("propagates store rejections so the caller can log them (does not swallow)", async () => {
+    updateWebhookStatus.mockRejectedValueOnce(new Error("db down"));
+    const bridge = buildWhatsAppStatusBridge({ testSendStore: testSendStore as never });
+
+    await expect(
+      bridge.onStatusUpdate(
+        {
+          messageId: "wamid.boom",
+          recipientId: "15551234567",
+          status: "delivered",
+          timestamp: new Date(),
+        },
+        "org_test",
+      ),
+    ).rejects.toThrow("db down");
+  });
+
+  it("omits organizationId from the store call when orgId is empty", async () => {
+    const bridge = buildWhatsAppStatusBridge({ testSendStore: testSendStore as never });
+    const timestamp = new Date("2026-05-15T13:00:00.000Z");
+
+    await bridge.onStatusUpdate(
+      {
+        messageId: "wamid.no-org",
+        recipientId: "15551234567",
+        status: "delivered",
+        timestamp,
+      },
+      "",
+    );
+
+    expect(updateWebhookStatus).toHaveBeenCalledWith({
+      messageId: "wamid.no-org",
+      status: "delivered",
+      at: timestamp,
+    });
   });
 });

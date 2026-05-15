@@ -109,7 +109,11 @@ export const whatsappSendTestRoutes: FastifyPluginAsync<SendTestOptions> = async
     const body: WhatsAppSendTestRequest = parsed.data;
 
     const channel = await app.prisma!.managedChannel.findFirst({
-      where: { organizationId: orgId, channel: "whatsapp" },
+      where: {
+        organizationId: orgId,
+        channel: "whatsapp",
+        status: { in: ["active", "provisioning"] },
+      },
     });
     if (!channel) {
       return reply.code(404).send({
@@ -121,9 +125,17 @@ export const whatsappSendTestRoutes: FastifyPluginAsync<SendTestOptions> = async
       });
     }
 
-    const allowed = Array.isArray(channel.testRecipients)
-      ? (channel.testRecipients as unknown[]).filter((x): x is string => typeof x === "string")
-      : [];
+    let allowed: string[] = [];
+    if (Array.isArray(channel.testRecipients)) {
+      allowed = (channel.testRecipients as unknown[]).filter(
+        (x): x is string => typeof x === "string",
+      );
+    } else {
+      app.log.warn(
+        { channelId: channel.id, testRecipientsType: typeof channel.testRecipients },
+        "ManagedChannel.testRecipients is not a JSON array; treating as empty allowlist",
+      );
+    }
     if (!allowed.includes(body.toNumber)) {
       return reply.code(403).send({
         error: {

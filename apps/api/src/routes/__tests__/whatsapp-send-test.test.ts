@@ -220,6 +220,36 @@ describe("POST /send-test", () => {
     expect(onlyUrl).toContain("/WABA_1/message_templates");
     expect(prisma.whatsAppTestSend.create).not.toHaveBeenCalled();
   });
+
+  it("filters managedChannel.findFirst by status active|provisioning (disabled channels return 404)", async () => {
+    const prisma = buildPrismaMock();
+    prisma.managedChannel.findFirst.mockResolvedValue(null);
+    const graphApiFetch = vi.fn();
+
+    app = await buildApp({ prisma, graphApiFetch });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/send-test",
+      payload: {
+        phoneNumberId: "PN_123",
+        templateName: "appt_reminder",
+        languageCode: "en_US",
+        toNumber: "+15551234567",
+      },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect((res.json() as { error: { code: string } }).error.code).toBe("WHATSAPP_NOT_CONNECTED");
+    expect(prisma.managedChannel.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org_test",
+        channel: "whatsapp",
+        status: { in: ["active", "provisioning"] },
+      },
+    });
+    expect(graphApiFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /send-test — Graph error mapping", () => {

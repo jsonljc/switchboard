@@ -36,6 +36,14 @@ export interface UpdateWebhookStatusInput {
   messageId: string;
   status: WebhookStatus;
   at: Date;
+  /**
+   * Optional tenant guard. When provided, the update is a no-op if the row's
+   * organizationId doesn't match — defends against cross-tenant writes if a
+   * future webhook routing bug ever delivers a status update on the wrong
+   * gateway entry. Meta-signed webhooks plus globally unique wamids make this
+   * defense-in-depth today; the check is cheap.
+   */
+  organizationId?: string;
 }
 
 export class PrismaWhatsAppTestSendStore {
@@ -60,6 +68,7 @@ export class PrismaWhatsAppTestSendStore {
       where: { messageId: input.messageId },
     });
     if (!existing) return null;
+    if (input.organizationId && existing.organizationId !== input.organizationId) return null;
     const updated = await this.prisma.whatsAppTestSend.update({
       where: { messageId: input.messageId },
       data: { lastWebhookStatus: input.status, lastWebhookAt: input.at },
