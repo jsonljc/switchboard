@@ -4,8 +4,12 @@
 # Usage:
 #   API_URL=https://api.example.com \
 #   CHAT_URL=https://chat.example.com \
-#   INTERNAL_API_SECRET=... \
+#   API_KEY=<value from API_KEYS env var on the api service> \
 #   ./scripts/smoke-prod.sh
+#
+# API_KEY is one of the keys configured in the api service's API_KEYS env var
+# (see apps/api/src/middleware/auth.ts `loadHashedKeys`). It is sent as
+# `Authorization: Bearer <key>` to authenticated endpoints like /api/health/deep.
 #
 # Exits 0 if every check passes, non-zero (and prints which check failed) otherwise.
 # Browser-side smoke (dashboard drag-and-drop, Sentry test events, rollback rehearsal)
@@ -28,7 +32,7 @@ require() {
 
 require API_URL
 require CHAT_URL
-require INTERNAL_API_SECRET
+require API_KEY
 
 pass=0
 fail=0
@@ -84,25 +88,20 @@ echo "[api]"
 check "GET /health returns 200" \
   check_http_ok "$API_URL/health"
 check "GET /api/health/deep returns 200" \
-  check_http_ok "$API_URL/api/health/deep" -H "x-internal-api-secret: $INTERNAL_API_SECRET"
+  check_http_ok "$API_URL/api/health/deep" -H "Authorization: Bearer $API_KEY"
 check "/api/health/deep reports database=connected" \
   check_json_field "$API_URL/api/health/deep" '.checks.database.status' 'connected' \
-    -H "x-internal-api-secret: $INTERNAL_API_SECRET"
+    -H "Authorization: Bearer $API_KEY"
 check "/api/health/deep reports redis=connected" \
   check_json_field "$API_URL/api/health/deep" '.checks.redis.status' 'connected' \
-    -H "x-internal-api-secret: $INTERNAL_API_SECRET"
+    -H "Authorization: Bearer $API_KEY"
 
 echo "[chat]"
+# chat /api/health/deep is added in Phase 2 — once that PR lands, swap the
+# /health probe below for /api/health/deep and re-add database/redis/api
+# field assertions parallel to the api block.
 check "GET /health returns 200" \
   check_http_ok "$CHAT_URL/health"
-check "GET /api/health/deep returns 200" \
-  check_http_ok "$CHAT_URL/api/health/deep"
-check "/api/health/deep reports database=connected" \
-  check_json_field "$CHAT_URL/api/health/deep" '.checks.database.status' 'connected'
-check "/api/health/deep reports redis=connected" \
-  check_json_field "$CHAT_URL/api/health/deep" '.checks.redis.status' 'connected'
-check "/api/health/deep reports api reachability" \
-  check_json_field "$CHAT_URL/api/health/deep" '.checks.api.status' 'connected'
 
 echo "[webhook routing — negative case]"
 check "chat returns 4xx for an unknown managed-webhook id (routing alive)" \
