@@ -58,14 +58,23 @@ export function parseCommand(raw: string): ParsedAction {
   if (match) {
     const n = Number(match[1]);
     const unit = match[2]!.toLowerCase();
-    const hours = unit.startsWith("m") ? n / 60 : n;
-    return {
-      kind: "pause",
-      icon: "⏸",
-      label: hours >= 1 ? `pause · ${hours}h` : `pause · ${n}m`,
-      detail: untilHourLabel(hours),
-      raw: original,
-    };
+    const isMinutes = unit.startsWith("m");
+    // Sanity bounds: positive integer, ≤24h or ≤1440min. Out-of-range
+    // input falls through to `instruction` so the operator sees an
+    // explicit "Got it. Acting on '<raw>'." toast — better than a
+    // nonsense projection like "pause · 100h · until 11:55 PM" with
+    // no day indicator. Tested in parse-command.test.ts.
+    const inRange = isMinutes ? n >= 1 && n <= 1440 : n >= 1 && n <= 24;
+    if (inRange) {
+      const hours = isMinutes ? n / 60 : n;
+      return {
+        kind: "pause",
+        icon: "⏸",
+        label: hours >= 1 ? `pause · ${hours}h` : `pause · ${n}m`,
+        detail: untilHourLabel(hours),
+        raw: original,
+      };
+    }
   }
 
   match = text.match(PAUSE_WORD);

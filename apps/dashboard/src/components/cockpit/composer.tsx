@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { T } from "./tokens";
 import { parseCommand } from "@/lib/cockpit/parse-command";
 import type { ParsedAction } from "./types";
@@ -23,15 +23,19 @@ export function Composer({
   compact = false,
 }: ComposerProps) {
   const [value, setValue] = useState("");
-  const parsed: ParsedAction | null = value.trim().length > 0 ? parseCommand(value) : null;
+  // Single parse per keystroke. Reused for the chip preview AND for the
+  // Enter-key dispatch — avoids parsing twice on every Enter press.
+  const parsed: ParsedAction | null = useMemo(
+    () => (value.trim().length > 0 ? parseCommand(value) : null),
+    [value],
+  );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (value.trim().length === 0) return;
-      const action = parseCommand(value);
+      if (parsed === null) return;
       setValue("");
-      onDispatch(action);
+      onDispatch(parsed);
       return;
     }
     if (e.key === "Escape") {

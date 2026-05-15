@@ -130,4 +130,30 @@ describe("parseCommand", () => {
     expect(parseCommand("pause for 1h").raw).toBe("pause for 1h");
     expect(parseCommand("").raw).toBe("");
   });
+
+  it("pause for 0h falls through to instruction (no nonsense projection)", () => {
+    const r = parseCommand("pause for 0h");
+    expect(r.kind).toBe("instruction");
+  });
+
+  it("pause for 100h falls through to instruction (out of 24h bound)", () => {
+    const r = parseCommand("pause for 100h");
+    expect(r.kind).toBe("instruction");
+  });
+
+  it("pause for 0min falls through to instruction", () => {
+    expect(parseCommand("pause for 0min").kind).toBe("instruction");
+  });
+
+  it("pause for 1500min falls through to instruction (out of 1440min bound)", () => {
+    expect(parseCommand("pause for 1500min").kind).toBe("instruction");
+  });
+
+  it("pause for 24h still parses (boundary)", () => {
+    expect(parseCommand("pause for 24h").kind).toBe("pause");
+  });
+
+  it("pause for 1440min still parses (boundary)", () => {
+    expect(parseCommand("pause for 1440min").kind).toBe("pause");
+  });
 });

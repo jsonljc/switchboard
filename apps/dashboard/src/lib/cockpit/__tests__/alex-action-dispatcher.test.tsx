@@ -237,6 +237,28 @@ describe("useAlexActionDispatcher", () => {
     expect(pushMock).toHaveBeenCalledWith("/settings?focus=channels");
   });
 
+  it("thread-group commandId without threadContext is a no-op (no toast, no route)", () => {
+    // Defensive against the catalog/dispatcher asymmetry:
+    // fu-named/reply-named/hold-named labels carry literal `{contact}` tokens.
+    // Palette filters them out when threadContext is undefined; this guards
+    // direct dispatcher invocations.
+    const { result } = setup();
+    for (const id of ["fu-named", "reply-named", "hold-named"]) {
+      act(() => {
+        result.current.dispatch({
+          kind: "command",
+          icon: "·",
+          label: `placeholder · {contact}`,
+          detail: "",
+          raw: "",
+          commandId: id,
+        });
+      });
+    }
+    expect(toastMock).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it("resume works even when currently halted", () => {
     const { result } = setup();
     act(() => result.current.halt.setHalted(true));

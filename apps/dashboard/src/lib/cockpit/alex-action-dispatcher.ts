@@ -23,6 +23,15 @@ const PER_ID_ROUTE: Record<string, string> = {
   "open-meta": "/settings?focus=channels",
 };
 
+// Thread-group command IDs whose labels carry literal `{contact}` template
+// tokens. The palette filters them out when threadContext is undefined,
+// which is always at the A.5 CockpitPage call site — so this dispatcher
+// branch is unreachable in production today. The early-return is defensive:
+// if a future call site invokes the dispatcher directly with one of these
+// IDs and no threadContext, we no-op rather than render the literal
+// "{contact}" placeholder in a toast.
+const THREAD_GROUP_IDS = new Set(["fu-named", "reply-named", "hold-named"]);
+
 export type AlexActionDispatcher = (action: ParsedAction, threadContext?: ThreadContext) => void;
 
 export function useAlexActionDispatcher(): AlexActionDispatcher {
@@ -53,8 +62,12 @@ export function useAlexActionDispatcher(): AlexActionDispatcher {
         // Thread-group commands (fu-named/reply-named/hold-named) only fire
         // when threadContext is set; the palette filters them otherwise.
         // At A.5, threadContext is always undefined at the page call site,
-        // so this branch is unreachable in production. Tested implicitly
-        // via the palette's disabled-state assertion.
+        // so this branch is unreachable in production. The early-return
+        // is defensive — toasting toastVoice(action) here would render
+        // the literal `{contact}` placeholder in the label.
+        if (THREAD_GROUP_IDS.has(action.commandId) && !threadContext) {
+          return;
+        }
         toast(toastVoice(action));
         return;
       }
