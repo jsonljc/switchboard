@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
+
+// ---------------------------------------------------------------------------
+// Module-level shared mock state (used by both B.1 and B.3 describes)
+// ---------------------------------------------------------------------------
 
 const haltState = { halted: false };
 vi.mock("@/components/layout/halt/halt-context", () => ({
@@ -28,6 +32,33 @@ vi.mock("@/hooks/use-riley-activity", () => ({
   useRileyActivity: () => ({ rows: rileyActivityState.rows, isLoading: false, isError: false }),
 }));
 
+// ---------------------------------------------------------------------------
+// B.3 mocks — use-recommendation-action (keyed by id) and use-toast
+// ---------------------------------------------------------------------------
+
+const actionCalls: Array<{ id: string; verb: "primary" | "dismiss" }> = [];
+const toast = vi.fn();
+const mockConfig = { rejectPrimary: false };
+
+vi.mock("@/hooks/use-recommendation-action", () => ({
+  useRecommendationAction: (id: string) => ({
+    primary: vi.fn(async () => {
+      actionCalls.push({ id, verb: "primary" });
+      if (mockConfig.rejectPrimary) throw new Error("network failed");
+    }),
+    dismiss: vi.fn(async () => {
+      actionCalls.push({ id, verb: "dismiss" });
+    }),
+  }),
+}));
+vi.mock("@/components/ui/use-toast", () => ({
+  useToast: () => ({ toast }),
+}));
+
+// ---------------------------------------------------------------------------
+// Static imports (used by B.1 tests)
+// ---------------------------------------------------------------------------
+
 import { RileyCockpitPage } from "../riley-cockpit-page";
 import {
   pauseFixture,
@@ -40,6 +71,10 @@ function wrap(node: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
 }
+
+// ---------------------------------------------------------------------------
+// B.1 tests (preserved)
+// ---------------------------------------------------------------------------
 
 describe("RileyCockpitPage", () => {
   it("renders Topbar with Riley tab present", () => {
@@ -107,5 +142,142 @@ describe("RileyCockpitPage — data-driven states", () => {
     expect(screen.getAllByText(/HALTED/i).length).toBeGreaterThanOrEqual(1);
     haltState.halted = false;
     (rileyStatusState as { status: string }).status = "IDLE";
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B.3 fixtures
+// ---------------------------------------------------------------------------
+
+const rec1 = {
+  id: "rec-1",
+  kind: "pause" as const,
+  urgency: "immediate" as const,
+  askedAt: "2m",
+  title: "Pause Cold Interests",
+  presentation: { primaryLabel: "Pause", dismissLabel: "Dismiss" },
+  primary: "Pause",
+  secondary: "Reduce 50%",
+  campaign: { kind: "campaign" as const, name: "Cold Interests", id: "c-1" },
+  confidence: 0.9,
+  learningPhaseImpact: "no impact" as const,
+  reversible: true,
+  primaryAction: { kind: "internal" as const, intent: "recommendation.pause", parameters: {} },
+  acceptToast: "Paused Cold Interests. Standing by.",
+  declineToast: "Leaving Cold Interests running.",
+};
+const rec2 = {
+  ...rec1,
+  id: "rec-2",
+  kind: "scale" as const,
+  title: "Scale BR-Whitening",
+  primary: "Scale 20%",
+  secondary: "Hold",
+  campaign: { kind: "campaign" as const, name: "BR-Whitening", id: "c-2" },
+  primaryAction: { kind: "internal" as const, intent: "recommendation.scale", parameters: {} },
+  acceptToast: undefined,
+  declineToast: undefined,
+};
+const rec3 = {
+  ...rec1,
+  id: "rec-3",
+  kind: "review_budget" as const,
+  title: "Review Cold Interests budget",
+  primary: "Review budget",
+  secondary: "Hold",
+  campaign: { kind: "campaign" as const, name: "Cold Interests", id: "c-1" },
+  primaryAction: {
+    kind: "external" as const,
+    url: "https://business.facebook.com/adsmanager/manage/campaigns?act=123",
+    service: "meta" as const,
+  },
+  acceptToast: "Opening Meta to review Cold Interests's budget.",
+  declineToast: "Holding Cold Interests's budget where it is.",
+};
+
+// ---------------------------------------------------------------------------
+// B.3 tests
+// ---------------------------------------------------------------------------
+
+describe("RileyCockpitPage — B.3 voice + accent", () => {
+  beforeEach(() => {
+    actionCalls.length = 0;
+    toast.mockReset();
+    mockConfig.rejectPrimary = false;
+    // Set up the 3-approval state for B.3 tests
+    rileyApprovalsState.approvals = [rec1, rec2, rec3];
+    (rileyStatusState as { status: string }).status = "WAITING";
+  });
+
+  it("renders the Riley sender label on every approval card", () => {
+    render(<RileyCockpitPage />);
+    expect(screen.getAllByText("Riley needs you").length).toBe(3);
+  });
+
+  it("clicking accept on the first card calls primary() bound to rec-1 and fires its acceptToast", async () => {
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Pause"));
+    await Promise.resolve();
+    expect(actionCalls).toEqual([{ id: "rec-1", verb: "primary" }]);
+    expect(toast).toHaveBeenCalledWith({ title: "Paused Cold Interests. Standing by." });
+  });
+
+  it("clicking decline on the first card calls dismiss() bound to rec-1 and fires its declineToast", async () => {
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Reduce 50%"));
+    await Promise.resolve();
+    expect(actionCalls).toEqual([{ id: "rec-1", verb: "dismiss" }]);
+    expect(toast).toHaveBeenCalledWith({ title: "Leaving Cold Interests running." });
+  });
+
+  it("clicking accept on the second card calls primary() bound to rec-2 (per-row hook binding)", async () => {
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Scale 20%"));
+    await Promise.resolve();
+    expect(actionCalls).toEqual([{ id: "rec-2", verb: "primary" }]);
+  });
+
+  it("falls back to per-kind rileyToast copy when engine omitted acceptToast / declineToast", async () => {
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Scale 20%"));
+    await Promise.resolve();
+    expect(toast).toHaveBeenCalledWith({ title: "Scaling — back to scanning." });
+  });
+
+  it("external-action primary opens the Meta URL and does NOT call primary() or fire a toast", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Review budget"));
+    await Promise.resolve();
+    expect(openSpy).toHaveBeenCalledWith(
+      "https://business.facebook.com/adsmanager/manage/campaigns?act=123",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    expect(actionCalls).toEqual([]);
+    expect(toast).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("external-action decline still calls dismiss() and fires the decline toast", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(<RileyCockpitPage />);
+    const holds = screen.getAllByText("Hold");
+    fireEvent.click(holds[holds.length - 1]!);
+    await Promise.resolve();
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(actionCalls).toEqual([{ id: "rec-3", verb: "dismiss" }]);
+    expect(toast).toHaveBeenCalledWith({ title: "Holding Cold Interests's budget where it is." });
+    openSpy.mockRestore();
+  });
+
+  it("success-only toast — toast does not fire if the mutation rejects", async () => {
+    mockConfig.rejectPrimary = true;
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Pause"));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(actionCalls).toEqual([{ id: "rec-1", verb: "primary" }]);
+    expect(toast).not.toHaveBeenCalled();
   });
 });
