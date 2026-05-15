@@ -100,32 +100,32 @@ The seven Wave B acceptance criteria fall into a strict dependency DAG. The sequ
   |---|---|
   | `workUnitId` | new UUID per emission |
   | `intent` | `recommendation.<action>` (e.g., `recommendation.pause_adset`) |
-  | `mode` | `"advisory"` (new mode name — see §Mode addition) |
+  | `mode` | `"pipeline"` (existing `ExecutionModeName` value — Riley is the ad-optimizer pipeline; no new mode value needed) |
   | `agentKey` | `"riley"` (carried via actor) |
   | `actor` | `{ type: "service", id: "ad-optimizer" }` |
-  | `trigger` | `{ kind: "cron", cronId: "ad-optimizer-weekly-audit" | "ad-optimizer-daily-check" | "ad-optimizer-daily-signal-health" }` |
-  | `parameters` | `{ recommendationId, action, humanSummary, confidence, dollarsAtRisk, parameters: rec.parameters }` |
+  | `trigger` | `"schedule"` (existing `Trigger` value — Riley emissions are cron-scheduled; the specific cron id lives in `parameters.cronId`) |
+  | `parameters` | `{ recommendationId, action, humanSummary, confidence, dollarsAtRisk, cronId, parameters: rec.parameters }` |
   | `governanceOutcome` | `"require_approval"` for `queue` surface; `"execute"` for `shadow_action` |
   | `riskScore` | derived from `riskLevel` (high=0.8, medium=0.5, low=0.2 — same map already used in cockpit) |
   | `matchedPolicies` | `[]` (no Riley-side policies yet; populated when PR-5 lands) |
-  | `outcome` | `"emitted"` (new outcome value — see §Outcome addition) |
+  | `outcome` | `"pending_approval"` for `queue` surface; `"completed"` for `shadow_action` surface — both existing `WorkOutcome` values |
   | `durationMs` | wall time from emit start to insert commit |
   | `idempotencyKey` | reuse the existing `Recommendation.idempotencyKey` (same SHA-256 hash) so dual-write idempotency aligns naturally |
   | `requestedAt` | now |
   | `governanceCompletedAt` | now (no governance to wait for at emission) |
+  | `completedAt` | now (advisory emissions are terminal at emit time — operator approval is a separate WorkTrace chain in PR-2) |
   | `ingressPath` | `"agent_recommendation_emission"` |
   | `hashInputVersion` | `WORK_TRACE_HASH_VERSION_LATEST` (v2 today) |
   | `parentWorkUnitId` | absent (Riley emissions have no parent) |
   | `organizationId` | `rec.orgId` |
   | `deploymentId` | from `rec.parameters.deploymentId` if present; optional |
-- **Mode addition.** Existing `ExecutionModeName` values cover Alex-side modes (skill execution, tool call, etc.). Add `"advisory"` for agent-side decisions that don't execute anything yet. This is the canonical mode for Riley emissions and any future advisory agent.
-- **Outcome addition.** Existing `WorkOutcome` values cover terminal execution outcomes. Add `"emitted"` for advisory emissions that complete at emit time (terminal-from-the-substrate's-perspective; the operator-approval handshake happens later in a separate WorkTrace chain in PR-2).
+- **No new `ExecutionModeName` or `WorkOutcome` values.** Existing values already model Riley emissions cleanly: `mode = "pipeline"` (ad-optimizer is a pipeline by architectural category), `outcome = "pending_approval"` for queue-surface emissions awaiting operator approval, `outcome = "completed"` for shadow-action-surface emissions that auto-apply. Reusing existing enum values shrinks the migration surface to a single column.
 - **Schema files touched:**
-  - `packages/core/src/platform/types.ts` — extend `ExecutionModeName`, `WorkOutcome`
   - `packages/core/src/platform/work-trace.ts` — extend `ingressPath` union to include `"agent_recommendation_emission"`
   - `packages/schemas/src/work-trace.ts` (or wherever the Zod ingress-path enum lives) — extend the Zod enum
-  - `packages/db/prisma/schema.prisma` — extend the Postgres enum values for `ingressPath` and the mode + outcome columns; migration via `migrate diff --from-empty --to-schema-datamodel --script` (memory: don't use `migrate dev` in agent sessions)
+  - `packages/db/prisma/schema.prisma` — extend the Postgres enum values for `ingressPath` only; migration via `migrate diff --from-empty --to-schema-datamodel --script` (memory: don't use `migrate dev` in agent sessions)
   - `packages/core/src/platform/work-trace-hash.ts` — **no changes needed**; v2 hash input already includes `ingressPath`. Adding an enum value is value-space-only.
+  - `packages/core/src/platform/types.ts` — **no changes needed**; existing `ExecutionModeName` (`"pipeline"`) and `WorkOutcome` (`"pending_approval"` / `"completed"`) values are reused.
 - **`emitRecommendation` signature change.** Adds an optional second parameter:
   ```ts
   export async function emitRecommendation(
@@ -153,7 +153,7 @@ The seven Wave B acceptance criteria fall into a strict dependency DAG. The sequ
 1. Every emission through `emitRecommendation` (any agent, any surface ≠ `"dropped"`) writes both a `Recommendation` row and a `WorkTrace` row when a `WorkTraceStore` is configured. The two writes commit or roll back together via a single Prisma transaction.
 2. Idempotency: when `emitRecommendation` is called twice with the same `RecommendationInput` (same intent + targets + day-bucket), both calls produce a single `Recommendation` row AND a single `WorkTrace` row. The shared `idempotencyKey` enforces this on both tables.
 3. `WorkTrace.ingressPath = "agent_recommendation_emission"` on every Riley emission row.
-4. `WorkTrace.mode = "advisory"` and `WorkTrace.outcome = "emitted"` on every Riley emission row.
+4. `WorkTrace.mode = "pipeline"` on every Riley emission row. `WorkTrace.outcome = "pending_approval"` for queue-surface emissions; `WorkTrace.outcome = "completed"` for shadow-action-surface emissions. (Both existing enum values; no schema migration for these.)
 5. `WorkTrace.idempotencyKey` matches the corresponding `Recommendation.idempotencyKey`.
 6. `WorkTrace.intent = "recommendation.<action>"` mapping covers all 11 Riley action variants (per [Wave A slicing §Adapter responsibilities](./2026-05-14-riley-cockpit-wave-a-slicing-design.md#adapter-responsibilities-b1)).
 7. The grep query `SELECT count(*) FROM "WorkTrace" WHERE "ingressPath" = 'agent_recommendation_emission' AND "agentKey" = 'riley'` returns the same count as `SELECT count(*) FROM "Recommendation" WHERE "agentKey" = 'riley' AND "createdAt" > <PR-1 deploy timestamp>` for any time window after PR-1 deploys. This is the substrate-symmetry invariant.
@@ -165,7 +165,7 @@ The seven Wave B acceptance criteria fall into a strict dependency DAG. The sequ
 13. Failure mode: if `WorkTraceStore.persistInTx` throws, the entire transaction rolls back; no orphaned `Recommendation` row. Verified by integration test.
 14. Reverse failure mode: if `RecommendationStore.insert` throws, no orphaned `WorkTrace` row. Verified by integration test.
 15. `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm --filter @switchboard/dashboard build` (per `feedback_dashboard_build_not_in_ci`) all clean.
-16. Tests cover: dual-write happy path, idempotent re-emission, two-way rollback, all 11 action variants, shadow-action vs queue surfaces, the new `"emitted"` outcome and `"advisory"` mode, v2 integrity verification with the new ingressPath value, the missing-WorkTraceStore back-compat path.
+16. Tests cover: dual-write happy path, idempotent re-emission, two-way rollback, all 11 action variants, shadow-action (`outcome = "completed"`) vs queue (`outcome = "pending_approval"`) surfaces, `mode = "pipeline"`, v2 integrity verification with the new ingressPath value, the missing-WorkTraceStore back-compat path.
 
 ### Dependencies
 
@@ -352,7 +352,7 @@ These are slicing-time questions resolved here:
 
 - ✅ **Dual-write vs cockpit substrate swap at PR-1?** Dual-write. Cockpit adapters still read `Recommendation`. WorkTrace is shadow until Wave C.
 - ✅ **`ingressPath` enum extension or repurpose existing value?** Extend with `"agent_recommendation_emission"`. Repurposing `"store_recorded_operator_mutation"` would be semantically dishonest.
-- ✅ **New `mode = "advisory"` and `outcome = "emitted"`?** Yes — Riley emissions don't fit existing values (which describe execution outcomes). New canonical values; not Riley-specific, reusable by future advisory agents.
+- ✅ **New `mode` / `outcome` enum values?** No — existing `mode = "pipeline"` (ad-optimizer pipeline) and `outcome = "pending_approval"` / `"completed"` (per surface) model Riley emissions cleanly. Reusing existing values shrinks the migration to one enum column (`ingressPath`).
 - ✅ **Hash-input version bump?** Yes — `hashInputVersion = 3` for traces with the new ingressPath. v1/v2 verification preserved.
 - ✅ **Transactional dual-write?** Yes — single Prisma transaction, both inserts commit or roll back together.
 
