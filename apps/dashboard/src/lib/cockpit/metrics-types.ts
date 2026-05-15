@@ -15,6 +15,36 @@ export interface MetricsTargets {
   targetCpbCents: number | null;
 }
 
+export interface KpiTileWire {
+  label: string;
+  value: number | string;
+  unit?: string;
+  trend?: string;
+  unavailable?: boolean;
+  hint?: string;
+}
+
+export interface RoiBarFullWire {
+  label: string;
+  leftMeta: string;
+  rightMeta: { value: string; suffix: string };
+  fillPct: number;
+  breakEvenPct: number;
+  breakEvenLabel: string;
+  scaleLeft: string;
+  scaleRight: string;
+  comparator: { value: string; target: string; onTarget: boolean };
+}
+
+export interface RoiBarDegradedWire {
+  degraded: true;
+  degradedHint: string;
+  label?: string;
+  comparator: { value: string; target: string; onTarget?: false };
+}
+
+export type RoiBarWire = RoiBarFullWire | RoiBarDegradedWire;
+
 export interface MetricsViewModelWire {
   hero: HeroMetric;
   heroSubProseSegments: readonly ProseSegment[];
@@ -29,4 +59,6 @@ export interface MetricsViewModelWire {
   bookedDelta: string | null;
   leadsDelta: string | null;
   qualifiedDelta: string | null;
+  tiles?: readonly KpiTileWire[];
+  roi?: RoiBarWire;
 }
