@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { T } from "./tokens";
+import { T, type AccentTokens } from "./tokens";
 import type { RoiBar } from "./types";
 
 const eyebrowStyle: CSSProperties = {
@@ -16,15 +16,25 @@ const comparatorBaseStyle: CSSProperties = {
   fontWeight: 600,
 };
 
+// `accent?:` (optional, no default) — not the `accent = ALEX_*_ACCENT`
+// default-value pattern used by <ApprovalCard>. Reason: <ROIBar>'s two render
+// modes (degraded chip + live fill) have asymmetric Alex defaults — degraded
+// chip uses T.hair/T.paper (neutral white), live mode uses T.amberSoft/T.amber
+// (amber). The `soft` slot would need to be both T.hair (for degraded) and
+// T.amberSoft (for live) at the same time, which a single AccentTokens
+// constant can't express without changing Alex's rendered look. Keeping the
+// per-site ternary preserves Alex byte-for-byte while letting Riley pass a
+// uniform clay accent.
 interface ROIBarProps {
   roi: RoiBar;
+  accent?: AccentTokens;
 }
 
 function isDegraded(roi: RoiBar): roi is Extract<RoiBar, { degraded: true }> {
   return "degraded" in roi && roi.degraded === true;
 }
 
-export function ROIBar({ roi }: ROIBarProps) {
+export function ROIBar({ roi, accent }: ROIBarProps) {
   if (isDegraded(roi)) {
     return (
       <div
@@ -49,8 +59,8 @@ export function ROIBar({ roi }: ROIBarProps) {
             fontWeight: 500,
             padding: "4px 10px",
             borderRadius: 999,
-            border: `1px solid ${T.hair}`,
-            background: T.paper,
+            border: `1px solid ${accent ? accent.soft : T.hair}`,
+            background: accent ? accent.paper : T.paper,
           }}
         >
           {roi.comparator.value}
@@ -83,7 +93,7 @@ export function ROIBar({ roi }: ROIBarProps) {
           data-on-target={String(onTarget)}
           style={{
             ...comparatorBaseStyle,
-            color: onTarget ? T.green : T.amberDeep,
+            color: onTarget ? T.green : accent ? accent.deep : T.amberDeep,
           }}
         >
           {roi.comparator.value}
@@ -108,7 +118,7 @@ export function ROIBar({ roi }: ROIBarProps) {
             top: 0,
             bottom: 0,
             width: `${fillPctClamped}%`,
-            background: `linear-gradient(90deg, ${T.amberSoft} 0%, ${T.amber} 100%)`,
+            background: `linear-gradient(90deg, ${accent ? accent.soft : T.amberSoft} 0%, ${accent ? accent.base : T.amber} 100%)`,
           }}
         />
         <div

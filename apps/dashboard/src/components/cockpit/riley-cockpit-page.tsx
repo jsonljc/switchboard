@@ -9,6 +9,7 @@ import { ApprovalCard } from "./approval-card";
 import type { ApprovalAccent } from "./approval-card";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { ComposerPlaceholder } from "./composer-placeholder";
+import { KPIStrip } from "./kpi-strip";
 import {
   RILEY_ACCENT,
   RILEY_COMPOSER_PLACEHOLDER,
@@ -21,10 +22,12 @@ import { rileyToast } from "@/lib/cockpit/riley/riley-toast";
 import { useRileyApprovals } from "@/hooks/use-riley-approvals";
 import { useRileyStatus } from "@/hooks/use-riley-status";
 import { useRileyActivity } from "@/hooks/use-riley-activity";
+import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
 import { useToast } from "@/components/ui/use-toast";
 import { useHalt } from "@/components/layout/halt/halt-context";
-import type { RileyApprovalView } from "./types";
+import { metricsViewModelToRileyKpiData } from "@/lib/cockpit/riley/metrics-to-kpi-data";
+import type { CockpitKpiData, RileyApprovalView } from "./types";
 
 const RILEY_APPROVAL_ACCENT: ApprovalAccent = {
   base: RILEY_ACCENT.base,
@@ -77,7 +80,17 @@ export function RileyCockpitPage() {
   const { approvals } = useRileyApprovals();
   const statusKey = useRileyStatus();
   const { rows: activityRows } = useRileyActivity();
+  const metricsQ = useAgentMetrics("riley");
   const [filter, setFilter] = useState<ActivityFilter>("all");
+
+  // Adapter returns null when the wire VM is missing tiles or roi — the page
+  // mount gates on this and renders no KPI strip rather than falling back to
+  // Alex's `legacyTiles()` derivation (which would leak a `qualified` tile
+  // onto /riley). See metrics-to-kpi-data.ts for the strict no-fallback
+  // rationale.
+  const kpis: CockpitKpiData | null = metricsQ.data
+    ? metricsViewModelToRileyKpiData(metricsQ.data)
+    : null;
 
   return (
     <div
@@ -101,6 +114,9 @@ export function RileyCockpitPage() {
           colorFor={statusColor}
           pulseFor={statusPulse}
         />
+        {kpis ? (
+          <KPIStrip kpis={kpis} collapsed={approvals.length > 0} accent={RILEY_ACCENT} />
+        ) : null}
         {approvals.length > 0 && (
           <div
             style={{

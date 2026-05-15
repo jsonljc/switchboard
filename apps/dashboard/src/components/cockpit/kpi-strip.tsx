@@ -1,6 +1,6 @@
 "use client";
 
-import { T } from "./tokens";
+import { T, type AccentTokens } from "./tokens";
 import { KpiTile } from "./kpi-tile";
 import { ROIBar } from "./roi-bar";
 import {
@@ -14,6 +14,7 @@ import type { CockpitKpiData } from "./types";
 interface KPIStripProps {
   kpis: CockpitKpiData;
   collapsed?: boolean;
+  accent?: AccentTokens;
 }
 
 function toLegacyInput(kpis: CockpitKpiData): LegacyKpiInput {
@@ -54,7 +55,7 @@ const openReportButton = (
   </button>
 );
 
-export function KPIStrip({ kpis, collapsed = false }: KPIStripProps) {
+export function KPIStrip({ kpis, collapsed = false, accent }: KPIStripProps) {
   const legacy = toLegacyInput(kpis);
   const tiles = kpis.tiles ?? legacyTiles(legacy);
   const roi = kpis.roi ?? legacyRoi(legacy);
@@ -63,6 +64,7 @@ export function KPIStrip({ kpis, collapsed = false }: KPIStripProps) {
     const head = collapsedHeadline({ ...kpis, ...legacy });
     return (
       <div
+        data-testid="kpi-strip"
         style={{
           padding: "10px 28px",
           borderTop: `1px solid ${T.hair}`,
@@ -115,6 +117,7 @@ export function KPIStrip({ kpis, collapsed = false }: KPIStripProps) {
 
   return (
     <div
+      data-testid="kpi-strip"
       style={{
         padding: "16px 28px 20px",
         borderTop: `1px solid ${T.hair}`,
@@ -139,7 +142,7 @@ export function KPIStrip({ kpis, collapsed = false }: KPIStripProps) {
           <KpiTile key={`${tile.label}-${i}`} {...tile} />
         ))}
       </div>
-      {roi ? <ROIBar roi={roi} /> : null}
+      {roi ? <ROIBar roi={roi} accent={accent} /> : null}
     </div>
   );
 }

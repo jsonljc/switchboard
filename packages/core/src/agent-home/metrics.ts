@@ -14,6 +14,10 @@ export type {
   MetricsViewModel,
   MetricsSignalStore,
   PerAgentBuilderInput,
+  KpiTile,
+  RoiBar,
+  RoiBarFull,
+  RoiBarDegraded,
 } from "./metrics-types.js";
 
 import type { MetricsSignalStore, MetricsViewModel } from "./metrics-types.js";

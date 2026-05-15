@@ -1,15 +1,13 @@
 // apps/dashboard/src/components/cockpit/approval-card.tsx
-import { T } from "./tokens";
+import { T, type AccentTokens } from "./tokens";
 import type { ApprovalView } from "./types";
 
-export interface ApprovalAccent {
-  base: string;
-  deep: string;
-  soft: string;
-  paper: string;
-}
+// `ApprovalAccent` is retained as an alias for the shared `AccentTokens`
+// shape (originally introduced by this component in B.3; B.2b promoted it to
+// `tokens.ts` so <ROIBar> / <KPIStrip> can reuse the same shape).
+export type ApprovalAccent = AccentTokens;
 
-export const ALEX_APPROVAL_ACCENT: ApprovalAccent = {
+export const ALEX_APPROVAL_ACCENT: AccentTokens = {
   base: T.amber,
   deep: T.amberDeep,
   soft: T.amberSoft,

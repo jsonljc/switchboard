@@ -80,4 +80,74 @@ describe("<KPIStrip>", () => {
     expect(screen.getByText(/ROAS/i)).toBeInTheDocument();
     expect(screen.getByText("3.2×")).toBeInTheDocument();
   });
+
+  it("forwards accent prop through to <ROIBar>", () => {
+    const RILEY_ACCENT = {
+      base: "#B86C50",
+      deep: "#7E4533",
+      soft: "#ECD4C8",
+      paper: "#F6E7DE",
+    };
+    render(
+      <KPIStrip
+        kpis={{
+          range: "This week · Mon — Wed",
+          tiles: [
+            { label: "leads", value: 27, trend: "+5" },
+            { label: "ctr", value: "—", unavailable: true },
+            { label: "ad spend", value: "$200" },
+          ],
+          roi: {
+            degraded: true,
+            degradedHint: "",
+            label: "cost per lead",
+            comparator: { value: "$7 per lead", target: "target $5" },
+          },
+        }}
+        accent={RILEY_ACCENT}
+      />,
+    );
+    const pill = screen.getByTestId("roi-comparator");
+    expect(pill).toHaveStyle({
+      background: RILEY_ACCENT.paper,
+      borderColor: RILEY_ACCENT.soft,
+    });
+  });
+
+  it("exposes data-testid='kpi-strip' on the root container (expanded mode)", () => {
+    render(
+      <KPIStrip
+        kpis={{
+          range: "This week · Mon — Wed",
+          tiles: [{ label: "leads", value: 27 }],
+          roi: {
+            degraded: true,
+            degradedHint: "",
+            label: "cost per lead",
+            comparator: { value: "—", target: "—" },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByTestId("kpi-strip")).toBeInTheDocument();
+  });
+
+  it("exposes data-testid='kpi-strip' on the root container (collapsed mode)", () => {
+    render(
+      <KPIStrip
+        collapsed
+        kpis={{
+          range: "This week · Mon — Wed",
+          tiles: [{ label: "leads", value: 27 }],
+          roi: {
+            degraded: true,
+            degradedHint: "",
+            label: "cost per lead",
+            comparator: { value: "—", target: "—" },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByTestId("kpi-strip")).toBeInTheDocument();
+  });
 });

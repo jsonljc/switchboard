@@ -144,7 +144,7 @@ export type RoiBar = RoiBarFull | RoiBarDegraded;
 
 export interface CockpitKpiData {
   range: string;
-  tiles?: KpiTile[];
+  tiles?: readonly KpiTile[];
   roi?: RoiBar;
   // legacy flat shape (Alex-side adapter)
   booked?: number | null;

@@ -1,8 +1,10 @@
 import type {
+  KpiTile,
   MetricsSignalStore,
   MetricsViewModel,
   PerAgentBuilderInput,
   ProseSegment,
+  RoiBar,
   SparkPoint,
   StatCell,
 } from "./metrics-types.js";
@@ -54,6 +56,7 @@ export async function buildRileyMetricsViewModel(
   const leads = heroValue;
   const qualifiedPct = 0;
   const qualifiedPrev: number | null = null;
+  const bookedDeltaStr = formatNumericDelta(heroValue, heroPrev);
 
   const stats: readonly [StatCell, StatCell, StatCell] = [
     {
@@ -89,6 +92,65 @@ export async function buildRileyMetricsViewModel(
   const unavailableSources: string[] = ["ad-platform-ctr"];
   if (spendCents === null) unavailableSources.push("ad-platform-spend");
 
+  const spendDollars = spendCents !== null ? Math.round(spendCents / 100) : null;
+  const cpl =
+    spendCents !== null && heroValue > 0 ? Math.round(spendCents / 100 / heroValue) : null;
+  let cplDisplay = "—";
+  if (cpl !== null) cplDisplay = cpl === 0 ? "<$1 per lead" : `$${cpl} per lead`;
+  // Riley v1 reinterprets `targetCpbCents` as **target cost per lead** for the
+  // ROI comparator. The config key is shared with Alex (target cost per
+  // booking) for storage symmetry — one targetCpbCents value lives in
+  // AgentRoster's config column; the meaning is agent-side. Do not treat
+  // Riley's target as booking economics until Riley has booking attribution
+  // (future slice). Read via `getAgentTargets`; this file consumes the typed
+  // result, never reaches into config keys directly.
+  const targetDollars =
+    targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
+  const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
+
+  const tiles: readonly KpiTile[] = [
+    {
+      label: "leads",
+      value: heroValue,
+      ...(bookedDeltaStr ? { trend: bookedDeltaStr } : {}),
+    },
+    { label: "ctr", value: "—", unavailable: true },
+    spendDollars !== null
+      ? { label: "ad spend", value: `$${spendDollars}` }
+      : { label: "ad spend", value: "—", unavailable: true, hint: "Connect Meta Ads" },
+  ];
+
+  const roi: RoiBar = (() => {
+    // Rule 1: spendCents === null
+    if (spendCents === null) {
+      return {
+        degraded: true,
+        degradedHint: "Connect Meta Ads to see cost per lead",
+        label: "cost per lead",
+        comparator: { value: "—", target: targetLabel },
+      };
+    }
+    // Rule 2: spendCents !== null && leads <= 0
+    if (heroValue <= 0) {
+      return {
+        degraded: true,
+        degradedHint: "",
+        label: "cost per lead",
+        comparator: { value: "—", target: targetLabel },
+      };
+    }
+    // Rules 3 + 4: spendCents !== null && leads > 0
+    return {
+      degraded: true,
+      degradedHint: "",
+      label: "cost per lead",
+      comparator: {
+        value: cplDisplay,
+        target: targetLabel,
+      },
+    };
+  })();
+
   return {
     hero: {
       kind: "ad-leads",
@@ -109,9 +171,11 @@ export async function buildRileyMetricsViewModel(
     spendCents,
     leads,
     qualifiedPct,
-    bookedDelta: formatNumericDelta(heroValue, heroPrev),
-    leadsDelta: formatNumericDelta(heroValue, heroPrev),
+    bookedDelta: bookedDeltaStr,
+    leadsDelta: bookedDeltaStr,
     qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),
+    tiles,
+    roi,
   };
 }
 
