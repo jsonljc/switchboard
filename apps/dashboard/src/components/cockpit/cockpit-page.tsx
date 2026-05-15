@@ -15,11 +15,10 @@ import { KPIStrip } from "./kpi-strip";
 import type { CockpitKpiData } from "./types";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view";
-import { translatedActionToActivityRow } from "@/lib/cockpit/activity-kind-map";
 import { metricsViewModelToLegacyKpiInput } from "@/lib/cockpit/metrics-to-kpi-input";
 import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
 import { usePendingApprovals } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
-import { useAgentActivity } from "@/hooks/use-agent-activity";
+import { useAgentActivityCockpit } from "@/hooks/use-agent-activity-cockpit";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
@@ -28,7 +27,7 @@ import { useHalt } from "@/components/layout/halt/halt-context";
 export function CockpitPage() {
   const haltCtx = useHalt();
   const approvalsQ = usePendingApprovals();
-  const activityQ = useAgentActivity(1);
+  const activityQ = useAgentActivityCockpit("alex", { limit: 50, expandPreview: true });
   const greetingQ = useAgentGreeting("alex");
   const mission = useAgentMission("alex");
   const metricsQ = useAgentMetrics("alex");
@@ -48,12 +47,15 @@ export function CockpitPage() {
   const approvals = (approvalsQ.data?.approvals ?? []).map((a) =>
     legacyPendingApprovalToApprovalView(a, now),
   );
-  const rawAlexActions = (activityQ.data?.actions ?? []).filter(
-    (a) => a.agentRole === "alex" || a.agentRole === "unknown",
-  );
-  const activityRows = rawAlexActions.map((a) => translatedActionToActivityRow(a, now));
+  const activityRows = activityQ.data?.rows ?? [];
+  // timestampIso is populated by the server-side translator (Task 5,
+  // driven by ActivityRowSchema.timestampIso from Task 3). The cockpit
+  // page only reads `now` and the most-recent row's timestampIso for
+  // the WORKING-pill window calculation in useCockpitStatusAlex.
   const recentActivityAt =
-    rawAlexActions.length > 0 ? new Date(rawAlexActions[0]!.timestamp) : null;
+    activityRows.length > 0 && activityRows[0]!.timestampIso
+      ? new Date(activityRows[0]!.timestampIso)
+      : null;
 
   const statusKey = useCockpitStatusAlex({
     halted: haltCtx.halted,

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
+import type { ActivityRow } from "@/components/cockpit/types";
 
 // Mock data hooks before importing the page.
 vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-approvals", () => ({
@@ -12,8 +13,8 @@ vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-approvals", () => ({
   }),
 }));
 
-vi.mock("@/hooks/use-agent-activity", () => ({
-  useAgentActivity: () => ({ data: { roster: [], states: [], actions: [] }, isLoading: false }),
+vi.mock("@/hooks/use-agent-activity-cockpit", () => ({
+  useAgentActivityCockpit: () => ({ data: { rows: activityRowsData }, isLoading: false }),
 }));
 
 vi.mock("@/hooks/use-agent-greeting", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/hooks/use-agent-metrics", () => ({
 }));
 
 let pendingApprovalsData: unknown[] = [];
+let activityRowsData: ActivityRow[] = [];
 
 const toggleHaltMock = vi.fn();
 let haltedState = false;
@@ -100,6 +102,7 @@ describe("CockpitPage", () => {
     missionData = undefined;
     metricsData = undefined;
     pendingApprovalsData = [];
+    activityRowsData = [];
   });
 
   it("renders Topbar, Identity, and ActivityStream in the cold state", () => {
@@ -145,6 +148,7 @@ describe("CockpitPage — A.2 mission + empty-state", () => {
     missionData = undefined;
     metricsData = undefined;
     pendingApprovalsData = [];
+    activityRowsData = [];
   });
 
   it("makes the subtitle clickable once mission data loads and toggles the popover", async () => {
@@ -202,6 +206,7 @@ describe("CockpitPage — A.3 KPI strip", () => {
     missionData = undefined;
     metricsData = undefined;
     pendingApprovalsData = [];
+    activityRowsData = [];
   });
 
   it("renders KPIStrip in steady state (mission partial-done + metrics present)", async () => {
@@ -261,5 +266,57 @@ describe("CockpitPage — A.3 KPI strip", () => {
     await waitFor(() => expect(screen.queryByText(/return on spend/i)).not.toBeInTheDocument());
     // Open Report button is the collapsed signature
     expect(screen.getByRole("button", { name: /Open report/i })).toBeInTheDocument();
+  });
+});
+
+describe("CockpitPage — A.4 useAgentActivityCockpit wiring", () => {
+  beforeEach(() => {
+    toggleHaltMock.mockClear();
+    pushMock.mockClear();
+    haltedState = false;
+    missionData = undefined;
+    metricsData = undefined;
+    pendingApprovalsData = [];
+    activityRowsData = [];
+  });
+
+  it("renders activity rows returned by useAgentActivityCockpit", async () => {
+    missionData = MISSION_PARTIAL_DONE;
+    activityRowsData = [
+      {
+        time: "11:58",
+        kind: "booked",
+        head: "Tour booked with Priya S.",
+        body: "Confirmed for Thursday 2pm",
+        timestampIso: new Date().toISOString(),
+      },
+    ];
+    render(<CockpitPage />);
+    expect(await screen.findByText("Tour booked with Priya S.")).toBeInTheDocument();
+  });
+
+  it("renders empty activity stream when hook returns no rows", async () => {
+    missionData = MISSION_PARTIAL_DONE;
+    activityRowsData = [];
+    render(<CockpitPage />);
+    expect(await screen.findByTestId("cockpit-activity-stream")).toBeInTheDocument();
+    expect(screen.getByText(/Nothing here yet/i)).toBeInTheDocument();
+  });
+
+  it("derives recentActivityAt from timestampIso of the first row", async () => {
+    missionData = MISSION_PARTIAL_DONE;
+    // A row with a recent timestampIso drives the WORKING status pill
+    const recentIso = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+    activityRowsData = [
+      {
+        time: "11:58",
+        kind: "booked",
+        head: "Just booked",
+        timestampIso: recentIso,
+      },
+    ];
+    render(<CockpitPage />);
+    // The status pill should show WORKING (recent activity within 10 min window)
+    expect(await screen.findByText("WORKING")).toBeInTheDocument();
   });
 });
