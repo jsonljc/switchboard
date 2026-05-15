@@ -23,15 +23,26 @@ interface CheckResult {
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("timeout")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
 }
 
-function sanitizeError(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
+// Whitelist-only error tag for the deep readiness response.
+// Never returns err.message — Prisma / pg errors can embed connection strings
+// or query fragments. Returns name + optional .code which is enough to debug
+// connectivity failures (e.g. "Error:ECONNREFUSED", "PrismaClientKnownRequestError:P1001").
+function safeErrorTag(err: unknown): string {
+  if (err instanceof Error) {
+    const name = err.name || "Error";
+    const code = (err as { code?: string }).code;
+    return code ? `${name}:${code}` : name;
+  }
+  return "UnknownError";
 }
 
 export const chatHealthRoutes: FastifyPluginAsync<ChatHealthRoutesOptions> = async (app, opts) => {
@@ -52,7 +63,7 @@ export const chatHealthRoutes: FastifyPluginAsync<ChatHealthRoutesOptions> = asy
         checks["database"] = {
           status: "disconnected",
           latencyMs: Date.now() - dbStart,
-          error: sanitizeError(err),
+          error: safeErrorTag(err),
         };
         healthy = false;
       }
@@ -70,7 +81,7 @@ export const chatHealthRoutes: FastifyPluginAsync<ChatHealthRoutesOptions> = asy
         checks["redis"] = {
           status: "disconnected",
           latencyMs: Date.now() - redisStart,
-          error: sanitizeError(err),
+          error: safeErrorTag(err),
         };
         healthy = false;
       }
@@ -103,7 +114,7 @@ export const chatHealthRoutes: FastifyPluginAsync<ChatHealthRoutesOptions> = asy
         checks["api"] = {
           status: "disconnected",
           latencyMs: Date.now() - apiStart,
-          error: sanitizeError(err),
+          error: safeErrorTag(err),
         };
         healthy = false;
       }
