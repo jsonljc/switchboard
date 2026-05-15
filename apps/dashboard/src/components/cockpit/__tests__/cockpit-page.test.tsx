@@ -330,6 +330,66 @@ describe("CockpitPage — A.4 useAgentActivityCockpit wiring", () => {
   });
 });
 
+describe("CockpitPage — A.7a approval sort", () => {
+  beforeEach(() => {
+    toggleHaltMock.mockClear();
+    pushMock.mockClear();
+    haltedState = false;
+    missionData = undefined;
+    metricsData = undefined;
+    pendingApprovalsData = [];
+    activityRowsData = [];
+  });
+
+  it("renders approvals in urgency-then-createdAt order (immediate → this_week, createdAt desc within band)", () => {
+    // Intentionally out-of-order in the fixture to verify sorting:
+    // - p1 medium/this_week, oldest
+    // - p2 critical/immediate, middle
+    // - p3 medium/this_week, newest
+    // Expected order: [p2 immediate, p3 this_week newest, p1 this_week oldest].
+    pendingApprovalsData = [
+      {
+        id: "p1",
+        summary: "old pricing",
+        riskCategory: "medium",
+        status: "pending",
+        envelopeId: "e1",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        bindingHash: "h1",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        agentRosterId: "alex",
+      },
+      {
+        id: "p2",
+        summary: "regulatory immediate",
+        riskCategory: "critical",
+        status: "pending",
+        envelopeId: "e2",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        bindingHash: "h2",
+        createdAt: "2026-05-15T00:00:00.000Z",
+        agentRosterId: "alex",
+      },
+      {
+        id: "p3",
+        summary: "new pricing",
+        riskCategory: "medium",
+        status: "pending",
+        envelopeId: "e3",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        bindingHash: "h3",
+        createdAt: "2026-05-15T12:00:00.000Z",
+        agentRosterId: "alex",
+      },
+    ];
+    render(<CockpitPage />);
+    // Approval titles render in the ApprovalCard <h2> elements.
+    const headings = screen.getAllByRole("heading", { level: 2 });
+    const titles = headings.map((h) => h.textContent ?? "");
+    expect(titles).toEqual(["regulatory immediate", "new pricing", "old pricing"]);
+  });
+});
+
 describe("CockpitPage — A.5 composer + palette", () => {
   beforeEach(() => {
     toggleHaltMock.mockClear();

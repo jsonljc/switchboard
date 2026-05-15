@@ -64,9 +64,23 @@ export function CockpitPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const approvals = (approvalsQ.data?.approvals ?? []).map((a) =>
-    legacyPendingApprovalToApprovalView(a, now),
-  );
+  // Sort order per spec §Card sort order: immediate → this_week → next_cycle,
+  // then createdAt desc within band. The wrap-then-unwrap is required because
+  // the tiebreak reads `createdAt` from the raw PendingApproval (the view-only
+  // `askedAt` is a relative string, not a timestamp).
+  const URGENCY_ORDER: Record<"immediate" | "this_week" | "next_cycle", number> = {
+    immediate: 0,
+    this_week: 1,
+    next_cycle: 2,
+  };
+  const approvals = (approvalsQ.data?.approvals ?? [])
+    .map((a) => ({ raw: a, view: legacyPendingApprovalToApprovalView(a, now) }))
+    .sort((a, b) => {
+      const urgencyDiff = URGENCY_ORDER[a.view.urgency] - URGENCY_ORDER[b.view.urgency];
+      if (urgencyDiff !== 0) return urgencyDiff;
+      return new Date(b.raw.createdAt).getTime() - new Date(a.raw.createdAt).getTime();
+    })
+    .map(({ view }) => view);
   const activityRows = activityQ.data?.rows ?? [];
   // timestampIso is populated by the server-side translator (Task 5,
   // driven by ActivityRowSchema.timestampIso from Task 3). The cockpit
