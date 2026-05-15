@@ -21,7 +21,15 @@ interface RecommendationParams {
   [key: string]: unknown;
 }
 
-function rowToRecommendation(row: {
+/**
+ * Project a Prisma `pendingActionRecord` row into the canonical `Recommendation`
+ * read shape. Exported because PrismaRecommendationEmissionMirror also needs
+ * this projection — see packages/db/src/stores/prisma-recommendation-emission-mirror.ts.
+ * Both call sites must use the same projection or future schema additions will
+ * silently surface as shape divergence between the idempotent path and the
+ * fresh path.
+ */
+export function rowToRecommendation(row: {
   id: string;
   organizationId: string;
   sourceAgent: string;
