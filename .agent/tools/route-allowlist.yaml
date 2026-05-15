@@ -148,29 +148,28 @@
   reason: "Managed inbound chat webhook (WhatsApp / Slack / Telegram) — handoff to gateway.handleIncoming which routes through ingress; pre-ingress channel receiver."
 
 # ---------------------------------------------------------------------------
-# local-readiness-followup — TEMPORARY allowlist (PR #TBD, 2026-05-15)
+# Permanently justified — routes outside the PlatformIngress action lifecycle
 # ---------------------------------------------------------------------------
-# These 7 routes were silently violating the ingress check before
-# scripts/local-verify-fast.ts wired check-routes into the developer
-# pre-flight. They reproduce on main as of 2026-05-15. Allowlisted here
-# so PR-1 of the local-readiness spec can ship a green local:verify:fast
-# without expanding scope into route remediation.
-#
-# Each entry MUST be audited and either (a) routed through PlatformIngress.submit
-# or (b) given a permanent justification BEFORE PR-2 promotes the gate into CI.
-# Track as local-readiness-followup.
 
 - path: "apps/api/src/routes/whatsapp-send-test.ts"
-  reason: "local-readiness-followup — diagnostic WhatsApp send-test surface used during Tech Provider verification; pre-existing on main; needs audit before PR-2 CI gate."
-- path: "apps/api/src/routes/recommendations.ts"
-  reason: "local-readiness-followup — POST /recommendations/:id/act (actOnRecommendation) is a governed mutator that bypasses ingress today; pre-existing on main; should route through PlatformIngress before PR-2 CI gate."
+  reason: "Permanently justified: Tech Provider verification surface — sends to testRecipients allowlist only, persists a diagnostic audit record, not a revenue-affecting operator business action."
 - path: "apps/api/src/routes/meta-deletion.ts"
-  reason: "local-readiness-followup — Meta GDPR data-deletion callback (signed_request POST from Meta); webhook-driven, no operator; pre-existing on main; needs audit before PR-2 CI gate."
-- path: "apps/api/src/routes/lifecycle-disqualifications.ts"
-  reason: "local-readiness-followup — operator-facing Phase 3b lifecycle disqualification API; mutating endpoint that bypasses ingress today; pre-existing on main; should route through PlatformIngress before PR-2 CI gate."
+  reason: "Permanently justified: Meta GDPR data-deletion webhook — signed_request HMAC-verified against META_APP_SECRET, no operator identity, regulatory compliance handler required by Meta App Review."
 - path: "apps/api/src/routes/dashboard-reports.ts"
-  reason: "local-readiness-followup — mutating endpoint at line 168 inside a mostly-read reports surface; pre-existing on main; needs audit before PR-2 CI gate."
-- path: "apps/api/src/routes/dashboard-opportunities.ts"
-  reason: "local-readiness-followup — opportunity stage mutation at line 42 bypasses ingress today; pre-existing on main; should route through PlatformIngress before PR-2 CI gate."
+  reason: "Permanently justified: POST /refresh is a cache-invalidation endpoint that recomputes the report cache from already-persisted data; no business state mutation, no governed agent action."
 - path: "apps/api/src/routes/admin-consent.ts"
-  reason: "local-readiness-followup — admin consent state writes bypass ingress today; pre-existing on main; needs audit before PR-2 CI gate."
+  reason: "Permanently justified: PDPA consent grant/revoke/clear — regulatory compliance ledger writes scoped to admin-endpoint deployment, not governed agent actions or revenue-affecting business state."
+
+# ---------------------------------------------------------------------------
+# Temporarily justified — governed mutators pending route-governance-cleanup
+# ---------------------------------------------------------------------------
+# Tracked in issue #562 (route-governance-cleanup). Each entry below is a
+# genuine mutator that should eventually route through PlatformIngress.submit;
+# remediation is intentionally out of PR-2 scope (CI enforcement first).
+
+- path: "apps/api/src/routes/recommendations.ts"
+  reason: "Temporarily justified: POST /:id/act calls actOnRecommendation — operator acting on an AI recommendation is a governed mutator with revenue impact. Follow-up: route-governance-cleanup (#562)."
+- path: "apps/api/src/routes/lifecycle-disqualifications.ts"
+  reason: "Temporarily justified: confirm/dismiss endpoints call DisqualificationResolutionHook which advances lifecycle state affecting lead qualification and revenue. Follow-up: route-governance-cleanup (#562)."
+- path: "apps/api/src/routes/dashboard-opportunities.ts"
+  reason: "Temporarily justified: PATCH /stage calls transitionOpportunityStage — operator advancing an opportunity through the funnel is a governed mutator with revenue impact. Follow-up: route-governance-cleanup (#562)."

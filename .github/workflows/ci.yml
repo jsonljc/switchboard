@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Install .agent/tools dependencies
+        run: cd .agent/tools && pnpm install --ignore-workspace --no-frozen-lockfile
+
       - name: Generate Prisma client
         run: pnpm --filter @switchboard/db exec prisma generate
 
@@ -58,6 +61,12 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Seed development data
+        run: pnpm db:seed
+
+      - name: Verify seed counts
+        run: pnpm exec tsx scripts/check-seed-counts.ts
 
       - name: Cache build artifacts
         uses: actions/cache/save@v5
@@ -73,6 +82,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
   typecheck:
@@ -103,6 +113,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Typecheck
@@ -136,6 +147,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Lint
@@ -143,6 +155,9 @@ jobs:
 
       - name: Check formatting
         run: pnpm format:check
+
+      - name: Local readiness pre-flight (fast)
+        run: pnpm local:verify:fast
 
   test:
     needs: setup
@@ -172,6 +187,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Test with coverage
@@ -193,6 +209,12 @@ jobs:
 
       - name: Check for untested packages
         run: bash scripts/check-no-empty-tests.sh
+
+      - name: Dashboard production build
+        env:
+          CREDENTIALS_ENCRYPTION_KEY: ${{ secrets.CI_CREDENTIALS_ENCRYPTION_KEY || 'ci-test-encryption-secret-32chr' }}
+          NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-nextauth-secret' }}
+        run: pnpm --filter @switchboard/dashboard build
 
   secrets:
     runs-on: ubuntu-latest
@@ -234,6 +256,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Regenerate lockfile with overrides
@@ -270,6 +293,7 @@ jobs:
             apps/*/.next
             apps/*/node_modules
             packages/db/node_modules/.prisma
+            .agent/tools/node_modules
           key: build-${{ github.sha }}
 
       - name: Architecture health check
