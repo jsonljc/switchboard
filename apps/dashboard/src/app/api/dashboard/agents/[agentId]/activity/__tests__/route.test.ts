@@ -32,8 +32,6 @@ describe("per-agent activity cockpit dashboard proxy", () => {
         time: "11:58",
         kind: "booked",
         head: "Booked a tour with Jane",
-        preview: null,
-        threadId: null,
       },
     ];
     const getAgentActivityCockpit = vi.fn().mockResolvedValue({ rows: mockRows });

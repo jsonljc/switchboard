@@ -1,5 +1,5 @@
 import type { ActivityKind, ActivityRow, ThreadMessage } from "@switchboard/schemas";
-import type { AgentKey } from "@switchboard/schemas";
+import type { AgentHomeKey } from "./agent-key.js";
 import type { ActivityPreviewReader } from "./activity-preview-reader.js";
 import { extractContactRef } from "./contact-snapshot-extractors.js";
 
@@ -16,7 +16,7 @@ export interface TranslateAuditToCockpitActivityArgs {
   entries: readonly AuditEntryForTranslator[];
   previewReader: ActivityPreviewReader;
   orgId: string;
-  agentKey: AgentKey;
+  agentKey: AgentHomeKey;
   limit: number;
   expandPreview: boolean;
   now?: Date;
@@ -27,7 +27,7 @@ export interface TranslateAuditToCockpitActivityArgs {
 // apps/api/src/services/activity-translator.ts:25-31).
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-/i;
 
-function actorMatchesAgent(entry: AuditEntryForTranslator, agentKey: AgentKey): boolean {
+function actorMatchesAgent(entry: AuditEntryForTranslator, agentKey: AgentHomeKey): boolean {
   if (entry.actorType !== "agent") return false;
   if (entry.actorId === agentKey) return true;
   const snapshotRole =

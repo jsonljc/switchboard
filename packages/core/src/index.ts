@@ -274,17 +274,6 @@ export * from "./agents/index.js";
 // Agent Home (greeting, wins, metrics, pipeline block projections)
 export * from "./agent-home/index.js";
 export * as agentHome from "./agent-home/index.js";
-export type {
-  ActivityPreviewReader,
-  ThreadMessageRecord,
-} from "./agent-home/activity-preview-reader.js";
-export { extractContactRef } from "./agent-home/contact-snapshot-extractors.js";
-export type { ContactRef } from "./agent-home/contact-snapshot-extractors.js";
-export { translateAuditToCockpitActivity } from "./agent-home/cockpit-activity-translator.js";
-export type {
-  AuditEntryForTranslator,
-  TranslateAuditToCockpitActivityArgs,
-} from "./agent-home/cockpit-activity-translator.js";
 
 // Reports projection (operator deep-dive surface)
 export * as reports from "./reports/index.js";

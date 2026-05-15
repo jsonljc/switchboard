@@ -15,6 +15,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { translateAuditToCockpitActivity } from "@switchboard/core";
+import type { AgentHomeKey } from "@switchboard/core";
 import { AgentKeySchema } from "@switchboard/schemas";
 import type { ActivityRow } from "@switchboard/schemas";
 import type { CockpitActivityDeps } from "../../lib/cockpit-activity-deps.js";
@@ -37,6 +38,8 @@ const QuerySchema = z.object({
 
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 50;
+
+const ALEX_RILEY_ONLY = ["alex", "riley"] as const;
 
 export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginAsync {
   return async (app) => {
@@ -61,6 +64,11 @@ export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginA
       const params = ParamsSchema.safeParse(request.params);
       if (!params.success) return reply.code(400).send({ error: "Invalid agentId" });
 
+      const { agentId } = params.data;
+      if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
+        return reply.code(404).send({ error: "Agent not available on home" });
+      }
+
       const query = QuerySchema.safeParse(request.query);
       if (!query.success) return reply.code(400).send({ error: "Invalid query" });
 
@@ -76,11 +84,12 @@ export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginA
 
       try {
         const entries = await deps.fetchAuditEntries({ orgId, limit });
+        const agentKey = agentId as AgentHomeKey; // narrowed by ALEX_RILEY_ONLY guard above
         const translated = await translateAuditToCockpitActivity({
           entries,
           previewReader: deps.previewReader,
           orgId,
-          agentKey: params.data.agentId,
+          agentKey,
           limit,
           expandPreview,
         });

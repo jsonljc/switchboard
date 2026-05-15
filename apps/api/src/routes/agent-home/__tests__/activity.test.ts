@@ -79,6 +79,17 @@ describe("cockpit /activity route", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("returns 404 for valid AgentKey outside agent-home (e.g., mira)", async () => {
+    const deps = makeDeps({ entries: [] });
+    const app = await buildApp(deps);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/activity",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
   it("skips preview fetch when expandPreview=false", async () => {
     const reader = makePreviewReader();
     const deps = makeDeps({
