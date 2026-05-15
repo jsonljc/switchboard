@@ -23,7 +23,7 @@
 - Preview environments for backend services (`apps/dashboard` PR previews remain via Vercel).
 - Production-grade observability (PagerDuty rotations, SLO dashboards, custom metrics pipelines).
 - **Production deployment of `apps/mcp-server`** — stdio-only transport, no production call path. See §11 *Out of scope*.
-- Designing the architecture for post-pilot scale. See §8 *Exit conditions* for re-evaluation triggers.
+- Designing the architecture for post-pilot scale. See §9 *Exit conditions* for re-evaluation triggers.
 
 ---
 
@@ -100,7 +100,7 @@
 
 Webhook latency from Meta's nearest edge to the chosen region is the dominant constraint — if Meta retries webhooks aggressively, distant regions degrade message reliability before they degrade dashboard performance.
 
-If Render's available regions don't include a sufficiently close option for the primary user geography, note that as a candidate exit condition (§8) and lean toward Fly.io's broader region coverage at migration time.
+If Render's available regions don't include a sufficiently close option for the primary user geography, note that as a candidate exit condition (§9) and lean toward Fly.io's broader region coverage at migration time.
 
 ## 4. Environment variable discipline
 
@@ -211,7 +211,7 @@ Use the endpoints the code already exposes; do not rename them just for spec nea
 | Client errors | Sentry (`NEXT_PUBLIC_SENTRY_DSN`) | Free tier (shared project, separate DSN) | Dashboard on Vercel — already wired (`apps/dashboard/sentry.client.config.ts` + `sentry.server.config.ts`) |
 | Logs | Render's built-in viewer (validate retention before launch; export to Better Stack later if needed) | Included | All Render services |
 | Metrics | Render's CPU / memory / RPS dashboard | Included | All Render services |
-| Uptime | UptimeRobot (free) or Better Stack | Free–$10/mo | External probe of `api/api/health/deep` + `chat/health` every 5 min (probe chat at `/health` until the deep endpoint lands; switch to `/api/health/deep` after) |
+| Uptime | UptimeRobot (free) or Better Stack | Free–$10/mo | External probe every 5 min of `https://<api-domain>/api/health/deep` and `https://<chat-domain>/health` (probe chat at `/health` until the deep endpoint lands; switch chat to `https://<chat-domain>/api/health/deep` after that endpoint exists) |
 | Deploy notifications | Render + Vercel email/Slack | Included | Deploy failure alerts |
 | Tracing | **Skipped at pilot** | — | Re-evaluate at exit condition |
 
@@ -270,8 +270,8 @@ Sequenced checklist from "spec approved" to "first real user signed up."
 7. **Post-deploy smoke checklist:**
    - Dashboard loads at production URL.
    - Dashboard's Next.js API routes successfully proxy to `api` (any auth'd dashboard page that hits a `/api/dashboard/*` route — confirms `SWITCHBOARD_API_URL` is wired).
-   - `api /api/health/deep` returns 200 with `database: connected` and `redis: connected` when probed authenticated.
-   - `chat /health` returns 200 (deep endpoint pending — see §7 implementation gap).
+   - `GET https://<api-domain>/api/health/deep` returns 200 with `database: connected` and `redis: connected` when probed authenticated.
+   - `GET https://<chat-domain>/health` returns 200 (deep endpoint pending — see §7 implementation gap).
    - **Webhook signature verification works:** Meta webhook verification succeeds with the correct `hub.verify_token`; invalid signatures are rejected with non-200. Same for Slack signing-secret verification (Slack messages flow through the managed-webhook endpoint, see step 8) and Telegram secret-token verification.
    - `api` reads Postgres successfully (any authenticated route hits the DB).
    - `api` reads/writes Redis successfully (session store or rate-limit counter).
@@ -312,7 +312,7 @@ When that decision is taken, this spec is amended with a dedicated `mcp` section
 - Distributed tracing
 - mTLS service mesh
 - Compliance certifications (SOC 2, HIPAA, etc.)
-- Cost optimization beyond the §8 exit conditions
+- Cost optimization beyond the §9 exit conditions
 
 Anything in this list re-enters scope only when an exit condition (§9) is triggered or when an external requirement (Meta App Review escalation, enterprise customer, compliance audit) demands it.
 
