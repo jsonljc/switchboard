@@ -284,29 +284,22 @@ Insert AFTER `- name: Run database migrations` and BEFORE `- name: Build` in the
 
 ```yaml
 - name: Seed development data
-  run: pnpm --filter @switchboard/db exec tsx prisma/seed.ts
+  run: pnpm db:seed
 
 - name: Verify seed counts
   run: pnpm exec tsx scripts/check-seed-counts.ts
 ```
 
+**Use the canonical `pnpm db:seed` command — do NOT call `tsx prisma/seed.ts` directly.** This PR is about enforcing the local contract, so CI must use the exact command developers use. Any future wrapper or orchestration the team adds at the package level applies automatically. Direct invocation would bypass that.
+
+Confirmed in this worktree: root `package.json` exposes `"db:seed": "pnpm --filter @switchboard/db seed"`, and `packages/db/package.json` defines `"seed": "tsx prisma/seed.ts"` — the canonical chain is intact. Only if `pnpm db:seed` is ever removed from root `package.json` should this step fall back to a direct invocation.
+
 Notes:
 
 - `seed.ts` calls into `seed-dev-data.ts` when `NODE_ENV !== "production"`. The setup job has no `NODE_ENV` set → defaults to dev path → dev data seeded.
 - The setup job's `env:` block already provides `DATABASE_URL` and `CREDENTIALS_ENCRYPTION_KEY` — both required by the seed.
-- We invoke `tsx prisma/seed.ts` directly (not `pnpm db:seed`) because the root `db:seed` script may include extra orchestration; this matches what `prisma migrate deploy` would call. If `package.json` exposes `pnpm db:seed` (it does), prefer that — replace the `Seed development data` run with `run: pnpm db:seed`. **Use whichever invocation matches `packages/db/package.json` and root `package.json` — verify in worktree before running.**
 
-- [ ] **Step 2: Verify invocation matches reality**
-
-Run from the worktree:
-
-```bash
-grep -E '"(db:seed|seed)"' package.json packages/db/package.json
-```
-
-Expected: confirms the canonical seed entrypoint. Adjust the workflow step's `run:` to match.
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 2: Commit**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -351,6 +344,10 @@ Builds on PR-1 (#549). Plan: `docs/superpowers/plans/2026-05-15-local-readiness-
 - **test job:** `pnpm --filter @switchboard/dashboard build` — closes the documented build-not-in-CI gap.
 - **setup job:** `pnpm db:seed` + `pnpm exec tsx scripts/check-seed-counts.ts` — seed integrity after `migrate deploy`.
 - **Allowlist audit:** PR-1's 7 `local-readiness-followup` entries reclassified as permanent or temporary-with-`route-governance-cleanup`-followup. No route refactoring in PR-2 (out of scope).
+
+## Reading CI failures after this PR
+
+The `lint` job now also runs the local-readiness structural gate, so failures there may come from env completeness, live-flag manifest, arch:check, route-ingress, or seed-count skip behavior — not only ESLint/formatting. Job names are unchanged, so check the failing step name in the lint job to identify the cause.
 
 ## CI runtime impact
 
