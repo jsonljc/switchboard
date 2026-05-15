@@ -156,4 +156,43 @@ describe("parseCommand", () => {
   it("pause for 1440min still parses (boundary)", () => {
     expect(parseCommand("pause for 1440min").kind).toBe("pause");
   });
+
+  it("pause riley for 1h", () => {
+    const r = parseCommand("pause riley for 1h");
+    expect(r.kind).toBe("pause");
+    expect(r.label).toMatch(/1h/);
+    expect(r.detail).toMatch(/^until /);
+  });
+
+  it("pause riley 30m", () => {
+    const r = parseCommand("pause riley 30m");
+    expect(r.kind).toBe("pause");
+    expect(r.label).toMatch(/30m/);
+  });
+
+  it("pause riley an hour (word quantifier with agent prefix)", () => {
+    const r = parseCommand("pause riley an hour");
+    expect(r.kind).toBe("pause");
+    expect(r.label).toMatch(/1h/);
+  });
+
+  it("pause riley until 3pm", () => {
+    const r = parseCommand("pause riley until 3pm");
+    expect(r.kind).toBe("pause");
+    expect(r.detail).toContain("3pm");
+  });
+
+  it("pause riley (bare)", () => {
+    const r = parseCommand("pause riley");
+    expect(r.kind).toBe("pause");
+    expect(r.detail).toBe("until you resume");
+  });
+
+  it("pause alex for 1h (symmetric Alex prefix in PAUSE_FOR)", () => {
+    // Regression: PAUSE_FOR previously did not admit a name between
+    // 'pause' and the duration. The widening also fixes the Alex form.
+    const r = parseCommand("pause alex for 1h");
+    expect(r.kind).toBe("pause");
+    expect(r.label).toMatch(/1h/);
+  });
 });

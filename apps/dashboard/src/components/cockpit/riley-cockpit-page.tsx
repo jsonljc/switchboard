@@ -9,7 +9,7 @@ import { ApprovalCard } from "./approval-card";
 import type { ApprovalAccent } from "./approval-card";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { CommandPalette } from "./command-palette";
-import { ComposerPlaceholder } from "./composer-placeholder";
+import { Composer } from "./composer";
 import { KPIStrip } from "./kpi-strip";
 import { MissionPopover } from "./mission-popover";
 import {
@@ -186,10 +186,11 @@ export function RileyCockpitPage() {
         )}
         <ActivityStream rows={activityRows} filter={filter} setFilter={setFilter} />
       </div>
-      <ComposerPlaceholder
+      <Composer
+        placeholder={RILEY_COMPOSER_PLACEHOLDER}
+        onDispatch={(action) => dispatch(action)}
         halted={haltCtx.halted}
         senderLabel="RILEY"
-        placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}
         accentColor={RILEY_ACCENT.deep}
       />
       <CommandPalette
@@ -198,7 +199,14 @@ export function RileyCockpitPage() {
         commands={RILEY_COMMANDS}
         onSelect={(cmd) => {
           setPaletteOpen(false);
-          dispatch(cmd);
+          dispatch({
+            kind: "command",
+            icon: "·",
+            label: cmd.label,
+            detail: "",
+            raw: "",
+            commandId: cmd.id,
+          });
         }}
       />
     </div>

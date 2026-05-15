@@ -1,10 +1,10 @@
 import type { ParsedAction } from "@/components/cockpit/types";
 
-const PAUSE_FOR = /^pause\s+(?:for\s+)?(\d+)\s*(min|m|h|hour|hours)\b/i;
+const PAUSE_FOR = /^pause\s+(?:(?:alex|riley)\s+)?(?:for\s+)?(\d+)\s*(min|m|h|hour|hours)\b/i;
 const PAUSE_WORD =
-  /^pause\s+(?:for\s+)?(half\s+an?|an|one|two|three|four|five|six)\s+(hour|hours|min|minute|minutes)\b/i;
-const PAUSE_UNTIL = /^pause\s+until\s+(.+)$/i;
-const PAUSE_BARE = /^pause(?:\s+alex)?$/i;
+  /^pause\s+(?:(?:alex|riley)\s+)?(?:for\s+)?(half\s+an?|an|one|two|three|four|five|six)\s+(hour|hours|min|minute|minutes)\b/i;
+const PAUSE_UNTIL = /^pause\s+(?:(?:alex|riley)\s+)?until\s+(.+)$/i;
+const PAUSE_BARE = /^pause(?:\s+(?:alex|riley))?$/i;
 
 const WORD_TO_NUM: Record<string, number> = {
   an: 1,
