@@ -169,6 +169,36 @@ describe("executeWeeklyAudit", () => {
     // Audits still run normally for both deployments.
     expect(deps.saveAuditReport).toHaveBeenCalledTimes(2);
   });
+
+  it("threads recommendationEmitter into the AuditRunner when configured", async () => {
+    const emitter = vi.fn().mockResolvedValue({ surface: "queue" });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    deps.recommendationEmitter = emitter;
+
+    await executeWeeklyAudit(step as never, deps);
+
+    // The audit-runner only logs `[ad-optimizer] Nova reviewed N candidates` when
+    // its recommendationEmitter dep is set (it's the bottom of the
+    // runRecommendationSink branch). The default mocks produce 0 candidates so the
+    // emitter spy itself is never called, but the log line firing proves
+    // executeWeeklyAudit threaded the emitter through to the AuditRunner constructor.
+    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("Nova reviewed"))).toBe(true);
+
+    warnSpy.mockRestore();
+  });
+
+  it("does NOT invoke the recommendation-sink branch when emitter is absent (back-compat)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // deps.recommendationEmitter is undefined by construction in beforeEach.
+
+    await executeWeeklyAudit(step as never, deps);
+
+    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("Nova reviewed"))).toBe(
+      false,
+    );
+
+    warnSpy.mockRestore();
+  });
 });
 
 describe("executeDailyCheck", () => {
