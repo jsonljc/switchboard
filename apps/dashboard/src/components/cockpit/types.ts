@@ -124,3 +124,40 @@ export interface CockpitKpiData {
   avgValue?: number | null;
   target?: number | null;
 }
+
+// ─── A.5 Composer + Command Palette ───────────────────────────
+
+export type ParsedActionKind =
+  | "pause"
+  | "resume"
+  | "halt"
+  | "followup"
+  | "brief"
+  | "rule"
+  | "handoff"
+  | "context"
+  | "instruction"
+  | "command";
+
+export interface ParsedAction {
+  kind: ParsedActionKind;
+  icon: string;
+  label: string;
+  detail: string;
+  raw: string;
+  /** Optional `command` id when the action originated from the palette. */
+  commandId?: string;
+}
+
+export type CommandGroup = "control" | "thread" | "rules" | "nav";
+
+export interface Command {
+  id: string;
+  label: string;
+  group: CommandGroup;
+}
+
+export interface ThreadContext {
+  contactId: string;
+  displayName: string;
+}

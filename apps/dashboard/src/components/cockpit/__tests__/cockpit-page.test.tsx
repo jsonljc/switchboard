@@ -58,7 +58,12 @@ vi.mock("@/hooks/use-agent-mission", () => ({
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, replace: pushMock, prefetch: vi.fn() }),
+}));
+
+const toastMock = vi.fn();
+vi.mock("@/components/ui/use-toast", () => ({
+  useToast: () => ({ toast: toastMock }),
 }));
 
 import { CockpitPage } from "../cockpit-page";
@@ -129,7 +134,11 @@ describe("CockpitPage", () => {
     haltedState = true;
     render(<CockpitPage />);
     expect(screen.getByText("HALTED")).toBeInTheDocument();
-    expect(screen.getByText(/Halted — resume to send instructions/i)).toBeInTheDocument();
+    // A.5: halted copy now lives as the Composer input placeholder, not as
+    // visible <span> text the way ComposerPlaceholder rendered it.
+    expect(
+      screen.getByPlaceholderText(/Halted — resume to send instructions/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /resume/i })).toBeInTheDocument();
   });
 
@@ -318,5 +327,61 @@ describe("CockpitPage — A.4 useAgentActivityCockpit wiring", () => {
     render(<CockpitPage />);
     // The status pill should show WORKING (recent activity within 10 min window)
     expect(await screen.findByText("WORKING")).toBeInTheDocument();
+  });
+});
+
+describe("CockpitPage — A.5 composer + palette", () => {
+  beforeEach(() => {
+    toggleHaltMock.mockClear();
+    pushMock.mockClear();
+    toastMock.mockClear();
+    haltedState = false;
+    missionData = undefined;
+    metricsData = undefined;
+    pendingApprovalsData = [];
+    activityRowsData = [];
+  });
+
+  it("renders the Composer at the bottom of the cockpit (not ComposerPlaceholder)", () => {
+    render(<CockpitPage />);
+    expect(screen.getByLabelText("Composer input")).toBeInTheDocument();
+  });
+
+  it("flips Topbar 'Tell Alex…' from disabled to enabled (paletteEnabled=true)", () => {
+    render(<CockpitPage />);
+    const button = screen.getByRole("button", { name: /Tell Alex…/i });
+    expect(button).not.toBeDisabled();
+  });
+
+  it("Topbar 'Tell Alex…' click opens the palette", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    render(<CockpitPage />);
+    expect(screen.queryByRole("dialog", { name: /command palette/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Tell Alex…/i }));
+    expect(screen.getByRole("dialog", { name: /command palette/i })).toBeInTheDocument();
+  });
+
+  it("⌘K opens the palette", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    render(<CockpitPage />);
+    expect(screen.queryByRole("dialog", { name: /command palette/i })).not.toBeInTheDocument();
+    await user.keyboard("{Meta>}k{/Meta}");
+    expect(screen.getByRole("dialog", { name: /command palette/i })).toBeInTheDocument();
+  });
+
+  it("Escape closes the palette after opening", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    render(<CockpitPage />);
+    await user.keyboard("{Meta>}k{/Meta}");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: /command palette/i })).not.toBeInTheDocument();
+  });
+
+  it("Composer input is disabled when halt is active", () => {
+    haltedState = true;
+    render(<CockpitPage />);
+    const input = screen.getByLabelText("Composer input") as HTMLInputElement;
+    expect(input).toBeDisabled();
+    expect(input.placeholder).toMatch(/Halted/);
   });
 });

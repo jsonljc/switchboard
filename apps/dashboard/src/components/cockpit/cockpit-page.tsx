@@ -8,12 +8,15 @@ import { Topbar } from "./topbar";
 import { Identity } from "./identity";
 import { ApprovalBlock } from "./approval-block";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
-import { ComposerPlaceholder } from "./composer-placeholder";
+import { Composer } from "./composer";
+import { CommandPalette } from "./command-palette";
 import { MissionPopover } from "./mission-popover";
 import { EmptyState, shouldRenderEmptyState } from "./empty-state";
 import { KPIStrip } from "./kpi-strip";
 import type { CockpitKpiData } from "./types";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
+import { ALEX_COMMANDS, ALEX_COMPOSER_PLACEHOLDER } from "@/lib/cockpit/alex-commands";
+import { useAlexActionDispatcher } from "@/lib/cockpit/alex-action-dispatcher";
 import { legacyPendingApprovalToApprovalView } from "@/lib/cockpit/legacy-pending-approval-to-approval-view";
 import { metricsViewModelToLegacyKpiInput } from "@/lib/cockpit/metrics-to-kpi-input";
 import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
@@ -32,8 +35,10 @@ export function CockpitPage() {
   const mission = useAgentMission("alex");
   const metricsQ = useAgentMetrics("alex");
   const router = useRouter();
+  const dispatch = useAlexActionDispatcher();
   const [filter, setFilter] = useState<ActivityFilter>("all");
   const [missionOpen, setMissionOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const [now, setNow] = useState<Date>(() => new Date());
 
@@ -42,6 +47,21 @@ export function CockpitPage() {
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(id);
+  }, []);
+
+  // Page-scoped ⌘K / Ctrl+K listener — opens the command palette.
+  // The native browser ⌘K (URL bar focus) is preempted only while
+  // /alex is the active page; the listener is removed on unmount.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPaletteOpen((o) => !o);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   const approvals = (approvalsQ.data?.approvals ?? []).map((a) =>
@@ -91,7 +111,7 @@ export function CockpitPage() {
         fontFamily: "Inter, system-ui, sans-serif",
       }}
     >
-      <Topbar paletteEnabled={false} />
+      <Topbar paletteEnabled onOpenPalette={() => setPaletteOpen(true)} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div style={{ position: "relative" }}>
           <Identity
@@ -132,7 +152,27 @@ export function CockpitPage() {
           <ActivityStream rows={activityRows} filter={filter} setFilter={setFilter} />
         )}
       </div>
-      <ComposerPlaceholder halted={haltCtx.halted} />
+      <Composer
+        placeholder={ALEX_COMPOSER_PLACEHOLDER}
+        onDispatch={(action) => dispatch(action)}
+        halted={haltCtx.halted}
+      />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={ALEX_COMMANDS}
+        onSelect={(cmd) => {
+          setPaletteOpen(false);
+          dispatch({
+            kind: "command",
+            icon: "·",
+            label: cmd.label,
+            detail: "",
+            raw: "",
+            commandId: cmd.id,
+          });
+        }}
+      />
     </div>
   );
 }
