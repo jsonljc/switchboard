@@ -629,24 +629,38 @@ describe("RileyCockpitPage — composer adoption", () => {
     expect(toast).toHaveBeenCalledWith({ title: "Resumed — back to scanning." });
   });
 
-  it("ad-ops free-form ('raise daily budget to $200') falls through to instruction (no mutation)", async () => {
+  it("ad-ops free-form ('raise daily budget to $200') falls through to 'not automated yet' (no mutation)", async () => {
     wrap(<RileyCockpitPage />);
     const input = screen.getByRole("textbox", { name: "Composer input" });
     fireEvent.change(input, { target: { value: "raise daily budget to $200" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     const payload = toast.mock.calls[0]![0] as { title: string; description: string };
-    expect(payload.title).toBe("Got it.");
-    expect(payload.description).toContain('Acting on "raise daily budget to $200".');
+    expect(payload.title).toBe("Noted.");
+    expect(payload.description).toContain('"raise daily budget to $200" is not automated yet.');
   });
 
-  it("'follow up with Maya tonight' folds into instruction toast", async () => {
+  it("campaign-targeted NL ('pause the Cold Interests adset') stays inert (no halt, no router push)", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "pause the Cold Interests adset" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    const payload = toast.mock.calls[0]![0] as { title: string; description: string };
+    // Critical regression guard: "pause the Cold Interests adset" must NOT
+    // parse as a real pause (which would setHalted + show "Paused —
+    // standing by."). Falls through to instruction → 'not automated yet'.
+    expect(payload.title).toBe("Noted.");
+    expect(payload.description).toContain("is not automated yet.");
+  });
+
+  it("'follow up with Maya tonight' folds into 'not automated yet' toast", async () => {
     wrap(<RileyCockpitPage />);
     const input = screen.getByRole("textbox", { name: "Composer input" });
     fireEvent.change(input, { target: { value: "follow up with Maya tonight" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
-    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Got it." });
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Noted." });
   });
 
   it("'stop offering free consults' + Enter routes to rules and toasts", async () => {

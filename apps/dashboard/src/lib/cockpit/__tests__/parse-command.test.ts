@@ -195,4 +195,27 @@ describe("parseCommand", () => {
     expect(r.kind).toBe("pause");
     expect(r.label).toMatch(/1h/);
   });
+
+  // Campaign-targeted NL (Riley's locked non-goal): these phrases must
+  // NOT parse as `pause` / `rule` / etc. — they fall through to
+  // `instruction` so the dispatcher's "not automated yet" toast fires
+  // instead of a real mutation. Regression guard against future regex
+  // changes that widen pause too far.
+
+  it("'pause the Cold Interests adset' falls through to instruction (not pause)", () => {
+    const r = parseCommand("pause the Cold Interests adset");
+    expect(r.kind).toBe("instruction");
+  });
+
+  it("'scale BR-Whitening 20%' falls through to instruction", () => {
+    expect(parseCommand("scale BR-Whitening 20%").kind).toBe("instruction");
+  });
+
+  it("'raise daily budget to $200' falls through to instruction", () => {
+    expect(parseCommand("raise daily budget to $200").kind).toBe("instruction");
+  });
+
+  it("'shift budget to MED-Awareness' falls through to instruction", () => {
+    expect(parseCommand("shift budget to MED-Awareness").kind).toBe("instruction");
+  });
 });
