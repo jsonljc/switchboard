@@ -171,7 +171,8 @@ Hint priority (first match wins; mirrors A.3 priority pattern):
 | 4 | `spendCents !== null && leads > 0 && targetCpbCents !== null` | `{ degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: \`$${cpl} per lead\`, target: \`target $${targetDollars}\` } }` |
 
 Where:
-- `cpl = Math.round(spendCents / 100 / leads)` — integer division; `$0 per lead` is acceptable display.
+- `cpl = Math.round(spendCents / 100 / leads)` — integer division.
+- **`cplDisplay = cpl === 0 ? "<$1 per lead" : \`$${cpl} per lead\`"`** — avoids the misleading `$0 per lead` chip when very low spend × high leads round to zero. The threshold is sub-dollar; cpl ≥ 1 reads `$N per lead` normally.
 - `targetDollars = Math.round(targetCpbCents / 100)`.
 - `targetLabel` (rules 1 + 2) = `targetCpbCents !== null ? \`target $${targetDollars}\` : "—"` — the target chip echoes when known even in degraded modes.
 
@@ -420,6 +421,24 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     });
   });
 
+  it("roi sub-dollar guard: cpl rounds to 0 → '<$1 per lead', not '$0 per lead'", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 100, leadsLastWeek: 0 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(99);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: 500 },
+    });
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "",
+      label: "cost per lead",
+      comparator: { value: "<$1 per lead", target: "target $5" },
+    });
+  });
+
   it("roi rule 4: spendCents > 0 && leads > 0 && targetCpbCents > 0 → live comparator + target", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const store = makeStore({ leadsThisWeek: 5, leadsLastWeek: 0 });
@@ -471,6 +490,12 @@ Edit `packages/core/src/agent-home/metrics-riley.ts`. Inside `buildRileyMetricsV
   const spendDollars = spendCents !== null ? Math.round(spendCents / 100) : null;
   const cpl =
     spendCents !== null && heroValue > 0 ? Math.round(spendCents / 100 / heroValue) : null;
+  const cplDisplay = cpl === 0 ? "<$1 per lead" : cpl !== null ? `$${cpl} per lead` : "—";
+  // Riley v1 reinterprets `targetCpbCents` as **target cost per lead** for the
+  // ROI comparator. The config key is shared with Alex (target cost per
+  // booking) for storage symmetry — `AgentRoster.config.targetCpbCents` is a
+  // single value; the meaning is agent-side. Do not treat Riley's target as
+  // booking economics until Riley has booking attribution (future slice).
   const targetDollars =
     targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
   const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
@@ -512,7 +537,7 @@ Edit `packages/core/src/agent-home/metrics-riley.ts`. Inside `buildRileyMetricsV
       degradedHint: "",
       label: "cost per lead",
       comparator: {
-        value: `$${cpl ?? 0} per lead`,
+        value: cplDisplay,
         target: targetLabel,
       },
     };
@@ -963,6 +988,11 @@ import { describe, expect, it } from "vitest";
 import { metricsViewModelToRileyKpiData } from "../metrics-to-kpi-data";
 import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
 
+// Riley adapter is strict — no legacy-shape fallback. If tiles or roi are
+// missing on the wire, the adapter returns null and the page renders no KPI
+// strip. This guards against Alex's `qualified` tile leaking into /riley via
+// `legacyTiles()` derivation.
+
 const baseWire: MetricsViewModelWire = {
   hero: { kind: "ad-leads", value: 27, comparator: { window: "week", value: 22 } },
   heroSubProseSegments: [{ kind: "text", text: "+5 from last week." }],
@@ -1001,29 +1031,43 @@ const baseWire: MetricsViewModelWire = {
 describe("metricsViewModelToRileyKpiData", () => {
   it("passes tiles through unchanged (typed pass-through)", () => {
     const out = metricsViewModelToRileyKpiData(baseWire);
-    expect(out.tiles).toEqual(baseWire.tiles);
+    expect(out).not.toBeNull();
+    expect(out!.tiles).toEqual(baseWire.tiles);
   });
 
   it("passes roi through unchanged", () => {
     const out = metricsViewModelToRileyKpiData(baseWire);
-    expect(out.roi).toEqual(baseWire.roi);
+    expect(out).not.toBeNull();
+    expect(out!.roi).toEqual(baseWire.roi);
   });
 
   it("formats range as 'This week · {folioRange}'", () => {
     const out = metricsViewModelToRileyKpiData(baseWire);
-    expect(out.range).toBe("This week · Mon — Wed");
+    expect(out!.range).toBe("This week · Mon — Wed");
   });
 
   it("does not surface qualifiedPct as a tile (Riley has no qualified concept)", () => {
     const out = metricsViewModelToRileyKpiData(baseWire);
-    expect((out.tiles ?? []).map((t) => t.label)).not.toContain("qualified");
+    expect((out!.tiles ?? []).map((t) => t.label)).not.toContain("qualified");
   });
 
   it("does not populate the Alex-flat fields (booked/leads/avgValue/target)", () => {
     const out = metricsViewModelToRileyKpiData(baseWire);
-    expect(out.booked).toBeUndefined();
-    expect(out.avgValue).toBeUndefined();
-    expect(out.target).toBeUndefined();
+    expect(out!.booked).toBeUndefined();
+    expect(out!.avgValue).toBeUndefined();
+    expect(out!.target).toBeUndefined();
+  });
+
+  it("returns null when vm.tiles is missing (no legacy-shape fallback)", () => {
+    const { tiles: _omit, ...wireWithoutTiles } = baseWire;
+    const out = metricsViewModelToRileyKpiData(wireWithoutTiles as MetricsViewModelWire);
+    expect(out).toBeNull();
+  });
+
+  it("returns null when vm.roi is missing (no legacy-shape fallback)", () => {
+    const { roi: _omit, ...wireWithoutRoi } = baseWire;
+    const out = metricsViewModelToRileyKpiData(wireWithoutRoi as MetricsViewModelWire);
+    expect(out).toBeNull();
   });
 });
 ```
@@ -1044,10 +1088,19 @@ Create `apps/dashboard/src/lib/cockpit/riley/metrics-to-kpi-data.ts`:
 import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
 import type { CockpitKpiData } from "@/components/cockpit/types";
 
-export function metricsViewModelToRileyKpiData(vm: MetricsViewModelWire): CockpitKpiData {
+/**
+ * Strict, typed pass-through. Returns null when the wire VM lacks `tiles` or
+ * `roi` — the cockpit page renders no KPI strip in that case rather than
+ * falling back to Alex's `legacyTiles()` derivation (which would leak a
+ * `qualified` tile onto /riley).
+ */
+export function metricsViewModelToRileyKpiData(
+  vm: MetricsViewModelWire,
+): CockpitKpiData | null {
+  if (!vm.tiles || !vm.roi) return null;
   return {
     range: `This week · ${vm.folioRange}`,
-    tiles: vm.tiles ? [...vm.tiles] : undefined,
+    tiles: [...vm.tiles],
     roi: vm.roi,
   };
 }
@@ -1154,6 +1207,63 @@ describe("RileyCockpitPage — B.2b KPI strip", () => {
     expect(screen.queryByText(/cost per lead/i)).not.toBeInTheDocument();
   });
 
+  it("renders nothing for KPI strip when wire VM is missing tiles (no Alex fallback)", () => {
+    // Adapter returns null when tiles is missing; page renders no strip.
+    metricsState.data = {
+      hero: { kind: "ad-leads", value: 27, comparator: { window: "week", value: 22 } },
+      heroSubProseSegments: [],
+      spark: [],
+      stats: [],
+      freshness: { generatedAt: "x", window: "week", dataSource: "live" },
+      folioRange: "Mon — Wed",
+      targets: { avgValueCents: null, targetCpbCents: null },
+      spendCents: 20000,
+      leads: 27,
+      qualifiedPct: 0,
+      bookedDelta: "+5",
+      leadsDelta: "+5",
+      qualifiedDelta: null,
+      // tiles + roi intentionally omitted
+    };
+    wrap(<RileyCockpitPage />);
+    expect(screen.queryByText(/cost per lead/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("roi-comparator")).not.toBeInTheDocument();
+  });
+
+  it("hard regression: never renders a 'qualified' label on /riley (no legacy leak)", () => {
+    // Even with full live data, no qualified tile should appear — Riley is
+    // not qualifying leads. This is the no-leak gate against accidental
+    // Alex-side `legacyTiles()` derivation.
+    metricsState.data = {
+      hero: { kind: "ad-leads", value: 27, comparator: { window: "week", value: 22 } },
+      heroSubProseSegments: [],
+      spark: [],
+      stats: [],
+      freshness: { generatedAt: "x", window: "week", dataSource: "live" },
+      folioRange: "Mon — Wed",
+      targets: { avgValueCents: null, targetCpbCents: null },
+      spendCents: 20000,
+      leads: 27,
+      qualifiedPct: 0,
+      bookedDelta: "+5",
+      leadsDelta: "+5",
+      qualifiedDelta: null,
+      tiles: [
+        { label: "leads", value: 27, trend: "+5" },
+        { label: "ctr", value: "—", unavailable: true },
+        { label: "ad spend", value: "$200" },
+      ],
+      roi: {
+        degraded: true,
+        degradedHint: "",
+        label: "cost per lead",
+        comparator: { value: "$7 per lead", target: "—" },
+      },
+    };
+    wrap(<RileyCockpitPage />);
+    expect(screen.queryByText(/qualified/i)).not.toBeInTheDocument();
+  });
+
   it("applies RILEY_ACCENT to the ROI comparator chip", () => {
     metricsState.data = { /* same as expanded fixture */ };
     wrap(<RileyCockpitPage />);
@@ -1189,6 +1299,10 @@ Inside `RileyCockpitPage`:
 ```tsx
 const metricsQ = useAgentMetrics("riley");
 
+// Adapter returns null when the wire VM is missing tiles or roi —
+// the page mount gates on this and renders no KPI strip rather than
+// falling back to Alex's `legacyTiles()` derivation. See
+// metrics-to-kpi-data.ts for the strict no-fallback rationale.
 const kpis: CockpitKpiData | null = metricsQ.data
   ? metricsViewModelToRileyKpiData(metricsQ.data)
   : null;

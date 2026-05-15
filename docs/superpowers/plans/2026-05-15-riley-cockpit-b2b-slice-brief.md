@@ -88,10 +88,17 @@ Render Alex A.3's `<KPIStrip>` (KPI tile grid + ROI bar) on `/riley`, populated 
 | Index | Tile | Source | Notes |
 |---|---|---|---|
 | 0 | `{ label: "leads", value: heroValue, trend: bookedDelta }` | `heroValue` (= week leads count); `bookedDelta` already emitted by metrics-riley.ts | Riley's "leads" is the hero value (`hero.kind === "ad-leads"`). |
-| 1 | `{ label: "ctr", value: "—", unavailable: true }` | n/a | CTR is not in v1's signal store. No `hint` — connecting Meta Ads brings spend, not CTR. CTR comes when an `ad-platform-ctr` source ships. |
+| 1 | `{ label: "ctr", value: "—", unavailable: true }` | n/a | CTR is not in v1's signal store. No `hint` — connecting Meta Ads brings spend, not CTR. CTR comes when an `ad-platform-ctr` source ships. See §"CTR tile UX tradeoff" below. |
 | 2 | `spendCents === null ? { label: "ad spend", value: "—", unavailable: true, hint: "Connect Meta Ads" } : { label: "ad spend", value: \`$${spend}\` }` | `spendCents` already echoed by metrics-riley.ts | Match A.3's `$${spend}` quirk (no `toLocaleString`). |
 
-**Three tiles, not four.** Riley has no "qualified" tile — qualification is downstream of Riley (Alex's pipeline). The `qualifiedPct: 0` placeholder in the flat shape stays for backward-compat with the Alex adapter's `CockpitKpiData` shape, but Riley's adapter does not surface it. Documented v1 quirk; no UI surface.
+**Three tiles, not four.** Riley has no "qualified" tile — qualification is downstream of Riley (Alex's pipeline). The `qualifiedPct: 0` placeholder in the flat shape stays for backward-compat with the Alex adapter's `CockpitKpiData` shape, but Riley's adapter does not surface it. Documented v1 quirk; no UI surface. The page-level test asserts the rendered DOM contains no "qualified" label — see §Test contract.
+
+**CTR tile UX tradeoff.** Showing a blank `"—"` tile is technically honest but reads as broken to first-time operators. The two polish-ramp options considered:
+
+- **(a) Add `hint: "Coming soon"`** — rejected for v1. `<KpiTile>` renders `hint` as a button-styled affordance with a `→` arrow and dashed underline. `Coming soon →` reads as a clickable next-step that does nothing when clicked, which is worse UX than the blank state.
+- **(b) Hide tile[1] entirely** — rejected for v1. The 3-tile grid (`repeat(3, 1fr)`) maps cleanly to the Alex visual rhythm; dropping to 2 tiles breaks symmetry with `/alex`.
+
+v1 ships with the blank tile. A follow-up may introduce a `subhint` variant on `<KpiTile>` (non-button muted text) and surface `"coming soon"` there; tracked as polish-ramp, not in B.2b scope.
 
 ### Riley ROI shape (locked, always degraded in v1)
 
@@ -106,11 +113,14 @@ ROI hint priority (first match wins; mirrors A.3's table-driven test pattern):
 | 3 | `spendCents > 0 && leads > 0 && targetCpbCents === null` | `""` (target not configured — no nag in v1) | `"$N per lead"` | `"—"` |
 | 4 | `spendCents > 0 && leads > 0 && targetCpbCents !== null` | `""` | `"$N per lead"` | `"target $M"` |
 
-Where `$N per lead = round(spendCents / 100 / leads)`, `$M = round(targetCpbCents / 100)`. The `label` is `"cost per lead"`. The comparator chip's on-target affordance is **off** in degraded mode (per the existing `<ROIBar>` degraded branch — the chip is a neutral pill).
+Where:
+- `cpl = Math.round(spendCents / 100 / leads)` (integer dollars per lead)
+- Comparator value display rule: **`cpl === 0 ? "<$1 per lead" : \`$${cpl} per lead\`"`** — avoids a misleading `$0 per lead` chip when very low spend × high leads round to zero. The threshold is sub-dollar; once cpl ≥ 1 the chip reads `$N per lead` normally.
+- `$M = round(targetCpbCents / 100)`. The `label` is `"cost per lead"`. The comparator chip's on-target affordance is **off** in degraded mode (per the existing `<ROIBar>` degraded branch — the chip is a neutral pill).
 
 **Rule 2 vs Rule 3 nuance.** A.3 had three degraded rules (`spend===null` / `avgValue===null` / `bookings===0`). Riley reuses rules 1, 2, 3 in spirit but drops the `avgValue===null` gate — Riley's cost-per-lead math doesn't need `avgValueCents`. `avgValueCents` is irrelevant to Riley v1 economics; it stays a `getAgentTargets` echo but is not consumed in the Riley ROI computation. The dashboard does not surface a "set average booking value" hint on `/riley`.
 
-**Target name reuse.** Riley reuses the `targetCpbCents` config key as "target cost per lead." Semantically different from Alex's "target cost per booking," but storage-symmetric and avoids a new config key for v1. When Riley's economics expand (booking-value attribution), a follow-up slice may introduce `targetCplCents` if naming disambiguation matters. v1 ships with one key, two interpretations.
+**Target name reuse.** Riley reuses the `targetCpbCents` config key as "target cost per lead." Semantically different from Alex's "target cost per booking," but storage-symmetric and avoids a new config key for v1. When Riley's economics expand (booking-value attribution), a follow-up slice may introduce `targetCplCents` if naming disambiguation matters. v1 ships with one key, two interpretations. **Implementation requirement:** the metrics-riley.ts read of `targets.targetCpbCents` carries an inline comment explicitly naming the Riley-side interpretation so future engineers can't misread Riley's target as cost-per-booking. The plan's Task 2 locks the comment text.
 
 ### Riley voice on the collapsed headline
 
@@ -178,13 +188,18 @@ Expected: no new matches vs `main` baseline.
 
 ## Risks specific to B.2b
 
-1. **Riley render must not show "qualified 0%" tile.** The dashboard's `<KPIStrip>` falls back to `legacyTiles(legacy)` when `kpis.tiles` is missing — and `legacyTiles` emits a qualified tile. If Riley's adapter accidentally omits `tiles`, the page would show a misleading 0% qualified tile. **Mitigation:** the adapter test asserts `kpis.tiles` is always populated (never undefined); the page test asserts the rendered tile set has exactly 3 tiles, none labeled "qualified."
+1. **Riley render must not show "qualified 0%" tile.** The dashboard's `<KPIStrip>` falls back to `legacyTiles(legacy)` when `kpis.tiles` is missing — and `legacyTiles` emits a qualified tile. If Riley's adapter accidentally omitted `tiles`, the page would show a misleading 0% qualified tile.
+
+   **Mitigation — strict, no fallback.** Riley's adapter `metricsViewModelToRileyKpiData` returns `CockpitKpiData | null`: when `vm.tiles` or `vm.roi` is missing, it returns `null`. The page mount gates on `kpis != null` so a missing-emission case **renders no KPI strip at all** rather than silently falling back to Alex-derived tiles. Two assertions enforce this:
+
+   - **Adapter test:** call `metricsViewModelToRileyKpiData(vmWithoutTiles)` → returns `null`. Call again with `vm.roi` missing → returns `null`.
+   - **Page test (hard regression):** assert the rendered DOM contains no text matching `/qualified/i` anywhere across all KPI-strip render cases (expanded, collapsed, loading, errored, present-data). This is the no-leak gate; the test fails if any future change derives a qualified tile via the legacy path.
 
 2. **ROI accent drift.** `<ROIBar>` and `<KPIStrip>` today hardcode Alex amber tokens at three sites (degraded chip border/background, live-mode `data-on-target="false"` color, live-mode fill gradient). B.2b parameterizes them with optional `accent?` defaults — same `?: defaults` pattern B.3 used for accent on `<ApprovalCard>` / `<ComposerPlaceholder>` / `<StatusPill>`. **Mitigation:** component tests assert *both* the default-render path (Alex amber, no Alex render change) and the explicit-override path (Riley clay).
 
 3. **`useAgentMetrics("riley")` calls the existing route.** A.3 wired the route to dispatch by `agentId`; no API change is needed. But B.2b is the first dashboard consumer of `/agents/riley/metrics`. **Mitigation:** the page test mounts `RileyCockpitPage` with a fixture metrics response (TanStack Query handler) and asserts the rendered tile set matches the fixture. No integration test against the real API in this slice (covered by metrics-riley unit tests + the route's own fastify tests).
 
-4. **Cost-per-lead calculation rounding.** `Math.round(spendCents / 100 / leads)` can produce 0 for small spend/large lead counts. **Mitigation:** the test fixture pins three cost-per-lead computations (e.g., spend=2000c, leads=10 → $2; spend=12345c, leads=3 → $41; spend=99c, leads=10 → $0). The locked-design quirk: `$0 per lead` is acceptable display when math rounds to 0; do not branch to `"<$1"`.
+4. **Cost-per-lead calculation rounding.** `Math.round(spendCents / 100 / leads)` can produce 0 for small spend/large lead counts. **Mitigation:** the test fixture pins three cost-per-lead computations: spend=2000c, leads=10 → `"$2 per lead"`; spend=12345c, leads=3 → `"$41 per lead"`; spend=99c, leads=100 → `"<$1 per lead"`. The comparator display rule branches on `cpl === 0` and emits `"<$1 per lead"` (locked above in §Riley ROI bar shape). A `$0 per lead` chip is **not** acceptable display — it reads as a bug to operators.
 
 5. **`spendCents > 0` ambiguity.** A.3's hint priority rule 1 uses `spendCents === null`. B.2b mirrors that — `spendCents === 0` (real "zero spent this week") is treated as live, not unavailable. The cost-per-lead comparator displays `$0 per lead` (when leads > 0) or `—` (when leads === 0). **Mitigation:** table-driven test pins each (spendCents, leads) combination.
 
