@@ -11,18 +11,21 @@ Run a thorough, parallelized audit of Switchboard's architecture, infrastructure
 ## Constraints
 
 - **Parallel workstreams in flight** (must not collide):
-  - **Local readiness / CI gates** — branches `docs/local-readiness-spec`, `docs/local-readiness-plan`; implementation branch not yet created.
-  - **Riley cockpit** — Wave B PR-1 already merged (`feat/riley-wave-b-pr1`, `feat/riley-prod-emitter-wiring`, `feat/riley-wave-b-pr1-followup`); further Riley follow-up may be in progress.
+  - **Local readiness / CI gates** — spec/plan branches `docs/local-readiness-spec` and `docs/local-readiness-plan` have unmerged commits; implementation branch not yet created.
+  - **Riley cockpit Wave B PR-1** — merged as #538/#541/#543 on main. Local branches `feat/riley-wave-b-pr1*` are stale (no diff vs main or already superseded). Wave 2 snapshot logic must treat empty-diff branches as "no collision."
 - **One branch per worktree** (per `CLAUDE.md` doctrine).
 - **No mutating bypass paths** — audit must not introduce them while flagging them.
 - **Token budget** — bounded per-lane reports; raw evidence by file:line, not by inlining files.
-- **Existing audit work is authoritative until contradicted.** `.audit/12-pre-launch-security-audit.md` is a 77 KB security audit covering tenant isolation, AI/skill-runtime, auth surface, credential storage, mutation bypass, and OWASP sweep. This audit does **not** redo that work — it diffs against it.
+- **Existing audit work is authoritative until contradicted.** Three existing audits this run deltas against rather than redoes:
+  - `.audit/12-pre-launch-security-audit.md` (77 KB — tenant isolation, AI/skill-runtime, auth, credentials, mutation bypass, OWASP) → owned by lane `security-sweep-delta`.
+  - `docs/superpowers/specs/2026-05-13-circular-import-cleanup-design.md` + its plan → owned by lane `layer-hygiene`.
+  - `.audit/08-launch-blocker-sequence.md` → cross-referenced by lanes `deploy-infra-parity`, `dead-code`, `prisma-hygiene`.
 
 ## Shape: Two Waves
 
 ### Wave 1 — Discovery (read-only, parallel)
 
-Many Explore subagents dispatched in a single message. Each lane has a tight charter and produces a structured report at a predictable path. Wave 1 never writes outside `docs/audits/2026-05-15-cleanup/`.
+Many Explore subagents dispatched in a single message. Each lane has a tight charter and produces a structured findings block. Wave 1 never writes outside `docs/audits/2026-05-15-cleanup/`. **Important:** Explore subagents are read-only and cannot Write files. Lanes return findings as text in their subagent reply; the **main agent** persists each lane's output to `docs/audits/2026-05-15-cleanup/<lane-slug>.md` after the subagent returns.
 
 ### Wave 2 — Cleanup (gated on user triage)
 
@@ -33,43 +36,84 @@ Only after user approves a prioritized backlog. Each approved item becomes eithe
 
 **Hard gate:** Wave 2 does NOT auto-execute. User triages, picks scope, then approves.
 
+## Pre-Dispatch Verification (run before Wave 1)
+
+Spec numbers and file lists drift between writing and dispatch. Before dispatching Wave 1, the orchestrating session **must** re-baseline these counts and pin literal file lists into the dispatch prompts. Lane charters reference quantities (LOC, file counts, suppression counts) that are snapshots — they may be stale by the time dispatch happens.
+
+Run these greps from `/Users/jasonli/switchboard` and record results in `docs/audits/2026-05-15-cleanup/_pre-dispatch.md`:
+
+```bash
+# Lane 6 — current .ts/.tsx/.css files >400 LOC
+find packages apps -name '*.ts' -o -name '*.tsx' -o -name '*.css' \
+  -o -name '*.module.css' | grep -v node_modules | grep -v dist | grep -v '.next/' \
+  | xargs wc -l 2>/dev/null | awk '$1 > 400' | sort -rn
+
+# Lane 7 — current type-suppression count, dashboard product code only
+rg -c '@ts-ignore|@ts-expect-error|\bas any\b|: any\b' \
+  apps/dashboard/src --type ts --type tsx 2>/dev/null
+
+# Lane 13 — current nullable organizationId count
+rg 'organizationId\s+String\?' packages/db/prisma/schema.prisma -c
+
+# Lane 17 — current Inngest function inventory
+rg -l 'createFunction\(' --type ts packages apps
+
+# Exclusion-mask — pin per active branch
+for b in docs/local-readiness-spec docs/local-readiness-plan; do
+  echo "== $b ==" >> _pre-dispatch.md
+  git diff main...origin/$b --name-only >> _pre-dispatch.md
+done
+```
+
+Lane charters that include numeric assertions ("~264 instances", "6 files >400 LOC") are starting hints; the dispatched subagent measures and reports actual numbers.
+
 ## Wave 1 Lanes (20 total, 2 deferred at start)
 
-Each lane is run by an Explore subagent. Output goes to `docs/audits/2026-05-15-cleanup/<lane-slug>.md`.
+Each lane is run by an Explore subagent. Output is captured by the main agent and persisted to `docs/audits/2026-05-15-cleanup/<lane-slug>.md`.
 
 ### Architecture & invariants
 
 1. **doctrine-compliance** — PlatformIngress as sole mutating entry, WorkTrace as canonical persistence, approval as lifecycle state, no bypass paths. Uses `.agent/skills/architecture-audit` playbook.
-2. **layer-hygiene** — `schemas → sdk/cartridge-sdk/creative-pipeline/ad-optimizer → core → db → apps`; flag circular deps, wrong-layer imports, barrel files with >40 exports.
+2. **layer-hygiene** — `schemas → sdk/cartridge-sdk/creative-pipeline/ad-optimizer → core → db → apps`; flag wrong-layer imports, barrel files with >40 exports. **Delta against** `docs/superpowers/specs/2026-05-13-circular-import-cleanup-design.md` and its plan — that work is authoritative for circular deps; this lane reports only NEW or REGRESSED ones.
 3. **route-chain-integrity** — button → API route → store reachability. Uses `.agent/skills/route-chain-audit` + `.agent/tools/check-routes`.
 4. **surface-agnostic-backend** — `packages/core`, `packages/schemas`, `packages/db`, `packages/ad-optimizer` free of UI surface references (per `feedback_surface_agnostic_backend`).
-5. **cartridge-sdk-removal-readiness** — `packages/cartridge-sdk` is marked pending removal in `CLAUDE.md`. Enumerate live import sites (~245 references across the repo per scout), classify into hard blockers (core uses) vs trivial migrations (test-only, dead exports), and identify what must land before deletion is safe. Output: wind-down inventory + suggested removal order.
+5. **cartridge-sdk-removal-readiness** — `packages/cartridge-sdk` is marked pending removal in `CLAUDE.md`. Enumerate live import sites, classify into hard blockers (core uses) vs trivial migrations (test-only, dead exports), and identify what must land before deletion is safe. Output: wind-down inventory + suggested removal order.
 
 ### Code health
 
-6. **file-size-splits** — `.ts` files >400 (warn) / >600 (error). **Also** sweep `.tsx` and `.css` since `arch-check` ignores them (per `feedback_arch_check_ts_only`). Known offenders to confirm: dashboard `.module.css` files (`reports`, `activity`, `pipeline`, `detail`, `contact-detail`, `landing` — six files >400 LOC); `packages/db/prisma/seed-marketplace.ts` (972 LOC); `packages/core/src/orchestrator/propose-pipeline.ts` (818 LOC); `apps/api/src/app.ts` (815 LOC).
-7. **type-safety** — `any` leaks across both `.ts` AND `.tsx` (excluding documented exceptions in `apps/api` and `auth.ts`), unsafe `as` casts, `@ts-ignore` / `@ts-expect-error` suppressions in dashboard `.tsx` (~264 instances reported by scout), missing null guards, types in `apps/*` that should live in `@switchboard/schemas`.
-8. **dead-code** — orphan files, unreferenced exports, never-imported routes, stale feature flags, unused dependencies in `package.json`. **Required sub-audit:** enumerate every Store class exported from `packages/db/src/storage/` (approval, competence, connection, envelope, governance-profile, identity, ledger, lifecycle, pause, policy, risk-posture, role-override, run, session, tool-event — 15 stores) and verify each has ≥1 external caller. Zero-caller stores are HIGH-severity dead code.
-9. **lint-debt** — `console.log` slips, `_`-prefixed escapes that mask real bugs, prettier drift (run `pnpm format:check` to enumerate), `.js` extension issues (extra in dashboard imports, missing elsewhere — per `feedback_dashboard_no_js_on_any_import`). Scope explicitly covers `.ts`, `.tsx`, `.mjs`, `.cjs`.
+6. **file-size-splits** — `.ts` files >400 (warn) / >600 (error). **Also** sweep `.tsx` and `.css` since `arch-check` ignores them (per `feedback_arch_check_ts_only`). Known starting points (verify against the pre-dispatch baseline — these are snapshots, not gospel): `reports.module.css` (~1350), `activity.module.css` (~940), `pipeline.module.css` (~565), `detail.module.css` (~520) in dashboard Mercury surfaces; `packages/db/prisma/seed-marketplace.ts` (972 LOC); `packages/core/src/orchestrator/propose-pipeline.ts` (818 LOC); `apps/api/src/app.ts` (815 LOC). Subagent enumerates final list from the pre-dispatch baseline.
+7. **type-safety** — `any` leaks across BOTH `.ts` and `.tsx` (excluding documented exceptions in `apps/api` and `auth.ts`), unsafe `as` casts, `@ts-ignore` / `@ts-expect-error` suppressions, missing null guards, types in `apps/*` that should live in `@switchboard/schemas`. Count comes from the pre-dispatch baseline; do NOT trust the initial scout estimate — measure fresh against `apps/dashboard/src/**/*.{ts,tsx}` plus other app directories.
+8. **dead-code** — orphan files, unreferenced exports, never-imported routes, stale feature flags, unused dependencies in `package.json`. **Required sub-audits (return as separate sub-sections in the report):**
+   - (a) **Store call-site audit:** enumerate every Store class exported from `packages/db/src/storage/` (approval, competence, connection, envelope, governance-profile, identity, ledger, lifecycle, pause, policy, risk-posture, role-override, run, session, tool-event — 15 stores). Verify each has ≥1 external caller. Zero-caller stores are HIGH-severity dead code.
+   - (b) **General orphan sweep:** unreferenced exports across `packages/`, dead handler files, removed-feature debris. Lower signal-to-noise; surface only HIGH or above unless count is small.
+   - Delta against `.audit/08-launch-blocker-sequence.md` "Orphaned Stores in db layer" entry.
+9. **lint-debt** — `console.log` slips, `_`-prefixed escapes that mask real bugs, prettier drift (run `pnpm format:check` to enumerate). **`.js` extension rule (per `feedback_dashboard_no_js_on_any_import`):** dashboard imports MUST omit `.js`; all other packages MUST include `.js` (ESM requirement). Flag violations in either direction. Scope: `.ts`, `.tsx`, `.mjs`, `.cjs`.
 
 ### Tests
 
 10. **coverage-vs-threshold** — global `55/50/52/55` (statements/branches/functions/lines), core `65/65/70/65`. Confirmed exact in `vitest.config.ts` files. Flag packages drifting below or above without threshold update.
 11. **missing-co-located-tests** — new modules without sibling `*.test.ts` (CLAUDE.md rule).
-12. **test-stability-inventory** — enumerate every `.skip` / `.skipIf` / `.todo` / `it.skip` / `describe.skip` across all test files. Flag known-flake suites from auto-memory (`prisma-work-trace-store-integrity`, `prisma-greeting-signal-store`, `prisma-ledger-storage`). Triage each into "quarantine OK", "needs fix", or "delete". This lane does NOT fix — it inventories.
+12. **test-stability-inventory** — enumerate every `.skip` / `.skipIf` / `.todo` / `it.skip` / `describe.skip` across all test files. Flag known-flake suites from auto-memory (`prisma-work-trace-store-integrity`, `prisma-greeting-signal-store`, `prisma-ledger-storage`). Triage each into "quarantine OK", "needs fix", or "delete." This lane does NOT fix — it inventories.
 
 ### Data & API
 
 13. **prisma-hygiene** — migration drift (`pnpm db:check-drift` if Postgres reachable), missing indexes, N+1 includes, raw SQL audit, encryption boundary checks. **Required sub-audits:**
     - Enumerate every `@@index` / `@@unique` name in `schema.prisma`; flag any whose pre-truncation name exceeds 63 chars (per `feedback_prisma_index_name_63_char_limit`); propose canonical Prisma-truncated replacements.
-    - Audit all tenant-scoped models for nullable `organizationId String?` (TI-9 in `.audit/12-pre-launch-security-audit.md` flags 11 such models as orphan-row risk). Output: model-by-model list with current nullability + recommended migration.
+    - **Re-verify** every nullable `organizationId String?` against the original TI-9 list in `.audit/12-pre-launch-security-audit.md` (which named 11 models — current count may differ; report actual). For each currently-nullable case, classify: orphan-row risk vs intentional null (e.g., system-owned rows). Delta-style report.
 14. **api-consistency** — error shape, idempotency keys, audit-trail coverage on mutating routes, auth guards. **Required sub-audit:** for high-risk shared types (`ConversationState`, `ApprovalRecord`, `Handoff`, and any approval/lifecycle DTO), grep `apps/api`, `apps/dashboard`, `apps/chat` for local re-declarations that shadow `@switchboard/schemas` exports — these are contract-drift bombs.
 15. **fixture-schema-alignment** — `packages/db/prisma/seed-marketplace.ts` (972 LOC), `seed.ts`, and other fixture files are static demo data and drift silently. Verify: (a) seed runs against current schema without errors; (b) demo agent slugs/names align with canonical Alex/Riley/Mira (per `project_canonical_agent_names` — no lingering `nova`/`jordan`); (c) fixture data doesn't reference removed columns or stale enums.
 
 ### Security & infra
 
 16. **security-sweep-delta** — **DELTA against `.audit/12-pre-launch-security-audit.md`**, not a from-scratch audit. For each finding in that document, classify as: FIXED (cite commit/PR), STILL-OPEN (cite current evidence), REGRESSED (was fixed, now broken), or NEW (issue not in original audit). Out of scope: re-running OWASP top-10 — that document is authoritative for the original sweep. Also runs `pnpm audit` for CVE deltas since the audit was written.
-17. **deploy-infra-parity** — Vercel envs vs `.env.example`, Render config in `infra/`, Sentry coverage gaps, cron registration (Riley emitter, etc.). **Required sub-audit:** enumerate every Inngest function in `apps/api/src/bootstrap/inngest.ts` (654 LOC); verify each has `onFailure` and a DLQ path (launch-blocker #18 flags creative-pipeline as `retries: 3` with no DLQ handler — confirm whether resolved). BullMQ queues if any: same treatment.
+17. **deploy-infra-parity** — Vercel envs vs `.env.example`, Render config in `infra/`, Sentry coverage gaps, cron registration (Riley emitter, etc.). **Inngest function inventory + DLQ verification:** the registration site `apps/api/src/bootstrap/inngest.ts` is the index — the actual function bodies live across these packages:
+    - `apps/api/src/services/cron/` (lead-retry, reconciliation, meta-token-refresh, lifecycle-stalled-sweep, pcd-registry-backfill, plus any others)
+    - `packages/creative-pipeline/src/` (creative-job-runner, mode-dispatcher, ugc/ugc-job-runner)
+    - `packages/ad-optimizer/src/inngest-functions.ts`
+    - `packages/core/src/skill-runtime/batch-executor-function.ts`
+    - Discover any others via `rg -l 'createFunction\(' --type ts packages apps`.
+
+    For each function: verify `onFailure` handler + DLQ path. **Delta against** `.audit/08-launch-blocker-sequence.md` launch-blocker #18 (creative-pipeline `retries: 3` with no DLQ) — confirm whether resolved.
 
 ### Docs & memory
 
@@ -79,26 +123,45 @@ Each lane is run by an Explore subagent. Output goes to `docs/audits/2026-05-15-
 
 The following two lanes are **intentionally deferred** because they would collide with currently active parallel work:
 
-- **ci-gate-gaps** — overlaps directly with the in-flight local-readiness PR-1 work. The spec/plan are still being authored on `docs/local-readiness-spec` and `docs/local-readiness-plan`. Re-enable after local-readiness PR-1 merges.
-- **spec-plan-rot** — Riley/Alex/local-readiness specs and plans are being actively edited. Stale-detection would produce false positives. Re-enable after all named workstreams merge.
+- **ci-gate-gaps** — overlaps directly with the in-flight local-readiness PR-1 work. Re-enable after local-readiness PR-1 merges, **or by 2026-05-29** (two weeks from spec date) with the local-readiness branches added to the exclusion mask if they have not yet merged. Whichever comes first.
+- **spec-plan-rot** — Riley/Alex/local-readiness specs and plans are being actively edited. Re-enable after all named workstreams merge, **or by 2026-05-29** with a narrower scope (exclude `docs/superpowers/{specs,plans}/2026-05-1*` from rot detection if branches still unmerged).
 
-Synthesis step records these as "deferred — re-run after merges" so the backlog stays honest.
+Synthesis step records these as "deferred — re-run after merges or by 2026-05-29" so the backlog stays honest.
 
-## Per-Lane Output Schema
+## Explore Subagent Charter Template
 
-Each lane writes one markdown file with this structure:
+When dispatching each lane, the main agent uses this exact prompt skeleton. This ensures consistent output and explicit I/O contract:
 
-```markdown
-# <lane-name>
+```
+You are an Explore subagent dispatched as one lane of a parallel
+architecture/codebase audit for the Switchboard monorepo at
+/Users/jasonli/switchboard.
+
+## Your lane
+
+Name: <lane-slug>
+Charter: <one-paragraph charter from the spec, copied verbatim>
+Method hints: <suggested greps, file globs, tools — non-binding>
+Scope exclusions: <exclusion mask paths — do not edit these even
+if you find issues, just tag findings with Collides:yes>
+Existing-audit deltas: <pointers to existing audit files this lane
+must delta against, if any>
+
+## What to return
+
+Return ONE markdown block in your reply matching this schema EXACTLY.
+Do NOT write any files — you are read-only. The main agent will
+persist your output.
+
+# <lane-slug>
 
 **Charter:** <one sentence>
-**Method:** <globs, greps, tools used — keep terse>
-**Scope exclusions applied:** <see "Exclusion Masks" below>
+**Method:** <what you actually did — globs, greps, tools used — keep terse>
+**Scope exclusions applied:** <list>
 
 ## Findings
 
 ### [SEV] <short-title>
-
 - **Where:** <file:line>, <file:line>
 - **Evidence:** <quote, count, or pattern — verbatim>
 - **Why it matters:** <invariant / memory entry / doctrine rule violated>
@@ -107,9 +170,16 @@ Each lane writes one markdown file with this structure:
 - **Risk if untouched:** <one line>
 - **Collides with active work?:** <yes/no — if yes, name the branch>
 
-## Out of scope / deferred for this lane
+(repeat per finding, sorted CRITICAL → HIGH → MED → LOW)
 
+## Out of scope / deferred for this lane
 - <notes>
+
+## Token-cap note
+If you have more than 150 findings, keep ALL CRITICAL and HIGH in the
+main Findings list; move MED and LOW into an "## Overflow (truncated
+to file:line)" section, ordered by file path. Never drop CRITICAL or
+HIGH.
 ```
 
 **Severity ladder:**
@@ -121,27 +191,30 @@ Each lane writes one markdown file with this structure:
 
 ## Exclusion Masks (Wave 1 advisory, Wave 2 enforced)
 
-Before dispatching Wave 1, compute and pin these mask files using `git diff main...origin/<branch> --name-only`:
+Computed during Pre-Dispatch Verification by running `git diff main...origin/<branch> --name-only` against each active branch. Active branches at spec date:
 
-- `packages/core/src/**/riley*` (4 files confirmed — `metrics-riley.ts`, `pipeline-riley.ts`, plus tests)
+- `docs/local-readiness-spec`, `docs/local-readiness-plan` (specs/plans only, no code)
+- Riley Wave B branches: re-check at dispatch; if empty-diff vs main, treat as merged and **drop from mask**
+
+Plus these always-excluded paths regardless of branch state (they're either shared infra or actively-edited zones):
+
+- `packages/core/src/**/riley*` (4 files: `metrics-riley.ts`, `pipeline-riley.ts`, plus tests)
 - `packages/core/src/**/recommendation*` and `packages/core/src/recommendations/**`
 - `packages/schemas/src/recommendation*`
-- WorkTrace mirror paths in `packages/db` and `packages/core` (resolve precise paths via `git diff main...origin/feat/riley-wave-b-pr1-followup --name-only` at dispatch time)
+- WorkTrace mirror paths in `packages/db` and `packages/core` (resolve precise paths via `rg -l WorkTrace` at dispatch time)
 - `.github/workflows/**`
 - Root `package.json` scripts, `turbo.json`, `pnpm-workspace.yaml`
 - `.husky/**`
 - `apps/dashboard/next.config.mjs`
 - `.env.example`
-- `docs/superpowers/specs/2026-05-1*`, `docs/superpowers/plans/2026-05-1*`
-
-Note: there is **no** `apps/dashboard/src/app/riley/` route directory — Riley is currently a packages/core feature, not a dashboard route. Earlier draft of this spec incorrectly listed it.
+- Specs/plans dated within 14 days of spec date: `docs/superpowers/specs/2026-05-{15,16,17,18,19,20,21,22,23,24,25,26,27,28}*` and the same for `plans/`. Narrow at dispatch.
 
 Wave 1 lanes still **report** findings inside these paths (so we know what's there) but tag them `Collides with active work?: yes (<branch>)`. Wave 2 **skips** these paths entirely unless their branches have merged by then.
 
 ## Synthesis (main agent, after lanes return)
 
-1. Read all reports from `docs/audits/2026-05-15-cleanup/<lane>.md`.
-2. Dedupe overlapping findings (file-size + barrel-file + dead-code tend to collide; cartridge-sdk-removal-readiness will overlap dead-code).
+1. Persist each lane's returned markdown block to `docs/audits/2026-05-15-cleanup/<lane>.md`.
+2. Dedupe overlapping findings (file-size + barrel-file + dead-code tend to collide; cartridge-sdk-removal-readiness will overlap dead-code; security-sweep-delta may overlap api-consistency on auth findings).
 3. Verify each finding's evidence still matches HEAD — flag stale items, do not auto-fix.
 4. Produce `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit.md` (the **synthesis doc**, not this design doc) containing:
    - Top 10 by impact (CRITICAL/HIGH first).
@@ -170,8 +243,8 @@ Excludes everything in the mask. User can pre-authorize this OR review the diff 
 
 For each approved item:
 
-1. New worktree off `main`: `git worktree add ../switchboard-<slug>` + `pnpm worktree:init`.
-2. Brainstorm → spec → plan only if effort = `L` or fix is "needs design".
+1. **New worktree** at `.claude/worktrees/<slug>` (matches the convention already in use elsewhere in the repo): `git worktree add .claude/worktrees/<slug>` + `pnpm worktree:init` from inside the new worktree.
+2. Brainstorm → spec → plan only if effort = `L` or fix is "needs design."
 3. Dispatch via `subagent-driven-development`.
 4. Each PR: targeted fix + tests + `pnpm typecheck` + `pnpm --filter @switchboard/dashboard build` if dashboard touched + `pnpm format:check`.
 5. Verify branch context (`git branch --show-current`) before commit (per CLAUDE.md).
@@ -180,9 +253,9 @@ If a fix's file list intersects the exclusion mask, **do not start it** — wait
 
 ## Guardrails
 
-- **Read-only Wave 1.** Lanes use `subagent_type: "Explore"` — no Edit/Write available.
-- **Resumability.** Each lane writes its raw report independently. Failure of one lane doesn't tank the run.
-- **Token budget.** Reports cap at ~150 findings per lane; overflow goes to a `## Overflow (truncated)` section listing only file:line.
+- **Read-only Wave 1.** Lanes use `subagent_type: "Explore"` — no Edit/Write available. Main agent persists outputs.
+- **Resumability.** Each lane's output is independent. Failure of one lane doesn't tank the run.
+- **Token budget with severity preservation.** Per-lane main report caps at ~150 findings. Overflow into a `## Overflow (truncated to file:line)` section keeps ONLY MED/LOW; CRITICAL and HIGH are always retained in full form regardless of count.
 - **Memory advisory only.** Auto-memory entries in `MEMORY.md` are treated as advisory during the run — they may be edited by other Claude sessions in parallel. Synthesis step does not write to memory.
 - **Hard gate on Wave 2.** No autonomous cleanup. User approval required per item or per group.
 
@@ -192,13 +265,25 @@ If a fix's file list intersects the exclusion mask, **do not start it** — wait
 - **Lane collisions on shared infra.** `pnpm audit`, `pnpm db:check-drift`, and `.agent/tools/check-routes` each may briefly hold local resources. Lanes invoke them serially within their own subprocess — no cross-lane locking needed because each subagent has its own working state.
 - **Dependabot PR noise.** ~20 open dependabot PRs. The `dead-code` and `lint-debt` lanes ignore them; the `security-sweep-delta` lane summarizes them under "Dependency upgrades pending" rather than auditing each.
 - **Cartridge-sdk lane collides with dead-code lane.** Both will flag cartridge-sdk dead exports. Synthesis dedupes; cartridge-sdk-removal-readiness lane is authoritative for the wind-down plan.
+- **Drifting numeric assertions.** Lane charters that cite counts (LOC, suppression counts, function counts) are snapshots. The Pre-Dispatch Verification step re-baselines these; the dispatched subagent always measures fresh and reports the actual number.
 
 ## Success Criteria
 
-- 18 of 20 lanes complete with structured reports at `docs/audits/2026-05-15-cleanup/<lane>.md` (2 deferred by design).
+- 18 active lanes complete with structured reports persisted to `docs/audits/2026-05-15-cleanup/<lane>.md`.
+- 2 deferred lanes (`ci-gate-gaps`, `spec-plan-rot`) recorded as deferred with re-run date 2026-05-29.
 - Synthesis doc at `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit.md` with ranked backlog.
 - Zero collisions with the named in-flight branches (no edits to masked paths during the audit).
 - User has a clear, triaged list to pick from for Wave 2.
+
+## Re-run Cadence
+
+This audit captures a snapshot. Re-run when any of these signals fires:
+
+- Quarterly default — pick up new debt before it compounds.
+- `arch-check` CI starts failing on layer-hygiene or file-size regressions.
+- Prisma drift surfaces in production.
+- A new launch-blocker entry appears in `.audit/`.
+- Any of the three deltas-against-existing-audits documents (security audit, circular-import spec, launch-blocker sequence) gets a major revision.
 
 ## Next Step
 
