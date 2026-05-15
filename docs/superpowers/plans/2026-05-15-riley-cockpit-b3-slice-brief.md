@@ -126,23 +126,32 @@ The catalog ships as typed data only — no consumer wires it in this slice. The
 
 ### Dashboard — Riley voice consumption in `RileyCockpitPage`
 
-`useRecommendationAction(id)` is keyed by recommendation id, so multi-card scenarios (which B.1 supports per its acceptance criterion #3, "Approval cards stack with `urgency = immediate` first…") require **per-row hook binding**, not a single page-level hook call. B.3 introduces a tiny `<RileyApprovalRow>` wrapper inside `riley-cockpit-page.tsx` that owns one `useRecommendationAction(approval.id)` and one `useToast()`-bound `onResolve`. The page maps `approvals` to a list of these wrappers inside a flex container that inlines the same gap + margin layout `<ApprovalBlock>` provides. Alex's page continues to use `<ApprovalBlock>` unchanged.
+`useRecommendationAction(id)` is keyed by recommendation id, so multi-card scenarios (which B.1 supports per its acceptance criterion #3, "Approval cards stack with `urgency = immediate` first…") require **per-row hook binding**, not a single page-level hook call. B.3 introduces a tiny `<RileyApprovalRow>` wrapper inside `riley-cockpit-page.tsx` that owns one `useRecommendationAction(approval.id)` and one `useToast()`-bound `onResolve`. The page maps `approvals` to a list of these wrappers inside a flex container that inlines the same gap + margin layout `<ApprovalBlock>` provides. Alex's page continues to use `<ApprovalBlock>` unchanged — its API is **not** extended in this slice.
+
+The wrapper enforces three behaviors:
+
+1. **Success-only toast.** Resolution uses `promise.then(...)`, not `promise.finally(...)`. A failed `primary()` / `dismiss()` must not produce a success-sounding toast like "Paused Cold Interests" if the action actually failed. Errors surface through TanStack Query's `error` state on `useRecommendationAction`; B.3 does not add error toasts.
+2. **External primary actions open the Meta URL and stop.** When `approval.primaryAction.kind === "external"`, the accept click opens `approval.primaryAction.url` in a new tab via `window.open(url, "_blank", "noopener,noreferrer")`. No `useRecommendationAction.primary()` call. No toast. The new tab opening is the visible confirmation. This covers `review_budget`, `fix_signal_health`, `harden_capi_attribution`.
+3. **Decline always dispatches.** The decline path is identical for internal and external action kinds: call `action.dismiss()` and fire `rileyToast({ verdict: "decline", approval })`.
 
 | Change | Today (`apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`) | After B.3 |
 |---|---|---|
-| `onResolve` callback | No-op stub at lines 43-45. | Per-row wrapper. Each `<RileyApprovalRow>` calls `useRecommendationAction(approval.id).primary()` on accept or `.dismiss()` on decline; settled success fires `useToast().toast(rileyToast({ verdict, approval }))`. The wrapper keys each hook to the row's `approval.id`, so the multi-card invariant holds. |
+| `onResolve` callback | No-op stub at lines 43-45. | Per-row wrapper. Internal accept → `action.primary().then(toast)`. External accept → `window.open(primaryAction.url, …)` only. Decline (always) → `action.dismiss().then(toast)`. The wrapper keys each hook to the row's `approval.id`, so the multi-card invariant holds. |
 | `<ApprovalCard>` accent | Renders Alex amber + "Alex needs you" eyebrow. | Wrapper passes `accent={RILEY_APPROVAL_ACCENT}` and `senderLabel="Riley needs you"`. |
-| `<ApprovalBlock>` use on `/riley` | B.1 wraps approvals via `<ApprovalBlock>`. | Riley page maps approvals directly to `<RileyApprovalRow>` (which renders `<ApprovalCard>` internally). `<ApprovalBlock>` stays in the codebase for Alex; Task 6's pass-through props (`accent` / `senderLabel`) remain in place for future Alex theming. |
+| `<ApprovalBlock>` use on `/riley` | B.1 wraps approvals via `<ApprovalBlock>`. | Riley page maps approvals directly to `<RileyApprovalRow>` (which renders `<ApprovalCard>` internally). `<ApprovalBlock>` stays in the codebase for Alex unchanged. The `<ApprovalBlock>` API is **not** extended — pass-through props can be added later if Alex needs theming, but B.3 does not need them. |
 | `<ComposerPlaceholder>` props | `halted={haltCtx.halted}` only. | Adds `senderLabel="RILEY"`, `placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}`, `accentColor={RILEY_ACCENT.deep}`. |
 | `<StatusPill>` props | Today the pill is rendered inside `<Identity>` which already wraps `StatusPill`; B.3 plumbs the per-agent color/pulse functions through `<Identity>` to `<StatusPill>`. | Riley page passes Riley `statusColor` + `statusPulse` via Identity's new optional props. Alex page omits → defaults apply. |
 
-The B.1 cockpit-status integration test (`apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`) gains a `describe("RileyCockpitPage — B.3 voice + accent", …)` block:
+The B.1 cockpit-status integration test (`apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`) gains a `describe("RileyCockpitPage — B.3 voice + accent", …)` block (8 new cases):
 
-- An accept test (mock `useRecommendationAction` + `useToast`; click rec-1's primary; verify `primary()` is called on rec-1's hook and `toast({ title: rec.acceptToast })`).
-- A decline test (click rec-1's secondary button; assert `dismiss()` on rec-1's hook + `toast({ title: rec.declineToast })`).
-- A **per-row binding test** with two approvals in the fixture: click rec-2's primary button → expect `primary()` to fire on rec-2's hook, **not** rec-1's. This is the test that proves the per-row wrapper pattern.
-- A fallback test (toast copy when engine emits no `acceptToast`/`declineToast`).
-- A Riley-eyebrow test — every approval card in a multi-card render shows `"Riley needs you"`.
+- **Internal accept** — click rec-1's primary; verify `primary()` is called on rec-1's hook and `toast({ title: rec.acceptToast })`.
+- **Internal decline** — click rec-1's secondary button; assert `dismiss()` on rec-1's hook + `toast({ title: rec.declineToast })`.
+- **Per-row binding** — multi-card fixture, click rec-2's primary → expect `primary()` to fire on rec-2's hook, not rec-1's. Proves the per-row wrapper pattern.
+- **Fallback toast** — toast copy when engine emits no `acceptToast`/`declineToast` falls back to `rileyToast()` per-kind line.
+- **Eyebrow** — every approval card in a multi-card render shows `"Riley needs you"`.
+- **External primary opens URL, no mutation, no toast** — fixture with `primaryAction.kind === "external"`; click primary; `window.open` spy receives the Meta URL with `_blank` + `noopener,noreferrer`; `actionCalls` stays empty; `toast` never called.
+- **External decline still dismisses and toasts** — same external fixture; click secondary; assert `dismiss()` is called and decline toast fires.
+- **Success-only suppression** — `primary()` rejects; assert `toast` is **not** called. Guards against `.finally()` regression.
 
 ### Tests added (summary)
 
@@ -155,7 +164,7 @@ The B.1 cockpit-status integration test (`apps/dashboard/src/components/cockpit/
 | `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Default-accent + custom-accent rendering; default-senderLabel + custom-senderLabel rendering. Existing Alex cases stay green (defaults). |
 | `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx` | Default-sender + Riley-sender rendering; placeholder copy override; halt copy unchanged. |
 | `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx` | Custom `colorFor`/`pulseFor` overrides; default behavior unchanged. |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Accept → `primary()` on the clicked row's hook + accept toast; decline → `dismiss()` on the clicked row's hook + decline toast; per-row binding (clicking rec-2's primary calls rec-2's hook, not rec-1's); engine-empty → fallback toast; "Riley needs you" eyebrow on every card. |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | 8 cases — internal accept/decline with engine toasts; per-row binding (rec-2 primary calls rec-2's hook); engine-empty fallback; "Riley needs you" eyebrow on every card; external primary opens URL with no mutation and no toast; external decline still dismisses + toasts; success-only suppression (rejected mutation produces no toast). |
 
 ### No changes to
 

@@ -98,16 +98,14 @@ Expected: all green. If any fail on `main`, fix or escalate before adding new co
 | `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts` | Add cases locking `RILEY_COMPOSER_PLACEHOLDER` and `RILEY_COMMANDS`. | Coverage. |
 | `apps/dashboard/src/components/cockpit/approval-card.tsx` | Add optional `accent?: { base; deep; soft; paper }` (default = Alex amber tokens from `T`) and `senderLabel?: string` (default `"Alex needs you"`). Use accent for eyebrow color, card background, border. | Riley accent. |
 | `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Add 4 cases: default-accent renders Alex amber; custom accent renders Riley clay; default sender renders "Alex needs you"; custom sender renders "Riley needs you". | Coverage. |
-| `apps/dashboard/src/components/cockpit/approval-block.tsx` | Forward `accent` + `senderLabel` from `ApprovalBlockProps` to each `<ApprovalCard>`. | Plumbing only — no decisions. |
-| `apps/dashboard/src/components/cockpit/__tests__/approval-block.test.tsx` | Add 1 case asserting accent/senderLabel pass-through to children. | Coverage. |
 | `apps/dashboard/src/components/cockpit/composer-placeholder.tsx` | Add optional `senderLabel?: string` (default `"ALEX"`), `placeholderCopy?: string` (default current "Tell Alex what to do — coming soon"), `accentColor?: string` (default `T.ink4`). Use accent for sender label color. | Riley composer chrome. |
 | `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx` | Add 3 cases: default-sender + default-copy, override-sender + override-copy, halted-with-override-copy stays halted-copy. | Coverage. |
 | `apps/dashboard/src/components/cockpit/status-pill.tsx` | Add optional `colorFor?: (s: CockpitStatus, halted: boolean) => string` + `pulseFor?: (s: CockpitStatus, halted: boolean) => boolean`. Defaults to the existing `alex-config` imports. | Riley status colors. |
 | `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx` | Add 2 cases: default behavior unchanged; custom `colorFor` + `pulseFor` overrides reach the rendered `<Dot>`. | Coverage. |
 | `apps/dashboard/src/components/cockpit/identity.tsx` | Forward optional `colorFor` + `pulseFor` props through to `<StatusPill>`. Pass-through only. | Plumbing. |
 | `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx` | Add 1 case asserting `colorFor` / `pulseFor` reach `StatusPill`. | Coverage. |
-| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Replace the B.1 no-op `onResolve` with real wiring: `useRecommendationAction(approval.id).primary()` on accept, `.dismiss()` on decline; on settled success, `useToast().toast(rileyToast({ verdict, approval }))`. Pass `accent={RILEY_ACCENT}` + `senderLabel="Riley needs you"` to `<ApprovalBlock>`. Pass `senderLabel="RILEY"`, `placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}`, `accentColor={RILEY_ACCENT.deep}` to `<ComposerPlaceholder>`. Pass `colorFor={statusColor}` + `pulseFor={statusPulse}` (from `riley-config`) through `<Identity>` to `<StatusPill>`. | The page is the only Riley-specific consumer of accent + voice. |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add 5 cases: accept fires `primary()` + accept-toast title; decline fires `dismiss()` + decline-toast title; engine-empty falls back to per-kind toast; eyebrow reads "Riley needs you"; status `Dot` receives Riley `WAITING` color. | Page-level integration. |
+| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Introduce a per-row `<RileyApprovalRow>` wrapper that owns `useRecommendationAction(approval.id)` + `useToast()`. The wrapper's `onResolve` (a) opens `primaryAction.url` in a new tab on external accept (no mutation, no toast), (b) calls `action.primary()` then `toast(rileyToast(...))` on internal accept, (c) calls `action.dismiss()` then `toast(rileyToast(...))` on decline regardless of action kind. Toast uses `.then()` not `.finally()` (success-only). The page bypasses `<ApprovalBlock>` and maps approvals directly to a list of `<RileyApprovalRow>` inside a flex container inlining `<ApprovalBlock>`'s gap + margin. The wrapper passes `accent={RILEY_APPROVAL_ACCENT}` + `senderLabel="Riley needs you"` to `<ApprovalCard>`. Page also passes `senderLabel="RILEY"`, `placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}`, `accentColor={RILEY_ACCENT.deep}` to `<ComposerPlaceholder>` and `colorFor={statusColor}` + `pulseFor={statusPulse}` through `<Identity>` to `<StatusPill>`. | The page is the only Riley-specific consumer of accent + voice. |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add 8 cases — internal accept/decline → action hook + engine toasts; per-row binding (rec-2 primary → rec-2's hook, not rec-1's); engine-empty → per-kind fallback; "Riley needs you" eyebrow on every card; external primary opens URL with no `primary()` call and no toast; external decline still calls `dismiss()` + decline toast; rejected mutation suppresses the toast (success-only). | Page-level integration. |
 
 ### Files explicitly NOT modified
 
@@ -128,7 +126,7 @@ Expected: all green. If any fail on `main`, fix or escalate before adding new co
 
 B.3 adds **zero** new imports of `Recommendation` / `AuditEntry` / `@switchboard/db` / `@prisma` / `@switchboard/schemas/recommendations` / `@switchboard/schemas/audit` under `apps/dashboard/src/components/cockpit/**` or `apps/dashboard/src/hooks/use-riley-*.ts`. The new `riley-toast.ts` lives in `apps/dashboard/src/lib/cockpit/riley/**` (the adapter layer) and imports only `RileyApprovalView` from `@/components/cockpit/types`. `useRecommendationAction` is exempt — it consumes the wire `/api/dashboard/recommendations` endpoint, not Prisma.
 
-Pre-merge grep gate (Task 13):
+Pre-merge grep gate (Task 11):
 
 ```bash
 rg "Recommendation|AuditEntry|@switchboard/db|@prisma" \
@@ -932,108 +930,7 @@ git commit -m "feat(cockpit): ApprovalCard accent + senderLabel props (B.3 prep)
 
 ---
 
-### Task 6: Forward `accent` + `senderLabel` through `<ApprovalBlock>`
-
-**Files:**
-- Modify: `apps/dashboard/src/components/cockpit/approval-block.tsx`
-- Test: `apps/dashboard/src/components/cockpit/__tests__/approval-block.test.tsx`
-
-- [ ] **Step 1: Write the failing test.**
-
-Append to `apps/dashboard/src/components/cockpit/__tests__/approval-block.test.tsx`:
-
-```tsx
-  it("forwards accent and senderLabel to each ApprovalCard", () => {
-    const accent = { base: "#B86C50", deep: "#7E4533", soft: "#ECD4C8", paper: "#F6E7DE" };
-    const data: ApprovalView[] = [makeAlexApprovalFixture(), makeAlexApprovalFixture()];
-    const { container } = render(
-      <ApprovalBlock data={data} onResolve={() => {}} accent={accent} senderLabel="Riley needs you" />,
-    );
-    const eyebrows = container.querySelectorAll('span[style*="0.14em"]');
-    expect(eyebrows.length).toBeGreaterThanOrEqual(2);
-    eyebrows.forEach((e) => {
-      expect((e as HTMLElement).textContent).toContain("Riley needs you");
-    });
-  });
-```
-
-- [ ] **Step 2: Run the test and verify it fails.**
-
-```bash
-pnpm --filter @switchboard/dashboard test -- --run approval-block
-```
-
-Expected: failure — `accent` / `senderLabel` unknown on `ApprovalBlockProps`.
-
-- [ ] **Step 3: Add the pass-through props.**
-
-Edit `apps/dashboard/src/components/cockpit/approval-block.tsx`:
-
-```tsx
-import { ApprovalCard, type ApprovalAccent } from "./approval-card";
-import type { ApprovalView } from "./types";
-
-export interface ApprovalBlockProps {
-  data: ApprovalView[];
-  onResolve: (verdict: "accept" | "decline", idx: number) => void;
-  compact?: boolean;
-  accent?: ApprovalAccent;
-  senderLabel?: string;
-}
-
-export function ApprovalBlock({
-  data,
-  onResolve,
-  compact = false,
-  accent,
-  senderLabel,
-}: ApprovalBlockProps) {
-  if (data.length === 0) return null;
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: compact ? 12 : 14,
-        margin: compact ? "16px 18px 0" : "20px 28px 0",
-      }}
-    >
-      {data.map((item, i) => (
-        <ApprovalCard
-          key={item.id}
-          data={item}
-          idx={i}
-          total={data.length}
-          onResolve={onResolve}
-          compact={compact}
-          accent={accent}
-          senderLabel={senderLabel}
-        />
-      ))}
-    </div>
-  );
-}
-```
-
-- [ ] **Step 4: Run the test and verify it passes.**
-
-```bash
-pnpm --filter @switchboard/dashboard test -- --run approval-block
-```
-
-Expected: all green.
-
-- [ ] **Step 5: Commit.**
-
-```bash
-git add apps/dashboard/src/components/cockpit/approval-block.tsx \
-        apps/dashboard/src/components/cockpit/__tests__/approval-block.test.tsx
-git commit -m "feat(cockpit): ApprovalBlock forwards accent + senderLabel (B.3 prep)"
-```
-
----
-
-### Task 7: Parameterize `<ComposerPlaceholder>` with optional sender + copy + accent
+### Task 6: Parameterize `<ComposerPlaceholder>` with optional sender + copy + accent
 
 **Files:**
 - Modify: `apps/dashboard/src/components/cockpit/composer-placeholder.tsx`
@@ -1172,7 +1069,7 @@ git commit -m "feat(cockpit): ComposerPlaceholder senderLabel + placeholderCopy 
 
 ---
 
-### Task 8: Extend `riley-config.ts` with `RILEY_COMPOSER_PLACEHOLDER` + `RILEY_COMMANDS`
+### Task 7: Extend `riley-config.ts` with `RILEY_COMPOSER_PLACEHOLDER` + `RILEY_COMMANDS`
 
 **Files:**
 - Modify: `apps/dashboard/src/lib/cockpit/riley/riley-config.ts`
@@ -1277,7 +1174,7 @@ git commit -m "feat(cockpit): riley-config RILEY_COMPOSER_PLACEHOLDER + RILEY_CO
 
 ---
 
-### Task 9: Create `riley-toast.ts` voice helper
+### Task 8: Create `riley-toast.ts` voice helper
 
 **Files:**
 - Create: `apps/dashboard/src/lib/cockpit/riley/riley-toast.ts`
@@ -1495,7 +1392,7 @@ git commit -m "feat(cockpit): rileyToast voice helper + per-kind fallback table 
 
 ---
 
-### Task 10: Wire `RileyCockpitPage` — accent + senderLabel + per-row resolution + Riley toast
+### Task 9: Wire `RileyCockpitPage` — accent + senderLabel + per-row resolution + Riley toast
 
 **Files:**
 - Modify: `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`
@@ -1503,7 +1400,15 @@ git commit -m "feat(cockpit): rileyToast voice helper + per-kind fallback table 
 
 **Why per-row not page-level for resolution wiring:** B.1's acceptance criterion #3 (slicing spec §B.1) requires approval cards to stack with `urgency` ordering. `useRecommendationAction(id)` is keyed by recommendation id, so a single hook call at page level can resolve only one fixed id per render. Multi-card scenarios — including the signal-health grouped card alongside a campaign-level card — would resolve the wrong recommendation if the page bound a single hook to `approvals[0].id`. The plan ships per-row resolution from the start to keep the multi-card invariant honest.
 
-The pattern: introduce a tiny `<RileyApprovalRow>` wrapper inside `riley-cockpit-page.tsx` that takes a single `RileyApprovalView` and renders one `<ApprovalCard>`. The wrapper owns its own `useRecommendationAction(approval.id)` and `useToast()`-bound `onResolve`. `<ApprovalBlock>` is bypassed for Riley (Alex continues to use it) — Riley page maps `approvals` directly to a list of `<RileyApprovalRow>` instances inside the same flex container `ApprovalBlock` provides.
+The pattern: introduce a tiny `<RileyApprovalRow>` wrapper inside `riley-cockpit-page.tsx` that takes a single `RileyApprovalView` and renders one `<ApprovalCard>`. The wrapper owns its own `useRecommendationAction(approval.id)` and `useToast()`-bound `onResolve`. `<ApprovalBlock>` is bypassed for Riley — Riley page maps `approvals` directly to a list of `<RileyApprovalRow>` instances inside the same flex container `<ApprovalBlock>` provides (Alex continues to use `<ApprovalBlock>` unchanged with its existing default props).
+
+**Three additional behaviors the wrapper enforces (each has a dedicated test in Step 2):**
+
+1. **Success-only toast.** Resolution uses `promise.then(...)` not `promise.finally(...)`. A failed `primary()` / `dismiss()` must not show a success-sounding toast like "Paused Cold Interests" if the action actually failed. Errors surface through TanStack Query's `error` state on `useRecommendationAction`; B.3 does not add error toasts.
+
+2. **External primary actions do not call `primary()` and do not fire an accept toast.** When `approval.primaryAction.kind === "external"`, the accept click opens `approval.primaryAction.url` in a new tab and stops. No mutation hook call, no toast — the new tab opening is the visible confirmation. This covers `review_budget`, `fix_signal_health`, `harden_capi_attribution`.
+
+3. **Decline (dismiss) still fires for external cards.** The decline path is identical for internal and external action kinds: call `action.dismiss()` and fire `rileyToast({ verdict: "decline", approval })`. External-action cards still represent a queued recommendation, and dismissing one marks it acted-on.
 
 - [ ] **Step 1: Read the current page to confirm region.**
 
@@ -1523,11 +1428,16 @@ import { render, screen, fireEvent } from "@testing-library/react";
 
 const actionCalls: Array<{ id: string; verb: "primary" | "dismiss" }> = [];
 const toast = vi.fn();
+// Mutable config the hoisted mock reads. Lets a single test flip primary() to
+// reject without re-mocking the module (vi.doMock + dynamic-import has subtle
+// hoist interactions; this avoids them).
+const mockConfig = { rejectPrimary: false };
 
 vi.mock("@/hooks/use-recommendation-action", () => ({
   useRecommendationAction: (id: string) => ({
     primary: vi.fn(async () => {
       actionCalls.push({ id, verb: "primary" });
+      if (mockConfig.rejectPrimary) throw new Error("network failed");
     }),
     dismiss: vi.fn(async () => {
       actionCalls.push({ id, verb: "dismiss" });
@@ -1572,21 +1482,41 @@ const rec2 = {
   acceptToast: undefined,
   declineToast: undefined,
 };
+// External-action card: review_budget opens Meta via primaryAction.url. Primary
+// click must not call useRecommendationAction.primary() and must not fire an
+// accept toast. Decline click still calls dismiss() + the decline toast.
+const rec3 = {
+  ...rec1,
+  id: "rec-3",
+  kind: "review_budget" as const,
+  title: "Review Cold Interests budget",
+  primary: "Review budget",
+  secondary: "Hold",
+  campaign: { kind: "campaign" as const, name: "Cold Interests", id: "c-1" },
+  primaryAction: {
+    kind: "external" as const,
+    url: "https://business.facebook.com/adsmanager/manage/campaigns?act=123",
+    service: "meta" as const,
+  },
+  acceptToast: "Opening Meta to review Cold Interests's budget.",
+  declineToast: "Holding Cold Interests's budget where it is.",
+};
 
 vi.mock("@/hooks/use-riley-approvals", () => ({
-  useRileyApprovals: () => ({ approvals: [rec1, rec2] }),
+  useRileyApprovals: () => ({ approvals: [rec1, rec2, rec3] }),
 }));
 
 beforeEach(() => {
   actionCalls.length = 0;
   toast.mockReset();
+  mockConfig.rejectPrimary = false;
 });
 
 describe("RileyCockpitPage — B.3 voice + accent", () => {
   it("renders the Riley sender label on every approval card", async () => {
     const { RileyCockpitPage } = await import("../riley-cockpit-page");
     render(<RileyCockpitPage />);
-    expect(screen.getAllByText("Riley needs you").length).toBe(2);
+    expect(screen.getAllByText("Riley needs you").length).toBe(3);
   });
 
   it("clicking accept on the first card calls primary() bound to rec-1 and fires its acceptToast", async () => {
@@ -1622,6 +1552,51 @@ describe("RileyCockpitPage — B.3 voice + accent", () => {
     await Promise.resolve();
     expect(toast).toHaveBeenCalledWith({ title: "Scaling — back to scanning." });
   });
+
+  it("external-action primary opens the Meta URL and does NOT call primary() or fire a toast", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    const { RileyCockpitPage } = await import("../riley-cockpit-page");
+    render(<RileyCockpitPage />);
+    // rec-3 ("Review budget") is the external-action primary
+    fireEvent.click(screen.getByText("Review budget"));
+    await Promise.resolve();
+    expect(openSpy).toHaveBeenCalledWith(
+      "https://business.facebook.com/adsmanager/manage/campaigns?act=123",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    expect(actionCalls).toEqual([]); // no mutation
+    expect(toast).not.toHaveBeenCalled(); // no toast
+    openSpy.mockRestore();
+  });
+
+  it("external-action decline still calls dismiss() and fires the decline toast", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    const { RileyCockpitPage } = await import("../riley-cockpit-page");
+    render(<RileyCockpitPage />);
+    // rec-3's secondary label is "Hold" → onResolve("decline")
+    // There are multiple "Hold" buttons (rec-2.secondary = "Hold" too); use the
+    // last one which is rec-3 in DOM order.
+    const holds = screen.getAllByText("Hold");
+    fireEvent.click(holds[holds.length - 1]!);
+    await Promise.resolve();
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(actionCalls).toEqual([{ id: "rec-3", verb: "dismiss" }]);
+    expect(toast).toHaveBeenCalledWith({ title: "Holding Cold Interests's budget where it is." });
+    openSpy.mockRestore();
+  });
+
+  it("success-only toast — toast does not fire if the mutation rejects", async () => {
+    mockConfig.rejectPrimary = true;
+    const { RileyCockpitPage } = await import("../riley-cockpit-page");
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Pause"));
+    // Flush microtasks; the rejection settles next tick.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(actionCalls).toEqual([{ id: "rec-1", verb: "primary" }]);
+    expect(toast).not.toHaveBeenCalled(); // success-only — failure suppresses the toast
+  });
 });
 ```
 
@@ -1633,7 +1608,7 @@ If the existing B.1 test file already mocks Riley hooks and asserts cold/steady/
 pnpm --filter @switchboard/dashboard test -- --run riley-cockpit-page
 ```
 
-Expected: 5 new test failures. The B.1 cold/steady/halted cases stay green.
+Expected: 8 new test failures. The B.1 cold/steady/halted cases stay green.
 
 - [ ] **Step 4: Wire the page with a per-row resolution wrapper.**
 
@@ -1686,8 +1661,17 @@ function RileyApprovalRow({
   const action = useRecommendationAction(approval.id);
   const { toast } = useToast();
   const onResolve = (verdict: "accept" | "decline", _idx: number) => {
+    // External-action accept: open the Meta URL in a new tab. No mutation
+    // hook call; no toast (the new tab opening is the visible confirmation).
+    if (verdict === "accept" && approval.primaryAction.kind === "external") {
+      window.open(approval.primaryAction.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // Internal accept or any decline: dispatch through the action hook and
+    // fire the Riley toast only on success (.then, not .finally — a failed
+    // primary()/dismiss() must not show a success-sounding toast).
     const promise = verdict === "accept" ? action.primary() : action.dismiss();
-    void promise.finally(() => {
+    void promise.then(() => {
       toast(rileyToast({ verdict, approval }));
     });
   };
@@ -1764,9 +1748,7 @@ export function RileyCockpitPage() {
 }
 ```
 
-Note: the Riley page no longer imports `ApprovalBlock`. The flex container styles are inlined verbatim from `ApprovalBlock` (gap 14, margin `20px 28px 0`) to preserve the visual layout. Alex's page continues to use `<ApprovalBlock>` unchanged — Task 6's `accent` / `senderLabel` forwarding through `ApprovalBlock` remains useful for any future single-agent caller (Alex's accent eventually) and stays in place.
-
-If grep later shows `ApprovalBlock` is only used by Alex, that is fine — it stays for Alex. The pass-through props from Task 6 are not dead code; they enable a future Alex theme change to flow through the same surface without page rewiring.
+Note: the Riley page no longer imports `ApprovalBlock`. The flex container styles are inlined verbatim from `ApprovalBlock` (gap 14, margin `20px 28px 0`) to preserve the visual layout. Alex's page continues to use `<ApprovalBlock>` unchanged with its existing default props (no `accent` / `senderLabel` overrides today; Alex defaults render as before). The `<ApprovalBlock>` API is **not** extended in this slice — pass-through props for accent/senderLabel can be added later if Alex needs theming, but B.3 does not need them and the extra plumbing would be PR noise.
 
 - [ ] **Step 5: Run the tests and verify they pass.**
 
@@ -1774,7 +1756,7 @@ If grep later shows `ApprovalBlock` is only used by Alex, that is fine — it st
 pnpm --filter @switchboard/dashboard test -- --run riley-cockpit-page
 ```
 
-Expected: all green (existing + 5 new). The per-row binding test (`rec-2 primary`) demonstrates that hook keying is correct across cards.
+Expected: all green (existing + 8 new). The per-row binding test (`rec-2 primary`) demonstrates that hook keying is correct across cards. The two external-action tests prove that external primary opens a new tab without invoking the mutation hook or firing a toast, and that external decline still dismisses + toasts. The success-only test proves a failed mutation does not produce a misleading success toast.
 
 - [ ] **Step 6: Commit.**
 
@@ -1786,7 +1768,7 @@ git commit -m "feat(riley-cockpit): wire accent + senderLabel + per-row onResolv
 
 ---
 
-### Task 11: Audit `amberPaper|amberSoft|amberDeep` references that may have been Riley-specific
+### Task 10: Audit `amberPaper|amberSoft|amberDeep` references that may have been Riley-specific
 
 Some B.1 fixture/test code may have asserted Alex tokens on Riley-shaped fixtures (a B.1 oversight). Riley fixtures now render through the parameterized `ApprovalCard` with Riley accent. Audit:
 
@@ -1824,7 +1806,7 @@ git commit -m "test(cockpit): align Riley fixture assertions with Riley accent (
 
 ---
 
-### Task 12: Adapter-boundary grep gate
+### Task 11: Adapter-boundary grep gate
 
 - [ ] **Step 1: Run the gate.**
 
@@ -1847,7 +1829,7 @@ Expected: `clean`. (Any plus-line containing those identifiers under the guarded
 
 ---
 
-### Task 13: Final verification — typecheck, lint, tests, dashboard `next build`
+### Task 12: Final verification — typecheck, lint, tests, dashboard `next build`
 
 Per CLAUDE.md memory `feedback_dashboard_build_not_in_ci`, run `pnpm --filter @switchboard/dashboard build` locally before claiming done.
 
@@ -1905,28 +1887,30 @@ This section is the writing-plans skill's required spec-coverage check.
 
 | Slicing spec §B.3 requirement | Plan task |
 |---|---|
-| Riley accent applied uniformly | Tasks 3 (StatusPill), 4 (Identity forward), 5 (ApprovalCard), 6 (ApprovalBlock forward), 7 (ComposerPlaceholder), 10 (page wiring). |
-| Command palette pre-populated with RILEY_COMMANDS | Task 8 ships catalog; **interactive palette deferred** to B.3-followup post-A.5 (documented in slice brief). |
+| Riley accent applied uniformly | Tasks 3 (StatusPill), 4 (Identity forward), 5 (ApprovalCard), 6 (ComposerPlaceholder), 9 (page wiring). |
+| Command palette pre-populated with RILEY_COMMANDS | Task 7 ships catalog; **interactive palette deferred** to B.3-followup post-A.5 (documented in slice brief). |
 | Composer constraint enforced | Composer remains inert (placeholder visuals only). Interactive `Allowed-in-B.3` semantics deferred post-A.5. |
 | `RecommendationPresentation.acceptToast` + `declineToast` optional fields | Task 1. |
 | Engine populates them where context exists | Task 2 — every action in the labels table gets both. |
-| Cockpit toasts use them with fallback to `rileyToast()` | Tasks 9 (rileyToast) + 10 (page wires it through `useToast`). |
-| Final empty/error copy reviewed for tone consistency with Alex | Embedded in Tasks 7 (placeholder copy) + 9 (fallback table); reviewer checks the locked tables in this plan against Alex A.2's tone. |
-| Type-check, lint, tests, dashboard `next build` clean | Task 13. |
+| Cockpit toasts use them with fallback to `rileyToast()` | Tasks 8 (rileyToast) + 9 (page wires it through `useToast`). |
+| External-action accept opens URL, does not fire toast | Task 9 — dedicated test asserts no `primary()` call and no `toast()` call when `primaryAction.kind === "external"`. |
+| Success-only toast (failure does not show success copy) | Task 9 — `.then()` not `.finally()`, dedicated test asserts toast suppressed on rejection. |
+| Final empty/error copy reviewed for tone consistency with Alex | Embedded in Tasks 6 (placeholder copy) + 8 (fallback table); reviewer checks the locked tables in this plan against Alex A.2's tone. |
+| Type-check, lint, tests, dashboard `next build` clean | Task 12. |
 
 Items deferred to B.3-followup are explicitly documented in the slice brief §What does NOT ship, with the A.5 dependency named.
 
 **2. Placeholder scan.**
 
 - No "TBD"/"TODO"/"fill in details" anywhere in the plan. The toast table in §Toast copy is fully locked (14 engine lines × 2 verdicts + 11 fallback kinds × 2 verdicts).
-- Task 10 ships the per-row `<RileyApprovalRow>` wrapper from the start — the page test asserts the multi-card binding (`rec-2 primary` calls `rec-2`'s hook, not `rec-1`'s) before the implementation lands. No "lift later" caveat.
+- Task 9 ships the per-row `<RileyApprovalRow>` wrapper from the start — the page test asserts the multi-card binding (`rec-2 primary` calls `rec-2`'s hook, not `rec-1`'s) before the implementation lands. No "lift later" caveat.
 
 **3. Type consistency.**
 
 - `RecommendationPresentation` is added in Task 1 (schemas) and consumed by Task 2 (engine) — the field names `acceptToast` / `declineToast` match.
-- `ApprovalAccent` interface is defined in Task 5 and re-imported by Task 6.
-- `RileyToastVerdict` is exported from `riley-toast.ts` in Task 9 but only used internally by the page in Task 10; no exported-but-unused concerns.
-- `RileyApprovalView` is already declared in `types.ts` (B.1); the `acceptToast` / `declineToast` fields on `ApprovalViewBase` (lines 52–53 of `types.ts`) are pre-existing and consumed by Task 9.
+- `ApprovalAccent` interface is defined in Task 5 and consumed by Task 9 (`RILEY_APPROVAL_ACCENT` in the Riley page).
+- `RileyToastVerdict` is exported from `riley-toast.ts` in Task 8 but only used internally by the page in Task 9; no exported-but-unused concerns.
+- `RileyApprovalView` is already declared in `types.ts` (B.1); the `acceptToast` / `declineToast` fields on `ApprovalViewBase` (lines 52–53 of `types.ts`) are pre-existing and consumed by Task 8.
 
 **4. Scope check.** Plan delivers one focused slice: schema → engine → cockpit voice + accent. No KPI/ROI work, no palette interactive behavior, no Wave B doctrine, no Alex render diff. Ship size: ~14 tasks across 11 modified files and 2 new files; modest.
 
