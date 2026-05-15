@@ -84,6 +84,13 @@ declare module "fastify" {
     reportStores?: import("@switchboard/core/reports").ReportStores;
     reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
     greetingSignalStore?: import("@switchboard/core").agentHome.GreetingSignalStore;
+    /** Test-only observer for the most recent ingress-persisted WorkTrace. */
+    lastIngressTrace?: {
+      intent: string;
+      mode: string;
+      outcome: string;
+      organizationId: string;
+    } | null;
   }
 }
 
@@ -367,6 +374,44 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     entitlementResolver: undefined,
   });
   app.decorate("platformIngress", platformIngress);
+  app.decorate("workTraceStore", workTraceStore);
+
+  // Test-only ingress trace observer: captures the most recent persisted
+  // WorkTrace summary for assertions in operator-direct ingress route tests
+  // (Wave 2 Phase 1b). Decorated as `lastIngressTrace` so tests can verify
+  // ingress-path flow without exposing the InMemoryWorkTraceStore internals.
+  let lastIngressTrace: {
+    intent: string;
+    mode: string;
+    outcome: string;
+    organizationId: string;
+  } | null = null;
+  const originalPersist = workTraceStore.persist.bind(workTraceStore);
+  workTraceStore.persist = async (trace) => {
+    lastIngressTrace = {
+      intent: trace.intent,
+      mode: trace.mode,
+      outcome: trace.outcome,
+      organizationId: trace.organizationId,
+    };
+    return originalPersist(trace);
+  };
+  Object.defineProperty(app, "lastIngressTrace", {
+    get: () => lastIngressTrace,
+    configurable: true,
+  });
+
+  // Operator-direct ingress bootstrap — registers OperatorMutationMode +
+  // operator.transition_opportunity_stage handler. Must run AFTER
+  // opportunityStore decoration and PlatformIngress wiring.
+  if (app.opportunityStore) {
+    const { bootstrapOperatorIntents } = await import("../bootstrap/operator-intents.js");
+    bootstrapOperatorIntents({
+      intentRegistry,
+      modeRegistry,
+      opportunityStore: app.opportunityStore,
+    });
+  }
 
   const platformLifecycle = new PlatformLifecycle({
     approvalStore: storage.approvals,

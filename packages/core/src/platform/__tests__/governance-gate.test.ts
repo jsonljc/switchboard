@@ -366,4 +366,79 @@ describe("GovernanceGate", () => {
       cartridgeId: "crm-cartridge",
     });
   });
+
+  describe("approvalMode short-circuit (Amendment 1)", () => {
+    it('skips policy lookup when approvalMode is "system_auto_approved"', async () => {
+      // Mock deps that would deny if policy engine ran — proves we short-circuit before reaching it.
+      const deps = makeDeps({
+        evaluate: vi.fn().mockReturnValue(makeTrace({ finalDecision: "deny" })),
+      });
+      const gate = new GovernanceGate(deps);
+
+      const registration = makeRegistration({
+        intent: "operator.transition_opportunity_stage",
+        approvalMode: "system_auto_approved",
+      });
+
+      const decision = await gate.evaluate(makeWorkUnit(), registration);
+
+      expect(decision.outcome).toBe("execute");
+      expect(deps.evaluate).not.toHaveBeenCalled();
+      expect(deps.loadPolicies).not.toHaveBeenCalled();
+    });
+
+    it('falls through to policy evaluation when approvalMode is "policy"', async () => {
+      const deps = makeDeps();
+      const gate = new GovernanceGate(deps);
+
+      await gate.evaluate(makeWorkUnit(), makeRegistration({ approvalMode: "policy" }));
+
+      expect(deps.evaluate).toHaveBeenCalledOnce();
+    });
+
+    it("defaults to policy evaluation when approvalMode is omitted", async () => {
+      const deps = makeDeps();
+      const gate = new GovernanceGate(deps);
+
+      const registration = makeRegistration();
+      // approvalMode is optional on IntentRegistration; absent means "policy"
+      delete (registration as { approvalMode?: string }).approvalMode;
+
+      await gate.evaluate(makeWorkUnit(), registration);
+
+      expect(deps.evaluate).toHaveBeenCalledOnce();
+    });
+
+    it("denies normally under policy mode when no policy matches (default-deny baseline)", async () => {
+      // Confirm the existing default-deny semantics still hold for policy mode.
+      const deps = makeDeps({
+        evaluate: vi.fn().mockReturnValue(makeTrace({ finalDecision: "deny" })),
+      });
+      const gate = new GovernanceGate(deps);
+
+      const decision = await gate.evaluate(
+        makeWorkUnit(),
+        makeRegistration({ approvalMode: "policy" }),
+      );
+
+      expect(decision.outcome).toBe("deny");
+    });
+
+    it("produces execute decision with empty matchedPolicies for system_auto_approved", async () => {
+      const deps = makeDeps();
+      const gate = new GovernanceGate(deps);
+
+      const decision = await gate.evaluate(
+        makeWorkUnit(),
+        makeRegistration({ approvalMode: "system_auto_approved" }),
+      );
+
+      expect(decision.outcome).toBe("execute");
+      if (decision.outcome === "execute") {
+        expect(decision.matchedPolicies).toEqual([]);
+        // Constraints still populated so downstream mode dispatch has a typed envelope.
+        expect(decision.constraints).toBeDefined();
+      }
+    });
+  });
 });

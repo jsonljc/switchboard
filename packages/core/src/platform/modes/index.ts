@@ -10,3 +10,9 @@ export type {
   WorkflowRuntimeServices,
   ChildWorkRequest,
 } from "./workflow-mode.js";
+export { OperatorMutationMode } from "./operator-mutation-mode.js";
+export type {
+  OperatorMutationModeConfig,
+  OperatorMutationHandler,
+  OperatorMutationHandlerResult,
+} from "./operator-mutation-mode.js";
