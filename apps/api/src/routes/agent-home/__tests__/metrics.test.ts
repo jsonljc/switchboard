@@ -118,6 +118,74 @@ describe("metrics route", () => {
     expect(body.vm.hero.kind).toBe("ad-leads");
   });
 
+  it("forwards AgentRoster.config targets when the responder row exists (Alex)", async () => {
+    const findUnique = vi.fn(
+      async (args: { where: { organizationId_agentRole: { agentRole: string } } }) => {
+        // The route must look up by canonical role ("responder"), not by the URL slug ("alex").
+        if (args?.where?.organizationId_agentRole?.agentRole === "responder") {
+          return { config: { avgValueCents: 17900, targetCpbCents: 3000 } };
+        }
+        return null;
+      },
+    );
+    const mockPrisma = {
+      organizationConfig: { findFirst: vi.fn(async () => null) },
+      agentRoster: { findUnique },
+    } as unknown as import("@switchboard/db").PrismaClient;
+
+    const app = await buildApp({ withStores: true, prisma: mockPrisma });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/alex/metrics?window=week",
+      headers: { "x-org-id": "org-1" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { vm: MetricsViewModel };
+    expect(body.vm.targets).toEqual({ avgValueCents: 17900, targetCpbCents: 3000 });
+    // Confirms the lookup hit the canonical role mapping (responder), not the slug.
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId_agentRole: expect.objectContaining({ agentRole: "responder" }),
+        }),
+      }),
+    );
+  });
+
+  it("forwards AgentRoster.config targets when the optimizer row exists (Riley)", async () => {
+    const findUnique = vi.fn(
+      async (args: { where: { organizationId_agentRole: { agentRole: string } } }) => {
+        if (args?.where?.organizationId_agentRole?.agentRole === "optimizer") {
+          return { config: { avgValueCents: 12000, targetCpbCents: 2500 } };
+        }
+        return null;
+      },
+    );
+    const mockPrisma = {
+      organizationConfig: { findFirst: vi.fn(async () => null) },
+      agentRoster: { findUnique },
+    } as unknown as import("@switchboard/db").PrismaClient;
+
+    const app = await buildApp({ withStores: true, prisma: mockPrisma });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/metrics?window=week",
+      headers: { "x-org-id": "org-1" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { vm: MetricsViewModel };
+    expect(body.vm.targets).toEqual({ avgValueCents: 12000, targetCpbCents: 2500 });
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId_agentRole: expect.objectContaining({ agentRole: "optimizer" }),
+        }),
+      }),
+    );
+  });
+
   it("reads timezone from OrganizationConfig.businessHours and uses it for projection", async () => {
     const mockFindFirst = vi.fn().mockResolvedValue({
       businessHours: {
