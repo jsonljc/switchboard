@@ -107,4 +107,36 @@ describe("PrismaActivityPreviewReader", () => {
       1,
     );
   });
+
+  it("does not starve quiet contacts when a chatty contact dominates recency", async () => {
+    // Regression for take-cap starvation bug: with the old take=N*limit
+    // clause, a chatty contact whose N*limit newest messages dominate
+    // global ORDER BY DESC would consume the entire fetch, leaving other
+    // contacts empty even when they have messages.
+    const now = new Date("2026-05-15T10:00:00Z");
+    const chattyMessages = Array.from({ length: 20 }, (_, i) => ({
+      contactId: "chatty",
+      direction: "inbound" as const,
+      content: `chatty #${i}`,
+      createdAt: new Date(now.getTime() - i * 1000),
+      metadata: {},
+    }));
+    const quietMessage = {
+      contactId: "quiet",
+      direction: "inbound" as const,
+      content: "quiet hello",
+      createdAt: new Date(now.getTime() - 100_000),
+      metadata: {},
+    };
+    const prisma = buildPrismaMock([...chattyMessages, quietMessage]);
+    const reader = new PrismaActivityPreviewReader(prisma);
+    const result = await reader.readRecentBatch({
+      contactIds: ["chatty", "quiet"],
+      orgId: "org-1",
+      limit: 4,
+    });
+    expect(result.chatty).toHaveLength(4);
+    expect(result.quiet).toHaveLength(1);
+    expect(result.quiet![0]!.text).toBe("quiet hello");
+  });
 });

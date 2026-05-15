@@ -17,9 +17,11 @@ export class PrismaActivityPreviewReader implements ActivityPreviewReader {
         orgId: args.orgId,
       },
       orderBy: { createdAt: "desc" },
-      // Over-fetch so each contact's bucket has enough rows even when one
-      // contact dominates. Final per-bucket slice happens after grouping.
-      take: args.contactIds.length * args.limit,
+      // Per-contact cap is enforced in-memory below. Dropping the global `take`
+      // prevents one chatty contact from starving others' buckets. Safe because
+      // (a) the `@@index([contactId, orgId])` keeps the scan cheap, (b) the
+      // cockpit use case caps `args.limit` at ≤5 and `contactIds.length` at ≤30,
+      // and (c) typical conversation message counts per contact are small.
       select: {
         contactId: true,
         direction: true,
