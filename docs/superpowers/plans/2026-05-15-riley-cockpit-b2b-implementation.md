@@ -888,7 +888,7 @@ git commit -m "feat(cockpit): optional accent prop on <ROIBar> for Riley clay to
 - Modify: `apps/dashboard/src/components/cockpit/kpi-strip.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/kpi-strip.test.tsx`
 
-- [ ] **Step 1: Write the failing test.**
+- [ ] **Step 1: Write the failing tests.**
 
 Append to the existing `describe("<KPIStrip>", …)`:
 
@@ -925,6 +925,33 @@ Append to the existing `describe("<KPIStrip>", …)`:
       borderColor: RILEY_ACCENT.soft,
     });
   });
+
+  it("exposes data-testid='kpi-strip' on the root container (expanded mode)", () => {
+    render(
+      <KPIStrip
+        kpis={{
+          range: "This week · Mon — Wed",
+          tiles: [{ label: "leads", value: 27 }],
+          roi: { degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: "—", target: "—" } },
+        }}
+      />,
+    );
+    expect(screen.getByTestId("kpi-strip")).toBeInTheDocument();
+  });
+
+  it("exposes data-testid='kpi-strip' on the root container (collapsed mode)", () => {
+    render(
+      <KPIStrip
+        collapsed
+        kpis={{
+          range: "This week · Mon — Wed",
+          tiles: [{ label: "leads", value: 27 }],
+          roi: { degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: "—", target: "—" } },
+        }}
+      />,
+    );
+    expect(screen.getByTestId("kpi-strip")).toBeInTheDocument();
+  });
 ```
 
 - [ ] **Step 2: Run and verify it fails.**
@@ -954,6 +981,20 @@ export function KPIStrip({ kpis, collapsed = false, accent }: KPIStripProps) {
 ```
 
 `AccentTokens` is exported from `roi-bar.tsx` in Task 4.
+
+**Additionally, add `data-testid="kpi-strip"` to the root `<div>` of both render branches** (collapsed and expanded) inside `KPIStrip`. This enables scoped DOM assertions in Task 7's "no `qualified` leak" regression — without scoping, the assertion would false-pass against the activity stream's `QUALIFIED` activity-kind label (`kind-meta.ts:18`). Both branches share the same testid; the collapsed assertion in Task 7 reads "expanded or collapsed strip mounted; no `qualified` label inside it."
+
+```tsx
+// Collapsed branch
+<div data-testid="kpi-strip" style={{ /* existing collapsed styles */ }}>
+  {/* ... */}
+</div>
+
+// Expanded branch
+<div data-testid="kpi-strip" style={{ /* existing expanded styles */ }}>
+  {/* ... */}
+</div>
+```
 
 - [ ] **Step 4: Run and verify it passes.**
 
@@ -1106,7 +1147,7 @@ export function metricsViewModelToRileyKpiData(
 }
 ```
 
-Note: `[...vm.tiles]` materializes the readonly array into a mutable `KpiTile[]` to match the `CockpitKpiData.tiles?: KpiTile[]` declared (non-readonly) type. Verify the local typing in `types.ts` — if `tiles?: readonly KpiTile[]`, drop the spread.
+Note: `[...vm.tiles]` materializes the readonly wire array into a mutable `KpiTile[]` to match the `CockpitKpiData.tiles?: KpiTile[]` declared (non-readonly) type at `apps/dashboard/src/components/cockpit/types.ts:147`.
 
 - [ ] **Step 4: Run and verify it passes.**
 
@@ -1137,34 +1178,39 @@ git commit -m "feat(dashboard): Riley metrics→kpi-data typed pass-through adap
 Append a new `describe` block in `riley-cockpit-page.test.tsx`. The existing module-level mocks for `useHalt` / `useRileyApprovals` / `useRileyStatus` / `useRileyActivity` are reused. Add a new mock for `useAgentMetrics` at the top of the file (before any test):
 
 ```ts
-const metricsState: { data: unknown; isLoading: boolean; isError: boolean } = {
+import { within } from "@testing-library/react";
+
+const metricsState: {
+  data: unknown;
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+} = {
   data: null,
   isLoading: false,
   isError: false,
+  error: null,
 };
 vi.mock("@/hooks/use-agent-metrics", () => ({
   useAgentMetrics: () => metricsState,
 }));
 ```
 
+The mock mirrors the four fields the real hook returns (`apps/dashboard/src/hooks/use-agent-metrics.ts:34-39`): `data`, `isLoading`, `isError`, `error`. A future refactor that reads `metricsQ.error` will see a fresh `null` rather than `undefined`.
+
 Then the new block:
 
 ```ts
 describe("RileyCockpitPage — B.2b KPI strip", () => {
-  beforeEach(() => {
-    rileyApprovalsState.approvals = [];
-    metricsState.data = null;
-    metricsState.isLoading = false;
-    metricsState.isError = false;
-  });
-
-  it("renders <KPIStrip> in expanded mode when metrics data exists and no approvals", () => {
-    metricsState.data = {
-      hero: { kind: "ad-leads", value: 27, comparator: { window: "week", value: 22 } },
+  // Local fixture builder — reused across cases. The wire shape mirrors
+  // MetricsViewModelWire; minimal fields populated to satisfy the page render.
+  function buildMetricsFixture(overrides: Partial<{ tiles: unknown; roi: unknown }> = {}) {
+    const base = {
+      hero: { kind: "ad-leads" as const, value: 27, comparator: { window: "week" as const, value: 22 } },
       heroSubProseSegments: [],
       spark: [],
       stats: [],
-      freshness: { generatedAt: "x", window: "week", dataSource: "live" },
+      freshness: { generatedAt: "x", window: "week" as const, dataSource: "live" as const },
       folioRange: "Mon — Wed",
       targets: { avgValueCents: null, targetCpbCents: null },
       spendCents: 20000,
@@ -1179,93 +1225,72 @@ describe("RileyCockpitPage — B.2b KPI strip", () => {
         { label: "ad spend", value: "$200" },
       ],
       roi: {
-        degraded: true,
+        degraded: true as const,
         degradedHint: "",
         label: "cost per lead",
         comparator: { value: "$7 per lead", target: "—" },
       },
     };
+    return { ...base, ...overrides };
+  }
+
+  beforeEach(() => {
+    rileyApprovalsState.approvals = [];
+    rileyActivityState.rows = []; // prevent activity-kind="qualified" rows from polluting the no-qualified assertion
+    metricsState.data = null;
+    metricsState.isLoading = false;
+    metricsState.isError = false;
+    metricsState.error = null;
+  });
+
+  it("renders <KPIStrip> in expanded mode when metrics data exists and no approvals", () => {
+    metricsState.data = buildMetricsFixture();
     wrap(<RileyCockpitPage />);
-    expect(screen.getByText(/leads/i)).toBeInTheDocument();
-    expect(screen.getByText("$200")).toBeInTheDocument();
-    expect(screen.getByText(/cost per lead/i)).toBeInTheDocument();
-    expect(screen.getByText("$7 per lead")).toBeInTheDocument();
+    const strip = screen.getByTestId("kpi-strip");
+    expect(within(strip).getByText("$200")).toBeInTheDocument();
+    expect(within(strip).getByText(/cost per lead/i)).toBeInTheDocument();
+    expect(within(strip).getByText("$7 per lead")).toBeInTheDocument();
   });
 
   it("collapses to single-line headline when approvals.length > 0", () => {
-    rileyApprovalsState.approvals = [{ id: "rec-1" /* … minimal RileyApprovalView */ }] as unknown[];
-    metricsState.data = { /* same as above */ };
+    rileyApprovalsState.approvals = mapRecommendationsToApprovalViews(pauseFixture);
+    metricsState.data = buildMetricsFixture();
     wrap(<RileyCockpitPage />);
-    // Headline is "27 leads · +5 from last week" (or similar — driven by collapsedHeadline()).
-    expect(screen.getByText(/27/)).toBeInTheDocument();
-    expect(screen.getByText(/leads/i)).toBeInTheDocument();
+    const strip = screen.getByTestId("kpi-strip");
+    // Collapsed headline is "27 leads · +5 from last week" (driven by collapsedHeadline()).
+    expect(within(strip).getByText(/27/)).toBeInTheDocument();
+    expect(within(strip).getByText(/leads/i)).toBeInTheDocument();
   });
 
   it("renders nothing for KPI strip when metrics is loading or errored", () => {
     metricsState.isLoading = true;
     wrap(<RileyCockpitPage />);
-    expect(screen.queryByText(/cost per lead/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("kpi-strip")).not.toBeInTheDocument();
   });
 
   it("renders nothing for KPI strip when wire VM is missing tiles (no Alex fallback)", () => {
     // Adapter returns null when tiles is missing; page renders no strip.
-    metricsState.data = {
-      hero: { kind: "ad-leads", value: 27, comparator: { window: "week", value: 22 } },
-      heroSubProseSegments: [],
-      spark: [],
-      stats: [],
-      freshness: { generatedAt: "x", window: "week", dataSource: "live" },
-      folioRange: "Mon — Wed",
-      targets: { avgValueCents: null, targetCpbCents: null },
-      spendCents: 20000,
-      leads: 27,
-      qualifiedPct: 0,
-      bookedDelta: "+5",
-      leadsDelta: "+5",
-      qualifiedDelta: null,
-      // tiles + roi intentionally omitted
-    };
+    const { tiles: _omit, ...withoutTiles } = buildMetricsFixture();
+    metricsState.data = withoutTiles;
     wrap(<RileyCockpitPage />);
-    expect(screen.queryByText(/cost per lead/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("kpi-strip")).not.toBeInTheDocument();
     expect(screen.queryByTestId("roi-comparator")).not.toBeInTheDocument();
   });
 
-  it("hard regression: never renders a 'qualified' label on /riley (no legacy leak)", () => {
-    // Even with full live data, no qualified tile should appear — Riley is
-    // not qualifying leads. This is the no-leak gate against accidental
-    // Alex-side `legacyTiles()` derivation.
-    metricsState.data = {
-      hero: { kind: "ad-leads", value: 27, comparator: { window: "week", value: 22 } },
-      heroSubProseSegments: [],
-      spark: [],
-      stats: [],
-      freshness: { generatedAt: "x", window: "week", dataSource: "live" },
-      folioRange: "Mon — Wed",
-      targets: { avgValueCents: null, targetCpbCents: null },
-      spendCents: 20000,
-      leads: 27,
-      qualifiedPct: 0,
-      bookedDelta: "+5",
-      leadsDelta: "+5",
-      qualifiedDelta: null,
-      tiles: [
-        { label: "leads", value: 27, trend: "+5" },
-        { label: "ctr", value: "—", unavailable: true },
-        { label: "ad spend", value: "$200" },
-      ],
-      roi: {
-        degraded: true,
-        degradedHint: "",
-        label: "cost per lead",
-        comparator: { value: "$7 per lead", target: "—" },
-      },
-    };
+  it("hard regression: KPI strip never renders a 'qualified' label (no legacy leak)", () => {
+    // Even with full live data, no qualified tile should appear inside the
+    // strip — Riley is not qualifying leads. The assertion is scoped to the
+    // strip subtree via data-testid so it cannot false-pass on (a) the
+    // ActivityStream's `QUALIFIED` activity-kind label (kind-meta.ts:18), nor
+    // (b) an empty render where the strip never mounted.
+    metricsState.data = buildMetricsFixture();
     wrap(<RileyCockpitPage />);
-    expect(screen.queryByText(/qualified/i)).not.toBeInTheDocument();
+    const strip = screen.getByTestId("kpi-strip"); // positive presence — fails fast if missing
+    expect(within(strip).queryByText(/qualified/i)).not.toBeInTheDocument();
   });
 
   it("applies RILEY_ACCENT to the ROI comparator chip", () => {
-    metricsState.data = { /* same as expanded fixture */ };
+    metricsState.data = buildMetricsFixture();
     wrap(<RileyCockpitPage />);
     const pill = screen.getByTestId("roi-comparator");
     expect(pill).toHaveStyle({ background: "#F6E7DE" }); // RILEY_ACCENT.paper
@@ -1273,7 +1298,7 @@ describe("RileyCockpitPage — B.2b KPI strip", () => {
 });
 ```
 
-The collapsed-mode test's approval fixture needs to satisfy the existing `RileyApprovalView` shape. Reuse `pauseFixture` (already imported at the top of the test file) by mapping it through `mapRecommendationsToApprovalViews(pauseFixture)`.
+The collapsed-mode test uses `mapRecommendationsToApprovalViews(pauseFixture)` directly — both `pauseFixture` and `mapRecommendationsToApprovalViews` are already imported at the top of the test file (B.1 fixtures, kept across B.3). The `within()` helper from `@testing-library/react` is imported alongside the existing `render` / `screen` / `fireEvent`.
 
 - [ ] **Step 2: Run and verify they fail.**
 
@@ -1451,6 +1476,8 @@ If Postgres is not running locally and the API can't serve metrics, the dashboar
 ---
 
 ## Commit message recap (for the eventual feature PR)
+
+Tasks 1–7 each produce one commit. **Tasks 8 (adapter-boundary grep) and 9 (full verification gate) produce no commits** — they are pre-merge verification gates only.
 
 The 7 commits in order:
 

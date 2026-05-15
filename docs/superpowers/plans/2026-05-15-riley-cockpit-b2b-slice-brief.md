@@ -201,7 +201,7 @@ Expected: no new matches vs `main` baseline.
 
 4. **Cost-per-lead calculation rounding.** `Math.round(spendCents / 100 / leads)` can produce 0 for small spend/large lead counts. **Mitigation:** the test fixture pins three cost-per-lead computations: spend=2000c, leads=10 → `"$2 per lead"`; spend=12345c, leads=3 → `"$41 per lead"`; spend=99c, leads=100 → `"<$1 per lead"`. The comparator display rule branches on `cpl === 0` and emits `"<$1 per lead"` (locked above in §Riley ROI bar shape). A `$0 per lead` chip is **not** acceptable display — it reads as a bug to operators.
 
-5. **`spendCents > 0` ambiguity.** A.3's hint priority rule 1 uses `spendCents === null`. B.2b mirrors that — `spendCents === 0` (real "zero spent this week") is treated as live, not unavailable. The cost-per-lead comparator displays `$0 per lead` (when leads > 0) or `—` (when leads === 0). **Mitigation:** table-driven test pins each (spendCents, leads) combination.
+5. **`spendCents > 0` ambiguity.** A.3's hint priority rule 1 uses `spendCents === null`. B.2b mirrors that — `spendCents === 0` (real "zero spent this week") is treated as live, not unavailable. The cost-per-lead comparator displays `<$1 per lead` when cpl rounds to 0 (per the sub-dollar guard above) or `—` when leads === 0. **Mitigation:** table-driven test pins each (spendCents, leads) combination.
 
 6. **B.2a rebase conflict.** If B.2a lands first, `RileyCockpitPage` will already have `useAgentMission` + `<MissionPopover>` wrapping `<Identity>`. The B.2b mount-point comes after that wrapper — adjacent but non-overlapping. **Mitigation:** the implementation plan locks the exact insertion point ("after the Identity element / mission-popover wrapper closes, before the approvals stack JSX"). Rebase is trivial.
 
