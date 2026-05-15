@@ -288,3 +288,54 @@ Sharing `WorkflowMode`'s handlers Map across `contained-workflows` and `operator
 ### Amendment scope
 
 These two amendments adjust Decisions 1 and 3 only. Decisions 2 (actor shape), 4 (intent registration site), and 5 (idempotency-key sourcing) stand unchanged. The Migration checklist remains correct; step 2 ("Define the WorkflowHandler") becomes "Define the OperatorMutationHandler" with the same shape (`execute(workUnit) → ExecutionResult`-compatible result).
+
+### Amendment 3 — 2026-05-16: Phase 1b execution reconciliation + admin-consent.ts deferred to Phase 1b.4
+
+**Source:** Reconciliation between this spec's Phase 1b mapping and the actual execution sequence driven by issue [#562](https://github.com/jsonljc/switchboard/issues/562) ("route-governance-cleanup").
+
+**Finding:** This spec's "Next step" section originally numbered Phase 1b as:
+
+- 1b.1 — `dashboard-opportunities.ts` (1 intent)
+- 1b.2 — `recommendations.ts` (1 intent)
+- 1b.3 — `admin-consent.ts` (3 intents grouped)
+- 1c  — `lifecycle-disqualifications.ts` (gated on PR #444)
+
+The actual execution sequence took a different path:
+
+- 1b.1 — `dashboard-opportunities.ts` shipped via PR #568 (migration) + PR #570 (cleanup of legacy `store_recorded_operator_mutation` write in `PrismaOpportunityStore.transitionStage`).
+- 1b.2 — `recommendations.ts` shipped via PR #571.
+- 1b.3 — `lifecycle-disqualifications.ts` shipped via PR #572 (PR #444 merged 2026-05-13, so the spec's Phase 1c gate cleared mid-stream and the slice consumed the freed slot).
+- `admin-consent.ts` (originally 1b.3 in this spec) was NOT migrated as part of issue #562's cohort — #562 explicitly tracked only 3 routes.
+
+**Resolution:**
+
+- Renumber Phase 1b to reflect what shipped: 1b.1 (opportunities), 1b.2 (recommendations), 1b.3 (lifecycle-disqualifications). Phase 1c is closed (its route was absorbed into 1b.3).
+- `admin-consent.ts` is reclassified as **Phase 1b.4** — audit residual, tracked via [issue #576](https://github.com/jsonljc/switchboard/issues/576). Same exemplar pattern; expected to be small (3 intents grouped under `consent.*`, no store-side bypass to clean per `ConsentService` review).
+
+**Cohort variations to capture for Design A:**
+
+The three migrations diverged in how they map handler outcomes to HTTP status codes. Design A (Mutating Route Contract — Phase 3A) MUST unify these. Current state:
+
+| Slice | Domain-rejection mapping | WorkTrace coverage of failure paths |
+|---|---|---|
+| 1b.1 (opportunities) | Handler throws `OpportunityNotFoundError` → handler returns `outcome: "failed"` with typed error code → route maps code → 404 | ✅ WorkTrace persisted with `outcome: "failed"` for 404 cases |
+| 1b.2 (recommendations) | Pre-flight check in route (`getById` + org-match) returns 404/403 BEFORE entering ingress | ❌ No WorkTrace for 404/403 cases (route exits before `platformIngress.submit`) |
+| 1b.3 (lifecycle-disqualifications) | Handler always returns `outcome: "completed"`; route unwraps nested `outputs.result.{not_found,conflict,...}` to decide HTTP status | ✅ WorkTrace persisted (always `completed`) — but failure paths surface as `completed` outcome with nested domain status |
+
+The 1b.2 pre-flight pattern weakens "WorkTrace is canonical persistence" for the failure paths. The 1b.3 always-completed pattern conflates handler-level success with domain-level failure. Neither is wrong in isolation — Design A picks the canonical pattern and codifies it.
+
+**Known residual (not blocking Phase 1b closure):**
+
+- HTTP idempotency middleware fingerprint-ordering bug — surfaced in PR #571 review, tracked via [issue #575](https://github.com/jsonljc/switchboard/issues/575). Affects routes with route-scoped auth preHandlers that mutate `organizationIdFromAuth`. Platform-level dedup via `PlatformIngress.submit` still functions; HTTP-layer dedup is degraded. Affects 1b.2 and any future cohort route with the same shape. Fix is owned by Design A or a separate middleware-cleanup slice.
+
+**Status after this amendment:**
+
+- Phase 1b governance migration cohort: 3/4 shipped, 1/4 (admin-consent.ts) tracked as residual.
+- Issue #562 (route-governance-cleanup): closed.
+- Wave 2 audit Category 1 (governance bypass) ingress findings 1.1, 1.3, 1.4: closed via PRs #568+#570 / #571 / #572.
+- Wave 2 audit Category 1 finding 1.2 (admin-consent.ts): open via issue #576.
+- Wave 1 audit artifacts + Phase 0 triage: merged via PR #559 (2026-05-16). Audit baseline now on `main`.
+
+### Amendment scope (revised)
+
+Amendments 1, 2, and 3 together adjust Decisions 1 and 3 (Amendments 1+2) and update the Phase 1b execution mapping (Amendment 3). Decisions 2, 4, 5 stand unchanged. The Migration checklist applies verbatim to Phase 1b.4 when admin-consent.ts is taken up.
