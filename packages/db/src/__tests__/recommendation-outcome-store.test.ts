@@ -247,4 +247,49 @@ describe("PrismaAttributableRecommendationStore.findOverlapsForCampaign", () => 
     expect(call.where.sourceAgent).toBe("riley");
     expect(call.where.status).toBe("acted");
   });
+
+  it("filters out same-window acted recs on a DIFFERENT campaign", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "rec-other-campaign",
+        organizationId: "org-1",
+        resolvedAt: new Date("2026-05-01T12:00:00Z"),
+        parameters: { __recommendation: { action: "pause" } },
+        targetEntities: { campaignId: "camp-B" }, // different campaign
+      },
+    ]);
+    const store = new PrismaAttributableRecommendationStore(prisma as never);
+    const out = await store.findOverlapsForCampaign({
+      organizationId: "org-1",
+      campaignId: "camp-A",
+      excludeRecommendationId: "rec-1",
+      windowStart: new Date("2026-04-17T12:00:00Z"),
+      windowEnd: new Date("2026-05-08T12:00:00Z"),
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("includes same-window acted rec on the SAME campaign even if its window has not yet closed", async () => {
+    const prisma = buildPrismaMock();
+    // A pause acted 2 days before windowEnd — its 7d window has NOT yet closed
+    (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "rec-mid-window",
+        organizationId: "org-1",
+        resolvedAt: new Date("2026-05-06T12:00:00Z"), // 2 days before windowEnd
+        parameters: { __recommendation: { action: "pause" } },
+        targetEntities: { campaignId: "camp-A" },
+      },
+    ]);
+    const store = new PrismaAttributableRecommendationStore(prisma as never);
+    const out = await store.findOverlapsForCampaign({
+      organizationId: "org-1",
+      campaignId: "camp-A",
+      excludeRecommendationId: "rec-1",
+      windowStart: new Date("2026-04-17T12:00:00Z"),
+      windowEnd: new Date("2026-05-08T12:00:00Z"),
+    });
+    expect(out).toEqual([{ id: "rec-mid-window", actionKind: "pause" }]);
+  });
 });

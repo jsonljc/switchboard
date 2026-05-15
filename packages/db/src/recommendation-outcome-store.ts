@@ -204,7 +204,7 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
   }): Promise<AttributableRecommendation[]> {
     // SQL prefilter: any kind's earliest eligible resolvedAt is
     // now - maxWindowDays - settlementLag. Pull anything older; refine per-kind
-    // in projectCandidate() since each kind has its own windowDays.
+    // in projectBaseCandidate() since each kind has its own windowDays.
     const maxWindowDays = Math.max(...Object.values(KIND_CONFIG).map((c) => c.windowDays));
     const cutoff = new Date(
       args.now.getTime() - SETTLEMENT_LAG_HOURS * MS_PER_HOUR - maxWindowDays * MS_PER_DAY,
@@ -223,8 +223,10 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
     });
 
     return rows
-      .map((row) => projectCandidate(row, args.now))
-      .filter((c): c is AttributableRecommendation => c !== null);
+      .map(projectBaseCandidate)
+      .filter(
+        (c): c is AttributableRecommendation => c !== null && isAttributionEligible(c, args.now),
+      );
   }
 
   async findOverlapsForCampaign(args: {
@@ -245,14 +247,14 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
       },
     });
 
+    // No eligibility check here — a same-campaign rec that is still mid-window
+    // is just as much an overlap as one whose attribution window has closed.
     return rows
-      .map((row) => {
-        const projected = projectCandidate(row, args.windowEnd);
-        if (!projected) return null;
-        if (projected.campaignId !== args.campaignId) return null;
-        return { id: projected.id, actionKind: projected.actionKind };
-      })
-      .filter((r): r is { id: string; actionKind: AttributableKind } => r !== null);
+      .map(projectBaseCandidate)
+      .filter(
+        (c): c is AttributableRecommendation => c !== null && c.campaignId === args.campaignId,
+      )
+      .map((c) => ({ id: c.id, actionKind: c.actionKind }));
   }
 }
 
@@ -264,7 +266,12 @@ interface PrismaCandidateRow {
   resolvedAt: Date | null;
 }
 
-function projectCandidate(row: PrismaCandidateRow, now: Date): AttributableRecommendation | null {
+/**
+ * Extracts the base attribution shape from a DB row: validates kind and
+ * campaign identity, but does NOT apply the time-eligibility check.
+ * Callers are responsible for applying eligibility where needed.
+ */
+function projectBaseCandidate(row: PrismaCandidateRow): AttributableRecommendation | null {
   if (!row.resolvedAt) return null;
 
   const params = (row.parameters ?? {}) as { __recommendation?: { action?: string } };
@@ -274,13 +281,6 @@ function projectCandidate(row: PrismaCandidateRow, now: Date): AttributableRecom
   const identity = extractCampaignIdentity(row);
   if (!identity) return null;
 
-  // Refine per-kind eligibility: windowDays must have elapsed + settlement lag.
-  const windowDays = KIND_CONFIG[kind].windowDays;
-  const eligibleAfter = new Date(
-    row.resolvedAt.getTime() + windowDays * MS_PER_DAY + SETTLEMENT_LAG_HOURS * MS_PER_HOUR,
-  );
-  if (eligibleAfter.getTime() > now.getTime()) return null;
-
   return {
     id: row.id,
     organizationId: row.organizationId,
@@ -288,4 +288,16 @@ function projectCandidate(row: PrismaCandidateRow, now: Date): AttributableRecom
     actionKind: kind,
     resolvedAt: row.resolvedAt,
   };
+}
+
+/**
+ * Returns true when the attribution window + settlement lag has elapsed,
+ * meaning this recommendation is ready for outcome attribution.
+ */
+function isAttributionEligible(candidate: AttributableRecommendation, now: Date): boolean {
+  const windowDays = KIND_CONFIG[candidate.actionKind].windowDays;
+  const eligibleAfter = new Date(
+    candidate.resolvedAt.getTime() + windowDays * MS_PER_DAY + SETTLEMENT_LAG_HOURS * MS_PER_HOUR,
+  );
+  return eligibleAfter.getTime() <= now.getTime();
 }
