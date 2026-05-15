@@ -144,3 +144,9 @@ export {
   type ApiStatus,
   type WebhookStatus,
 } from "./stores/prisma-whatsapp-test-send-store.js";
+export {
+  PrismaRecommendationOutcomeStore,
+  PrismaAttributableRecommendationStore,
+  RecommendationOutcomeAlreadyExistsError,
+  type RecommendationOutcomeReadModel,
+} from "./recommendation-outcome-store.js";
