@@ -6,10 +6,18 @@ import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
 import type { ActivityRow } from "@/components/cockpit/types";
 
 // Mock data hooks before importing the page.
+// `useRespondToApproval` is consumed by <AlexApprovalRow> (rendered when
+// approvals are present); the page itself never imports the mutation hook,
+// per the [[riley-b3-followup-shipped]] single-owner-toast doctrine.
+const respondMutateMock = vi.fn();
 vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-approvals", () => ({
   usePendingApprovals: () => ({
     data: { approvals: pendingApprovalsData },
     isLoading: false,
+  }),
+  useRespondToApproval: () => ({
+    mutate: respondMutateMock,
+    isPending: false,
   }),
 }));
 
@@ -119,9 +127,65 @@ describe("CockpitPage", () => {
     expect(screen.getByText(/Nothing here yet/i)).toBeInTheDocument();
   });
 
-  it("does not render ApprovalBlock when no pending approvals", () => {
+  it("does not render approval rows when no pending approvals", () => {
     render(<CockpitPage />);
     expect(screen.queryByText(/Alex needs you/i)).not.toBeInTheDocument();
+  });
+
+  it("renders one AlexApprovalRow per pending approval", () => {
+    const now = new Date().toISOString();
+    pendingApprovalsData = [
+      {
+        id: "appr-1",
+        summary: "First decision",
+        riskCategory: "high",
+        status: "pending",
+        envelopeId: "env-1",
+        expiresAt: now,
+        bindingHash: "bh-1",
+        createdAt: now,
+      },
+      {
+        id: "appr-2",
+        summary: "Second decision",
+        riskCategory: "medium",
+        status: "pending",
+        envelopeId: "env-2",
+        expiresAt: now,
+        bindingHash: "bh-2",
+        createdAt: now,
+      },
+    ];
+    render(<CockpitPage />);
+    // Each row renders an "Alex needs you" eyebrow + the approval title.
+    expect(screen.getAllByText(/Alex needs you/i)).toHaveLength(2);
+    expect(screen.getByText("First decision")).toBeInTheDocument();
+    expect(screen.getByText("Second decision")).toBeInTheDocument();
+  });
+
+  it("clicking Accept on an approval row dispatches useRespondToApproval.mutate", () => {
+    respondMutateMock.mockClear();
+    const now = new Date().toISOString();
+    pendingApprovalsData = [
+      {
+        id: "appr-1",
+        summary: "Refund request",
+        riskCategory: "high",
+        status: "pending",
+        envelopeId: "env-1",
+        expiresAt: now,
+        bindingHash: "bh-1",
+        createdAt: now,
+      },
+    ];
+    render(<CockpitPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(respondMutateMock).toHaveBeenCalledTimes(1);
+    expect(respondMutateMock.mock.calls[0]?.[0]).toEqual({
+      id: "appr-1",
+      action: "approve",
+      bindingHash: "bh-1",
+    });
   });
 
   it("clicking the Halt button calls useHalt().toggleHalt()", () => {
