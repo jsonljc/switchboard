@@ -120,6 +120,50 @@ describe("hook-runner", () => {
       const result = await runBeforeToolCallHooks([hook], toolCtx);
       expect(result.proceed).toBe(false);
     });
+
+    it("propagates typed payload from blocking hook (A.7c-followup)", async () => {
+      // HookResult.payload carries kind classification for pending_approval
+      // responses. The first hook returning proceed=false claims the payload.
+      const hook: SkillHook = {
+        name: "regulatory-gate",
+        beforeToolCall: async () => ({
+          proceed: false,
+          decision: "pending_approval",
+          reason: "Regulatory review",
+          payload: { kind: "regulatory", body: "FDA approval question" },
+        }),
+      };
+      const result = await runBeforeToolCallHooks([hook], toolCtx);
+      expect(result.proceed).toBe(false);
+      expect(result.decision).toBe("pending_approval");
+      expect(result.payload?.kind).toBe("regulatory");
+      expect(result.payload?.body).toBe("FDA approval question");
+    });
+
+    it("first-payload-wins when multiple hooks could block (A.7c-followup)", async () => {
+      // Aggregator short-circuits on first proceed=false; later hooks never
+      // run, so the first hook's payload is the one returned.
+      const firstHook: SkillHook = {
+        name: "safety-gate",
+        beforeToolCall: async () => ({
+          proceed: false,
+          decision: "pending_approval",
+          reason: "Banned phrase",
+          payload: { kind: "safety-gate" },
+        }),
+      };
+      const secondHook: SkillHook = {
+        name: "regulatory-gate",
+        beforeToolCall: vi.fn().mockResolvedValue({
+          proceed: false,
+          decision: "pending_approval",
+          payload: { kind: "regulatory" },
+        }),
+      };
+      const result = await runBeforeToolCallHooks([firstHook, secondHook], toolCtx);
+      expect(result.payload?.kind).toBe("safety-gate");
+      expect(secondHook.beforeToolCall).not.toHaveBeenCalled();
+    });
   });
 
   describe("runAfterSkillHooks — registration-order invariant", () => {
