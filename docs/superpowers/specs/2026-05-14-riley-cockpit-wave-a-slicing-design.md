@@ -20,12 +20,12 @@ The load-bearing constraint of Wave A is the **adapter boundary**: cockpit UI co
 
 Three slicing approaches were considered. The locked decision is **Approach B**: a vertical slice that ships Riley's core operator loop first (B.1), then layers performance context (B.2), then voice + polish (B.3).
 
-| | A — Mirror Alex A.1–A.6 | **B — Vertical slice (locked)** | C — Backend-first |
-|---|---|---|---|
-| PRs | 6 | 3 | 1 backend + 4–5 frontend |
-| First user-visible value | B.4 (approvals) | **B.1** (approvals + activity from day one) | After backend + first frontend slice |
-| Adapter discipline | Diffuse across 6 PRs | Concentrated in B.1 review | Explicit but no end-to-end proof until frontend ships |
-| Risk | High PR overhead, low value-per-PR | B.1 is larger; mitigated by ruthless scope discipline | Backend ships without end-to-end validation |
+|                          | A — Mirror Alex A.1–A.6            | **B — Vertical slice (locked)**                       | C — Backend-first                                     |
+| ------------------------ | ---------------------------------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| PRs                      | 6                                  | 3                                                     | 1 backend + 4–5 frontend                              |
+| First user-visible value | B.4 (approvals)                    | **B.1** (approvals + activity from day one)           | After backend + first frontend slice                  |
+| Adapter discipline       | Diffuse across 6 PRs               | Concentrated in B.1 review                            | Explicit but no end-to-end proof until frontend ships |
+| Risk                     | High PR overhead, low value-per-PR | B.1 is larger; mitigated by ruthless scope discipline | Backend ships without end-to-end validation           |
 
 **Why B wins:** approval cards are the actual Riley product (operators care about "what does Riley want me to approve and why," not KPI decoration). Concentrating the adapter boundary in B.1 lets a single review enforce the architectural rule. Slice cadence tracks Alex naturally — B.1 piggybacks on Alex A.1; B.2 lands when A.2+A.3 land; B.3 lands when A.5 lands.
 
@@ -37,13 +37,13 @@ Three slicing approaches were considered. The locked decision is **Approach B**:
 
 This is the rule that makes the Wave B substrate swap a layer-3 change, not a UI rewrite. Enforcement is described in §Adapter contract.
 
-The rule's corollary, for B.3 specifically: *"The Riley composer is a bounded operator surface, not an execution path. In B.3, commands may navigate, focus existing approval cards, summarize cockpit state, or control local cockpit affordances. Any command that would create a new mutation path, bypass approval cards, or require PlatformIngress / ExecutableWorkUnit semantics is deferred to Wave B."*
+The rule's corollary, for B.3 specifically: _"The Riley composer is a bounded operator surface, not an execution path. In B.3, commands may navigate, focus existing approval cards, summarize cockpit state, or control local cockpit affordances. Any command that would create a new mutation path, bypass approval cards, or require PlatformIngress / ExecutableWorkUnit semantics is deferred to Wave B."_
 
 ---
 
 ## Slice B.1 — Riley cockpit core loop
 
-**Single question B.1 answers:** *Can an operator open `/riley` and understand what needs approval and what Riley has recently done?*
+**Single question B.1 answers:** _Can an operator open `/riley` and understand what needs approval and what Riley has recently done?_
 
 ### What ships
 
@@ -70,7 +70,7 @@ The rule's corollary, for B.3 specifically: *"The Riley composer is a bounded op
 - ❌ KPI strip + ROI bar (B.2)
 - ❌ `/api/dashboard/agents/[agentId]/mission` aggregator route (B.2)
 - ❌ `/api/dashboard/agents/[agentId]/metrics` extension with `tiles[]` + `roi` + `targets` (B.2)
-- ❌ `AgentRoster.avgValueCents` + `targetCpbCents` migration (B.2)
+- ❌ `avgValueCents` + `targetCpbCents` target values surfaced from `AgentRoster.config` (B.2; no migration — see §B.2)
 - ❌ Command palette / composer behavior / NL parsing (B.3)
 - ❌ `RecommendationPresentation.acceptToast` + `declineToast` schema extension (B.3)
 - ❌ Riley `toastVoice()` function (B.3)
@@ -128,7 +128,7 @@ The rule's corollary, for B.3 specifically: *"The Riley composer is a bounded op
 - **Mission popover.** Subtitle becomes clickable; popover shows 5 rows (Role / Pipeline / Brand / Channels / Targets). Channels row carries a connection-status dot driven by `Connection.status` (Meta Ads). Targets row discloses ROAS source (`Meta` if no CRM Connection, `CRM` if `crm-data-provider` Connection present).
 - **`/api/dashboard/agents/[agentId]/mission` aggregator** — agent-key-aware (Riley reads `Connection` rows; Alex reads `ManagedChannel` rows). One aggregator, branching by `agentKey`.
 - **`useAgentMission()` hook** (consumed by both Alex and Riley; lands in Alex's A.2 conceptually but Riley B.2 verifies it returns Riley-shaped mission data).
-- **`AgentRoster.avgValueCents` + `targetCpbCents` columns** — Prisma migration via `migrate diff --from-url --to-schema-datamodel --script` + `migrate deploy` (per memory feedback: `migrate dev` blocks on TTY warning prompts in agent sessions). Decision: **columns over `config` JSON** for typed access, easier check-drift, future schema discoverability.
+- **`avgValueCents` + `targetCpbCents` via `AgentRoster.config` JSON keys** — reuse the shared `getAgentTargets(roster)` helper at `packages/core/src/agent-home/targets.ts` (introduced by Alex A.3). No Prisma migration; storage-symmetric with the five sibling threshold keys already on `AgentRoster.config`. The Riley B.2b implementation reinterprets `targetCpbCents` as "target cost per lead" while keeping the storage key name. A targets-convention test enforces zero direct `config.avgValueCents` / `config.targetCpbCents` access outside `targets.ts`. **This overrides the original "columns over config JSON" wording below** — see "Plan-stage decisions ratified by this spec" §1.
 - **`/api/dashboard/agents/[agentId]/metrics` extension** — adds `tiles[]` + `roi` + `targets` fields. Riley's branch in `metrics-riley.ts` produces these natively. Alex's branch keeps emitting today's flat shape; Alex A.3 ships `legacyTiles` / `legacyRoi` adapters to convert.
 - **KPI strip rendering for Riley.** 4 tiles (leads / spend / CPL / Reported ROAS) with cold-state degraded path (`"—"` + hint).
 - **ROI bar rendering for Riley.** ROAS fill, break-even mark, CPL-vs-target comparator. Degraded path when `avgValueCents` is null or `spend` unavailable.
@@ -138,7 +138,7 @@ The rule's corollary, for B.3 specifically: *"The Riley composer is a bounded op
 1. Mission popover opens from clickable subtitle on Identity row; 5 rows render in the documented order.
 2. Channels row carries a `Connection.status`-driven dot: `ok` / `degraded` / `disconnected`.
 3. Targets row discloses ROAS source explicitly: `"target CPL $X · avg lead value $Y · ROAS from Meta"` (or `… ROAS from CRM` when a `crm-data-provider` Connection exists).
-4. `AgentRoster.avgValueCents` + `targetCpbCents` columns exist via migration; `pnpm db:check-drift` passes.
+4. `avgValueCents` + `targetCpbCents` are readable via `getAgentTargets(roster)` from `AgentRoster.config` JSON keys; the targets-convention test passes (zero direct `config.avgValueCents` / `config.targetCpbCents` access outside `targets.ts`). No migration required.
 5. KPI strip renders 4 tiles with cold-state degraded path; tile labels use "Reported ROAS" (not "ROAS") to make the metric source explicit.
 6. ROI bar renders with fill, break-even mark, CPL-vs-target comparator; degraded path when `avgValueCents` is null or spend unavailable.
 7. **Honest impact-language guardrail.** All KPI/ROI labels must distinguish reported account metrics from Riley-attributed outcomes. No copy in B.2 claims Riley improved metrics. Allowed: estimated `dollarsAtRisk` (pre-decision), reported metrics from Meta or CRM, connection health. Causal attribution to Riley's actions is reserved for Wave B outcome attribution.
@@ -147,6 +147,7 @@ The rule's corollary, for B.3 specifically: *"The Riley composer is a bounded op
 ### Plan-stage choice (resolved here, ratified by writing-plans)
 
 The Riley target spec offered two paths for cockpit ROAS+CPL:
+
 - **(a)** Extend `/api/dashboard/roi` (existing funnel endpoint feeding `/reports`).
 - **(b) — recommended** Put cockpit ROAS+CPL on `/api/dashboard/agents/[agentId]/metrics`.
 
@@ -275,14 +276,14 @@ export type CockpitStatus = "IDLE" | "WORKING" | "WAITING" | "HALTED" | "WATCHIN
 
 export type ApprovalView = {
   id: string;
-  kind: ApprovalKind;                      // union of Alex + Riley kinds
+  kind: ApprovalKind; // union of Alex + Riley kinds
   urgency: "immediate" | "this_week" | "next_cycle";
   askedAt: string;
   title: string;
   campaign:
     | { kind: "campaign"; name: string; id: string }
-    | { kind: "account";  pixelId: string; breaches: number }
-    | null;                                // null for Alex bookings; required for Riley
+    | { kind: "account"; pixelId: string; breaches: number }
+    | null; // null for Alex bookings; required for Riley
   quote: string;
   risk?: string;
   confidence?: number;
@@ -294,13 +295,13 @@ export type ApprovalView = {
   primaryAction:
     | { kind: "internal"; intent: string; parameters: Record<string, unknown> }
     | { kind: "external"; url: string; service: "meta" | "google" };
-  acceptToast?: string;                    // wired in B.3
+  acceptToast?: string; // wired in B.3
   declineToast?: string;
 };
 
 export type ActivityRow = {
   time: string;
-  kind: ActivityKind;                      // shell union grows by 9 entries in B.1
+  kind: ActivityKind; // shell union grows by 9 entries in B.1
   head: string;
   body: string;
   who?: string;
@@ -337,7 +338,7 @@ Files under `apps/dashboard/src/lib/cockpit/riley/**` are exempt from the rule (
 
 The rule reads, in plain English: **Riley cockpit hooks may orchestrate raw-data hooks and adapters, but may not import database, Prisma, Recommendation, or AuditEntry types directly.**
 
-**2. Code review discipline.** PR template adds a checklist line: *"No new imports of `Recommendation` / `AuditEntry` / Prisma types from `components/cockpit/**` or `hooks/use-riley-*`. Adapter files only."*
+**2. Code review discipline.** PR template adds a checklist line: _"No new imports of `Recommendation` / `AuditEntry` / Prisma types from `components/cockpit/**` or `hooks/use-riley-_`. Adapter files only."\*
 
 ### Pre-merge grep smoke check
 
@@ -350,6 +351,7 @@ rg "Recommendation|AuditEntry|@switchboard/db|@prisma" \
 ```
 
 **Expected:**
+
 - Zero matches in `components/cockpit/**`.
 - No direct db/schema/Prisma type imports in `hooks/use-riley-*.ts`.
 - Matches are allowed only in `lib/cockpit/riley/**`.
@@ -359,13 +361,13 @@ If the grep returns matches outside the allowed locations, the adapter boundary 
 
 ### Adapter responsibilities (B.1)
 
-| Adapter | Input | Output | Key transforms |
-|---|---|---|---|
-| `recommendation-to-approval-view.ts` | `Recommendation` row | `ApprovalView` | Map 11 actions to titles/eyebrows/urgency; `humanSummary → quote`; `presentation.primaryLabel → primary`; `dollarsAtRisk → risk`; reversibility flag; `createdAt → askedAt` via existing `relativeAge` util in `packages/core/src/agent-home/relative-age.ts` |
-| `signal-health-grouper.ts` | `Recommendation[]` filtered by `campaignId.startsWith("signal:")` | one synthesized `ApprovalView` per pixel | Group by pixel; bullet-list breaches in `quote`; set `campaign.kind = "account"`; **primary action is external (Open Events Manager); no "Dismiss all" button in B.1** |
-| `riley-activity-translator.ts` | raw activity rows from existing `use-agent-activity` translator | `ActivityRow[]` with Riley kinds | Map intent + status → `ActivityKind` per the target spec's translator table; absorb three-vocabulary drift (`recommendation.pause` / `recommendation.pause_adset` / `recommendation.ad_set_pause`) |
-| `riley-status-deriver.ts` | `{ halted, hasActiveCampaign, pendingApprovals, recentActivityAt, now }` | `CockpitStatus` | Order: `HALTED` → `IDLE` (no connection / no active campaign) → `WAITING` (pending recs, connection present) → `WATCHING` (steady, recent activity). **Connection absence takes precedence over pending recommendation rows.** `REVIEWING` deferred — see §Status pill |
-| `cold-state-activity-rows.ts` | `boolean hasConnection` | `ActivityRow[]` | When no connection: 3 synthetic onboarding rows (no DB write) — `Connect Meta Ads to begin`, `Set average lead value`, `Standing rules loaded` |
+| Adapter                              | Input                                                                    | Output                                   | Key transforms                                                                                                                                                                                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `recommendation-to-approval-view.ts` | `Recommendation` row                                                     | `ApprovalView`                           | Map 11 actions to titles/eyebrows/urgency; `humanSummary → quote`; `presentation.primaryLabel → primary`; `dollarsAtRisk → risk`; reversibility flag; `createdAt → askedAt` via existing `relativeAge` util in `packages/core/src/agent-home/relative-age.ts`          |
+| `signal-health-grouper.ts`           | `Recommendation[]` filtered by `campaignId.startsWith("signal:")`        | one synthesized `ApprovalView` per pixel | Group by pixel; bullet-list breaches in `quote`; set `campaign.kind = "account"`; **primary action is external (Open Events Manager); no "Dismiss all" button in B.1**                                                                                                 |
+| `riley-activity-translator.ts`       | raw activity rows from existing `use-agent-activity` translator          | `ActivityRow[]` with Riley kinds         | Map intent + status → `ActivityKind` per the target spec's translator table; absorb three-vocabulary drift (`recommendation.pause` / `recommendation.pause_adset` / `recommendation.ad_set_pause`)                                                                     |
+| `riley-status-deriver.ts`            | `{ halted, hasActiveCampaign, pendingApprovals, recentActivityAt, now }` | `CockpitStatus`                          | Order: `HALTED` → `IDLE` (no connection / no active campaign) → `WAITING` (pending recs, connection present) → `WATCHING` (steady, recent activity). **Connection absence takes precedence over pending recommendation rows.** `REVIEWING` deferred — see §Status pill |
+| `cold-state-activity-rows.ts`        | `boolean hasConnection`                                                  | `ActivityRow[]`                          | When no connection: 3 synthetic onboarding rows (no DB write) — `Connect Meta Ads to begin`, `Set average lead value`, `Standing rules loaded`                                                                                                                         |
 
 ### Test contract
 
@@ -395,12 +397,12 @@ This keeps B.1 from sneaking in a mini-PlatformIngress problem and preserves the
 
 B.1 wires **4 of the 5 states** from the target Riley spec:
 
-| State | B.1 derivation | Wired? |
-|---|---|---|
-| `HALTED` | `useHalt().halted === true` | ✅ |
-| `IDLE` | no `Connection` row for Meta Ads OR no active campaign | ✅ |
-| `WAITING` | `Connection` present AND ≥1 `Recommendation` with `status = "pending"` | ✅ |
-| `WATCHING` | `Connection` present, no pending recs, recent activity within last 15 min | ✅ |
+| State       | B.1 derivation                                                                                                                              | Wired?     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `HALTED`    | `useHalt().halted === true`                                                                                                                 | ✅         |
+| `IDLE`      | no `Connection` row for Meta Ads OR no active campaign                                                                                      | ✅         |
+| `WAITING`   | `Connection` present AND ≥1 `Recommendation` with `status = "pending"`                                                                      | ✅         |
+| `WATCHING`  | `Connection` present, no pending recs, recent activity within last 15 min                                                                   | ✅         |
 | `REVIEWING` | requires `system.scoring_run_in_progress` audit signal — **not emitted today** (verified by `rg "scoring_run_in_progress" packages/ apps/`) | ⏸ deferred |
 
 **Precedence rule.** `Connection` absence takes precedence over pending recommendation rows. B.1 treats orphaned pending recs as non-actionable until a connection exists.
@@ -411,14 +413,14 @@ B.1 wires **4 of the 5 states** from the target Riley spec:
 
 ## Backend changes by slice
 
-| Change | Where | Slice |
-|---|---|---|
-| `AgentRoster.avgValueCents` + `targetCpbCents` columns | Prisma migration via `migrate diff --from-url --to-schema-datamodel --script` + `migrate deploy` | **B.2** |
-| `/api/dashboard/agents/[agentId]/mission` aggregator route | new Fastify route in `apps/api/` | **B.2** |
-| `/api/dashboard/agents/[agentId]/metrics` extension with `tiles[]` + `roi` + `targets` | extend existing route | **B.2** |
-| `RecommendationPresentation.acceptToast` + `declineToast` optional fields | Zod schema in `packages/schemas/src/recommendations.ts` | **B.3** |
-| Inngest instrumentation for `system.scoring_run_in_progress` audit event | `packages/ad-optimizer/src/inngest-functions.ts` | **deferred** (potentially a B.2 micro-slice) |
-| WorkTrace mirror, PlatformIngress route, ExecutableWorkUnit materialization, outcome attribution, learning memory, governance hook unification, unified approval lifecycle | core platform | **Wave B** (sibling parity spec) |
+| Change                                                                                                                                                                     | Where                                                                                                                                                                     | Slice                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `avgValueCents` + `targetCpbCents` target values                                                                                                                           | `AgentRoster.config` JSON keys read via `getAgentTargets(roster)` (shared helper at `packages/core/src/agent-home/targets.ts`; introduced by Alex A.3). **No migration.** | **B.2**                                      |
+| `/api/dashboard/agents/[agentId]/mission` aggregator route                                                                                                                 | new Fastify route in `apps/api/`                                                                                                                                          | **B.2**                                      |
+| `/api/dashboard/agents/[agentId]/metrics` extension with `tiles[]` + `roi` + `targets`                                                                                     | extend existing route                                                                                                                                                     | **B.2**                                      |
+| `RecommendationPresentation.acceptToast` + `declineToast` optional fields                                                                                                  | Zod schema in `packages/schemas/src/recommendations.ts`                                                                                                                   | **B.3**                                      |
+| Inngest instrumentation for `system.scoring_run_in_progress` audit event                                                                                                   | `packages/ad-optimizer/src/inngest-functions.ts`                                                                                                                          | **deferred** (potentially a B.2 micro-slice) |
+| WorkTrace mirror, PlatformIngress route, ExecutableWorkUnit materialization, outcome attribution, learning memory, governance hook unification, unified approval lifecycle | core platform                                                                                                                                                             | **Wave B** (sibling parity spec)             |
 
 **B.1 ships ZERO backend changes.** Pure UI + adapter work on existing substrate. This is deliberate — it bounds B.1's review surface to dashboard files only and makes the substrate-replacement contract verifiable from the dashboard side alone.
 
@@ -428,7 +430,7 @@ B.1 wires **4 of the 5 states** from the target Riley spec:
 
 The Riley target spec carried a few open plan-stage choices. This slicing spec resolves them:
 
-1. **`AgentRoster` storage:** Columns over `config` JSON (typed access, easier check-drift).
+1. **`AgentRoster` storage:** ~~Columns over `config` JSON.~~ **Amended 2026-05-15:** `config` JSON keys, reusing the shared `getAgentTargets(roster)` helper at `packages/core/src/agent-home/targets.ts`. Alex A.3 ratified this when it shipped (#500 → `ed54c4a8`): storage-symmetry with the five sibling threshold keys already on `AgentRoster.config`, no migration, and a targets-convention test that enforces single-helper access. Riley B.2b consumes the same helper. Both agents now read targets via one code path.
 2. **Cockpit ROAS/CPL endpoint:** Add to `/api/dashboard/agents/[agentId]/metrics`, not `/api/dashboard/roi`. Decouples cockpit from reports query patterns.
 3. **`REVIEWING` deferred** — no signal source today; revisit in B.2.
 4. **Signal-health card** — grouped in B.1, but no "Dismiss all" until per-row operator-visible flow exists.
