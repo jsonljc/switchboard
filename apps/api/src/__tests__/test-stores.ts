@@ -72,6 +72,35 @@ export class InMemoryWorkTraceStore implements WorkTraceStore {
   }
 }
 
+/**
+ * Test-only WorkTraceStore wrapper that records every persist() call so route
+ * tests can verify ingress-path flow. Subclasses InMemoryWorkTraceStore to
+ * avoid runtime monkey-patching of the base store — the wrapper itself is the
+ * observation point.
+ *
+ * Used by operator-direct ingress route tests (Wave 2 Phase 1b) to assert
+ * `intent`, `mode`, `outcome`, `organizationId` on the most recent persisted
+ * trace.
+ */
+export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
+  public lastPersistedSummary: {
+    intent: string;
+    mode: string;
+    outcome: string;
+    organizationId: string;
+  } | null = null;
+
+  async persist(trace: WorkTrace): Promise<void> {
+    this.lastPersistedSummary = {
+      intent: trace.intent,
+      mode: trace.mode,
+      outcome: trace.outcome,
+      organizationId: trace.organizationId,
+    };
+    await super.persist(trace);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Decision-feed stubs (Contact, Handoff, ConversationThread).
 // Tests that need to seed can do so via `app.contactStore.create(...)` etc.

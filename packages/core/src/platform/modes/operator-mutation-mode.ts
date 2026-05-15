@@ -9,8 +9,10 @@ import type { ExecutionModeName } from "../types.js";
  *
  * Mirrors the relevant subset of `WorkflowHandlerResult` but is intentionally
  * scoped: operator-direct mutations are synchronous and never `"queued"` or
- * `"pending_approval"` (governance approval was determined upstream by the
- * `approvalMode: "system_auto_approved"` short-circuit).
+ * `"pending_approval"`. Approval routing is decided upstream by
+ * `GovernanceGate.evaluate`: intents registered with `approvalMode: "policy"`
+ * that require approval are short-circuited to `require_approval` BEFORE the
+ * mode executes, so the handler never observes that outcome.
  */
 export interface OperatorMutationHandlerResult {
   outcome: "completed" | "failed";

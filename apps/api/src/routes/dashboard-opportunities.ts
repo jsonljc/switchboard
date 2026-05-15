@@ -5,7 +5,10 @@ import { listOpportunitiesForBoard } from "@switchboard/core/lifecycle";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { getIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
-import { TRANSITION_OPPORTUNITY_STAGE_INTENT } from "../bootstrap/operator-intents.js";
+import {
+  TRANSITION_OPPORTUNITY_STAGE_INTENT,
+  OPERATOR_INTENT_ERROR_CODES,
+} from "../bootstrap/operator-intents.js";
 
 const StageTransitionRequestSchema = z.object({
   stage: OpportunityStageSchema,
@@ -71,15 +74,18 @@ export const dashboardOpportunitiesRoutes: FastifyPluginAsync = async (app) => {
 
     const { result } = response;
     if (result.outcome === "failed") {
-      if (result.error?.code === "OPPORTUNITY_NOT_FOUND") {
-        return reply.code(404).send({ error: "OPPORTUNITY_NOT_FOUND" });
+      if (result.error?.code === OPERATOR_INTENT_ERROR_CODES.OPPORTUNITY_NOT_FOUND) {
+        return reply.code(404).send({ error: OPERATOR_INTENT_ERROR_CODES.OPPORTUNITY_NOT_FOUND });
       }
-      return reply.code(500).send({ error: result.error?.code ?? "EXECUTION_FAILED" });
+      // Any other handler failure is an unexpected execution error. Throw so
+      // the global error handler returns a scrubbed 500 — don't echo internal
+      // error codes to the client.
+      throw new Error(result.error?.message ?? "Operator mutation execution failed");
     }
 
     const opportunity = (result.outputs as { opportunity?: PipelineBoardOpportunity }).opportunity;
     if (!opportunity) {
-      return reply.code(500).send({ error: "MISSING_OUTPUT" });
+      throw new Error("Operator mutation handler returned no opportunity output");
     }
     return { opportunity };
   });

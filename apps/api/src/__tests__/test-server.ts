@@ -53,7 +53,7 @@ import type {
 } from "@switchboard/core/platform";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 import {
-  InMemoryWorkTraceStore,
+  ObservableWorkTraceStore,
   TestContactStore,
   TestHandoffStore,
   TestThreadStore,
@@ -360,7 +360,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     getGovernanceProfile: async (_orgId) => governanceProfileStore.get(_orgId),
   });
 
-  const workTraceStore = new InMemoryWorkTraceStore();
+  const workTraceStore = new ObservableWorkTraceStore();
 
   const { resolveAuthoritativeDeployment } =
     await import("../bootstrap/platform-deployment-resolver.js");
@@ -376,28 +376,12 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   app.decorate("platformIngress", platformIngress);
   app.decorate("workTraceStore", workTraceStore);
 
-  // Test-only ingress trace observer: captures the most recent persisted
-  // WorkTrace summary for assertions in operator-direct ingress route tests
-  // (Wave 2 Phase 1b). Decorated as `lastIngressTrace` so tests can verify
-  // ingress-path flow without exposing the InMemoryWorkTraceStore internals.
-  let lastIngressTrace: {
-    intent: string;
-    mode: string;
-    outcome: string;
-    organizationId: string;
-  } | null = null;
-  const originalPersist = workTraceStore.persist.bind(workTraceStore);
-  workTraceStore.persist = async (trace) => {
-    lastIngressTrace = {
-      intent: trace.intent,
-      mode: trace.mode,
-      outcome: trace.outcome,
-      organizationId: trace.organizationId,
-    };
-    return originalPersist(trace);
-  };
+  // Test-only ingress trace observer: the ObservableWorkTraceStore records the
+  // most recent persisted WorkTrace summary. Tests can read it via
+  // `app.lastIngressTrace` to verify ingress-path flow in operator-direct
+  // ingress route tests (Wave 2 Phase 1b).
   Object.defineProperty(app, "lastIngressTrace", {
-    get: () => lastIngressTrace,
+    get: () => workTraceStore.lastPersistedSummary,
     configurable: true,
   });
 

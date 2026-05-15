@@ -11,7 +11,10 @@ export type ExecutorBinding =
   | { mode: "pipeline"; pipelineId: string }
   | { mode: "cartridge"; actionId: string }
   | { mode: "workflow"; workflowId: string }
-  | { mode: "operator_mutation"; intent: string };
+  // Operator-direct mutations are identified by the surrounding
+  // IntentRegistration.intent — the binding carries no separate identifier
+  // because the handler lookup in OperatorMutationMode keys on the intent.
+  | { mode: "operator_mutation" };
 
 /**
  * Approval-evaluation mode for an intent registration.

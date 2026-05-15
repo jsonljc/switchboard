@@ -29,7 +29,16 @@ interface OperatorIntentsBootstrapDeps {
 
 export const TRANSITION_OPPORTUNITY_STAGE_INTENT = "operator.transition_opportunity_stage";
 
-function buildTransitionOpportunityStageHandler(
+/**
+ * Error codes returned by operator-mutation handlers. Routes and handlers
+ * share these literals so a rename on one side is a compile error on the
+ * other. Future Phase 1b/1c intents extend this object.
+ */
+export const OPERATOR_INTENT_ERROR_CODES = {
+  OPPORTUNITY_NOT_FOUND: "OPPORTUNITY_NOT_FOUND",
+} as const;
+
+export function buildTransitionOpportunityStageHandler(
   opportunityStore: OpportunityStore,
 ): OperatorMutationHandler {
   return {
@@ -55,7 +64,10 @@ function buildTransitionOpportunityStageHandler(
           return {
             outcome: "failed" as const,
             summary: "Opportunity not found",
-            error: { code: "OPPORTUNITY_NOT_FOUND", message: err.message },
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.OPPORTUNITY_NOT_FOUND,
+              message: err.message,
+            },
           };
         }
         throw err;
@@ -77,7 +89,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     intent: TRANSITION_OPPORTUNITY_STAGE_INTENT,
     defaultMode: "operator_mutation",
     allowedModes: ["operator_mutation"],
-    executor: { mode: "operator_mutation", intent: TRANSITION_OPPORTUNITY_STAGE_INTENT },
+    executor: { mode: "operator_mutation" },
     parameterSchema: {},
     mutationClass: "write",
     budgetClass: "cheap",
