@@ -225,6 +225,44 @@ describe("PrismaAttributableRecommendationStore.findAttributableCandidates", () 
     expect(call.where.recommendationOutcome.is).toBeNull();
     expect(call.orderBy).toEqual({ resolvedAt: "asc" });
   });
+
+  it("SQL cutoff uses minWindowDays (7d) so pause candidates 8–14 days old are included", async () => {
+    // Regression guard for the max→min fix.
+    //
+    // KIND_CONFIG: pause=7d, refresh_creative=14d.
+    // Correct cutoff = now - 7d - 24h (minWindowDays).
+    // Wrong cutoff   = now - 14d - 24h (maxWindowDays).
+    //
+    // A pause acted 10 days ago has resolvedAt = now - 10d.
+    // With the CORRECT cutoff (now - 7d - 24h = now - 8d):
+    //   resolvedAt (now-10d) <= cutoff (now-8d) → TRUE → row included in SQL fetch.
+    // With the WRONG cutoff (now - 14d - 24h = now - 15d):
+    //   resolvedAt (now-10d) <= cutoff (now-15d) → FALSE → row silently excluded.
+    //
+    // The test verifies the cutoff passed to findMany equals now - 7d - 24h.
+    const prisma = buildPrismaMock();
+    (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    const store = new PrismaAttributableRecommendationStore(prisma as never);
+
+    const now = new Date("2026-05-15T07:00:00Z");
+    await store.findAttributableCandidates({ organizationId: "org-1", now });
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const call = (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    const cutoff: Date = call.where.resolvedAt.lte;
+
+    // Expected: now - 7d - 24h (minWindowDays=7 for pause)
+    const MS_PER_HOUR = 60 * 60 * 1000;
+    const MS_PER_DAY = 24 * MS_PER_HOUR;
+    const expectedCutoff = new Date(now.getTime() - 24 * MS_PER_HOUR - 7 * MS_PER_DAY);
+
+    expect(cutoff.getTime()).toBe(expectedCutoff.getTime());
+
+    // Also confirm it is NOT the wrong value (now - 14d - 24h)
+    const wrongCutoff = new Date(now.getTime() - 24 * MS_PER_HOUR - 14 * MS_PER_DAY);
+    expect(cutoff.getTime()).not.toBe(wrongCutoff.getTime());
+  });
 });
 
 describe("PrismaAttributableRecommendationStore.findOverlapsForCampaign", () => {

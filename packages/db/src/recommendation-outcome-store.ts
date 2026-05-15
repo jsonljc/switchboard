@@ -202,12 +202,15 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
     organizationId: string;
     now: Date;
   }): Promise<AttributableRecommendation[]> {
-    // SQL prefilter: any kind's earliest eligible resolvedAt is
-    // now - maxWindowDays - settlementLag. Pull anything older; refine per-kind
-    // in projectBaseCandidate() since each kind has its own windowDays.
-    const maxWindowDays = Math.max(...Object.values(KIND_CONFIG).map((c) => c.windowDays));
+    // SQL prefilter: pull candidates whose attribution window has closed for AT LEAST ONE kind.
+    // The smallest windowDays gives the earliest cutoff that is still inclusive for all kinds.
+    // For pause (7d): eligible after now - 7d - 24h; for refresh_creative (14d): now - 14d - 24h.
+    // Using minWindowDays (7d) means the cutoff is now - 7d - 24h — rows newer than that are
+    // still in-window for pause and therefore correctly excluded. Per-kind eligibility is refined
+    // in TS via isAttributionEligible() after the SQL fetch.
+    const minWindowDays = Math.min(...Object.values(KIND_CONFIG).map((c) => c.windowDays));
     const cutoff = new Date(
-      args.now.getTime() - SETTLEMENT_LAG_HOURS * MS_PER_HOUR - maxWindowDays * MS_PER_DAY,
+      args.now.getTime() - SETTLEMENT_LAG_HOURS * MS_PER_HOUR - minWindowDays * MS_PER_DAY,
     );
 
     const rows = await this.prisma.pendingActionRecord.findMany({
