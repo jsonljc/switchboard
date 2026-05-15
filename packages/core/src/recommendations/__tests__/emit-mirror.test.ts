@@ -143,4 +143,33 @@ describe("emitRecommendation with mirror", () => {
       /cronId is required/,
     );
   });
+
+  it("propagates deploymentId option through to the WorkTrace", async () => {
+    const store = createInMemoryRecommendationStore();
+    const traces: CapturedTrace[] = [];
+    const mirror = createInMemoryEmissionMirror({ store, traces });
+
+    await emitRecommendation(store, baseInput(), {
+      mirror,
+      cronId: "ad-optimizer-weekly-audit",
+      deploymentId: "dep-99",
+      now: NOW,
+    });
+
+    expect(traces[0]?.trace.deploymentId).toBe("dep-99");
+  });
+
+  it("omits WorkTrace.deploymentId when option absent (back-compat)", async () => {
+    const store = createInMemoryRecommendationStore();
+    const traces: CapturedTrace[] = [];
+    const mirror = createInMemoryEmissionMirror({ store, traces });
+
+    await emitRecommendation(store, baseInput(), {
+      mirror,
+      cronId: "ad-optimizer-weekly-audit",
+      now: NOW,
+    });
+
+    expect(traces[0]?.trace.deploymentId).toBeUndefined();
+  });
 });

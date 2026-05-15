@@ -129,7 +129,13 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         config,
         ...(signalHealthChecker ? { signalHealthChecker } : {}),
         ...(deps.recommendationEmitter
-          ? { recommendationEmitter: deps.recommendationEmitter }
+          ? {
+              recommendationEmitter: deps.recommendationEmitter,
+              recommendationEmissionContext: {
+                cronId: "ad-optimizer-weekly-audit",
+                deploymentId: deployment.id,
+              },
+            }
           : {}),
       });
       const report = await runner.run(dateRanges);

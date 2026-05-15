@@ -37,6 +37,14 @@ export interface EmitRecommendationOptions {
    */
   cronId?: string;
   /**
+   * Deployment id captured into the mirrored WorkTrace's `deploymentId` field.
+   * Optional; populated from the cron loop in production so per-deployment
+   * outcome attribution (Wave B PR-3) can join WorkTrace → Deployment without
+   * scanning audit logs. When absent, `WorkTrace.deploymentId` is unset and
+   * downstream readers must look up by orgId.
+   */
+  deploymentId?: string;
+  /**
    * Clock injection point. Defaults to `() => new Date()`.
    */
   now?: () => Date;
@@ -107,6 +115,7 @@ export async function emitRecommendation(
       insert: persistInput,
       now,
       cronId: options.cronId,
+      ...(options.deploymentId ? { deploymentId: options.deploymentId } : {}),
     });
     const { row, idempotent } = await options.mirror.recordEmission({
       recommendationInsert: persistInput,

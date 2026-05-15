@@ -40,6 +40,7 @@ describe("runRecommendationSink", () => {
       auditRunId: "audit-1",
       recommendations: recs,
       emit,
+      emissionContext: { cronId: "test-cron", deploymentId: "test-deployment" },
     });
     expect(result.routedQueue + result.routedShadow + result.dropped).toBe(2);
     expect(emit).toHaveBeenCalledTimes(2);
@@ -58,6 +59,7 @@ describe("runRecommendationSink", () => {
       auditRunId: "audit-2",
       recommendations: recs,
       emit,
+      emissionContext: { cronId: "test-cron", deploymentId: "test-deployment" },
     });
     expect(result.dropped).toBeGreaterThan(0);
     // The sink emits unconditionally — the router decides surface. Both recs
@@ -72,6 +74,7 @@ describe("runRecommendationSink", () => {
       auditRunId: "audit-3",
       recommendations: [baseRec({ confidence: 0.9 })],
       emit,
+      emissionContext: { cronId: "test-cron", deploymentId: "test-deployment" },
     });
     expect(result.dropped).toBe(0);
   });
@@ -106,6 +109,7 @@ describe("runRecommendationSink", () => {
         baseRec({ action: a, campaignId: `c-${i}`, confidence: 0.6 }),
       ),
       emit,
+      emissionContext: { cronId: "test-cron", deploymentId: "test-deployment" },
     });
     expect(summaries).toHaveLength(actions.length);
     summaries.forEach((s) => {
@@ -153,6 +157,7 @@ describe("runRecommendationSink", () => {
         baseRec({ action: a, campaignId: `c-${i}`, confidence: 0.9 }),
       ),
       emit,
+      emissionContext: { cronId: "test-cron", deploymentId: "test-deployment" },
     });
     expect(presentations).toHaveLength(actions.length);
 

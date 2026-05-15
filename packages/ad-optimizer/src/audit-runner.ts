@@ -29,7 +29,11 @@ import {
   generateRecommendations,
   generateSignalHealthRecommendations,
 } from "./recommendation-engine.js";
-import { runRecommendationSink, type RecommendationEmitter } from "./recommendation-sink.js";
+import {
+  runRecommendationSink,
+  type EmissionContext,
+  type RecommendationEmitter,
+} from "./recommendation-sink.js";
 import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
@@ -90,6 +94,17 @@ export interface AuditDependencies {
    * the store are accessible.
    */
   recommendationEmitter?: RecommendationEmitter;
+  /**
+   * Optional. Bound at runner-construction time so each audit run can stamp
+   * emitted recommendations with the originating cron id + deployment id. The
+   * sink threads this context to the emitter; the emitter forwards it to
+   * `emitRecommendation` so the WorkTrace mirror records provenance. Required
+   * when `recommendationEmitter` is provided — the audit runner asserts at
+   * `run()` time so misconfiguration surfaces loudly, not silently as orphan
+   * traces. Optional in the type so callers that omit the emitter don't need
+   * to provide ctx.
+   */
+  recommendationEmissionContext?: EmissionContext;
   /**
    * Optional. When provided alongside `config.pixelId`, the runner pulls a
    * Meta Pixel + CAPI signal-health report and emits `fix_signal_health`
@@ -186,6 +201,7 @@ export class AuditRunner {
   private readonly getAdSetInsightsFn?: AuditDependencies["getAdSetInsights"];
   private readonly getTrendDataFn?: AuditDependencies["getTrendData"];
   private readonly recommendationEmitter?: RecommendationEmitter;
+  private readonly recommendationEmissionContext?: EmissionContext;
   private readonly signalHealthChecker?: SignalHealthReportProvider;
 
   constructor(deps: AuditDependencies) {
@@ -198,7 +214,15 @@ export class AuditRunner {
     this.getAdSetInsightsFn = deps.getAdSetInsights;
     this.getTrendDataFn = deps.getTrendData;
     this.recommendationEmitter = deps.recommendationEmitter;
+    this.recommendationEmissionContext = deps.recommendationEmissionContext;
     this.signalHealthChecker = deps.signalHealthChecker;
+
+    if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
+      throw new Error(
+        "AuditRunner: recommendationEmissionContext is required when recommendationEmitter is provided " +
+          "(otherwise mirrored WorkTrace rows would lack cron + deployment provenance)",
+      );
+    }
   }
 
   async run(params: {
@@ -502,11 +526,14 @@ export class AuditRunner {
     // analysis-only callers keep working.
     if (this.recommendationEmitter) {
       const auditRunId = `audit:${this.config.accountId}:${dateRange.since}:${dateRange.until}`;
+      // Constructor invariant: recommendationEmissionContext is always defined
+      // when recommendationEmitter is. The non-null assertion is safe.
       const sinkResult = await runRecommendationSink({
         orgId: this.config.orgId,
         auditRunId,
         recommendations,
         emit: this.recommendationEmitter,
+        emissionContext: this.recommendationEmissionContext!,
       });
       // v1: log the rollup. v1.5 will write a first-class activity-trail event
       // (deferred — AgentEvent requires deploymentId not yet in AuditConfig).
