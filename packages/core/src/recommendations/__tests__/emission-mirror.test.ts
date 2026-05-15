@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildRileyEmissionWorkTrace } from "../emission-mirror.js";
+import { createInMemoryEmissionMirror, type CapturedTrace } from "../in-memory-emission-mirror.js";
+import { createInMemoryRecommendationStore } from "../in-memory-store.js";
 import type { PersistRecommendationInput } from "../types.js";
 
 const baseInsert: PersistRecommendationInput = {
@@ -216,5 +218,69 @@ describe("buildRileyEmissionWorkTrace", () => {
     });
     expect(a.workUnitId).not.toBe(b.workUnitId);
     expect(a.traceId).not.toBe(b.traceId);
+  });
+});
+
+describe("createInMemoryEmissionMirror", () => {
+  function buildTrace(insert: PersistRecommendationInput) {
+    return buildRileyEmissionWorkTrace({
+      insert,
+      now: NOW,
+      cronId: "ad-optimizer-weekly-audit",
+    });
+  }
+
+  it("records both the recommendation and the work trace on a fresh emission", async () => {
+    const store = createInMemoryRecommendationStore();
+    const traces: CapturedTrace[] = [];
+    const mirror = createInMemoryEmissionMirror({ store, traces });
+
+    const wt = buildTrace(baseInsert);
+    const result = await mirror.recordEmission({
+      recommendationInsert: baseInsert,
+      workTrace: wt,
+    });
+
+    expect(result.idempotent).toBe(false);
+    expect(store.rows).toHaveLength(1);
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.idempotencyKey).toBe(baseInsert.idempotencyKey);
+  });
+
+  it("returns idempotent=true and writes nothing new on duplicate idempotencyKey", async () => {
+    const store = createInMemoryRecommendationStore();
+    const traces: CapturedTrace[] = [];
+    const mirror = createInMemoryEmissionMirror({ store, traces });
+
+    const wt = buildTrace(baseInsert);
+    await mirror.recordEmission({ recommendationInsert: baseInsert, workTrace: wt });
+    const second = await mirror.recordEmission({
+      recommendationInsert: baseInsert,
+      workTrace: wt,
+    });
+
+    expect(second.idempotent).toBe(true);
+    expect(store.rows).toHaveLength(1);
+    expect(traces).toHaveLength(1);
+  });
+
+  it("rolls back the recommendation when the trace recorder throws", async () => {
+    const store = createInMemoryRecommendationStore();
+    const traces: CapturedTrace[] = [];
+    const mirror = createInMemoryEmissionMirror({
+      store,
+      traces,
+      onTracePersist: () => {
+        throw new Error("simulated trace persist failure");
+      },
+    });
+    const wt = buildTrace(baseInsert);
+
+    await expect(
+      mirror.recordEmission({ recommendationInsert: baseInsert, workTrace: wt }),
+    ).rejects.toThrow(/simulated trace persist failure/);
+
+    expect(store.rows).toHaveLength(0);
+    expect(traces).toHaveLength(0);
   });
 });
