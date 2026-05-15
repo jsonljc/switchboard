@@ -445,10 +445,12 @@ describe("RileyCockpitPage — B.2a mission popover", () => {
     metricsState.isLoading = false;
     metricsState.isError = false;
     metricsState.error = null;
+    // Reset module-level missionData here so an assertion that throws inside
+    // waitFor() can't leave stale state for the next test.
+    missionData = undefined;
   });
 
   it("keeps the subtitle non-interactive while mission data is undefined", () => {
-    missionData = undefined;
     wrap(<RileyCockpitPage />);
     // The subtitle text is rendered as plain text, not a button.
     expect(screen.queryByRole("button", { name: /Optimizing Meta Ads/i })).not.toBeInTheDocument();
@@ -468,7 +470,6 @@ describe("RileyCockpitPage — B.2a mission popover", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: /Riley mission/i })).not.toBeInTheDocument(),
     );
-    missionData = undefined;
   });
 
   it("renders Riley-shaped mission rows inside the popover", async () => {
@@ -486,7 +487,6 @@ describe("RileyCockpitPage — B.2a mission popover", () => {
     expect(screen.getByText(/HotPod Yoga · —/i)).toBeInTheDocument();
     // No RULES row for Riley (mission.rules is null).
     expect(screen.queryByText(/^RULES$/)).not.toBeInTheDocument();
-    missionData = undefined;
   });
 
   it("does NOT render the Day-1 EmptyState (Riley uses synthetic activity rows for cold state)", () => {
@@ -499,6 +499,5 @@ describe("RileyCockpitPage — B.2a mission popover", () => {
     };
     wrap(<RileyCockpitPage />);
     expect(screen.queryByTestId("cockpit-empty-state")).not.toBeInTheDocument();
-    missionData = undefined;
   });
 });
