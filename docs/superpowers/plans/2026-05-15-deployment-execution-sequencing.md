@@ -4,7 +4,7 @@
 
 **Goal:** Land the pilot deployment implementation as three reviewable PRs after cleaning up four orphan remote branches and one stale worktree.
 
-**Architecture:** Operational / sequencing plan. The application-code work itself is specified in `docs/superpowers/plans/2026-05-15-deployment-hosting-implementation.md` (PR #506 — 10 tasks). This plan only governs *how* those 10 tasks are partitioned into PRs and what cleanup happens first. Tasks 1–3 do cleanup. Task 4 is a merge gate on the spec PR (#504) and implementation-plan PR (#506). Tasks 5–7 are the three phased implementation PRs, each consuming a named subset of the implementation plan.
+**Architecture:** Operational / sequencing plan. The application-code work itself is specified in `docs/superpowers/plans/2026-05-15-deployment-hosting-implementation.md` (PR #506 — 10 tasks). This plan only governs *how* those 10 tasks are partitioned into PRs and what cleanup happens first. **Tasks 1–2 do cleanup. Task 3 is the merge gate** on the spec PR (#504) and implementation-plan PR (#506). **Tasks 4–6 are the three phased implementation PRs**, each consuming a named subset of the implementation plan.
 
 **Tech Stack:** `git`, `git worktree`, `gh` CLI, `pnpm`. No application code changes — those live in the implementation plan PR #506.
 
