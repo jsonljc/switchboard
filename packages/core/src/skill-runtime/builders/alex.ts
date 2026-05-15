@@ -1,14 +1,32 @@
+import type { AgentContext } from "@switchboard/sdk";
 import type { BusinessFacts } from "@switchboard/schemas";
-import type { ParameterBuilder, SkillServices } from "../parameter-builder.js";
+import type { SkillServices, SkillStores } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
 import { renderBusinessFacts } from "../context-resolver.js";
 
-export const alexBuilder: ParameterBuilder = async (
-  ctx,
-  config,
-  stores,
+/**
+ * PR-3.2c: alex returns parameters AND the surfaced pattern IDs so they
+ * can be threaded to WorkTrace at finalize. Other builders that don't call
+ * ContextBuilder use the flat `ParameterBuilder` return shape.
+ */
+export interface AlexBuilderResult {
+  parameters: Record<string, unknown>;
+  injectedPatternIds: string[];
+}
+
+export const alexBuilder = async (
+  ctx: AgentContext,
+  config: {
+    deploymentId: string;
+    orgId: string;
+    contactId: string;
+    phone?: string;
+    channel?: string;
+    message?: string;
+  },
+  stores: SkillStores,
   services?: SkillServices,
-) => {
+): Promise<AlexBuilderResult> => {
   const contactId = config.contactId;
   const orgId = config.orgId;
 
@@ -80,6 +98,7 @@ export const alexBuilder: ParameterBuilder = async (
   // originates from listHighConfidence (pattern memory), not retrieval chunks, but
   // passing the real query avoids firing an empty-query retrieval round-trip.
   let OUTCOME_PATTERNS = "";
+  let injectedPatternIds: string[] = [];
   if (services?.contextBuilder) {
     const builtCtx = await services.contextBuilder.build({
       organizationId: config.orgId,
@@ -89,9 +108,10 @@ export const alexBuilder: ParameterBuilder = async (
       contactId: config.contactId,
     });
     OUTCOME_PATTERNS = builtCtx.outcomePatternContext;
+    injectedPatternIds = builtCtx.injectedPatternIds;
   }
 
-  return {
+  const parameters = {
     BUSINESS_NAME: ctx.persona.businessName,
     OPPORTUNITY_ID: opportunity.id,
     LEAD_PROFILE: leadProfile,
@@ -105,5 +125,10 @@ export const alexBuilder: ParameterBuilder = async (
       bookingLink: ctx.persona.bookingLink ?? "",
       customInstructions: ctx.persona.customInstructions ?? "",
     },
+  };
+
+  return {
+    parameters,
+    injectedPatternIds,
   };
 };

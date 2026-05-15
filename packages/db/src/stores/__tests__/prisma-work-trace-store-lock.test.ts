@@ -157,6 +157,41 @@ describe("PrismaWorkTraceStore.update — lock enforcement", () => {
     expect(prisma._updateFn).not.toHaveBeenCalled();
   });
 
+  it("writes injectedPatternIds when included in the update payload (PR-3.2c)", async () => {
+    const prisma = makePrismaMock(makeRow({ outcome: "running" }));
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const store = new PrismaWorkTraceStore(prisma as never, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
+
+    await store.update("wu_1", {
+      outcome: "completed",
+      durationMs: 50,
+      injectedPatternIds: ["pat_a", "pat_b"],
+    });
+
+    expect(prisma._updateFn).toHaveBeenCalledTimes(1);
+    expect(prisma._updateFn.mock.calls[0]![0].data.injectedPatternIds).toEqual(["pat_a", "pat_b"]);
+  });
+
+  it("persists [] for injectedPatternIds when caller passes empty array", async () => {
+    const prisma = makePrismaMock(makeRow({ outcome: "running" }));
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const store = new PrismaWorkTraceStore(prisma as never, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
+
+    await store.update("wu_1", {
+      outcome: "completed",
+      durationMs: 50,
+      injectedPatternIds: [],
+    });
+
+    expect(prisma._updateFn.mock.calls[0]![0].data.injectedPatternIds).toEqual([]);
+  });
+
   it("read-modify-write inside a single transaction", async () => {
     const prisma = makePrismaMock(makeRow({ outcome: "running" }));
     const ledger = new AuditLedger(new InMemoryLedgerStorage());

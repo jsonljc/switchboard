@@ -87,6 +87,7 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     error: executionResult?.error,
     executionSummary: executionResult?.summary,
     executionOutputs: executionResult?.outputs,
+    injectedPatternIds: executionResult?.injectedPatternIds ?? [],
     modeMetrics: input.modeMetrics,
     requestedAt,
     governanceCompletedAt: input.governanceCompletedAt,

@@ -4,7 +4,7 @@ import type { ExecutionResult } from "../execution-result.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { SkillExecutor, SkillDefinition } from "../../skill-runtime/types.js";
 import type { ExecutionModeName } from "../types.js";
-import type { BuilderRegistry } from "../../skill-runtime/builder-registry.js";
+import { isRichBuilderResult, type BuilderRegistry } from "../../skill-runtime/builder-registry.js";
 import type { SkillStores } from "../../skill-runtime/parameter-builder.js";
 
 export interface SkillModeConfig {
@@ -52,7 +52,7 @@ export class SkillMode implements ExecutionMode {
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-      const parameters = await this.resolveParameters(workUnit, skill);
+      const { parameters, injectedPatternIds } = await this.resolveParameters(workUnit, skill);
 
       const result = await this.config.executor.execute({
         skill,
@@ -79,6 +79,7 @@ export class SkillMode implements ExecutionMode {
           result.trace.status !== "success" && result.trace.error
             ? { code: result.trace.status, message: result.trace.error }
             : undefined,
+        injectedPatternIds,
       };
     } catch (err: unknown) {
       const durationMs = Date.now() - startMs;
@@ -90,24 +91,32 @@ export class SkillMode implements ExecutionMode {
   private async resolveParameters(
     workUnit: WorkUnit,
     _skill: SkillDefinition,
-  ): Promise<Record<string, unknown>> {
+  ): Promise<{ parameters: Record<string, unknown>; injectedPatternIds: string[] }> {
     const { builderRegistry, stores } = this.config;
     const slug = workUnit.deployment?.skillSlug;
 
     if (!builderRegistry || !slug || !stores) {
-      return workUnit.parameters;
+      return { parameters: workUnit.parameters, injectedPatternIds: [] };
     }
 
     const builder = builderRegistry.get(slug);
     if (!builder) {
-      return workUnit.parameters;
+      return { parameters: workUnit.parameters, injectedPatternIds: [] };
     }
 
-    return builder({
+    const result = await builder({
       workUnit,
       deployment: workUnit.deployment,
       stores,
     });
+
+    if (isRichBuilderResult(result)) {
+      return {
+        parameters: result.parameters,
+        injectedPatternIds: result.metadata?.injectedPatternIds ?? [],
+      };
+    }
+    return { parameters: result, injectedPatternIds: [] };
   }
 
   private resolveSkillSlugLegacy(workUnit: WorkUnit): string | undefined {

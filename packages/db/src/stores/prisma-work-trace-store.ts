@@ -198,6 +198,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       errorMessage: trace.error?.message ?? null,
       executionSummary: trace.executionSummary ?? null,
       executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
+      injectedPatternIds: trace.injectedPatternIds ?? [],
 
       modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
       qualificationSignals: trace.qualificationSignals
@@ -382,6 +383,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       executionOutputs: row.executionOutputs
         ? (JSON.parse(row.executionOutputs) as Record<string, unknown>)
         : undefined,
+      injectedPatternIds: row.injectedPatternIds ?? [],
 
       modeMetrics: row.modeMetrics
         ? (JSON.parse(row.modeMetrics) as Record<string, unknown>)
@@ -445,6 +447,8 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       if (fields.executionSummary !== undefined) data.executionSummary = fields.executionSummary;
       if (fields.executionOutputs !== undefined)
         data.executionOutputs = JSON.stringify(fields.executionOutputs);
+      if (fields.injectedPatternIds !== undefined)
+        data.injectedPatternIds = fields.injectedPatternIds;
       if (fields.executionStartedAt !== undefined)
         data.executionStartedAt = new Date(fields.executionStartedAt);
       if (fields.completedAt !== undefined) data.completedAt = new Date(fields.completedAt);

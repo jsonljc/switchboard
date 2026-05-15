@@ -78,4 +78,11 @@ export interface WorkTrace {
    * lifecycleTagging.qualification flag state.
    */
   qualificationSignals?: WorkTraceQualificationSignals | null;
+  /**
+   * PR-3.2c: IDs of DeploymentMemory pattern rows rendered into this turn's
+   * <outcome-patterns> prompt envelope. Empty when no patterns surfaced;
+   * never `undefined` once the column lands (DB default is `[]`).
+   * Persisted at finalization; populated upstream from BuiltContext.injectedPatternIds.
+   */
+  injectedPatternIds?: string[];
 }

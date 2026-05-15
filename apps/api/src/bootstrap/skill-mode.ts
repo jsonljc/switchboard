@@ -538,7 +538,13 @@ export async function bootstrapSkillMode(
       channel: ctx.workUnit.parameters.channel as string | undefined,
       message: ctx.workUnit.parameters._message as string | undefined,
     };
-    return alexBuilder(agentContext, config, ctx.stores, { contextBuilder: deps.contextBuilder });
+    const result = await alexBuilder(agentContext, config, ctx.stores, {
+      contextBuilder: deps.contextBuilder,
+    });
+    return {
+      parameters: result.parameters,
+      metadata: { injectedPatternIds: result.injectedPatternIds },
+    };
   });
 
   modeRegistry.register(

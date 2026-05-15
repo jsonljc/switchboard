@@ -40,7 +40,7 @@ describe("work-trace-hash", () => {
     expect(WORK_TRACE_HASH_VERSION).toBe(WORK_TRACE_HASH_VERSION_LATEST);
   });
 
-  it("v1 excluded set excludes contentHash, traceVersion, lockedAt, ingressPath, hashInputVersion", () => {
+  it("v1 excluded set excludes contentHash, traceVersion, lockedAt, ingressPath, hashInputVersion, injectedPatternIds", () => {
     expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1).toEqual(
       expect.arrayContaining([
         "contentHash",
@@ -48,17 +48,30 @@ describe("work-trace-hash", () => {
         "lockedAt",
         "ingressPath",
         "hashInputVersion",
+        "injectedPatternIds",
       ]),
     );
-    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1.length).toBe(5);
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1.length).toBe(6);
   });
 
-  it("v2 excluded set excludes contentHash, traceVersion, lockedAt, hashInputVersion (NOT ingressPath)", () => {
+  it("v2 excluded set excludes contentHash, traceVersion, lockedAt, hashInputVersion, injectedPatternIds (NOT ingressPath)", () => {
     expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2).toEqual(
-      expect.arrayContaining(["contentHash", "traceVersion", "lockedAt", "hashInputVersion"]),
+      expect.arrayContaining([
+        "contentHash",
+        "traceVersion",
+        "lockedAt",
+        "hashInputVersion",
+        "injectedPatternIds",
+      ]),
     );
     expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2).not.toContain("ingressPath");
-    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2.length).toBe(4);
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2.length).toBe(5);
+  });
+
+  it("changing injectedPatternIds does not change the hash (excluded — analytics-only)", () => {
+    const a = baseTrace({ injectedPatternIds: ["pat_a"] });
+    const b = baseTrace({ injectedPatternIds: ["pat_b", "pat_c"] });
+    expect(computeWorkTraceContentHash(a, 1)).toBe(computeWorkTraceContentHash(b, 1));
   });
 
   it("identical traces produce identical hashes", () => {
