@@ -72,6 +72,7 @@ async function dispatchResponse(params: {
       sessionId: message.sessionId,
       role: "assistant",
       content: text,
+      workTraceId: response.result.traceId,
     });
     await replySink.send(text);
   } else {
