@@ -11,6 +11,26 @@ describe("Topbar", () => {
     expect(screen.getByText("Mira")).toBeInTheDocument();
   });
 
+  it("wraps Alex and Riley tabs in next/link with correct hrefs", () => {
+    // Default tabs come from ALEX_CONFIG: Alex (active) → /alex, Riley → /riley.
+    // Mira has no route (no `/mira` page exists in apps/dashboard/src/app/(auth)),
+    // so the tab is rendered as a non-routing muted span.
+    render(<Topbar paletteEnabled={false} compact={false} />);
+    const alexLink = screen.getByText("Alex").closest("a");
+    const rileyLink = screen.getByText("Riley").closest("a");
+    expect(alexLink).not.toBeNull();
+    expect(alexLink).toHaveAttribute("href", "/alex");
+    expect(rileyLink).not.toBeNull();
+    expect(rileyLink).toHaveAttribute("href", "/riley");
+  });
+
+  it("renders muted/no-href tabs as a non-link span (Mira default)", () => {
+    render(<Topbar paletteEnabled={false} compact={false} />);
+    // Mira has no href/route; should not be wrapped in an <a>.
+    const miraLink = screen.getByText("Mira").closest("a");
+    expect(miraLink).toBeNull();
+  });
+
   it("renders the Switchboard wordmark in non-compact mode", () => {
     render(<Topbar paletteEnabled={false} compact={false} />);
     expect(screen.getByText("Switchboard")).toBeInTheDocument();

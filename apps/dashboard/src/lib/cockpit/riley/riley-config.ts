@@ -11,8 +11,9 @@ export const RILEY_ACCENT = {
 // Topbar tab order with Riley active. Matches the TopbarTab shape so the page
 // can pass `tabs={RILEY_TABS}` directly.
 export const RILEY_TABS: readonly TopbarTab[] = [
-  { name: "Alex" },
-  { name: "Riley", active: true },
+  { name: "Alex", href: "/alex" },
+  { name: "Riley", active: true, href: "/riley" },
+  // Mira: no `/mira` route exists; renders as a non-routing muted span.
   { name: "Mira", muted: true },
 ];
 

@@ -10,7 +10,15 @@ export const ALEX_CONFIG = {
     soft: "#F1E2C2",
     paper: "#FBF1D6",
   },
-  tabs: [{ name: "Alex", active: true }, { name: "Riley" }, { name: "Mira", muted: true }] as const,
+  // Mira intentionally has no href: no `/mira` route exists in apps/dashboard
+  // (verified via `ls apps/dashboard/src/app/(auth)/`). Without href the tab
+  // renders as a non-routing muted span — clicking does nothing, matching the
+  // pre-existing visual "muted" affordance.
+  tabs: [
+    { name: "Alex", active: true, href: "/alex" },
+    { name: "Riley", href: "/riley" },
+    { name: "Mira", muted: true },
+  ] as const,
   missionSubtitle: "SDR · Tours pipeline",
   needsYouLabel: "Alex needs you",
 } as const;
