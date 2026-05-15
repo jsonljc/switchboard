@@ -57,29 +57,23 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     expect(opp.stage).toBe("booked");
   });
 
-  it("writes a WorkTrace with ingressPath store_recorded_operator_mutation", async () => {
-    const store = app.opportunityStore as unknown as {
-      lastTraceWritten: {
-        ingressPath: string;
-        intent: string;
-        parameters: Record<string, unknown>;
-      } | null;
-    };
+  it("writes a single ingress WorkTrace through PlatformIngress (no store-side bypass)", async () => {
+    // Post-Phase-1b.1 cleanup: stage transitions emit exactly one WorkTrace,
+    // owned by PlatformIngress.persistTrace, with intent =
+    // operator.transition_opportunity_stage and mode = operator_mutation.
+    // The legacy store-side store_recorded_operator_mutation write is gone.
     await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
       headers: { "x-org-id": "org_acme", "content-type": "application/json" },
       payload: { stage: "booked" },
     });
-    expect(store.lastTraceWritten).toEqual({
-      ingressPath: "store_recorded_operator_mutation",
-      intent: "opportunity.stage_transition",
-      parameters: {
-        opportunityId: "opp_1",
-        contactId: "c_1",
-        fromStage: "quoted",
-        toStage: "booked",
-      },
+    expect(app.ingressTraceCount).toBe(1);
+    expect(app.lastIngressTrace).toEqual({
+      intent: "operator.transition_opportunity_stage",
+      mode: "operator_mutation",
+      outcome: "completed",
+      organizationId: "org_acme",
     });
   });
 
@@ -136,10 +130,7 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     expect(res.statusCode).toBe(503);
   });
 
-  it("emits a WorkTrace on idempotent same-stage PATCH (quoted → quoted)", async () => {
-    const store = app.opportunityStore as unknown as {
-      lastTraceWritten: { parameters: Record<string, unknown> } | null;
-    };
+  it("emits an ingress WorkTrace on idempotent same-stage PATCH (quoted → quoted)", async () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
@@ -147,10 +138,9 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
       payload: { stage: "quoted" },
     });
     expect(res.statusCode).toBe(200);
-    expect(store.lastTraceWritten?.parameters).toMatchObject({
-      fromStage: "quoted",
-      toStage: "quoted",
-    });
+    expect(app.ingressTraceCount).toBe(1);
+    expect(app.lastIngressTrace?.intent).toBe("operator.transition_opportunity_stage");
+    expect(app.lastIngressTrace?.outcome).toBe("completed");
   });
 
   it("sets closedAt on terminal transition (quoted → won)", async () => {

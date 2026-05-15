@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { PrismaOpportunityStore } from "../prisma-opportunity-store.js";
 import type { PrismaDbClient } from "../../prisma-db.js";
 import { OpportunityNotFoundError } from "@switchboard/core/lifecycle";
-import type { PrismaWorkTraceStore } from "../prisma-work-trace-store.js";
 
 function mkPrismaMock() {
   return {
@@ -14,7 +13,6 @@ function mkPrismaMock() {
     $transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
       cb({
         opportunity: { findFirst: vi.fn(), update: vi.fn() },
-        workTrace: { create: vi.fn() },
       }),
     ),
   } as unknown as PrismaDbClient;
@@ -36,7 +34,6 @@ function mkTxClient(opts: { existing?: Record<string, unknown> | null }) {
         }),
       ),
     },
-    workTrace: { create: vi.fn().mockResolvedValue({}) },
   };
 }
 
@@ -47,18 +44,11 @@ function mkPrismaWithTx(txClient: ReturnType<typeof mkTxClient>) {
   } as unknown as PrismaDbClient;
 }
 
-function mkTraceStore() {
-  return {
-    recordOperatorMutation: vi.fn().mockResolvedValue(undefined),
-    update: vi.fn().mockResolvedValue({ ok: true }),
-  } as unknown as PrismaWorkTraceStore;
-}
-
 describe("PrismaOpportunityStore.findOrgBoard", () => {
   it("filters by organizationId and includes the contact projection", async () => {
     const prisma = mkPrismaMock();
     (prisma.opportunity.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    const store = new PrismaOpportunityStore(prisma, null);
+    const store = new PrismaOpportunityStore(prisma);
     await store.findOrgBoard("org_acme");
     const call = (prisma.opportunity.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(call.where).toEqual({ organizationId: "org_acme" });
@@ -96,7 +86,7 @@ describe("PrismaOpportunityStore.findOrgBoard", () => {
         contact: { id: "c_1", name: "Felicia", primaryChannel: "whatsapp" },
       },
     ]);
-    const store = new PrismaOpportunityStore(prisma, null);
+    const store = new PrismaOpportunityStore(prisma);
     const rows = await store.findOrgBoard("org_acme");
     expect(rows).toHaveLength(1);
     expect(rows[0]!.id).toBe("opp_1");
@@ -108,13 +98,18 @@ describe("PrismaOpportunityStore.findOrgBoard", () => {
   it("returns [] for an org with no rows", async () => {
     const prisma = mkPrismaMock();
     (prisma.opportunity.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    const store = new PrismaOpportunityStore(prisma, null);
+    const store = new PrismaOpportunityStore(prisma);
     const rows = await store.findOrgBoard("org_empty");
     expect(rows).toEqual([]);
   });
 });
 
 describe("PrismaOpportunityStore.transitionStage", () => {
+  // Post-Phase-1b.1 cleanup: the store mutates only the opportunity row.
+  // WorkTrace persistence is owned by PlatformIngress.persistTrace upstream —
+  // one operator stage transition emits exactly one WorkTrace (the ingress
+  // one). The legacy store_recorded_operator_mutation write is gone.
+
   const existing = {
     id: "opp_1",
     organizationId: "org_acme",
@@ -138,11 +133,10 @@ describe("PrismaOpportunityStore.transitionStage", () => {
     contact: { id: "c_1", name: "Felicia", primaryChannel: "whatsapp" },
   };
 
-  it("updates the row and records an operator-mutation WorkTrace inside a single transaction", async () => {
+  it("updates the row inside a single transaction and returns the board-row projection", async () => {
     const tx = mkTxClient({ existing });
     const prisma = mkPrismaWithTx(tx);
-    const traceStore = mkTraceStore();
-    const store = new PrismaOpportunityStore(prisma, traceStore);
+    const store = new PrismaOpportunityStore(prisma);
 
     const result = await store.transitionStage({
       orgId: "org_acme",
@@ -153,29 +147,13 @@ describe("PrismaOpportunityStore.transitionStage", () => {
 
     expect((prisma as unknown as { $transaction: unknown }).$transaction).toHaveBeenCalledTimes(1);
     expect(tx.opportunity.update).toHaveBeenCalledTimes(1);
-    expect(traceStore.recordOperatorMutation).toHaveBeenCalledTimes(1);
-
-    const traceArg = (traceStore.recordOperatorMutation as ReturnType<typeof vi.fn>).mock
-      .calls[0]![0];
-    expect(traceArg.ingressPath).toBe("store_recorded_operator_mutation");
-    expect(traceArg.intent).toBe("opportunity.stage_transition");
-    expect(traceArg.organizationId).toBe("org_acme");
-    expect(traceArg.actor).toEqual({ id: "user_42", type: "user" });
-    expect(traceArg.parameters).toEqual({
-      opportunityId: "opp_1",
-      contactId: "c_1",
-      fromStage: "quoted",
-      toStage: "booked",
-    });
-
     expect(result.opportunity.stage).toBe("booked");
-    expect(result.workTraceId).toBeTruthy();
   });
 
   it("sets closedAt when transitioning to a terminal stage", async () => {
     const tx = mkTxClient({ existing });
     const prisma = mkPrismaWithTx(tx);
-    const store = new PrismaOpportunityStore(prisma, mkTraceStore());
+    const store = new PrismaOpportunityStore(prisma);
     await store.transitionStage({
       orgId: "org_acme",
       id: "opp_1",
@@ -189,7 +167,7 @@ describe("PrismaOpportunityStore.transitionStage", () => {
   it("clears closedAt when transitioning away from terminal", async () => {
     const tx = mkTxClient({ existing: { ...existing, stage: "won", closedAt: new Date() } });
     const prisma = mkPrismaWithTx(tx);
-    const store = new PrismaOpportunityStore(prisma, mkTraceStore());
+    const store = new PrismaOpportunityStore(prisma);
     await store.transitionStage({
       orgId: "org_acme",
       id: "opp_1",
@@ -203,7 +181,7 @@ describe("PrismaOpportunityStore.transitionStage", () => {
   it("throws OpportunityNotFoundError when the id is missing", async () => {
     const tx = mkTxClient({ existing: null });
     const prisma = mkPrismaWithTx(tx);
-    const store = new PrismaOpportunityStore(prisma, mkTraceStore());
+    const store = new PrismaOpportunityStore(prisma);
     await expect(
       store.transitionStage({
         orgId: "org_acme",
@@ -217,7 +195,7 @@ describe("PrismaOpportunityStore.transitionStage", () => {
   it("throws OpportunityNotFoundError for cross-tenant id (findFirst with org filter returns null)", async () => {
     const tx = mkTxClient({ existing: null });
     const prisma = mkPrismaWithTx(tx);
-    const store = new PrismaOpportunityStore(prisma, mkTraceStore());
+    const store = new PrismaOpportunityStore(prisma);
     await expect(
       store.transitionStage({
         orgId: "org_other",
@@ -233,54 +211,23 @@ describe("PrismaOpportunityStore.transitionStage", () => {
     });
   });
 
-  it("throws when workTraceStore is null", async () => {
+  it("does NOT call any WorkTrace store API (canonical persistence is owned by PlatformIngress)", async () => {
+    // Regression guard: the only consumer of WorkTrace persistence for
+    // operator stage transitions is PlatformIngress.persistTrace. If a
+    // future change re-introduces a store-side WorkTrace write, this
+    // assertion (combined with the absence of a constructor workTraceStore
+    // parameter) gives a static-typing wall against duplication.
     const tx = mkTxClient({ existing });
     const prisma = mkPrismaWithTx(tx);
-    const store = new PrismaOpportunityStore(prisma, null);
-    await expect(
-      store.transitionStage({
-        orgId: "org_acme",
-        id: "opp_1",
-        stage: "booked",
-        actor: { id: "u", type: "user" },
-      }),
-    ).rejects.toThrow(/workTraceStore/i);
-  });
-
-  it("emits a WorkTrace even on same-stage no-op (idempotency per spec §A6)", async () => {
-    const tx = mkTxClient({ existing });
-    const prisma = mkPrismaWithTx(tx);
-    const traceStore = mkTraceStore();
-    const store = new PrismaOpportunityStore(prisma, traceStore);
+    const store = new PrismaOpportunityStore(prisma);
     await store.transitionStage({
       orgId: "org_acme",
       id: "opp_1",
       stage: "quoted",
       actor: { id: "u", type: "user" },
     });
-    expect(traceStore.recordOperatorMutation).toHaveBeenCalledTimes(1);
-    const traceArg = (traceStore.recordOperatorMutation as ReturnType<typeof vi.fn>).mock
-      .calls[0]![0];
-    expect(traceArg.parameters).toMatchObject({ fromStage: "quoted", toStage: "quoted" });
-  });
-
-  it("rolls back the row update when recordOperatorMutation throws inside the transaction", async () => {
-    const traceStore = {
-      recordOperatorMutation: vi.fn().mockRejectedValueOnce(new Error("DB constraint")),
-      update: vi.fn(),
-    } as unknown as PrismaWorkTraceStore;
-    const tx = mkTxClient({ existing });
-    const prisma = mkPrismaWithTx(tx);
-    const store = new PrismaOpportunityStore(prisma, traceStore);
-    await expect(
-      store.transitionStage({
-        orgId: "org_acme",
-        id: "opp_1",
-        stage: "booked",
-        actor: { id: "u", type: "user" },
-      }),
-    ).rejects.toThrow();
-    // The mock $transaction propagates the throw — finalize update should NOT have been called:
-    expect(traceStore.update).not.toHaveBeenCalled();
+    // No workTrace.create call in the transaction (the tx mock has no
+    // workTrace field — would crash if the store reached for one).
+    expect(tx.opportunity.update).toHaveBeenCalledTimes(1);
   });
 });
