@@ -31,6 +31,10 @@ vi.mock("@tanstack/react-query", async (orig) => {
   return {
     ...actual,
     useQuery: () => ({
+      // Activity query returns actions; outcomes query returns rows: [].
+      // Both go through the same mock — the hook handles both shapes safely:
+      //   - base.data?.actions → activity rows (from activity query)
+      //   - outcomesQuery.data ?? [] → [] (tenant is null so query is disabled)
       data: { actions: [pausedFixture, watchingFixture], roster: [], states: [] },
       isLoading: false,
       isError: false,
