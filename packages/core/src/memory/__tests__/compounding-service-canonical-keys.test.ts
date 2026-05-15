@@ -56,6 +56,7 @@ describe("ConversationCompoundingService — canonical-key validation (PR-3.2a)"
       expect.objectContaining({
         deploymentMemoryId: "mem-1",
         bookingId: "bk-1",
+        workTraceId: "wt-A",
         attributionTier: "strong",
       }),
     );

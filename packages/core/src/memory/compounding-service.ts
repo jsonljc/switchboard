@@ -282,12 +282,7 @@ export class ConversationCompoundingService {
             organizationId: event.organizationId,
             bookingId: attribution.bookingId,
             conversionRecordId: null,
-            // workTraceId back-reference is intentionally null in PR-3.2a:
-            // BookingAttribution shape is { tier, bookingId? } only. The
-            // carry-debt PR-3.1.b that plumbs workTraceIds at the gateway
-            // can widen BookingAttribution to surface it and backfill this
-            // field — the column is nullable to allow progression.
-            workTraceId: null,
+            workTraceId: attribution.workTraceId ?? null,
             attributionTier: attribution.tier,
           });
         }
