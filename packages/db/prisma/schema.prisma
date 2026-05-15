@@ -514,6 +514,7 @@ model ManagedChannel {
   lastHealthCheck   DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  testRecipients    Json      @default("[]")
 
   @@unique([organizationId, channel])
   @@index([organizationId])
@@ -885,25 +886,25 @@ model ContactLifecycle {
 }
 
 model ConversationThread {
-  id                  String    @id @default(uuid())
-  contactId           String
-  organizationId      String
-  stage               String    @default("new") // ThreadStage enum
-  assignedAgent       String    @default("")
-  agentContext        Json      @default("{}") // AgentContextData JSON
-  currentSummary      String    @default("")
-  followUpSchedule    Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
-  lastOutcomeAt       DateTime?
-  messageCount        Int       @default(0)
+  id                    String    @id @default(uuid())
+  contactId             String
+  organizationId        String
+  stage                 String    @default("new") // ThreadStage enum
+  assignedAgent         String    @default("")
+  agentContext          Json      @default("{}") // AgentContextData JSON
+  currentSummary        String    @default("")
+  followUpSchedule      Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
+  lastOutcomeAt         DateTime?
+  messageCount          Int       @default(0)
   /// Last inbound WhatsApp message timestamp for the WhatsApp 24h customer-service window.
   /// Per Meta policy, the 24h window is per-channel. Only inbound WhatsApp messages update
   /// this column; other channels (Telegram, IG, email, web widget) MUST NOT write to it.
   lastWhatsAppInboundAt DateTime?
-  firstAgentMessageAt DateTime?
-  threadStatus        String    @default("open")
-  opportunityId       String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  firstAgentMessageAt   DateTime?
+  threadStatus          String    @default("open")
+  opportunityId         String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   lifecycleContact Contact? @relation(fields: [contactId], references: [id])
 
@@ -1200,6 +1201,25 @@ model WhatsAppMessageStatus {
   @@unique([messageId, status])
   @@index([messageId])
   @@index([organizationId, createdAt])
+}
+
+model WhatsAppTestSend {
+  id                String    @id @default(uuid())
+  organizationId    String
+  managedChannelId  String
+  messageId         String    @unique
+  phoneNumberId     String
+  templateName      String
+  languageCode      String
+  toNumber          String
+  sentBy            String
+  sentAt            DateTime  @default(now())
+  apiStatus         String    @default("sent")
+  lastWebhookStatus String?
+  lastWebhookAt     DateTime?
+
+  @@index([organizationId, sentAt(sort: Desc)])
+  @@index([managedChannelId, sentAt(sort: Desc)])
 }
 
 // ── Sales Pipeline: Agent Persona (shared business context) ──

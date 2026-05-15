@@ -21,31 +21,31 @@
 
 ### Created files
 
-| Path | Responsibility |
-|---|---|
-| `apps/api/src/routes/agent-home/mission.ts` | Fastify route: `GET /agents/:agentId/mission`. Reads `AgentRoster`, `OrganizationConfig`, `Connection`, `ManagedChannel` for the org; produces the view-model. 404 for non-Alex agents at A.2. |
-| `apps/api/src/routes/agent-home/__tests__/mission.test.ts` | Connection-present + absent paths; channel status mapping; defensive `rules: null`; non-Alex 404; missing prisma 503. |
-| `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/route.ts` | Next.js dashboard proxy. Calls `apiClient.getMission(agentId)`. |
-| `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/__tests__/route.test.ts` | 401 / 200 / error paths via mocked apiClient. |
-| `apps/dashboard/src/lib/cockpit/mission-types.ts` | Wire shape TS types for the dashboard: `MissionAggregatorResponse`, `MissionChannel`, `MissionChannelKind`, `MissionChannelStatus`, `MissionRules`, `MissionTargets`, `MissionSetupRow`. |
-| `apps/dashboard/src/lib/cockpit/__tests__/mission-types.test.ts` | Compile-time type assertions via `expectTypeOf`. |
-| `apps/dashboard/src/hooks/use-agent-mission.ts` | React Query hook. 60 s refetch + refetch on `useHalt()` halted toggle. |
-| `apps/dashboard/src/hooks/__tests__/use-agent-mission.test.tsx` | Mounts the hook with mocked fetch; refetch on halt; error surfacing. |
-| `apps/dashboard/src/components/cockpit/mission-popover.tsx` | Anchored popover; 5 rows (Role/Pipeline/Brand/Channels/Rules); footer "Edit configuration". Outside-click + Escape close. |
-| `apps/dashboard/src/components/cockpit/__tests__/mission-popover.test.tsx` | All rows render; `rules == null` hides Rules row; channel-dot color per status; Escape + outside-click close; settings link. |
-| `apps/dashboard/src/components/cockpit/empty-state.tsx` | Narrator card + 4-row setup checklist. Renders only when `every(setup[].done === false)`. Threshold templating from `mission.rules` or locked-design defaults (`$89` / `$200`). |
-| `apps/dashboard/src/components/cockpit/__tests__/empty-state.test.tsx` | Render rules + default-threshold branches; primary row pickup; onConnect deep-link href; conditional render. |
+| Path                                                                                    | Responsibility                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api/src/routes/agent-home/mission.ts`                                             | Fastify route: `GET /agents/:agentId/mission`. Reads `AgentRoster`, `OrganizationConfig`, `Connection`, `ManagedChannel` for the org; produces the view-model. 404 for non-Alex agents at A.2. |
+| `apps/api/src/routes/agent-home/__tests__/mission.test.ts`                              | Connection-present + absent paths; channel status mapping; defensive `rules: null`; non-Alex 404; missing prisma 503.                                                                          |
+| `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/route.ts`                | Next.js dashboard proxy. Calls `apiClient.getMission(agentId)`.                                                                                                                                |
+| `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/__tests__/route.test.ts` | 401 / 200 / error paths via mocked apiClient.                                                                                                                                                  |
+| `apps/dashboard/src/lib/cockpit/mission-types.ts`                                       | Wire shape TS types for the dashboard: `MissionAggregatorResponse`, `MissionChannel`, `MissionChannelKind`, `MissionChannelStatus`, `MissionRules`, `MissionTargets`, `MissionSetupRow`.       |
+| `apps/dashboard/src/lib/cockpit/__tests__/mission-types.test.ts`                        | Compile-time type assertions via `expectTypeOf`.                                                                                                                                               |
+| `apps/dashboard/src/hooks/use-agent-mission.ts`                                         | React Query hook. 60 s refetch + refetch on `useHalt()` halted toggle.                                                                                                                         |
+| `apps/dashboard/src/hooks/__tests__/use-agent-mission.test.tsx`                         | Mounts the hook with mocked fetch; refetch on halt; error surfacing.                                                                                                                           |
+| `apps/dashboard/src/components/cockpit/mission-popover.tsx`                             | Anchored popover; 5 rows (Role/Pipeline/Brand/Channels/Rules); footer "Edit configuration". Outside-click + Escape close.                                                                      |
+| `apps/dashboard/src/components/cockpit/__tests__/mission-popover.test.tsx`              | All rows render; `rules == null` hides Rules row; channel-dot color per status; Escape + outside-click close; settings link.                                                                   |
+| `apps/dashboard/src/components/cockpit/empty-state.tsx`                                 | Narrator card + 4-row setup checklist. Renders only when `every(setup[].done === false)`. Threshold templating from `mission.rules` or locked-design defaults (`$89` / `$200`).                |
+| `apps/dashboard/src/components/cockpit/__tests__/empty-state.test.tsx`                  | Render rules + default-threshold branches; primary row pickup; onConnect deep-link href; conditional render.                                                                                   |
 
 ### Modified files
 
-| Path | Change |
-|---|---|
-| `apps/api/src/bootstrap/routes.ts` | Register `missionRoute` next to `metricsRoute` under `/api/dashboard`. |
-| `apps/dashboard/src/lib/api-client/governance.ts` | Add `getMission(agentKey)` method below `getGreeting`. |
-| `apps/dashboard/src/components/cockpit/identity.tsx` | Add optional props `onOpenMission?: () => void` and `missionInteractive?: boolean`; subtitle becomes a `<button>` when both are set (otherwise stays plain text). |
-| `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx` | Add cases: interactive subtitle calls `onOpenMission`; non-interactive default unchanged. |
-| `apps/dashboard/src/components/cockpit/cockpit-page.tsx` | Call `useAgentMission(agentKey)`; manage `missionOpen` state; mount `<MissionPopover>`; render `<EmptyState>` (replacing activity stream) when mission signals cold state. |
-| `apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx` | Add: mission-loaded → subtitle clickable; EmptyState renders when all setup undone; activity stream hidden in cold state. |
+| Path                                                                    | Change                                                                                                                                                                     |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api/src/bootstrap/routes.ts`                                      | Register `missionRoute` next to `metricsRoute` under `/api/dashboard`.                                                                                                     |
+| `apps/dashboard/src/lib/api-client/governance.ts`                       | Add `getMission(agentKey)` method below `getGreeting`.                                                                                                                     |
+| `apps/dashboard/src/components/cockpit/identity.tsx`                    | Add optional props `onOpenMission?: () => void` and `missionInteractive?: boolean`; subtitle becomes a `<button>` when both are set (otherwise stays plain text).          |
+| `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx`     | Add cases: interactive subtitle calls `onOpenMission`; non-interactive default unchanged.                                                                                  |
+| `apps/dashboard/src/components/cockpit/cockpit-page.tsx`                | Call `useAgentMission(agentKey)`; manage `missionOpen` state; mount `<MissionPopover>`; render `<EmptyState>` (replacing activity stream) when mission signals cold state. |
+| `apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx` | Add: mission-loaded → subtitle clickable; EmptyState renders when all setup undone; activity stream hidden in cold state.                                                  |
 
 ### Test files
 
@@ -58,6 +58,7 @@ Co-located under `__tests__/` per directory. The api package's test path is `app
 These are referenced by multiple tasks. Defined once here:
 
 **Path constants:**
+
 - Fastify route root: `apps/api/src/routes/agent-home/`
 - Dashboard cockpit components: `apps/dashboard/src/components/cockpit/`
 - Dashboard cockpit lib: `apps/dashboard/src/lib/cockpit/`
@@ -134,13 +135,13 @@ Expected: `.env` copied, dev ports cleared, `pnpm db:migrate` runs (or skips if 
 
 The tasks below are TDD-granular. **Commit at 5 group boundaries** — not after every task:
 
-| Commit | Covers tasks | Subject |
-|---|---|---|
-| 1 — backend aggregator | 1–4 (Fastify route Zod params, mission builder, route, bootstrap registration, route tests) | `feat(cockpit): mission aggregator endpoint for Alex (A.2)` |
-| 2 — dashboard wire | 5–8 (mission-types, getMission client, proxy route, use-agent-mission hook) | `feat(cockpit): wire mission aggregator to dashboard hook (A.2)` |
-| 3 — popover + empty-state components | 9–10 (mission-popover, empty-state) | `feat(cockpit): mission popover + Day-1 narrator/setup checklist (A.2)` |
-| 4 — page composition | 11–12 (Identity prop extension, cockpit-page integration) | `feat(cockpit): make identity subtitle clickable, render cold-state narrator (A.2)` |
-| 5 — full verification + PR | 13 (verification, push, PR) | (no commit — verification only) |
+| Commit                               | Covers tasks                                                                                | Subject                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1 — backend aggregator               | 1–4 (Fastify route Zod params, mission builder, route, bootstrap registration, route tests) | `feat(cockpit): mission aggregator endpoint for Alex (A.2)`                         |
+| 2 — dashboard wire                   | 5–8 (mission-types, getMission client, proxy route, use-agent-mission hook)                 | `feat(cockpit): wire mission aggregator to dashboard hook (A.2)`                    |
+| 3 — popover + empty-state components | 9–10 (mission-popover, empty-state)                                                         | `feat(cockpit): mission popover + Day-1 narrator/setup checklist (A.2)`             |
+| 4 — page composition                 | 11–12 (Identity prop extension, cockpit-page integration)                                   | `feat(cockpit): make identity subtitle clickable, render cold-state narrator (A.2)` |
+| 5 — full verification + PR           | 13 (verification, push, PR)                                                                 | (no commit — verification only)                                                     |
 
 Within each group, **stage incrementally** (`git add ...`) but **defer `git commit` to the boundary task**. Per-task "Step 5: Commit" blocks below show what to stage; the actual `git commit` runs only at Tasks 4, 8, 10, 12.
 
@@ -151,6 +152,7 @@ Within each group, **stage incrementally** (`git add ...`) but **defer `git comm
 ### Task 1: Mission builder (pure function in the route module)
 
 **Files:**
+
 - Create: `apps/api/src/routes/agent-home/mission.ts` (initial scaffold — builder function only)
 - Test: `apps/api/src/routes/agent-home/__tests__/mission.test.ts` (only the builder test at this step)
 
@@ -189,11 +191,7 @@ describe("buildAlexMissionResponse", () => {
     expect(out.mission.role).toBe("SDR · qualify inbound leads, book tours");
     expect(out.mission.pipeline).toBe("Tours pipeline · single funnel");
     expect(out.mission.brand).toBe("HotPod Yoga · —");
-    expect(out.mission.channels.map((c) => c.kind)).toEqual([
-      "meta-ads",
-      "whatsapp",
-      "calendar",
-    ]);
+    expect(out.mission.channels.map((c) => c.kind)).toEqual(["meta-ads", "whatsapp", "calendar"]);
     expect(out.mission.channels.find((c) => c.kind === "meta-ads")?.status).toBe("off");
     expect(out.mission.rules).toBeNull();
     expect(out.targets).toEqual({
@@ -308,12 +306,7 @@ type OrgInput = { id: string; name: string };
 type ConnectionInput = { serviceId: string; status: string };
 type ManagedChannelInput = { channel: string; status: string };
 
-export type MissionChannelKind =
-  | "meta-ads"
-  | "whatsapp"
-  | "telegram"
-  | "slack"
-  | "calendar";
+export type MissionChannelKind = "meta-ads" | "whatsapp" | "telegram" | "slack" | "calendar";
 export type MissionChannelStatus = "ok" | "warn" | "off";
 export type MissionChannel = {
   kind: MissionChannelKind;
@@ -486,6 +479,7 @@ git add apps/api/src/routes/agent-home/mission.ts \
 ### Task 2: Route handler
 
 **Files:**
+
 - Modify: `apps/api/src/routes/agent-home/mission.ts` — replace the placeholder route plugin with the real handler.
 - Modify: `apps/api/src/routes/agent-home/__tests__/mission.test.ts` — add Fastify route tests on top of the builder tests.
 
@@ -725,6 +719,7 @@ git add apps/api/src/routes/agent-home/mission.ts \
 ### Task 3: Register the route in the Fastify bootstrap
 
 **Files:**
+
 - Modify: `apps/api/src/bootstrap/routes.ts`
 
 - [ ] **Step 1: Locate the existing `metricsRoute` registration in `routes.ts`**
@@ -746,8 +741,8 @@ import { missionRoute } from "../routes/agent-home/mission.js";
 Add the registration immediately after the `metricsRoute` registration (matching the existing comment pattern):
 
 ```ts
-  // missionRoute: GET /api/dashboard/agents/:agentId/mission — agent-home mission aggregator
-  await app.register(missionRoute, { prefix: "/api/dashboard" });
+// missionRoute: GET /api/dashboard/agents/:agentId/mission — agent-home mission aggregator
+await app.register(missionRoute, { prefix: "/api/dashboard" });
 ```
 
 - [ ] **Step 3: Run the api test suite to confirm route registration plays nicely with the rest of the app**
@@ -800,6 +795,7 @@ Expected: commit succeeds; commitlint accepts the conventional-commits subject.
 ### Task 5: Dashboard wire — mission types
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/mission-types.ts`
 - Test: `apps/dashboard/src/lib/cockpit/__tests__/mission-types.test.ts`
 
@@ -947,6 +943,7 @@ git add apps/dashboard/src/lib/cockpit/mission-types.ts \
 ### Task 6: Add `getMission` to the API client
 
 **Files:**
+
 - Modify: `apps/dashboard/src/lib/api-client/governance.ts`
 
 The existing `getGreeting` method is the model (see file lines around 338). No test for the client method directly — its shape is exercised by the proxy-route test in Task 7.
@@ -996,6 +993,7 @@ git add apps/dashboard/src/lib/api-client/governance.ts
 ### Task 7: Dashboard proxy route
 
 **Files:**
+
 - Create: `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/route.ts`
 - Test: `apps/dashboard/src/app/api/dashboard/agents/[agentId]/mission/__tests__/route.test.ts`
 
@@ -1051,7 +1049,9 @@ describe("per-agent mission dashboard proxy", () => {
       ],
     });
     (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ getMission });
-    (requireDashboardSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+    (requireDashboardSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      undefined,
+    );
 
     const res = await GET(makeReq(), { params: Promise.resolve({ agentId: "alex" }) });
     expect(res.status).toBe(200);
@@ -1063,7 +1063,9 @@ describe("per-agent mission dashboard proxy", () => {
   it("returns 500 when upstream throws", async () => {
     const getMission = vi.fn().mockRejectedValue(new Error("boom"));
     (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ getMission });
-    (requireDashboardSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+    (requireDashboardSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      undefined,
+    );
 
     const res = await GET(makeReq(), { params: Promise.resolve({ agentId: "alex" }) });
     expect(res.status).toBe(500);
@@ -1133,6 +1135,7 @@ git add apps/dashboard/src/app/api/dashboard/agents/\[agentId\]/mission/route.ts
 ### Task 8: `use-agent-mission` hook + commit boundary
 
 **Files:**
+
 - Create: `apps/dashboard/src/hooks/use-agent-mission.ts`
 - Test: `apps/dashboard/src/hooks/__tests__/use-agent-mission.test.tsx`
 
@@ -1320,6 +1323,7 @@ Expected: commit succeeds.
 ### Task 9: Mission popover component
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/mission-popover.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/mission-popover.test.tsx`
 
@@ -1493,10 +1497,7 @@ export function MissionPopover({ open, onClose, mission }: Props) {
 function MissionRow({ eyebrow, value }: { eyebrow: string; value: string }) {
   return (
     <div className="grid grid-cols-[7rem_1fr] gap-3 px-4 py-3">
-      <div
-        className="text-[10px] font-semibold uppercase tracking-wider"
-        style={{ color: T.ink3 }}
-      >
+      <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: T.ink3 }}>
         {eyebrow}
       </div>
       <div className="text-sm" style={{ color: T.ink }}>
@@ -1509,10 +1510,7 @@ function MissionRow({ eyebrow, value }: { eyebrow: string; value: string }) {
 function ChannelsRow({ channels }: { channels: MissionChannel[] }) {
   return (
     <div className="grid grid-cols-[7rem_1fr] gap-3 px-4 py-3">
-      <div
-        className="text-[10px] font-semibold uppercase tracking-wider"
-        style={{ color: T.ink3 }}
-      >
+      <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: T.ink3 }}>
         CHANNELS
       </div>
       <ul className="flex flex-col gap-1 text-sm">
@@ -1556,6 +1554,7 @@ git add apps/dashboard/src/components/cockpit/dot.tsx
 ### Task 10: Empty-state component + commit boundary
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/empty-state.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/empty-state.test.tsx`
 
@@ -1770,6 +1769,7 @@ Expected: commit succeeds.
 ### Task 11: Extend `<Identity>` with optional mission-interactive props
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/identity.tsx`
 - Modify: `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx`
 
@@ -1831,18 +1831,20 @@ type IdentityProps = {
 Replace the subtitle render with the conditional:
 
 ```tsx
-{missionInteractive && onOpenMission ? (
-  <button
-    type="button"
-    onClick={onOpenMission}
-    className="text-left underline-offset-2 hover:underline"
-    style={{ color: T.ink3 }}
-  >
-    {subtitle}
-  </button>
-) : (
-  <div style={{ color: T.ink3 }}>{subtitle}</div>
-)}
+{
+  missionInteractive && onOpenMission ? (
+    <button
+      type="button"
+      onClick={onOpenMission}
+      className="text-left underline-offset-2 hover:underline"
+      style={{ color: T.ink3 }}
+    >
+      {subtitle}
+    </button>
+  ) : (
+    <div style={{ color: T.ink3 }}>{subtitle}</div>
+  );
+}
 ```
 
 Do **not** change any existing prop or render — A.1 call sites must continue to compile and behave identically.
@@ -1867,6 +1869,7 @@ git add apps/dashboard/src/components/cockpit/identity.tsx \
 ### Task 12: Compose `<MissionPopover>` and `<EmptyState>` into `cockpit-page.tsx` + commit boundary
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/cockpit-page.tsx`
 - Modify: `apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx`
 
