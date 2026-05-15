@@ -19,6 +19,7 @@ import { StaticDeploymentResolver } from "./single-tenant/static-deployment-reso
 import { InMemoryGatewayConversationStore } from "./single-tenant/memory-conversation-store.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerManagedWebhookRoutes } from "./routes/managed-webhook.js";
+import { chatHealthRoutes } from "./routes/health.js";
 import { buildWhatsAppStatusBridge } from "./bridges/whatsapp-test-send-status-bridge.js";
 import { CtwaAdapter } from "@switchboard/ad-optimizer";
 
@@ -224,6 +225,16 @@ async function main() {
       app.log.error(err, "Failed to initialize RuntimeRegistry and widget endpoints");
     }
   }
+
+  // Deep readiness — distinct from the shallow /health below; used by external uptime
+  // probes and Render's readiness gating per docs/superpowers/specs/2026-05-15-deployment-hosting-design.md
+  await app.register(chatHealthRoutes, {
+    prefix: "/api/health",
+    prisma: healthPrisma ?? null,
+    redis: healthRedis ?? null,
+    apiBaseUrl: process.env["SWITCHBOARD_API_URL"] ?? null,
+    internalApiSecret: process.env["INTERNAL_API_SECRET"] ?? null,
+  });
 
   // Health check — reuses existing connections (no leak per call)
   const chatBootTime = Date.now();
