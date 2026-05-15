@@ -2,7 +2,7 @@ import { SURFACING_THRESHOLD } from "@switchboard/schemas";
 import { getMetrics } from "../telemetry/metrics.js";
 import {
   filterSurfaceablePatterns,
-  formatOutcomePatternsForContext,
+  renderOutcomePatternsForContext,
   type OutcomePattern,
 } from "./outcome-pattern-extractor.js";
 
@@ -185,8 +185,8 @@ export class ContextBuilder {
         lastSeenAt: m.lastSeenAt,
       }));
     const surfaceable = filterSurfaceablePatterns(outcomePatterns);
-    const outcomePatternContext = formatOutcomePatternsForContext(surfaceable);
-    const injectedPatternIds = outcomePatternContext.length > 0 ? surfaceable.map((p) => p.id) : [];
+    const { rendered: outcomePatternContext, renderedIds: injectedPatternIds } =
+      renderOutcomePatternsForContext(surfaceable);
     if (outcomePatternContext.length > 0) {
       getMetrics().outcomePatternsSurfaced.inc({ deploymentId: input.deploymentId });
     }

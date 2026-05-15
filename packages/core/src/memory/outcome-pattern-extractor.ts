@@ -73,8 +73,26 @@ function escapeAttr(value: string): string {
   return value.replace(/[^a-zA-Z0-9_:.-]/g, "_");
 }
 
-export function formatOutcomePatternsForContext(patterns: OutcomePattern[]): string {
-  if (patterns.length === 0) return "";
+export interface RenderedOutcomePatterns {
+  /** The full `<outcome-patterns>` envelope, or `""` when nothing rendered. */
+  rendered: string;
+  /** IDs of patterns whose escaped content actually entered the envelope.
+   *  Excludes patterns that collapsed to empty during escapePromptText. */
+  renderedIds: string[];
+}
+
+/**
+ * Render the outcome-patterns prompt envelope.
+ * Returns both the rendered string and the IDs of patterns that survived
+ * escaping (i.e. actually landed in the prompt). Callers persisting per-turn
+ * pattern attribution should use `renderedIds`, not the input set, so that a
+ * pattern which passes surfacing thresholds but collapses during content
+ * escaping is not recorded as "injected".
+ */
+export function renderOutcomePatternsForContext(
+  patterns: OutcomePattern[],
+): RenderedOutcomePatterns {
+  if (patterns.length === 0) return { rendered: "", renderedIds: [] };
 
   const lines = [
     "<outcome-patterns>",
@@ -84,6 +102,7 @@ export function formatOutcomePatternsForContext(patterns: OutcomePattern[]): str
     "",
   ];
   const baselineLength = lines.length;
+  const renderedIds: string[] = [];
 
   for (const p of patterns) {
     const safeContent = escapePromptText(p.content);
@@ -97,10 +116,16 @@ export function formatOutcomePatternsForContext(patterns: OutcomePattern[]): str
       safeContent,
       `</pattern>`,
     );
+    renderedIds.push(p.id);
   }
 
-  if (lines.length === baselineLength) return ""; // every pattern collapsed to empty after escaping
+  if (lines.length === baselineLength) return { rendered: "", renderedIds: [] };
 
   lines.push("</outcome-patterns>");
-  return lines.join("\n");
+  return { rendered: lines.join("\n"), renderedIds };
+}
+
+/** Back-compat wrapper: returns only the rendered string. */
+export function formatOutcomePatternsForContext(patterns: OutcomePattern[]): string {
+  return renderOutcomePatternsForContext(patterns).rendered;
 }

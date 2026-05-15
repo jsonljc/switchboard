@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   shouldExtractOutcomePatterns,
   formatOutcomePatternsForContext,
+  renderOutcomePatternsForContext,
   filterSurfaceablePatterns,
   type OutcomePattern,
 } from "../outcome-pattern-extractor.js";
@@ -124,6 +125,34 @@ describe("formatOutcomePatternsForContext", () => {
     expect(out).not.toMatch(/<\/intent>/i);
     expect(out).toContain("Mentioning");
     expect(out).toContain("often helps");
+  });
+});
+
+describe("renderOutcomePatternsForContext", () => {
+  it("returns renderedIds for patterns whose content survived escaping", () => {
+    const { rendered, renderedIds } = renderOutcomePatternsForContext([
+      pattern({ id: "pat_ok", content: "Real content" }),
+    ]);
+    expect(rendered).toMatch(/id="pat_ok"/);
+    expect(renderedIds).toEqual(["pat_ok"]);
+  });
+
+  it("returns [] renderedIds when every pattern collapses after escaping", () => {
+    const { rendered, renderedIds } = renderOutcomePatternsForContext([
+      pattern({ id: "pat_dead", content: "\x00\x01\x02" }),
+    ]);
+    expect(rendered).toBe("");
+    expect(renderedIds).toEqual([]);
+  });
+
+  it("excludes collapsed patterns from renderedIds in the mixed case", () => {
+    const { rendered, renderedIds } = renderOutcomePatternsForContext([
+      pattern({ id: "pat_renders", content: "Customers ask about downtime" }),
+      pattern({ id: "pat_collapses", content: "\x00\x01\x02" }),
+    ]);
+    expect(rendered).toMatch(/id="pat_renders"/);
+    expect(rendered).not.toMatch(/id="pat_collapses"/);
+    expect(renderedIds).toEqual(["pat_renders"]);
   });
 });
 
