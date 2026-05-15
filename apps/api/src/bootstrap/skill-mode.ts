@@ -534,7 +534,7 @@ export async function bootstrapSkillMode(
     // PR-3.2e: resolve pilotMode from the deployment's inputConfig.outcomePatterns
     // namespace. Defaults to false when the namespace is absent, so steady-state
     // surfacing remains the default for every deployment.
-    const { pilotMode } = resolveOutcomePatternsConfig(ctx.deployment.deploymentConfig ?? null);
+    const { pilotMode } = resolveOutcomePatternsConfig(ctx.deployment.inputConfig ?? null);
     const config = {
       deploymentId: ctx.deployment.deploymentId,
       orgId: ctx.workUnit.organizationId,

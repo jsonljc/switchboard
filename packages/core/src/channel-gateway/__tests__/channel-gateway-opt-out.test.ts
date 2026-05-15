@@ -18,7 +18,7 @@ function makeResolverResult(): DeploymentResolverResult {
     skillSlug: "alex",
     trustLevel: "guided",
     trustScore: 50,
-    deploymentConfig: {},
+    inputConfig: {},
   };
 }
 

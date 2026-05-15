@@ -11,7 +11,7 @@ export class StaticDeploymentResolver implements DeploymentResolver {
       skillSlug: config.skillSlug ?? process.env["SKILL_SLUG"] ?? "sales-pipeline",
       trustLevel: "supervised",
       trustScore: 0,
-      deploymentConfig: {},
+      inputConfig: {},
     };
   }
 

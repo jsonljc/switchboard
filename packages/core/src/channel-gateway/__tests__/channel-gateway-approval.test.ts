@@ -26,7 +26,7 @@ function createMockConfig(overrides: Partial<ChannelGatewayConfig> = {}): Channe
         skillSlug: "alex",
         trustLevel: "guided",
         trustScore: 50,
-        deploymentConfig: {},
+        inputConfig: {},
       }),
       resolveByDeploymentId: vi.fn().mockResolvedValue({}),
       resolveByOrgAndSlug: vi.fn().mockResolvedValue({}),

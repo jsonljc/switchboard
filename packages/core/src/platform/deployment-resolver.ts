@@ -13,7 +13,7 @@ export interface DeploymentResolverResult {
   trustLevel: TrustLevel;
   trustScore: number;
   persona?: AgentPersona;
-  deploymentConfig: Record<string, unknown>;
+  inputConfig: Record<string, unknown>;
   policyOverrides?: DeploymentPolicyOverrides;
 }
 
@@ -41,6 +41,6 @@ export function toDeploymentContext(result: DeploymentResolverResult): Deploymen
     trustScore: result.trustScore,
     persona: result.persona,
     policyOverrides: result.policyOverrides,
-    deploymentConfig: result.deploymentConfig,
+    inputConfig: result.inputConfig,
   };
 }
