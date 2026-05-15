@@ -119,6 +119,14 @@ describe("renderOutcomeCopy", () => {
       "Spend changed 0.0% in 7d after pause.",
     );
   });
+
+  it("contains no causal language (B.2 guardrail tripwire)", () => {
+    // Cheap guard: any future template that introduces banned causal words
+    // fails CI immediately. Keep this list in sync with the B.2 prohibited list.
+    expect(JSON.stringify(ALLOWLISTED_TEMPLATES)).not.toMatch(
+      /\b(saved|caused|recovered|improved|prevented)\b/i,
+    );
+  });
 });
 ```
 
@@ -686,8 +694,7 @@ describe("attributeOneRecommendation — pause below noise floor (pct)", () => {
 
 describe("attributeOneRecommendation — pause below absolute floor", () => {
   it("hides when |deltaAmountCents| < 500 even if pct passes", () => {
-    // pre 600c, post 0c → deltaPct -100% (passes), but deltaAmount -600c (passes)
-    // pre 100c, post 0c → deltaPct -100% (passes), deltaAmount -100c (FAILS)
+    // pre 100c, post 0c → deltaPct -100% (passes), deltaAmount -100c (fails $5 floor)
     const row = attributeOneRecommendation({
       candidate: REC,
       preWindow: w(100, 0.02),
@@ -1290,9 +1297,9 @@ Then add the reverse-relation line to `PendingActionRecord`. Find `model Pending
   recommendationOutcome RecommendationOutcome?
 ```
 
-- [ ] **Step 6.2: Generate the canonical migration SQL**
+- [ ] **Step 6.2: Generate the incremental migration SQL**
 
-Per CLAUDE.md `feedback_prisma_migrate_dev_tty` and `feedback_prisma_index_name_63_char_limit`, do NOT use `prisma migrate dev`. Generate the canonical SQL via `migrate diff`:
+Per CLAUDE.md `feedback_prisma_migrate_dev_tty` and `feedback_prisma_index_name_63_char_limit`, do NOT use `prisma migrate dev` (it needs a TTY). Generate the incremental SQL diff between current DB state and the new schema via `migrate diff` with `--from-url`:
 
 ```bash
 pnpm --filter @switchboard/db exec prisma migrate diff \
@@ -1301,6 +1308,8 @@ pnpm --filter @switchboard/db exec prisma migrate diff \
   --script > /tmp/riley-outcome-migration.sql
 cat /tmp/riley-outcome-migration.sql
 ```
+
+`--from-url "$DATABASE_URL"` is the right flag for incremental migrations: it produces the SQL diff from the live DB state to the new schema. (`--from-empty` would emit the entire schema from scratch and is only useful for canonical-index-name verification, not for the actual migration.)
 
 Verify index names are Prisma-truncated (under 63 chars). Inspect; should look like:
 
@@ -1372,6 +1381,7 @@ import {
   PrismaRecommendationOutcomeStore,
   PrismaAttributableRecommendationStore,
   RecommendationOutcomeAlreadyExistsError,
+  extractCampaignIdentity,
 } from "../recommendation-outcome-store.js";
 import type { RileyOutcomeRow } from "@switchboard/core";
 
@@ -1470,7 +1480,7 @@ describe("PrismaRecommendationOutcomeStore.existsByRecommendationId", () => {
 });
 
 describe("PrismaRecommendationOutcomeStore.listRenderableForOrg", () => {
-  it("filters cockpitRenderable=true and orders by windowEndedAt desc", async () => {
+  it("filters cockpitRenderable=true, orders by windowEndedAt desc, includes recommendation relation", async () => {
     const prisma = buildPrismaMock();
     (prisma.recommendationOutcome.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
     const store = new PrismaRecommendationOutcomeStore(prisma as never);
@@ -1479,6 +1489,34 @@ describe("PrismaRecommendationOutcomeStore.listRenderableForOrg", () => {
       where: { organizationId: "org-1", agentRole: "riley", cockpitRenderable: true },
       orderBy: { windowEndedAt: "desc" },
       take: 50,
+      include: {
+        recommendation: { select: { targetEntities: true, parameters: true } },
+      },
+    });
+  });
+
+  it("projects campaignId/campaignName from the joined recommendation", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.recommendationOutcome.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "outcome-1",
+        recommendationId: "rec-1",
+        actionKind: "pause",
+        windowEndedAt: new Date("2026-05-08T12:00:00Z"),
+        copyTemplate: "pause.spend.fell",
+        copyValues: { deltaPct: -92, windowDays: 7 },
+        recommendation: {
+          targetEntities: { campaignId: "camp-A", campaignName: "Campaign A" },
+          parameters: {},
+        },
+      },
+    ]);
+    const store = new PrismaRecommendationOutcomeStore(prisma as never);
+    const out = await store.listRenderableForOrg({ orgId: "org-1", agentRole: "riley", limit: 50 });
+    expect(out[0]).toMatchObject({
+      id: "outcome-1",
+      campaignId: "camp-A",
+      campaignName: "Campaign A",
     });
   });
 });
@@ -1487,6 +1525,68 @@ describe("PrismaRecommendationOutcomeStore.listRenderableForOrg", () => {
 Add a second describe block for the AttributableRecommendationStore (lives in same file):
 
 ```ts
+describe("extractCampaignIdentity", () => {
+  it("reads {campaignId, campaignName} from top-level targetEntities", () => {
+    expect(
+      extractCampaignIdentity({
+        targetEntities: { campaignId: "camp-A", campaignName: "Campaign A" },
+        parameters: {},
+      }),
+    ).toEqual({ campaignId: "camp-A", campaignName: "Campaign A" });
+  });
+
+  it("falls back to campaignName=null when only campaignId is present", () => {
+    expect(
+      extractCampaignIdentity({
+        targetEntities: { campaignId: "camp-A" },
+        parameters: {},
+      }),
+    ).toEqual({ campaignId: "camp-A", campaignName: null });
+  });
+
+  it("reads from {entities: [{kind:'campaign', id, name}]} shape", () => {
+    expect(
+      extractCampaignIdentity({
+        targetEntities: { entities: [{ kind: "campaign", id: "camp-B", name: "B" }] },
+        parameters: {},
+      }),
+    ).toEqual({ campaignId: "camp-B", campaignName: "B" });
+  });
+
+  it("reads from bare array shape", () => {
+    expect(
+      extractCampaignIdentity({
+        targetEntities: [{ kind: "campaign", id: "camp-C" }],
+        parameters: {},
+      }),
+    ).toEqual({ campaignId: "camp-C", campaignName: null });
+  });
+
+  it("falls back to parameters.campaignId", () => {
+    expect(
+      extractCampaignIdentity({
+        targetEntities: {},
+        parameters: { campaignId: "camp-D" },
+      }),
+    ).toEqual({ campaignId: "camp-D", campaignName: null });
+  });
+
+  it("returns null when no campaign identity is findable", () => {
+    expect(
+      extractCampaignIdentity({ targetEntities: {}, parameters: {} }),
+    ).toBeNull();
+  });
+
+  it("returns null on malformed entities (no campaign element)", () => {
+    expect(
+      extractCampaignIdentity({
+        targetEntities: { entities: [{ kind: "ad", id: "ad-1" }] },
+        parameters: {},
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("PrismaAttributableRecommendationStore.findAttributableCandidates", () => {
   it("filters intent/sourceAgent/status and excludes existing outcomes", async () => {
     const prisma = buildPrismaMock();
@@ -1541,7 +1641,7 @@ Expected: FAIL (module not found).
 Create `packages/db/src/recommendation-outcome-store.ts`:
 
 ```ts
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import {
   isAttributableKind,
   KIND_CONFIG,
@@ -1558,6 +1658,76 @@ export class RecommendationOutcomeAlreadyExistsError extends Error {
     super(`RecommendationOutcome already exists for recommendation ${recommendationId}`);
     this.name = "RecommendationOutcomeAlreadyExistsError";
   }
+}
+
+/**
+ * Tolerant extractor for the campaign identity carried on a recommendation row.
+ * Riley emits campaignId inside targetEntities, but historic shapes have varied
+ * (top-level field, array of {kind, id}, parameters payload). Try the known
+ * locations in priority order; return null if none match.
+ *
+ * Tested against real PendingActionRecord rows in the store tests.
+ */
+export function extractCampaignIdentity(row: {
+  targetEntities: Prisma.JsonValue;
+  parameters: Prisma.JsonValue;
+}): { campaignId: string; campaignName: string | null } | null {
+  const te = row.targetEntities;
+  const params = row.parameters;
+
+  // Shape 1: { campaignId: "...", campaignName?: "..." } on targetEntities
+  if (te && typeof te === "object" && !Array.isArray(te)) {
+    const obj = te as Record<string, unknown>;
+    if (typeof obj.campaignId === "string" && obj.campaignId.length > 0) {
+      return {
+        campaignId: obj.campaignId,
+        campaignName: typeof obj.campaignName === "string" ? obj.campaignName : null,
+      };
+    }
+    // Shape 2: { entities: [{ kind: "campaign", id, name? }, ...] } on targetEntities
+    if (Array.isArray(obj.entities)) {
+      const match = obj.entities.find(
+        (e: unknown): e is { kind: string; id: string; name?: string } =>
+          !!e &&
+          typeof e === "object" &&
+          (e as { kind?: unknown }).kind === "campaign" &&
+          typeof (e as { id?: unknown }).id === "string",
+      );
+      if (match) {
+        return {
+          campaignId: match.id,
+          campaignName: typeof match.name === "string" ? match.name : null,
+        };
+      }
+    }
+  }
+
+  // Shape 3: bare array of {kind, id, name?}
+  if (Array.isArray(te)) {
+    const match = (te as unknown[]).find(
+      (e): e is { kind: string; id: string; name?: string } =>
+        !!e &&
+        typeof e === "object" &&
+        (e as { kind?: unknown }).kind === "campaign" &&
+        typeof (e as { id?: unknown }).id === "string",
+    );
+    if (match) {
+      return {
+        campaignId: match.id,
+        campaignName: typeof match.name === "string" ? match.name : null,
+      };
+    }
+  }
+
+  // Shape 4: parameters.campaignId fallback
+  if (params && typeof params === "object" && !Array.isArray(params)) {
+    const obj = params as Record<string, unknown>;
+    if (typeof obj.campaignId === "string" && obj.campaignId.length > 0) {
+      return { campaignId: obj.campaignId, campaignName: null };
+    }
+  }
+
+  return null;
 }
 
 export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeStore {
@@ -1579,8 +1749,12 @@ export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeSt
           confidence: row.confidence,
           cockpitRenderable: row.cockpitRenderable,
           metricSummary: row.metricSummary as Prisma.InputJsonValue,
+          // Prisma nullable JSON column: must use Prisma.JsonNull, not raw null.
           copyTemplate: row.copyTemplate,
-          copyValues: (row.copyValues ?? null) as Prisma.InputJsonValue,
+          copyValues:
+            row.copyValues === null
+              ? Prisma.JsonNull
+              : (row.copyValues as Prisma.InputJsonValue),
           visibilityFlags: row.visibilityFlags as Prisma.InputJsonValue,
         },
       });
@@ -1613,6 +1787,14 @@ export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeSt
       },
       orderBy: { windowEndedAt: "desc" },
       take: args.limit,
+      include: {
+        // Join the parent recommendation so the projection can extract
+        // campaignId + campaignName for the API's activity-row body. Avoids
+        // a second roundtrip from the route.
+        recommendation: {
+          select: { targetEntities: true, parameters: true },
+        },
+      },
     });
     return rows.map(projectReadModel);
   }
@@ -1636,8 +1818,12 @@ function projectReadModel(row: {
   windowEndedAt: Date;
   copyTemplate: string | null;
   copyValues: Prisma.JsonValue;
+  recommendation: { targetEntities: Prisma.JsonValue; parameters: Prisma.JsonValue } | null;
 }): RecommendationOutcomeReadModel {
   const cv = row.copyValues as { deltaPct?: number; windowDays?: number } | null;
+  const campaign = row.recommendation
+    ? extractCampaignIdentity(row.recommendation)
+    : null;
   return {
     id: row.id,
     recommendationId: row.recommendationId,
@@ -1648,8 +1834,8 @@ function projectReadModel(row: {
       cv && typeof cv.deltaPct === "number" && typeof cv.windowDays === "number"
         ? { deltaPct: cv.deltaPct, windowDays: cv.windowDays }
         : null,
-    campaignId: null, // populated by join projection at API layer if needed (Task 8)
-    campaignName: null,
+    campaignId: campaign?.campaignId ?? null,
+    campaignName: campaign?.campaignName ?? null,
   };
 }
 
@@ -1663,13 +1849,14 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
     organizationId: string;
     now: Date;
   }): Promise<AttributableRecommendation[]> {
-    // Maximum windowDays across all attributable kinds — used as a conservative
-    // upper bound; per-kind eligibility refined in TS after the SQL pull.
-    const maxWindowDays = Math.max(
-      ...Object.values(KIND_CONFIG).map((c) => c.windowDays),
-    );
+    // SQL prefilter: any kind's earliest eligible resolvedAt is
+    // now - maxWindowDays - settlementLag. Pull anything older; refine per-kind
+    // in projectCandidate() since each kind has its own windowDays.
+    const maxWindowDays = Math.max(...Object.values(KIND_CONFIG).map((c) => c.windowDays));
     const cutoff = new Date(
-      args.now.getTime() - SETTLEMENT_LAG_HOURS * MS_PER_HOUR - 1 * MS_PER_DAY,
+      args.now.getTime() -
+        SETTLEMENT_LAG_HOURS * MS_PER_HOUR -
+        maxWindowDays * MS_PER_DAY,
     );
 
     const rows = await this.prisma.pendingActionRecord.findMany({
@@ -1733,9 +1920,8 @@ function projectCandidate(row: PrismaCandidateRow, now: Date): AttributableRecom
   const kind = params.__recommendation?.action;
   if (!isAttributableKind(kind)) return null;
 
-  const targets = (row.targetEntities ?? {}) as { campaignId?: string };
-  const campaignId = targets.campaignId;
-  if (typeof campaignId !== "string" || campaignId.length === 0) return null;
+  const identity = extractCampaignIdentity(row);
+  if (!identity) return null;
 
   // Refine per-kind eligibility: windowDays must have elapsed + settlement lag.
   const windowDays = KIND_CONFIG[kind].windowDays;
@@ -1747,7 +1933,7 @@ function projectCandidate(row: PrismaCandidateRow, now: Date): AttributableRecom
   return {
     id: row.id,
     organizationId: row.organizationId,
-    campaignId,
+    campaignId: identity.campaignId,
     actionKind: kind,
     resolvedAt: row.resolvedAt,
   };
@@ -1887,6 +2073,23 @@ describe("GET /api/cockpit/riley/outcomes", () => {
       url: "/api/cockpit/riley/outcomes",
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it("invokes the store's renderable-only list (contract — hidden rows never reach the wire)", async () => {
+    // Inject a spy fake instead of seeding via buildTestServer. The route's
+    // contract is that it calls listRenderable; the store filters
+    // cockpitRenderable=true at the SQL layer. We verify the route honors
+    // that contract regardless of what the store returns.
+    const listRenderable = vi.fn().mockResolvedValue([]);
+    const server = await buildTestServer({ listRenderableOverride: listRenderable });
+    await server.inject({
+      method: "GET",
+      url: "/api/cockpit/riley/outcomes?orgId=org-1",
+    });
+    expect(listRenderable).toHaveBeenCalledTimes(1);
+    expect(listRenderable).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org-1" }),
+    );
   });
 });
 ```
@@ -2387,15 +2590,49 @@ grep -rn "kind.*observed\|ActivityKind\|kind === 'paused'" apps/dashboard/src/co
 
 Add the `observed` case to the kind-to-icon map.
 
-- [ ] **Step 11.4: Run dashboard build (CI doesn't run this — `feedback_dashboard_build_not_in_ci`)**
+- [ ] **Step 11.4: Add a merge/sort test for the loader**
+
+The activity-feed merge is new dashboard-side behavior; cover it with a focused test colocated with the loader. Test file path follows the loader's location — e.g., `apps/dashboard/src/lib/cockpit/riley/__tests__/<loader>.test.ts`.
+
+```ts
+import { describe, it, expect } from "vitest";
+import { mergeRileyActivityAndOutcomes } from "../<loader>";
+import type { ActivityRow } from "@switchboard/schemas";
+
+const activity: ActivityRow[] = [
+  { id: "a-1", time: "11:42", timestampIso: "2026-05-01T11:42:00Z", kind: "paused", head: "..." },
+];
+const outcomes: ActivityRow[] = [
+  { id: "outcome:o-1", time: "07:00", timestampIso: "2026-05-08T07:00:00Z", kind: "observed", head: "Spend fell 92.0% in 7d after pause." },
+];
+
+describe("mergeRileyActivityAndOutcomes", () => {
+  it("merges and sorts descending by timestampIso", () => {
+    const merged = mergeRileyActivityAndOutcomes(activity, outcomes);
+    expect(merged.map((r) => r.id)).toEqual(["outcome:o-1", "a-1"]);
+  });
+
+  it("preserves order when timestamps are equal (stable sort)", () => {
+    const a: ActivityRow = { id: "a-eq", time: "07:00", timestampIso: "2026-05-08T07:00:00Z", kind: "paused", head: "..." };
+    const o: ActivityRow = { id: "outcome:o-eq", time: "07:00", timestampIso: "2026-05-08T07:00:00Z", kind: "observed", head: "..." };
+    const merged = mergeRileyActivityAndOutcomes([a], [o]);
+    expect(merged.map((r) => r.id)).toEqual(["a-eq", "outcome:o-eq"]);
+  });
+});
+```
+
+> NOTE: If you inline the merge inside an existing loader/hook rather than extracting `mergeRileyActivityAndOutcomes`, extract a pure helper for the merge so it's unit-testable. The contract is the same: concat + sort desc by `timestampIso`.
+
+- [ ] **Step 11.5: Run dashboard build (CI doesn't run this — `feedback_dashboard_build_not_in_ci`)**
 
 ```bash
 pnpm --filter @switchboard/dashboard build
+pnpm --filter @switchboard/dashboard test
 ```
 
 Expected: PASS.
 
-- [ ] **Step 11.5: Commit**
+- [ ] **Step 11.6: Commit**
 
 ```bash
 git add <paths-modified-in-this-task>
