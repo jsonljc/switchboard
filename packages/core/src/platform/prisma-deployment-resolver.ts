@@ -1,63 +1,13 @@
 import { createHash } from "node:crypto";
+import { resolvePersona, resolvePolicyOverrides } from "@switchboard/schemas";
 import type { DeploymentResolver, DeploymentResolverResult } from "./deployment-resolver.js";
 import { DeploymentInactiveError } from "./deployment-resolver.js";
-import type { AgentPersona, DeploymentPolicyOverrides } from "./deployment-context.js";
 import type { TrustLevel } from "../skill-runtime/governance.js";
 
 function trustLevelFromScore(score: number): TrustLevel {
   if (score >= 55) return "autonomous";
   if (score >= 30) return "guided";
   return "supervised";
-}
-
-function extractPersona(inputConfig: Record<string, unknown>): AgentPersona | undefined {
-  const businessName = inputConfig.businessName;
-  if (typeof businessName !== "string") return undefined;
-
-  return {
-    businessName,
-    tone: typeof inputConfig.tone === "string" ? inputConfig.tone : "professional",
-    qualificationCriteria: Array.isArray(inputConfig.qualificationCriteria)
-      ? inputConfig.qualificationCriteria
-      : undefined,
-    disqualificationCriteria: Array.isArray(inputConfig.disqualificationCriteria)
-      ? inputConfig.disqualificationCriteria
-      : undefined,
-    escalationRules: Array.isArray(inputConfig.escalationRules)
-      ? inputConfig.escalationRules
-      : undefined,
-    bookingLink: typeof inputConfig.bookingLink === "string" ? inputConfig.bookingLink : undefined,
-    customInstructions:
-      typeof inputConfig.customInstructions === "string"
-        ? inputConfig.customInstructions
-        : undefined,
-  };
-}
-
-function extractPolicyOverrides(
-  row: Record<string, unknown>,
-): DeploymentPolicyOverrides | undefined {
-  const overrides: DeploymentPolicyOverrides = {};
-  let hasAny = false;
-
-  if (typeof row.circuitBreakerThreshold === "number") {
-    overrides.circuitBreakerThreshold = row.circuitBreakerThreshold;
-    hasAny = true;
-  }
-  if (typeof row.maxWritesPerHour === "number") {
-    overrides.maxWritesPerHour = row.maxWritesPerHour;
-    hasAny = true;
-  }
-  if (Array.isArray(row.allowedModelTiers) && row.allowedModelTiers.length > 0) {
-    overrides.allowedModelTiers = row.allowedModelTiers as string[];
-    hasAny = true;
-  }
-  if (typeof row.spendApprovalThreshold === "number") {
-    overrides.spendApprovalThreshold = row.spendApprovalThreshold;
-    hasAny = true;
-  }
-
-  return hasAny ? overrides : undefined;
 }
 
 interface DeploymentRow {
@@ -171,9 +121,9 @@ export class PrismaDeploymentResolver implements DeploymentResolver {
       skillSlug: row.skillSlug,
       trustScore: row.listing.trustScore,
       trustLevel: trustLevelFromScore(row.listing.trustScore),
-      persona: extractPersona(inputConfig),
+      persona: resolvePersona(inputConfig),
       inputConfig,
-      policyOverrides: extractPolicyOverrides(row as unknown as Record<string, unknown>),
+      policyOverrides: resolvePolicyOverrides(row as unknown as Record<string, unknown>),
     };
   }
 

@@ -166,3 +166,11 @@ export * from "./outcome-patterns-config.js";
 
 // Ad-optimizer config (per-deployment targetCPA/targetROAS/monthlyBudget)
 export * from "./ad-optimizer-config.js";
+
+// Runtime-shape agent persona overlay (distinct from agent-persona.ts which
+// models the full DB row — this is the inputConfig overlay used by core
+// DeploymentContext)
+export * from "./agent-persona-config.js";
+
+// Deployment governance policy overrides (top-level AgentDeployment columns)
+export * from "./policy-overrides-config.js";
