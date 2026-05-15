@@ -34,6 +34,7 @@ describe("resolveBookingAttribution", () => {
 
     expect(result.tier).toBe("strong");
     expect(result.bookingId).toBe("bk-1");
+    expect(result.workTraceId).toBe("wt-B");
     expect(store.findInWindow).not.toHaveBeenCalled();
   });
 
