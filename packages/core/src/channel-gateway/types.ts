@@ -74,6 +74,7 @@ export interface ChannelGatewayConfig {
     sessionId: string;
     role: "user" | "assistant";
     content: string;
+    workTraceId?: string;
   }) => void;
   /** Deployment resolver for converged execution path */
   deploymentResolver: DeploymentResolver;

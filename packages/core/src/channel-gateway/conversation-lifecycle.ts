@@ -35,6 +35,7 @@ export interface RecordMessageInput {
   contactId?: string;
   role: string;
   content: string;
+  workTraceId?: string;
 }
 
 interface ActiveSession {
@@ -44,6 +45,7 @@ interface ActiveSession {
   sessionId: string;
   contactId: string | null;
   messages: Array<{ role: string; content: string }>;
+  workTraceIds: string[];
   startedAt: number;
   timer: ReturnType<typeof setTimeout>;
 }
@@ -69,6 +71,7 @@ export class ConversationLifecycleTracker {
     if (existing) {
       clearTimeout(existing.timer);
       existing.messages.push({ role: input.role, content: input.content });
+      if (input.workTraceId) existing.workTraceIds.push(input.workTraceId);
       if (input.contactId) existing.contactId = input.contactId;
       existing.timer = this.startTimer(input.sessionKey);
     } else {
@@ -83,6 +86,7 @@ export class ConversationLifecycleTracker {
         sessionId: input.sessionId,
         contactId: input.contactId ?? null,
         messages: [{ role: input.role, content: input.content }],
+        workTraceIds: input.workTraceId ? [input.workTraceId] : [],
         startedAt: Date.now(),
         timer: this.startTimer(input.sessionKey),
       });
@@ -134,6 +138,7 @@ export class ConversationLifecycleTracker {
       messageCount: session.messages.length,
       endReason: reason,
       endedAt: new Date(),
+      workTraceIds: session.workTraceIds.length > 0 ? session.workTraceIds : undefined,
     };
 
     try {

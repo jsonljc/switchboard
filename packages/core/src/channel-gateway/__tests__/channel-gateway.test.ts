@@ -45,6 +45,7 @@ function createMockConfig(overrides: Partial<ChannelGatewayConfig> = {}): Channe
           outcome: "completed",
           outputs: { response: "Hello from agent" },
           summary: "Responded to user",
+          traceId: "trace-1",
         },
         workUnit: { id: "wu-1", traceId: "trace-1" },
       }),
@@ -335,6 +336,52 @@ describe("ChannelGateway", () => {
     // Should proceed normally for backward compatibility
     expect(submitSpy).toHaveBeenCalled();
     expect(sendSpy).toHaveBeenCalledWith("Hello from agent");
+  });
+
+  it("emits workTraceId on the assistant-turn onMessageRecorded callback", async () => {
+    const onMessageRecordedSpy = vi.fn();
+    const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid123",
+      sessionId: "sess-1",
+      text: "Hello",
+    };
+    const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
+
+    await gateway.handleIncoming(message, replySink);
+
+    // Two calls: one for the user turn, one for the assistant turn.
+    // The assistant call carries result.traceId.
+    expect(onMessageRecordedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        workTraceId: "trace-1",
+      }),
+    );
+  });
+
+  it("does NOT emit workTraceId on the user-turn onMessageRecorded callback (invariant: user turns are text events)", async () => {
+    const onMessageRecordedSpy = vi.fn();
+    const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid123",
+      sessionId: "sess-1",
+      text: "Hello",
+    };
+    const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
+
+    await gateway.handleIncoming(message, replySink);
+
+    // First call (user turn) must not carry workTraceId.
+    const userCallArg = onMessageRecordedSpy.mock.calls.find(
+      (c) => (c[0] as { role: string }).role === "user",
+    )?.[0] as { workTraceId?: string } | undefined;
+    expect(userCallArg).toBeDefined();
+    expect(userCallArg!.workTraceId).toBeUndefined();
   });
 });
 

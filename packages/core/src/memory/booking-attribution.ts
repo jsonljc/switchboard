@@ -14,6 +14,7 @@ export type AttributionTier = "strong" | "fallback" | "none";
 export interface BookingAttribution {
   tier: AttributionTier;
   bookingId?: string;
+  workTraceId?: string;
 }
 
 /**
@@ -48,7 +49,11 @@ export async function resolveBookingAttribution(
     if (strong.length > 0) {
       // Deterministic pick: first row. Multiple tool-trace bookings in one
       // conversation are vanishingly rare; if it happens, the first wins.
-      return { tier: "strong", bookingId: strong[0]!.id };
+      return {
+        tier: "strong",
+        bookingId: strong[0]!.id,
+        workTraceId: strong[0]!.workTraceId ?? undefined,
+      };
     }
   }
 

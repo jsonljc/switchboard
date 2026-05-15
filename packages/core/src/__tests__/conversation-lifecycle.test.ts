@@ -147,4 +147,129 @@ describe("ConversationLifecycleTracker", () => {
 
     expect(tracker.activeSessionCount).toBe(0);
   });
+
+  it("accumulates workTraceIds across assistant turns and surfaces them in the end event", async () => {
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "user",
+      content: "Hello",
+    });
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "assistant",
+      content: "Hi",
+      workTraceId: "wt-A",
+    });
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "user",
+      content: "Tell me more",
+    });
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "assistant",
+      content: "Sure",
+      workTraceId: "wt-B",
+    });
+
+    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ workTraceIds: ["wt-A", "wt-B"] }),
+    );
+  });
+
+  it("preserves insertion order across multiple distinct traces (no dedupe)", async () => {
+    const traces = ["wt-X", "wt-Y", "wt-Z"];
+    for (const wt of traces) {
+      tracker.recordMessage({
+        sessionKey: "dep-1:telegram:session-1",
+        deploymentId: "dep-1",
+        organizationId: "org-1",
+        channelType: "telegram",
+        sessionId: "session-1",
+        role: "assistant",
+        content: `turn ${wt}`,
+        workTraceId: wt,
+      });
+    }
+
+    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ workTraceIds: ["wt-X", "wt-Y", "wt-Z"] }),
+    );
+  });
+
+  it("emits workTraceIds: undefined (not []) when no traces are recorded", async () => {
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "user",
+      content: "Hello",
+    });
+
+    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+
+    const call = (handler as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const event = call[0] as { workTraceIds?: string[] };
+    expect(event.workTraceIds).toBeUndefined();
+  });
+
+  it("skips turns where workTraceId is omitted (forward compat while call sites migrate)", async () => {
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "assistant",
+      content: "first",
+      workTraceId: "wt-1",
+    });
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "assistant",
+      content: "middle (no workTraceId — older call site)",
+    });
+    tracker.recordMessage({
+      sessionKey: "dep-1:telegram:session-1",
+      deploymentId: "dep-1",
+      organizationId: "org-1",
+      channelType: "telegram",
+      sessionId: "session-1",
+      role: "assistant",
+      content: "third",
+      workTraceId: "wt-3",
+    });
+
+    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ workTraceIds: ["wt-1", "wt-3"] }),
+    );
+  });
 });
