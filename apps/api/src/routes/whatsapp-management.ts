@@ -212,13 +212,26 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
       });
     }
 
-    // Step 1: Look up WhatsApp Connection
-    const connection = await app.prisma!.connection.findFirst({
-      where: {
-        organizationId,
-        serviceId: "whatsapp",
-      },
-    });
+    // Step 1: Look up WhatsApp Connection + ManagedChannel (allowlist) in parallel
+    const [connection, channel] = await Promise.all([
+      app.prisma!.connection.findFirst({
+        where: {
+          organizationId,
+          serviceId: "whatsapp",
+        },
+      }),
+      app.prisma!.managedChannel.findFirst({
+        where: { organizationId, channel: "whatsapp" },
+      }),
+    ]);
+
+    const testRecipients: string[] = Array.isArray(
+      (channel as { testRecipients?: unknown } | null)?.testRecipients,
+    )
+      ? ((channel as { testRecipients: unknown[] }).testRecipients.filter(
+          (x): x is string => typeof x === "string",
+        ) as string[])
+      : [];
 
     if (!connection) {
       return reply.code(200).send({
@@ -227,6 +240,7 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
           externalAccountId: null,
           primaryPhoneNumberId: null,
           connectedAt: null,
+          testRecipients,
         },
         account: {
           id: null,
@@ -276,6 +290,7 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
           externalAccountId: wabaId ?? null,
           primaryPhoneNumberId,
           connectedAt,
+          testRecipients,
         },
         account: {
           id: null,
@@ -310,6 +325,7 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
           externalAccountId: wabaId,
           primaryPhoneNumberId,
           connectedAt,
+          testRecipients,
         },
         account: {
           id: null,
@@ -376,6 +392,7 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
         externalAccountId: wabaId,
         primaryPhoneNumberId,
         connectedAt,
+        testRecipients,
       },
       account: {
         id: wabaAccount.id ?? null,

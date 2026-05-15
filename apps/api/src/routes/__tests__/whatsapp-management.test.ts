@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- aggregated route tests: 18 cases across
+   /account, /phone-numbers, and /templates branches share one Fastify
+   harness and Prisma mock. Splitting requires three sibling files plus a
+   shared test-utils module; tracked as a follow-up. */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import { whatsappManagementRoutes } from "../whatsapp-management.js";
@@ -6,6 +10,7 @@ describe("WhatsApp management routes", () => {
   let app: FastifyInstance;
   const mockGraphFetch = vi.fn();
   const mockFindFirst = vi.fn();
+  const mockManagedChannelFindFirst = vi.fn();
 
   // Set encryption key for tests
   process.env.CREDENTIALS_ENCRYPTION_KEY = "test-key-for-whatsapp-management-tests-32chars";
@@ -17,6 +22,9 @@ describe("WhatsApp management routes", () => {
     app.decorate("prisma", {
       connection: {
         findFirst: mockFindFirst,
+      },
+      managedChannel: {
+        findFirst: mockManagedChannelFindFirst,
       },
     } as any);
 
@@ -39,6 +47,9 @@ describe("WhatsApp management routes", () => {
   beforeEach(() => {
     mockGraphFetch.mockReset();
     mockFindFirst.mockReset();
+    mockManagedChannelFindFirst.mockReset();
+    // Default to empty allowlist so every existing test still passes.
+    mockManagedChannelFindFirst.mockResolvedValue({ testRecipients: [] });
   });
 
   describe("GET /account", () => {
@@ -484,6 +495,85 @@ describe("WhatsApp management routes", () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.account.reviewStatus).toBe("FUTURE_STATUS_NOT_YET_KNOWN");
+    });
+
+    it("connected: includes testRecipients on the connection block", async () => {
+      mockFindFirst.mockResolvedValueOnce({
+        id: "conn_1",
+        organizationId: "org_test",
+        serviceId: "whatsapp",
+        externalAccountId: "waba_123",
+        credentials: JSON.stringify({ primaryPhoneNumberId: "phone_123" }),
+      });
+      mockManagedChannelFindFirst.mockResolvedValueOnce({ testRecipients: ["+15551234567"] });
+      mockGraphFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: "waba_123",
+          name: "Test Business",
+          currency: "USD",
+          timezone_id: "America/Los_Angeles",
+          message_template_namespace: "ns_123",
+          account_review_status: "APPROVED",
+        }),
+      });
+      mockGraphFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [
+            {
+              id: "phone_123",
+              display_phone_number: "+15551234567",
+              verified_name: "Test",
+              status: "CONNECTED",
+              quality_rating: "GREEN",
+              messaging_limit_tier: "TIER_1K",
+            },
+          ],
+        }),
+      });
+
+      const response = await app.inject({ method: "GET", url: "/account" });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { connection: { testRecipients: string[] } };
+      expect(body.connection.testRecipients).toEqual(["+15551234567"]);
+    });
+
+    it("not_connected: still surfaces empty testRecipients", async () => {
+      mockFindFirst.mockResolvedValueOnce(null);
+      mockManagedChannelFindFirst.mockResolvedValueOnce({ testRecipients: [] });
+
+      const response = await app.inject({ method: "GET", url: "/account" });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        connection: { status: string; testRecipients: string[] };
+      };
+      expect(body.connection.status).toBe("not_connected");
+      expect(body.connection.testRecipients).toEqual([]);
+    });
+
+    it("incomplete: surfaces testRecipients alongside the incomplete status", async () => {
+      mockFindFirst.mockResolvedValueOnce({
+        id: "conn_1",
+        organizationId: "org_test",
+        serviceId: "whatsapp",
+        externalAccountId: null,
+        credentials: JSON.stringify({ primaryPhoneNumberId: "phone_123" }),
+      });
+      mockManagedChannelFindFirst.mockResolvedValueOnce({ testRecipients: ["+15551111111"] });
+
+      const response = await app.inject({ method: "GET", url: "/account" });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        connection: { status: string; testRecipients: string[] };
+      };
+      expect(body.connection.status).toBe("incomplete");
+      expect(body.connection.testRecipients).toEqual(["+15551111111"]);
     });
   });
 
