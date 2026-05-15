@@ -1,24 +1,27 @@
 // apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { T } from "./tokens";
 import { Topbar } from "./topbar";
 import { Identity } from "./identity";
 import { ApprovalCard } from "./approval-card";
 import type { ApprovalAccent } from "./approval-card";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
+import { CommandPalette } from "./command-palette";
 import { ComposerPlaceholder } from "./composer-placeholder";
 import { KPIStrip } from "./kpi-strip";
 import { MissionPopover } from "./mission-popover";
 import {
   RILEY_ACCENT,
+  RILEY_COMMANDS,
   RILEY_COMPOSER_PLACEHOLDER,
   RILEY_MISSION_SUBTITLE,
   RILEY_TABS,
   statusColor,
   statusPulse,
 } from "@/lib/cockpit/riley/riley-config";
+import { useRileyActionDispatcher } from "@/lib/cockpit/riley-action-dispatcher";
 import { rileyToast } from "@/lib/cockpit/riley/riley-toast";
 import { useRileyApprovals } from "@/hooks/use-riley-approvals";
 import { useRileyStatus } from "@/hooks/use-riley-status";
@@ -86,6 +89,27 @@ export function RileyCockpitPage() {
   const mission = useAgentMission("riley");
   const [filter, setFilter] = useState<ActivityFilter>("all");
   const [missionOpen, setMissionOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const dispatch = useRileyActionDispatcher({
+    onShowMission: () => setMissionOpen(true),
+  });
+
+  // Page-scoped ⌘K / Ctrl+K listener — opens the command palette. Mirrors
+  // Alex A.5's CockpitPage pattern (cockpit-page.tsx:55-65). The native
+  // browser ⌘K is preempted only while /riley is the active page; the
+  // listener is removed on unmount.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPaletteOpen((o) => !o);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // Adapter returns null when the wire VM is missing tiles or roi — the page
   // mount gates on this and renders no KPI strip rather than falling back to
@@ -107,7 +131,13 @@ export function RileyCockpitPage() {
         fontFamily: "Inter, system-ui, sans-serif",
       }}
     >
-      <Topbar paletteEnabled={false} compact tabs={RILEY_TABS} />
+      <Topbar
+        paletteEnabled
+        onOpenPalette={() => setPaletteOpen(true)}
+        paletteLabel="Tell Riley…"
+        compact
+        tabs={RILEY_TABS}
+      />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div style={{ position: "relative" }}>
           <Identity
@@ -159,6 +189,15 @@ export function RileyCockpitPage() {
         senderLabel="RILEY"
         placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}
         accentColor={RILEY_ACCENT.deep}
+      />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={RILEY_COMMANDS}
+        onSelect={(cmd) => {
+          setPaletteOpen(false);
+          dispatch(cmd);
+        }}
       />
     </div>
   );

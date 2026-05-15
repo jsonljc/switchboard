@@ -506,3 +506,81 @@ describe("RileyCockpitPage — B.2a mission popover", () => {
     expect(screen.queryByTestId("cockpit-empty-state")).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// B.3-followup tests — palette wiring on /riley
+// ---------------------------------------------------------------------------
+
+describe("RileyCockpitPage — B.3-followup palette wiring", () => {
+  beforeEach(() => {
+    rileyApprovalsState.approvals = [];
+    rileyActivityState.rows = [];
+    metricsState.data = null;
+    metricsState.isLoading = false;
+    metricsState.isError = false;
+    metricsState.error = null;
+    missionData = undefined;
+    toast.mockReset();
+  });
+
+  it("renders 'Tell Riley…' on the Topbar palette button, not 'Tell Alex…'", () => {
+    wrap(<RileyCockpitPage />);
+    expect(screen.getByText("Tell Riley…")).toBeInTheDocument();
+    expect(screen.queryByText("Tell Alex…")).not.toBeInTheDocument();
+  });
+
+  it("Topbar palette button is enabled (paletteEnabled=true)", () => {
+    wrap(<RileyCockpitPage />);
+    const btn = screen.getByText("Tell Riley…").closest("button")!;
+    expect(btn).not.toBeDisabled();
+    expect(btn).toHaveAttribute("aria-disabled", "false");
+  });
+
+  it("clicking the Topbar palette button opens the command palette", async () => {
+    wrap(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Tell Riley…").closest("button")!);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: /Command palette/i })).toBeInTheDocument(),
+    );
+  });
+
+  it("⌘K opens the command palette", async () => {
+    wrap(<RileyCockpitPage />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: /Command palette/i })).toBeInTheDocument(),
+    );
+  });
+
+  it("Escape closes the palette", async () => {
+    wrap(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Tell Riley…").closest("button")!);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: /Command palette/i })).toBeInTheDocument(),
+    );
+    const dialog = screen.getByRole("dialog", { name: /Command palette/i });
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /Command palette/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("selecting 'Resume Riley' fires the dispatcher (toast fires; palette closes)", async () => {
+    wrap(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Tell Riley…").closest("button")!);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: /Command palette/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Resume Riley"));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /Command palette/i })).not.toBeInTheDocument(),
+    );
+    expect(toast).toHaveBeenCalledWith({ title: "Resumed — back to scanning." });
+  });
+
+  it("ComposerPlaceholder still renders (composer adoption deferred)", () => {
+    wrap(<RileyCockpitPage />);
+    // The placeholder copy is the locked Riley NL example.
+    expect(screen.getByText(/pause the Cold Interests adset/i)).toBeInTheDocument();
+  });
+});
