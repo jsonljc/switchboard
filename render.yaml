@@ -1,0 +1,163 @@
+# Render Infrastructure-as-Code for Switchboard pilot launch.
+# Reference: docs/superpowers/specs/2026-05-15-deployment-hosting-design.md
+#
+# Blueprint v2 schema verified against https://render.com/docs/blueprint-spec
+# on 2026-05-15. Notable deltas from earlier drafts:
+#   - Redis uses `type: keyvalue` (the legacy `type: redis` is deprecated).
+#   - There is no multi-stage Dockerfile `--target` field in the Blueprint
+#     schema, so each web service points at a per-service Dockerfile
+#     (`Dockerfile.api`, `Dockerfile.chat`) instead of the root multi-stage
+#     `Dockerfile`. The root Dockerfile is retained for local integration
+#     testing via docker-compose.prod.yml.
+#   - The deprecated `autoDeploy: true` is replaced by
+#     `autoDeployTrigger: commit`.
+#   - `buildFilter` uses `paths` (a flat list of glob patterns) under
+#     `include` / `exclude` (current schema field names).
+#   - `fromService` references the Key Value service with `type: keyvalue`.
+#
+# Values for envVars with `sync: false` are entered in the Render UI from
+# the master vault. This file declares only their *keys*.
+#
+# Region (3 occurrences) is set by the operator at provisioning per spec §3.
+# Replace <RENDER_REGION> with the chosen region before connecting to Render.
+
+services:
+  - type: web
+    name: switchboard-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    dockerContext: .
+    plan: starter
+    region: <RENDER_REGION>
+    numInstances: 1
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /health # Shallow liveness — Render uses this to gate container promotion.
+    preDeployCommand: pnpm --filter @switchboard/db run migrate:deploy
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/**
+        - Dockerfile.api
+        - pnpm-lock.yaml
+        - render.yaml
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: switchboard-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: switchboard-redis
+          property: connectionString
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+      - key: INTERNAL_API_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: META_ADS_ACCESS_TOKEN
+        sync: false
+      - key: META_ADS_ACCOUNT_ID
+        sync: false
+      - key: META_PIXEL_ID
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: INNGEST_EVENT_KEY
+        sync: false
+      - key: INNGEST_SIGNING_KEY
+        sync: false
+      - key: SENTRY_DSN_SERVER
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+
+  - type: web
+    name: switchboard-chat
+    runtime: docker
+    dockerfilePath: ./Dockerfile.chat
+    dockerContext: .
+    plan: starter
+    region: <RENDER_REGION>
+    numInstances: 1
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /health # Shallow liveness — does NOT depend on api reachability.
+    buildFilter:
+      paths:
+        - apps/chat/**
+        - packages/**
+        - Dockerfile.chat
+        - pnpm-lock.yaml
+        - render.yaml
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CHAT_PORT
+        value: 3001
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: switchboard-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: switchboard-redis
+          property: connectionString
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+      - key: INTERNAL_API_SECRET
+        sync: false
+      - key: SWITCHBOARD_API_URL
+        value: http://switchboard-api:3000 # Render private network: http://<service-name>:<PORT>. PORT for api is 3000 (set above).
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SENTRY_DSN_SERVER
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+
+  - type: keyvalue
+    name: switchboard-redis
+    plan: starter
+    region: <RENDER_REGION>
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # Empty list = private-network only, no public access.
+
+databases:
+  - name: switchboard-postgres
+    plan: starter
+    region: <RENDER_REGION>
+    postgresMajorVersion: "16"
