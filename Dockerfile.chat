@@ -62,6 +62,9 @@ COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
 COPY --from=build /app/packages/sdk/package.json packages/sdk/package.json
 COPY --from=build /app/packages/sdk/dist/ packages/sdk/dist/
 
+COPY --from=build /app/packages/ad-optimizer/package.json packages/ad-optimizer/package.json
+COPY --from=build /app/packages/ad-optimizer/dist/ packages/ad-optimizer/dist/
+
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/
 
