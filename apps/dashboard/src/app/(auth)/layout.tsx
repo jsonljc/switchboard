@@ -4,17 +4,24 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { OperatorChatWidget } from "@/components/operator-chat/operator-chat-widget";
 import { Toaster } from "@/components/ui/toaster";
 import { getServerSession } from "@/lib/session";
+import { getDataMode } from "@/lib/data-mode/server";
+import { isFixtureModeAllowed } from "@/lib/data-mode/shared";
+import { DataModeProvider } from "@/lib/data-mode/client";
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
+  const mode = await getDataMode();
+  const dataModeControlsAllowed = isFixtureModeAllowed(process.env);
 
   return (
     <AuthProvider session={session}>
-      <ErrorBoundary>
-        <AppShell>{children}</AppShell>
-      </ErrorBoundary>
-      <OperatorChatWidget />
-      <Toaster />
+      <DataModeProvider mode={mode}>
+        <ErrorBoundary>
+          <AppShell dataModeControlsAllowed={dataModeControlsAllowed}>{children}</AppShell>
+        </ErrorBoundary>
+        <OperatorChatWidget />
+        <Toaster />
+      </DataModeProvider>
     </AuthProvider>
   );
 }
