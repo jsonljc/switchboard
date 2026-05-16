@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyInstance } from "fastify";
-import type { ConsentService, ContactConsentReader } from "@switchboard/core";
+import type { ContactConsentReader } from "@switchboard/core";
 import { registerAdminConsentRoutes } from "../routes/admin-consent.js";
 import { actionsRoutes } from "../routes/actions.js";
 import { executeRoutes } from "../routes/execute.js";
@@ -71,7 +71,12 @@ import { registerLifecycleDisqualificationsRoutes } from "../routes/lifecycle-di
 import type { LifecycleDisqualificationsRouteDeps } from "../routes/lifecycle-disqualifications.js";
 
 export interface RegisterRoutesDeps {
-  consentService?: ConsentService;
+  /**
+   * Read-side consent state. Phase 1b.4 migrated mutating consent calls to
+   * PlatformIngress; the ConsentService now lives in operator-intent handlers,
+   * not the route deps. Only the reader is needed here for the GET endpoint
+   * and the post-mutation state read.
+   */
   consentReader?: ContactConsentReader;
   /** Phase 3b: lifecycle disqualification API deps. Only wired when Prisma is available. */
   lifecycleDisqualifications?: LifecycleDisqualificationsRouteDeps;
@@ -201,13 +206,14 @@ export async function registerRoutes(
     await registerLifecycleDisqualificationsRoutes(app, deps.lifecycleDisqualifications);
   }
 
-  // Phase 1c — admin consent endpoint.
+  // Phase 1c — admin consent endpoint. Phase 1b.4 migrated POST routes to
+  // PlatformIngress; the ConsentService is now invoked from operator-intent
+  // handlers registered in `bootstrap/operator-intents.ts`. The route only
+  // needs the read-side ContactConsentReader for post-mutation state reads
+  // (non-mutating; stays outside ingress).
   // Only registered when consent deps are wired (SkillMode bootstrap succeeded).
-  // Existing callers (test-server.ts, etc.) that omit deps continue to work —
-  // admin endpoint simply won't be reachable in those environments.
-  if (deps?.consentService && deps?.consentReader) {
+  if (deps?.consentReader) {
     registerAdminConsentRoutes(app, {
-      consentService: deps.consentService,
       consentReader: deps.consentReader,
       resolveActor: async (req) => {
         // Primary: principalIdFromAuth populated by authMiddleware.

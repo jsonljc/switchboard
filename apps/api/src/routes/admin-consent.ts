@@ -1,13 +1,37 @@
-import type { FastifyInstance } from "fastify";
+// apps/api/src/routes/admin-consent.ts
+// ---------------------------------------------------------------------------
+// Phase 1c — admin consent endpoint
+//
+// Endpoints:
+//   POST /api/admin/consent/grant
+//   POST /api/admin/consent/revoke
+//   POST /api/admin/consent/clear
+//   GET  /api/admin/consent/:contactId
+//
+// Auth: uses request.organizationIdFromAuth (set by authMiddleware in prod;
+// set via preHandler hook from `x-org-id` header in dev/test — mirrors the
+// dashboard-opportunities + lifecycle-disqualifications pattern).
+// principalIdFromAuth supplies the operatorId; falls back to
+// "system:unknown_admin" in dev mode where no API key is bound to a principal.
+//
+// POST routes use PlatformIngress.submit (Wave 2 Phase 1b.4 migration —
+// closes Cat 1 ingress bypass 4/4). The legacy direct consentService calls
+// were removed in favor of operator-mutation handlers registered in
+// `bootstrap/operator-intents.ts`. The route still owns the post-mutation
+// state read via `consentReader` (non-mutating, stays outside ingress).
+// ---------------------------------------------------------------------------
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { PdpaJurisdictionSchema, deriveConsentStatus } from "@switchboard/schemas";
+import { type ContactConsentReader, ContactNotFound } from "@switchboard/core";
+import { getIdempotencyKey } from "../utils/idempotency-key.js";
+import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import {
-  type ConsentService,
-  type ContactConsentReader,
-  ConsentJurisdictionMismatch,
-  ConsentRevokedCannotRegrant,
-  ContactNotFound,
-} from "@switchboard/core";
+  CLEAR_CONSENT_INTENT,
+  GRANT_CONSENT_INTENT,
+  OPERATOR_INTENT_ERROR_CODES,
+  REVOKE_CONSENT_INTENT,
+} from "../bootstrap/operator-intents.js";
 
 const GrantBody = z.object({
   contactId: z.string().min(1),
@@ -30,7 +54,6 @@ const ClearBody = z.object({
 });
 
 export interface AdminConsentRouteDeps {
-  consentService: ConsentService;
   consentReader: ContactConsentReader;
   /** Resolves the actor (operator userId) from the request. */
   resolveActor: (req: import("fastify").FastifyRequest) => Promise<string>;
@@ -51,6 +74,26 @@ export function registerAdminConsentRoutes(
     return "system:admin-endpoint";
   };
 
+  // Dev/test mode: allow `x-org-id` header to populate request fields so the
+  // global idempotency middleware fingerprint is stable across replay calls.
+  // In production the auth middleware sets these before handlers run.
+  app.addHook("preHandler", async (request) => {
+    if (app.authDisabled === true) {
+      const headerVal = request.headers["x-org-id"];
+      if (typeof headerVal === "string" && headerVal.trim()) {
+        request.organizationIdFromAuth = headerVal.trim();
+      } else if (!request.organizationIdFromAuth) {
+        request.organizationIdFromAuth = "default";
+      }
+      const principalHeader = request.headers["x-principal-id"];
+      if (typeof principalHeader === "string" && principalHeader.trim()) {
+        request.principalIdFromAuth = principalHeader.trim();
+      } else if (!request.principalIdFromAuth) {
+        request.principalIdFromAuth = "default";
+      }
+    }
+  });
+
   const respondWithState = async (contactId: string) => {
     const state = await deps.consentReader.read(contactId);
     return {
@@ -68,22 +111,44 @@ export function registerAdminConsentRoutes(
     if (!parsed.success)
       return reply.status(400).send({ error: "invalid_body", issues: parsed.error.issues });
 
-    try {
-      const actor = await deps.resolveActor(req);
-      const organizationId = await resolveOrganizationId(req);
-      await deps.consentService.recordGrant({
+    if (!app.platformIngress) {
+      return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+    }
+
+    const actor = await deps.resolveActor(req);
+    const organizationId = await resolveOrganizationId(req);
+    const idempotencyKey = getIdempotencyKey(req);
+
+    const response = await app.platformIngress.submit({
+      organizationId,
+      actor: { id: actor, type: "user" },
+      intent: GRANT_CONSENT_INTENT,
+      parameters: {
         contactId: parsed.data.contactId,
         jurisdiction: parsed.data.jurisdiction,
         source: parsed.data.source,
-        grantedAt: new Date(parsed.data.grantedAt),
-        actor,
+        grantedAt: parsed.data.grantedAt,
         notes: parsed.data.notes,
-        organizationId,
-        deploymentId: "system:admin-endpoint",
-      });
+        actor,
+      },
+      trigger: "api",
+      surface: { surface: "api" },
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    });
+
+    if (!response.ok) {
+      return ingressErrorToReply(response.error, reply);
+    }
+
+    const { result } = response;
+    if (result.outcome === "failed") {
+      return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
+    }
+
+    try {
       return reply.send(await respondWithState(parsed.data.contactId));
     } catch (err) {
-      return mapError(reply, err);
+      return mapReaderError(reply, err);
     }
   });
 
@@ -92,21 +157,43 @@ export function registerAdminConsentRoutes(
     if (!parsed.success)
       return reply.status(400).send({ error: "invalid_body", issues: parsed.error.issues });
 
-    try {
-      const actor = await deps.resolveActor(req);
-      const organizationId = await resolveOrganizationId(req);
-      await deps.consentService.recordRevocation({
+    if (!app.platformIngress) {
+      return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+    }
+
+    const actor = await deps.resolveActor(req);
+    const organizationId = await resolveOrganizationId(req);
+    const idempotencyKey = getIdempotencyKey(req);
+
+    const response = await app.platformIngress.submit({
+      organizationId,
+      actor: { id: actor, type: "user" },
+      intent: REVOKE_CONSENT_INTENT,
+      parameters: {
         contactId: parsed.data.contactId,
-        source: "operator_recorded_revocation",
-        revokedAt: new Date(parsed.data.revokedAt),
-        actor,
+        source: parsed.data.source,
+        revokedAt: parsed.data.revokedAt,
         notes: parsed.data.notes,
-        organizationId,
-        deploymentId: "system:admin-endpoint",
-      });
+        actor,
+      },
+      trigger: "api",
+      surface: { surface: "api" },
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    });
+
+    if (!response.ok) {
+      return ingressErrorToReply(response.error, reply);
+    }
+
+    const { result } = response;
+    if (result.outcome === "failed") {
+      return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
+    }
+
+    try {
       return reply.send(await respondWithState(parsed.data.contactId));
     } catch (err) {
-      return mapError(reply, err);
+      return mapReaderError(reply, err);
     }
   });
 
@@ -115,19 +202,41 @@ export function registerAdminConsentRoutes(
     if (!parsed.success)
       return reply.status(400).send({ error: "invalid_body", issues: parsed.error.issues });
 
-    try {
-      const actor = await deps.resolveActor(req);
-      const organizationId = await resolveOrganizationId(req);
-      await deps.consentService.clearConsent({
+    if (!app.platformIngress) {
+      return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+    }
+
+    const actor = await deps.resolveActor(req);
+    const organizationId = await resolveOrganizationId(req);
+    const idempotencyKey = getIdempotencyKey(req);
+
+    const response = await app.platformIngress.submit({
+      organizationId,
+      actor: { id: actor, type: "user" },
+      intent: CLEAR_CONSENT_INTENT,
+      parameters: {
         contactId: parsed.data.contactId,
-        actor,
         notes: parsed.data.notes,
-        organizationId,
-        deploymentId: "system:admin-endpoint",
-      });
+        actor,
+      },
+      trigger: "api",
+      surface: { surface: "api" },
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    });
+
+    if (!response.ok) {
+      return ingressErrorToReply(response.error, reply);
+    }
+
+    const { result } = response;
+    if (result.outcome === "failed") {
+      return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
+    }
+
+    try {
       return reply.send(await respondWithState(parsed.data.contactId));
     } catch (err) {
-      return mapError(reply, err);
+      return mapReaderError(reply, err);
     }
   });
 
@@ -137,33 +246,54 @@ export function registerAdminConsentRoutes(
       try {
         return reply.send(await respondWithState(req.params.contactId));
       } catch (err) {
-        return mapError(reply, err);
+        return mapReaderError(reply, err);
       }
     },
   );
 }
 
-function mapError(reply: import("fastify").FastifyReply, err: unknown) {
-  if (err instanceof ContactNotFound) {
-    return reply.status(404).send({ error: "contact_not_found", contactId: err.contactId });
+/**
+ * Map a typed `outcome: "failed"` handler result onto the existing
+ * admin-consent response envelope. Each code preserves the structured payload
+ * (stamped/provided, revokedAt, etc.) that the old `mapError` helper returned
+ * pre-ingress.
+ */
+function mapFailedOutcome(
+  reply: FastifyReply,
+  code: string | undefined,
+  outputs: Record<string, unknown> | undefined,
+  message: string | undefined,
+): FastifyReply {
+  const o = outputs ?? {};
+  if (code === OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND) {
+    return reply.status(404).send({ error: "contact_not_found", contactId: o["contactId"] });
   }
-  if (err instanceof ConsentJurisdictionMismatch) {
+  if (code === OPERATOR_INTENT_ERROR_CODES.CONSENT_INVALID_JURISDICTION) {
     return reply.status(400).send({
       error: "jurisdiction_mismatch",
-      stamped: err.stamped,
-      provided: err.provided,
+      stamped: o["stamped"],
+      provided: o["provided"],
     });
   }
-  if (err instanceof ConsentRevokedCannotRegrant) {
+  if (code === OPERATOR_INTENT_ERROR_CODES.CONSENT_REVOKED_CANNOT_REGRANT) {
     return reply.status(409).send({
       error: "consent_revoked_cannot_regrant",
       hint: "POST /api/admin/consent/clear first to start a fresh cycle",
-      revokedAt: err.revokedAt.toISOString(),
+      revokedAt: o["revokedAt"],
     });
   }
-  if (err instanceof Error && (err.message.includes("notes") || err.message.includes("system:"))) {
-    return reply.status(400).send({ error: "invalid_actor_or_notes", message: err.message });
+  if (code === OPERATOR_INTENT_ERROR_CODES.CONSENT_OPERATION_FAILED) {
+    return reply.status(400).send({ error: "invalid_actor_or_notes", message: message ?? "" });
   }
-  reply.log.error({ err }, "admin-consent unexpected error");
+  // Unexpected handler-level failure — scrubbed 500 (don't leak codes/messages).
+  reply.log.error({ code, message }, "admin-consent unexpected handler failure");
+  return reply.status(500).send({ error: "internal_error" });
+}
+
+function mapReaderError(reply: FastifyReply, err: unknown): FastifyReply {
+  if (err instanceof ContactNotFound) {
+    return reply.status(404).send({ error: "contact_not_found", contactId: err.contactId });
+  }
+  reply.log.error({ err }, "admin-consent unexpected reader error");
   return reply.status(500).send({ error: "internal_error" });
 }

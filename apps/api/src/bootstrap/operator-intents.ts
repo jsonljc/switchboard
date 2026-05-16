@@ -1,12 +1,18 @@
 import { transitionOpportunityStage, OpportunityNotFoundError } from "@switchboard/core/lifecycle";
 import type {
+  ConsentService,
   OpportunityStore,
   RecommendationStore,
   DisqualificationResolutionHook,
   HookConfirmResult,
   HookDismissResult,
 } from "@switchboard/core";
-import { actOnRecommendation } from "@switchboard/core";
+import {
+  actOnRecommendation,
+  ConsentJurisdictionMismatch,
+  ConsentRevokedCannotRegrant,
+  ContactNotFound,
+} from "@switchboard/core";
 import {
   OperatorMutationMode,
   type ExecutionModeRegistry,
@@ -18,6 +24,9 @@ import {
   ActOnRecommendationParametersSchema,
   ConfirmDisqualificationParametersSchema,
   DismissDisqualificationParametersSchema,
+  GrantConsentParametersSchema,
+  RevokeConsentParametersSchema,
+  ClearConsentParametersSchema,
 } from "../routes/operator-intents-schemas.js";
 
 /**
@@ -39,6 +48,7 @@ interface OperatorIntentsBootstrapDeps {
   opportunityStore?: OpportunityStore;
   recommendationStore?: RecommendationStore;
   disqualificationHook?: Pick<DisqualificationResolutionHook, "confirm" | "dismiss">;
+  consentService?: ConsentService;
   logger?: { info(msg: string): void };
 }
 
@@ -46,6 +56,16 @@ export const TRANSITION_OPPORTUNITY_STAGE_INTENT = "operator.transition_opportun
 export const ACT_ON_RECOMMENDATION_INTENT = "operator.act_on_recommendation";
 export const CONFIRM_DISQUALIFICATION_INTENT = "operator.confirm_disqualification";
 export const DISMISS_DISQUALIFICATION_INTENT = "operator.dismiss_disqualification";
+export const GRANT_CONSENT_INTENT = "operator.grant_consent";
+export const REVOKE_CONSENT_INTENT = "operator.revoke_consent";
+export const CLEAR_CONSENT_INTENT = "operator.clear_consent";
+
+/**
+ * Sentinel deployment ID used for admin-consent verdict context. The admin
+ * endpoint is not a real deployment; this literal preserves the audit-trail
+ * tagging that pre-dated the ingress migration (Phase 1b.4).
+ */
+const ADMIN_CONSENT_DEPLOYMENT_ID = "system:admin-endpoint";
 
 /**
  * Error codes returned by operator-mutation handlers. Routes and handlers
@@ -59,6 +79,10 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   DISQUALIFICATION_NOT_FOUND: "DISQUALIFICATION_NOT_FOUND",
   DISQUALIFICATION_CONFLICT: "DISQUALIFICATION_CONFLICT",
   DISQUALIFICATION_HOOK_THROW: "DISQUALIFICATION_HOOK_THROW",
+  CONSENT_NOT_FOUND: "CONSENT_NOT_FOUND",
+  CONSENT_INVALID_JURISDICTION: "CONSENT_INVALID_JURISDICTION",
+  CONSENT_REVOKED_CANNOT_REGRANT: "CONSENT_REVOKED_CANNOT_REGRANT",
+  CONSENT_OPERATION_FAILED: "CONSENT_OPERATION_FAILED",
 } as const;
 
 export function buildTransitionOpportunityStageHandler(
@@ -268,6 +292,166 @@ export function buildDismissDisqualificationHandler(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 1b.4 — admin-consent handler factories
+// ---------------------------------------------------------------------------
+
+export function buildGrantConsentHandler(consentService: ConsentService): OperatorMutationHandler {
+  return {
+    async execute(workUnit) {
+      const params = GrantConsentParametersSchema.parse(workUnit.parameters);
+      try {
+        await consentService.recordGrant({
+          contactId: params.contactId,
+          jurisdiction: params.jurisdiction,
+          source: params.source,
+          grantedAt: new Date(params.grantedAt),
+          actor: params.actor,
+          notes: params.notes,
+          organizationId: workUnit.organizationId,
+          deploymentId: ADMIN_CONSENT_DEPLOYMENT_ID,
+        });
+        return {
+          outcome: "completed" as const,
+          summary: `Consent granted for ${params.contactId}`,
+          outputs: { contactId: params.contactId },
+        };
+      } catch (err) {
+        if (err instanceof ContactNotFound) {
+          return {
+            outcome: "failed" as const,
+            summary: "Contact not found",
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND,
+              message: err.message,
+            },
+            outputs: { contactId: err.contactId },
+          };
+        }
+        if (err instanceof ConsentJurisdictionMismatch) {
+          return {
+            outcome: "failed" as const,
+            summary: "Consent jurisdiction mismatch",
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.CONSENT_INVALID_JURISDICTION,
+              message: err.message,
+            },
+            outputs: {
+              contactId: err.contactId,
+              stamped: err.stamped,
+              provided: err.provided,
+            },
+          };
+        }
+        if (err instanceof ConsentRevokedCannotRegrant) {
+          return {
+            outcome: "failed" as const,
+            summary: "Consent revoked — cannot regrant",
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.CONSENT_REVOKED_CANNOT_REGRANT,
+              message: err.message,
+            },
+            outputs: {
+              contactId: err.contactId,
+              revokedAt: err.revokedAt.toISOString(),
+            },
+          };
+        }
+        throw err;
+      }
+    },
+  };
+}
+
+export function buildRevokeConsentHandler(consentService: ConsentService): OperatorMutationHandler {
+  return {
+    async execute(workUnit) {
+      const params = RevokeConsentParametersSchema.parse(workUnit.parameters);
+      try {
+        await consentService.recordRevocation({
+          contactId: params.contactId,
+          source: params.source,
+          revokedAt: new Date(params.revokedAt),
+          actor: params.actor,
+          notes: params.notes,
+          organizationId: workUnit.organizationId,
+          deploymentId: ADMIN_CONSENT_DEPLOYMENT_ID,
+        });
+        return {
+          outcome: "completed" as const,
+          summary: `Consent revoked for ${params.contactId}`,
+          outputs: { contactId: params.contactId },
+        };
+      } catch (err) {
+        if (err instanceof ContactNotFound) {
+          return {
+            outcome: "failed" as const,
+            summary: "Contact not found",
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND,
+              message: err.message,
+            },
+            outputs: { contactId: err.contactId },
+          };
+        }
+        throw err;
+      }
+    },
+  };
+}
+
+export function buildClearConsentHandler(consentService: ConsentService): OperatorMutationHandler {
+  return {
+    async execute(workUnit) {
+      const params = ClearConsentParametersSchema.parse(workUnit.parameters);
+      try {
+        await consentService.clearConsent({
+          contactId: params.contactId,
+          actor: params.actor,
+          notes: params.notes,
+          organizationId: workUnit.organizationId,
+          deploymentId: ADMIN_CONSENT_DEPLOYMENT_ID,
+        });
+        return {
+          outcome: "completed" as const,
+          summary: `Consent cleared for ${params.contactId}`,
+          outputs: { contactId: params.contactId },
+        };
+      } catch (err) {
+        if (err instanceof ContactNotFound) {
+          return {
+            outcome: "failed" as const,
+            summary: "Contact not found",
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND,
+              message: err.message,
+            },
+            outputs: { contactId: err.contactId },
+          };
+        }
+        // ConsentService.clearConsent runtime guards: plain Error with "notes"
+        // (empty audit-trail notes) or "system:" (system-prefix actor rejection).
+        // Both should NOT bubble as 500 — they represent invalid operator input.
+        if (
+          err instanceof Error &&
+          (err.message.includes("notes") || err.message.includes("system:"))
+        ) {
+          return {
+            outcome: "failed" as const,
+            summary: "Invalid actor or notes for clear consent",
+            error: {
+              code: OPERATOR_INTENT_ERROR_CODES.CONSENT_OPERATION_FAILED,
+              message: err.message,
+            },
+            outputs: { contactId: params.contactId },
+          };
+        }
+        throw err;
+      }
+    },
+  };
+}
+
 export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): void {
   const {
     intentRegistry,
@@ -275,6 +459,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     opportunityStore,
     recommendationStore,
     disqualificationHook,
+    consentService,
     logger,
   } = deps;
 
@@ -303,6 +488,12 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
       DISMISS_DISQUALIFICATION_INTENT,
       buildDismissDisqualificationHandler(disqualificationHook),
     );
+  }
+
+  if (consentService) {
+    handlers.set(GRANT_CONSENT_INTENT, buildGrantConsentHandler(consentService));
+    handlers.set(REVOKE_CONSENT_INTENT, buildRevokeConsentHandler(consentService));
+    handlers.set(CLEAR_CONSENT_INTENT, buildClearConsentHandler(consentService));
   }
 
   modeRegistry.register(new OperatorMutationMode({ handlers }));
@@ -376,8 +567,31 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     });
   }
 
+  if (consentService) {
+    for (const intent of [GRANT_CONSENT_INTENT, REVOKE_CONSENT_INTENT, CLEAR_CONSENT_INTENT]) {
+      intentRegistry.register({
+        intent,
+        defaultMode: "operator_mutation",
+        allowedModes: ["operator_mutation"],
+        executor: { mode: "operator_mutation" },
+        parameterSchema: {},
+        mutationClass: "write",
+        budgetClass: "cheap",
+        approvalPolicy: "none",
+        approvalMode: "system_auto_approved",
+        idempotent: true,
+        allowedTriggers: ["api"],
+        timeoutMs: 30_000,
+        retryable: false,
+      });
+    }
+  }
+
   const intentCount =
-    (opportunityStore ? 1 : 0) + (recommendationStore ? 1 : 0) + (disqualificationHook ? 2 : 0);
+    (opportunityStore ? 1 : 0) +
+    (recommendationStore ? 1 : 0) +
+    (disqualificationHook ? 2 : 0) +
+    (consentService ? 3 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

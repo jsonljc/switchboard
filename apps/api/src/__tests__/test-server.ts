@@ -36,6 +36,8 @@ import type {
   OpportunityStore,
   RevenueStore,
   TriggerStore,
+  ConsentService,
+  ContactConsentReader,
 } from "@switchboard/core";
 import type { ApprovalRoutingConfig } from "@switchboard/core/approval";
 import {
@@ -116,6 +118,13 @@ export interface BuildTestServerOptions {
     import("@switchboard/core").DisqualificationResolutionHook,
     "confirm" | "dismiss"
   > | null;
+  /** Provide a mock ConsentService for admin-consent ingress tests (Phase 1b.4).
+   * When provided alongside `consentReader`, admin-consent routes are registered
+   * and the service is threaded into `bootstrapOperatorIntents`. */
+  consentService?: ConsentService;
+  /** Provide a mock ContactConsentReader for admin-consent ingress tests (Phase 1b.4).
+   * Required alongside `consentService` to register admin-consent routes. */
+  consentReader?: ContactConsentReader;
 }
 
 export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
@@ -423,6 +432,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     opportunityStore: app.opportunityStore ?? undefined,
     recommendationStore: app.recommendationStore,
     disqualificationHook: app.disqualificationHook ?? undefined,
+    consentService: options.consentService,
   });
 
   const platformLifecycle = new PlatformLifecycle({
@@ -487,6 +497,27 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
       },
       transitionStore: {
         findLatestProposal: async () => null,
+      },
+    });
+  }
+
+  // Admin-consent routes (Phase 1b.4) — registered when test provides both
+  // consentService (threaded into bootstrapOperatorIntents above) and
+  // consentReader (used by the route for post-mutation state reads + the GET
+  // endpoint). Mirrors the disqualificationHook conditional-registration pattern.
+  if (options.consentService && options.consentReader) {
+    const { registerAdminConsentRoutes } = await import("../routes/admin-consent.js");
+    registerAdminConsentRoutes(app, {
+      consentReader: options.consentReader,
+      resolveActor: async (req) => {
+        const principal = req.principalIdFromAuth;
+        if (principal) return principal;
+        return "operator_test";
+      },
+      resolveOrganizationId: async (req) => {
+        const orgId = req.organizationIdFromAuth;
+        if (orgId) return orgId;
+        return "system:admin-endpoint";
       },
     });
   }

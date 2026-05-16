@@ -709,6 +709,7 @@ export async function buildServer() {
       opportunityStore: app.opportunityStore,
       recommendationStore: app.recommendationStore,
       disqualificationHook: app.disqualificationHook ?? undefined,
+      consentService: skillModeConsentService ?? undefined,
       logger: app.log,
     });
   }
@@ -836,8 +837,9 @@ export async function buildServer() {
   }
 
   // --- Register all API routes ---
+  // Note: ConsentService was wired into bootstrapOperatorIntents above (Phase
+  // 1b.4 migration). registerRoutes only takes the read-side ContactConsentReader.
   await registerRoutes(app, {
-    consentService: skillModeConsentService ?? undefined,
     consentReader: skillModeContactConsentReader ?? undefined,
     lifecycleDisqualifications: lifecycleDisqualificationsDeps,
   });
