@@ -227,6 +227,12 @@
       }
     },
     {
+      "files": ["evals/**/*.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
       "files": ["apps/api/src/routes/**/*.ts"],
       "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {

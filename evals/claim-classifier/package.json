@@ -1,0 +1,16 @@
+{
+  "name": "@switchboard/eval-claim-classifier",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
+    "@switchboard/core": "workspace:*",
+    "@switchboard/schemas": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "vitest": "^2.1.0"
+  }
+}

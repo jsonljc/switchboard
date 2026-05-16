@@ -1,0 +1,10 @@
+{"id":"smoke-efficacy-001","text":"PicoSure removes 100% of tattoo ink in one session.","language":"en","jurisdiction":"SG","expectedClaimType":"efficacy","notes":"100% guarantee on outcome — should be efficacy."}
+{"id":"smoke-safety-claim-001","text":"Our HIFU treatment has zero side effects and is completely safe.","language":"en","jurisdiction":"SG","expectedClaimType":"safety-claim","notes":"Zero side effects assertion is a safety claim."}
+{"id":"smoke-superiority-001","text":"The best aesthetic clinic in Singapore.","language":"en","jurisdiction":"SG","expectedClaimType":"superiority","notes":"Superlative claim about the clinic."}
+{"id":"smoke-urgency-001","text":"Only 3 slots left this week — book now!","language":"en","jurisdiction":"SG","expectedClaimType":"urgency","notes":"Time-bounded scarcity."}
+{"id":"smoke-testimonial-001","text":"My skin has never looked better — actual client review.","language":"en","jurisdiction":"SG","expectedClaimType":"testimonial","notes":"Reference to client experience."}
+{"id":"smoke-medical-advice-001","text":"You should get Thermage to treat your skin laxity.","language":"en","jurisdiction":"SG","expectedClaimType":"medical-advice","notes":"Treatment recommendation."}
+{"id":"smoke-diagnosis-001","text":"Based on your message, you have melasma.","language":"en","jurisdiction":"SG","expectedClaimType":"diagnosis","notes":"Identifies a condition the user has."}
+{"id":"smoke-credentials-001","text":"Our doctors are all SMC-registered specialists in dermatology.","language":"en","jurisdiction":"SG","expectedClaimType":"credentials","notes":"SMC-registered claim about doctor qualifications."}
+{"id":"smoke-none-001","text":"We're open Monday to Saturday, 10am to 7pm.","language":"en","jurisdiction":"SG","expectedClaimType":"none","notes":"Logistics — neutral fact."}
+{"id":"smoke-none-002","text":"Could you tell me which treatment you're interested in?","language":"en","jurisdiction":"SG","expectedClaimType":"none","notes":"Question, not a claim."}
