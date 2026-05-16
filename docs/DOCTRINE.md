@@ -1,7 +1,7 @@
 # Switchboard — Architectural Doctrine
 
 > Hard rules, not aspirational guidance. Every change must comply.
-> Last updated: 2026-04-18.
+> Last updated: 2026-05-16.
 
 Switchboard is a **governed operating system for revenue actions**, not a collection of smart agents. Agents are one execution layer. The operating spine — ingress, governance, lifecycle, persistence, recovery — is the architecture.
 
@@ -51,13 +51,13 @@ Every governed action enters through `PlatformIngress.submit()`. No route, adapt
 
 Every action lifecycle — submission, governance, execution, approval, completion, undo, recovery — is managed by the platform layer. No subsystem may independently manage action state transitions.
 
-**Current gap:** Approval lifecycle is still managed by `ApprovalManager` in the old orchestrator. This must be migrated.
+**Current state:** Approval lifecycle is owned by `PlatformLifecycle` (`packages/core/src/platform/platform-lifecycle.ts`). `respondToApproval()` is exported from `@switchboard/core` and called by the API approvals route. The legacy `ApprovalManager` was deleted 2026-04-19; `LifecycleOrchestrator.respondToApproval()` remains only as a throwing placeholder until the orchestrator interface itself is retired.
 
 ### 3. One persistence truth
 
 `WorkTrace` is the canonical durable record for every governed action. One WorkTrace per WorkUnit. No synthetic envelopes, no parallel persistence models.
 
-**Current state:** `envelope-bridge.ts` deleted in Phase 3. WorkTrace is written on every PlatformIngress submission. Envelopes remain only for the legacy approval lifecycle managed by `ApprovalManager`.
+**Current state:** `envelope-bridge.ts` deleted in Phase 3. WorkTrace is written on every PlatformIngress submission. Envelopes remain only for the legacy approval-record shape (`ApprovalRecord.envelopeId` is semantic debt — the field stores `workUnitId` but retains the legacy name pending a dedicated rename migration).
 
 ### 4. Governance runs once
 
@@ -107,7 +107,6 @@ These components exist only to support the migration from the old runtime to the
 | `CartridgeMode`                    | `core/src/platform/modes/cartridge-mode.ts`                 | Phase 4: no longer creates envelopes. Remove when no IntentRegistration uses `mode: "cartridge"`                                                      |
 | ~~`envelope-bridge.ts`~~           | ~~`apps/api/src/routes/`~~                                  | **Deleted in Phase 3**                                                                                                                                |
 | `ProposePipeline`                  | `core/src/orchestrator/propose-pipeline.ts`                 | Remove with LifecycleOrchestrator                                                                                                                     |
-| `ApprovalManager`                  | `core/src/orchestrator/approval-manager.ts`                 | Remove when platform layer owns approval lifecycle                                                                                                    |
 | `ExecutionManager`                 | `core/src/orchestrator/execution-manager.ts`                | Remove with LifecycleOrchestrator                                                                                                                     |
 | `RuntimeOrchestrator` interface    | `core/src/orchestrator/runtime-orchestrator.ts`             | Remove with LifecycleOrchestrator                                                                                                                     |
 | `ApiOrchestratorAdapter`           | `apps/chat/src/api-orchestrator-adapter.ts`                 | Active — adapts chat orchestrator calls to API HTTP requests. Remove when chat local mode is retired                                                  |

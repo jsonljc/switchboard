@@ -50,7 +50,7 @@ async function main() {
       roles: ["admin"],
     },
   });
-  console.log("Seeded system principal:", systemPrincipal.id);
+  console.warn("Seeded system principal:", systemPrincipal.id);
 
   // ── 2. Dev user principal ──
   const devPrincipal = await prisma.principal.upsert({
@@ -64,7 +64,7 @@ async function main() {
       roles: ["admin", "approver", "operator"],
     },
   });
-  console.log("Seeded dev principal:", devPrincipal.id);
+  console.warn("Seeded dev principal:", devPrincipal.id);
 
   // ── 3. Organization config ──
   await prisma.organizationConfig.upsert({
@@ -79,11 +79,11 @@ async function main() {
       provisioningStatus: "active",
     },
   });
-  console.log("Seeded organization config: org_dev");
+  console.warn("Seeded organization config: org_dev");
 
   // Slice A PR 2: seed day-one agent enablement for the dev org. Idempotent.
   await seedOrgDayOneAgents(prisma, "org_dev");
-  console.log("Seeded day-one agent enablement for org_dev");
+  console.warn("Seeded day-one agent enablement for org_dev");
 
   // ── 4. Default identity spec ──
   const defaultSpec = await prisma.identitySpec.upsert({
@@ -112,7 +112,7 @@ async function main() {
       trustBehaviors: [],
     },
   });
-  console.log("Seeded default identity spec:", defaultSpec.id);
+  console.warn("Seeded default identity spec:", defaultSpec.id);
 
   // ── 5. Dev user identity spec ──
   await prisma.identitySpec.upsert({
@@ -142,7 +142,7 @@ async function main() {
       trustBehaviors: [],
     },
   });
-  console.log("Seeded dev identity spec: spec_dev");
+  console.warn("Seeded dev identity spec: spec_dev");
 
   // ── 6. Dashboard user ──
   // Refresh apiKeyEncrypted on update so re-seeding self-heals rows that were
@@ -164,7 +164,7 @@ async function main() {
       apiKeyHash: sha256(devApiKey),
     },
   });
-  console.log("Seeded dashboard user: dev-user");
+  console.warn("Seeded dashboard user: dev-user");
 
   // ── 6b. Admin dashboard user (with password) ──
   const adminApiKey = "sb_admin_key_0123456789abcdef";
@@ -187,7 +187,7 @@ async function main() {
       passwordHash: adminPasswordHash,
     },
   });
-  console.log("Seeded admin user: admin@switchboard.local / admin123");
+  console.warn("Seeded admin user: admin@switchboard.local / admin123");
 
   // ── 7. System risk posture ──
   await prisma.systemRiskPosture.upsert({
@@ -199,7 +199,7 @@ async function main() {
       updatedBy: "system",
     },
   });
-  console.log("Seeded system risk posture: normal");
+  console.warn("Seeded system risk posture: normal");
 
   // ── 8. Sample policies ──
   const policies = [
@@ -269,7 +269,7 @@ async function main() {
       create: policy,
     });
   }
-  console.log("Seeded", policies.length, "policies");
+  console.warn("Seeded", policies.length, "policies");
 
   // ── 9. Cartridge registrations ──
   const cartridges = [
@@ -320,7 +320,7 @@ async function main() {
       create: cart,
     });
   }
-  console.log("Seeded", cartridges.length, "cartridge registrations");
+  console.warn("Seeded", cartridges.length, "cartridge registrations");
 
   // ── 10. Sample audit entries with valid hash chain ──
   const now = new Date();
@@ -498,7 +498,7 @@ async function main() {
 
     previousHash = entryHash;
   }
-  console.log("Seeded", auditEntries.length, "audit entries with hash chain");
+  console.warn("Seeded", auditEntries.length, "audit entries with hash chain");
 
   // (CRM Contacts, Deals, Activities removed — models deleted)
   // (SMB Activity Log Entries removed — model deleted)
@@ -587,18 +587,18 @@ async function main() {
       },
     });
   }
-  console.log("Seeded agent roster (7 agents) for org_dev");
+  console.warn("Seeded agent roster (7 agents) for org_dev");
 
   // ── Marketplace Listings ──
-  console.log("\n--- Marketplace Listings ---");
+  console.warn("\n--- Marketplace Listings ---");
   await seedMarketplace(prisma);
 
   // ── Marketplace Demo Data ──
-  console.log("\n--- Marketplace Demo Data ---");
+  console.warn("\n--- Marketplace Demo Data ---");
   await seedDemoData(prisma);
 
   // ── Knowledge Entries ──
-  console.log("\n--- Knowledge Entries ---");
+  console.warn("\n--- Knowledge Entries ---");
   await seedKnowledge(prisma);
 
   // ── Dev-only domain data ──

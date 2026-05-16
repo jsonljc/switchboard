@@ -23,10 +23,10 @@ function sha256(input: string): string {
 
 export async function seedDevData(prisma: PrismaClient): Promise<void> {
   if (process.env["NODE_ENV"] === "production") {
-    console.log("[seed-dev-data] NODE_ENV=production — skipping dev seed");
+    console.warn("[seed-dev-data] NODE_ENV=production — skipping dev seed");
     return;
   }
-  console.log("[seed-dev-data] populating dev domain data for", ORG_ID);
+  console.warn("[seed-dev-data] populating dev domain data for", ORG_ID);
 
   await seedContacts(prisma);
   await seedOpportunities(prisma);
@@ -34,7 +34,7 @@ export async function seedDevData(prisma: PrismaClient): Promise<void> {
   await seedApprovals(prisma);
   await seedAutomations(prisma);
 
-  console.log("[seed-dev-data] done");
+  console.warn("[seed-dev-data] done");
 }
 
 async function seedContacts(prisma: PrismaClient): Promise<void> {
@@ -63,7 +63,7 @@ async function seedContacts(prisma: PrismaClient): Promise<void> {
       create: row,
     });
   }
-  console.log(`[seed-dev-data] contacts: ${rows.length}`);
+  console.warn(`[seed-dev-data] contacts: ${rows.length}`);
 }
 
 async function seedOpportunities(prisma: PrismaClient): Promise<void> {
@@ -101,7 +101,7 @@ async function seedOpportunities(prisma: PrismaClient): Promise<void> {
       create: row,
     });
   }
-  console.log(`[seed-dev-data] opportunities: ${rows.length}`);
+  console.warn(`[seed-dev-data] opportunities: ${rows.length}`);
 }
 
 async function seedExtraAuditEntries(prisma: PrismaClient): Promise<void> {
@@ -212,7 +212,7 @@ async function seedExtraAuditEntries(prisma: PrismaClient): Promise<void> {
     });
     previousHash = entryHash;
   }
-  console.log(`[seed-dev-data] audit entries: +${entries.length}`);
+  console.warn(`[seed-dev-data] audit entries: +${entries.length}`);
 }
 
 async function seedApprovals(prisma: PrismaClient): Promise<void> {
@@ -276,7 +276,7 @@ async function seedApprovals(prisma: PrismaClient): Promise<void> {
       create: a,
     });
   }
-  console.log(`[seed-dev-data] approval records: ${approvals.length}`);
+  console.warn(`[seed-dev-data] approval records: ${approvals.length}`);
 }
 
 async function seedAutomations(prisma: PrismaClient): Promise<void> {
@@ -324,5 +324,5 @@ async function seedAutomations(prisma: PrismaClient): Promise<void> {
       create: a,
     });
   }
-  console.log(`[seed-dev-data] scheduled triggers: ${automations.length}`);
+  console.warn(`[seed-dev-data] scheduled triggers: ${automations.length}`);
 }

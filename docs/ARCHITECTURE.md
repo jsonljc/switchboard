@@ -84,8 +84,9 @@ This is the largest and most important package. It contains all governance logic
 The `LifecycleOrchestrator` is the main entry point for all governed operations. It's a thin facade that delegates to three specialized managers:
 
 - **ProposePipeline** — handles `propose()`, `resolveAndPropose()`, `simulate()`
-- **ApprovalManager** — handles `respondToApproval()`
 - **ExecutionManager** — handles `executeApproved()`, `requestUndo()`
+
+`respondToApproval()` is no longer routed through the orchestrator. It is owned by `PlatformLifecycle` (`platform/platform-lifecycle.ts`) and called directly from the API approvals route via the `respondToApproval()` export of `@switchboard/core`; the `LifecycleOrchestrator` method survives only as a throwing placeholder pending interface retirement.
 
 **Configuration** (`OrchestratorConfig`): Wires together ~20 subsystems including storage, ledger, guardrails, routing, risk scoring, competence tracking, trust score integration, circuit breakers, idempotency guards, credential resolvers, and cross-cartridge enrichment.
 
@@ -158,13 +159,13 @@ Score maps to categories: 0-20=none, 21-40=low, 41-60=medium, 61-80=high, 81-100
 
 A complete approval workflow with tamper-evident binding:
 
-| Component            | File                                  | What It Does                                                                                                                                                                                                     |
-| -------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **State Machine**    | `approval/state-machine.ts`           | States: `pending` → `approved`/`rejected`/`expired`/`patched`. Supports **quorum** (multiple approvers required). Optimistic concurrency via version tracking.                                                   |
-| **Router**           | `approval/router.ts`                  | Determines approval level, approvers, and expiry (mandatory=4h, elevated=12h, standard=24h) from identity config                                                                                                 |
-| **Binding**          | `approval/binding.ts`                 | SHA-256 hash over envelope ID, version, action, parameters, decision trace. **Timing-safe comparison** prevents timing attacks. Ensures the approval matches exactly what was proposed.                          |
-| **Delegation**       | `approval/delegation.ts` + `chain.ts` | BFS graph traversal through delegation rules. Max depth=5, scope narrowing only (each hop can only narrow permissions, never widen), cycle detection, expiration checks. Returns full chain path for audit.      |
-| **Approval Manager** | `orchestrator/approval-manager.ts`    | Responds to approvals: validates binding hash, checks authorization (delegation chains), prevents self-approval, executes on approve, re-evaluates on patch. Updates marketplace trust scores on approve/reject. |
+| Component             | File                                  | What It Does                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **State Machine**     | `approval/state-machine.ts`           | States: `pending` → `approved`/`rejected`/`expired`/`patched`. Supports **quorum** (multiple approvers required). Optimistic concurrency via version tracking.                                                                                                                                                                                                                  |
+| **Router**            | `approval/router.ts`                  | Determines approval level, approvers, and expiry (mandatory=4h, elevated=12h, standard=24h) from identity config                                                                                                                                                                                                                                                                |
+| **Binding**           | `approval/binding.ts`                 | SHA-256 hash over envelope ID, version, action, parameters, decision trace. **Timing-safe comparison** prevents timing attacks. Ensures the approval matches exactly what was proposed.                                                                                                                                                                                         |
+| **Delegation**        | `approval/delegation.ts` + `chain.ts` | BFS graph traversal through delegation rules. Max depth=5, scope narrowing only (each hop can only narrow permissions, never widen), cycle detection, expiration checks. Returns full chain path for audit.                                                                                                                                                                     |
+| **PlatformLifecycle** | `platform/platform-lifecycle.ts`      | Responds to approvals: validates binding hash, checks authorization (delegation chains), prevents self-approval, executes on approve, re-evaluates on patch. Updates marketplace trust scores on approve/reject. Replaces the deleted `ApprovalManager` (2026-04-19); called directly from the API approvals route via `respondToApproval()` exported from `@switchboard/core`. |
 
 #### 3f. Execution Guard + Execution Manager
 
