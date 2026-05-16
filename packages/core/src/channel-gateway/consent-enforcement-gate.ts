@@ -38,6 +38,9 @@ export interface RunConsentEnforcementGateInput {
  * errors with a cached enforce posture, the gate persists a critical audit row
  * (reasonCode: "governance_unavailable") but still returns "allowed". This is
  * fail-open with audit, not fail-closed.
+ *
+ * When the resolver errors and no enforce posture is cached, the gate is a
+ * silent no-op (allowed, no verdict, error logged).
  */
 export async function runConsentEnforcementGate(
   input: RunConsentEnforcementGateInput,
@@ -67,6 +70,8 @@ export async function runConsentEnforcementGate(
       } catch (err) {
         console.error("[consent-enforcement-gate] verdict persist failure", err);
       }
+    } else {
+      console.error("[consent-enforcement-gate] resolver error; no cached enforce posture");
     }
     return "allowed";
   }
@@ -114,6 +119,7 @@ export async function runConsentEnforcementGate(
     resolution.config.jurisdiction) as PdpaJurisdiction;
 
   const verdictAction = consentConfig.mode === "enforce" ? "block" : "allow";
+  const auditLevel = consentConfig.mode === "enforce" ? "critical" : "warning";
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (cfg.verdictStore.save as any)({
@@ -132,7 +138,7 @@ export async function runConsentEnforcementGate(
         outboundLength: outboundText.length,
         observe: consentConfig.mode === "observe",
       },
-      auditLevel: "critical",
+      auditLevel,
     });
   } catch (err) {
     console.error("[consent-enforcement-gate] verdict persist failure", err);

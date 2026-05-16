@@ -92,6 +92,8 @@ describe("runConsentEnforcementGate", () => {
     expect(verdict.reasonCode).toBe("consent_revoked");
     expect(verdict.details.channel).toBe("telegram");
     expect(verdict.details.contactId).toBe("contact-123");
+    expect(verdict.auditLevel).toBe("critical");
+    expect(verdict.details.outboundLength).toBe("Hi there".length);
   });
 
   it("allows but records verdict in observe mode", async () => {
@@ -112,6 +114,8 @@ describe("runConsentEnforcementGate", () => {
     expect((verdictSave as any).mock.calls[0][0].action).toBe("allow");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((verdictSave as any).mock.calls[0][0].details.observe).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((verdictSave as any).mock.calls[0][0].auditLevel).toBe("warning");
   });
 
   it("passes through when consent mode is off", async () => {
@@ -141,6 +145,27 @@ describe("runConsentEnforcementGate", () => {
     });
     expect(result).toBe("allowed");
     expect(verdictSave).not.toHaveBeenCalled();
+  });
+
+  it("on resolver error with NO cached posture, allows and emits no verdict", async () => {
+    const { cfg, verdictSave } = makeStubs({
+      resolverStatus: "error",
+      cachedPostureMode: null,
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await runConsentEnforcementGate({
+      cfg,
+      outboundText: "Hi",
+      sessionId: "s-1",
+      deploymentId: "d-1",
+      channel: "whatsapp",
+    });
+    expect(result).toBe("allowed");
+    expect(verdictSave).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("resolver error; no cached enforce posture"),
+    );
+    errorSpy.mockRestore();
   });
 
   it("on resolver error with cached enforce posture, records audit + fails open", async () => {
