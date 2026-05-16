@@ -43,7 +43,7 @@ describe("useAgentGreeting", () => {
       json: () => Promise.resolve(mockGreetingResponse),
     });
 
-    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting.js");
+    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting");
     const { result } = renderHook(() => useAgentGreeting("alex"), { wrapper: createWrapper() });
 
     expect(result.current.isLoading).toBe(true);
@@ -61,7 +61,7 @@ describe("useAgentGreeting", () => {
       json: () => Promise.resolve(mockGreetingResponse),
     });
 
-    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting.js");
+    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting");
     renderHook(() => useAgentGreeting("alex"), { wrapper: createWrapper() });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
@@ -74,7 +74,7 @@ describe("useAgentGreeting", () => {
       json: () => Promise.resolve(mockGreetingResponse),
     });
 
-    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting.js");
+    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting");
     renderHook(() => useAgentGreeting("riley"), { wrapper: createWrapper() });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
@@ -87,7 +87,7 @@ describe("useAgentGreeting", () => {
       status: 500,
     });
 
-    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting.js");
+    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting");
     const { result } = renderHook(() => useAgentGreeting("alex"), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -101,7 +101,7 @@ describe("useAgentGreeting", () => {
       json: () => Promise.resolve(mockGreetingResponse),
     });
 
-    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting.js");
+    const { useAgentGreeting } = await import("@/hooks/use-agent-greeting");
     const { result } = renderHook(() => useAgentGreeting("alex"), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));

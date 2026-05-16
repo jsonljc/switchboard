@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ScopeSegment } from "../scope-segment.js";
+import { ScopeSegment } from "../scope-segment";
 
 describe("ScopeSegment", () => {
   it("renders Operational and All buttons with counts", () => {

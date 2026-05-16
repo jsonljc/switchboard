@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DateRange } from "../date-range.js";
+import { DateRange } from "../date-range";
 
 describe("DateRange", () => {
   it("renders two date inputs with after/before eyebrow labels", () => {

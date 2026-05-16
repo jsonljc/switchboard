@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { EventTypeCombobox } from "../event-type-combobox.js";
+import { EventTypeCombobox } from "../event-type-combobox";
 
 const BANDS = {
   "Action lifecycle": ["action.executed", "action.failed"],

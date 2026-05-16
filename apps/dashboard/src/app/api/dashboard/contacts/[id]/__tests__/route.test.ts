@@ -9,7 +9,7 @@ vi.mock("@/lib/session", () => ({
 
 import { getApiClient } from "@/lib/get-api-client";
 import { requireSession } from "@/lib/session";
-import { GET } from "../route.js";
+import { GET } from "../route";
 
 function mkRequest() {
   // Proxy never reads the request body — just satisfy the signature.

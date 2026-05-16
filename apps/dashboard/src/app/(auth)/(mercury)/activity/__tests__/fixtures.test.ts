@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AuditEntryBrowseRowSchema, OPERATIONAL_AUDIT_EVENT_TYPES } from "@switchboard/schemas";
-import { ACTIVITY_FIXTURES } from "../fixtures.js";
+import { ACTIVITY_FIXTURES } from "../fixtures";
 
 describe("ACTIVITY_FIXTURES (v2 distribution)", () => {
   it("contains exactly 30 rows", () => {

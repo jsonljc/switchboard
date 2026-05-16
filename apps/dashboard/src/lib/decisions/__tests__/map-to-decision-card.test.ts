@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mapToDecisionCard } from "../map-to-decision-card.js";
-import type { Decision } from "../types.js";
+import { mapToDecisionCard } from "../map-to-decision-card";
+import type { Decision } from "../types";
 
 function makeDecision(overrides: Partial<Decision> = {}): Decision {
   return {

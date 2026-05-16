@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PaginationFooter } from "../pagination-footer.js";
+import { PaginationFooter } from "../pagination-footer";
 
 describe("PaginationFooter", () => {
   it("renders the 'Showing N of …' info line with keyset chrome", () => {

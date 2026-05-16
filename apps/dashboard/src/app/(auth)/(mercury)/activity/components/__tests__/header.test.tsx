@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ActivityHeader } from "../header.js";
+import { ActivityHeader } from "../header";
 
 describe("ActivityHeader", () => {
   it("renders the page title as plain 'Audit log' (no italic accent)", () => {

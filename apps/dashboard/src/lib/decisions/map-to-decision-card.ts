@@ -1,4 +1,4 @@
-import type { Decision, DecisionKind } from "./types.js";
+import type { Decision, DecisionKind } from "./types";
 
 export interface DecisionCardProps {
   folio: { kindLabel: string; rightFolio: string };

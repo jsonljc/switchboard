@@ -7,7 +7,7 @@ vi.mock("@/lib/session", () => ({
 
 import { getApiClient } from "@/lib/get-api-client";
 import { requireSession } from "@/lib/session";
-import { POST } from "../route.js";
+import { POST } from "../route";
 import { quietFixture } from "@/app/(auth)/(mercury)/reports/fixtures";
 
 function mkRequest(url: string) {

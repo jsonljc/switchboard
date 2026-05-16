@@ -9,7 +9,7 @@ vi.mock("@/lib/require-dashboard-session", () => ({
 
 import { getApiClient } from "@/lib/get-api-client";
 import { requireDashboardSession } from "@/lib/require-dashboard-session";
-import { GET } from "../route.js";
+import { GET } from "../route";
 
 function makeReq(url = "http://x/api/dashboard/agents/alex/wins"): Request {
   return new Request(url);
