@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ActorPills } from "../actor-pills.js";
+import { ActorPills } from "../actor-pills";
 
 const COUNTS = { user: 5, agent: 12, system: 7, service_account: 3 };
 

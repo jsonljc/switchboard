@@ -21,7 +21,7 @@
 // The two policies are not unified because they have different lifetimes
 // and consumers: env-var gates flip independently per environment, while
 // agent-home link kinds gate on whether a target route exists in the build.
-import type { AgentHomeLink } from "./agent-home/types.js";
+import type { AgentHomeLink } from "./agent-home/types";
 
 export type ToolsNavId = "contacts" | "automations" | "activity" | "reports" | "approvals";
 

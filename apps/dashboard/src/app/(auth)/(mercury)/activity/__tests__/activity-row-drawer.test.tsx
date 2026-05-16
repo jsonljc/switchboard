@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
-import { ActivityRowDrawer } from "../components/activity-row-drawer.js";
+import { ActivityRowDrawer } from "../components/activity-row-drawer";
 
 const makeRow = (overrides: Partial<AuditEntryBrowseRow> = {}): AuditEntryBrowseRow => ({
   id: "audit_test_001",

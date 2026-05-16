@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { StalePill } from "../stale-pill.js";
+import { StalePill } from "../stale-pill";
 
 const NOW = new Date("2026-05-14T12:00:00.000Z").getTime();
 

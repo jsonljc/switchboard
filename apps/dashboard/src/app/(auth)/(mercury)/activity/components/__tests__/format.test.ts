@@ -8,7 +8,7 @@ import {
   fmtRel,
   fmtFullISO,
   eventBand,
-} from "../format.js";
+} from "../format";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -20,7 +20,7 @@ describe("dashboard dev auth env", () => {
   it("throws in production when NEXTAUTH_SECRET is missing", async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "production";
 
-    const { assertSafeDashboardAuthEnv } = await import("../dev-auth.js");
+    const { assertSafeDashboardAuthEnv } = await import("../dev-auth");
 
     expect(() => assertSafeDashboardAuthEnv()).toThrow(/NEXTAUTH_SECRET/i);
   });
@@ -30,7 +30,7 @@ describe("dashboard dev auth env", () => {
     process.env.NEXTAUTH_SECRET = "secret";
     process.env.DEV_BYPASS_AUTH = "true";
 
-    const { assertSafeDashboardAuthEnv } = await import("../dev-auth.js");
+    const { assertSafeDashboardAuthEnv } = await import("../dev-auth");
 
     expect(() => assertSafeDashboardAuthEnv()).toThrow(/DEV_BYPASS_AUTH/i);
   });
@@ -39,7 +39,7 @@ describe("dashboard dev auth env", () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
     process.env.DEV_BYPASS_AUTH = "true";
 
-    const { isDevBypassEnabled } = await import("../dev-auth.js");
+    const { isDevBypassEnabled } = await import("../dev-auth");
 
     expect(isDevBypassEnabled()).toBe(true);
   });

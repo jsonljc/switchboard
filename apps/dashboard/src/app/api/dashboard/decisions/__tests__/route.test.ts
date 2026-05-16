@@ -9,7 +9,7 @@ vi.mock("@/lib/require-dashboard-session", () => ({
 
 import { getApiClient } from "@/lib/get-api-client";
 import { requireDashboardSession } from "@/lib/require-dashboard-session";
-import { GET } from "../route.js";
+import { GET } from "../route";
 
 describe("decisions dashboard proxy (cross-agent)", () => {
   it("returns 401 when no session", async () => {
