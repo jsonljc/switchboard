@@ -48,6 +48,18 @@ describe("ActivityStream", () => {
     render(<ActivityStream rows={[]} filter="all" setFilter={() => {}} />);
     expect(screen.getByText(/nothing here yet/i)).toBeInTheDocument();
   });
+
+  it("eyebrow defaults to 'Activity' when today is undefined", () => {
+    render(<ActivityStream rows={rows} filter="all" setFilter={() => {}} />);
+    expect(screen.getByText("Activity")).toBeInTheDocument();
+    expect(screen.queryByText(/Today ·/)).not.toBeInTheDocument();
+  });
+
+  it("eyebrow becomes 'Today · {date}' when today is supplied", () => {
+    render(<ActivityStream rows={rows} filter="all" setFilter={() => {}} today="Mon May 12" />);
+    expect(screen.getByText("Today · Mon May 12")).toBeInTheDocument();
+    expect(screen.queryByText(/^Activity$/)).not.toBeInTheDocument();
+  });
 });
 
 const rowsWithIds: ActivityRow[] = [

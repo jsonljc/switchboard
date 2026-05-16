@@ -13,6 +13,9 @@ export interface ActivityStreamProps {
   filter: ActivityFilter;
   setFilter: (f: ActivityFilter) => void;
   compact?: boolean;
+  /** Operator-local "today" label rendered in the section eyebrow.
+   * When omitted the eyebrow renders just "Activity" (legacy fallback). */
+  today?: string;
 }
 
 const FILTERS: ActivityFilter[] = ["all", "booked", "escalations"];
@@ -28,7 +31,13 @@ function rowKey(row: ActivityRow, index: number): string {
   return row.id ?? `${row.time}-${row.head}-${index}`;
 }
 
-export function ActivityStream({ rows, filter, setFilter, compact = false }: ActivityStreamProps) {
+export function ActivityStream({
+  rows,
+  filter,
+  setFilter,
+  compact = false,
+  today,
+}: ActivityStreamProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const toggle = useCallback((key: string) => {
     setOpen((prev) => {
@@ -62,7 +71,7 @@ export function ActivityStream({ rows, filter, setFilter, compact = false }: Act
             textTransform: "uppercase",
           }}
         >
-          Activity
+          {today ? `Today · ${today}` : "Activity"}
         </span>
         <div style={{ display: "flex", gap: 4 }}>
           {FILTERS.map((k) => (

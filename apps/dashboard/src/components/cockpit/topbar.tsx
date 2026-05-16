@@ -158,6 +158,25 @@ export function Topbar({
             ⌘K
           </span>
         </button>
+        {!compact && (
+          <Link
+            href="/settings"
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 12.5,
+              color: T.ink3,
+              fontWeight: 500,
+              padding: "6px 8px",
+              borderRadius: 4,
+              textDecoration: "none",
+            }}
+          >
+            Settings
+          </Link>
+        )}
         <div
           style={{
             width: 28,

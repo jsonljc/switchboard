@@ -66,6 +66,28 @@ describe("ApprovalCard", () => {
     render(<ApprovalCard data={noQuote} idx={0} total={1} onResolve={() => {}} />);
     expect(screen.queryByText(/Jordan F\./)).not.toBeInTheDocument();
   });
+
+  it("renders the inline avatar chip with default 'A' letter and accent.soft background", () => {
+    render(<ApprovalCard data={fixture} idx={0} total={1} onResolve={() => {}} />);
+    const chip = screen.getByTestId("approval-card-avatar-chip");
+    expect(chip.textContent).toBe("A");
+    // Accent default is ALEX_APPROVAL_ACCENT.soft — verify via inline style
+    expect(chip.getAttribute("style")).toContain("rgb(241, 226, 194)"); // #F1E2C2
+  });
+
+  it("avatarLetter prop overrides the default monogram independent of senderLabel", () => {
+    render(
+      <ApprovalCard
+        data={fixture}
+        idx={0}
+        total={1}
+        onResolve={() => {}}
+        avatarLetter="R"
+        senderLabel="Needs review"
+      />,
+    );
+    expect(screen.getByTestId("approval-card-avatar-chip").textContent).toBe("R");
+  });
 });
 
 // --- B.1 Riley cross-agent contract extension ---

@@ -123,6 +123,7 @@ export function Identity({
             <button
               type="button"
               onClick={onOpenMission}
+              title={`Edit ${displayName}'s mission`}
               style={{
                 background: "transparent",
                 border: "none",
@@ -133,10 +134,16 @@ export function Identity({
                 fontFamily: "inherit",
                 letterSpacing: "inherit",
                 textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
               }}
               className="text-left underline-offset-2 hover:underline"
             >
-              {subtitle}
+              <span>{subtitle}</span>
+              <span style={{ fontSize: 10, color: T.ink4 }} aria-hidden="true">
+                ✎
+              </span>
             </button>
           ) : (
             subtitle
