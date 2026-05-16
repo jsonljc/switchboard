@@ -47,8 +47,8 @@ export function EmptyState({ rules, setup, onConnect }: Props) {
           I'm set up and quiet. Connect Meta Ads and I'll pull the first leads in under a minute.
         </p>
         <p className="mt-2 text-base leading-snug" style={{ color: T.ink2 }}>
-          So Alex can qualify inbound leads and book consultations under your standing rules. I'll
-          only interrupt you for pricing decisions over ${price} and refunds over ${refund}.
+          So Alex can qualify inbound leads and book consultations under your standing rules. Alex
+          will only interrupt you for pricing decisions over ${price} and refunds over ${refund}.
         </p>
         {primary && (
           <div className="mt-4">
