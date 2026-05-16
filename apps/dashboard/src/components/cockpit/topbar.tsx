@@ -1,4 +1,5 @@
 // apps/dashboard/src/components/cockpit/topbar.tsx
+import Link from "next/link";
 import { T } from "./tokens";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 
@@ -6,6 +7,12 @@ export interface TopbarTab {
   name: string;
   active?: boolean;
   muted?: boolean;
+  /**
+   * Route the tab navigates to when clicked. When omitted, the tab renders
+   * as a non-routing span (used for tabs whose route doesn't exist yet,
+   * e.g. Mira). Tabs with `href` render as a `next/link` for client-side nav.
+   */
+  href?: string;
 }
 
 export interface TopbarProps {
@@ -44,22 +51,36 @@ function Mark() {
   );
 }
 
-function Tab({ name, active, muted }: { name: string; active?: boolean; muted?: boolean }) {
-  return (
-    <span
-      style={{
-        padding: "5px 10px",
-        borderRadius: 4,
-        fontSize: 13,
-        fontWeight: active ? 600 : 500,
-        color: active ? T.ink : muted ? T.ink4 : T.ink3,
-        background: active ? "rgba(14,12,10,0.05)" : "transparent",
-        cursor: "pointer",
-      }}
-    >
-      {name}
-    </span>
-  );
+function Tab({
+  name,
+  active,
+  muted,
+  href,
+}: {
+  name: string;
+  active?: boolean;
+  muted?: boolean;
+  href?: string;
+}) {
+  const style = {
+    padding: "5px 10px",
+    borderRadius: 4,
+    fontSize: 13,
+    fontWeight: active ? 600 : 500,
+    color: active ? T.ink : muted ? T.ink4 : T.ink3,
+    background: active ? "rgba(14,12,10,0.05)" : "transparent",
+    cursor: "pointer",
+    textDecoration: "none",
+    display: "inline-block",
+  } as const;
+  if (href) {
+    return (
+      <Link href={href} style={style}>
+        {name}
+      </Link>
+    );
+  }
+  return <span style={style}>{name}</span>;
 }
 
 export function Topbar({
@@ -94,7 +115,13 @@ export function Topbar({
         </div>
         <nav style={{ display: "flex", gap: 2 }}>
           {tabs.map((t) => (
-            <Tab key={t.name} name={t.name} active={t.active ?? false} muted={t.muted ?? false} />
+            <Tab
+              key={t.name}
+              name={t.name}
+              active={t.active ?? false}
+              muted={t.muted ?? false}
+              href={t.href}
+            />
           ))}
         </nav>
       </div>

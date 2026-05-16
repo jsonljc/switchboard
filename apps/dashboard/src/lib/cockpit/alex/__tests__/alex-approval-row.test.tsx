@@ -117,4 +117,38 @@ describe("AlexApprovalRow", () => {
     render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
     expect(screen.getByText(/Alex needs you/i)).toBeInTheDocument();
   });
+
+  it("uses the view's acceptToast copy when present (spec criterion 6)", () => {
+    mockMutate.mockImplementation((_input, options) => {
+      options?.onSuccess?.();
+    });
+    const approval: AlexApprovalView = { ...baseApproval, acceptToast: "Refund processed" };
+    render(wrap(<AlexApprovalRow approval={approval} idx={0} total={1} />));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    const toastArg = toastMock.mock.calls[0]?.[0] as { title: string };
+    expect(toastArg.title).toBe("Refund processed");
+  });
+
+  it("uses the view's declineToast copy when present (spec criterion 6)", () => {
+    mockMutate.mockImplementation((_input, options) => {
+      options?.onSuccess?.();
+    });
+    const approval: AlexApprovalView = { ...baseApproval, declineToast: "Refund declined" };
+    render(wrap(<AlexApprovalRow approval={approval} idx={0} total={1} />));
+    fireEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    const toastArg = toastMock.mock.calls[0]?.[0] as { title: string };
+    expect(toastArg.title).toBe("Refund declined");
+  });
+
+  it("falls back to hardcoded 'Approved'/'Declined' copy when toast overrides absent", () => {
+    mockMutate.mockImplementation((_input, options) => {
+      options?.onSuccess?.();
+    });
+    render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    const toastArg = toastMock.mock.calls[0]?.[0] as { title: string };
+    expect(toastArg.title).toBe("Approved");
+  });
 });

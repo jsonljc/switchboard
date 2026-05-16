@@ -8,10 +8,10 @@ describe("alex-config", () => {
     expect(ALEX_CONFIG.accent.deep).toBe("#7C4F1C");
   });
 
-  it("exposes Alex/Riley/Mira tabs with Alex active and Mira muted", () => {
+  it("exposes Alex/Riley/Mira tabs with hrefs (Mira non-routing)", () => {
     expect(ALEX_CONFIG.tabs).toEqual([
-      { name: "Alex", active: true },
-      { name: "Riley" },
+      { name: "Alex", active: true, href: "/alex" },
+      { name: "Riley", href: "/riley" },
       { name: "Mira", muted: true },
     ]);
   });

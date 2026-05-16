@@ -40,13 +40,14 @@ export function AlexApprovalRow({ approval, idx, total }: AlexApprovalRowProps) 
     // `"internal"` branch is reserved for future kinds (e.g., escalation
     // handoffs) and lands explicitly in A.7c when the rich adapter ships.
     if (approval.primaryAction.kind !== "respond") {
-      // TODO(A.7c): route `kind === "internal"` through
-      // `useAlexActionDispatcher` once the rich adapter emits non-respond
-      // primary actions. Until then the legacy adapter never produces this
-      // branch, so this is unreachable on production data.
+      // Defensive guard: when the rich adapter eventually emits
+      // `kind === "internal"` primary actions for Alex, the dispatch must go
+      // through `useAlexActionDispatcher` instead of `useRespondToApproval`.
+      // The legacy adapter currently never produces this branch on production
+      // data, so this path stays unreachable until the rich adapter is wired.
       // eslint-disable-next-line no-console
       console.warn(
-        `AlexApprovalRow: unsupported primaryAction.kind=${approval.primaryAction.kind} (A.7c)`,
+        `AlexApprovalRow: unsupported primaryAction.kind=${approval.primaryAction.kind}`,
       );
       return;
     }
@@ -64,10 +65,20 @@ export function AlexApprovalRow({ approval, idx, total }: AlexApprovalRowProps) 
             action: "reject" as const,
           };
 
+    // Per spec criterion 6 (toast voice): emit the view's `acceptToast` /
+    // `declineToast` copy when the adapter has populated it; otherwise fall
+    // back to the generic "Approved" / "Declined" voice. This is the
+    // single-owner-toast doctrine — the row owns this translation, not the
+    // shared ApprovalCard or the cockpit page.
+    const successTitle =
+      verdict === "accept"
+        ? (approval.acceptToast ?? "Approved")
+        : (approval.declineToast ?? "Declined");
+
     respond.mutate(input, {
       onSuccess: () => {
         toast({
-          title: verdict === "accept" ? "Approved" : "Declined",
+          title: successTitle,
           description: approval.title,
         });
       },
