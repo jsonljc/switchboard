@@ -174,6 +174,16 @@ pnpm --filter @switchboard/chat dev           # http://localhost:3001 (requires 
 
 `apps/chat` warns (and starts with no inbound channels) when none of `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`, or `SLACK_BOT_TOKEN` is set in development; in production, the same condition is a hard error. Configure at least one channel token to actually receive messages.
 
+##### Watching dev readiness
+
+In a second terminal pane after starting `pnpm dev`:
+
+```bash
+pnpm dev:ready
+```
+
+Polls `:3000/health`, `:3001/health`, and `:3002/api/dashboard/health` at 500ms intervals. Prints `:<port> ready` as each service responds and `All services ready ✓` when all three are up. Times out after 90 seconds with a recovery hint per still-unready port. Optional — useful when a slow cold-cache compile makes it ambiguous whether `pnpm dev` is still booting or actually broken.
+
 #### Working with the database
 
 Edits to `packages/db/prisma/schema.prisma` must be paired with a migration in the same commit.
