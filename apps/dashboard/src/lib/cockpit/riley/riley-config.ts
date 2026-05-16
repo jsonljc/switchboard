@@ -1,5 +1,7 @@
 import type { CockpitStatus } from "@/components/cockpit/types";
 import type { TopbarTab } from "@/components/cockpit/topbar";
+import { RILEY_VARIANTS } from "@/components/cockpit/sprite/riley-variants";
+import type { SpriteVariantKey } from "@/components/cockpit/sprite/types";
 
 export const RILEY_ACCENT = {
   base: "#B86C50",
@@ -72,3 +74,18 @@ export const RILEY_COMMANDS: readonly RileyCommand[] = [
   { id: "brief-eod", label: "Brief me at EOD", group: "thread" },
   { id: "cpl-30", label: "Show CPL — last 30d", group: "thread" },
 ];
+
+/** Hardcoded sprite variant for Riley — see spec §6.3. */
+export const DEFAULT_RILEY_VARIANT: SpriteVariantKey = "analyst";
+
+export { RILEY_VARIANTS };
+
+/** Map Riley's CockpitStatus into a sprite animation state.
+ *  Mirrors alex-config.ts animState; WATCHING/REVIEWING get "draft" because
+ *  Riley is actively working; IDLE/WAITING/HALTED other cases handled by the
+ *  fallback. (won state is dormant per spec §5.4 — never returned.) */
+export function animState(key: CockpitStatus, halted: boolean): "sleep" | "draft" | "idle" {
+  if (halted) return "sleep";
+  if (key === "WATCHING" || key === "REVIEWING" || key === "WAITING") return "draft";
+  return "idle";
+}

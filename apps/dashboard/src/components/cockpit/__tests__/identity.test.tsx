@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Identity } from "../identity";
 import type { CockpitStatus } from "../types";
+import { ALEX_VARIANTS } from "@/components/cockpit/sprite/alex-variants";
 
 const BASE_PROPS = {
   statusKey: "WORKING" as const,
@@ -175,5 +176,54 @@ describe("Identity — colorFor / pulseFor pass-through (B.3 prep)", () => {
     );
     expect(colorFor).toHaveBeenCalledWith("WAITING", false);
     expect(pulseFor).toHaveBeenCalledWith("WAITING", false);
+  });
+});
+
+describe("Identity — sprite avatar wiring (Commit #3)", () => {
+  it("renders a sprite SVG when bundle + variant + spriteState are passed", () => {
+    const { container } = render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="SDR · Consultations pipeline"
+        line={null}
+        onHaltToggle={() => {}}
+        bundle={ALEX_VARIANTS}
+        variant="classic"
+        spriteState="draft"
+      />,
+    );
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("falls back to the letter avatar when bundle/variant doesn't resolve", () => {
+    const { container, getByText } = render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="…"
+        line={null}
+        onHaltToggle={() => {}}
+        bundle={ALEX_VARIANTS}
+        variant="does-not-exist"
+        spriteState="idle"
+      />,
+    );
+    expect(getByText("A")).toBeInTheDocument();
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("falls back to the letter avatar when bundle is omitted entirely (pre-migration callers)", () => {
+    const { container, getByText } = render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="…"
+        line={null}
+        onHaltToggle={() => {}}
+      />,
+    );
+    expect(getByText("A")).toBeInTheDocument();
+    expect(container.querySelector("svg")).toBeNull();
   });
 });

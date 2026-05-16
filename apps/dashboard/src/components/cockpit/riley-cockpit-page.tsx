@@ -20,6 +20,9 @@ import {
   RILEY_TABS,
   statusColor,
   statusPulse,
+  animState,
+  RILEY_VARIANTS,
+  DEFAULT_RILEY_VARIANT,
 } from "@/lib/cockpit/riley/riley-config";
 import { useRileyActionDispatcher } from "@/lib/cockpit/riley-action-dispatcher";
 import { rileyToast } from "@/lib/cockpit/riley/riley-toast";
@@ -152,6 +155,9 @@ export function RileyCockpitPage() {
             onOpenMission={() => setMissionOpen((o) => !o)}
             displayName="Riley"
             avatarAccent={{ soft: RILEY_ACCENT.soft, deep: RILEY_ACCENT.deep }}
+            bundle={RILEY_VARIANTS}
+            variant={DEFAULT_RILEY_VARIANT}
+            spriteState={animState(statusKey, haltCtx.halted)}
           />
           {mission.data ? (
             <MissionPopover
