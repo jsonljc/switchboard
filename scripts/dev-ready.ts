@@ -37,9 +37,9 @@ export interface ProbeResult {
   timedOutPorts: number[];
 }
 
-// Dashboard endpoint deviates from spec line 104 (which said poll `:3002/`).
-// `apps/dashboard/src/app/api/dashboard/health/route.ts` already exists and
-// is a cheaper, more semantically accurate readiness signal than SSR-ing `/`.
+// Dashboard polls /api/dashboard/health rather than / — the health route
+// already exists, is cheaper (no SSR), and is a more semantically accurate
+// readiness signal.
 export const DEFAULT_TARGETS: ProbeTarget[] = [
   { port: 3000, path: "/health" },
   { port: 3001, path: "/health" },
@@ -61,7 +61,7 @@ export async function probeServices(targets: ProbeTarget[], deps: ProbeDeps): Pr
             `http://localhost:${t.port}${t.path}`,
             controller.signal,
           );
-          if (res.ok && !ready.has(t.port)) {
+          if (res.ok) {
             ready.add(t.port);
             deps.log(`:${t.port} ready`);
           }

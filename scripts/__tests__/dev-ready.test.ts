@@ -84,7 +84,8 @@ describe("probeServices", () => {
       intervalMs: 50,
       timeoutMs: 5_000,
       fetchImpl: async () => {
-        // First two cycles return ok:false (e.g. 503 during boot); third returns ok:true.
+        // 3 targets × 2 rounds = 6 calls of ok:false (e.g. 503 during boot);
+        // round 3 (calls 7–9) returns ok:true.
         cycle++;
         return { ok: cycle > 6 };
       },

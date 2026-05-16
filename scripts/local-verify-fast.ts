@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Fast structural pre-flight.
+ * Fast structural pre-flight (≤30s warm-cache, ≤60s cold).
  *
  * Runs:
  *   1. env-completeness         (scripts/check-env-completeness.ts)
@@ -8,12 +8,11 @@
  *   3. arch:check               (pnpm arch:check)
  *   4. route-ingress check      (.agent/tools/check-routes)
  *   5. seed-count check         (scripts/check-seed-counts.ts — fails if no DB; --strict-db locally)
- *   6. dashboard typecheck      (pnpm --filter @switchboard/dashboard typecheck)
+ *   6. dashboard typecheck      (local-only; CI's typecheck job already covers it)
  *
- * Acceptance gate (per phase-2 spec PR B): total wall-clock ≤30s warm-cache,
- * ≤60s cold. Locally requires DATABASE_URL + reachable Postgres for step 5;
- * step 6 requires `packages/{schemas,db,core}/dist` to exist (run `pnpm build`
- * once via `pnpm local:setup`, or rely on CI's restored dist cache).
+ * Locally requires DATABASE_URL + reachable Postgres for step 5; step 6
+ * requires `packages/{schemas,db,core}/dist` to exist (run `pnpm build` once
+ * via `pnpm local:setup`).
  *
  * Fail-fast: stops at first non-zero exit. Each step prints a one-line
  * summary.
@@ -56,14 +55,21 @@ const STEPS: Step[] = [
       ...(process.env["CI"] ? [] : ["--strict-db"]),
     ],
   },
-  // Last so cheaper structural checks fail fast before we pay the typecheck
-  // cost. CI's lint job restores packages/*/dist from the setup-job cache,
-  // satisfying the @switchboard/core import resolution this step requires.
-  {
-    name: "dashboard:typecheck",
-    cmd: "pnpm",
-    args: ["--filter", "@switchboard/dashboard", "typecheck"],
-  },
+  // Dashboard typecheck is local-only: CI's separate `typecheck` job already
+  // runs `pnpm typecheck` (turbo), which covers @switchboard/dashboard. Running
+  // it again here just doubles CI wall-clock with no extra signal. The
+  // local benefit is catching dashboard typing regressions before push, when
+  // a developer typically wouldn't run the heavier `pnpm typecheck`.
+  // Placed last so cheaper structural checks fail fast before paying its cost.
+  ...(process.env["CI"]
+    ? []
+    : [
+        {
+          name: "dashboard:typecheck",
+          cmd: "pnpm",
+          args: ["--filter", "@switchboard/dashboard", "typecheck"],
+        } satisfies Step,
+      ]),
 ];
 
 /* eslint-disable no-console */
