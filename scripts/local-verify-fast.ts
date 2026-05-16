@@ -38,9 +38,17 @@ const STEPS: Step[] = [
   { name: "arch:check", cmd: "pnpm", args: ["arch:check"] },
   { name: "route-ingress", cmd: "bash", args: [".agent/tools/check-routes"] },
   {
+    // --strict-db is local-only: CI's lint job runs this before the setup job
+    // provisions Postgres, so requiring DB here would fail the lint stage.
+    // CI's setup job invokes check-seed-counts.ts directly after DB is up.
     name: "seed-counts",
     cmd: "pnpm",
-    args: ["exec", "tsx", "scripts/check-seed-counts.ts", "--strict-db"],
+    args: [
+      "exec",
+      "tsx",
+      "scripts/check-seed-counts.ts",
+      ...(process.env["CI"] ? [] : ["--strict-db"]),
+    ],
   },
 ];
 
