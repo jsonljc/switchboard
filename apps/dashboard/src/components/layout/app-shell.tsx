@@ -6,14 +6,15 @@ import { useEffect } from "react";
 import { DataModeBanner } from "@/components/layout/data-mode-banner";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
-// DevPanel accepts `dataModeControlsAllowed` (required) so AppShell can
-// forward the demo-data-mode capability flag. The production-stub branch is
-// `() => null`, which trivially satisfies any prop signature; the dev build
-// pulls the real component via dynamic import.
-const DevPanel: React.ComponentType<{ dataModeControlsAllowed: boolean }> =
-  process.env.NODE_ENV === "production"
-    ? () => null
-    : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
+// DevPanel always dynamic-loads (ssr: false). The runtime `dataModeControlsAllowed`
+// check inside DevPanel itself is the authoritative gate — no build-time stubbing.
+// Earlier versions short-circuited on `NODE_ENV === "production"` to avoid loading
+// the chunk in prod builds, but that also disabled the panel on Vercel preview
+// deployments (which run NODE_ENV=production), defeating the purpose of fixture-
+// mode opt-in for staging walkthroughs.
+const DevPanel = dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), {
+  ssr: false,
+});
 
 /**
  * Paths that mount their own EditorialAuthShell — either directly (agent
