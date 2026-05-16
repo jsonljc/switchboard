@@ -17,7 +17,7 @@ describe("buildAlexMissionResponse", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     },
-    org: { id: "org-1", name: "HotPod Yoga" },
+    org: { id: "org-1", name: "Acme Medspa" },
     connections: [] as Array<{ serviceId: string; status: string }>,
     managedChannels: [] as Array<{ channel: string; status: string }>,
   };
@@ -26,9 +26,9 @@ describe("buildAlexMissionResponse", () => {
     const out = buildAlexMissionResponse(baseInputs);
     expect(out.agentKey).toBe("alex");
     expect(out.displayName).toBe("Alex");
-    expect(out.mission.role).toBe("SDR · qualify inbound leads, book tours");
-    expect(out.mission.pipeline).toBe("Tours pipeline · single funnel");
-    expect(out.mission.brand).toBe("HotPod Yoga · —");
+    expect(out.mission.role).toBe("SDR · qualify inbound leads, book consultations");
+    expect(out.mission.pipeline).toBe("Consultations pipeline · single funnel");
+    expect(out.mission.brand).toBe("Acme Medspa · —");
     expect(out.mission.channels.map((c) => c.kind)).toEqual(["meta-ads", "whatsapp", "calendar"]);
     expect(out.mission.channels.find((c) => c.kind === "meta-ads")?.status).toBe("off");
     expect(out.mission.rules).toBeNull();
@@ -187,7 +187,7 @@ describe("buildRileyMissionResponse", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     },
-    org: { id: "org-1", name: "HotPod Yoga" },
+    org: { id: "org-1", name: "Acme Medspa" },
     connections: [] as Array<{ serviceId: string; status: string }>,
   };
 
@@ -199,7 +199,7 @@ describe("buildRileyMissionResponse", () => {
       "Ad optimizer · score, recommend, never act without your approval",
     );
     expect(out.mission.pipeline).toBe("Ad sets · all campaigns");
-    expect(out.mission.brand).toBe("HotPod Yoga · —");
+    expect(out.mission.brand).toBe("Acme Medspa · —");
     expect(out.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
     expect(out.mission.channels[0]).toEqual({
       kind: "meta-ads",
@@ -352,7 +352,7 @@ describe("mission route", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       },
-      org: { id: "org-1", name: "HotPod Yoga" },
+      org: { id: "org-1", name: "Acme Medspa" },
       connections: [
         { serviceId: "meta-ads", status: "connected" },
         { serviceId: "crm-data-provider", status: "connected" },
@@ -374,7 +374,7 @@ describe("mission route", () => {
     expect(body.mission.role).toBe(
       "Ad optimizer · score, recommend, never act without your approval",
     );
-    expect(body.mission.brand).toBe("HotPod Yoga · —");
+    expect(body.mission.brand).toBe("Acme Medspa · —");
     expect(body.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
     expect(body.targets.roasSource).toBe("crm");
     // Riley aggregator does NOT call managedChannel.findMany.
@@ -436,7 +436,7 @@ describe("mission route", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       },
-      org: { id: "org-1", name: "HotPod Yoga" },
+      org: { id: "org-1", name: "Acme Medspa" },
       connections: [{ serviceId: "meta-ads", status: "connected" }],
       managedChannels: [{ channel: "whatsapp", status: "active" }],
     });
@@ -448,7 +448,7 @@ describe("mission route", () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { mission: { brand: string; rules: unknown } };
-    expect(body.mission.brand).toBe("HotPod Yoga · —");
+    expect(body.mission.brand).toBe("Acme Medspa · —");
     expect(body.mission.rules).toEqual({ priceApprovalThreshold: 89, refundEscalationFloor: 200 });
     expect(prisma.agentRoster.findFirst).toHaveBeenCalledWith({
       where: { organizationId: "org-1", agentRole: "responder" },

@@ -429,7 +429,7 @@ const RILEY_MISSION_DATA: MissionAggregatorResponse = {
   mission: {
     role: "Ad optimizer · score, recommend, never act without your approval",
     pipeline: "Ad sets · all campaigns",
-    brand: "HotPod Yoga · —",
+    brand: "Acme Medspa · —",
     channels: [{ kind: "meta-ads", label: "Meta Ads", status: "ok" }],
     rules: null,
   },
@@ -489,7 +489,7 @@ describe("RileyCockpitPage — B.2a mission popover", () => {
       screen.getByText(/Ad optimizer · score, recommend, never act without your approval/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/Ad sets · all campaigns/i)).toBeInTheDocument();
-    expect(screen.getByText(/HotPod Yoga · —/i)).toBeInTheDocument();
+    expect(screen.getByText(/Acme Medspa · —/i)).toBeInTheDocument();
     // No RULES row for Riley (mission.rules is null).
     expect(screen.queryByText(/^RULES$/)).not.toBeInTheDocument();
   });

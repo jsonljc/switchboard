@@ -30,8 +30,8 @@ describe("per-agent mission dashboard proxy", () => {
       agentKey: "alex",
       displayName: "Alex",
       mission: {
-        role: "SDR · qualify inbound leads, book tours",
-        pipeline: "Tours pipeline · single funnel",
+        role: "SDR · qualify inbound leads, book consultations",
+        pipeline: "Consultations pipeline · single funnel",
         brand: "Acme · —",
         channels: [],
         rules: null,

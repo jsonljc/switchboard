@@ -7,7 +7,7 @@ import type { RoiBar } from "../types";
 const fullRoi: RoiBar = {
   label: "return on spend",
   leftMeta: "$214 spent",
-  rightMeta: { value: "$1,611", suffix: " in tour value" },
+  rightMeta: { value: "$1,611", suffix: " in consultation value" },
   fillPct: 75,
   breakEvenPct: 16.67,
   breakEvenLabel: "break-even",
