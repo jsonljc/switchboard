@@ -27,6 +27,8 @@
     "preflight": "bash scripts/preflight.sh",
     "reference-audit": "node scripts/reference-audit.mjs",
     "worktree:init": "bash scripts/worktree-init.sh",
+    "archive:superpowers": "bash scripts/archive-superpowers-docs.sh",
+    "archive:superpowers:install": "bash scripts/launchd/install-archive-superpowers.sh",
     "audit:validate": "npx tsx scripts/audit-validate-findings.ts",
     "audit:lighthouse": "bash scripts/audit-run-lighthouse.sh",
     "audit:axe": "bash scripts/audit-run-axe.sh",
