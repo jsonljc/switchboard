@@ -337,7 +337,7 @@ describe("InMemoryApprovalStore", () => {
       quorum: null,
       version: 2,
     };
-    await store.updateState("appr_2", newState);
+    await store.updateState("appr_2", newState, undefined, null);
     const retrieved = await store.getById("appr_2");
     expect(retrieved?.state.status).toBe("approved");
     expect(retrieved?.state.respondedBy).toBe("admin");

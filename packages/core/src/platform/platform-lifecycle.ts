@@ -110,7 +110,12 @@ export class PlatformLifecycle {
       params.respondedBy,
       params.patchValue,
     );
-    await approvalStore.updateState(params.approvalId, newState, versionBefore);
+    await approvalStore.updateState(
+      params.approvalId,
+      newState,
+      versionBefore,
+      approval.organizationId ?? null,
+    );
 
     let executionResult: ExecuteResult | null = null;
 
@@ -454,7 +459,12 @@ export class PlatformLifecycle {
 
     const { approvalStore, envelopeStore, ledger } = this.config;
     const expiredState = transitionApproval(approval.state, "expire");
-    await approvalStore.updateState(approvalId, expiredState, approval.state.version);
+    await approvalStore.updateState(
+      approvalId,
+      expiredState,
+      approval.state.version,
+      approval.organizationId ?? null,
+    );
 
     const envelope = await envelopeStore.getById(approval.envelopeId);
     if (!envelope) throw new Error("Envelope not found for expired approval");

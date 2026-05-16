@@ -36,11 +36,17 @@ export class PrismaApprovalStore implements ApprovalStore {
     return toApprovalRecord(row);
   }
 
-  async updateState(id: string, state: ApprovalState, expectedVersion?: number): Promise<void> {
+  async updateState(
+    id: string,
+    state: ApprovalState,
+    expectedVersion: number | undefined,
+    organizationId: string | null,
+  ): Promise<void> {
     if (expectedVersion !== undefined) {
-      // Optimistic concurrency: only update if version matches
+      // Optimistic concurrency: only update if version matches.
+      // organizationId is part of WHERE for tenant isolation (audit TI-7).
       const result = await this.prisma.approvalRecord.updateMany({
-        where: { id, version: expectedVersion },
+        where: { id, version: expectedVersion, organizationId },
         data: {
           status: state.status,
           respondedBy: state.respondedBy,

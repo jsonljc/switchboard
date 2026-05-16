@@ -96,7 +96,12 @@ export class ApprovalLifecycleService {
       ...params.materializationParams,
     });
 
-    return this.store.approveAndMaterialize(lifecycle.id, lifecycle.version, matInput);
+    return this.store.approveAndMaterialize(
+      lifecycle.id,
+      lifecycle.version,
+      lifecycle.organizationId,
+      matInput,
+    );
   }
 
   async approveLifecycle(params: {
@@ -133,7 +138,12 @@ export class ApprovalLifecycleService {
       throw new Error(`Cannot reject: lifecycle status is "${lifecycle.status}"`);
     }
 
-    return this.store.updateLifecycleStatus(lifecycle.id, "rejected", lifecycle.version);
+    return this.store.updateLifecycleStatus(
+      lifecycle.id,
+      "rejected",
+      lifecycle.version,
+      lifecycle.organizationId,
+    );
   }
 
   async rejectLifecycle(params: {
@@ -192,7 +202,12 @@ export class ApprovalLifecycleService {
     if (!lifecycle) throw new Error(`Lifecycle not found: ${lifecycleId}`);
     if (lifecycle.status !== "pending") return lifecycle;
 
-    return this.store.updateLifecycleStatus(lifecycle.id, "expired", lifecycle.version);
+    return this.store.updateLifecycleStatus(
+      lifecycle.id,
+      "expired",
+      lifecycle.version,
+      lifecycle.organizationId,
+    );
   }
 
   async listPendingLifecycles(organizationId?: string): Promise<LifecycleRecord[]> {

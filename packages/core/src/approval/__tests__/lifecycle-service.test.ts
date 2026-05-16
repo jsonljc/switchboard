@@ -241,6 +241,7 @@ describe("ApprovalLifecycleService", () => {
       expect(store.approveAndMaterialize).toHaveBeenCalledWith(
         "lc-1",
         1,
+        "org-1",
         expect.objectContaining({ lifecycleId: "lc-1" }),
       );
     });
@@ -302,7 +303,7 @@ describe("ApprovalLifecycleService", () => {
       });
 
       expect(result).toEqual(rejectedLifecycle);
-      expect(store.updateLifecycleStatus).toHaveBeenCalledWith("lc-1", "rejected", 1);
+      expect(store.updateLifecycleStatus).toHaveBeenCalledWith("lc-1", "rejected", 1, "org-1");
     });
 
     it("rejects when not pending", async () => {
@@ -330,7 +331,7 @@ describe("ApprovalLifecycleService", () => {
       const result = await service.expireLifecycle("lc-1");
 
       expect(result).toEqual(expiredLifecycle);
-      expect(store.updateLifecycleStatus).toHaveBeenCalledWith("lc-1", "expired", 1);
+      expect(store.updateLifecycleStatus).toHaveBeenCalledWith("lc-1", "expired", 1, "org-1");
     });
 
     it("skips if already approved", async () => {

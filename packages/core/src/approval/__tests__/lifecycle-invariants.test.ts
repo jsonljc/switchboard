@@ -277,6 +277,7 @@ describe("Lifecycle Trust Invariants", () => {
       expect(store.approveAndMaterialize).toHaveBeenCalledWith(
         "lc-1",
         1,
+        "org-1",
         expect.objectContaining({ lifecycleId: "lc-1" }),
       );
     });
@@ -414,6 +415,7 @@ describe("Lifecycle Trust Invariants", () => {
       expect(store.approveAndMaterialize).toHaveBeenCalledWith(
         "lc-1",
         3,
+        "org-1",
         expect.objectContaining({ lifecycleId: "lc-1" }),
       );
     });

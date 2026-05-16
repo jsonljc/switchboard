@@ -120,7 +120,7 @@ describe("PrismaApprovalStore", () => {
     it("uses update when no expectedVersion provided", async () => {
       prisma.approvalRecord.update.mockResolvedValue({});
 
-      await store.updateState("apr_1", updatedState);
+      await store.updateState("apr_1", updatedState, undefined, "org_1");
 
       expect(prisma.approvalRecord.update).toHaveBeenCalledWith({
         where: { id: "apr_1" },
@@ -136,10 +136,10 @@ describe("PrismaApprovalStore", () => {
     it("succeeds with optimistic concurrency when version matches (count=1)", async () => {
       prisma.approvalRecord.updateMany.mockResolvedValue({ count: 1 });
 
-      await store.updateState("apr_1", updatedState, 1);
+      await store.updateState("apr_1", updatedState, 1, "org_1");
 
       expect(prisma.approvalRecord.updateMany).toHaveBeenCalledWith({
-        where: { id: "apr_1", version: 1 },
+        where: { id: "apr_1", version: 1, organizationId: "org_1" },
         data: expect.objectContaining({
           status: "approved",
           version: 2,
@@ -150,7 +150,37 @@ describe("PrismaApprovalStore", () => {
     it("throws StaleVersionError when count=0", async () => {
       prisma.approvalRecord.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(store.updateState("apr_1", updatedState, 1)).rejects.toThrow(StaleVersionError);
+      await expect(store.updateState("apr_1", updatedState, 1, "org_1")).rejects.toThrow(
+        StaleVersionError,
+      );
+    });
+
+    // TI-7 regression — cross-tenant isolation on optimistic updateMany WHERE.
+    // Audit: docs/audits/2026-05-15-cleanup/security-sweep-delta.md (TI-7 STILL-OPEN).
+    it("scopes optimistic updateMany WHERE by organizationId (TI-7)", async () => {
+      prisma.approvalRecord.updateMany.mockResolvedValue({ count: 1 });
+
+      await store.updateState("apr_1", updatedState, 1, "org_1");
+
+      const callArgs = prisma.approvalRecord.updateMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({
+        id: "apr_1",
+        version: 1,
+        organizationId: "org_1",
+      });
+    });
+
+    it("scopes optimistic updateMany WHERE by organizationId=null when caller passes null", async () => {
+      prisma.approvalRecord.updateMany.mockResolvedValue({ count: 1 });
+
+      await store.updateState("apr_1", updatedState, 1, null);
+
+      const callArgs = prisma.approvalRecord.updateMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({
+        id: "apr_1",
+        version: 1,
+        organizationId: null,
+      });
     });
   });
 

@@ -200,7 +200,12 @@ async function respondViaLifecycle(args: {
     params.respondedBy,
     params.patchValue,
   );
-  await approvalStore.updateState(approval.request.id, newState, approval.state.version);
+  await approvalStore.updateState(
+    approval.request.id,
+    newState,
+    approval.state.version,
+    approval.organizationId ?? null,
+  );
 
   if (params.action === "reject") {
     if (!workTraceStore) {

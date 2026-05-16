@@ -147,12 +147,19 @@ function createMockStores() {
       approvals.set(a.request.id, a);
     }),
     getById: vi.fn(async (id: string) => approvals.get(id) ?? null),
-    updateState: vi.fn(async (id: string, state: ApprovalState, _expectedVersion?: number) => {
-      const existing = approvals.get(id);
-      if (existing) {
-        approvals.set(id, { ...existing, state });
-      }
-    }),
+    updateState: vi.fn(
+      async (
+        id: string,
+        state: ApprovalState,
+        _expectedVersion: number | undefined,
+        _organizationId: string | null,
+      ) => {
+        const existing = approvals.get(id);
+        if (existing) {
+          approvals.set(id, { ...existing, state });
+        }
+      },
+    ),
     listPending: vi.fn(async () => []),
   };
 

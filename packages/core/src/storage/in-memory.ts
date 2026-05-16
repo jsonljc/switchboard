@@ -213,11 +213,21 @@ export class InMemoryApprovalStore implements ApprovalStore {
     return entry ? { ...entry } : null;
   }
 
-  async updateState(id: string, state: ApprovalState, expectedVersion?: number): Promise<void> {
+  async updateState(
+    id: string,
+    state: ApprovalState,
+    expectedVersion: number | undefined,
+    organizationId: string | null,
+  ): Promise<void> {
     const entry = this.store.get(id);
     if (!entry) throw new Error(`Approval not found: ${id}`);
     if (expectedVersion !== undefined && entry.state.version !== expectedVersion) {
       throw new StaleVersionError(id, expectedVersion, entry.state.version);
+    }
+    // Tenant isolation: refuse if caller's org doesn't match the stored row (audit TI-7).
+    const storedOrgId = entry.organizationId ?? null;
+    if (storedOrgId !== organizationId) {
+      throw new StaleVersionError(id, expectedVersion ?? -1, entry.state.version);
     }
     this.store.set(id, { ...entry, state });
   }
