@@ -124,13 +124,18 @@ export function buildAlexMissionResponse(inputs: {
     ? mapManagedChannelStatus(inboxChannel.status)
     : "off";
 
-  // Calendar: looks up a `google-calendar` Connection (created by the dashboard's
-  // /api/dashboard/connections/google-calendar/authorize OAuth callback).
-  // `calDone` requires status === "connected" — a degraded/error Connection
-  // means present-but-unhealthy and should keep the setup row unticked even
-  // while the channel pill surfaces as "warn". The existing metaDone logic
-  // (mission.ts:111 above) is laxer (any row counts as done); see follow-up
-  // note in the plan for that asymmetry.
+  // Calendar: looks up a `google-calendar` Connection row for this org.
+  // NOTE: as of this commit, no production writer creates Connection rows with
+  // serviceId === "google-calendar" — the OAuth callback at
+  // apps/api/src/routes/google-calendar-oauth.ts writes to DeploymentConnection
+  // (a different table) instead. The cockpit-wiring punchlist Task 4 runbook
+  // tracks the missing upstream writer; this read-side is intentionally correct
+  // so it lights up automatically once the writer ships.
+  // `calDone` requires status === "connected" — a non-connected Connection
+  // (degraded/expired/revoked/etc.) keeps the setup row unticked. Status
+  // mapping to "warn" vs "off" delegates to mapConnectionStatus. The metaDone
+  // logic at mission.ts:109 is intentionally laxer (any row counts as done);
+  // see the plan's Follow-up #1.
   const calConnection = connections.find((c) => c.serviceId === "google-calendar");
   const calDone = calConnection?.status === "connected";
   const calStatus: MissionChannelStatus = calConnection
