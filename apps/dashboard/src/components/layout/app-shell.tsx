@@ -3,12 +3,18 @@
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { DataModeBanner } from "@/components/layout/data-mode-banner";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
-const DevPanel =
-  process.env.NODE_ENV === "production"
-    ? () => null
-    : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
+// DevPanel always dynamic-loads (ssr: false). The runtime `dataModeControlsAllowed`
+// check inside DevPanel itself is the authoritative gate — no build-time stubbing.
+// Earlier versions short-circuited on `NODE_ENV === "production"` to avoid loading
+// the chunk in prod builds, but that also disabled the panel on Vercel preview
+// deployments (which run NODE_ENV=production), defeating the purpose of fixture-
+// mode opt-in for staging walkthroughs.
+const DevPanel = dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), {
+  ssr: false,
+});
 
 /**
  * Paths that mount their own EditorialAuthShell — either directly (agent
@@ -44,7 +50,13 @@ function ownsItsShell(pathname: string): boolean {
 const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/", "/alex", "/riley"]);
 export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding", "/setup"];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  dataModeControlsAllowed = false,
+}: {
+  children: React.ReactNode;
+  dataModeControlsAllowed?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -68,8 +80,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (usesEditorialShell) {
     return (
       <>
+        <DataModeBanner />
         {children}
-        <DevPanel />
+        <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
       </>
     );
   }
@@ -79,9 +92,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // own layout.tsx (e.g., SettingsLayout, ReportsLayout) is responsible for
   // any sidebar/header/back-link chrome.
   return (
-    <main className="min-h-screen bg-background">
-      {children}
-      <DevPanel />
-    </main>
+    <>
+      <DataModeBanner />
+      <main className="min-h-screen bg-background">
+        {children}
+        <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
+      </main>
+    </>
   );
 }

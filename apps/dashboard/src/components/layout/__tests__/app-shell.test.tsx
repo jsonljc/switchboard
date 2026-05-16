@@ -15,12 +15,21 @@ vi.mock("@/hooks/use-org-config", () => ({
   useOrgConfig: (enabled?: boolean) => orgConfigMock(enabled),
 }));
 
+const devPanelProps: { current: Record<string, unknown> } = { current: {} };
+
 vi.mock("next/dynamic", () => ({
-  default: (_loader: () => Promise<{ DevPanel: React.FC }>) => {
-    const Component = () => <div data-testid="dev-panel" />;
+  default: (_loader: () => Promise<{ DevPanel: React.FC<Record<string, unknown>> }>) => {
+    const Component = (props: Record<string, unknown>) => {
+      devPanelProps.current = props;
+      return <div data-testid="dev-panel" />;
+    };
     Component.displayName = "DynamicDevPanel";
     return Component;
   },
+}));
+
+vi.mock("../data-mode-banner", () => ({
+  DataModeBanner: () => <div data-testid="data-mode-banner" />,
 }));
 
 beforeEach(() => {
@@ -234,5 +243,49 @@ describe("Onboarding-redirect behavior", () => {
       </AppShell>,
     );
     expect(orgConfigMock).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("AppShell — dataModeControlsAllowed prop forwarding", () => {
+  it("forwards dataModeControlsAllowed=true to DevPanel in editorial branch", () => {
+    pathnameRef.current = "/alex";
+    render(
+      <AppShell dataModeControlsAllowed={true}>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(devPanelProps.current.dataModeControlsAllowed).toBe(true);
+  });
+
+  it("forwards dataModeControlsAllowed=false to DevPanel in bare-main branch", () => {
+    pathnameRef.current = "/settings";
+    render(
+      <AppShell dataModeControlsAllowed={false}>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(devPanelProps.current.dataModeControlsAllowed).toBe(false);
+  });
+});
+
+describe("AppShell — DataModeBanner mounted in both branches", () => {
+  it("mounts DataModeBanner in editorial branch", () => {
+    pathnameRef.current = "/alex";
+    render(
+      <AppShell dataModeControlsAllowed={false}>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(screen.getByTestId("data-mode-banner")).toBeInTheDocument();
+  });
+
+  it("mounts DataModeBanner in bare-main branch", () => {
+    pathnameRef.current = "/settings";
+    render(
+      <AppShell dataModeControlsAllowed={false}>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(screen.getByTestId("data-mode-banner")).toBeInTheDocument();
   });
 });
