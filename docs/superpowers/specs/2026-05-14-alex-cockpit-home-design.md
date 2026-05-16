@@ -162,7 +162,7 @@ These are **rendered, not edited** in v1 — clicking the mission subtitle opens
 For the ROI bar and KPI tiles, Alex needs two numbers stored per-org:
 
 - `targetCpbCents` — cost-per-booking target (e.g. $30)
-- `avgValueCents` — average booking/tour value used to compute return on spend (e.g. $179)
+- `avgValueCents` — average booking value used to compute return on spend (e.g. $179)
 
 These are the **same two fields Riley needs** (`avgValueCents` + `targetCpbCents` per the Riley spec §Persistence). They live in the same place. Final placement decided in the plan (§Backend changes §1) — either two nullable columns on `AgentRoster`, or two keys under `AgentRoster.config`.
 
@@ -376,13 +376,13 @@ The third element on the status line (`· 3`) is `data.liveCount` — the number
 
 Mission popover rows (`mission.rows`) for Alex:
 
-| Eyebrow    | Value                                                                                |
-| ---------- | ------------------------------------------------------------------------------------ |
-| `ROLE`     | `SDR · qualify inbound leads, book consultations`                                    |
-| `PIPELINE` | `Tours pipeline · single funnel`                                                     |
-| `BRAND`    | `{org.displayName} · {org.tagline ?? "—"}`                                           |
-| `CHANNELS` | `Meta Ads · {org.displayName} inbox · tour calendar` (with status dots if available) |
-| `RULES`    | `Pricing approvals over ${threshold} · refunds over ${refundFloor}`                  |
+| Eyebrow    | Value                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| `ROLE`     | `SDR · qualify inbound leads, book consultations`                                            |
+| `PIPELINE` | `Consultations pipeline · single funnel`                                                     |
+| `BRAND`    | `{org.displayName} · {org.tagline ?? "—"}`                                                   |
+| `CHANNELS` | `Meta Ads · {org.displayName} inbox · consultation calendar` (with status dots if available) |
+| `RULES`    | `Pricing approvals over ${threshold} · refunds over ${refundFloor}`                          |
 
 The locked design ships 4 rows; this spec adds a `RULES` row (5th) to disclose Alex's per-org thresholds — symmetric with Riley's `TARGETS` row. The shell supports variable-length `mission.rows` (verified by reading `cockpit.jsx:996` — `AG.mission.rows.map((row, i) => ...)` accepts any length).
 
@@ -797,7 +797,7 @@ If the templated copy proves insufficient — operators report the cold state fe
   displayName: string;             // AgentRoster.displayName
   mission: {
     role: string;                  // "SDR · qualify inbound leads, book consultations"
-    pipeline: string;              // "Tours pipeline · single funnel"
+    pipeline: string;              // "Consultations pipeline · single funnel"
     brand: string;                 // org.displayName + (tagline ?? "—")
     channels: Array<{
       kind: "meta-ads" | "whatsapp" | "telegram" | "slack" | "calendar";
