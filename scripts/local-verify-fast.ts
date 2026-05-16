@@ -7,7 +7,7 @@
  *   2. live-flag manifest       (scripts/check-live-flag-manifest.ts)
  *   3. arch:check               (pnpm arch:check)
  *   4. route-ingress check      (.agent/tools/check-routes)
- *   5. seed-count check         (scripts/check-seed-counts.ts — skips if no DB)
+ *   5. seed-count check         (scripts/check-seed-counts.ts — fails if no DB; --strict-db)
  *
  * Fail-fast: stops at first non-zero exit. Each step prints a one-line
  * summary.
@@ -37,7 +37,11 @@ const STEPS: Step[] = [
   },
   { name: "arch:check", cmd: "pnpm", args: ["arch:check"] },
   { name: "route-ingress", cmd: "bash", args: [".agent/tools/check-routes"] },
-  { name: "seed-counts", cmd: "pnpm", args: ["exec", "tsx", "scripts/check-seed-counts.ts"] },
+  {
+    name: "seed-counts",
+    cmd: "pnpm",
+    args: ["exec", "tsx", "scripts/check-seed-counts.ts", "--strict-db"],
+  },
 ];
 
 /* eslint-disable no-console */
