@@ -11,7 +11,7 @@ const baseMission: MissionAggregatorResponse["mission"] = {
   channels: [
     { kind: "meta-ads", label: "Meta Ads", status: "ok" },
     { kind: "whatsapp", label: "WhatsApp inbox", status: "warn" },
-    { kind: "calendar", label: "Tour calendar", status: "off" },
+    { kind: "calendar", label: "Booking calendar", status: "off" },
   ],
   rules: { priceApprovalThreshold: 89, refundEscalationFloor: 200 },
 };
@@ -38,7 +38,7 @@ describe("MissionPopover", () => {
     render(<MissionPopover open onClose={() => {}} mission={baseMission} />);
     expect(screen.getByLabelText("Meta Ads: connected")).toBeInTheDocument();
     expect(screen.getByLabelText("WhatsApp inbox: degraded")).toBeInTheDocument();
-    expect(screen.getByLabelText("Tour calendar: not connected")).toBeInTheDocument();
+    expect(screen.getByLabelText("Booking calendar: not connected")).toBeInTheDocument();
   });
 
   it("calls onClose when Escape is pressed", () => {

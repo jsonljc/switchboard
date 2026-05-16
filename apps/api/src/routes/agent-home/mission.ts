@@ -159,7 +159,7 @@ export function buildAlexMissionResponse(inputs: {
       channels: [
         { kind: "meta-ads", label: "Meta Ads", status: metaStatus },
         { kind: inboxKind, label: inboxLabel(inboxKind), status: inboxStatus },
-        { kind: "calendar", label: "Tour calendar", status: calStatus },
+        { kind: "calendar", label: "Booking calendar", status: calStatus },
       ],
       rules,
     },
