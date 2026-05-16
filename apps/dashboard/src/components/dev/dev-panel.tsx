@@ -32,12 +32,14 @@ export interface DevPanelProps {
 }
 
 export function DevPanel({ dataModeControlsAllowed }: DevPanelProps) {
-  if (!dataModeControlsAllowed) return null;
-
+  // All hooks must run before any conditional return (Rules of Hooks).
+  // dataModeControlsAllowed is stable per-mount today, but treating it like
+  // any other gate keeps the file safe if it ever becomes hook-derived.
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const { data: session } = useSession();
 
+  if (!dataModeControlsAllowed) return null;
   if (session?.user?.id !== "dev-user") return null;
 
   return (
