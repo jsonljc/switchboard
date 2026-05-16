@@ -22,11 +22,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SCAN_ROOTS = [join(HERE, "..", "components", "cockpit"), join(HERE, "..", "lib", "cockpit")];
 
 const BANNED: ReadonlyArray<{ phrase: string; caseInsensitive?: boolean }> = [
+  // All entries are case-insensitive to match the api hygiene test's behavior
+  // (both guards walk the same banned-phrase space; asymmetric case-sensitivity
+  // would let "BOOK TOURS" slip past one but not the other).
+  // The leading space on " in tour value" prevents false positives on the
+  // internal variable name `tourValue` while still catching the user-visible
+  // suffix string.
   { phrase: "HotPod", caseInsensitive: true },
-  { phrase: "Tours pipeline" },
-  { phrase: "book tours" },
-  { phrase: " in tour value" },
-  { phrase: "tour calendar" },
+  { phrase: "Tours pipeline", caseInsensitive: true },
+  { phrase: "book tours", caseInsensitive: true },
+  { phrase: " in tour value", caseInsensitive: true },
+  { phrase: "tour calendar", caseInsensitive: true },
 ];
 
 const SELF_BASENAME = "cockpit-copy-hygiene.test.ts";
