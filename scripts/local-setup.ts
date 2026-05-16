@@ -6,10 +6,10 @@
  * When Postgres is not reachable, runs the non-DB steps (install,
  * setup-env, build), prints recovery guidance, and exits non-zero
  * BEFORE local:verify:fast. We cannot run verify in that state because
- * Task 2 wires `--strict-db` into local:verify:fast, which would fail
- * with a generic strict-db banner — the explicit recovery message here
- * is clearer. "Setup is incomplete" is the correct signal; the "no
- * silent green" promise demands a non-zero exit.
+ * local:verify:fast passes `--strict-db`, which would fail with a
+ * generic strict-db banner — the explicit recovery message here is
+ * clearer. "Setup is incomplete" is the correct signal; the "no silent
+ * green" promise demands a non-zero exit.
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -94,7 +94,6 @@ function main(): void {
 }
 /* eslint-enable no-console */
 
-// Guard required: STEPS is exported for tests; unconditional main() would run on import.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main();
 }
