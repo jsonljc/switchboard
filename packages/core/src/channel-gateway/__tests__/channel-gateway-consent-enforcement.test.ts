@@ -148,7 +148,7 @@ function makeConfig(opts: {
 // ---------------------------------------------------------------------------
 
 describe("ChannelGateway — consent enforcement at dispatch", () => {
-  it("1. suppresses outbound and records metadata-only marker when contact is revoked", async () => {
+  it("1. suppresses outbound and records marker when contact is revoked", async () => {
     const { config, sendSpy, addMessage, verdictSave } = makeConfig({
       revokedAt: new Date("2026-05-15T00:00:00Z"),
     });
@@ -193,7 +193,7 @@ describe("ChannelGateway — consent enforcement at dispatch", () => {
     expect(verdictSave).not.toHaveBeenCalled();
   });
 
-  it("3. PROVES a normal successful assistant response IS gated (load-bearing safety invariant)", async () => {
+  it("3. PROVES a normal successful assistant response IS gated (regression guard)", async () => {
     // This test is intentionally structurally similar to test 1.
     // Its purpose is to guard against future regressions where someone moves
     // the gate call outside the response.ok branch — making successful assistant
@@ -218,7 +218,7 @@ describe("ChannelGateway — consent enforcement at dispatch", () => {
     );
   });
 
-  it("4. PROVES the framework-generated technical-failure fallback is NOT gated (narrow exemption invariant)", async () => {
+  it("4. PROVES technical-failure fallback is NOT gated (narrow exemption invariant)", async () => {
     // Load-bearing safety test. The non-ok branch (I'm having trouble...) intentionally
     // bypasses the consent gate. This test guards that exemption from being
     // accidentally removed, which would block users from ever receiving error
@@ -282,7 +282,7 @@ describe("ChannelGateway — consent enforcement at dispatch", () => {
     consoleSpy.mockRestore();
   });
 
-  it("6. sends normally when consentEnforcementGate config is omitted (backward compat)", async () => {
+  it("6. sends normally when consentEnforcementGate config is omitted", async () => {
     // Setup: no consentEnforcementGate in config. Existing behavior must be unchanged.
     const { config, sendSpy, verdictSave } = makeConfig({
       revokedAt: new Date("2026-05-15T00:00:00Z"), // would block if gate were wired

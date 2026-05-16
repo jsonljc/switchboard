@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { runConsentEnforcementGate } from "./consent-enforcement-gate.js";
-import type { ConsentEnforcementGateConfig } from "./consent-enforcement-gate.js";
+import { runConsentEnforcementGate } from "../consent-enforcement-gate.js";
+import type { ChannelGatewayConfig } from "../types.js";
 
 const FIXED_DATE = new Date("2026-05-16T12:00:00Z");
 
@@ -21,7 +21,7 @@ function makeStubs(
     pdpaJurisdiction: overrides.jurisdiction ?? "SG",
   });
 
-  const cfg: ConsentEnforcementGateConfig = {
+  const cfg: NonNullable<ChannelGatewayConfig["consentEnforcementGate"]> = {
     governanceConfigResolver: vi.fn().mockResolvedValue(
       overrides.resolverStatus === "missing"
         ? { status: "missing" }
