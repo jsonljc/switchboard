@@ -156,6 +156,7 @@ export interface ChannelGatewayConfig {
     sessionContactResolver: (sessionId: string) => Promise<string | null>;
     verdictStore: GovernanceVerdictStore;
     clock: () => Date;
+    revocationKeywordLoader?: never; // not used on egress; trap field guards against accidental copy from inbound config
   };
 }
 
