@@ -87,7 +87,7 @@ const STRICT_HINT = `
   or run \`pnpm db:migrate && pnpm db:seed\` directly.
 `;
 
-interface RunMainOptions {
+export interface RunMainOptions {
   strictDb: boolean;
   _auditFn?: () => Promise<SeedCountResult>;
 }

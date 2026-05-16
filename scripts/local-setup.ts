@@ -94,6 +94,7 @@ function main(): void {
 }
 /* eslint-enable no-console */
 
+// Guard required: STEPS is exported for tests; unconditional main() would run on import.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main();
 }
