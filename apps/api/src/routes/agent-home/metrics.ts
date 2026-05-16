@@ -57,9 +57,9 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
     });
     const targets = getAgentTargets(rosterRow ?? { config: {} });
 
-    // Wire Meta Ads spend provider — graceful no-op when not wired in bootstrap.
-    // TODO(A.3-follow-up): wire buildMetaSpendProvider(prisma, adsClientFactory) in
-    // apps/api bootstrap once credential decryption plumbing is verified.
+    // Meta Ads spend provider — decorated in apps/api/src/bootstrap/wire-metrics.ts.
+    // Falls back to the null-returning provider in test harnesses that build a
+    // Fastify app without calling wireMetricsProvider.
     const getMetaSpendCents = app.metaSpendProvider ?? (async () => null);
 
     const store: MetricsSignalStore = {

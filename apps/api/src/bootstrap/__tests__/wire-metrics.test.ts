@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import Fastify from "fastify";
-import { wireMetricsProvider } from "./wire-metrics.js";
+import { wireMetricsProvider } from "../wire-metrics.js";
 
 vi.mock("@switchboard/ad-optimizer", () => ({
   MetaAdsClient: vi.fn().mockImplementation((creds: unknown) => ({

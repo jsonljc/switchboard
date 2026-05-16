@@ -14,8 +14,9 @@ the KPI spend tile and mission setup checklist.
 
 `apps/api/src/routes/agent-home/mission.ts` and
 `apps/api/src/lib/meta-spend-provider.ts` query the `Connection` table for
-rows with `serviceId === "meta-ads"` or `serviceId === "google-calendar"`.
-**As of 2026-05-16, no production code automatically creates these rows.**
+rows with `serviceId === "meta-ads"` or `serviceId === "google_calendar"`.
+**As of 2026-05-16, the OAuth callbacks do NOT automatically create these
+rows.**
 
 The OAuth callbacks `apps/api/src/routes/facebook-oauth.ts` and
 `apps/api/src/routes/google-calendar-oauth.ts` write to a different table
@@ -24,18 +25,26 @@ The two tables are separate models in the Prisma schema (`schema.prisma:196`
 vs `schema.prisma:1206`); the mission/spend reads have no awareness of
 `DeploymentConnection`.
 
-**Today, the only way to populate the `Connection` rows that
-mission.ts/meta-spend-provider read** is via the generic
-`POST /api/connections` endpoint (`apps/api/src/routes/connections.ts:19`).
-This is a manual API call — no UI surfaces it. Until either the OAuth
-callbacks are extended to dual-write or mission/spend are re-pointed at
-`DeploymentConnection`, the KPI spend tile and the calendar/meta setup
-rows will remain blank/off regardless of what env flags are flipped.
+**There IS an operator-facing path** that writes to the `Connection`
+table: the `/settings` page
+(`apps/dashboard/src/components/settings/connections-list.tsx`) lets an
+operator pick "Meta Ads" or "Google Calendar" from a dropdown, provide
+credentials, and POST to `/api/dashboard/connections` — which creates a
+`Connection` row with the right `serviceId` (`"meta-ads"` or
+`"google_calendar"`). Once such a row exists with `status: "connected"`,
+the KPI spend tile and calendar setup row light up automatically (the
+read-side this PR ships handles them correctly).
+
+**What's missing for "magic" auto-flow**: the OAuth callbacks should
+dual-write a `Connection` row when they write `DeploymentConnection`,
+so an operator who completes the OAuth flow gets the cockpit benefits
+without a separate /settings round-trip. Alternative: re-point mission.ts
+
+- meta-spend-provider.ts at `DeploymentConnection` directly.
 
 **Tracked follow-up:** dual-write `Connection` rows from
-`facebook-oauth.ts` and `google-calendar-oauth.ts` (or alternatively
-re-point mission.ts + meta-spend-provider.ts at `DeploymentConnection`).
-Out of scope for the current cockpit wiring PR.
+`facebook-oauth.ts` and `google-calendar-oauth.ts`. Out of scope for
+the current cockpit wiring PR.
 
 ## Prerequisites for live data on KPI spend tile
 
@@ -44,23 +53,25 @@ KPI spend tile renders "—" until ALL of the following are true:
 1. `apps/api/src/app.ts` decorates `metaSpendProvider` (shipped — see PR
    that landed this runbook).
 2. The org has a `Connection` row with `serviceId: "meta-ads"` and
-   `status: "connected"`. **Today this requires a manual `POST /api/connections`** —
-   see "Upstream-writer gap" above.
+   `status: "connected"`. Today an operator creates this via the
+   `/settings` page (see "Upstream-writer gap" above); auto-creation
+   from the Facebook OAuth callback is a tracked follow-up.
 3. The Connection's stored credentials decrypt cleanly. If decryption
    throws, the provider logs a warn and returns null (tile stays "—").
 
 ## Prerequisites for live calendar setup row
 
 The Alex mission setup checklist's calendar row ticks "done" only when
-a `Connection` row with `serviceId: "google-calendar"` AND
+a `Connection` row with `serviceId: "google_calendar"` AND
 `status: "connected"` exists. The strict `=== "connected"` semantic
 keeps a degraded row from prematurely marking the step done. The
 existing meta-ads row uses a laxer `!!metaConnection` semantic; this
 asymmetry is intentional for the current PR and tracked as a separate
 follow-up to align both reads.
 
-As with the spend tile, populating the `Connection` row today requires
-the manual API path (see "Upstream-writer gap").
+As with the spend tile, an operator creates the row via `/settings`
+today; auto-creation from the Google Calendar OAuth callback is a
+tracked follow-up.
 
 ## Flag 1: `NEXT_PUBLIC_APPROVALS_LIVE`
 

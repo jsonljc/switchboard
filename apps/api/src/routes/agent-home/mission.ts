@@ -124,20 +124,21 @@ export function buildAlexMissionResponse(inputs: {
     ? mapManagedChannelStatus(inboxChannel.status)
     : "off";
 
-  // Calendar: looks up a `google-calendar` Connection row for this org.
-  // NOTE: as of this commit, no production writer creates Connection rows with
-  // serviceId === "google-calendar" — the OAuth callback at
-  // apps/api/src/routes/google-calendar-oauth.ts writes to DeploymentConnection
-  // (a different table) instead. The cockpit-wiring punchlist Task 4 runbook
-  // tracks the missing upstream writer; this read-side is intentionally correct
-  // so it lights up automatically once the writer ships.
+  // Calendar: looks up a `google_calendar` Connection row for this org.
+  // Operators create such rows today via the /settings UI
+  // (apps/dashboard/src/components/settings/connections-list.tsx). The
+  // google-calendar OAuth callback at apps/api/src/routes/google-calendar-oauth.ts
+  // writes to a SEPARATE table (`DeploymentConnection` with column `type`), so
+  // OAuth-completed integrations do NOT automatically populate the `Connection`
+  // row this read needs — see the cockpit-wiring runbook for the dual-write
+  // follow-up that closes that gap.
   // `calDone` requires status === "connected" — a non-connected Connection
   // (degraded/expired/revoked/etc.) keeps the setup row unticked. Status
   // mapping to "warn" vs "off" delegates to mapConnectionStatus. The metaDone
   // logic at mission.ts:109 is intentionally laxer (any row counts as done);
   // a future PR will align both reads to the strict semantic (tracked in the
   // cockpit-wiring runbook's follow-ups).
-  const calConnection = connections.find((c) => c.serviceId === "google-calendar");
+  const calConnection = connections.find((c) => c.serviceId === "google_calendar");
   const calDone = calConnection?.status === "connected";
   const calStatus: MissionChannelStatus = calConnection
     ? mapConnectionStatus(calConnection.status)

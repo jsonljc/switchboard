@@ -173,10 +173,10 @@ describe("buildAlexMissionResponse", () => {
   });
 
   describe("calendar setup row", () => {
-    it("marks calendar done when a connected google-calendar Connection exists", () => {
+    it("marks calendar done when a connected google_calendar Connection exists", () => {
       const out = buildAlexMissionResponse({
         ...baseInputs,
-        connections: [{ serviceId: "google-calendar", status: "connected" }],
+        connections: [{ serviceId: "google_calendar", status: "connected" }],
       });
       const calRow = out.setup.find((r) => r.key === "cal");
       expect(calRow?.done).toBe(true);
@@ -184,7 +184,7 @@ describe("buildAlexMissionResponse", () => {
       expect(calChannel?.status).toBe("ok");
     });
 
-    it("marks calendar off when no google-calendar Connection exists", () => {
+    it("marks calendar off when no google_calendar Connection exists", () => {
       const out = buildAlexMissionResponse({
         ...baseInputs,
         connections: [],
@@ -195,14 +195,14 @@ describe("buildAlexMissionResponse", () => {
       expect(calChannel?.status).toBe("off");
     });
 
-    it("marks calendar NOT done but warn when google-calendar Connection is degraded", () => {
+    it("marks calendar NOT done but warn when google_calendar Connection is degraded", () => {
       // Honest setup semantics: a degraded Connection means present-but-unhealthy.
       // The setup checklist should NOT mark this step as done (operator still has
       // remediation work) even though the channel status surfaces as "warn"
       // (distinguishable from "off" / "ok" in UI).
       const out = buildAlexMissionResponse({
         ...baseInputs,
-        connections: [{ serviceId: "google-calendar", status: "degraded" }],
+        connections: [{ serviceId: "google_calendar", status: "degraded" }],
       });
       const calRow = out.setup.find((r) => r.key === "cal");
       expect(calRow?.done).toBe(false);

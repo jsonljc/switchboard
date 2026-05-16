@@ -32,12 +32,13 @@ function fmt(d: Date): string {
  * and converts to cents. Returns null when:
  * - no `meta-ads` Connection exists for the org
  * - the Connection is not in "connected" status
- * - adsClientFactory is not provided (Option A: graceful no-op)
+ * - adsClientFactory is not provided (graceful no-op for test harnesses)
  * - the insights call throws
  *
- * TODO(A.3-follow-up): wire an actual adsClientFactory once credential decryption
- * plumbing is verified. Until then, callers can pass undefined/omit it to get a
- * graceful null-returning provider. The seam is validated; Meta API wiring deferred.
+ * In production this is composed with the connection-based adsClientFactory at
+ * apps/api/src/lib/ads-client-factory.ts and decorated onto the Fastify app
+ * via apps/api/src/bootstrap/wire-metrics.ts. Test harnesses pass `undefined`
+ * to get the graceful null-returning provider.
  */
 export function buildMetaSpendProvider(
   prisma: PrismaClient,

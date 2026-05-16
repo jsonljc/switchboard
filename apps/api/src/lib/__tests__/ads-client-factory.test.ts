@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildAdsClientFactory } from "./ads-client-factory.js";
+import { buildAdsClientFactory } from "../ads-client-factory.js";
 
 type PrismaStub = {
   connection: { findFirst: ReturnType<typeof vi.fn> };
