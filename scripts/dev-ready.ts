@@ -13,6 +13,8 @@
  * Designed as an optional companion to `pnpm dev` in a second terminal pane.
  */
 
+import { fileURLToPath } from "node:url";
+
 export interface ProbeTarget {
   port: number;
   path: string;
@@ -41,10 +43,7 @@ export const DEFAULT_TARGETS: ProbeTarget[] = [
   { port: 3002, path: "/api/dashboard/health" },
 ];
 
-export async function probeServices(
-  targets: ProbeTarget[],
-  deps: ProbeDeps,
-): Promise<ProbeResult> {
+export async function probeServices(targets: ProbeTarget[], deps: ProbeDeps): Promise<ProbeResult> {
   const start = deps.now();
   const ready = new Set<number>();
 
@@ -90,4 +89,24 @@ export async function probeServices(
     readyPorts: [...ready],
     timedOutPorts: timedOut,
   };
+}
+
+/* eslint-disable no-console */
+async function main(): Promise<void> {
+  const result = await probeServices(DEFAULT_TARGETS, {
+    fetchImpl: (url, signal) => fetch(url, { signal }),
+    intervalMs: 500,
+    timeoutMs: 90_000,
+    fetchTimeoutMs: 1_000,
+    log: (m) => console.log(m),
+    errLog: (m) => console.error(m),
+    now: () => Date.now(),
+    sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
+  });
+  process.exit(result.allReady ? 0 : 1);
+}
+/* eslint-enable no-console */
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  void main();
 }
