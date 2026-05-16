@@ -120,12 +120,13 @@ type VariantBundle = Record<SpriteVariantKey, VariantDef>;
 type VariantDef = { palette: Palette; states: Record<SpriteState, Frame[]> };
 ```
 
-**Per-bundle variant keys** (reconciled — same as `variantOptions[]` in the design's agent configs):
+**Per-bundle variant keys** (canonical truth from the bundle exports in `sprites.jsx` and `riley-sprites.jsx` — NOT the `variantOptions[]` arrays in the design's agent configs, which use design-canvas tweaks-panel labels that drifted from bundle keys):
 
-- `ALEX_VARIANTS` keys: `"classic" | "operator" | "cozy" | "agent"` (4 entries)
-- `RILEY_VARIANTS` keys: `"analyst" | "terminal" | "agent"` (3 entries)
-- Distinct name union across both bundles: `"classic" | "operator" | "cozy" | "agent" | "analyst" | "terminal"` (6 names — `"agent"` is shared by both bundles but resolves to a different `VariantDef` in each)
-- Snapshot tests: one per (bundle, key) tuple → 4 + 3 = 7 snapshots (NOT 6, because the two `"agent"` definitions are distinct)
+- `ALEX_VARIANTS` keys: `"classic" | "operator" | "cozy" | "agent"` (4 entries — `sprites.jsx` `Object.assign(window, { ALEX_VARIANTS })` block)
+- `RILEY_VARIANTS` keys: `"analyst" | "trader" | "bot"` (3 entries — `riley-sprites.jsx` `Object.assign(window, { RILEY_VARIANTS })` block)
+- Distinct name union across both bundles: `"classic" | "operator" | "cozy" | "agent" | "analyst" | "trader" | "bot"` (7 unique names — no overlap)
+- Snapshot tests: one per (bundle, key) tuple → 4 + 3 = 7 snapshots (matches the unique-name count because there is no overlap)
+- Note: `riley-config.jsx`'s `variantOptions` array still lists `terminal | agent` as design-canvas-only labels. These do **not** resolve in `RILEY_VARIANTS` and v2 ignores them. The plan ports bundle keys (`trader`, `bot`), not option labels.
 
 **Why pass `bundle` explicitly instead of resolving it from agent name?** Hidden global lookups (e.g., `window.AGENT.variants`) are easier to mistype and harder to fallback-test. Explicit `bundle` props make SpriteFrame agent-agnostic, let the test harness swap in a synthetic `VariantBundle`, and avoid coupling the sprite layer to anything outside the prop interface.
 
