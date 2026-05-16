@@ -7,7 +7,12 @@ import { dirname, join } from "path";
 import { findMutatingRouteHandlers } from "./routes.js";
 import { reachesIngress } from "./reachability.js";
 import { findApprovalMutations } from "./approval-mutations.js";
-import { loadAllowlist, isAllowlisted, type AllowlistEntry } from "./allowlist.js";
+import {
+  loadAllowlist,
+  isAllowlisted,
+  validateTemporaryEntries,
+  type AllowlistEntry,
+} from "./allowlist.js";
 
 export type FindingKind = "ingress" | "approval";
 
@@ -32,6 +37,14 @@ export interface RunResult {
 
 export async function runCheckRoutes(opts: RunOptions): Promise<RunResult> {
   const allowlist = loadAllowlist(opts.allowlistPath);
+
+  const tempErrors = validateTemporaryEntries(allowlist);
+  if (tempErrors.length > 0) {
+    for (const err of tempErrors) {
+      console.error(err); // eslint-disable-line no-console
+    }
+    return { findings: [], suppressedCount: 0, exitCode: 1 };
+  }
 
   const files = (
     await Promise.all(opts.includePaths.map((p) => glob(p, { absolute: true, nodir: true })))

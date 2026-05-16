@@ -8,11 +8,11 @@ Switchboard runs the operations side of a business through one control plane. Ev
 
 ## Three Revenue Wedges
 
-| Wedge | Status | What it does |
-|---|---|---|
-| **Lead-to-Booking (Alex)** | `Alpha` | WhatsApp-native conversion agent. Inbound lead → governed qualification → Google Calendar booking. Actively under hardening; not yet shipped. |
-| **Ad Optimization** | `Production-grade` | Meta + Google integrations. Lead ingestion, funnel and saturation analysis, automated budget and creative recommendations — all routed through governance. |
-| **Product / Character / Director (PCD)** | `Planned` | Character-consistent creative across Sora, Veo, Runway, Kling, and HeyGen. Currently developed in a separate repo ([`creative-agent`](https://github.com/jsonljc/creative-agent)); integration into Switchboard targeted for a later release. |
+| Wedge                                    | Status             | What it does                                                                                                                                                                                                                                  |
+| ---------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lead-to-Booking (Alex)**               | `Alpha`            | WhatsApp-native conversion agent. Inbound lead → governed qualification → Google Calendar booking. Actively under hardening; not yet shipped.                                                                                                 |
+| **Ad Optimization**                      | `Production-grade` | Meta + Google integrations. Lead ingestion, funnel and saturation analysis, automated budget and creative recommendations — all routed through governance.                                                                                    |
+| **Product / Character / Director (PCD)** | `Planned`          | Character-consistent creative across Sora, Veo, Runway, Kling, and HeyGen. Currently developed in a separate repo ([`creative-agent`](https://github.com/jsonljc/creative-agent)); integration into Switchboard targeted for a later release. |
 
 Status labels describe code maturity, not deployment status. We do not claim a wedge is "live" unless it is.
 
@@ -27,7 +27,7 @@ These are properties of the architecture, not marketing. Each one ties back to a
 - **Consistent judgment at scale.** `GovernanceGate.evaluate()` (`packages/core/src/platform/governance/governance-gate.ts`) applies the same identity, policy, and risk evaluation to action #1 and action #10,000. Humans drift, get tired, and apply rules unevenly.
 - **Parallel wedges, one operator.** One platform runs lead-to-booking, ad optimization, and (soon) creative production at the same time. A human team needs three specialists plus a coordinator.
 - **A learning loop that compounds.** Every decision is hashed, anchored to an audit entry, and outcome-linked (`work-trace-integrity.ts`). Policy changes are evaluated against history. Tribal knowledge does not walk out the door.
-- **Compliance built in.** Tamper-evident audit trail (SHA-256 content hash + audit-anchor binding) and first-class human-override paths (`packages/core/src/approval/lifecycle-service.ts`) mean speed *without* losing accountability. Most "AI agents" trade one for the other.
+- **Compliance built in.** Tamper-evident audit trail (SHA-256 content hash + audit-anchor binding) and first-class human-override paths (`packages/core/src/approval/lifecycle-service.ts`) mean speed _without_ losing accountability. Most "AI agents" trade one for the other.
 - **Fixed-cost economics.** Marginal cost per action approaches zero; headcount cost scales linearly with volume. A switchboard that handles 10× the volume next quarter does not need 10× the budget.
 
 ---
@@ -78,6 +78,22 @@ WorkTrace persisted  →  canonical lifecycle record
 - **PCD (Creative Studio):** Lives in [`creative-agent`](https://github.com/jsonljc/creative-agent) today. Switchboard's `packages/creative-pipeline` carries UGC scaffolding (Kling provider, scripting, scene casting, realism QA) for the future integration.
 
 For deeper architecture: [`docs/DOCTRINE.md`](docs/DOCTRINE.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## First-time local setup
+
+From a fresh clone:
+
+```bash
+pnpm local:setup
+```
+
+This runs: `pnpm install` → environment setup → `pnpm build` → `pnpm db:migrate` → `pnpm db:seed` → `pnpm local:verify:fast`. Safe to re-run if any step fails.
+
+If Postgres is not running yet, the DB-dependent steps are skipped and the command exits non-zero with a clear "setup is incomplete" message. **This is expected** — start Postgres and re-run.
+
+The dashboard reads `apps/dashboard/.env.local`; keys marked `SYNC-FROM-ROOT` in `apps/dashboard/.env.local.example` must match the values in the root `.env` (database URL, encryption key, NextAuth secret) or auth and encryption will silently fail.
 
 ---
 

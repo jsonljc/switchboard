@@ -1,0 +1,2 @@
+- path: "apps/api/src/routes/foo.ts"
+  reason: "Temporarily justified: needs migration."

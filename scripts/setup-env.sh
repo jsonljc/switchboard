@@ -9,6 +9,30 @@ set -euo pipefail
 
 ENV_FILE="${1:-.env}"
 
+# If we're in a non-primary worktree AND target .env is missing AND primary has one,
+# copy from primary instead of regenerating secrets (which would diverge).
+WORKTREE_COPIED=false
+common_dir="$(git rev-parse --git-common-dir 2>/dev/null || echo "")"
+git_dir="$(git rev-parse --git-dir 2>/dev/null || echo "")"
+
+if [[ -n "$common_dir" && -n "$git_dir" ]]; then
+  common_abs="$(cd "$common_dir" 2>/dev/null && pwd -P || true)"
+  git_abs="$(cd "$git_dir" 2>/dev/null && pwd -P || true)"
+  if [[ -z "$common_abs" || -z "$git_abs" ]]; then
+    : # cannot resolve git dirs — skip worktree copy, fall through to normal setup
+  elif [[ "$common_abs" != "$git_abs" && ! -f "$ENV_FILE" ]]; then
+    # First worktree in `git worktree list --porcelain` is the primary by convention.
+    # Use sub() instead of print $2 so paths with spaces are preserved correctly.
+    primary_root="$(git worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')"
+    if [[ -n "$primary_root" && -f "$primary_root/.env" ]]; then
+      cp "$primary_root/.env" "$ENV_FILE"
+      echo "[setup-env] Copied $ENV_FILE from primary worktree ($primary_root/.env)"
+      echo "[setup-env] Skipping secret generation — using primary's existing secrets."
+      WORKTREE_COPIED=true
+    fi
+  fi
+fi
+
 echo "Switchboard environment setup"
 echo ""
 
@@ -40,34 +64,36 @@ set_secret() {
   fi
 }
 
-echo ""
-echo "Generating secrets..."
+if [[ "$WORKTREE_COPIED" != "true" ]]; then
+  echo ""
+  echo "Generating secrets..."
 
-# Redis password
-REDIS_PW=$(openssl rand -base64 32)
-set_secret "REDIS_PASSWORD" "$REDIS_PW" "REDIS_PASSWORD"
+  # Redis password
+  REDIS_PW=$(openssl rand -base64 32)
+  set_secret "REDIS_PASSWORD" "$REDIS_PW" "REDIS_PASSWORD"
 
-# Postgres password
-PG_PW=$(openssl rand -base64 32)
-set_secret "POSTGRES_PASSWORD" "$PG_PW" "POSTGRES_PASSWORD"
+  # Postgres password
+  PG_PW=$(openssl rand -base64 32)
+  set_secret "POSTGRES_PASSWORD" "$PG_PW" "POSTGRES_PASSWORD"
 
-# Credentials encryption key
-CRED_KEY=$(openssl rand -hex 32)
-set_secret "CREDENTIALS_ENCRYPTION_KEY" "$CRED_KEY" "CREDENTIALS_ENCRYPTION_KEY"
+  # Credentials encryption key
+  CRED_KEY=$(openssl rand -hex 32)
+  set_secret "CREDENTIALS_ENCRYPTION_KEY" "$CRED_KEY" "CREDENTIALS_ENCRYPTION_KEY"
 
-# Session token secret
-SESSION_SECRET=$(openssl rand -base64 32)
-set_secret "SESSION_TOKEN_SECRET" "$SESSION_SECRET" "SESSION_TOKEN_SECRET"
+  # Session token secret
+  SESSION_SECRET=$(openssl rand -base64 32)
+  set_secret "SESSION_TOKEN_SECRET" "$SESSION_SECRET" "SESSION_TOKEN_SECRET"
 
-# NextAuth secret
-NEXTAUTH_SECRET=$(openssl rand -base64 32)
-set_secret "NEXTAUTH_SECRET" "$NEXTAUTH_SECRET" "NEXTAUTH_SECRET"
+  # NextAuth secret
+  NEXTAUTH_SECRET=$(openssl rand -base64 32)
+  set_secret "NEXTAUTH_SECRET" "$NEXTAUTH_SECRET" "NEXTAUTH_SECRET"
 
-# Internal API secret
-INTERNAL_SECRET=$(openssl rand -base64 32)
-set_secret "INTERNAL_API_SECRET" "$INTERNAL_SECRET" "INTERNAL_API_SECRET"
+  # Internal API secret
+  INTERNAL_SECRET=$(openssl rand -base64 32)
+  set_secret "INTERNAL_API_SECRET" "$INTERNAL_SECRET" "INTERNAL_API_SECRET"
 
-echo ""
+  echo ""
+fi
 
 # ---------------------------------------------------------------------------
 # Dashboard .env.local (NextAuth + shared secrets)
