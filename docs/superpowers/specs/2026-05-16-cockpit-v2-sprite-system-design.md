@@ -100,35 +100,51 @@ Every variant's `won` state has frames defined (grin + sparkle stars per `sprite
 
 ## 6. Components
 
-### 6.1 `<SpriteFrame variant state size />` (replaces `AvatarFrame` in Identity, EmptyState)
+### 6.1 `<SpriteFrame bundle variant state size />` (replaces `AvatarFrame` in Identity, EmptyState)
 
 Props:
 
 ```ts
 type SpriteFrameProps = {
-  variant: SpriteVariant; // "classic" | "operator" | "cozy" | "agent" | "analyst" | "terminal"
+  bundle: VariantBundle; // ALEX_VARIANTS or RILEY_VARIANTS — explicit, no hidden global lookup
+  variant: SpriteVariantKey; // "classic" | "operator" | "cozy" | "agent" (alex) | "analyst" | "terminal" (riley); "agent" appears in both bundles
   state: SpriteState; // "idle" | "draft" | "sleep" | "won"
   size: number; // 48 or 64 by current call sites
   accentSoft: string; // background color (e.g., T.amberSoft for Alex)
   fallbackLetter: string; // "A" or "R" for the letter-monogram fallback path
 };
+
+// Types from sprite/types.ts:
+type SpriteVariantKey = string; // bundle-scoped; per-bundle keys enumerated below
+type VariantBundle = Record<SpriteVariantKey, VariantDef>;
+type VariantDef = { palette: Palette; states: Record<SpriteState, Frame[]> };
 ```
+
+**Per-bundle variant keys** (reconciled — same as `variantOptions[]` in the design's agent configs):
+
+- `ALEX_VARIANTS` keys: `"classic" | "operator" | "cozy" | "agent"` (4 entries)
+- `RILEY_VARIANTS` keys: `"analyst" | "terminal" | "agent"` (3 entries)
+- Distinct name union across both bundles: `"classic" | "operator" | "cozy" | "agent" | "analyst" | "terminal"` (6 names — `"agent"` is shared by both bundles but resolves to a different `VariantDef` in each)
+- Snapshot tests: one per (bundle, key) tuple → 4 + 3 = 7 snapshots (NOT 6, because the two `"agent"` definitions are distinct)
+
+**Why pass `bundle` explicitly instead of resolving it from agent name?** Hidden global lookups (e.g., `window.AGENT.variants`) are easier to mistype and harder to fallback-test. Explicit `bundle` props make SpriteFrame agent-agnostic, let the test harness swap in a synthetic `VariantBundle`, and avoid coupling the sprite layer to anything outside the prop interface.
 
 Behavior:
 
-- Looks up `bundles[variant]?.states[state]` from the agent's `VariantBundle` (Alex or Riley).
-- If frames exist → render `<AnimatedSprite frames={...} palette={...} size={size - 6} />` inside a rounded frame.
-- If lookup fails (typo'd variant, missing state) → render the existing letter-monogram path (current `AvatarFrame` body) using `fallbackLetter`. **No console.error, no throw.** Tests assert this path.
+- Looks up `bundle[variant]?.states[state]`.
+- If frames exist → render `<AnimatedSprite frames={...} palette={bundle[variant].palette} size={size - 6} />` inside a rounded frame.
+- If lookup fails (typo'd variant key, missing state on a bundle that lacks it) → render the existing letter-monogram path (current `AvatarFrame` body) using `fallbackLetter`. **No console.error, no throw.** Tests assert this path.
 
-Frame style copied from `cockpit.jsx:112-120`: `borderRadius: round(size * 0.18)`, background `accentSoft`, `border: 1px solid T.hair`, subtle inset shadow, `overflow: hidden`.
+Frame style copied from `cockpit.jsx:112-120`: `borderRadius: round(size * 0.18)`, background `accentSoft`, `border: 1px solid T.hair`, subtle inset treatment matching the locked cockpit design package, `overflow: hidden`.
 
-### 6.2 `<SpriteChip variant state />` (replaces 22px letter chip in ApprovalCard)
+### 6.2 `<SpriteChip bundle variant state />` (replaces 22px letter chip in ApprovalCard)
 
 Props:
 
 ```ts
 type SpriteChipProps = {
-  variant: SpriteVariant;
+  bundle: VariantBundle; // same explicit-bundle pattern as SpriteFrame
+  variant: SpriteVariantKey;
   state: SpriteState; // "draft" for approval cards (always)
   size?: number; // default 22
   accentSoft: string; // background color
@@ -136,7 +152,7 @@ type SpriteChipProps = {
 };
 ```
 
-Behavior: same as `SpriteFrame` but smaller frame (4px corner radius, no inset shadow), inline alignment (`display: inline-grid`, `verticalAlign: middle`).
+Behavior: same lookup + fallback as `SpriteFrame` but smaller frame (4px corner radius, no inset treatment), inline alignment (`display: inline-grid`, `verticalAlign: middle`).
 
 ### 6.3 Sprite variant defaults — INTENTIONAL hardcoding (locked decision)
 
@@ -145,7 +161,7 @@ Variants are NOT a runtime preference, NOT a Settings affordance, NOT a URL para
 - **Alex defaults to `"classic"`** — the sales-pro-with-headset variant from `sprites.jsx`. Matches Alex's SDR role.
 - **Riley defaults to `"analyst"`** — the data-analyst variant from `riley-sprites.jsx`. Matches Riley's ad-optimizer role.
 
-Source of truth: a new `DEFAULT_ALEX_VARIANT: SpriteVariant = "classic"` constant in `alex-config.ts` (and matching `DEFAULT_RILEY_VARIANT` in `riley-config.ts`). Pages pass it down via `variant={DEFAULT_ALEX_VARIANT}`.
+Source of truth: a new `DEFAULT_ALEX_VARIANT: SpriteVariantKey = "classic"` constant in `alex-config.ts` (and matching `DEFAULT_RILEY_VARIANT = "analyst"` in `riley-config.ts`). Pages also import the corresponding bundle (`ALEX_VARIANTS` / `RILEY_VARIANTS`) and pass both down: `<SpriteFrame bundle={ALEX_VARIANTS} variant={DEFAULT_ALEX_VARIANT} ... />`.
 
 **This is deliberate, not a missing feature.** Operators do not pick their avatar variant in v2. A future Settings affordance (per-operator preference) is a post-launch decision contingent on operator demand. The spec calls this out explicitly so a future reader does not mistake the hardcode for an incomplete plumbing.
 
@@ -238,7 +254,7 @@ Two PRs to `main`, in order:
 
 1. **Docs-only PR** — `docs(audit, spec): cockpit v2 audit + sprite-system design`. Lands `docs/superpowers/audits/2026-05-16-cockpit-v2-audit.md` + `docs/superpowers/specs/2026-05-16-cockpit-v2-sprite-system-design.md` on main. Per CLAUDE.md branch doctrine "Specs and plans land on main via focused PRs." Unblocks the implementation worktree to consume specs that already exist on main.
 
-2. **Implementation PR** — `feat(cockpit): v2 sprite system + ApprovalCard tertiary/campaign + Riley today eyebrow`. Branched off latest origin/main. Contains the 7 commits from §10. Description references both docs from PR #1.
+2. **Implementation PR** — `feat(cockpit): v2 sprite system + ApprovalCard tertiary/campaign + Riley today eyebrow`. Branched off latest origin/main. Contains the 6 commits from §10. Description references both docs from PR #1.
 
 Implementation worktree per `superpowers:using-git-worktrees`: `git worktree add .claude/worktrees/cockpit-v2-sprite -b feat/cockpit-v2-sprite-system origin/main`, then `pnpm worktree:init` per CLAUDE.md branch doctrine.
 
@@ -267,7 +283,27 @@ Before requesting code review on the implementation PR:
 - **Sprite a11y.** Sprites are decorative. Aria-hide the SVG (`aria-hidden="true"`) and keep the existing letter monogram (or agent name) as the accessible label on the parent container. Tested in component tests.
 - **Frame data drift from design.** The frames are copied verbatim from `sprites.jsx` / `riley-sprites.jsx`. If the design ever updates, we re-copy. No automated sync.
 
-## 14. Open items (none for v2 — for future post-launch reference)
+## 14. Implementation guardrail (load-bearing — read this before writing the plan)
+
+The plan and the implementing agent must scope themselves narrowly. This is a visual port, not an avatar-system redesign. The rule:
+
+> **Port static sprite data and render it. Do NOT introduce runtime customization, persistence, settings, API fields, schema columns, or backend-driven avatar selection.**
+
+Concrete things the plan and the implementation MUST NOT do, even if they look like natural extensions:
+
+- No `OrganizationConfig.avatarVariant` field, no Prisma migration, no API route, no `/api/dashboard/sprite-variant` endpoint.
+- No `localStorage` key for variant preference. No cookie. No session-scoped state.
+- No URL-param toggle (`?variant=cozy`). The "halfway position" we explicitly rejected during brainstorm.
+- No Settings page section, no UI affordance for variant selection. The hardcoded default is the entire user-facing variant story for v2.
+- No animation easing / cross-fade / transition between sprite states. The current frame-cycle hard-swap is correct.
+- No event-based `won` state trigger (e.g., "celebrate when a booked row arrives in the last 6s"). The frames ship dormant.
+- No retry / backoff if sprite frames fail to load. The frames are inline JS data; there is no network load to retry.
+- No telemetry on sprite variant usage. Out of scope.
+- No exported `SpriteFrame` / `SpriteChip` from the dashboard package boundary. These are internal cockpit components.
+
+If a step in the plan touches any of the above, that step is wrong and should be deleted, not adjusted.
+
+## 15. Open items (none for v2 — for future post-launch reference)
 
 These are intentionally not included in v2 and not part of any pre-implementation question. Listed only for future-reader context:
 
