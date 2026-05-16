@@ -140,6 +140,10 @@ export const scopedKeys = (orgId: string) => ({
   scan: {
     all: () => [orgId, "scan"] as const,
   },
+  rileyOutcomes: {
+    all: () => [orgId, "rileyOutcomes"] as const,
+    feed: () => [orgId, "rileyOutcomes", "feed"] as const,
+  },
   modules: {
     all: () => [orgId, "modules"] as const,
     status: () => [orgId, "modules", "status"] as const,

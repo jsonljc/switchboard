@@ -79,3 +79,9 @@ describe("ActivityRowSchema", () => {
     expect(row.timestampIso).toBe("2026-05-15T11:58:00Z");
   });
 });
+
+describe("ActivityKindSchema — observed", () => {
+  it("accepts observed as a valid kind", () => {
+    expect(ActivityKindSchema.parse("observed")).toBe("observed");
+  });
+});

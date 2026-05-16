@@ -21,6 +21,8 @@ import {
   PrismaDeploymentMemoryStore,
   PrismaRecommendationStore,
   PrismaRecommendationEmissionMirror,
+  PrismaRecommendationOutcomeStore,
+  PrismaAttributableRecommendationStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -48,6 +50,7 @@ import {
   createWeeklyAuditCron,
   createDailyCheckCron,
   createDailySignalHealthCron,
+  createRileyOutcomeAttributionDispatch,
   MetaAdsClient,
   RealCrmDataProvider,
   SignalHealthChecker,
@@ -72,6 +75,11 @@ import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
+import {
+  createRileyOutcomeAttributionWorker,
+  bindRileyOutcomeOrchestrator,
+} from "../services/cron/riley-outcome-attribution.js";
+import { createMetaInsightsProviderForOrg } from "../services/cron/meta-insights-adapter.js";
 
 function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
   if (!adapter) {
@@ -163,6 +171,10 @@ export async function registerInngest(
   // does not hardcode either field.
   const recommendationStore = new PrismaRecommendationStore(app.prisma);
   const recommendationEmissionMirror = new PrismaRecommendationEmissionMirror(app.prisma);
+
+  // Riley PR-3: outcome attribution stores (Task 10)
+  const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
+  const attributableRecommendationStore = new PrismaAttributableRecommendationStore(app.prisma);
   const rileyRecommendationEmitter = async (
     input: RecommendationInput,
     ctx: { cronId: string; deploymentId?: string },
@@ -609,6 +621,30 @@ export async function registerInngest(
     governanceConfigResolver: { resolve: async () => null },
   });
 
+  // ---------------------------------------------------------------------------
+  // Riley PR-3: outcome-attribution dispatch + per-org worker (Task 10)
+  // ---------------------------------------------------------------------------
+  // Dispatch cron fires daily at 07:00 UTC and emits one "riley.outcome.attribute"
+  // event per org that has acted Riley recommendations. The per-org worker picks
+  // up each event and runs the pure attribution orchestrator from @switchboard/core.
+  // Kill-switch: set RILEY_OUTCOME_ATTRIBUTION_ENABLED=true to enable; default off
+  // so the deploy is dark until the bake period completes.
+  const rileyOutcomeDispatch = createRileyOutcomeAttributionDispatch({
+    listRileyOrgs: () => listRileyActiveOrgs(app.prisma!),
+    sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
+      inngestClient.send(event),
+  });
+
+  const rileyOutcomeWorker = createRileyOutcomeAttributionWorker({
+    runRileyOutcomeAttribution: bindRileyOutcomeOrchestrator({
+      recommendationStore: attributableRecommendationStore,
+      createInsightsProvider: (orgId) => createMetaInsightsProviderForOrg(orgId, app.prisma!),
+      outcomeStore: recommendationOutcomeStore,
+    }),
+    readEnabledFlag: () => process.env["RILEY_OUTCOME_ATTRIBUTION_ENABLED"] === "true",
+    logger: app.log,
+  });
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -647,8 +683,45 @@ export async function registerInngest(
         history: lifecycleHistory,
         readMode: lifecycleReadMode,
       }),
+      rileyOutcomeDispatch,
+      rileyOutcomeWorker,
     ],
   });
 
   app.log.info("Inngest serve handler registered at /api/inngest");
+}
+
+/**
+ * Enumerates distinct organizationIds that have acted Riley recommendations.
+ * Used by the Riley outcome-attribution dispatch cron to fan out per-org events.
+ * Queries `pendingActionRecord` for rows where sourceAgent="riley" and
+ * intent starts with "recommendation." — the same rows that outcome attribution
+ * reads back for candidates.
+ */
+async function listRileyActiveOrgs(prisma: {
+  pendingActionRecord: {
+    findMany: (args: {
+      where: {
+        sourceAgent: string;
+        intent: { startsWith: string };
+        status: string;
+      };
+      distinct: ["organizationId"];
+      select: { organizationId: true };
+    }) => Promise<{ organizationId: string }[]>;
+  };
+}): Promise<string[]> {
+  // Filter to status="acted" so we only dispatch to orgs that actually have
+  // attributable rows. Without this, orgs with only queued/shadow_action
+  // recommendations get noisy dispatch events that resolve to zero candidates.
+  const rows = await prisma.pendingActionRecord.findMany({
+    where: {
+      sourceAgent: "riley",
+      intent: { startsWith: "recommendation." },
+      status: "acted",
+    },
+    distinct: ["organizationId"],
+    select: { organizationId: true },
+  });
+  return rows.map((r) => r.organizationId);
 }

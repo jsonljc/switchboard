@@ -21,8 +21,14 @@ export {
   createDailyCheckCron,
   createDailySignalHealthCron,
   executeDailySignalHealthCheck,
+  createRileyOutcomeAttributionDispatch,
+  executeRileyOutcomeAttributionDispatch,
 } from "./inngest-functions.js";
-export type { CronDependencies, SignalHealthCronDependencies } from "./inngest-functions.js";
+export type {
+  CronDependencies,
+  SignalHealthCronDependencies,
+  RileyOutcomeAttributionDispatchDeps,
+} from "./inngest-functions.js";
 export { parseLeadWebhook, fetchLeadDetail, extractFieldValue } from "./meta-leads-ingester.js";
 export type { LeadData } from "./meta-leads-ingester.js";
 export {

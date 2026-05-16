@@ -31,6 +31,10 @@ vi.mock("@tanstack/react-query", async (orig) => {
   return {
     ...actual,
     useQuery: () => ({
+      // Activity query returns actions; outcomes query returns rows: [].
+      // Both go through the same mock — the hook handles both shapes safely:
+      //   - base.data?.actions → activity rows (from activity query)
+      //   - outcomesQuery.data ?? [] → [] (tenant is null so query is disabled)
       data: { actions: [pausedFixture, watchingFixture], roster: [], states: [] },
       isLoading: false,
       isError: false,
@@ -67,5 +71,18 @@ describe("useRileyActivity", () => {
     expect(result.current.rows).toEqual([]);
     expect(result.current.isLoading).toBe(true);
     connState.isLoading = false;
+  });
+
+  it("does not report isLoading=true after cold-state Meta resolution (no Meta connection)", () => {
+    // Tenant present but no Meta connection — the outcomes query is disabled.
+    // Under TanStack Query v5 a disabled query has isLoading=false; this test
+    // locks that contract so a version drift back to v4 behaviour is caught early.
+    connState.rows = [];
+    connState.isLoading = false;
+    const { result } = renderHook(() => useRileyActivity(), { wrapper: wrap });
+    // Cold-state path: returns synthetic rows, never stalls on isLoading.
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.rows.length).toBeGreaterThan(0);
+    connState.rows = [{ serviceId: "meta-ads", status: "connected" }];
   });
 });

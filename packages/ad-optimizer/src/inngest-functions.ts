@@ -307,3 +307,45 @@ export function createDailyCheckDispatcher(inngestClient: InngestLike, deps: Dis
     },
   );
 }
+
+// ── Riley Outcome Attribution Dispatch Cron ──
+
+export interface RileyOutcomeAttributionDispatchDeps {
+  listRileyOrgs: () => Promise<string[]>;
+  /** Bound to inngestClient.send in apps/api. */
+  sendEvent: (event: { name: string; data: Record<string, unknown> }) => Promise<unknown>;
+}
+
+interface RileyDispatchStepTools {
+  run: <T>(name: string, fn: () => T | Promise<T>) => Promise<T>;
+}
+
+export async function executeRileyOutcomeAttributionDispatch(
+  step: RileyDispatchStepTools,
+  deps: RileyOutcomeAttributionDispatchDeps,
+): Promise<{ dispatched: number }> {
+  const orgs = await step.run("list-riley-orgs", () => deps.listRileyOrgs());
+  for (const orgId of orgs) {
+    await step.run(`emit-${orgId}`, async () => {
+      await deps.sendEvent({ name: "riley.outcome.attribute", data: { orgId } });
+    });
+  }
+  return { dispatched: orgs.length };
+}
+
+export function createRileyOutcomeAttributionDispatch(deps: RileyOutcomeAttributionDispatchDeps) {
+  return inngestClient.createFunction(
+    {
+      id: "riley-outcome-attribution-dispatch",
+      name: "Riley Outcome Attribution Dispatch",
+      retries: 2,
+      triggers: [{ cron: "0 7 * * *" }],
+    },
+    async ({ step }) => {
+      return executeRileyOutcomeAttributionDispatch(
+        step as unknown as RileyDispatchStepTools,
+        deps,
+      );
+    },
+  );
+}

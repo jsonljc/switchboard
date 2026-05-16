@@ -18,6 +18,7 @@ export const ActivityKindSchema = z.enum([
   "shifted",
   "restructured",
   "alert",
+  "observed", // PR-3: RecommendationOutcome rendered into the activity feed
 ]);
 
 export type ActivityKind = z.infer<typeof ActivityKindSchema>;
