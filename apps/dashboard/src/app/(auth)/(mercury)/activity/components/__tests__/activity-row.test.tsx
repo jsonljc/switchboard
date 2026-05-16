@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
-import { ActivityRow } from "../activity-row.js";
+import { ActivityRow } from "../activity-row";
 
 const baseRow: AuditEntryBrowseRow = {
   id: "audit_test_001",

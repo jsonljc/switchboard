@@ -9,7 +9,7 @@ vi.mock("@/lib/require-dashboard-session", () => ({
 }));
 
 import { getApiClient } from "@/lib/get-api-client";
-import { GET, POST } from "../route.js";
+import { GET, POST } from "../route";
 
 describe("recommendations dashboard proxy", () => {
   it("GET forwards surface query param", async () => {

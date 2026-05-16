@@ -1,11 +1,16 @@
 import type { FastifyPluginAsync, FastifyInstance } from "fastify";
 import {
-  actOnRecommendation,
   type RecommendationAction,
   type RecommendationSurface,
   type RecommendationStatus,
 } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { getIdempotencyKey } from "../utils/idempotency-key.js";
+import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
+import {
+  ACT_ON_RECOMMENDATION_INTENT,
+  OPERATOR_INTENT_ERROR_CODES,
+} from "../bootstrap/operator-intents.js";
 
 const ACT_HTTP_RATE_LIMIT_MAX = parseInt(
   process.env["RECOMMENDATION_ACT_RATE_LIMIT_MAX"] ?? "300",
@@ -179,37 +184,55 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const principalId = request.principalIdFromAuth ?? "dashboard-user";
+      const idempotencyKey = getIdempotencyKey(request);
 
-      try {
-        const result = await actOnRecommendation(app.recommendationStore, {
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
+
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: principalId, type: "user" },
+        intent: ACT_ON_RECOMMENDATION_INTENT,
+        parameters: {
           recommendationId: id,
-          orgId,
-          actor: { principalId, type: "operator" },
           action: body.action as RecommendationAction,
           note: body.note,
-        });
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      });
 
-        if (result.status === "ok") {
-          return reply.code(200).send({ recommendation: rowToApiShape(result.row) });
-        }
-        // already_terminal | expired | undo_window_closed all map to 409 with current row
-        return reply.code(409).send({
-          error: result.status,
-          recommendation: rowToApiShape(result.row),
-        });
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("queue surface accepts") || msg.includes("shadow surface accepts")) {
-          return reply.code(400).send({ error: msg, statusCode: 400 });
-        }
-        if (msg.includes("org mismatch")) {
-          return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
-        }
-        if (msg.includes("not found")) {
-          return reply.code(404).send({ error: msg, statusCode: 404 });
-        }
-        return reply.code(500).send({ error: msg, statusCode: 500 });
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
       }
+
+      const { result } = response;
+      if (result.outcome === "failed") {
+        if (result.error?.code === OPERATOR_INTENT_ERROR_CODES.RECOMMENDATION_INVALID_ACTION) {
+          return reply.code(400).send({ error: result.error.message, statusCode: 400 });
+        }
+        // Any other handler failure is an unexpected execution error. Throw so
+        // the global error handler returns a scrubbed 500 — don't echo internal
+        // error codes to the client.
+        throw new Error(result.error?.message ?? "Operator mutation execution failed");
+      }
+
+      const actResult = (
+        result.outputs as { result?: { status: string; row: Parameters<typeof rowToApiShape>[0] } }
+      ).result;
+      if (!actResult) {
+        throw new Error("Operator mutation handler returned no result output");
+      }
+      if (actResult.status === "ok") {
+        return reply.code(200).send({ recommendation: rowToApiShape(actResult.row) });
+      }
+      // already_terminal | expired | undo_window_closed all map to 409 with current row
+      return reply.code(409).send({
+        error: actResult.status,
+        recommendation: rowToApiShape(actResult.row),
+      });
     },
   );
 };

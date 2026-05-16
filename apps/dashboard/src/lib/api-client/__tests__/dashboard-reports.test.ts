@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SwitchboardDashboardClient } from "../dashboard.js";
+import { SwitchboardDashboardClient } from "../dashboard";
 // Reuse production-shaped fixtures so this test never teaches a fake
 // ReportDataV1 contract. `goodFixture` = THIS MONTH, `quietFixture` = THIS WEEK
 // (per FIXTURES_BY_WINDOW). Mixing them keeps each test honest about which

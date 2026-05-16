@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { DispatchContext } from "../dispatch-action.js";
-import { dispatchDecisionAction } from "../dispatch-action.js";
+import type { DispatchContext } from "../dispatch-action";
+import { dispatchDecisionAction } from "../dispatch-action";
 
 beforeEach(() => {
   global.fetch = vi

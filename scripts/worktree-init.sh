@@ -2,6 +2,7 @@
 # One-shot bootstrap for a fresh git worktree. Idempotent — safe to re-run.
 # See docs/superpowers/specs/2026-05-02-worktree-bootstrap-and-error-visibility-design.md.
 set -euo pipefail
+trap 'echo "" >&2; echo "[worktree-init] Bootstrap failed (see error above). DB may be partial — run \`pnpm db:migrate && pnpm db:seed\` to retry, or \`pnpm local:setup\` for full bootstrap." >&2' ERR
 
 common_dir="$(git rev-parse --git-common-dir 2>/dev/null || echo "")"
 git_dir="$(git rev-parse --git-dir 2>/dev/null || echo "")"
@@ -24,16 +25,8 @@ repo_root="$(cd "$common_abs/.." && pwd -P)"
 
 echo "[worktree-init] Bootstrapping worktree at $worktree_root"
 
-# 1. Copy .env from repo root if missing.
-if [[ -f "$worktree_root/.env" ]]; then
-  echo "[worktree-init] .env already present — leaving it alone"
-elif [[ -f "$repo_root/.env" ]]; then
-  cp "$repo_root/.env" "$worktree_root/.env"
-  echo "[worktree-init] Copied .env from $repo_root/.env"
-else
-  echo "[worktree-init] WARNING: no .env in $repo_root either."
-  echo "[worktree-init]          Copy .env.example to .env and set required vars."
-fi
+# 1. Ensure .env exists (delegates worktree-copy + secret-generation to setup-env.sh).
+(cd "$worktree_root" && bash scripts/setup-env.sh)
 
 # 2. Kill listeners on dev ports.
 for port in 3000 3001 3002; do
@@ -44,20 +37,27 @@ for port in 3000 3001 3002; do
   fi
 done
 
-# 3. DB sanity. Parse DATABASE_URL out of .env (shell `source` chokes on `&` in URLs).
+# 3. DB-dependent setup: migrate (fatal on failure), then build, then seed.
+#    Skipped (exit 0 with explicit message) when DB is unreachable so devs
+#    can re-run after starting Postgres.
+db_reachable=false
 if [[ -f "$worktree_root/.env" ]] && command -v pg_isready >/dev/null 2>&1; then
   db_url="$(awk -F= '/^DATABASE_URL=/ { sub(/^DATABASE_URL=/, ""); print; exit }' "$worktree_root/.env" | tr -d '"' | tr -d "'")"
-  if [[ -n "$db_url" ]]; then
-    if pg_isready -d "$db_url" >/dev/null 2>&1; then
-      echo "[worktree-init] Postgres reachable — running pnpm db:migrate"
-      (cd "$worktree_root" && pnpm db:migrate) || {
-        echo "[worktree-init] WARNING: pnpm db:migrate failed (continuing)"
-      }
-    else
-      echo "[worktree-init] WARNING: Postgres is not reachable at the configured DATABASE_URL."
-      echo "[worktree-init]          Start it (e.g. \`docker compose up postgres -d\`) then re-run."
-    fi
+  if [[ -n "$db_url" ]] && pg_isready -d "$db_url" >/dev/null 2>&1; then
+    db_reachable=true
   fi
+fi
+
+if [[ "$db_reachable" == "true" ]]; then
+  echo "[worktree-init] Postgres reachable — running pnpm db:migrate"
+  (cd "$worktree_root" && pnpm db:migrate)
+  echo "[worktree-init] Building workspace (required before seed) — ~30-60s first run"
+  (cd "$worktree_root" && pnpm build)
+  echo "[worktree-init] Seeding dev data — pnpm db:seed"
+  (cd "$worktree_root" && pnpm db:seed)
+else
+  echo "[worktree-init] DB not reachable. Skipped migrate/build/seed."
+  echo "[worktree-init] Run \`pnpm local:setup\` after starting Postgres."
 fi
 
 # 4. Print next steps.
@@ -67,5 +67,7 @@ cat <<EOF
   cd $worktree_root
   pnpm dev                    # starts api (:3000), chat (:3001), dashboard (:3002)
   open http://localhost:3002
+
+  Note: first run includes \`pnpm build\` (~30-60s); re-runs are fast (turbo cache).
 
 EOF

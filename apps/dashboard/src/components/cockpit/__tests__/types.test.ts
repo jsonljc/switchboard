@@ -51,10 +51,10 @@ describe("cockpit types", () => {
 
   it("MissionViewModel rows tuple optionally carries a dot color", () => {
     const vm: MissionViewModel = {
-      subtitle: "SDR · Tours pipeline · HotPod",
+      subtitle: "SDR · Consultations pipeline · Acme Medspa",
       title: "What is Alex configured for?",
       rows: [
-        ["ROLE", "SDR · qualify inbound leads, book tours"],
+        ["ROLE", "SDR · qualify inbound leads, book consultations"],
         ["CHANNELS", "Meta Ads", "ok"],
       ],
     };

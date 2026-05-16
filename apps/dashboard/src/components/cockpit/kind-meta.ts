@@ -32,6 +32,10 @@ export const KIND_META: Partial<Record<ActivityKind, KindMetaEntry>> = {
   shifted: { label: "SHIFTED", color: T.blue, bg: "rgba(58,90,128,0.08)" },
   restructured: { label: "RESTRUCTURED", color: T.blue, bg: "rgba(58,90,128,0.08)" },
   alert: { label: "ALERT", color: T.red, bg: "rgba(160,58,46,0.08)" },
+  // PR-3 outcome rows: quiet treatment — neutral muted color, no pulse.
+  // "OBSERVED" mirrors the "watching" register but visually softer (ink4 vs green)
+  // so outcome attributions read as historical data, not live-watch signals.
+  observed: { label: "OBSERVED", color: T.ink4, bg: "rgba(14,12,10,0.04)" },
 };
 
 const NEUTRAL_FALLBACK: KindMetaEntry = {

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AppShell, ONBOARDING_EXEMPT_PATHS } from "../app-shell.js";
+import { AppShell, ONBOARDING_EXEMPT_PATHS } from "../app-shell";
 
 const pathnameRef = { current: "/contacts" };
 const replaceMock = vi.fn();

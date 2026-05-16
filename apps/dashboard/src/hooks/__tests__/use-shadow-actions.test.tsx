@@ -33,7 +33,7 @@ describe("useShadowActions", () => {
       json: () => Promise.resolve({ recommendations: shadowActions }),
     });
 
-    const { useShadowActions } = await import("@/hooks/use-shadow-actions.js");
+    const { useShadowActions } = await import("@/hooks/use-shadow-actions");
     const { result } = renderHook(() => useShadowActions(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

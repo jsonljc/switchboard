@@ -142,6 +142,9 @@ The rule's corollary, for B.3 specifically: _"The Riley composer is a bounded op
 5. KPI strip renders 4 tiles with cold-state degraded path; tile labels use "Reported ROAS" (not "ROAS") to make the metric source explicit.
 6. ROI bar renders with fill, break-even mark, CPL-vs-target comparator; degraded path when `avgValueCents` is null or spend unavailable.
 7. **Honest impact-language guardrail.** All KPI/ROI labels must distinguish reported account metrics from Riley-attributed outcomes. No copy in B.2 claims Riley improved metrics. Allowed: estimated `dollarsAtRisk` (pre-decision), reported metrics from Meta or CRM, connection health. Causal attribution to Riley's actions is reserved for Wave B outcome attribution.
+
+   **PR-3 amendment (2026-05-15).** The honest-impact guardrail relaxes for one narrow surface: the new `"observed"` activity row added by PR-3 (outcome attribution) may render directional copy from the allowlist defined in `packages/schemas/src/recommendation-outcome-copy.ts`. Every other Riley surface — KPI strip, ROI bar, approval cards, recommendation cards, composer responses, palette toasts — remains under this guardrail unchanged. Unknown copy templates fail-closed: `renderOutcomeCopy()` returns `null` and the API drops the row from the response. See `docs/superpowers/specs/2026-05-15-riley-cockpit-pr3-outcome-attribution-design.md` for full methodology.
+
 8. Type-check, lint, tests, dashboard `next build` clean.
 
 ### Plan-stage choice (resolved here, ratified by writing-plans)

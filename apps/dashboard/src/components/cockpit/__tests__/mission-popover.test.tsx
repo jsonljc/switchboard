@@ -5,13 +5,13 @@ import { MissionPopover } from "../mission-popover";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 
 const baseMission: MissionAggregatorResponse["mission"] = {
-  role: "SDR · qualify inbound leads, book tours",
-  pipeline: "Tours pipeline · single funnel",
-  brand: "HotPod Yoga · —",
+  role: "SDR · qualify inbound leads, book consultations",
+  pipeline: "Consultations pipeline · single funnel",
+  brand: "Acme Medspa · —",
   channels: [
     { kind: "meta-ads", label: "Meta Ads", status: "ok" },
     { kind: "whatsapp", label: "WhatsApp inbox", status: "warn" },
-    { kind: "calendar", label: "Tour calendar", status: "off" },
+    { kind: "calendar", label: "Consultation calendar", status: "off" },
   ],
   rules: { priceApprovalThreshold: 89, refundEscalationFloor: 200 },
 };
@@ -38,7 +38,7 @@ describe("MissionPopover", () => {
     render(<MissionPopover open onClose={() => {}} mission={baseMission} />);
     expect(screen.getByLabelText("Meta Ads: connected")).toBeInTheDocument();
     expect(screen.getByLabelText("WhatsApp inbox: degraded")).toBeInTheDocument();
-    expect(screen.getByLabelText("Tour calendar: not connected")).toBeInTheDocument();
+    expect(screen.getByLabelText("Consultation calendar: not connected")).toBeInTheDocument();
   });
 
   it("calls onClose when Escape is pressed", () => {

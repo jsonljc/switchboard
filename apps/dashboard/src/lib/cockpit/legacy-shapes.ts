@@ -100,7 +100,7 @@ export function legacyRoi(k: LegacyKpiInput): RoiBar {
   return {
     label: "return on spend",
     leftMeta: `$${spend} spent`,
-    rightMeta: { value: `$${earned.toLocaleString()}`, suffix: " in tour value" },
+    rightMeta: { value: `$${earned.toLocaleString()}`, suffix: " in consultation value" },
     fillPct: (ratioCap / 6) * 100,
     breakEvenPct: (1 / 6) * 100,
     breakEvenLabel: "break-even",

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AuditEntryBrowseRow } from "@switchboard/schemas";
-import { ActivityTable } from "../components/activity-table.js";
+import { ActivityTable } from "../components/activity-table";
 
 const makeRow = (overrides: Partial<AuditEntryBrowseRow>): AuditEntryBrowseRow => ({
   id: "audit_test_x",

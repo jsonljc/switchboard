@@ -1,6 +1,4 @@
-import type { ExecuteAction } from "@switchboard/schemas";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
-import type { ApprovalRequest } from "@switchboard/schemas";
+import type { ApprovalRequest, ExecuteAction, ExecuteResult } from "@switchboard/schemas";
 
 /** Outcome of a single execute request (unified for runtimes e.g. MCP, API). */
 export type ExecuteOutcome = "EXECUTED" | "PENDING_APPROVAL" | "DENIED";

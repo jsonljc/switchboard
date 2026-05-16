@@ -19,7 +19,7 @@ export const ALEX_CONFIG = {
     { name: "Riley", href: "/riley" },
     { name: "Mira", muted: true },
   ] as const,
-  missionSubtitle: "SDR · Tours pipeline",
+  missionSubtitle: "SDR · Consultations pipeline",
   needsYouLabel: "Alex needs you",
 } as const;
 

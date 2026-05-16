@@ -36,3 +36,30 @@ export class ContactNotFound extends Error {
     this.contactId = input.contactId;
   }
 }
+
+/**
+ * Thrown by `ConsentService.clearConsent` when notes are empty. The audit
+ * trail requires a non-empty justification — the admin route's Zod schema
+ * also enforces this, but the service guard catches direct skill-runtime
+ * callers that bypass the Zod boundary.
+ */
+export class ConsentNotesRequired extends Error {
+  constructor(message = "clearConsent requires non-empty notes (audit trail)") {
+    super(message);
+    this.name = "ConsentNotesRequired";
+  }
+}
+
+/**
+ * Thrown by `ConsentService.clearConsent` when the caller's actor identifier
+ * starts with the `system:` prefix. `clearConsent` is operator-initiated and
+ * must be attributable to a real user ID for compliance review.
+ */
+export class ConsentSystemActorRejected extends Error {
+  readonly actor: string;
+  constructor(input: { actor: string }) {
+    super(`clearConsent rejects system: actors; require a real userId (got ${input.actor})`);
+    this.name = "ConsentSystemActorRejected";
+    this.actor = input.actor;
+  }
+}

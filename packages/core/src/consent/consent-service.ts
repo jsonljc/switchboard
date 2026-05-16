@@ -6,7 +6,9 @@ import { buildHandoffPackage } from "../handoff/build-handoff-package.js";
 import type { ConsentStateStore } from "./consent-store.js";
 import {
   ConsentJurisdictionMismatch,
+  ConsentNotesRequired,
   ConsentRevokedCannotRegrant,
+  ConsentSystemActorRejected,
   ContactNotFound,
 } from "./errors.js";
 
@@ -288,10 +290,10 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       deploymentId: deploymentIdOverride,
     }) {
       if (!notes || notes.trim().length === 0) {
-        throw new Error("clearConsent requires non-empty notes (audit trail)");
+        throw new ConsentNotesRequired();
       }
       if (actor.startsWith("system:")) {
-        throw new Error("clearConsent rejects system: actors; require a real userId");
+        throw new ConsentSystemActorRejected({ actor });
       }
       const current = await store.readOrNull(contactId);
       if (!current) throw new ContactNotFound({ contactId });

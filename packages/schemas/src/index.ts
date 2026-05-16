@@ -177,3 +177,11 @@ export * from "./agent-persona-config.js";
 
 // Deployment governance policy overrides (top-level AgentDeployment columns)
 export * from "./policy-overrides-config.js";
+
+// PR-3: Allowlisted directional copy for "observed" activity rows
+export {
+  ALLOWLISTED_TEMPLATES,
+  renderOutcomeCopy,
+  type OutcomeCopyTemplate,
+  type OutcomeCopyValues,
+} from "./recommendation-outcome-copy.js";

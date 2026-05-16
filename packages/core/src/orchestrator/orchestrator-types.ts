@@ -1,5 +1,9 @@
-import type { ActionEnvelope, ApprovalRequest, DecisionTrace } from "@switchboard/schemas";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type {
+  ActionEnvelope,
+  ApprovalRequest,
+  DecisionTrace,
+  ExecuteResult,
+} from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 
 export interface ProposeResult {

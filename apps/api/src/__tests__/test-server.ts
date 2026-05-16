@@ -36,6 +36,8 @@ import type {
   OpportunityStore,
   RevenueStore,
   TriggerStore,
+  ConsentService,
+  ContactConsentReader,
 } from "@switchboard/core";
 import type { ApprovalRoutingConfig } from "@switchboard/core/approval";
 import {
@@ -84,6 +86,10 @@ declare module "fastify" {
     reportStores?: import("@switchboard/core/reports").ReportStores;
     reportInsightsProvider?: import("@switchboard/schemas").ReportInsightsProvider | null;
     greetingSignalStore?: import("@switchboard/core").agentHome.GreetingSignalStore;
+    disqualificationHook?: Pick<
+      import("@switchboard/core").DisqualificationResolutionHook,
+      "confirm" | "dismiss"
+    > | null;
     /** Test-only observer for the most recent ingress-persisted WorkTrace. */
     lastIngressTrace?: {
       intent: string;
@@ -105,6 +111,20 @@ export interface TestContext {
 export interface BuildTestServerOptions {
   /** Override the opportunityStore decorator. Pass `null` to skip decoration entirely (tests the 503 path). */
   opportunityStore?: OpportunityStore | null;
+  /** Provide a mock disqualificationHook for lifecycle-disqualifications ingress tests (Phase 1b.3).
+   * Accepts Pick<DisqualificationResolutionHook,"confirm"|"dismiss"> so test mocks don't need
+   * awkward `as unknown as InstanceType<...>` casts. */
+  disqualificationHook?: Pick<
+    import("@switchboard/core").DisqualificationResolutionHook,
+    "confirm" | "dismiss"
+  > | null;
+  /** Provide a mock ConsentService for admin-consent ingress tests (Phase 1b.4).
+   * When provided alongside `consentReader`, admin-consent routes are registered
+   * and the service is threaded into `bootstrapOperatorIntents`. */
+  consentService?: ConsentService;
+  /** Provide a mock ContactConsentReader for admin-consent ingress tests (Phase 1b.4).
+   * Required alongside `consentService` to register admin-consent routes. */
+  consentReader?: ContactConsentReader;
 }
 
 export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
@@ -291,6 +311,12 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   app.decorate("revenueEventStore", new TestRevenueStore());
   app.decorate("triggerStore", new TestTriggerStore());
 
+  // Disqualification hook — provide via options for Phase 1b.3 ingress tests.
+  // Undefined by default; tests that need it pass an explicit mock.
+  if (options.disqualificationHook !== undefined) {
+    app.decorate("disqualificationHook", options.disqualificationHook);
+  }
+
   const { createInMemoryReportCacheStore } = await import("@switchboard/core/reports");
 
   app.decorate("reportCacheStore", createInMemoryReportCacheStore());
@@ -392,16 +418,22 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   });
 
   // Operator-direct ingress bootstrap — registers OperatorMutationMode +
-  // operator.transition_opportunity_stage handler. Must run AFTER
-  // opportunityStore decoration and PlatformIngress wiring.
-  if (app.opportunityStore) {
-    const { bootstrapOperatorIntents } = await import("../bootstrap/operator-intents.js");
-    bootstrapOperatorIntents({
-      intentRegistry,
-      modeRegistry,
-      opportunityStore: app.opportunityStore,
-    });
-  }
+  // operator.transition_opportunity_stage + operator.act_on_recommendation +
+  // operator.confirm_disqualification + operator.dismiss_disqualification handlers.
+  // All stores are optional; bootstrapOperatorIntents conditionally registers each
+  // handler+intent internally. Always call so disqualification intents are wired
+  // even when opportunityStore is absent (e.g. tests that pass null to skip 503 path).
+  // Must run AFTER opportunityStore/recommendationStore/disqualificationHook decoration
+  // and PlatformIngress wiring.
+  const { bootstrapOperatorIntents } = await import("../bootstrap/operator-intents.js");
+  bootstrapOperatorIntents({
+    intentRegistry,
+    modeRegistry,
+    opportunityStore: app.opportunityStore ?? undefined,
+    recommendationStore: app.recommendationStore,
+    disqualificationHook: app.disqualificationHook ?? undefined,
+    consentService: options.consentService,
+  });
 
   const platformLifecycle = new PlatformLifecycle({
     approvalStore: storage.approvals,
@@ -451,6 +483,44 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
 
   const { dashboardActivityRoutes } = await import("../routes/dashboard-activity.js");
   await app.register(dashboardActivityRoutes, { prefix: "/api/dashboard/activity" });
+
+  // Lifecycle disqualifications routes (Phase 1b.3) — registered when test provides stores.
+  // Tests that only need the POST ingress path (via app.disqualificationHook) can rely on
+  // in-memory mocks; the GET route requires snapshotStore + transitionStore which are not
+  // provided by default.
+  if (app.disqualificationHook) {
+    const { registerLifecycleDisqualificationsRoutes } =
+      await import("../routes/lifecycle-disqualifications.js");
+    await registerLifecycleDisqualificationsRoutes(app, {
+      snapshotStore: {
+        listPendingDisqualifications: async () => [],
+      },
+      transitionStore: {
+        findLatestProposal: async () => null,
+      },
+    });
+  }
+
+  // Admin-consent routes (Phase 1b.4) — registered when test provides both
+  // consentService (threaded into bootstrapOperatorIntents above) and
+  // consentReader (used by the route for post-mutation state reads + the GET
+  // endpoint). Mirrors the disqualificationHook conditional-registration pattern.
+  if (options.consentService && options.consentReader) {
+    const { registerAdminConsentRoutes } = await import("../routes/admin-consent.js");
+    registerAdminConsentRoutes(app, {
+      consentReader: options.consentReader,
+      resolveActor: async (req) => {
+        const principal = req.principalIdFromAuth;
+        if (principal) return principal;
+        return "operator_test";
+      },
+      resolveOrganizationId: async (req) => {
+        const orgId = req.organizationIdFromAuth;
+        if (orgId) return orgId;
+        return "system:admin-endpoint";
+      },
+    });
+  }
 
   return { app, cartridge, storage };
 }

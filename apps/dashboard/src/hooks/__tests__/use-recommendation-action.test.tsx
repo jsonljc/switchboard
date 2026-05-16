@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
-import { useRecommendationAction } from "../use-recommendation-action.js";
+import { useRecommendationAction } from "../use-recommendation-action";
 
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { organizationId: "org-1", principalId: "user-1" } }),

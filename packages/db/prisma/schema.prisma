@@ -575,6 +575,44 @@ model ConfigVersion {
 
 // ── AI Agent System: Outcome Tracking ──
 
+model RecommendationOutcome {
+  id String @id @default(cuid())
+
+  // PendingActionRecord.id for intent="recommendation.*".
+  // Product-facing name; the FK target is PendingActionRecord because
+  // "Recommendation" is not its own table.
+  recommendationId     String  @unique
+  executableWorkUnitId String?
+
+  organizationId String
+  agentRole      String // "riley" v1; "alex" reserved
+  actionKind     String // "pause" | "refresh_creative"
+
+  anchorAt        DateTime
+  windowStartedAt DateTime
+  windowEndedAt   DateTime
+  observedAt      DateTime @default(now())
+
+  attributionMethod String // "directional" v1
+  confidence        String // "low" | "medium"
+
+  cockpitRenderable Boolean @default(false)
+
+  metricSummary    Json
+  copyTemplate     String?
+  copyValues       Json?
+  visibilityFlags  Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recommendation PendingActionRecord @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, agentRole, actionKind, windowEndedAt])
+  @@index([organizationId, agentRole, cockpitRenderable, windowEndedAt])
+  @@index([executableWorkUnitId])
+}
+
 // ── AI Agent System: Human Handoff ──
 
 model Handoff {
@@ -1484,7 +1522,8 @@ model PendingActionRecord {
   resolvedAt           DateTime?
   resolvedBy           String?
 
-  workflow WorkflowExecution? @relation(fields: [workflowId], references: [id])
+  workflow              WorkflowExecution?    @relation(fields: [workflowId], references: [id])
+  recommendationOutcome RecommendationOutcome?
 
   @@index([organizationId, status])
   @@index([organizationId, surface, status])

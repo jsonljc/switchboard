@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import {
   createConsentService,
   ConsentJurisdictionMismatch,
+  ConsentNotesRequired,
   ConsentRevokedCannotRegrant,
+  ConsentSystemActorRejected,
   ContactNotFound,
   type ConsentStateStore,
 } from "../index.js";
@@ -316,14 +318,14 @@ describe("ConsentService.recordRevocation", () => {
 });
 
 describe("ConsentService.clearConsent", () => {
-  it("rejects empty notes", async () => {
+  it("rejects empty notes with ConsentNotesRequired", async () => {
     const { service } = ctx();
     await expect(
       service.clearConsent({ contactId: "c1", actor: "user_42", notes: "" }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(ConsentNotesRequired);
   });
 
-  it("rejects system: actors", async () => {
+  it("rejects system: actors with ConsentSystemActorRejected carrying the actor", async () => {
     const { service } = ctx();
     await expect(
       service.clearConsent({
@@ -331,7 +333,7 @@ describe("ConsentService.clearConsent", () => {
         actor: "system:something",
         notes: "operator reset",
       }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(ConsentSystemActorRejected);
   });
 
   it("emits consent_cycle_reset warning verdict on success", async () => {

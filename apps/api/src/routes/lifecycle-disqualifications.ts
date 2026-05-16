@@ -11,19 +11,26 @@
 // set via preHandler hook from `x-org-id` header in dev/test — mirrors the
 // decisions route pattern). principalIdFromAuth supplies the operatorId; falls
 // back to "system:unknown" in dev mode where no API key is bound to a principal.
+//
+// POST routes use PlatformIngress.submit (Wave 2 Phase 1b.3 migration).
 // ---------------------------------------------------------------------------
 import type { FastifyInstance } from "fastify";
 import {
   isPendingDisqualification,
   type LifecycleSnapshotStore,
   type LifecycleTransitionStore,
-  type DisqualificationResolutionHook,
 } from "@switchboard/core";
+import { getIdempotencyKey } from "../utils/idempotency-key.js";
+import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
+import {
+  CONFIRM_DISQUALIFICATION_INTENT,
+  DISMISS_DISQUALIFICATION_INTENT,
+  OPERATOR_INTENT_ERROR_CODES,
+} from "../bootstrap/operator-intents.js";
 
 export interface LifecycleDisqualificationsRouteDeps {
   snapshotStore: Pick<LifecycleSnapshotStore, "listPendingDisqualifications">;
   transitionStore: Pick<LifecycleTransitionStore, "findLatestProposal">;
-  disqualificationHook: Pick<DisqualificationResolutionHook, "confirm" | "dismiss">;
 }
 
 export async function registerLifecycleDisqualificationsRoutes(
@@ -123,36 +130,66 @@ export async function registerLifecycleDisqualificationsRoutes(
         });
       }
 
-      let out;
-      try {
-        out = await deps.disqualificationHook.confirm({
-          organizationId: orgId,
-          conversationThreadId: request.params.threadId,
-          operatorId,
-          operatorNote: request.body?.operatorNote,
-        });
-      } catch (err) {
-        console.warn("[lifecycle] disqualification confirm threw unexpectedly", {
-          threadId: request.params.threadId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return reply.code(404).send({ reason: "not_found" });
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
+      if (!app.disqualificationHook) {
+        return reply
+          .code(503)
+          .send({ error: "Disqualification capability not available", statusCode: 503 });
       }
 
-      if (out.result === "confirmed") {
-        return reply.code(200).send({ result: "confirmed" });
+      const idempotencyKey = getIdempotencyKey(request);
+
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: operatorId, type: "user" },
+        intent: CONFIRM_DISQUALIFICATION_INTENT,
+        parameters: {
+          conversationThreadId: request.params.threadId,
+          operatorNote: request.body?.operatorNote,
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      });
+
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
       }
-      if (out.result === "already_applied") {
+
+      const { result } = response;
+      if (result.outcome === "failed") {
+        const code = result.error?.code;
+        if (
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_NOT_FOUND ||
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_HOOK_THROW
+        ) {
+          return reply.code(404).send({ reason: "not_found" });
+        }
+        if (code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_CONFLICT) {
+          const reason = (result.outputs as { reason?: string } | undefined)?.reason;
+          return reply.code(409).send({ reason });
+        }
+        // Any other handler failure is an unexpected execution error — throw so
+        // the global error handler returns a scrubbed 500.
+        throw new Error(result.error?.message ?? "Operator mutation execution failed");
+      }
+
+      // outcome === "completed" — unwrap result from outputs
+      const outputs = result.outputs as {
+        result?: string;
+        alreadyApplied?: boolean;
+      };
+
+      if (!outputs?.result) {
+        throw new Error("Disqualification confirm handler returned no result output");
+      }
+
+      if (outputs.alreadyApplied) {
         return reply.code(200).send({ result: "confirmed", alreadyApplied: true });
       }
-      if (out.result === "not_found") {
-        return reply.code(404).send({ reason: "not_found" });
-      }
-      if (out.result === "capability_disabled") {
-        return reply.code(404).send({ reason: "not_found" });
-      }
-      // conflict — out.reason is "already_booked" | "not_proposed" | "already_disqualified"
-      return reply.code(409).send({ reason: out.reason });
+      return reply.code(200).send({ result: "confirmed" });
     },
   );
 
@@ -190,33 +227,63 @@ export async function registerLifecycleDisqualificationsRoutes(
         });
       }
 
-      let out;
-      try {
-        out = await deps.disqualificationHook.dismiss({
-          organizationId: orgId,
-          conversationThreadId: request.params.threadId,
-          operatorId,
-          operatorNote: request.body?.operatorNote,
-        });
-      } catch (err) {
-        console.warn("[lifecycle] disqualification dismiss threw unexpectedly", {
-          threadId: request.params.threadId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return reply.code(404).send({ reason: "not_found" });
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
+      if (!app.disqualificationHook) {
+        return reply
+          .code(503)
+          .send({ error: "Disqualification capability not available", statusCode: 503 });
       }
 
-      if (out.result === "dismissed") {
-        return reply.code(200).send({ result: "dismissed", restoredStatus: out.restoredStatus });
+      const idempotencyKey = getIdempotencyKey(request);
+
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: operatorId, type: "user" },
+        intent: DISMISS_DISQUALIFICATION_INTENT,
+        parameters: {
+          conversationThreadId: request.params.threadId,
+          operatorNote: request.body?.operatorNote,
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      });
+
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
       }
-      if (out.result === "not_found") {
-        return reply.code(404).send({ reason: "not_found" });
+
+      const { result } = response;
+      if (result.outcome === "failed") {
+        const code = result.error?.code;
+        if (
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_NOT_FOUND ||
+          code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_HOOK_THROW
+        ) {
+          return reply.code(404).send({ reason: "not_found" });
+        }
+        if (code === OPERATOR_INTENT_ERROR_CODES.DISQUALIFICATION_CONFLICT) {
+          const reason = (result.outputs as { reason?: string } | undefined)?.reason;
+          return reply.code(409).send({ reason });
+        }
+        // Any other handler failure is an unexpected execution error — throw so
+        // the global error handler returns a scrubbed 500.
+        throw new Error(result.error?.message ?? "Operator mutation execution failed");
       }
-      if (out.result === "capability_disabled") {
-        return reply.code(404).send({ reason: "not_found" });
+
+      // outcome === "completed" — unwrap result from outputs
+      const outputs = result.outputs as {
+        result?: string;
+        restoredStatus?: string;
+      };
+
+      if (!outputs?.result) {
+        throw new Error("Disqualification dismiss handler returned no result output");
       }
-      // conflict — out.reason is "not_proposed"
-      return reply.code(409).send({ reason: out.reason });
+
+      return reply.code(200).send({ result: "dismissed", restoredStatus: outputs.restoredStatus });
     },
   );
 }

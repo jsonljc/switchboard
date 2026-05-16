@@ -1,5 +1,5 @@
 import { CircuitBreaker, type CircuitBreakerConfig } from "../utils/circuit-breaker.js";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { ExecuteResult } from "@switchboard/schemas";
 
 const DEFAULT_CIRCUIT_BREAKER_CONFIG: CircuitBreakerConfig = {
   failureThreshold: 5,

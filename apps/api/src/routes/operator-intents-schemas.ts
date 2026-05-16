@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OpportunityStageSchema } from "@switchboard/schemas";
+import { OpportunityStageSchema, PdpaJurisdictionSchema } from "@switchboard/schemas";
 
 /**
  * Zod schemas for operator-direct intent parameters (Wave 2 Phase 1b).
@@ -20,3 +20,62 @@ export const TransitionOpportunityStageParametersSchema = z.object({
 export type TransitionOpportunityStageParameters = z.infer<
   typeof TransitionOpportunityStageParametersSchema
 >;
+
+export const ActOnRecommendationParametersSchema = z.object({
+  recommendationId: z.string().min(1),
+  action: z.enum(["primary", "secondary", "dismiss", "confirm", "undo"]),
+  note: z.string().optional(),
+});
+
+export type ActOnRecommendationParameters = z.infer<typeof ActOnRecommendationParametersSchema>;
+
+export const ConfirmDisqualificationParametersSchema = z.object({
+  conversationThreadId: z.string().min(1),
+  operatorNote: z.string().optional(),
+});
+
+export type ConfirmDisqualificationParameters = z.infer<
+  typeof ConfirmDisqualificationParametersSchema
+>;
+
+export const DismissDisqualificationParametersSchema = z.object({
+  conversationThreadId: z.string().min(1),
+  operatorNote: z.string().optional(),
+});
+
+export type DismissDisqualificationParameters = z.infer<
+  typeof DismissDisqualificationParametersSchema
+>;
+
+// ---------------------------------------------------------------------------
+// Phase 1b.4 — admin-consent operator intents
+// ---------------------------------------------------------------------------
+
+export const GrantConsentParametersSchema = z.object({
+  contactId: z.string().min(1),
+  jurisdiction: PdpaJurisdictionSchema,
+  source: z.enum(["whatsapp_quick_reply", "ig_dm_reply", "web_form", "operator_recorded"]),
+  grantedAt: z.string().datetime(),
+  notes: z.string().optional(),
+  actor: z.string().min(1),
+});
+
+export type GrantConsentParameters = z.infer<typeof GrantConsentParametersSchema>;
+
+export const RevokeConsentParametersSchema = z.object({
+  contactId: z.string().min(1),
+  source: z.literal("operator_recorded_revocation"),
+  revokedAt: z.string().datetime(),
+  notes: z.string().optional(),
+  actor: z.string().min(1),
+});
+
+export type RevokeConsentParameters = z.infer<typeof RevokeConsentParametersSchema>;
+
+export const ClearConsentParametersSchema = z.object({
+  contactId: z.string().min(1),
+  notes: z.string().min(1),
+  actor: z.string().min(1),
+});
+
+export type ClearConsentParameters = z.infer<typeof ClearConsentParametersSchema>;

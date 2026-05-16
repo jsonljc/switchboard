@@ -27,7 +27,7 @@ describe("getServerSession", () => {
     process.env.NEXTAUTH_SECRET = "secret";
     (process.env as Record<string, string | undefined>).NODE_ENV = "production";
 
-    const { getServerSession } = await import("../session.js");
+    const { getServerSession } = await import("../session");
     await expect(getServerSession()).rejects.toThrow(/DEV_BYPASS_AUTH/i);
   });
 
@@ -35,7 +35,7 @@ describe("getServerSession", () => {
     process.env.DEV_BYPASS_AUTH = "true";
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
 
-    const { getServerSession } = await import("../session.js");
+    const { getServerSession } = await import("../session");
     const session = await getServerSession();
 
     expect(session).not.toBeNull();
@@ -46,7 +46,7 @@ describe("getServerSession", () => {
     process.env.NEXTAUTH_SECRET = "secret";
     (process.env as Record<string, string | undefined>).NODE_ENV = "production";
 
-    const { getServerSession } = await import("../session.js");
+    const { getServerSession } = await import("../session");
     const session = await getServerSession();
 
     expect(session).toBeNull();

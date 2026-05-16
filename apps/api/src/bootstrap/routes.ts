@@ -69,10 +69,27 @@ import { cockpitActivityRoutes } from "../routes/agent-home/activity.js";
 import { buildCockpitActivityDeps } from "../lib/cockpit-activity-deps.js";
 import { registerLifecycleDisqualificationsRoutes } from "../routes/lifecycle-disqualifications.js";
 import type { LifecycleDisqualificationsRouteDeps } from "../routes/lifecycle-disqualifications.js";
+import { registerRileyOutcomesRoute } from "../routes/cockpit/riley/outcomes.js";
 
 export interface RegisterRoutesDeps {
-  consentService?: ConsentService;
+  /**
+   * Read-side consent state. Phase 1b.4 migrated mutating consent calls to
+   * PlatformIngress; the ConsentService now lives in operator-intent handlers,
+   * not the route deps. Only the reader is needed here for the GET endpoint
+   * and the post-mutation state read.
+   */
   consentReader?: ContactConsentReader;
+  /**
+   * Gate-only reference to the ConsentService. The service is wired into
+   * `bootstrapOperatorIntents` (where the actual write handlers live); here it
+   * is consulted only to confirm that the write intents have been registered
+   * before the admin route is exposed. If a future bootstrap mode produces a
+   * `consentReader` without a `consentService`, the admin POST routes would
+   * 500 at `platformIngress.submit` with "intent not found"; requiring both
+   * here means the route is registered iff its handlers exist (defense-in-depth
+   * called out by Phase 1b.4 code review).
+   */
+  consentService?: ConsentService;
   /** Phase 3b: lifecycle disqualification API deps. Only wired when Prisma is available. */
   lifecycleDisqualifications?: LifecycleDisqualificationsRouteDeps;
 }
@@ -107,6 +124,14 @@ export async function registerRoutes(
     const cockpitActivityDeps = buildCockpitActivityDeps(app.prisma);
     await app.register(cockpitActivityRoutes(cockpitActivityDeps), {
       prefix: "/api/dashboard",
+    });
+    // Riley outcomes route: GET /api/cockpit/riley/outcomes
+    // Gated on Prisma; store filters cockpitRenderable=true at the SQL layer.
+    const { PrismaRecommendationOutcomeStore } = await import("@switchboard/db");
+    const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
+    await registerRileyOutcomesRoute(app, {
+      listRenderable: ({ orgId, limit }) =>
+        recommendationOutcomeStore.listRenderableForOrg({ orgId, agentRole: "riley", limit }),
     });
   }
   // greetingRoutes: GET /api/dashboard/agents/:agentKey/greeting — agent-home greeting block
@@ -201,13 +226,19 @@ export async function registerRoutes(
     await registerLifecycleDisqualificationsRoutes(app, deps.lifecycleDisqualifications);
   }
 
-  // Phase 1c — admin consent endpoint.
-  // Only registered when consent deps are wired (SkillMode bootstrap succeeded).
-  // Existing callers (test-server.ts, etc.) that omit deps continue to work —
-  // admin endpoint simply won't be reachable in those environments.
-  if (deps?.consentService && deps?.consentReader) {
+  // Phase 1c — admin consent endpoint. Phase 1b.4 migrated POST routes to
+  // PlatformIngress; the ConsentService is now invoked from operator-intent
+  // handlers registered in `bootstrap/operator-intents.ts`. The route only
+  // needs the read-side ContactConsentReader for post-mutation state reads
+  // (non-mutating; stays outside ingress).
+  //
+  // Gate on BOTH consentService AND consentReader: the service presence
+  // confirms that bootstrapOperatorIntents registered the grant/revoke/clear
+  // intents. Without it, POST routes would 500 at submit time with "intent
+  // not found." Both come from the same `bootstrapSkillMode` call today, but
+  // future bootstrap modes might diverge (Phase 1b.4 review-followup #4).
+  if (deps?.consentReader && deps?.consentService) {
     registerAdminConsentRoutes(app, {
-      consentService: deps.consentService,
       consentReader: deps.consentReader,
       resolveActor: async (req) => {
         // Primary: principalIdFromAuth populated by authMiddleware.

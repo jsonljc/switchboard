@@ -31,7 +31,7 @@ describe("useRecommendations", () => {
       json: () => Promise.resolve({ recommendations }),
     });
 
-    const { useRecommendations } = await import("@/hooks/use-recommendations.js");
+    const { useRecommendations } = await import("@/hooks/use-recommendations");
     const { result } = renderHook(() => useRecommendations(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -54,7 +54,7 @@ describe("useRecommendationCount", () => {
       json: () => Promise.resolve({ recommendations }),
     });
 
-    const { useRecommendationCount } = await import("@/hooks/use-recommendations.js");
+    const { useRecommendationCount } = await import("@/hooks/use-recommendations");
     const { result } = renderHook(() => useRecommendationCount(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current).toBe(2));

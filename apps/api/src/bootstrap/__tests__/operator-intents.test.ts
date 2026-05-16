@@ -1,8 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import type { WorkUnit } from "@switchboard/core/platform";
-import type { OpportunityStore } from "@switchboard/core";
+import type { ConsentService, OpportunityStore } from "@switchboard/core";
+import {
+  ConsentJurisdictionMismatch,
+  ConsentNotesRequired,
+  ConsentRevokedCannotRegrant,
+  ConsentSystemActorRejected,
+  ContactNotFound,
+} from "@switchboard/core";
 import { OpportunityNotFoundError, type OpportunityBoardRow } from "@switchboard/core/lifecycle";
 import {
+  buildClearConsentHandler,
+  buildGrantConsentHandler,
+  buildRevokeConsentHandler,
   buildTransitionOpportunityStageHandler,
   OPERATOR_INTENT_ERROR_CODES,
 } from "../operator-intents.js";
@@ -117,5 +127,296 @@ describe("buildTransitionOpportunityStageHandler", () => {
       handler.execute(makeWorkUnit({ parameters: { id: "", stage: "booked" } })),
     ).rejects.toThrow();
     expect(store.transitionStage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 1b.4 — admin-consent handler factories
+// ---------------------------------------------------------------------------
+
+function makeConsentServiceStub(overrides: Partial<ConsentService> = {}): ConsentService {
+  return {
+    attachToGovernedInteraction: vi.fn().mockResolvedValue(undefined),
+    recordDisclosureShown: vi.fn().mockResolvedValue(undefined),
+    recordGrant: vi.fn().mockResolvedValue(undefined),
+    recordRevocation: vi.fn().mockResolvedValue(undefined),
+    clearConsent: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function makeConsentWorkUnit(
+  intent: string,
+  parameters: Record<string, unknown>,
+  overrides: Partial<WorkUnit> = {},
+): WorkUnit {
+  return makeWorkUnit({
+    intent,
+    parameters,
+    ...overrides,
+  });
+}
+
+const grantParams = {
+  contactId: "c1",
+  jurisdiction: "MY",
+  source: "operator_recorded",
+  grantedAt: "2026-05-11T10:00:00.000Z",
+  notes: "captured offline",
+  actor: "operator_42",
+};
+
+const revokeParams = {
+  contactId: "c1",
+  source: "operator_recorded_revocation",
+  revokedAt: "2026-05-11T11:00:00.000Z",
+  notes: "customer requested",
+  actor: "operator_42",
+};
+
+const clearParams = {
+  contactId: "c1",
+  notes: "operator reset",
+  actor: "operator_42",
+};
+
+describe("buildGrantConsentHandler", () => {
+  it("returns completed with contactId output on success", async () => {
+    const service = makeConsentServiceStub();
+    const handler = buildGrantConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.grant_consent", grantParams),
+    );
+
+    expect(service.recordGrant).toHaveBeenCalledWith({
+      contactId: "c1",
+      jurisdiction: "MY",
+      source: "operator_recorded",
+      grantedAt: new Date("2026-05-11T10:00:00.000Z"),
+      actor: "operator_42",
+      notes: "captured offline",
+      organizationId: "org_acme",
+      deploymentId: "system:admin-endpoint",
+    });
+    expect(result.outcome).toBe("completed");
+    const outputs = result.outputs as { contactId: string };
+    expect(outputs.contactId).toBe("c1");
+  });
+
+  it("maps ContactNotFound → outcome=failed with CONSENT_NOT_FOUND code", async () => {
+    const service = makeConsentServiceStub({
+      recordGrant: vi.fn().mockRejectedValue(new ContactNotFound({ contactId: "c1" })),
+    });
+    const handler = buildGrantConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.grant_consent", grantParams),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND);
+    expect((result.outputs as { contactId: string }).contactId).toBe("c1");
+  });
+
+  it("maps ConsentJurisdictionMismatch → outcome=failed with CONSENT_INVALID_JURISDICTION + stamped/provided in outputs", async () => {
+    const service = makeConsentServiceStub({
+      recordGrant: vi
+        .fn()
+        .mockRejectedValue(
+          new ConsentJurisdictionMismatch({ contactId: "c1", stamped: "SG", provided: "MY" }),
+        ),
+    });
+    const handler = buildGrantConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.grant_consent", grantParams),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_INVALID_JURISDICTION);
+    const outputs = result.outputs as { stamped: string; provided: string };
+    expect(outputs.stamped).toBe("SG");
+    expect(outputs.provided).toBe("MY");
+  });
+
+  it("maps ConsentRevokedCannotRegrant → outcome=failed with CONSENT_REVOKED_CANNOT_REGRANT + revokedAt in outputs", async () => {
+    const revokedAt = new Date("2026-05-10T00:00:00Z");
+    const service = makeConsentServiceStub({
+      recordGrant: vi
+        .fn()
+        .mockRejectedValue(new ConsentRevokedCannotRegrant({ contactId: "c1", revokedAt })),
+    });
+    const handler = buildGrantConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.grant_consent", grantParams),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_REVOKED_CANNOT_REGRANT);
+    const outputs = result.outputs as { revokedAt: string };
+    expect(outputs.revokedAt).toBe(revokedAt.toISOString());
+  });
+
+  it("re-throws non-typed errors so infra failures surface as scrubbed 500", async () => {
+    const service = makeConsentServiceStub({
+      recordGrant: vi.fn().mockRejectedValue(new Error("postgres connection lost")),
+    });
+    const handler = buildGrantConsentHandler(service);
+
+    await expect(
+      handler.execute(makeConsentWorkUnit("operator.grant_consent", grantParams)),
+    ).rejects.toThrow("postgres connection lost");
+  });
+
+  it("rejects parameters that fail Zod validation (defense in depth)", async () => {
+    const service = makeConsentServiceStub();
+    const handler = buildGrantConsentHandler(service);
+
+    await expect(
+      handler.execute(makeConsentWorkUnit("operator.grant_consent", { contactId: "" })),
+    ).rejects.toThrow();
+    expect(service.recordGrant).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildRevokeConsentHandler", () => {
+  it("returns completed with contactId output on success", async () => {
+    const service = makeConsentServiceStub();
+    const handler = buildRevokeConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.revoke_consent", revokeParams),
+    );
+
+    expect(service.recordRevocation).toHaveBeenCalledWith({
+      contactId: "c1",
+      source: "operator_recorded_revocation",
+      revokedAt: new Date("2026-05-11T11:00:00.000Z"),
+      actor: "operator_42",
+      notes: "customer requested",
+      organizationId: "org_acme",
+      deploymentId: "system:admin-endpoint",
+    });
+    expect(result.outcome).toBe("completed");
+    expect((result.outputs as { contactId: string }).contactId).toBe("c1");
+  });
+
+  it("maps ContactNotFound → outcome=failed with CONSENT_NOT_FOUND code", async () => {
+    const service = makeConsentServiceStub({
+      recordRevocation: vi.fn().mockRejectedValue(new ContactNotFound({ contactId: "c1" })),
+    });
+    const handler = buildRevokeConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.revoke_consent", revokeParams),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND);
+  });
+
+  it("re-throws non-typed errors", async () => {
+    const service = makeConsentServiceStub({
+      recordRevocation: vi.fn().mockRejectedValue(new Error("downstream timeout")),
+    });
+    const handler = buildRevokeConsentHandler(service);
+
+    await expect(
+      handler.execute(makeConsentWorkUnit("operator.revoke_consent", revokeParams)),
+    ).rejects.toThrow("downstream timeout");
+  });
+});
+
+describe("buildClearConsentHandler", () => {
+  it("returns completed with contactId output on success", async () => {
+    const service = makeConsentServiceStub();
+    const handler = buildClearConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.clear_consent", clearParams),
+    );
+
+    expect(service.clearConsent).toHaveBeenCalledWith({
+      contactId: "c1",
+      actor: "operator_42",
+      notes: "operator reset",
+      organizationId: "org_acme",
+      deploymentId: "system:admin-endpoint",
+    });
+    expect(result.outcome).toBe("completed");
+    expect((result.outputs as { contactId: string }).contactId).toBe("c1");
+  });
+
+  it("maps ContactNotFound → outcome=failed with CONSENT_NOT_FOUND code", async () => {
+    const service = makeConsentServiceStub({
+      clearConsent: vi.fn().mockRejectedValue(new ContactNotFound({ contactId: "c1" })),
+    });
+    const handler = buildClearConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.clear_consent", clearParams),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND);
+  });
+
+  it("maps ConsentSystemActorRejected → outcome=failed with CONSENT_OPERATION_FAILED", async () => {
+    const service = makeConsentServiceStub({
+      clearConsent: vi
+        .fn()
+        .mockRejectedValue(new ConsentSystemActorRejected({ actor: "system:bot" })),
+    });
+    const handler = buildClearConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.clear_consent", { ...clearParams, actor: "system:bot" }),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_OPERATION_FAILED);
+  });
+
+  it("maps ConsentNotesRequired → outcome=failed with CONSENT_OPERATION_FAILED", async () => {
+    const service = makeConsentServiceStub({
+      clearConsent: vi.fn().mockRejectedValue(new ConsentNotesRequired()),
+    });
+    const handler = buildClearConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.clear_consent", clearParams),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_OPERATION_FAILED);
+  });
+
+  it("re-throws untyped errors (no substring fallback — only instanceof checks)", async () => {
+    const service = makeConsentServiceStub({
+      clearConsent: vi.fn().mockRejectedValue(new Error("postgres connection lost")),
+    });
+    const handler = buildClearConsentHandler(service);
+
+    await expect(
+      handler.execute(makeConsentWorkUnit("operator.clear_consent", clearParams)),
+    ).rejects.toThrow("postgres connection lost");
+  });
+
+  it("re-throws plain Error with 'system:' in message — substring no longer reclassifies", async () => {
+    // Regression: legacy substring-match would catch this and return 400.
+    // After Phase 1b.4 review-followup, only typed errors are mapped → real
+    // failure surfaces as 500 via global error handler.
+    const service = makeConsentServiceStub({
+      clearConsent: vi
+        .fn()
+        .mockRejectedValue(new Error("system: bus disconnected during clearConsent")),
+    });
+    const handler = buildClearConsentHandler(service);
+
+    await expect(
+      handler.execute(makeConsentWorkUnit("operator.clear_consent", clearParams)),
+    ).rejects.toThrow("system: bus disconnected");
   });
 });

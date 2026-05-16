@@ -10,7 +10,7 @@ import type {
   CompetencePolicy,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
-import type { Cartridge, CartridgeInterceptor } from "@switchboard/cartridge-sdk";
+import type { Cartridge, CartridgeInterceptor } from "@switchboard/schemas";
 
 export interface EnvelopeStore {
   save(envelope: ActionEnvelope): Promise<void>;
