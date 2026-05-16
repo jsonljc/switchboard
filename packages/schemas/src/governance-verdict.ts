@@ -42,6 +42,8 @@ export const GovernanceVerdictReasonSchema = z.enum([
   "disclosure_version_outdated",
   "consent_cycle_reset",
   "jurisdiction_mismatch",
+  // Phase 1c egress addition (send-time consent enforcement)
+  "contact_resolution_missing", // egress visibility: sessionContactResolver returned null
 ]);
 
 export const GovernanceVerdictSourceSchema = z.enum([
