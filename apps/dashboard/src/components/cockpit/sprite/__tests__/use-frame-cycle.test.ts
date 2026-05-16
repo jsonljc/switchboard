@@ -46,4 +46,21 @@ describe("useFrameCycle", () => {
     act(() => vi.advanceTimersByTime(60_000));
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("snaps to frame[0] when playing flips to false mid-cycle (not the current idx)", () => {
+    const { result, rerender } = renderHook(
+      ({ playing }: { playing: boolean }) => useFrameCycle([F1, F2], { playing }),
+      { initialProps: { playing: true } },
+    );
+    expect(result.current).toBe(F1.rows);
+    // Advance to F2.
+    act(() => vi.advanceTimersByTime(F1.dur));
+    expect(result.current).toBe(F2.rows);
+    // Now flip playing=false mid-cycle. Expect snap to F1 (frame[0]).
+    rerender({ playing: false });
+    expect(result.current).toBe(F1.rows);
+    // Subsequent timer ticks must not change the frame (no timer running).
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(result.current).toBe(F1.rows);
+  });
 });

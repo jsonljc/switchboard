@@ -23,6 +23,10 @@ export function useFrameCycle(
     const t = setTimeout(() => setIdx((i) => (i + 1) % length), f?.dur ?? 400);
     return () => clearTimeout(t);
   }, [idx, frames, shouldCycle, length]);
+  useEffect(() => {
+    if (!shouldCycle) setIdx(0);
+  }, [shouldCycle]);
   if (length === 0) return null;
+  if (!shouldCycle) return frames[0]!.rows;
   return frames[idx % length]?.rows ?? frames[0]!.rows;
 }

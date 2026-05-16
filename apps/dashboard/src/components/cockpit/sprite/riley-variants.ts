@@ -7,8 +7,9 @@
 import { mergeSprite } from "./build-sprite";
 import type { Frame, Palette, VariantBundle } from "./types";
 
-// Inline row-length sanity check. Throws in dev, silently passes the string in prod.
-// (Design's riley-sprites.jsx uses console.warn; we throw because a malformed row is a bug.)
+// Always throws on bad row length — malformed rows are a build-time bug,
+// not a runtime condition. (Design's riley-sprites.jsx uses console.warn; we
+// upgraded to throw because the design canvas is dev-only.)
 function R(s: string): string {
   if (s.length !== 24) throw new Error(`sprite row length ${s.length}, expected 24: ${s}`);
   return s;
