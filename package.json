@@ -5,6 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:ready": "npx tsx scripts/dev-ready.ts",
     "predev": "bash scripts/check-env.sh",
     "lint": "turbo lint",
     "local:setup": "npx tsx scripts/local-setup.ts",
