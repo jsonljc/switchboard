@@ -124,11 +124,18 @@ export function buildAlexMissionResponse(inputs: {
     ? mapManagedChannelStatus(inboxChannel.status)
     : "off";
 
-  // Calendar: no canonical Connection serviceId exists yet (see slice brief — risk
-  // "Calendar Connection.serviceId ambiguity"). v1 surfaces the channel as "off".
-  // When a calendar integration ships, this read becomes a Connection lookup.
-  const calDone = false;
-  const calStatus: MissionChannelStatus = "off";
+  // Calendar: looks up a `google-calendar` Connection (created by the dashboard's
+  // /api/dashboard/connections/google-calendar/authorize OAuth callback).
+  // `calDone` requires status === "connected" — a degraded/error Connection
+  // means present-but-unhealthy and should keep the setup row unticked even
+  // while the channel pill surfaces as "warn". The existing metaDone logic
+  // (mission.ts:111 above) is laxer (any row counts as done); see follow-up
+  // note in the plan for that asymmetry.
+  const calConnection = connections.find((c) => c.serviceId === "google-calendar");
+  const calDone = calConnection?.status === "connected";
+  const calStatus: MissionChannelStatus = calConnection
+    ? mapConnectionStatus(calConnection.status)
+    : "off";
 
   const priceApprovalThreshold = readNumberKey(roster.config, "priceApprovalThreshold");
   const refundEscalationFloor = readNumberKey(roster.config, "refundEscalationFloor");
