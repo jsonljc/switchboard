@@ -170,3 +170,95 @@ Total scope: ~160 LOC across roughly 8 files. Three small PRs. Estimated 1-2 day
 - Every blocked send is auditable via `GovernanceVerdict` query within the org.
 - The cross-channel regression test passes in CI.
 - No regression in existing send-success rate for non-revoked contacts.
+
+---
+
+## PR 4 — Egress bypass discovery (2026-05-16)
+
+### Search summary
+
+Eight grep patterns were run against `packages/` and `apps/` (excluding `dist/`, `__tests__/`, `.test.ts`):
+
+1. All `ChannelAdapter` interface send methods (`sendTextReply`, `sendApprovalCard`, etc.)
+2. `replySink.send` / `ReplySink` usage
+3. Direct adapter class references outside `ChannelGateway`
+4. `effectCategory.*send-message` / skill-runtime send-message tools
+5. `sendTemplate` / `canSendWhatsAppTemplate` / `MessageTemplate` (broadcast paths)
+6. Riley / outcome-attribution emissions (`outcome-dispatcher`, `RecommendationOutcome`, etc.)
+7. Operator-direct mutations (`store_recorded_operator_mutation`, `operator.send`)
+8. Direct HTTP POSTs to Meta Graph API, Telegram Bot API, Twilio, Slack API
+
+### Classification
+
+**Category 1 — Gateway-mediated** (safe, already gated):
+
+- `apps/chat/src/routes/managed-webhook.ts:158-171` — `replySink.send` is wired as `gatewayEntry.adapter.sendTextReply(threadId, text)` but called only inside `gatewayEntry.gateway.handleIncoming(...)`, which routes through `ChannelGateway.dispatchResponse` where `runConsentEnforcementGate` now runs (PR 2).
+- `apps/chat/src/main.ts:318-325` — Same pattern for the single-tenant Telegram path: `replySink.send` passed into `singleTenantGateway.handleIncoming`, routed through `ChannelGateway`.
+- `apps/chat/src/endpoints/widget-messages.ts:41` — Widget messages routed through `ChannelGateway`.
+- `packages/core/src/channel-gateway/handle-approval-response.ts` — All `replySink.send` calls here are responses to operator approval/rejection button presses, routed through the same `ChannelGateway.handleIncoming` path.
+- `packages/core/src/channel-gateway/pre-input-gate.ts` — `replySink.send` for handoff messages; same path.
+- `packages/core/src/channel-gateway/consent-revocation-gate.ts` — `replySink.send` for STOP acknowledgement; same path.
+
+**Category 2 — Adapter-internal** (implementation detail, not an external bypass):
+
+- `apps/chat/src/adapters/whatsapp.ts:207` — `sendTemplateMessage` is an adapter method that calls `this.sendMessage(...)`. It has zero external call sites (grep confirms: only its own definition). Not reachable outside the adapter without going through the adapter's public interface.
+- All adapter `sendTextReply`/`sendApprovalCard`/`sendResultCard`/`sendMedia`/`sendFlowMessage` implementations — these are the adapter interface implementations. They are called by `ChannelGateway.dispatchResponse` via the `ReplySink` abstraction (Category 1 paths above).
+- `apps/chat/src/escalation/routing.ts:13` — `routeEscalation` calls `adapter.sendTextReply` but has no external callers. It is dead code (grep found no import sites). Not a current bypass.
+
+**Category 3 — Skill-runtime send-message tools** (0 hits):
+
+No tools with `effectCategory === "send-message"` were found. The skill-runtime hook defined in the spec design is therefore a precautionary addition for future skills, not a fix for any currently existing bypass. The spec's PR 3 implementation hook (`ConsentEnforcementHook`) was already shipped as described in PRs 1-3, but there is nothing currently to gate via that path.
+
+**Category 4 — Broadcast/operator-direct/non-gateway senders** (3 confirmed bypass paths):
+
+1. **`ProactiveSender` — operator-sends-to-contact path** (`packages/core/src/notifications/proactive-sender.ts:82-160`):
+   - Called by `apps/api/src/routes/conversations.ts:374` (`POST /api/conversations/:threadId/send`) to deliver an operator-authored message to the contact (`destinationPrincipalId`) during `human_override` mode. This is a genuine contact-facing outbound send.
+   - Called by `apps/api/src/routes/escalations.ts:245` to deliver an operator escalation reply to the contact.
+   - `ProactiveSender.sendProactive()` makes direct HTTP calls to `api.telegram.org/sendMessage`, `slack.com/api/chat.postMessage`, and `graph.facebook.com/.../messages` with zero consent gate. If a contact has revoked consent, an operator can still message them via the dashboard "Send" action or escalation reply.
+   - **Why it bypasses:** The API route calls `app.agentNotifier.sendProactive()` directly — there is no `ChannelGateway` in this path. The `ProactiveSender` class has no knowledge of `ConsentService`.
+
+2. **`buildMetaLeadGreetingWorkflow`** (`apps/api/src/services/workflows/meta-lead-greeting-workflow.ts:22-43`):
+   - This workflow fires a WhatsApp template message (type `"template"`) directly to a lead's phone number via `fetch("https://graph.facebook.com/v21.0/...")`. It is registered as `meta.lead.greeting.send` in `apps/api/src/bootstrap/contained-workflows.ts:123` and runs as a contained workflow (triggered by lead intake).
+   - The input is `{ phone, firstName, templateName }` — a raw phone number from the lead event, with no `contactId` lookup, no `ConsentService` call, and no `ChannelGateway` routing.
+   - **Why it bypasses:** It directly constructs a Graph API HTTP request. The spec's `ConsentEnforcementGate.evaluateSend` is never consulted. A lead who replied STOP to a prior campaign message could be greeted again at intake.
+
+3. **`whatsapp-send-test.ts` send-test route** (`apps/api/src/routes/whatsapp-send-test.ts:88-240`):
+   - `POST /send-test` sends a WhatsApp template to a phone number on the channel's `testRecipients` allowlist. Calls `graphPost(...)` which makes a direct Graph API fetch. No consent check.
+   - Mitigating factor: recipients are on an explicit operator-managed allowlist; this is a developer/QA tool, not a production send path. The risk is lower than the two paths above.
+   - **Why it bypasses:** Calls `graphPost()` directly; no `ChannelGateway` or `ConsentEnforcementGate` in the path.
+
+**Category 5 — Tests/fixtures** (not counted; excluded from search by `grep -v __tests__ | grep -v "\.test\."`).
+
+**Not-a-bypass — Approval notifiers:**
+
+`WhatsAppApprovalNotifier`, `TelegramApprovalNotifier`, `SlackApprovalNotifier` (`packages/core/src/notifications/`) send messages to **operator approvers** — business staff who own the bot, not consumer contacts. Consumer PDPA consent does not apply to operator-facing approval notifications. These are excluded from consent scope.
+
+### Verdict
+
+**B — Bypass paths found.** Two active production-send bypass paths exist:
+
+1. `ProactiveSender` used in `conversations.ts` and `escalations.ts` to deliver messages to contacts, bypassing `ChannelGateway`.
+2. `buildMetaLeadGreetingWorkflow` sending WhatsApp templates directly to lead phone numbers with no consent check.
+
+`ConsentEnforcementHook` for skill-runtime is NOT required (no Category 3 hits). The required fix is gating the two Category 4 paths at source — the hook would not reach them since they are not skill-runtime tool calls.
+
+### Implementation direction for bypasses (tracked, not in this PR)
+
+**Bypass 1 — `ProactiveSender` / conversations + escalations routes:**
+
+The correct fix is to call `ConsentEnforcementGate.evaluateSend(...)` inside `ProactiveSender.sendProactive()` (or in the two route handlers before calling `sendProactive`). `ProactiveSender` currently receives only a `chatId` (the contact's principal ID on the channel) and a `channelType` string — it does not carry `orgId` or `contactId`. The gate requires `orgId + contactId`. The route handlers do have `orgId` (from auth) and can resolve `contactId` from the conversation record. The cleanest fix is to gate at the route handler level before calling `sendProactive`, or to thread `orgId` and `contactId` through into a gated wrapper.
+
+**Bypass 2 — `buildMetaLeadGreetingWorkflow`:**
+
+The workflow fires at lead intake time — the contact may not yet have a `consentRevokedAt` because they are a new lead. The consent gap is narrower here, but CTWA opt-in semantics still require checking `messagingOptIn` status before sending a template. The fix is to pass a `consentStore` into the workflow's dependencies and call `ConsentEnforcementGate.evaluateSend` before the `fetch(...)`.
+
+### Tracked follow-up
+
+Issue to file: **"PR 4 follow-up: gate ProactiveSender and MetaLeadGreetingWorkflow at consent enforcement"** — linking this discovery commit. The two bypasses above require:
+
+- Route-level consent gate in `conversations.ts:POST /:threadId/send` before `sendProactive`
+- Route-level consent gate in `escalations.ts` before `sendProactive`
+- Dependency injection of `ConsentEnforcementGate` into `buildMetaLeadGreetingWorkflow`
+- `whatsapp-send-test.ts` send-test: low priority (operator allowlist mitigates); gate opportunistically when touching this file.
+
+This PR (PR 4) delivers the discovery output. The hook (`ConsentEnforcementHook`) is **not shipped** in PR 4 — there are no skill-runtime bypass paths to gate, and the two actual bypasses require source-level fixes, not a hook.
