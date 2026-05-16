@@ -39,4 +39,14 @@ describe("runCheckRoutes (CLI integration)", () => {
     expect(result.findings).toHaveLength(0);
     expect(result.suppressedCount).toBeGreaterThanOrEqual(1);
   });
+
+  it("fails when a temporary allowlist entry has no #NNN reference", async () => {
+    const fixtureAllowlist = join(here, "fixtures", "allowlist-temp-no-issue.yaml");
+    const result = await runCheckRoutes({
+      includePaths: [join(here, "fixtures/synthetic-clean/**/*.ts")],
+      allowlistPath: fixtureAllowlist,
+      repoRoot,
+    });
+    expect(result.exitCode).toBe(1);
+  });
 });
