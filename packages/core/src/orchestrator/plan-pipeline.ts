@@ -6,7 +6,7 @@ import type {
   DecisionTrace,
   RiskCategory,
 } from "@switchboard/schemas";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { ExecuteResult } from "@switchboard/schemas";
 import { evaluatePlan } from "../engine/composites.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
 import { createApprovalState } from "../approval/state-machine.js";

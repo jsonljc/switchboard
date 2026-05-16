@@ -1,5 +1,5 @@
 import type { ExecuteAction } from "@switchboard/schemas";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { ExecuteResult } from "@switchboard/schemas";
 import type { ApprovalRequest } from "@switchboard/schemas";
 
 /** Outcome of a single execute request (unified for runtimes e.g. MCP, API). */

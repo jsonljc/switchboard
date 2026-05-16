@@ -3,10 +3,10 @@ import type {
   ActionProposal,
   ActionEnvelope,
   DecisionTrace,
+  ExecuteResult,
   RiskCategory,
   UndoRecipe,
 } from "@switchboard/schemas";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import { beginExecution, endExecution, GuardedCartridge } from "../execution-guard.js";
 import { getTracer } from "../telemetry/tracing.js";
 import type { Span } from "../telemetry/tracing.js";
@@ -215,7 +215,7 @@ export class ExecutionManager {
   }
 
   private async capturePreMutationSnapshot(
-    cartridge: import("@switchboard/cartridge-sdk").Cartridge,
+    cartridge: import("@switchboard/schemas").Cartridge,
     proposal: ActionProposal,
     envelope: ActionEnvelope,
     decision: import("@switchboard/schemas").DecisionTrace | undefined,
@@ -260,7 +260,7 @@ export class ExecutionManager {
   }
 
   private async executeCartridgeAction(
-    cartridge: import("@switchboard/cartridge-sdk").Cartridge,
+    cartridge: import("@switchboard/schemas").Cartridge,
     proposal: ActionProposal,
     envelope: ActionEnvelope,
     execCartridgeId: string,

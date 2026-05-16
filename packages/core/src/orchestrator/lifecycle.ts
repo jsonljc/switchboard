@@ -1,6 +1,10 @@
-import type { ActionEnvelope, ActionPlan, ApprovalRequest } from "@switchboard/schemas";
+import type {
+  ActionEnvelope,
+  ActionPlan,
+  ApprovalRequest,
+  ExecuteResult,
+} from "@switchboard/schemas";
 import type { ProposeResult, ApprovalResponse } from "./orchestrator-types.js";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { AuditLedger } from "../audit/ledger.js";
 import type { GuardrailState } from "../engine/policy-engine.js";

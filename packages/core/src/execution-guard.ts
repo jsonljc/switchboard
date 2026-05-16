@@ -3,7 +3,7 @@ import type {
   CartridgeContext,
   CartridgeInterceptor,
   ExecuteResult,
-} from "@switchboard/cartridge-sdk";
+} from "@switchboard/schemas";
 
 /**
  * Runtime guard that wraps a Cartridge and only allows execute() when

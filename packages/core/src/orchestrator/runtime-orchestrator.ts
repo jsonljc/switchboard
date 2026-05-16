@@ -1,4 +1,4 @@
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { ExecuteResult } from "@switchboard/schemas";
 import type { ProposeResult, ApprovalResponse } from "./orchestrator-types.js";
 
 /**

@@ -4,7 +4,7 @@ import type {
   Policy,
   RiskInput,
 } from "@switchboard/schemas";
-import type { Cartridge } from "@switchboard/cartridge-sdk";
+import type { Cartridge } from "@switchboard/schemas";
 import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import { evaluateRule } from "../engine/rule-evaluator.js";
 import type { SpendLookup } from "../engine/policy-engine.js";

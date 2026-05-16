@@ -6,7 +6,7 @@ import type {
   ActionProposal,
   ApprovalRequest,
 } from "@switchboard/schemas";
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { ExecuteResult } from "@switchboard/schemas";
 import type { PolicyEngineContext } from "../engine/policy-engine.js";
 import type { SimulationResult } from "../engine/simulator.js";
 import type { EvaluationContext } from "../engine/rule-evaluator.js";
