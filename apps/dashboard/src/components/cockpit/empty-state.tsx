@@ -9,8 +9,8 @@ const DEFAULT_REFUND = 200;
 
 const SETUP_LABEL: Record<MissionAggregatorResponse["setup"][number]["key"], string> = {
   meta: "Connect Meta Ads",
-  inbox: "Connect HotPod inbox",
-  cal: "Connect tour calendar",
+  inbox: "Connect your inbox",
+  cal: "Connect consultation calendar",
   rules: "Review pricing & escalation",
 };
 
@@ -47,8 +47,8 @@ export function EmptyState({ rules, setup, onConnect }: Props) {
           I'm set up and quiet. Connect Meta Ads and I'll pull the first leads in under a minute.
         </p>
         <p className="mt-2 text-base leading-snug" style={{ color: T.ink2 }}>
-          Then I'll qualify, reply, and book tours under your standing rules. I'll only interrupt
-          you for pricing decisions over ${price} and refunds over ${refund}.
+          So Alex can qualify inbound leads and book consultations under your standing rules. I'll
+          only interrupt you for pricing decisions over ${price} and refunds over ${refund}.
         </p>
         {primary && (
           <div className="mt-4">

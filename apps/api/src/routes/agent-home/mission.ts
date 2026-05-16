@@ -64,8 +64,8 @@ export type MissionAggregatorResponse = {
   setup: MissionSetupRow[];
 };
 
-const ALEX_ROLE = "SDR · qualify inbound leads, book tours";
-const ALEX_PIPELINE = "Tours pipeline · single funnel";
+const ALEX_ROLE = "SDR · qualify inbound leads, book consultations";
+const ALEX_PIPELINE = "Consultations pipeline · single funnel";
 const ALEX_COMPOSER_PLACEHOLDER = "Tell Alex what to do — coming soon";
 
 const RILEY_ROLE = "Ad optimizer · score, recommend, never act without your approval";

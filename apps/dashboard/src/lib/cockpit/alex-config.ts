@@ -11,7 +11,7 @@ export const ALEX_CONFIG = {
     paper: "#FBF1D6",
   },
   tabs: [{ name: "Alex", active: true }, { name: "Riley" }, { name: "Mira", muted: true }] as const,
-  missionSubtitle: "SDR · Tours pipeline",
+  missionSubtitle: "SDR · Consultations pipeline",
   needsYouLabel: "Alex needs you",
 } as const;
 
