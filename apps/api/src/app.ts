@@ -38,6 +38,7 @@ import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
 import { registerRoutes } from "./bootstrap/routes.js";
 import { registerInngest } from "./bootstrap/inngest.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
+import { wireMetricsProvider } from "./bootstrap/wire-metrics.js";
 import type Redis from "ioredis";
 
 declare module "fastify" {
@@ -366,6 +367,7 @@ export async function buildServer() {
   app.decorate("policyCache", policyCache);
   app.decorate("redis", redis);
   app.decorate("prisma", prismaClient);
+  if (prismaClient) wireMetricsProvider(app, prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
   // Wire ProactiveSender if channel credentials are available
   let agentNotifier: AgentNotifier | null = null;

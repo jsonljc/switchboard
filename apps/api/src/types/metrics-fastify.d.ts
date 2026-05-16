@@ -3,12 +3,12 @@ export {};
 declare module "fastify" {
   interface FastifyInstance {
     /**
-     * Optional Meta Ads spend provider. When wired, the metrics route uses it to
-     * fetch org spend for the week window. When absent or undefined, spendCents is
-     * always null (graceful no-op per A.3 slice brief).
-     *
-     * TODO(A.3-follow-up): wire buildMetaSpendProvider(prisma, adsClientFactory)
-     * in the bootstrap layer once credential decryption plumbing is verified.
+     * Meta Ads spend provider — feeds /alex and /riley KPI spend tiles.
+     * Wired in apps/api/src/app.ts via apps/api/src/bootstrap/wire-metrics.ts,
+     * which composes buildMetaSpendProvider + the connection-based
+     * adsClientFactory. Returns null when no connected `meta-ads` Connection
+     * exists, when the insights call throws, or when the AdsClientFactory
+     * rejects.
      */
     metaSpendProvider?: (range: { orgId: string; from: Date; to: Date }) => Promise<number | null>;
   }
