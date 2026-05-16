@@ -250,6 +250,14 @@ export function createGatewayBridge(
       verdictStore: gatewayGovernanceVerdictStore,
       clock: () => new Date(),
     },
+    consentEnforcementGate: {
+      governanceConfigResolver: gatewayGovernanceResolver,
+      consentStore: gatewayConsentStore,
+      postureCache: gatewayConsentPostureCache,
+      sessionContactResolver: gatewaySessionContactResolver,
+      verdictStore: gatewayGovernanceVerdictStore,
+      clock: () => new Date(),
+    },
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
       lifecycleTracker.recordMessage({
