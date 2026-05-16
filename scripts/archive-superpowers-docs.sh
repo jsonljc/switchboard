@@ -55,7 +55,7 @@ while [ $# -gt 0 ]; do
       ;;
     --days=*) days="${1#--days=}" ;;
     -h|--help)
-      sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -111,7 +111,10 @@ if [ "$no_commit" -eq 1 ]; then
 elif [ "$current_branch" != "main" ]; then
   commit_reason="branch=$current_branch (not main)"
 else
-  unrelated_dirty="$(git status --porcelain | grep -Ev '^[ ?][ ?]docs/superpowers/(specs|plans)/' || true)"
+  # Pathspec exclusion handles rename porcelain (R old -> new) natively, where
+  # a regex on status output had to special-case it. ':!path' is git's exclude
+  # magic; both src and dst of a rename are filtered by it.
+  unrelated_dirty="$(git status --porcelain -- ':!docs/superpowers/specs' ':!docs/superpowers/plans' 2>/dev/null || true)"
   if [ -n "$unrelated_dirty" ]; then
     commit_reason="unrelated dirty paths present"
   else
