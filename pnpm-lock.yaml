@@ -441,6 +441,19 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@25.6.0)(jiti@2.6.1)(jsdom@29.1.0(@noble/hashes@2.2.0))(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
 
+  evals/claim-classifier:
+    dependencies:
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.6.0
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.6.0)(jiti@2.6.1)(jsdom@29.1.0(@noble/hashes@2.2.0))(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
+
   packages/ad-optimizer:
     dependencies:
       '@switchboard/schemas':

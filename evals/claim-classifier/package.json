@@ -1,0 +1,13 @@
+{
+  "name": "@switchboard/eval-claim-classifier",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "vitest": "^2.1.0"
+  }
+}
