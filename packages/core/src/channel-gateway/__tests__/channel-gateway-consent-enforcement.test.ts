@@ -209,7 +209,7 @@ describe("ChannelGateway — consent enforcement at dispatch", () => {
     // Gate fired: send suppressed, marker written, verdict persisted.
     expect(sendSpy).not.toHaveBeenCalled();
     expect(addMessage).toHaveBeenCalledWith(
-      expect.any(String),
+      "conv-ceg-1",
       "assistant",
       "[suppressed:consent_revoked]",
     );
@@ -274,7 +274,10 @@ describe("ChannelGateway — consent enforcement at dispatch", () => {
     );
 
     // Error was logged.
-    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("verdict persist failure"),
+      expect.any(Error),
+    );
 
     consoleSpy.mockRestore();
   });

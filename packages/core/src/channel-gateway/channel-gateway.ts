@@ -66,6 +66,8 @@ async function dispatchResponse(params: {
       typeof response.result.outputs.response === "string"
         ? response.result.outputs.response
         : response.result.summary;
+    // Gate runs BEFORE addMessage(text) so a blocked outbound is never written
+    // to the transcript — only the metadata marker below is persisted.
     if (consentEnforcementGate) {
       const outcome = await runConsentEnforcementGate({
         cfg: consentEnforcementGate,
@@ -80,11 +82,16 @@ async function dispatchResponse(params: {
         // include the generated text — a contact who said STOP shouldn't
         // have the would-have-been-said reply preserved in their transcript.
         // Verdict already captures channel + contactId + outboundLength.
-        await conversationStore.addMessage(
-          conversationId,
-          "assistant",
-          "[suppressed:consent_revoked]",
-        );
+        try {
+          await conversationStore.addMessage(
+            conversationId,
+            "assistant",
+            "[suppressed:consent_revoked]",
+          );
+        } catch (err) {
+          console.error("[channel-gateway] consent-suppression marker persist failed", err);
+          // Verdict already persisted by gate; block decision stands.
+        }
         return;
       }
     }
