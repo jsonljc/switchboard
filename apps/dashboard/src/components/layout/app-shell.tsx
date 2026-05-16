@@ -6,12 +6,11 @@ import { useEffect } from "react";
 import { DataModeBanner } from "@/components/layout/data-mode-banner";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
-// DevPanel signature is widened to accept `dataModeControlsAllowed` so AppShell
-// can forward the demo-data-mode capability flag. The real DevPanel gains the
-// prop in Task 7 of the demo-data-toggle migration; until then this cast lets
-// the production-stub (`() => null`) and the dynamic-imported dev build share
-// a single permissive component type.
-const DevPanel: React.ComponentType<{ dataModeControlsAllowed?: boolean }> =
+// DevPanel accepts `dataModeControlsAllowed` (required) so AppShell can
+// forward the demo-data-mode capability flag. The production-stub branch is
+// `() => null`, which trivially satisfies any prop signature; the dev build
+// pulls the real component via dynamic import.
+const DevPanel: React.ComponentType<{ dataModeControlsAllowed: boolean }> =
   process.env.NODE_ENV === "production"
     ? () => null
     : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });

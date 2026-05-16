@@ -17,8 +17,22 @@ const NAV_LINKS = [
   { href: "/login", label: "Login" },
 ];
 
-export function DevPanel() {
-  if (process.env.NODE_ENV === "production") return null;
+export interface DevPanelProps {
+  /**
+   * Server-resolved flag from isFixtureModeAllowed(process.env). Gates the
+   * DevPanel's existence — when false, the panel is fully hidden because none
+   * of its controls would have any effect (cookie writes ignored by the
+   * production-normalizing resolver).
+   *
+   * Computed server-side in (auth)/layout.tsx because process.env in client
+   * components only exposes NEXT_PUBLIC_* vars — server-only env vars like
+   * VERCEL_ENV would read as undefined here.
+   */
+  dataModeControlsAllowed: boolean;
+}
+
+export function DevPanel({ dataModeControlsAllowed }: DevPanelProps) {
+  if (!dataModeControlsAllowed) return null;
 
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
