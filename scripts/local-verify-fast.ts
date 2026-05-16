@@ -1,13 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Fast structural pre-flight (≤10s, no Postgres required).
+ * Fast structural pre-flight.
  *
  * Runs:
  *   1. env-completeness         (scripts/check-env-completeness.ts)
  *   2. live-flag manifest       (scripts/check-live-flag-manifest.ts)
  *   3. arch:check               (pnpm arch:check)
  *   4. route-ingress check      (.agent/tools/check-routes)
- *   5. seed-count check         (scripts/check-seed-counts.ts — fails if no DB; --strict-db)
+ *   5. seed-count check         (scripts/check-seed-counts.ts — fails if no DB; --strict-db locally)
+ *   6. dashboard typecheck      (pnpm --filter @switchboard/dashboard typecheck)
+ *
+ * Acceptance gate (per phase-2 spec PR B): total wall-clock ≤30s warm-cache,
+ * ≤60s cold. Locally requires DATABASE_URL + reachable Postgres for step 5;
+ * step 6 requires `packages/{schemas,db,core}/dist` to exist (run `pnpm build`
+ * once via `pnpm local:setup`, or rely on CI's restored dist cache).
  *
  * Fail-fast: stops at first non-zero exit. Each step prints a one-line
  * summary.
@@ -49,6 +55,14 @@ const STEPS: Step[] = [
       "scripts/check-seed-counts.ts",
       ...(process.env["CI"] ? [] : ["--strict-db"]),
     ],
+  },
+  // Last so cheaper structural checks fail fast before we pay the typecheck
+  // cost. CI's lint job restores packages/*/dist from the setup-job cache,
+  // satisfying the @switchboard/core import resolution this step requires.
+  {
+    name: "dashboard:typecheck",
+    cmd: "pnpm",
+    args: ["--filter", "@switchboard/dashboard", "typecheck"],
   },
 ];
 
