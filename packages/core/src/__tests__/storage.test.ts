@@ -9,6 +9,7 @@ import {
 } from "../storage/index.js";
 import type { ActionEnvelope, Policy, IdentitySpec, RoleOverlay } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
+import { StaleVersionError, TenantMismatchError } from "../approval/state-machine.js";
 import type { Cartridge } from "@switchboard/cartridge-sdk";
 
 function makeEnvelope(overrides?: Partial<ActionEnvelope>): ActionEnvelope {
@@ -337,10 +338,86 @@ describe("InMemoryApprovalStore", () => {
       quorum: null,
       version: 2,
     };
-    await store.updateState("appr_2", newState, undefined, null);
+    await store.updateState("appr_2", newState, 1, null);
     const retrieved = await store.getById("appr_2");
     expect(retrieved?.state.status).toBe("approved");
     expect(retrieved?.state.respondedBy).toBe("admin");
+  });
+
+  // TI-7 in-memory tripwire — defense-in-depth check that fires when a caller's
+  // org context does not match the stored row. The route layer should already
+  // have rejected; this catches drift past that boundary.
+  describe("updateState tenant isolation (TI-7 tripwire)", () => {
+    const newState: ApprovalState = {
+      status: "approved",
+      respondedBy: "admin",
+      respondedAt: new Date(),
+      patchValue: null,
+      expiresAt: new Date(Date.now() + 3600000),
+      quorum: null,
+      version: 2,
+    };
+
+    it("succeeds when caller's org matches the stored row", async () => {
+      const approval = makeApproval("appr_org_match");
+      await store.save({ ...approval, organizationId: "org-A" });
+
+      await store.updateState("appr_org_match", newState, 1, "org-A");
+
+      const retrieved = await store.getById("appr_org_match");
+      expect(retrieved?.state.status).toBe("approved");
+    });
+
+    it("throws TenantMismatchError when caller's org differs from the stored row", async () => {
+      const approval = makeApproval("appr_org_mismatch");
+      await store.save({ ...approval, organizationId: "org-A" });
+
+      await expect(store.updateState("appr_org_mismatch", newState, 1, "org-B")).rejects.toThrow(
+        TenantMismatchError,
+      );
+    });
+
+    it("TenantMismatchError is also instanceof StaleVersionError (preserves 409 catch contract)", async () => {
+      const approval = makeApproval("appr_409_contract");
+      await store.save({ ...approval, organizationId: "org-A" });
+
+      try {
+        await store.updateState("appr_409_contract", newState, 1, "org-B");
+        throw new Error("expected updateState to throw");
+      } catch (err) {
+        expect(err).toBeInstanceOf(TenantMismatchError);
+        expect(err).toBeInstanceOf(StaleVersionError);
+      }
+    });
+
+    it("throws TenantMismatchError when caller passes null but row has an org", async () => {
+      const approval = makeApproval("appr_null_caller");
+      await store.save({ ...approval, organizationId: "org-A" });
+
+      await expect(store.updateState("appr_null_caller", newState, 1, null)).rejects.toThrow(
+        TenantMismatchError,
+      );
+    });
+
+    it("throws TenantMismatchError when caller passes an org but row is null", async () => {
+      const approval = makeApproval("appr_null_row");
+      await store.save({ ...approval, organizationId: null });
+
+      await expect(store.updateState("appr_null_row", newState, 1, "org-A")).rejects.toThrow(
+        TenantMismatchError,
+      );
+    });
+
+    it("checks tenant before version (mismatch wins over stale)", async () => {
+      const approval = makeApproval("appr_both_wrong");
+      await store.save({ ...approval, organizationId: "org-A" });
+
+      // Both wrong: stale version (999 instead of 1) AND wrong org.
+      // The tenant check should fire first, surfacing the security issue.
+      await expect(store.updateState("appr_both_wrong", newState, 999, "org-B")).rejects.toThrow(
+        TenantMismatchError,
+      );
+    });
   });
 
   it("should list pending approvals", async () => {

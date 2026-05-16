@@ -10,7 +10,7 @@ import type {
   CompetencePolicy,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
-import { StaleVersionError } from "../approval/state-machine.js";
+import { StaleVersionError, TenantMismatchError } from "../approval/state-machine.js";
 import type { Cartridge, CartridgeInterceptor } from "@switchboard/schemas";
 import { GuardedCartridge } from "../execution-guard.js";
 import type {
@@ -216,18 +216,20 @@ export class InMemoryApprovalStore implements ApprovalStore {
   async updateState(
     id: string,
     state: ApprovalState,
-    expectedVersion: number | undefined,
+    expectedVersion: number,
     organizationId: string | null,
   ): Promise<void> {
     const entry = this.store.get(id);
     if (!entry) throw new Error(`Approval not found: ${id}`);
-    if (expectedVersion !== undefined && entry.state.version !== expectedVersion) {
-      throw new StaleVersionError(id, expectedVersion, entry.state.version);
-    }
     // Tenant isolation: refuse if caller's org doesn't match the stored row (audit TI-7).
+    // TenantMismatchError extends StaleVersionError so existing 409 catches still
+    // fire, while observability can detect cross-tenant attempts via instanceof.
     const storedOrgId = entry.organizationId ?? null;
     if (storedOrgId !== organizationId) {
-      throw new StaleVersionError(id, expectedVersion ?? -1, entry.state.version);
+      throw new TenantMismatchError(id, organizationId, storedOrgId);
+    }
+    if (entry.state.version !== expectedVersion) {
+      throw new StaleVersionError(id, expectedVersion, entry.state.version);
     }
     this.store.set(id, { ...entry, state });
   }

@@ -4,6 +4,7 @@ export {
   isExpired,
   determineApprovalRequirement,
   StaleVersionError,
+  TenantMismatchError,
 } from "./state-machine.js";
 export type { ApprovalState, ApprovalStatus, QuorumState, QuorumEntry } from "./state-machine.js";
 export { routeApproval, DEFAULT_ROUTING_CONFIG } from "./router.js";

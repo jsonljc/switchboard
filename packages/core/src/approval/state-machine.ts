@@ -31,6 +31,20 @@ export class StaleVersionError extends Error {
   }
 }
 
+// Cross-tenant isolation tripwire. Thrown by stores that can definitively
+// distinguish tenant mismatch from version drift (e.g. InMemoryApprovalStore).
+// Extends StaleVersionError so existing route catches preserve their 409
+// response while observability can detect cross-tenant attempts via instanceof.
+// Prisma stores cannot differentiate without an extra read, so they throw
+// the parent StaleVersionError on count===0.
+export class TenantMismatchError extends StaleVersionError {
+  constructor(id: string, callerOrgId: string | null, storedOrgId: string | null) {
+    super(id, -1, -1);
+    this.message = `Tenant mismatch on ${id}: caller org=${callerOrgId} stored org=${storedOrgId}`;
+    this.name = "TenantMismatchError";
+  }
+}
+
 export function determineApprovalRequirement(
   riskCategory: RiskCategory,
   identity: ResolvedIdentity,

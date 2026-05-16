@@ -117,22 +117,6 @@ describe("PrismaApprovalStore", () => {
       version: 2,
     };
 
-    it("uses update when no expectedVersion provided", async () => {
-      prisma.approvalRecord.update.mockResolvedValue({});
-
-      await store.updateState("apr_1", updatedState, undefined, "org_1");
-
-      expect(prisma.approvalRecord.update).toHaveBeenCalledWith({
-        where: { id: "apr_1" },
-        data: expect.objectContaining({
-          status: "approved",
-          respondedBy: "user_1",
-          version: 2,
-        }),
-      });
-      expect(prisma.approvalRecord.updateMany).not.toHaveBeenCalled();
-    });
-
     it("succeeds with optimistic concurrency when version matches (count=1)", async () => {
       prisma.approvalRecord.updateMany.mockResolvedValue({ count: 1 });
 

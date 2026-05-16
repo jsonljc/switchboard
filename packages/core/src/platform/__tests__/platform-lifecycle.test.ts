@@ -151,7 +151,7 @@ function createMockStores() {
       async (
         id: string,
         state: ApprovalState,
-        _expectedVersion: number | undefined,
+        _expectedVersion: number,
         _organizationId: string | null,
       ) => {
         const existing = approvals.get(id);
