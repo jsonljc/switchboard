@@ -678,19 +678,19 @@ ALEX_COMMANDS = [
 
 The `parseCommand(raw)` function from `commands.jsx:7` ports verbatim to `apps/dashboard/src/lib/cockpit/parse-command.ts`. Pattern matchers:
 
-| Pattern                     | Returns                                                                                       |
-| --------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------- |
-| `pause (for) N (min         | m                                                                                             | h                                                                             | hour                                                                                     | hours)` | `{ kind: "pause", icon: "⏸", label: "pause · Nh", detail: "until HH:MM AM" }` |
-| `pause until <when>`        | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until <when>" }`                        |
-| `pause` / `pause alex`      | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until you resume" }`                    |
-| `resume` / `unpause` / `go` | `{ kind: "resume", icon: "▶", label: "resume", detail: "pick up where I left off" }`          |
-| `halt` / `stop`             | `{ kind: "halt", icon: "⏹", label: "halt", detail: "stop everything now" }`                   |
-| `(fu                        | follow up) (with) <name> [<when>]`                                                            | `{ kind: "followup", icon: "↻", label: "follow up · Name", detail: "today" }` |
-| `brief (me) (at) <time>`    | `{ kind: "brief", icon: "☼", label: "brief me", detail: "at <time>" }`                        |
-| `(stop                      | don't) (offer(ing)                                                                            | sending) <thing>`                                                             | `{ kind: "rule", icon: "⊘", label: "rule change", detail: "stop offering <thing>" }`     |
-| `(reply to                  | i'll reply to                                                                                 | let me reply to) <name>`                                                      | `{ kind: "handoff", icon: "✎", label: "handoff · Name", detail: "you take the thread" }` |
-| `tell alex about <name>`    | `{ kind: "context", icon: "ⓘ", label: "context · Name", detail: "add a note to the thread" }` |
-| anything else               | `{ kind: "instruction", icon: "→", label: "instruction", detail: "<truncated to 60>" }`       |
+| Pattern                                             | Returns                                                                                       |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pause (for) N (min\|m\|h\|hour\|hours)`            | `{ kind: "pause", icon: "⏸", label: "pause · Nh", detail: "until HH:MM AM" }`                 |
+| `pause until <when>`                                | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until <when>" }`                        |
+| `pause` / `pause alex`                              | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until you resume" }`                    |
+| `resume` / `unpause` / `go`                         | `{ kind: "resume", icon: "▶", label: "resume", detail: "pick up where I left off" }`          |
+| `halt` / `stop`                                     | `{ kind: "halt", icon: "⏹", label: "halt", detail: "stop everything now" }`                   |
+| `(fu\|follow up) (with) <name> [<when>]`            | `{ kind: "followup", icon: "↻", label: "follow up · Name", detail: "today" }`                 |
+| `brief (me) (at) <time>`                            | `{ kind: "brief", icon: "☼", label: "brief me", detail: "at <time>" }`                        |
+| `(stop\|don't) (offer(ing)\|sending) <thing>`       | `{ kind: "rule", icon: "⊘", label: "rule change", detail: "stop offering <thing>" }`          |
+| `(reply to\|i'll reply to\|let me reply to) <name>` | `{ kind: "handoff", icon: "✎", label: "handoff · Name", detail: "you take the thread" }`      |
+| `tell alex about <name>`                            | `{ kind: "context", icon: "ⓘ", label: "context · Name", detail: "add a note to the thread" }` |
+| anything else                                       | `{ kind: "instruction", icon: "→", label: "instruction", detail: "<truncated to 60>" }`       |
 
 Wired into the composer's "stage → confirm" flow per the locked design: typing stages a chip, Enter confirms.
 
