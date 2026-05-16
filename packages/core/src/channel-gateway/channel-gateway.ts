@@ -14,6 +14,7 @@ import { handleApprovalResponse } from "./handle-approval-response.js";
 import { isOptOutKeyword } from "./opt-out-keywords.js";
 import { runPreInputGate } from "./pre-input-gate.js";
 import { runConsentRevocationGate } from "./consent-revocation-gate.js";
+import { runConsentEnforcementGate } from "./consent-enforcement-gate.js";
 
 const OPT_OUT_CONFIRMATION =
   "You've been opted out of WhatsApp messages from us. Reply START at any time to opt back in.";
@@ -30,6 +31,7 @@ async function dispatchResponse(params: {
   message: IncomingChannelMessage;
   onMessageRecorded: ChannelGatewayConfig["onMessageRecorded"];
   replySink: ReplySink;
+  consentEnforcementGate: ChannelGatewayConfig["consentEnforcementGate"];
 }): Promise<void> {
   const {
     response,
@@ -40,6 +42,7 @@ async function dispatchResponse(params: {
     message,
     onMessageRecorded,
     replySink,
+    consentEnforcementGate,
   } = params;
 
   // Re-check override status — operator may have toggled during skill execution
@@ -63,6 +66,28 @@ async function dispatchResponse(params: {
       typeof response.result.outputs.response === "string"
         ? response.result.outputs.response
         : response.result.summary;
+    if (consentEnforcementGate) {
+      const outcome = await runConsentEnforcementGate({
+        cfg: consentEnforcementGate,
+        outboundText: text,
+        sessionId,
+        deploymentId: resolved.deploymentId,
+        channel: message.channel,
+      });
+      if (outcome === "blocked") {
+        // Audit row already persisted by the gate. Persist a metadata-only
+        // transcript marker so operators see something happened, but do NOT
+        // include the generated text — a contact who said STOP shouldn't
+        // have the would-have-been-said reply preserved in their transcript.
+        // Verdict already captures channel + contactId + outboundLength.
+        await conversationStore.addMessage(
+          conversationId,
+          "assistant",
+          "[suppressed:consent_revoked]",
+        );
+        return;
+      }
+    }
     await conversationStore.addMessage(conversationId, "assistant", text);
     onMessageRecorded?.({
       deploymentId: resolved.deploymentId,
@@ -76,6 +101,9 @@ async function dispatchResponse(params: {
     });
     await replySink.send(text);
   } else {
+    // Only framework-generated technical-failure notices may bypass the
+    // consent gate. Any agent/composer-authored outbound text MUST pass
+    // the gate above. Do not move that branch outside the `if (consentEnforcementGate)` block.
     await replySink.send("I'm having trouble right now. Let me connect you with the team.");
   }
 }
@@ -284,6 +312,7 @@ export class ChannelGateway {
       message,
       onMessageRecorded: this.config.onMessageRecorded,
       replySink,
+      consentEnforcementGate: this.config.consentEnforcementGate,
     });
   }
 }
