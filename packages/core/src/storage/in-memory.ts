@@ -11,7 +11,7 @@ import type {
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import { StaleVersionError } from "../approval/state-machine.js";
-import type { Cartridge, CartridgeInterceptor } from "@switchboard/cartridge-sdk";
+import type { Cartridge, CartridgeInterceptor } from "@switchboard/schemas";
 import { GuardedCartridge } from "../execution-guard.js";
 import type {
   EnvelopeStore,
@@ -307,7 +307,7 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
   async initializeAndRegister(
     cartridgeId: string,
     cartridge: Cartridge,
-    context: import("@switchboard/cartridge-sdk").CartridgeContext,
+    context: import("@switchboard/schemas").CartridgeContext,
     interceptors?: CartridgeInterceptor[],
   ): Promise<void> {
     await cartridge.initialize(context);
