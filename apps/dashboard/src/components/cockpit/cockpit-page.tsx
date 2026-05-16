@@ -208,7 +208,9 @@ export function CockpitPage() {
           <EmptyState
             rules={mission.data.mission.rules}
             setup={mission.data.setup}
-            onConnect={(key) => router.push(`/setup?step=${key}`)}
+            onConnect={(key) =>
+              router.push(key === "rules" ? "/settings?focus=rules" : "/settings/channels")
+            }
           />
         ) : (
           <ActivityStream
