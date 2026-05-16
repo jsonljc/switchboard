@@ -1,20 +1,8 @@
 import { resolveConsentStateConfig, type PdpaJurisdiction } from "@switchboard/schemas";
-import type { ConsentStateStore } from "../consent/consent-store.js";
-import type { GovernanceConfigResolver } from "../governance/governance-config-resolver.js";
-import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
-import type { GovernancePostureCache } from "../governance/posture-cache.js";
-
-export interface ConsentEnforcementGateConfig {
-  governanceConfigResolver: GovernanceConfigResolver;
-  consentStore: ConsentStateStore;
-  postureCache: GovernancePostureCache;
-  verdictStore: GovernanceVerdictStore;
-  sessionContactResolver: (sessionId: string) => Promise<string | null>;
-  clock: () => Date;
-}
+import type { ChannelGatewayConfig } from "./types.js";
 
 export interface RunConsentEnforcementGateInput {
-  cfg: ConsentEnforcementGateConfig;
+  cfg: NonNullable<ChannelGatewayConfig["consentEnforcementGate"]>;
   outboundText: string;
   sessionId: string;
   deploymentId: string;
