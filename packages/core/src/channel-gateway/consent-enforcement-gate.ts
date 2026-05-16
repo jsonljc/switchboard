@@ -33,6 +33,11 @@ export interface RunConsentEnforcementGateInput {
  * Backward-compatible: when ConsentStateConfig.mode === "off" or governance
  * config is missing/erroring without an enforce-cached posture, the gate
  * is a pass-through ("allowed").
+ *
+ * Resolver-error fail-open is intentional: when the governance config resolver
+ * errors with a cached enforce posture, the gate persists a critical audit row
+ * (reasonCode: "governance_unavailable") but still returns "allowed". This is
+ * fail-open with audit, not fail-closed.
  */
 export async function runConsentEnforcementGate(
   input: RunConsentEnforcementGateInput,
@@ -76,7 +81,30 @@ export async function runConsentEnforcementGate(
   });
 
   const contactId = await cfg.sessionContactResolver(sessionId);
-  if (!contactId) return "allowed"; // pre-contact outbound (e.g., system error reply)
+  if (!contactId) {
+    // Pre-contact outbound (e.g., system reply with no resolved contact).
+    // Allow, but emit a visibility verdict so resolver-mapping breakage
+    // never silently fails open. Severity is warning (not critical) because
+    // the legitimate pre-contact-system-reply case is not a failure.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (cfg.verdictStore.save as any)({
+        deploymentId,
+        sourceGuard: "consent_gate",
+        action: "allow",
+        reasonCode: "contact_resolution_missing",
+        jurisdiction: resolution.config.jurisdiction,
+        clinicType: resolution.config.clinicType,
+        conversationId: sessionId,
+        decidedAt: cfg.clock().toISOString(),
+        details: { event: "egress_contact_resolution_missing", channel },
+        auditLevel: "warning",
+      });
+    } catch (err) {
+      console.error("[consent-enforcement-gate] verdict persist failure", err);
+    }
+    return "allowed";
+  }
 
   const consent = await cfg.consentStore.readOrNull(contactId);
   if (!consent?.consentRevokedAt) return "allowed";
