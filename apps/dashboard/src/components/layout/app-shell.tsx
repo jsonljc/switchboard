@@ -3,9 +3,15 @@
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { DataModeBanner } from "@/components/layout/data-mode-banner";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
-const DevPanel =
+// DevPanel signature is widened to accept `dataModeControlsAllowed` so AppShell
+// can forward the demo-data-mode capability flag. The real DevPanel gains the
+// prop in Task 7 of the demo-data-toggle migration; until then this cast lets
+// the production-stub (`() => null`) and the dynamic-imported dev build share
+// a single permissive component type.
+const DevPanel: React.ComponentType<{ dataModeControlsAllowed?: boolean }> =
   process.env.NODE_ENV === "production"
     ? () => null
     : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
@@ -44,7 +50,13 @@ function ownsItsShell(pathname: string): boolean {
 const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/", "/alex", "/riley"]);
 export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding", "/setup"];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  dataModeControlsAllowed = false,
+}: {
+  children: React.ReactNode;
+  dataModeControlsAllowed?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -68,8 +80,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (usesEditorialShell) {
     return (
       <>
+        <DataModeBanner />
         {children}
-        <DevPanel />
+        <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
       </>
     );
   }
@@ -79,9 +92,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // own layout.tsx (e.g., SettingsLayout, ReportsLayout) is responsible for
   // any sidebar/header/back-link chrome.
   return (
-    <main className="min-h-screen bg-background">
-      {children}
-      <DevPanel />
-    </main>
+    <>
+      <DataModeBanner />
+      <main className="min-h-screen bg-background">
+        {children}
+        <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
+      </main>
+    </>
   );
 }
