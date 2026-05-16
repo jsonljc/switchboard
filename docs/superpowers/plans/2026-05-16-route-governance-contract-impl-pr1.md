@@ -22,8 +22,8 @@
 |---|---|
 | `apps/api/src/utils/validation-error.ts` | Shared `replyValidationError(reply, zodError)` helper — the §4.3 normalized envelope. |
 | `apps/api/src/utils/__tests__/validation-error.test.ts` | Vitest suite for `replyValidationError`. |
-| `apps/api/src/utils/auth-fallback.ts` | Shared `devAuthFallback` preHandler — consolidates the `if (app.authDisabled) populate from x-org-id` block currently duplicated in 4 routes. |
-| `apps/api/src/utils/__tests__/auth-fallback.test.ts` | Vitest suite for `devAuthFallback`. |
+| `apps/api/src/utils/auth-fallback.ts` | `buildDevAuthFallback(app)` factory returning a preHandler — consolidates the `if (app.authDisabled) populate from x-org-id` block currently duplicated in 4 routes. Factory shape avoids Fastify `this`-binding fragility across plugin scopes. |
+| `apps/api/src/utils/__tests__/auth-fallback.test.ts` | Vitest suite for `buildDevAuthFallback`. |
 | `apps/api/src/decorators/require-org.ts` | `requireOrg` + `requireOrgForMutation` typed preHandlers + module augmentation adding narrowed `request.orgId: string` and `request.actorId: string`. |
 | `apps/api/src/decorators/__tests__/require-org.test.ts` | Vitest suite for both decorators. |
 | `.agent/tools/route-class-validator.ts` | Per-class matrix validation rules + `validateRouteClass(sourceFile, repoPath): Warning[]` API. Pure data — no I/O. |
@@ -38,10 +38,10 @@
 | `apps/api/src/app.ts` | Only the `FastifyRequest` module augmentation at line 43 extends with the new narrowed `orgId` + `actorId` properties. **No `app.decorate("requireOrg", ...)` registration** — PR-1 uses direct imports per Task 4 / Task 10. |
 | `apps/api/src/__tests__/test-server.ts` | No change required (decorators are direct imports). If any test imports `requireOrg` directly, that's the only adjustment. |
 | `apps/api/src/bootstrap/operator-intents/recommendation.ts` | Cohort B → A migration: handler fetches the recommendation row inside the try block, returns `failed-RECOMMENDATION_NOT_FOUND` for both missing-row and tenant-mismatch. Replace the comment that says "made unreachable by the pre-flight checks in the route." |
-| `apps/api/src/routes/recommendations.ts` | Remove the pre-flight `getById` + `row.orgId !== orgId` block (lines 178-184 today). Adopt `app.requireOrgForMutation` + `requireIdempotencyKey` + `devAuthFallback`. Drop the duplicated `app.addHook("preHandler", ...)` block. Add `// @route-class: operator-direct` header. |
-| `apps/api/src/routes/dashboard-opportunities.ts` | Adopt decorators + `requireIdempotencyKey`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
-| `apps/api/src/routes/lifecycle-disqualifications.ts` | Adopt decorators + `requireIdempotencyKey`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
-| `apps/api/src/routes/admin-consent.ts` | Adopt decorators + `requireIdempotencyKey`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
+| `apps/api/src/routes/recommendations.ts` | Remove the pre-flight `getById` + `row.orgId !== orgId` block (lines 178-184 today). Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)` (no `app.decorate`). Drop the duplicated `app.addHook("preHandler", ...)` block. Add `// @route-class: operator-direct` header. |
+| `apps/api/src/routes/dashboard-opportunities.ts` | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
+| `apps/api/src/routes/lifecycle-disqualifications.ts` | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
+| `apps/api/src/routes/admin-consent.ts` | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
 | `apps/api/src/routes/__tests__/dashboard-opportunities-ingress.test.ts` | Add: 400 when Idempotency-Key absent; decorator-narrowed `request.orgId` reaches handler; existing happy/failure cases continue to pass. |
 | `apps/api/src/routes/__tests__/recommendations-ingress.test.ts` | Add: 400 when Idempotency-Key absent; **WorkTrace persisted for tenant-reject path** (cross-tenant `getById` no longer pre-flight-rejected); existing tests continue to pass. |
 | `apps/api/src/routes/__tests__/lifecycle-disqualifications-ingress.test.ts` | Add: 400 when Idempotency-Key absent; decorator-narrowed contract; existing tests continue to pass. |
@@ -74,9 +74,11 @@ Verify the plan does NOT call for `app.decorate("requireOrg", ...)` anywhere. Gr
 
 If any subsequent task (4, 6-9, 10) references `app.requireOrg` or `app.requireOrgForMutation`, that's a plan bug — file it as an issue and use direct import.
 
-- [ ] **Step 2: Grep all callers of the 7 operator-direct endpoints.**
+- [ ] **Step 2: Two-pass grep for callers of the 7 operator-direct endpoints.**
 
-Run from the repo root:
+The literal URL grep misses common patterns (template literals with variable IDs, typed API clients, route-constant indirection). Run BOTH passes.
+
+**Pass 1 — literal URL strings (catches direct fetch calls):**
 
 ```bash
 grep -rIn '"/api/recommendations/[^"]*/act"\|/api/dashboard/opportunities/[^/]*\+/stage\|/api/dashboard/lifecycle/disqualifications/[^/]*\+/confirm\|/api/dashboard/lifecycle/disqualifications/[^/]*\+/dismiss\|/api/admin/consent/grant\|/api/admin/consent/revoke\|/api/admin/consent/clear' \
@@ -84,21 +86,69 @@ grep -rIn '"/api/recommendations/[^"]*/act"\|/api/dashboard/opportunities/[^/]*\
   --include='*.ts' --include='*.tsx' 2>&1 | grep -v __tests__
 ```
 
-Capture results into a scratch note: which files call these endpoints, and do they send `Idempotency-Key`?
+**Pass 2 — broader keyword sweep (catches template literals, route constants, typed clients):**
+
+```bash
+rg -n 'recommendations/[^/]+/act|dashboard/opportunities/[^/]+/stage|lifecycle/disqualifications|admin/consent/(grant|revoke|clear)|Idempotency-Key' \
+  apps/dashboard apps/chat apps/api \
+  --glob '*.{ts,tsx}' 2>&1 | grep -v __tests__
+```
+
+**Pass 3 — route-constant inspection (manual):**
+
+Read these files top-to-bottom (existence varies by codebase) and identify any route helper functions or constants:
+- `apps/dashboard/src/lib/api-client.ts`
+- `apps/dashboard/src/lib/routes.ts` (if exists)
+- `apps/dashboard/src/lib/hooks/use-*.ts` for the 4 endpoint families
+- Any `*-client.ts` or `*Routes.ts` file in `apps/dashboard/src/`
+
+Capture results into a scratch note: which files call these endpoints (directly or via a helper), and do they send `Idempotency-Key`?
 
 - [ ] **Step 3: Audit each caller for the header.**
 
 For each non-test caller, open the file and check the `fetch` / `apiClient.post` / equivalent call. Verify either:
-- The call passes `headers: { "Idempotency-Key": <some_uuid> }`, OR
-- The shared `apiClient` / `fetch` wrapper auto-injects it.
+- The call passes `headers: { "Idempotency-Key": <some_key> }`, OR
+- The shared `apiClient` / `fetch` wrapper auto-injects it on POST/PATCH/DELETE.
 
 If neither is true, the caller breaks after PR-1's route changes ship.
 
 - [ ] **Step 4: Fix any callers that lack the header.**
 
-The simplest fix: extract a `mutationFetch(url, body)` helper in `apps/dashboard/src/lib/api-client.ts` (or wherever the shared fetcher lives) that auto-injects `Idempotency-Key: crypto.randomUUID()` on every POST/PATCH/DELETE call to these routes. Update all 7-endpoint callers to use it.
+The simplest fix: extract a `mutationFetch(url, body)` helper in `apps/dashboard/src/lib/api-client.ts` (or wherever the shared fetcher lives) that auto-injects `Idempotency-Key` on every POST/PATCH/DELETE call to operator-direct endpoints.
 
-If no shared wrapper exists, apply the per-caller fix inline. Either way, the change lands in THIS PR — not a follow-up.
+**Use a defensive UUID helper** — `crypto.randomUUID()` is not always available (older SSR contexts, some Vitest/jsdom environments, polyfilled browsers). Create a one-shot helper:
+
+```ts
+// apps/dashboard/src/lib/idempotency.ts
+export function createIdempotencyKey(): string {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `idemp_${Date.now()}_${Math.random().toString(36).slice(2)}`
+  );
+}
+```
+
+Then the shared wrapper calls it once per mutation:
+
+```ts
+async function mutationFetch(url: string, body: unknown) {
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": createIdempotencyKey(),
+    },
+    body: JSON.stringify(body),
+  });
+}
+```
+
+Add a unit test for `createIdempotencyKey`:
+- When `globalThis.crypto.randomUUID` is defined → returns the UUID.
+- When `globalThis.crypto` is undefined → returns the `idemp_*` fallback.
+- Returned value is always a non-empty string.
+
+Update all 7-endpoint callers to use `mutationFetch`. If no shared wrapper exists, apply the per-caller fix inline using `createIdempotencyKey()`. Either way, the change lands in THIS PR — not a follow-up.
 
 - [ ] **Step 5: Verify the fix end-to-end.**
 
@@ -563,9 +613,7 @@ export function buildDevAuthFallback(app: FastifyInstance): preHandlerAsyncHookH
 }
 ```
 
-The corresponding update to the tests in Step 1: replace `app.addHook("preHandler", devAuthFallback)` with `app.addHook("preHandler", buildDevAuthFallback(app))`. Adjust each test to call the factory.
-
-Route plugins (Tasks 6-9) register the fallback as `app.addHook("preHandler", buildDevAuthFallback(app))` inside the plugin function where `app` is the parameter the plugin receives.
+Route plugins (Tasks 6-9) register the fallback as `app.addHook("preHandler", buildDevAuthFallback(app))` inside the plugin function where `app` is the parameter the plugin receives. The tests in Step 1 already use this shape — no further adjustment needed.
 
 Bonus: add one integration test that mounts the fallback through a real plugin (not a bare `/probe`) to verify it works under Fastify's plugin-scope binding:
 
@@ -1163,13 +1211,16 @@ import {
   type RecommendationSurface,
   type RecommendationStatus,
 } from "@switchboard/core";
-import { requireOrganizationScope } from "../utils/require-org.js";
 import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
 import { requireOrg, requireOrgForMutation } from "../decorators/require-org.js";
 import { replyValidationError } from "../utils/validation-error.js";
 import { z } from "zod";
+// Note: `requireOrganizationScope` from `../utils/require-org.js` is intentionally
+// NOT imported — the new decorators (`requireOrg`, `requireOrgForMutation`)
+// replace it for this route. PR-4 audits whether the legacy helper can be
+// deprecated across the codebase.
 import {
   ACT_ON_RECOMMENDATION_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
@@ -1394,8 +1445,8 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 
 Key diffs from current:
 1. `// @route-class: operator-direct` header at top.
-2. Imports: drop `getIdempotencyKey`, add `requireIdempotencyKey`, `devAuthFallback`, `requireOrg`, `requireOrgForMutation`, `replyValidationError`, `z`.
-3. Drop the `app.addHook("preHandler", ...)` block (the duplicated dev fallback) — replaced by `app.addHook("preHandler", devAuthFallback)`.
+2. Imports: drop `getIdempotencyKey`, add `requireIdempotencyKey`, `buildDevAuthFallback`, `requireOrg`, `requireOrgForMutation`, `replyValidationError`, `z`. **Do not** import `requireOrganizationScope` (the legacy helper) — the decorators replace it.
+3. Drop the `app.addHook("preHandler", ...)` block (the duplicated dev fallback) — replaced by `app.addHook("preHandler", buildDevAuthFallback(app))`.
 4. GET handler: add `preHandler: requireOrg` to the route options; replace `requireOrganizationScope(request, reply)` + `if (!orgId) return;` with `const { orgId } = request;`.
 5. POST handler: add `preHandler: requireOrgForMutation` to the route options; replace the org-scope + idempotency-optional-spread pattern with `requireOrgForMutation` decorator + `requireIdempotencyKey()`; use Zod-via-`replyValidationError` for body validation (the existing manual VALID_ACTIONS check stays as a defensive layer).
 6. Remove the pre-flight `getById` + `row.orgId !== orgId` block (lines 178-184 in the current file).
@@ -1673,8 +1724,8 @@ Expected: FAIL on the missing-Idempotency-Key check; the WorkTrace assertion may
 **Apply a minimal diff to `apps/api/src/routes/lifecycle-disqualifications.ts`** following the Task 7 pattern. The pattern is identical to `dashboard-opportunities.ts`. Specifically:
 
 1. Add `// @route-class: operator-direct` header.
-2. Import `devAuthFallback`, `requireOrg`, `requireOrgForMutation`, `requireIdempotencyKey`, `replyValidationError`.
-3. Replace `app.addHook("preHandler", ...)` block with `app.addHook("preHandler", devAuthFallback)`.
+2. Import `buildDevAuthFallback`, `requireOrg`, `requireOrgForMutation`, `requireIdempotencyKey`, `replyValidationError`.
+3. Replace `app.addHook("preHandler", ...)` block with `app.addHook("preHandler", buildDevAuthFallback(app))`.
 4. GET handler gets `preHandler: requireOrg`; replace `request.organizationIdFromAuth` + `if (!orgId)` with `request.orgId`.
 5. Both POST handlers get `preHandler: requireOrgForMutation`; replace `request.organizationIdFromAuth` + `request.principalIdFromAuth ?? "system:unknown"` with `request.orgId` + `request.actorId`.
 6. Both POST handlers replace `getIdempotencyKey` + conditional spread with `requireIdempotencyKey(request, reply)` + early-return.
@@ -2012,6 +2063,31 @@ describe("validateRouteClass — operator-direct", () => {
     const warnings = validateRouteClass(sf, "test.ts");
     expect(warnings.map((w) => w.message).join("\n")).toMatch(/registers 2 mutating handler\(s\) but only calls requireIdempotencyKey 1 time/);
   });
+
+  it("does NOT warn for GET handlers in operator-direct file (admin-consent mixed-class compromise)", () => {
+    // Mirrors the post-Task-9 shape of admin-consent.ts: 3 POSTs + 1 GET in
+    // the same file, classified as operator-direct by dominant semantics.
+    // GETs do not need requireIdempotencyKey.
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+      import { requireOrg, requireOrgForMutation } from "../decorators/require-org.js";
+      export const r = async (app) => {
+        app.get("/x/:id", { preHandler: requireOrg }, async () => {});
+        app.post("/x/grant", { preHandler: requireOrgForMutation }, async (req, reply) => {
+          const k = requireIdempotencyKey(req, reply);
+        });
+        app.post("/x/revoke", { preHandler: requireOrgForMutation }, async (req, reply) => {
+          const k = requireIdempotencyKey(req, reply);
+        });
+        app.post("/x/clear", { preHandler: requireOrgForMutation }, async (req, reply) => {
+          const k = requireIdempotencyKey(req, reply);
+        });
+      };
+    `);
+    // 3 mutating routes + 3 calls = balanced. GET is ignored.
+    expect(validateRouteClass(sf, "test.ts")).toEqual([]);
+  });
 });
 
 describe("validateRouteClass — read-only", () => {
@@ -2112,6 +2188,27 @@ export function parseRouteClass(sf: SourceFile): RouteClass | null {
  *
  * PR-1 scope: only validates operator-direct and read-only routes; other
  * classes are relaxed until PR-4.
+ *
+ * **Validation strategy — three-stage AST checks, not just imports.**
+ *
+ * For each rule (e.g., "operator-direct must use requireIdempotencyKey"):
+ *
+ * 1. *Import check* — is the helper imported? If not, warn "should import."
+ *    Without an import, no later check fires (you can't call what you don't
+ *    have). The import-presence warning is the entry point.
+ * 2. *Usage check* — is the helper actually called/referenced in the file?
+ *    Catches the "imports but forgets" failure mode. Uses
+ *    `getDescendantsOfKind(SyntaxKind.CallExpression)` + identifier scans, not
+ *    just import declarations.
+ * 3. *Cardinality check* — for `requireIdempotencyKey`, does the call count
+ *    match the number of mutating-verb route registrations (POST/PATCH/PUT/
+ *    DELETE)? Catches the "imports + uses on handler A but forgets on handler
+ *    B" failure mode. GET handlers are NOT counted — read-only handlers in
+ *    operator-direct files (e.g., the mixed admin-consent.ts GET) are exempt.
+ *
+ * Each stage produces at most one warning per rule. The validator returns the
+ * union of stage warnings; routes can have multiple warnings if multiple
+ * rules fail.
  */
 export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorWarning[] {
   const cls = parseRouteClass(sf);
@@ -2565,7 +2662,17 @@ This plan implements PR-1 scope from spec §12 in full. Spec coverage:
 | §14 risk: clients reading auth message string | Task 11 |
 | §14 risk: dashboard clients not sending Idempotency-Key | **Task 0** (hard preflight blocker, not deferred) |
 
-No placeholders (`TBD` / `TODO` / "fill in") in tasks; all code blocks are runnable; all commands have expected outputs.
+No `TBD` / `TODO` / "fill in" sections. Most code blocks are runnable as-is; a few rely on inspect-current-code substitutions that the executing agent fills in from local state. Those are intentional — the alternative would freeze line numbers and seed fixtures that drift between plan-writing and execution.
+
+**Known judgment-required substitutions** (catalog so the executing agent knows where to look up rather than copy-paste):
+
+| Location | Substitution | How to resolve |
+|---|---|---|
+| Task 7 happy-path test (`opp_seeded_above`) | Replace with the actual opportunity ID from whichever seed helper the existing `dashboard-opportunities-ingress.test.ts` already uses. | Open the existing test file; reuse its seed pattern (e.g., `seedOpportunity(app)` or `app.opportunityStore!.create({...})`). |
+| Task 9 admin-consent `makeMockConsentService()` / `makeMockConsentReader()` | Replace with the mock builders already present in the file's first describe block. | Locate the helpers above the new describe; if absent, write minimal mocks matching `ConsentService` / `ContactConsentReader` signatures. |
+| Task 6 step 6 / Task 11 step 5 `<touched dashboard client files>` | Replace with the file paths produced by Task 11 step 2's grep. | The Task 11 grep produces the list directly. |
+| Task 0 step 6 `<file paths from Task 0 step 2 results>` | Same as above. | Grep output. |
+| Task 8 step 3 "specific delta list" referencing `dashboard-opportunities.ts` Task 7 template | The 7-item delta list at Task 7 step 4 is the source. | Cross-reference Task 7's code block. |
 
 Type consistency: `requireOrg` / `requireOrgForMutation` are referenced consistently across Tasks 3, 4, 6, 7, 8, 9, 12. `requireIdempotencyKey` consistent across Tasks 1, 6, 7, 8, 9, 12. `replyValidationError` consistent across Tasks 2, 6, 7. `buildDevAuthFallback` (factory pattern) consistent across Tasks 3, 6, 7, 8, 9 — no occurrences of the older free-function `devAuthFallback` form (which relied on Fastify `this`-binding) remain.
 
