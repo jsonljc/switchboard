@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyInstance } from "fastify";
-import type { ContactConsentReader } from "@switchboard/core";
+import type { ConsentService, ContactConsentReader } from "@switchboard/core";
 import { registerAdminConsentRoutes } from "../routes/admin-consent.js";
 import { actionsRoutes } from "../routes/actions.js";
 import { executeRoutes } from "../routes/execute.js";
@@ -79,6 +79,17 @@ export interface RegisterRoutesDeps {
    * and the post-mutation state read.
    */
   consentReader?: ContactConsentReader;
+  /**
+   * Gate-only reference to the ConsentService. The service is wired into
+   * `bootstrapOperatorIntents` (where the actual write handlers live); here it
+   * is consulted only to confirm that the write intents have been registered
+   * before the admin route is exposed. If a future bootstrap mode produces a
+   * `consentReader` without a `consentService`, the admin POST routes would
+   * 500 at `platformIngress.submit` with "intent not found"; requiring both
+   * here means the route is registered iff its handlers exist (defense-in-depth
+   * called out by Phase 1b.4 code review).
+   */
+  consentService?: ConsentService;
   /** Phase 3b: lifecycle disqualification API deps. Only wired when Prisma is available. */
   lifecycleDisqualifications?: LifecycleDisqualificationsRouteDeps;
 }
@@ -220,8 +231,13 @@ export async function registerRoutes(
   // handlers registered in `bootstrap/operator-intents.ts`. The route only
   // needs the read-side ContactConsentReader for post-mutation state reads
   // (non-mutating; stays outside ingress).
-  // Only registered when consent deps are wired (SkillMode bootstrap succeeded).
-  if (deps?.consentReader) {
+  //
+  // Gate on BOTH consentService AND consentReader: the service presence
+  // confirms that bootstrapOperatorIntents registered the grant/revoke/clear
+  // intents. Without it, POST routes would 500 at submit time with "intent
+  // not found." Both come from the same `bootstrapSkillMode` call today, but
+  // future bootstrap modes might diverge (Phase 1b.4 review-followup #4).
+  if (deps?.consentReader && deps?.consentService) {
     registerAdminConsentRoutes(app, {
       consentReader: deps.consentReader,
       resolveActor: async (req) => {

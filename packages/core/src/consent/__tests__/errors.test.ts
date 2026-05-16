@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   ConsentJurisdictionMismatch,
+  ConsentNotesRequired,
   ConsentRevokedCannotRegrant,
+  ConsentSystemActorRejected,
   ContactNotFound,
 } from "../errors.js";
 
@@ -35,5 +37,24 @@ describe("ContactNotFound", () => {
     const err = new ContactNotFound({ contactId: "c1" });
     expect(err.name).toBe("ContactNotFound");
     expect(err.contactId).toBe("c1");
+  });
+});
+
+describe("ConsentNotesRequired", () => {
+  it("is an Error subclass with stable name", () => {
+    const err = new ConsentNotesRequired();
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("ConsentNotesRequired");
+    expect(err.message).toMatch(/notes/);
+  });
+});
+
+describe("ConsentSystemActorRejected", () => {
+  it("carries the rejected actor for audit trail", () => {
+    const err = new ConsentSystemActorRejected({ actor: "system:bot" });
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("ConsentSystemActorRejected");
+    expect(err.actor).toBe("system:bot");
+    expect(err.message).toMatch(/system:/);
   });
 });
