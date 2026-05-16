@@ -1,6 +1,6 @@
 // apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
 import type { ActivityRow } from "@/components/cockpit/types";
@@ -249,6 +249,25 @@ describe("CockpitPage — A.2 mission + empty-state", () => {
     expect(await screen.findByTestId("cockpit-activity-stream")).toBeInTheDocument();
     expect(screen.queryByTestId("cockpit-empty-state")).not.toBeInTheDocument();
   });
+
+  it("Connect on the rules setup row routes to /settings?focus=rules", async () => {
+    missionData = FULL_MISSION_ALL_UNDONE;
+    render(<CockpitPage />);
+    const row = await screen.findByTestId("setup-row-rules");
+    fireEvent.click(within(row).getByRole("button", { name: /connect/i }));
+    expect(pushMock).toHaveBeenCalledWith("/settings?focus=rules");
+  });
+
+  it.each([["meta"], ["inbox"], ["cal"]] as const)(
+    "Connect on the %s setup row routes to /settings/channels",
+    async (key) => {
+      missionData = FULL_MISSION_ALL_UNDONE;
+      render(<CockpitPage />);
+      const row = await screen.findByTestId(`setup-row-${key}`);
+      fireEvent.click(within(row).getByRole("button", { name: /connect/i }));
+      expect(pushMock).toHaveBeenCalledWith("/settings/channels");
+    },
+  );
 });
 
 const STEADY_METRICS: MetricsViewModelWire = {

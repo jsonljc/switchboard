@@ -209,6 +209,12 @@ export function CockpitPage() {
             rules={mission.data.mission.rules}
             setup={mission.data.setup}
             onConnect={(key) =>
+              // Channel-connection keys land directly on /settings/channels (the cards
+              // page). The existing alex/riley action dispatchers use `?focus=channels`
+              // by convention, but the param is currently inert (the menu at /settings
+              // doesn't read useSearchParams) — direct nav is better UX. The `rules`
+              // key follows the dispatcher convention since /settings is the right
+              // landing spot for that one.
               router.push(key === "rules" ? "/settings?focus=rules" : "/settings/channels")
             }
           />
