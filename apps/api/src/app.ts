@@ -837,10 +837,13 @@ export async function buildServer() {
   }
 
   // --- Register all API routes ---
-  // Note: ConsentService was wired into bootstrapOperatorIntents above (Phase
-  // 1b.4 migration). registerRoutes only takes the read-side ContactConsentReader.
+  // ConsentService is wired into bootstrapOperatorIntents above (Phase 1b.4
+  // migration). It is also passed here as a gate-only reference so the admin
+  // consent route is only registered when its operator-intent handlers exist
+  // (Phase 1b.4 review-followup #4 — gate symmetry).
   await registerRoutes(app, {
     consentReader: skillModeContactConsentReader ?? undefined,
+    consentService: skillModeConsentService ?? undefined,
     lifecycleDisqualifications: lifecycleDisqualificationsDeps,
   });
 

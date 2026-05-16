@@ -3,7 +3,9 @@ import type { WorkUnit } from "@switchboard/core/platform";
 import type { ConsentService, OpportunityStore } from "@switchboard/core";
 import {
   ConsentJurisdictionMismatch,
+  ConsentNotesRequired,
   ConsentRevokedCannotRegrant,
+  ConsentSystemActorRejected,
   ContactNotFound,
 } from "@switchboard/core";
 import { OpportunityNotFoundError, type OpportunityBoardRow } from "@switchboard/core/lifecycle";
@@ -361,11 +363,11 @@ describe("buildClearConsentHandler", () => {
     expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_NOT_FOUND);
   });
 
-  it("maps service-runtime guards (notes/system:) → outcome=failed with CONSENT_OPERATION_FAILED", async () => {
+  it("maps ConsentSystemActorRejected → outcome=failed with CONSENT_OPERATION_FAILED", async () => {
     const service = makeConsentServiceStub({
       clearConsent: vi
         .fn()
-        .mockRejectedValue(new Error("clearConsent rejects system: actors; require a real userId")),
+        .mockRejectedValue(new ConsentSystemActorRejected({ actor: "system:bot" })),
     });
     const handler = buildClearConsentHandler(service);
 
@@ -377,7 +379,21 @@ describe("buildClearConsentHandler", () => {
     expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_OPERATION_FAILED);
   });
 
-  it("re-throws non-typed errors (not notes/system: guard messages)", async () => {
+  it("maps ConsentNotesRequired → outcome=failed with CONSENT_OPERATION_FAILED", async () => {
+    const service = makeConsentServiceStub({
+      clearConsent: vi.fn().mockRejectedValue(new ConsentNotesRequired()),
+    });
+    const handler = buildClearConsentHandler(service);
+
+    const result = await handler.execute(
+      makeConsentWorkUnit("operator.clear_consent", clearParams),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe(OPERATOR_INTENT_ERROR_CODES.CONSENT_OPERATION_FAILED);
+  });
+
+  it("re-throws untyped errors (no substring fallback — only instanceof checks)", async () => {
     const service = makeConsentServiceStub({
       clearConsent: vi.fn().mockRejectedValue(new Error("postgres connection lost")),
     });
@@ -386,5 +402,21 @@ describe("buildClearConsentHandler", () => {
     await expect(
       handler.execute(makeConsentWorkUnit("operator.clear_consent", clearParams)),
     ).rejects.toThrow("postgres connection lost");
+  });
+
+  it("re-throws plain Error with 'system:' in message — substring no longer reclassifies", async () => {
+    // Regression: legacy substring-match would catch this and return 400.
+    // After Phase 1b.4 review-followup, only typed errors are mapped → real
+    // failure surfaces as 500 via global error handler.
+    const service = makeConsentServiceStub({
+      clearConsent: vi
+        .fn()
+        .mockRejectedValue(new Error("system: bus disconnected during clearConsent")),
+    });
+    const handler = buildClearConsentHandler(service);
+
+    await expect(
+      handler.execute(makeConsentWorkUnit("operator.clear_consent", clearParams)),
+    ).rejects.toThrow("system: bus disconnected");
   });
 });

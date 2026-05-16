@@ -10,9 +10,13 @@
 //
 // Auth: uses request.organizationIdFromAuth (set by authMiddleware in prod;
 // set via preHandler hook from `x-org-id` header in dev/test — mirrors the
-// dashboard-opportunities + lifecycle-disqualifications pattern).
-// principalIdFromAuth supplies the operatorId; falls back to
-// "system:unknown_admin" in dev mode where no API key is bound to a principal.
+// dashboard-opportunities + lifecycle-disqualifications pattern). The hook
+// populates both organizationIdFromAuth and principalIdFromAuth with a
+// "default" sentinel when no header is present (so the global idempotency
+// middleware fingerprint is stable across replays). The bootstrap-layer
+// `resolveActor`/`resolveOrganizationId` then layer admin-specific fallbacks
+// on top — "system:unknown_admin" / "system:admin-endpoint" in non-production
+// mode if neither auth middleware nor the test hook populated the fields.
 //
 // POST routes use PlatformIngress.submit (Wave 2 Phase 1b.4 migration —
 // closes Cat 1 ingress bypass 4/4). The legacy direct consentService calls
@@ -283,7 +287,10 @@ function mapFailedOutcome(
     });
   }
   if (code === OPERATOR_INTENT_ERROR_CODES.CONSENT_OPERATION_FAILED) {
-    return reply.status(400).send({ error: "invalid_actor_or_notes", message: message ?? "" });
+    // Phase 1b.4 review-followup: stable client-facing envelope; do NOT echo
+    // the service-thrown message (which contains internal validation text like
+    // "rejects system: actors"). The `code` is sufficient for client logic.
+    return reply.status(400).send({ error: "invalid_actor_or_notes" });
   }
   // Unexpected handler-level failure — scrubbed 500 (don't leak codes/messages).
   reply.log.error({ code, message }, "admin-consent unexpected handler failure");
