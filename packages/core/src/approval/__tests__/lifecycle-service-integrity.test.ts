@@ -259,6 +259,7 @@ describe("ApprovalLifecycleService.rejectLifecycle — admission gate", () => {
         "lc-integrity",
         "rejected",
         1,
+        "org-1",
       );
     });
   });

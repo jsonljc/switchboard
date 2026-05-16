@@ -125,13 +125,15 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
     id: string,
     status: ApprovalLifecycleStatus,
     expectedVersion: number,
+    organizationId: string | null,
     updates?: {
       currentRevisionId?: string;
       currentExecutableWorkUnitId?: string;
     },
   ): Promise<LifecycleRecord> {
+    // organizationId is part of WHERE for tenant isolation (audit TI-8).
     const result = await this.prisma.approvalLifecycle.updateMany({
-      where: { id, version: expectedVersion },
+      where: { id, version: expectedVersion, organizationId },
       data: {
         status,
         version: expectedVersion + 1,
@@ -174,13 +176,15 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
   async approveAndMaterialize(
     lifecycleId: string,
     expectedVersion: number,
+    organizationId: string | null,
     materializeInput: MaterializeWorkUnitInput,
   ): Promise<{ lifecycle: LifecycleRecord; workUnit: ExecutableWorkUnit }> {
     const workUnitId = randomUUID();
 
+    // organizationId is part of WHERE for tenant isolation (audit TI-8).
     const [lcResult, wuRow] = await this.prisma.$transaction([
       this.prisma.approvalLifecycle.updateMany({
-        where: { id: lifecycleId, version: expectedVersion },
+        where: { id: lifecycleId, version: expectedVersion, organizationId },
         data: {
           status: "approved",
           version: expectedVersion + 1,

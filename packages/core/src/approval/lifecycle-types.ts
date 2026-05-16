@@ -62,6 +62,7 @@ export interface ApprovalLifecycleStore {
     id: string,
     status: ApprovalLifecycleStatus,
     expectedVersion: number,
+    organizationId: string | null,
     updates?: {
       currentRevisionId?: string;
       currentExecutableWorkUnitId?: string;
@@ -75,6 +76,7 @@ export interface ApprovalLifecycleStore {
   approveAndMaterialize(
     lifecycleId: string,
     expectedVersion: number,
+    organizationId: string | null,
     materializeInput: import("./executable-materializer.js").MaterializeWorkUnitInput,
   ): Promise<{ lifecycle: LifecycleRecord; workUnit: ExecutableWorkUnit }>;
 

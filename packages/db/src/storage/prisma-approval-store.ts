@@ -36,35 +36,31 @@ export class PrismaApprovalStore implements ApprovalStore {
     return toApprovalRecord(row);
   }
 
-  async updateState(id: string, state: ApprovalState, expectedVersion?: number): Promise<void> {
-    if (expectedVersion !== undefined) {
-      // Optimistic concurrency: only update if version matches
-      const result = await this.prisma.approvalRecord.updateMany({
-        where: { id, version: expectedVersion },
-        data: {
-          status: state.status,
-          respondedBy: state.respondedBy,
-          respondedAt: state.respondedAt,
-          patchValue: (state.patchValue as object) ?? undefined,
-          expiresAt: state.expiresAt,
-          version: state.version,
-        },
-      });
-      if (result.count === 0) {
-        throw new StaleVersionError(id, expectedVersion, -1);
-      }
-    } else {
-      await this.prisma.approvalRecord.update({
-        where: { id },
-        data: {
-          status: state.status,
-          respondedBy: state.respondedBy,
-          respondedAt: state.respondedAt,
-          patchValue: (state.patchValue as object) ?? undefined,
-          expiresAt: state.expiresAt,
-          version: state.version,
-        },
-      });
+  async updateState(
+    id: string,
+    state: ApprovalState,
+    expectedVersion: number,
+    organizationId: string | null,
+  ): Promise<void> {
+    // Optimistic concurrency + tenant isolation in a single WHERE clause.
+    // organizationId is required (audit TI-7); count===0 may signify stale
+    // version, missing row, OR cross-tenant attempt — the prisma store cannot
+    // differentiate without an extra read, so callers see StaleVersionError.
+    // The in-memory store throws the more specific TenantMismatchError when
+    // it can definitively distinguish the cases.
+    const result = await this.prisma.approvalRecord.updateMany({
+      where: { id, version: expectedVersion, organizationId },
+      data: {
+        status: state.status,
+        respondedBy: state.respondedBy,
+        respondedAt: state.respondedAt,
+        patchValue: (state.patchValue as object) ?? undefined,
+        expiresAt: state.expiresAt,
+        version: state.version,
+      },
+    });
+    if (result.count === 0) {
+      throw new StaleVersionError(id, expectedVersion, -1);
     }
   }
 
