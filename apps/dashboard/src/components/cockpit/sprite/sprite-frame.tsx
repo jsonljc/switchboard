@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { T } from "../tokens";
 import { AnimatedSprite } from "./animated-sprite";
 import type { SpriteState, SpriteVariantKey, VariantBundle } from "./types";
@@ -15,7 +16,7 @@ export interface SpriteFrameProps {
   fallbackLetter: string;
 }
 
-function frameStyle(size: number, accentSoft: string): React.CSSProperties {
+function frameStyle(size: number, accentSoft: string): CSSProperties {
   return {
     width: size,
     height: size,

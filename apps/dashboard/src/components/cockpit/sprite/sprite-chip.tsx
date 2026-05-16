@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { T } from "../tokens";
 import { AnimatedSprite } from "./animated-sprite";
 import type { SpriteState, SpriteVariantKey, VariantBundle } from "./types";
@@ -12,7 +13,7 @@ export interface SpriteChipProps {
   fallbackLetter: string;
 }
 
-function chipStyle(size: number, accentSoft: string): React.CSSProperties {
+function chipStyle(size: number, accentSoft: string): CSSProperties {
   return {
     width: size,
     height: size,
@@ -40,7 +41,9 @@ export function SpriteChip({
   if (!frames || frames.length === 0 || !palette) {
     return (
       <span style={chipStyle(size, accentSoft)}>
-        <span style={{ fontWeight: 700, fontSize: 11, color: fallbackDeep }}>{fallbackLetter}</span>
+        <span style={{ fontWeight: 700, fontSize: Math.round(size * 0.42), color: fallbackDeep }}>
+          {fallbackLetter}
+        </span>
       </span>
     );
   }
