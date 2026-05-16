@@ -48,7 +48,7 @@ function ownsItsShell(pathname: string): boolean {
  * homes and the auth/setup flow bypass.
  */
 const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/", "/alex", "/riley"]);
-export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding", "/setup"];
+export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding"];
 
 export function AppShell({
   children,
@@ -88,7 +88,7 @@ export function AppShell({
   }
 
   // All non-editorial routes (Mercury surfaces, /settings, /operator/reports,
-  // /login, /onboarding, /setup) get the bare <main> wrapper. The route's
+  // /login, /onboarding) get the bare <main> wrapper. The route's
   // own layout.tsx (e.g., SettingsLayout, ReportsLayout) is responsible for
   // any sidebar/header/back-link chrome.
   return (
