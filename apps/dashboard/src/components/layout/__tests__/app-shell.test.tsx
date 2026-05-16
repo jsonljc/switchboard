@@ -114,8 +114,8 @@ describe("AppShell visual branches", () => {
 });
 
 describe("ONBOARDING_EXEMPT_PATHS membership (gating, not chrome)", () => {
-  it("contains only login/onboarding/setup — not Mercury surfaces or settings", () => {
-    expect(ONBOARDING_EXEMPT_PATHS).toEqual(["/login", "/onboarding", "/setup"]);
+  it("contains only login/onboarding — not Mercury surfaces or settings", () => {
+    expect(ONBOARDING_EXEMPT_PATHS).toEqual(["/login", "/onboarding"]);
   });
 });
 
