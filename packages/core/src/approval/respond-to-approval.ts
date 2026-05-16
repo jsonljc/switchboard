@@ -219,7 +219,11 @@ async function respondViaLifecycle(args: {
 
     const envelope = await envelopeStore.getById(approval.envelopeId);
     if (envelope) {
-      await envelopeStore.update(envelope.id, { status: "denied" });
+      await envelopeStore.update(
+        envelope.id,
+        { status: "denied" },
+        approval.organizationId ?? null,
+      );
     }
 
     return {
@@ -279,7 +283,11 @@ async function respondViaLifecycle(args: {
 
   const envelope = await envelopeStore.getById(approval.envelopeId);
   if (envelope) {
-    await envelopeStore.update(envelope.id, { status: "approved" });
+    await envelopeStore.update(
+      envelope.id,
+      { status: "approved" },
+      approval.organizationId ?? null,
+    );
   }
 
   logger.info(

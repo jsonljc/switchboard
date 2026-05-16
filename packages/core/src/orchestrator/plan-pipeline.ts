@@ -100,7 +100,9 @@ export async function proposePlan(
   if (plan.strategy === "atomic" && planResult.planDecision === "deny") {
     for (const result of results) {
       if (result.envelope.status !== "denied") {
-        await ctx.storage.envelopes.update(result.envelope.id, { status: "denied" });
+        const orgId =
+          (result.envelope.proposals[0]?.parameters["_organizationId"] as string) ?? null;
+        await ctx.storage.envelopes.update(result.envelope.id, { status: "denied" }, orgId);
         result.envelope.status = "denied";
       }
     }
@@ -114,7 +116,9 @@ export async function proposePlan(
       if (hitFailure && proposalId) {
         const result = results[i]!;
         if (result.envelope.status !== "denied") {
-          await ctx.storage.envelopes.update(result.envelope.id, { status: "denied" });
+          const orgId =
+            (result.envelope.proposals[0]?.parameters["_organizationId"] as string) ?? null;
+          await ctx.storage.envelopes.update(result.envelope.id, { status: "denied" }, orgId);
           result.envelope.status = "denied";
         }
       }
@@ -258,7 +262,8 @@ async function consolidatePlanApproval(
   });
 
   for (const result of pendingResults) {
-    await ctx.storage.envelopes.update(result.envelope.id, { status: "queued" });
+    const orgId = (result.envelope.proposals[0]?.parameters["_organizationId"] as string) ?? null;
+    await ctx.storage.envelopes.update(result.envelope.id, { status: "queued" }, orgId);
     result.envelope.status = "queued" as ActionEnvelope["status"];
   }
 

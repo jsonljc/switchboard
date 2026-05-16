@@ -98,7 +98,10 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
     const nextNumber = (latestRev?.revisionNumber ?? 0) + 1;
     const revisionId = randomUUID();
 
-    const [revRow] = await this.prisma.$transaction([
+    // organizationId is part of the lifecycle update WHERE for tenant isolation
+    // (audit follow-up to TI-7/TI-8). Use updateMany to enable orgId scoping +
+    // surface a tenant mismatch as count===0 rather than a silent no-op.
+    const [revRow, lcResult] = await this.prisma.$transaction([
       this.prisma.approvalRevision.create({
         data: {
           id: revisionId,
@@ -112,11 +115,15 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
           createdBy: input.createdBy,
         },
       }),
-      this.prisma.approvalLifecycle.update({
-        where: { id: input.lifecycleId },
+      this.prisma.approvalLifecycle.updateMany({
+        where: { id: input.lifecycleId, organizationId: input.organizationId },
         data: { currentRevisionId: revisionId },
       }),
     ]);
+
+    if (lcResult.count === 0) {
+      throw new Error(`ApprovalLifecycle not found or tenant mismatch: ${input.lifecycleId}`);
+    }
 
     return toRevision(revRow);
   }

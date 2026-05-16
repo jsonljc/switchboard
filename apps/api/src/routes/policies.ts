@@ -131,10 +131,14 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
-      await app.storageContext.policies.update(id, {
-        ...parsed.data,
-        updatedAt: new Date(),
-      });
+      await app.storageContext.policies.update(
+        id,
+        {
+          ...parsed.data,
+          updatedAt: new Date(),
+        },
+        existing.organizationId,
+      );
       await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
       const updated = await app.storageContext.policies.getById(id);
 

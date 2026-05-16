@@ -9,6 +9,10 @@ function createMockPrisma() {
       updateMany: vi.fn(),
       findUniqueOrThrow: vi.fn(),
     },
+    approvalRevision: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+    },
     executableWorkUnit: {
       create: vi.fn(),
     },
@@ -179,6 +183,82 @@ describe("PrismaLifecycleStore", () => {
       await expect(
         store.approveAndMaterialize("lc_1", 1, "org_1", MATERIALIZE_INPUT),
       ).rejects.toThrow(StaleVersionError);
+    });
+  });
+
+  describe("createRevision", () => {
+    const REVISION_INPUT = {
+      lifecycleId: "lc_1",
+      organizationId: "org_1" as string | null,
+      parametersSnapshot: { foo: "bar" },
+      approvalScopeSnapshot: { risk: "medium" },
+      bindingHash: "hash-new",
+      rationale: null,
+      supersedesRevisionId: "rev_old",
+      createdBy: "user_1",
+    };
+
+    const FAKE_REVISION_ROW = {
+      id: "rev_new",
+      lifecycleId: "lc_1",
+      revisionNumber: 2,
+      parametersSnapshot: { foo: "bar" },
+      approvalScopeSnapshot: { risk: "medium" },
+      bindingHash: "hash-new",
+      rationale: null,
+      supersedesRevisionId: "rev_old",
+      createdBy: "user_1",
+      createdAt: new Date("2025-06-01"),
+    };
+
+    // Issue #594 sibling regression — orgId scoping on lifecycle pointer update
+    // inside the createRevision transaction.
+    it("scopes lifecycle updateMany WHERE by organizationId (TI sibling)", async () => {
+      prisma.approvalRevision.findFirst.mockResolvedValue({ revisionNumber: 1 });
+      prisma.approvalRevision.create.mockReturnValue({});
+      prisma.approvalLifecycle.updateMany.mockReturnValue({});
+      prisma.$transaction.mockResolvedValue([FAKE_REVISION_ROW, { count: 1 }]);
+
+      await store.createRevision(REVISION_INPUT);
+
+      const callArgs = prisma.approvalLifecycle.updateMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({ id: "lc_1", organizationId: "org_1" });
+    });
+
+    it("scopes lifecycle updateMany WHERE by organizationId=null when input is null", async () => {
+      prisma.approvalRevision.findFirst.mockResolvedValue({ revisionNumber: 1 });
+      prisma.approvalRevision.create.mockReturnValue({});
+      prisma.approvalLifecycle.updateMany.mockReturnValue({});
+      prisma.$transaction.mockResolvedValue([FAKE_REVISION_ROW, { count: 1 }]);
+
+      await store.createRevision({ ...REVISION_INPUT, organizationId: null });
+
+      const callArgs = prisma.approvalLifecycle.updateMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({ id: "lc_1", organizationId: null });
+    });
+
+    it("throws when transaction lifecycle updateMany count=0 (tenant mismatch)", async () => {
+      prisma.approvalRevision.findFirst.mockResolvedValue({ revisionNumber: 1 });
+      prisma.approvalRevision.create.mockReturnValue({});
+      prisma.approvalLifecycle.updateMany.mockReturnValue({});
+      prisma.$transaction.mockResolvedValue([FAKE_REVISION_ROW, { count: 0 }]);
+
+      await expect(store.createRevision(REVISION_INPUT)).rejects.toThrow(
+        /not found or tenant mismatch/,
+      );
+    });
+
+    it("returns the created revision when transaction succeeds", async () => {
+      prisma.approvalRevision.findFirst.mockResolvedValue({ revisionNumber: 1 });
+      prisma.approvalRevision.create.mockReturnValue({});
+      prisma.approvalLifecycle.updateMany.mockReturnValue({});
+      prisma.$transaction.mockResolvedValue([FAKE_REVISION_ROW, { count: 1 }]);
+
+      const result = await store.createRevision(REVISION_INPUT);
+
+      expect(result.id).toBe("rev_new");
+      expect(result.revisionNumber).toBe(2);
+      expect(result.bindingHash).toBe("hash-new");
     });
   });
 });

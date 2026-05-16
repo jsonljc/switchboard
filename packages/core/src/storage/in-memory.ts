@@ -34,9 +34,31 @@ export class InMemoryEnvelopeStore implements EnvelopeStore {
     return envelope ? { ...envelope } : null;
   }
 
-  async update(id: string, updates: Partial<ActionEnvelope>): Promise<void> {
+  async update(
+    id: string,
+    updates: Partial<ActionEnvelope>,
+    organizationId: string | null,
+  ): Promise<void> {
     const existing = this.store.get(id);
     if (!existing) throw new Error(`Envelope not found: ${id}`);
+    // Tenant isolation: in-memory envelope org is embedded in proposals
+    // (PrismaEnvelopeStore.extractOrganizationId mirrors this shape).
+    // Defend the single-org-per-envelope invariant here: scan all proposals,
+    // reject mixed orgs (would be a save-time bug), and compare to caller's org.
+    const distinctOrgs = new Set<string>();
+    for (const p of existing.proposals) {
+      const v = p.parameters["_organizationId"];
+      if (typeof v === "string") distinctOrgs.add(v);
+    }
+    if (distinctOrgs.size > 1) {
+      throw new Error(
+        `InMemoryEnvelopeStore: envelope ${id} has multiple distinct _organizationId values across proposals (${[...distinctOrgs].join(", ")}); single-org invariant violated`,
+      );
+    }
+    const storedOrgId = distinctOrgs.size === 1 ? [...distinctOrgs][0]! : null;
+    if (storedOrgId !== organizationId) {
+      throw new TenantMismatchError(id, organizationId, storedOrgId);
+    }
     this.store.set(id, { ...existing, ...updates, updatedAt: new Date() });
   }
 
@@ -81,9 +103,14 @@ export class InMemoryPolicyStore implements PolicyStore {
     return policy ? { ...policy } : null;
   }
 
-  async update(id: string, data: Partial<Policy>): Promise<void> {
+  async update(id: string, data: Partial<Policy>, organizationId: string | null): Promise<void> {
     const existing = this.store.get(id);
     if (!existing) throw new Error(`Policy not found: ${id}`);
+    // Tenant isolation: refuse if caller's org doesn't match the stored row
+    // (audit follow-up to TI-7/TI-8). Policy.organizationId may be null (global).
+    if (existing.organizationId !== organizationId) {
+      throw new TenantMismatchError(id, organizationId, existing.organizationId);
+    }
     this.store.set(id, { ...existing, ...data, updatedAt: new Date() });
   }
 

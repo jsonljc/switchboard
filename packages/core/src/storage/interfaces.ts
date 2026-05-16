@@ -15,7 +15,11 @@ import type { Cartridge, CartridgeInterceptor } from "@switchboard/schemas";
 export interface EnvelopeStore {
   save(envelope: ActionEnvelope): Promise<void>;
   getById(id: string): Promise<ActionEnvelope | null>;
-  update(id: string, updates: Partial<ActionEnvelope>): Promise<void>;
+  update(
+    id: string,
+    updates: Partial<ActionEnvelope>,
+    organizationId: string | null,
+  ): Promise<void>;
   list(filter?: {
     principalId?: string;
     organizationId?: string;
@@ -27,7 +31,7 @@ export interface EnvelopeStore {
 export interface PolicyStore {
   save(policy: Policy): Promise<void>;
   getById(id: string): Promise<Policy | null>;
-  update(id: string, data: Partial<Policy>): Promise<void>;
+  update(id: string, data: Partial<Policy>, organizationId: string | null): Promise<void>;
   delete(id: string): Promise<boolean>;
   listActive(filter?: { cartridgeId?: string; organizationId?: string | null }): Promise<Policy[]>;
 }

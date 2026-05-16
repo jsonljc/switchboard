@@ -57,6 +57,7 @@ export class ApprovalLifecycleService {
 
     return this.store.createRevision({
       lifecycleId: params.lifecycleId,
+      organizationId: lifecycle.organizationId,
       parametersSnapshot: params.parametersSnapshot,
       approvalScopeSnapshot: params.approvalScopeSnapshot,
       bindingHash: params.bindingHash,

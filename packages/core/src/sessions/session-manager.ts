@@ -219,12 +219,16 @@ export class SessionManager {
     };
 
     await this.deps.toolEvents.record(event);
-    await this.deps.sessions.update(sessionId, {
-      toolCallCount: session.toolCallCount + 1,
-      mutationCount: session.mutationCount + (input.isMutation ? 1 : 0),
-      dollarsAtRisk: session.dollarsAtRisk + input.dollarsAtRisk,
-      currentStep: session.currentStep + 1,
-    });
+    await this.deps.sessions.update(
+      sessionId,
+      {
+        toolCallCount: session.toolCallCount + 1,
+        mutationCount: session.mutationCount + (input.isMutation ? 1 : 0),
+        dollarsAtRisk: session.dollarsAtRisk + input.dollarsAtRisk,
+        currentStep: session.currentStep + 1,
+      },
+      session.organizationId,
+    );
 
     return event;
   }
@@ -268,14 +272,22 @@ export class SessionManager {
     };
 
     await this.deps.pauses.save(pause);
-    await this.deps.sessions.update(sessionId, {
-      status: "paused",
-      checkpoint: input.checkpoint,
-    });
-    await this.deps.runs.update(input.runId, {
-      outcome: "paused_for_approval",
-      completedAt: new Date(),
-    });
+    await this.deps.sessions.update(
+      sessionId,
+      {
+        status: "paused",
+        checkpoint: input.checkpoint,
+      },
+      session.organizationId,
+    );
+    await this.deps.runs.update(
+      input.runId,
+      {
+        outcome: "paused_for_approval",
+        completedAt: new Date(),
+      },
+      session.organizationId,
+    );
 
     return pause;
   }
@@ -295,22 +307,25 @@ export class SessionManager {
       throw new ConcurrentResumeError(pause.id);
     }
 
-    // CAS: atomically transition pending → consumed
-    const swapped = await this.deps.pauses.compareAndSwapResumeStatus(
-      pause.id,
-      "pending",
-      "consumed",
-      { approvalOutcome, resumedAt: new Date() },
-    );
-    if (!swapped) {
-      throw new ConcurrentResumeError(pause.id);
-    }
-
+    // Fetch session BEFORE the CAS so we can scope the CAS WHERE by organizationId
+    // (tenant isolation; audit follow-up to TI-7/TI-8).
     const session = await this.requireSession(pause.sessionId);
     if (session.status !== "paused") {
       throw new Error(
         `Cannot resume session ${session.id}: status is ${session.status}, expected paused`,
       );
+    }
+
+    // CAS: atomically transition pending → consumed (scoped by org)
+    const swapped = await this.deps.pauses.compareAndSwapResumeStatus(
+      pause.id,
+      "pending",
+      "consumed",
+      session.organizationId,
+      { approvalOutcome, resumedAt: new Date() },
+    );
+    if (!swapped) {
+      throw new ConcurrentResumeError(pause.id);
     }
 
     const existingRuns = await this.deps.runs.listBySession(session.id);
@@ -329,7 +344,7 @@ export class SessionManager {
     };
 
     await this.deps.runs.save(run);
-    await this.deps.sessions.update(session.id, { status: "running" });
+    await this.deps.sessions.update(session.id, { status: "running" }, session.organizationId);
 
     const updatedSession = await this.requireSession(session.id);
     return { session: updatedSession, run, resumeToken: pause.resumeToken };
@@ -344,8 +359,16 @@ export class SessionManager {
     this.assertTransition(session.status, "completed");
 
     const now = new Date();
-    await this.deps.sessions.update(sessionId, { status: "completed", completedAt: now });
-    await this.deps.runs.update(opts.runId, { outcome: "completed", completedAt: now });
+    await this.deps.sessions.update(
+      sessionId,
+      { status: "completed", completedAt: now },
+      session.organizationId,
+    );
+    await this.deps.runs.update(
+      opts.runId,
+      { outcome: "completed", completedAt: now },
+      session.organizationId,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -357,11 +380,19 @@ export class SessionManager {
     this.assertTransition(session.status, "failed");
 
     const now = new Date();
-    await this.deps.sessions.update(sessionId, {
-      status: "failed",
-      completedAt: now,
-    });
-    await this.deps.runs.update(opts.runId, { outcome: "failed", completedAt: now });
+    await this.deps.sessions.update(
+      sessionId,
+      {
+        status: "failed",
+        completedAt: now,
+      },
+      session.organizationId,
+    );
+    await this.deps.runs.update(
+      opts.runId,
+      { outcome: "failed", completedAt: now },
+      session.organizationId,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -375,7 +406,7 @@ export class SessionManager {
     const pauses = await this.deps.pauses.listBySession(sessionId);
     for (const p of pauses) {
       if (p.resumeStatus === "pending") {
-        await this.deps.pauses.update(p.id, { resumeStatus: "cancelled" });
+        await this.deps.pauses.update(p.id, { resumeStatus: "cancelled" }, session.organizationId);
       }
     }
 
@@ -383,11 +414,19 @@ export class SessionManager {
     const now = new Date();
     for (const run of runs) {
       if (run.outcome === null) {
-        await this.deps.runs.update(run.id, { outcome: "cancelled", completedAt: now });
+        await this.deps.runs.update(
+          run.id,
+          { outcome: "cancelled", completedAt: now },
+          session.organizationId,
+        );
       }
     }
 
-    await this.deps.sessions.update(sessionId, { status: "cancelled", completedAt: now });
+    await this.deps.sessions.update(
+      sessionId,
+      { status: "cancelled", completedAt: now },
+      session.organizationId,
+    );
   }
 
   // -------------------------------------------------------------------------

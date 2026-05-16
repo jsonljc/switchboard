@@ -102,13 +102,13 @@ describe("InMemoryEnvelopeStore", () => {
   it("should update an envelope", async () => {
     const envelope = makeEnvelope({ id: "env_2", status: "proposed" });
     await store.save(envelope);
-    await store.update("env_2", { status: "approved" });
+    await store.update("env_2", { status: "approved" }, null);
     const retrieved = await store.getById("env_2");
     expect(retrieved?.status).toBe("approved");
   });
 
   it("should throw when updating non-existent envelope", async () => {
-    await expect(store.update("nonexistent", { status: "approved" })).rejects.toThrow(
+    await expect(store.update("nonexistent", { status: "approved" }, null)).rejects.toThrow(
       "Envelope not found",
     );
   });
@@ -153,7 +153,7 @@ describe("InMemoryPolicyStore", () => {
   it("should update a policy", async () => {
     const policy = makePolicy({ id: "pol_2" });
     await store.save(policy);
-    await store.update("pol_2", { name: "Updated Policy" });
+    await store.update("pol_2", { name: "Updated Policy" }, null);
     const retrieved = await store.getById("pol_2");
     expect(retrieved?.name).toBe("Updated Policy");
   });

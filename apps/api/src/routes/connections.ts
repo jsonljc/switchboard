@@ -298,7 +298,11 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      await store.updateStatus(id, healthResult.healthy ? "connected" : "error");
+      await store.updateStatus(
+        id,
+        healthResult.healthy ? "connected" : "error",
+        connection.organizationId,
+      );
 
       return reply.code(200).send(healthResult);
     },

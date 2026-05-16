@@ -7,6 +7,7 @@ function createMockPrisma() {
       upsert: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findMany: vi.fn(),
     },
   };
@@ -88,15 +89,42 @@ describe("PrismaEnvelopeStore", () => {
   });
 
   it("updates envelope status", async () => {
-    prisma.actionEnvelope.update.mockResolvedValue({});
+    prisma.actionEnvelope.updateMany.mockResolvedValue({ count: 1 });
 
-    await store.update("env_test_1", { status: "executed" });
+    await store.update("env_test_1", { status: "executed" }, "org_1");
 
-    expect(prisma.actionEnvelope.update).toHaveBeenCalledWith(
+    expect(prisma.actionEnvelope.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "env_test_1" },
+        where: { id: "env_test_1", organizationId: "org_1" },
         data: expect.objectContaining({ status: "executed" }),
       }),
+    );
+  });
+
+  // Sibling-isolation regression — audit follow-up to TI-7/TI-8 (issue #594).
+  it("scopes update WHERE by organizationId (TI sibling)", async () => {
+    prisma.actionEnvelope.updateMany.mockResolvedValue({ count: 1 });
+
+    await store.update("env_test_1", { status: "executed" }, "org_1");
+
+    const callArgs = prisma.actionEnvelope.updateMany.mock.calls[0]![0];
+    expect(callArgs.where).toEqual({ id: "env_test_1", organizationId: "org_1" });
+  });
+
+  it("scopes update WHERE by organizationId=null when caller passes null", async () => {
+    prisma.actionEnvelope.updateMany.mockResolvedValue({ count: 1 });
+
+    await store.update("env_test_1", { status: "executed" }, null);
+
+    const callArgs = prisma.actionEnvelope.updateMany.mock.calls[0]![0];
+    expect(callArgs.where).toEqual({ id: "env_test_1", organizationId: null });
+  });
+
+  it("throws when update count=0 (tenant mismatch or missing row)", async () => {
+    prisma.actionEnvelope.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(store.update("env_test_1", { status: "executed" }, "org_X")).rejects.toThrow(
+      /not found or tenant mismatch/,
     );
   });
 
