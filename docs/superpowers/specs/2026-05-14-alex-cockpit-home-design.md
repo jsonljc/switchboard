@@ -94,22 +94,21 @@ Phase A ships across six PRs. Each slice has its own plan doc under `docs/superp
 
 ---
 
-
 This section is the **authoritative inventory** of what Alex does in the codebase as of 2026-05-14. The cockpit's job is to surface this work to operators — every capability below maps to at least one cockpit element (KPI tile, approval card, activity row, mission row, or thread preview).
 
 ### Conversation lifecycle states Alex moves contacts through
 
 From `packages/core/src/conversation-lifecycle/constants.ts` + `packages/schemas/src/conversation-lifecycle.ts`:
 
-| State                       | Capability      | Reachable via triggers                                                                                                    | Cockpit treatment                                                          |
-|-----------------------------|-----------------|---------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|
-| `active`                    | mechanical      | inbound message arrives; lifecycle re-opens after re-engagement                                                            | Activity rows `replied` / `qualified` / `sent`; status `TALKING` when ≥1 live |
-| `stalled`                   | mechanical      | `timer_24h_no_inbound`                                                                                                    | Activity row `passed` (silent) or no row; pipeline counts only             |
-| `booked`                    | mechanical      | `booking_event_received`                                                                                                  | Activity row `booked`; KPI `bookings`                                      |
-| `escalated`                 | mechanical      | `governance_verdict_escalate`, `operator_takeover`                                                                        | Activity row `escalated` (`TO YOU`)                                        |
-| `qualified`                 | qualification   | `qualification_checklist_met`                                                                                             | Activity row `qualified`; KPI `qualified %`                                |
-| `disqualified`              | qualification   | `operator_confirmed_disqualification`                                                                                     | Activity row `passed`; pipeline `dropped` count                            |
-| `proposed_disqualified` *   | qualification   | `system_proposed_disqualification` (qualificationStatus, not currentState)                                                | **Approval card** — operator confirms/dismisses                            |
+| State                      | Capability    | Reachable via triggers                                                     | Cockpit treatment                                                             |
+| -------------------------- | ------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `active`                   | mechanical    | inbound message arrives; lifecycle re-opens after re-engagement            | Activity rows `replied` / `qualified` / `sent`; status `TALKING` when ≥1 live |
+| `stalled`                  | mechanical    | `timer_24h_no_inbound`                                                     | Activity row `passed` (silent) or no row; pipeline counts only                |
+| `booked`                   | mechanical    | `booking_event_received`                                                   | Activity row `booked`; KPI `bookings`                                         |
+| `escalated`                | mechanical    | `governance_verdict_escalate`, `operator_takeover`                         | Activity row `escalated` (`TO YOU`)                                           |
+| `qualified`                | qualification | `qualification_checklist_met`                                              | Activity row `qualified`; KPI `qualified %`                                   |
+| `disqualified`             | qualification | `operator_confirmed_disqualification`                                      | Activity row `passed`; pipeline `dropped` count                               |
+| `proposed_disqualified` \* | qualification | `system_proposed_disqualification` (qualificationStatus, not currentState) | **Approval card** — operator confirms/dismisses                               |
 
 \* `proposed_disqualified` is a `qualificationStatus`, not a `currentState`. The cockpit treats any contact with `qualificationStatus === "proposed_disqualified"` as an Alex-emitted approval candidate; confirmation flows through the same approval path as pricing/refund asks (see §Approval block).
 
@@ -117,14 +116,14 @@ From `packages/core/src/conversation-lifecycle/constants.ts` + `packages/schemas
 
 From `packages/core/src/skill-runtime/tools/`:
 
-| Tool                       | Purpose                                                | Cockpit relevance                                                                              |
-|----------------------------|--------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| `calendar-book`            | Hold/confirm a tour slot                               | Activity row `booked`; powers KPI `bookings`                                                   |
-| `crm-query`                | Read contact/opportunity history                       | Invisible — informs Alex's replies; not surfaced as its own row                                |
-| `crm-write`                | Update contact stage / opportunity status / notes      | Surfaces only when state advances (`qualified`/`booked`); raw writes are invisible             |
-| `escalate`                 | Hand a thread to the operator's inbox                  | Activity row `escalated`; status pill stays `TALKING` until the operator picks up              |
-| `web-scanner`              | Pull org/listing data during onboarding                | Surfaces in `EmptyState` setup row hints — not on steady-state cockpit                         |
-| `booking-failure-handler`  | Roll back a calendar-book that the provider rejected   | Activity row `escalated` with body `"Booking failed — needs you"`                              |
+| Tool                      | Purpose                                              | Cockpit relevance                                                                  |
+| ------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `calendar-book`           | Hold/confirm a consultation slot                     | Activity row `booked`; powers KPI `bookings`                                       |
+| `crm-query`               | Read contact/opportunity history                     | Invisible — informs Alex's replies; not surfaced as its own row                    |
+| `crm-write`               | Update contact stage / opportunity status / notes    | Surfaces only when state advances (`qualified`/`booked`); raw writes are invisible |
+| `escalate`                | Hand a thread to the operator's inbox                | Activity row `escalated`; status pill stays `TALKING` until the operator picks up  |
+| `web-scanner`             | Pull org/listing data during onboarding              | Surfaces in `EmptyState` setup row hints — not on steady-state cockpit             |
+| `booking-failure-handler` | Roll back a calendar-book that the provider rejected | Activity row `escalated` with body `"Booking failed — needs you"`                  |
 
 All tool invocations enter through `PlatformIngress.submit()` and produce `WorkTrace` rows. The cockpit reads from **persisted `Audit` / `WorkTrace` / `ConversationLifecycle` rows only** — it never inspects skill-executor state mid-flight. This is the same contract Riley honors.
 
@@ -132,14 +131,14 @@ All tool invocations enter through `PlatformIngress.submit()` and produce `WorkT
 
 Alex emits approvals through `skill-runtime` `pendingApproval()` (see `packages/core/src/skill-runtime/tool-result.ts:54`) and through the qualification hook (`system_proposed_disqualification`). All persist into the `Approval` table with `bindingHash`, `riskCategory`, `summary`, and a routing payload. The cockpit reads from `usePendingApprovals()` (already exists at `apps/dashboard/src/app/(auth)/(mercury)/approvals/hooks/use-approvals.ts`).
 
-| Approval source                                              | When                                                                                  | Card kind             | Risk category surfaced                                  |
-|--------------------------------------------------------------|---------------------------------------------------------------------------------------|-----------------------|---------------------------------------------------------|
-| Pricing reply over org's `priceApprovalThreshold`            | Alex drafts a reply that includes a discount/founder rate above the per-org threshold | `pricing`             | `low` / `medium` / `high` from `riskCategory`           |
-| Refund / cancellation thread                                 | Inbound `STOP`-adjacent / refund language hits the deterministic gate                 | `refund`              | `high`                                                  |
-| Escalated thread the operator still needs to acknowledge     | `escalate` tool fired but no operator ack yet                                         | `escalation`          | from gate verdict                                       |
-| Proposed disqualification awaiting confirm                   | `system_proposed_disqualification` written; not yet operator-confirmed                | `qualification`       | `low` (re-routable)                                     |
-| Claim-classifier flagged a medical/regulatory claim          | Alex drafts language the classifier marks unsafe                                      | `regulatory`          | `critical` (medical) / `high` (regulatory adjacent)     |
-| Deterministic-safety-gate blocked draft                      | Draft violated a deterministic rule (e.g. price floor, claim list)                    | `safety-gate`         | from gate                                               |
+| Approval source                                          | When                                                                                  | Card kind       | Risk category surfaced                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------- | --------------------------------------------------- |
+| Pricing reply over org's `priceApprovalThreshold`        | Alex drafts a reply that includes a discount/founder rate above the per-org threshold | `pricing`       | `low` / `medium` / `high` from `riskCategory`       |
+| Refund / cancellation thread                             | Inbound `STOP`-adjacent / refund language hits the deterministic gate                 | `refund`        | `high`                                              |
+| Escalated thread the operator still needs to acknowledge | `escalate` tool fired but no operator ack yet                                         | `escalation`    | from gate verdict                                   |
+| Proposed disqualification awaiting confirm               | `system_proposed_disqualification` written; not yet operator-confirmed                | `qualification` | `low` (re-routable)                                 |
+| Claim-classifier flagged a medical/regulatory claim      | Alex drafts language the classifier marks unsafe                                      | `regulatory`    | `critical` (medical) / `high` (regulatory adjacent) |
+| Deterministic-safety-gate blocked draft                  | Draft violated a deterministic rule (e.g. price floor, claim list)                    | `safety-gate`   | from gate                                           |
 
 The cockpit's `approval[]` array is the union of these sources, scoped to `agentKey === "alex"` (i.e. `Approval.actorId` resolves to an Alex skill execution). Sort order: `urgency = immediate` first (escalations / refund / regulatory), then `this_week` (pricing / qualification), then `next_cycle` (none for Alex today). Within a band: most-recent first.
 
@@ -147,14 +146,14 @@ The cockpit's `approval[]` array is the union of these sources, scoped to `agent
 
 From `AgentRoster.config` (JSON) + `OrganizationProfile`:
 
-| Rule                              | Source                                          | Cockpit surface                                                       |
-|-----------------------------------|-------------------------------------------------|-----------------------------------------------------------------------|
-| Price approval threshold ($)      | `AgentRoster.config.priceApprovalThreshold`     | Mission popover `RULES` row; command `Raise approval threshold to $N` |
-| Quiet hours window                | `AgentRoster.config.quietHours`                 | Mission popover; `IDLE` status pill during the window                 |
-| Refund escalation floor ($)       | `AgentRoster.config.refundEscalationFloor`      | Activity body copy for refund escalations                             |
-| Founder-rate offer enabled        | `AgentRoster.config.founderRateEnabled`         | Command `Stop offering the founder rate`                              |
-| Booking calendar provider         | `AgentRoster.config.calendar.providerId`        | Mission popover `CHANNELS` row, with status dot                       |
-| Re-engagement template enabled    | `AgentRoster.config.reEngagementTemplate`       | Activity row `connected` ("Pulled overnight leads")                   |
+| Rule                           | Source                                      | Cockpit surface                                                       |
+| ------------------------------ | ------------------------------------------- | --------------------------------------------------------------------- |
+| Price approval threshold ($)   | `AgentRoster.config.priceApprovalThreshold` | Mission popover `RULES` row; command `Raise approval threshold to $N` |
+| Quiet hours window             | `AgentRoster.config.quietHours`             | Mission popover; `IDLE` status pill during the window                 |
+| Refund escalation floor ($)    | `AgentRoster.config.refundEscalationFloor`  | Activity body copy for refund escalations                             |
+| Founder-rate offer enabled     | `AgentRoster.config.founderRateEnabled`     | Command `Stop offering the founder rate`                              |
+| Booking calendar provider      | `AgentRoster.config.calendar.providerId`    | Mission popover `CHANNELS` row, with status dot                       |
+| Re-engagement template enabled | `AgentRoster.config.reEngagementTemplate`   | Activity row `connected` ("Pulled overnight leads")                   |
 
 These are **rendered, not edited** in v1 — clicking the mission subtitle opens the popover; the "Edit configuration" button routes to `/settings`. No inline editing in the popover (matches the locked design).
 
@@ -163,7 +162,7 @@ These are **rendered, not edited** in v1 — clicking the mission subtitle opens
 For the ROI bar and KPI tiles, Alex needs two numbers stored per-org:
 
 - `targetCpbCents` — cost-per-booking target (e.g. $30)
-- `avgValueCents` — average booking/tour value used to compute return on spend (e.g. $179)
+- `avgValueCents` — average booking value used to compute return on spend (e.g. $179)
 
 These are the **same two fields Riley needs** (`avgValueCents` + `targetCpbCents` per the Riley spec §Persistence). They live in the same place. Final placement decided in the plan (§Backend changes §1) — either two nullable columns on `AgentRoster`, or two keys under `AgentRoster.config`.
 
@@ -171,18 +170,18 @@ These are the **same two fields Riley needs** (`avgValueCents` + `targetCpbCents
 
 Documented so the cockpit doesn't accidentally re-surface them:
 
-| Capability                              | File / module                                              | Cockpit relevance                                     |
-|-----------------------------------------|------------------------------------------------------------|-------------------------------------------------------|
-| Conversation compounding                | `ConversationCompoundingService` (knowledgeStore-wired)    | Feeds Alex's context; cockpit shows the outcome only  |
-| Outcome-informed context injection      | `packages/core/src/agent-infra` (PR-3, #461)               | Same — invisible to operator                          |
-| Qualification rule evaluator            | `conversation-lifecycle/qualification/*`                   | Triggers `qualified`/`proposed_disqualified` rows     |
-| Disqualification resolver               | `conversation-lifecycle/qualification/disqualification-resolver.ts` | Creates qualification approval cards         |
-| Deterministic safety gate               | `skill-runtime/hooks/deterministic-safety-gate.ts`         | Creates `safety-gate` approval cards                  |
-| Claim classifier                        | `skill-runtime/hooks/claim-classifier.ts`                  | Creates `regulatory` approval cards (med-spa Phase 1b2) |
-| Re-engagement attributor                | `conversation-lifecycle/re-engagement-attributor.ts`       | Drives `connected` activity rows                      |
-| Lifecycle config resolver               | `conversation-lifecycle/lifecycle-config-resolver.ts`      | Surfaces in mission popover indirectly                |
-| Phase 3 mechanical lifecycle            | shipped (#442)                                             | All activity row kinds are derived from this          |
-| Phase 3b LLM qualification              | spec'd (#443); ship state per branch                       | Powers `proposed_disqualified` approvals              |
+| Capability                         | File / module                                                       | Cockpit relevance                                       |
+| ---------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| Conversation compounding           | `ConversationCompoundingService` (knowledgeStore-wired)             | Feeds Alex's context; cockpit shows the outcome only    |
+| Outcome-informed context injection | `packages/core/src/agent-infra` (PR-3, #461)                        | Same — invisible to operator                            |
+| Qualification rule evaluator       | `conversation-lifecycle/qualification/*`                            | Triggers `qualified`/`proposed_disqualified` rows       |
+| Disqualification resolver          | `conversation-lifecycle/qualification/disqualification-resolver.ts` | Creates qualification approval cards                    |
+| Deterministic safety gate          | `skill-runtime/hooks/deterministic-safety-gate.ts`                  | Creates `safety-gate` approval cards                    |
+| Claim classifier                   | `skill-runtime/hooks/claim-classifier.ts`                           | Creates `regulatory` approval cards (med-spa Phase 1b2) |
+| Re-engagement attributor           | `conversation-lifecycle/re-engagement-attributor.ts`                | Drives `connected` activity rows                        |
+| Lifecycle config resolver          | `conversation-lifecycle/lifecycle-config-resolver.ts`               | Surfaces in mission popover indirectly                  |
+| Phase 3 mechanical lifecycle       | shipped (#442)                                                      | All activity row kinds are derived from this            |
+| Phase 3b LLM qualification         | spec'd (#443); ship state per branch                                | Powers `proposed_disqualified` approvals                |
 
 ## Scope (full Phase A target)
 
@@ -204,7 +203,7 @@ Out of scope:
 - Riley's data wiring (covered by the Riley spec; depends on shell shipping first).
 - Mira tab content. `tabs` shows `Mira` as `muted: true`; the tab is rendered greyed and not clickable in v1. Mira Home v3 lands in Wave 4 (per the launch roadmap).
 - The pixel-avatar sprite system from the locked design (`sprite.jsx` / `sprites.jsx` / `riley-sprites.jsx`). v1 ships a static SVG mark (the `Mark` component from `cockpit.jsx`) plus an initial-letter fallback frame. Sprite animations are deferred polish ramp; the shell exposes `state="idle"|"draft"|"sleep"` props so sprites can land later without changing call sites.
-- ROI bar `crm` source for Alex. Alex's ROI bar uses `bookings × avgValueCents / spend` (per `legacyRoi()` in `cockpit.jsx`). CRM-confirmed revenue is Riley territory (true ROAS) — Alex's "tour value" is a deterministic computation, not a CRM lookup.
+- ROI bar `crm` source for Alex. Alex's ROI bar uses `bookings × avgValueCents / spend` (per `legacyRoi()` in `cockpit.jsx`). CRM-confirmed revenue is Riley territory (true ROAS) — Alex's "consultation value" is a deterministic computation, not a CRM lookup.
 - Editing standing rules from the mission popover (clicking "Edit configuration" routes to `/settings`).
 - Inline-reply send-as-me wire-through. Activity rows expand to show a thread preview + reply box (per locked design), but the reply box is **not wired to send** in v1 — pressing "Send as me" routes to `/contacts/[id]` with the thread open. Inline send is a polish ramp; the UI is built so wiring is a one-handler swap.
 - "Tell Alex about {Name}" context-write button on activity rows. Routes to a `/contacts/[id]?note=open` deep link in v1; no inline note-write API call.
@@ -215,16 +214,16 @@ Out of scope:
 
 The implementation must match the design files in the bundle. Component boundaries are already drawn:
 
-| Shell component (in `cockpit.jsx`) | Alex input                                   | Spec section          |
-|------------------------------------|----------------------------------------------|-----------------------|
-| `Topbar`                           | `tabs` from `AGENT.tabs`                     | §Identity row         |
-| `Identity` / `MissionPopover`      | `AGENT.mission`                              | §Identity row         |
-| `KPIStrip` / `KPI` / `ROIBar`      | `STATES[k].kpis` (legacy schema; see §KPIs)  | §KPI strip, §ROI bar  |
-| `ApprovalBlock` / `ApprovalCard`   | `STATES[k].approval` (object or array)       | §Approval block       |
-| `ActivityStream` / `ActivityRow`   | `STATES[k].activity[]` + `ThreadPreview`     | §Activity stream      |
-| `Composer` / `Toast`               | `AGENT.composerPlaceholder`, `AGENT.toastVoice` | §Composer          |
-| `EmptyState`                       | `STATES.empty.narrator` + `setup[]`          | §Day-1 empty state    |
-| `CommandPalette`                   | `window.COMMANDS` + `parseCommand`           | §Composer             |
+| Shell component (in `cockpit.jsx`) | Alex input                                      | Spec section         |
+| ---------------------------------- | ----------------------------------------------- | -------------------- |
+| `Topbar`                           | `tabs` from `AGENT.tabs`                        | §Identity row        |
+| `Identity` / `MissionPopover`      | `AGENT.mission`                                 | §Identity row        |
+| `KPIStrip` / `KPI` / `ROIBar`      | `STATES[k].kpis` (legacy schema; see §KPIs)     | §KPI strip, §ROI bar |
+| `ApprovalBlock` / `ApprovalCard`   | `STATES[k].approval` (object or array)          | §Approval block      |
+| `ActivityStream` / `ActivityRow`   | `STATES[k].activity[]` + `ThreadPreview`        | §Activity stream     |
+| `Composer` / `Toast`               | `AGENT.composerPlaceholder`, `AGENT.toastVoice` | §Composer            |
+| `EmptyState`                       | `STATES.empty.narrator` + `setup[]`             | §Day-1 empty state   |
+| `CommandPalette`                   | `window.COMMANDS` + `parseCommand`              | §Composer            |
 
 `alex-config.jsx`, `data.jsx`, and `commands.jsx` are the **canonical reference** for Alex's data shape. Production code must produce data conforming to those shapes (renamed where helpful for TypeScript clarity, but structurally identical).
 
@@ -236,9 +235,9 @@ From `alex-config.jsx`:
 
 ```ts
 ALEX_ACCENT = {
-  base:  "#B8782E", // warm amber
-  deep:  "#7C4F1C",
-  soft:  "#F1E2C2",
+  base: "#B8782E", // warm amber
+  deep: "#7C4F1C",
+  soft: "#F1E2C2",
   paper: "#FBF1D6",
 };
 ```
@@ -249,10 +248,20 @@ Shared across both agents (in `cockpit.jsx`):
 T = {
   bg: "#FAF8F2",
   paper: "#FFFFFF",
-  ink: "#0E0C0A", ink2: "#3A332B", ink3: "#6B6052", ink4: "#A39786", ink5: "#C8BEAE",
-  hair: "rgba(14,12,10,0.08)", hairSoft: "rgba(14,12,10,0.04)",
-  amber: "#B8782E", amberDeep: "#7C4F1C", amberSoft: "#F1E2C2", amberPaper: "#FBF1D6",
-  green: "#3F7A36", red: "#A03A2E", blue: "#3A5A80",
+  ink: "#0E0C0A",
+  ink2: "#3A332B",
+  ink3: "#6B6052",
+  ink4: "#A39786",
+  ink5: "#C8BEAE",
+  hair: "rgba(14,12,10,0.08)",
+  hairSoft: "rgba(14,12,10,0.04)",
+  amber: "#B8782E",
+  amberDeep: "#7C4F1C",
+  amberSoft: "#F1E2C2",
+  amberPaper: "#FBF1D6",
+  green: "#3F7A36",
+  red: "#A03A2E",
+  blue: "#3A5A80",
 };
 ```
 
@@ -271,17 +280,17 @@ The cockpit ships two distinct vocabularies depending on slice:
 ```ts
 export type CockpitStatusA1 =
   | "IDLE"
-  | "WORKING"     // activity-row proxy — recent Alex work, source-agnostic
+  | "WORKING" // activity-row proxy — recent Alex work, source-agnostic
   | "WAITING"
   | "HALTED";
 ```
 
-| Status     | Color           | Pulses | Alex meaning (A.1)                                                                                                                  |
-|------------|-----------------|--------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `WORKING`  | green `#3F7A36` | yes    | At least one Alex-attributed activity row in the last N minutes (configurable; default 15). Sourced from existing activity stream. |
-| `WAITING`  | amber `#B8782E` | yes    | One or more `Approval` rows with `status = "pending"` and actor resolving to Alex.                                                  |
-| `IDLE`     | grey `#A39786`  | no     | Neither condition above; or inside configured quiet hours.                                                                          |
-| `HALTED`   | red `#A03A2E`   | no     | `HaltProvider.halted === true`.                                                                                                     |
+| Status    | Color           | Pulses | Alex meaning (A.1)                                                                                                                 |
+| --------- | --------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `WORKING` | green `#3F7A36` | yes    | At least one Alex-attributed activity row in the last N minutes (configurable; default 15). Sourced from existing activity stream. |
+| `WAITING` | amber `#B8782E` | yes    | One or more `Approval` rows with `status = "pending"` and actor resolving to Alex.                                                 |
+| `IDLE`    | grey `#A39786`  | no     | Neither condition above; or inside configured quiet hours.                                                                         |
+| `HALTED`  | red `#A03A2E`   | no     | `HaltProvider.halted === true`.                                                                                                    |
 
 A.1 derives `WORKING` from the **activity-row recency** signal — the same data the cockpit's activity stream is rendering. No new backend, no conversation-grain query.
 
@@ -290,10 +299,10 @@ A.1 derives `WORKING` from the **activity-row recency** signal — the same data
 ```ts
 export type CockpitStatusFull =
   | "IDLE"
-  | "TALKING"     // live-conversation truth — ≥1 active conversation
+  | "TALKING" // live-conversation truth — ≥1 active conversation
   | "WAITING"
-  | "WATCHING"    // Riley
-  | "REVIEWING"   // Riley
+  | "WATCHING" // Riley
+  | "REVIEWING" // Riley
   | "HALTED";
 ```
 
@@ -321,8 +330,8 @@ Runs client-side in `apps/dashboard/src/hooks/use-cockpit-status.ts`:
 ```ts
 function deriveAlexStatusA1(input: {
   halted: boolean;
-  pendingApprovals: number;            // from usePendingApprovals(), scoped to Alex actor
-  recentActivityAt: Date | null;       // most recent Alex activity row's timestamp
+  pendingApprovals: number; // from usePendingApprovals(), scoped to Alex actor
+  recentActivityAt: Date | null; // most recent Alex activity row's timestamp
   inQuietHours: boolean;
   now: Date;
 }): CockpitStatusA1 {
@@ -355,7 +364,7 @@ if (input.activeConversations > 0) return "TALKING";
 
 ```
 [avatar warm amber] Alex  [● TALKING · 3]
-                    SDR · Tours pipeline · {org.displayName}   (clickable)
+                    SDR · Consultations pipeline · {org.displayName}   (clickable)
 
                     "Talking to three people. Two warm. One on pricing —
                     covered by your standing rule."
@@ -367,13 +376,13 @@ The third element on the status line (`· 3`) is `data.liveCount` — the number
 
 Mission popover rows (`mission.rows`) for Alex:
 
-| Eyebrow    | Value                                                                          |
-|------------|--------------------------------------------------------------------------------|
-| `ROLE`     | `SDR · qualify inbound leads, book tours`                                      |
-| `PIPELINE` | `Tours pipeline · single funnel`                                               |
-| `BRAND`    | `{org.displayName} · {org.tagline ?? "—"}`                                     |
-| `CHANNELS` | `Meta Ads · {org.displayName} inbox · tour calendar` (with status dots if available) |
-| `RULES`    | `Pricing approvals over ${threshold} · refunds over ${refundFloor}`            |
+| Eyebrow    | Value                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| `ROLE`     | `SDR · qualify inbound leads, book consultations`                                            |
+| `PIPELINE` | `Consultations pipeline · single funnel`                                                     |
+| `BRAND`    | `{org.displayName} · {org.tagline ?? "—"}`                                                   |
+| `CHANNELS` | `Meta Ads · {org.displayName} inbox · consultation calendar` (with status dots if available) |
+| `RULES`    | `Pricing approvals over ${threshold} · refunds over ${refundFloor}`                          |
 
 The locked design ships 4 rows; this spec adds a `RULES` row (5th) to disclose Alex's per-org thresholds — symmetric with Riley's `TARGETS` row. The shell supports variable-length `mission.rows` (verified by reading `cockpit.jsx:996` — `AG.mission.rows.map((row, i) => ...)` accepts any length).
 
@@ -393,11 +402,11 @@ Tile schema (shared with Riley):
 ```ts
 export type KpiTile = {
   label: string;
-  value: number | string;  // "—" when unavailable
-  unit?: string;           // "%", "×", etc.
-  trend?: string;          // "+2 vs last", "best Mon"
+  value: number | string; // "—" when unavailable
+  unit?: string; // "%", "×", etc.
+  trend?: string; // "+2 vs last", "best Mon"
   unavailable?: boolean;
-  hint?: string;           // "Connect Meta Ads"
+  hint?: string; // "Connect Meta Ads"
 };
 ```
 
@@ -409,10 +418,10 @@ When `data.narrator` is present, the cockpit renders `EmptyState` instead of the
 
 ```ts
 tiles = [
-  { label: "bookings",     value: 9,  trend: "+3" },          // KPI 1 — Alex's hero
+  { label: "bookings", value: 9, trend: "+3" }, // KPI 1 — Alex's hero
   { label: "leads worked", value: 47, trend: "+12" },
-  { label: "qualified",    value: 28, unit: "%", trend: "+4 pts" },
-  { label: "ad spend",     value: "$214" },                    // unit omitted; value is pre-formatted
+  { label: "qualified", value: 28, unit: "%", trend: "+4 pts" },
+  { label: "ad spend", value: "$214" }, // unit omitted; value is pre-formatted
 ];
 ```
 
@@ -420,12 +429,12 @@ Range eyebrow: `This week · {weekStartShort} — {weekEndShort}` (`metrics-alex
 
 ### Backend mapping
 
-| Tile          | Source                                                                                | Currently live? |
-|---------------|---------------------------------------------------------------------------------------|-----------------|
-| bookings      | `metrics-alex.buildAlexMetricsViewModel().heroValue`                                  | yes             |
-| leads worked  | `metrics-alex.leads` (conversion count, type `lead`, this week)                        | yes             |
-| qualified %   | Derived: `bookings / leads` × 100 (already computed at `metrics-alex.ts:57`)          | yes             |
-| ad spend      | From Meta insights (`meta-campaign-insights-provider`) summed over week                | no — falls back to `unavailable: true` with hint `"Connect Meta Ads"` |
+| Tile         | Source                                                                       | Currently live?                                                       |
+| ------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| bookings     | `metrics-alex.buildAlexMetricsViewModel().heroValue`                         | yes                                                                   |
+| leads worked | `metrics-alex.leads` (conversion count, type `lead`, this week)              | yes                                                                   |
+| qualified %  | Derived: `bookings / leads` × 100 (already computed at `metrics-alex.ts:57`) | yes                                                                   |
+| ad spend     | From Meta insights (`meta-campaign-insights-provider`) summed over week      | no — falls back to `unavailable: true` with hint `"Connect Meta Ads"` |
 
 `metrics-alex.ts` keeps emitting today's flat `MetricsViewModel` (it ships `{ heroValue, stats, spark, subprose }`). The shell's `legacyTiles()` adapter (`cockpit.jsx:327`) is ported to TypeScript at `apps/dashboard/src/lib/cockpit/legacy-shapes.ts` and converts the flat shape to `tiles[]`. **Production cost:** zero changes to `metrics-alex.ts`; one new adapter file.
 
@@ -441,7 +450,7 @@ Trend deltas (`+2`, `+12`, `+4 pts`, `best Mon`):
 Layout (shell-provided, `cockpit.jsx:450`):
 
 ```
-[● return on spend] $214 spent · $1,611 in tour value ─────[━━━●━━━━]──── 6× spend
+[● return on spend] $214 spent · $1,611 in consultation value ─────[━━━●━━━━]──── 6× spend
                     $0        break-even                                  $24 per booking · target $30
 ```
 
@@ -451,19 +460,19 @@ Schema (shared):
 export type RoiBar =
   | {
       degraded: true;
-      degradedHint: string;          // "Set avg booking value to see return on spend"
+      degradedHint: string; // "Set avg booking value to see return on spend"
       label?: string;
       comparator: { value: string; target: string; onTarget?: false };
     }
   | {
-      label: string;                  // "return on spend"
-      leftMeta: string;               // "$214 spent"
-      rightMeta: { value: string; suffix: string };  // { value: "$1,611", suffix: " in tour value" }
-      fillPct: number;                // 0..100
-      breakEvenPct: number;           // (1 / 6) * 100 ≈ 16.67
-      breakEvenLabel: string;         // "break-even"
-      scaleLeft: string;              // "$0"
-      scaleRight: string;             // "6× spend"
+      label: string; // "return on spend"
+      leftMeta: string; // "$214 spent"
+      rightMeta: { value: string; suffix: string }; // { value: "$1,611", suffix: " in consultation value" }
+      fillPct: number; // 0..100
+      breakEvenPct: number; // (1 / 6) * 100 ≈ 16.67
+      breakEvenLabel: string; // "break-even"
+      scaleLeft: string; // "$0"
+      scaleRight: string; // "6× spend"
       comparator: { value: string; target: string; onTarget: boolean };
     };
 ```
@@ -497,24 +506,24 @@ When both are unavailable, prefer the Meta Ads hint (the more proximate setup st
 
 ```ts
 export type ApprovalView = {
-  id: string;                        // Approval.id
-  kind: AlexApprovalKind;            // "pricing" | "refund" | "qualification" | "regulatory" | "safety-gate" | "escalation"
+  id: string; // Approval.id
+  kind: AlexApprovalKind; // "pricing" | "refund" | "qualification" | "regulatory" | "safety-gate" | "escalation"
   urgency: "immediate" | "this_week" | "next_cycle";
-  askedAt: string;                   // "4 min ago" (via relative-age util)
-  title: string;                     // Card eyebrow + display title
-  body?: string;                     // Operator-language description; Alex's first-person narration
-  quote?: string;                    // Inbound-message excerpt that triggered the approval
-  quoteFrom?: string;                // "Jordan F. · 11:53"
-  campaign?: never;                  // Riley-only; Alex omits
-  risk?: string;                     // "$680 at risk" / "above $50 threshold"
-  primary: string;                   // CTA primary label, e.g. "Accept & send"
-  secondary: string;                 // "Decline"
-  tertiaryLabel?: string;            // "Open thread" / "Edit reply"
+  askedAt: string; // "4 min ago" (via relative-age util)
+  title: string; // Card eyebrow + display title
+  body?: string; // Operator-language description; Alex's first-person narration
+  quote?: string; // Inbound-message excerpt that triggered the approval
+  quoteFrom?: string; // "Jordan F. · 11:53"
+  campaign?: never; // Riley-only; Alex omits
+  risk?: string; // "$680 at risk" / "above $50 threshold"
+  primary: string; // CTA primary label, e.g. "Accept & send"
+  secondary: string; // "Decline"
+  tertiaryLabel?: string; // "Open thread" / "Edit reply"
   presentation: { primaryLabel: string; dismissLabel: string };
   primaryAction:
     | { kind: "respond"; bindingHash: string; verdict: "accept" | "deny" }
     | { kind: "internal"; intent: string; parameters: Record<string, unknown> }; // for non-binding cards
-  acceptToast?: string;              // optional; falls back to AGENT.toastVoice
+  acceptToast?: string; // optional; falls back to AGENT.toastVoice
   declineToast?: string;
 };
 ```
@@ -523,14 +532,14 @@ export type ApprovalView = {
 
 The shell renders all six from the same `ApprovalCard` component — difference is data, not layout. Visual identity comes from the eyebrow (urgency-driven) and the body copy.
 
-| Kind            | Eyebrow                   | Typical title                                    | Quote source                                | Primary CTA                | Notes                                              |
-|-----------------|---------------------------|--------------------------------------------------|---------------------------------------------|----------------------------|----------------------------------------------------|
-| `pricing`       | **NEEDS YOU** (amber)     | "Send Jordan the founding-member rate?"          | Inbound message that asked for the discount | Accept & send              | Routes through `respondToApproval`; risk = $ at stake |
-| `refund`        | **IMMEDIATE** (red)       | "Refund request from {Name}"                     | Inbound message                              | Open thread (handoff)      | Always escalates to operator inbox; binary verdict |
-| `qualification` | THIS WEEK (amber)         | "Mark {Name} as disqualified?"                   | Last operator-visible inbound (or none)     | Confirm disqualification   | Triggers `operator_confirmed_disqualification`     |
-| `regulatory`    | **IMMEDIATE** (red)       | "Medical claim flagged in draft"                  | Draft text (the unsafe claim)                | Edit reply                 | claim-classifier; high/critical risk               |
-| `safety-gate`   | **IMMEDIATE** (red)       | "Deterministic gate blocked this reply"          | Draft text (the violation)                   | Edit reply                 | deterministic-safety-gate; blocks send             |
-| `escalation`    | **TO YOU** (red)          | "{Name} thread waiting for you"                  | Last 1–3 messages                            | Open thread                | `escalate` tool fired; no `bindingHash`            |
+| Kind            | Eyebrow               | Typical title                           | Quote source                                | Primary CTA              | Notes                                                 |
+| --------------- | --------------------- | --------------------------------------- | ------------------------------------------- | ------------------------ | ----------------------------------------------------- |
+| `pricing`       | **NEEDS YOU** (amber) | "Send Jordan the founding-member rate?" | Inbound message that asked for the discount | Accept & send            | Routes through `respondToApproval`; risk = $ at stake |
+| `refund`        | **IMMEDIATE** (red)   | "Refund request from {Name}"            | Inbound message                             | Open thread (handoff)    | Always escalates to operator inbox; binary verdict    |
+| `qualification` | THIS WEEK (amber)     | "Mark {Name} as disqualified?"          | Last operator-visible inbound (or none)     | Confirm disqualification | Triggers `operator_confirmed_disqualification`        |
+| `regulatory`    | **IMMEDIATE** (red)   | "Medical claim flagged in draft"        | Draft text (the unsafe claim)               | Edit reply               | claim-classifier; high/critical risk                  |
+| `safety-gate`   | **IMMEDIATE** (red)   | "Deterministic gate blocked this reply" | Draft text (the violation)                  | Edit reply               | deterministic-safety-gate; blocks send                |
+| `escalation`    | **TO YOU** (red)      | "{Name} thread waiting for you"         | Last 1–3 messages                           | Open thread              | `escalate` tool fired; no `bindingHash`               |
 
 ### Card sort order
 
@@ -580,14 +589,14 @@ The translator at `apps/dashboard/src/hooks/use-agent-activity.ts` already exist
 
 ```ts
 export type ActivityRow = {
-  time: string;            // "11:58", "Fri", "—" for cold state
+  time: string; // "11:58", "Fri", "—" for cold state
   kind: ActivityKind;
-  head: string;            // One-line summary
-  body?: string;           // Multi-line detail (rendered on expand)
-  who?: string;            // Contact display name (drives "Tell Alex about Jordan" affordance)
-  preview?: ThreadMessage[];  // Inline thread preview on expand — Alex only
-  replyable?: boolean;     // Defaults true when `who` and `preview` both present
-  tag?: string;            // "+12" badge for batch rows
+  head: string; // One-line summary
+  body?: string; // Multi-line detail (rendered on expand)
+  who?: string; // Contact display name (drives "Tell Alex about Jordan" affordance)
+  preview?: ThreadMessage[]; // Inline thread preview on expand — Alex only
+  replyable?: boolean; // Defaults true when `who` and `preview` both present
+  tag?: string; // "+12" badge for batch rows
 };
 
 export type ThreadMessage = { from: string; text: string };
@@ -597,33 +606,33 @@ export type ThreadMessage = { from: string; text: string };
 
 The shared `KIND_META` table in `cockpit.jsx:26` already enumerates Alex's kinds. Production code ports it to TypeScript at `apps/dashboard/src/lib/cockpit/kind-meta.ts`:
 
-| Kind        | Label       | Color           | Pulses |
-|-------------|-------------|-----------------|--------|
-| `booked`    | `BOOKED`    | amberDeep       | no     |
-| `qualified` | `QUALIFIED` | amber           | no     |
-| `replied`   | `REPLIED`   | ink2            | no     |
-| `sent`      | `SENT`      | ink3            | no     |
-| `started`   | `STARTED`   | ink3            | no     |
-| `connected` | `LEADS IN`  | blue            | no     |
-| `waiting`   | `WAITING`   | amberDeep       | no     |
-| `escalated` | `TO YOU`    | red             | no     |
-| `passed`    | `PASSED`    | ink4            | no     |
+| Kind        | Label       | Color     | Pulses |
+| ----------- | ----------- | --------- | ------ |
+| `booked`    | `BOOKED`    | amberDeep | no     |
+| `qualified` | `QUALIFIED` | amber     | no     |
+| `replied`   | `REPLIED`   | ink2      | no     |
+| `sent`      | `SENT`      | ink3      | no     |
+| `started`   | `STARTED`   | ink3      | no     |
+| `connected` | `LEADS IN`  | blue      | no     |
+| `waiting`   | `WAITING`   | amberDeep | no     |
+| `escalated` | `TO YOU`    | red       | no     |
+| `passed`    | `PASSED`    | ink4      | no     |
 
 ### Translator rules (Alex)
 
 The translator reads `AuditEntry` rows + `ConversationLifecycle` state transitions and maps:
 
-| Event source                                                | Activity kind | Head template                                | Body source                                         |
-|-------------------------------------------------------------|---------------|----------------------------------------------|-----------------------------------------------------|
-| `Booking.create` audit                                      | `booked`      | `"{contactName} confirmed {service} {when}"` | `"Calendar held. {note ?? ''}"`                     |
-| Lifecycle `qualified` (qualification capability)            | `qualified`   | `"{contactName} {qualifier}"`                | Last inbound excerpt                                |
-| Outbound message with state `active`                        | `replied`     | `"{contactName} {topic}"`                    | Reply summary                                       |
-| Outbound batch (`re_engagement_template`)                   | `sent`        | `"Morning batch · {N} follow-ups"`           | Template name + filter                              |
-| Day-1 / cron `system.daily_scan_started`                    | `started`     | `"Daily run begins"`                         | Quiet-hours window                                  |
-| `meta-leads-ingester` daily pull                            | `connected`   | `"Pulled {N} new leads from {source}"`       | Campaign + CTR                                      |
-| `Approval.create` (with Alex actor)                         | `waiting`     | `"Awaiting your call on {topic}"`            | Quote excerpt                                       |
-| `escalate` tool                                             | `escalated`   | `"{topic} from {contactName} → your inbox"`  | Threshold reason + note                             |
-| Lifecycle `disqualified` / out-of-region close              | `passed`      | `"{contactName} — {reason}"`                 | —                                                   |
+| Event source                                     | Activity kind | Head template                                | Body source                     |
+| ------------------------------------------------ | ------------- | -------------------------------------------- | ------------------------------- |
+| `Booking.create` audit                           | `booked`      | `"{contactName} confirmed {service} {when}"` | `"Calendar held. {note ?? ''}"` |
+| Lifecycle `qualified` (qualification capability) | `qualified`   | `"{contactName} {qualifier}"`                | Last inbound excerpt            |
+| Outbound message with state `active`             | `replied`     | `"{contactName} {topic}"`                    | Reply summary                   |
+| Outbound batch (`re_engagement_template`)        | `sent`        | `"Morning batch · {N} follow-ups"`           | Template name + filter          |
+| Day-1 / cron `system.daily_scan_started`         | `started`     | `"Daily run begins"`                         | Quiet-hours window              |
+| `meta-leads-ingester` daily pull                 | `connected`   | `"Pulled {N} new leads from {source}"`       | Campaign + CTR                  |
+| `Approval.create` (with Alex actor)              | `waiting`     | `"Awaiting your call on {topic}"`            | Quote excerpt                   |
+| `escalate` tool                                  | `escalated`   | `"{topic} from {contactName} → your inbox"`  | Threshold reason + note         |
+| Lifecycle `disqualified` / out-of-region close   | `passed`      | `"{contactName} — {reason}"`                 | —                               |
 
 Where a `preview: ThreadMessage[]` is available (from the last 3–4 messages of the conversation), the translator includes it. Pulled from `MessageStore.recent(conversationId, 4)`. The shell renders the inline preview + reply box on row expand.
 
@@ -648,20 +657,20 @@ ALEX_COMPOSER_PLACEHOLDER =
   'Tell Alex what to do — "pause an hour", "follow up with Maya tonight"…';
 
 ALEX_COMMANDS = [
-  { id: "pause-1h",     label: "Pause Alex for 1 hour",            group: "control" },
-  { id: "pause-3pm",    label: "Pause until 3 PM",                 group: "control" },
-  { id: "resume",       label: "Resume Alex",                      group: "control" },
-  { id: "halt",         label: "Halt — stop everything",           group: "control" },
-  { id: "brief-noon",   label: "Brief me at noon",                 group: "control" },
-  { id: "brief-eod",    label: "Brief me at end of day",           group: "control" },
-  { id: "fu-named",     label: "Follow up with {contact} tonight", group: "thread"  },  // template; resolved from open thread
-  { id: "reply-named",  label: "Reply to {contact} myself",        group: "thread"  },
-  { id: "hold-named",   label: "Hold {contact}, don't send anything", group: "thread" },
-  { id: "stop-founder", label: "Stop offering the founder rate",   group: "rules"   },
-  { id: "raise-rule",   label: "Raise approval threshold to $99",  group: "rules"   },
-  { id: "open-settings",label: "Open settings",                    group: "nav"     },
-  { id: "open-rules",   label: "Open standing rules",              group: "nav"     },
-  { id: "open-meta",    label: "Open Meta Ads campaigns",          group: "nav"     },
+  { id: "pause-1h", label: "Pause Alex for 1 hour", group: "control" },
+  { id: "pause-3pm", label: "Pause until 3 PM", group: "control" },
+  { id: "resume", label: "Resume Alex", group: "control" },
+  { id: "halt", label: "Halt — stop everything", group: "control" },
+  { id: "brief-noon", label: "Brief me at noon", group: "control" },
+  { id: "brief-eod", label: "Brief me at end of day", group: "control" },
+  { id: "fu-named", label: "Follow up with {contact} tonight", group: "thread" }, // template; resolved from open thread
+  { id: "reply-named", label: "Reply to {contact} myself", group: "thread" },
+  { id: "hold-named", label: "Hold {contact}, don't send anything", group: "thread" },
+  { id: "stop-founder", label: "Stop offering the founder rate", group: "rules" },
+  { id: "raise-rule", label: "Raise approval threshold to $99", group: "rules" },
+  { id: "open-settings", label: "Open settings", group: "nav" },
+  { id: "open-rules", label: "Open standing rules", group: "nav" },
+  { id: "open-meta", label: "Open Meta Ads campaigns", group: "nav" },
 ];
 ```
 
@@ -669,19 +678,19 @@ ALEX_COMMANDS = [
 
 The `parseCommand(raw)` function from `commands.jsx:7` ports verbatim to `apps/dashboard/src/lib/cockpit/parse-command.ts`. Pattern matchers:
 
-| Pattern                                              | Returns                                              |
-|------------------------------------------------------|------------------------------------------------------|
-| `pause (for) N (min|m|h|hour|hours)`                 | `{ kind: "pause", icon: "⏸", label: "pause · Nh", detail: "until HH:MM AM" }` |
-| `pause until <when>`                                 | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until <when>" }`        |
-| `pause` / `pause alex`                               | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until you resume" }`    |
-| `resume` / `unpause` / `go`                          | `{ kind: "resume", icon: "▶", label: "resume", detail: "pick up where I left off" }` |
-| `halt` / `stop`                                      | `{ kind: "halt", icon: "⏹", label: "halt", detail: "stop everything now" }`    |
-| `(fu|follow up) (with) <name> [<when>]`              | `{ kind: "followup", icon: "↻", label: "follow up · Name", detail: "today" }`  |
-| `brief (me) (at) <time>`                             | `{ kind: "brief", icon: "☼", label: "brief me", detail: "at <time>" }`         |
-| `(stop|don't) (offer(ing)|sending) <thing>`          | `{ kind: "rule", icon: "⊘", label: "rule change", detail: "stop offering <thing>" }` |
-| `(reply to|i'll reply to|let me reply to) <name>`    | `{ kind: "handoff", icon: "✎", label: "handoff · Name", detail: "you take the thread" }` |
-| `tell alex about <name>`                             | `{ kind: "context", icon: "ⓘ", label: "context · Name", detail: "add a note to the thread" }` |
-| anything else                                        | `{ kind: "instruction", icon: "→", label: "instruction", detail: "<truncated to 60>" }` |
+| Pattern                                             | Returns                                                                                       |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pause (for) N (min\|m\|h\|hour\|hours)`            | `{ kind: "pause", icon: "⏸", label: "pause · Nh", detail: "until HH:MM AM" }`                 |
+| `pause until <when>`                                | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until <when>" }`                        |
+| `pause` / `pause alex`                              | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until you resume" }`                    |
+| `resume` / `unpause` / `go`                         | `{ kind: "resume", icon: "▶", label: "resume", detail: "pick up where I left off" }`          |
+| `halt` / `stop`                                     | `{ kind: "halt", icon: "⏹", label: "halt", detail: "stop everything now" }`                   |
+| `(fu\|follow up) (with) <name> [<when>]`            | `{ kind: "followup", icon: "↻", label: "follow up · Name", detail: "today" }`                 |
+| `brief (me) (at) <time>`                            | `{ kind: "brief", icon: "☼", label: "brief me", detail: "at <time>" }`                        |
+| `(stop\|don't) (offer(ing)\|sending) <thing>`       | `{ kind: "rule", icon: "⊘", label: "rule change", detail: "stop offering <thing>" }`          |
+| `(reply to\|i'll reply to\|let me reply to) <name>` | `{ kind: "handoff", icon: "✎", label: "handoff · Name", detail: "you take the thread" }`      |
+| `tell alex about <name>`                            | `{ kind: "context", icon: "ⓘ", label: "context · Name", detail: "add a note to the thread" }` |
+| anything else                                       | `{ kind: "instruction", icon: "→", label: "instruction", detail: "<truncated to 60>" }`       |
 
 Wired into the composer's "stage → confirm" flow per the locked design: typing stages a chip, Enter confirms.
 
@@ -689,18 +698,18 @@ Wired into the composer's "stage → confirm" flow per the locked design: typing
 
 Most parsed actions are local-state-only in v1 (pause/resume/halt operate the local `HaltProvider`; rules and handoffs route to settings/contacts respectively). Wired actions for v1:
 
-| `action.kind`  | v1 behavior                                                                            |
-|----------------|----------------------------------------------------------------------------------------|
-| `pause`        | Sets `HaltProvider.halted = true` for the parsed duration; toast "Paused — …"          |
-| `resume`       | Sets `HaltProvider.halted = false`; toast                                              |
-| `halt`         | Sets `HaltProvider.halted = true` with no auto-resume; toast                           |
-| `brief`        | Stub: records intent locally, toasts. Scheduled-brief delivery is post-v1 (no cron yet) |
-| `rule`         | Routes to `/settings?focus=rules`; toast confirms the navigation                       |
-| `handoff`      | Routes to `/contacts/[id]?takeover=true` for the matched contact; toast                |
-| `context`      | Routes to `/contacts/[id]?note=open` for the matched contact; toast                    |
-| `followup`     | Stub: records intent; toast. Scheduled follow-ups land alongside `brief` cron.         |
-| `command`      | Generic toast "On it — {label}". Specific commands route per their `id`.               |
-| `instruction`  | No backend; toast as `"Got it. Acting on \"{detail}\"."`                                |
+| `action.kind` | v1 behavior                                                                             |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `pause`       | Sets `HaltProvider.halted = true` for the parsed duration; toast "Paused — …"           |
+| `resume`      | Sets `HaltProvider.halted = false`; toast                                               |
+| `halt`        | Sets `HaltProvider.halted = true` with no auto-resume; toast                            |
+| `brief`       | Stub: records intent locally, toasts. Scheduled-brief delivery is post-v1 (no cron yet) |
+| `rule`        | Routes to `/settings?focus=rules`; toast confirms the navigation                        |
+| `handoff`     | Routes to `/contacts/[id]?takeover=true` for the matched contact; toast                 |
+| `context`     | Routes to `/contacts/[id]?note=open` for the matched contact; toast                     |
+| `followup`    | Stub: records intent; toast. Scheduled follow-ups land alongside `brief` cron.          |
+| `command`     | Generic toast "On it — {label}". Specific commands route per their `id`.                |
+| `instruction` | No backend; toast as `"Got it. Acting on \"{detail}\"."`                                |
 
 Per-`id` overrides for the `command` group:
 
@@ -722,7 +731,7 @@ Lift `toastVoice(action)` from `alex-config.jsx:41` verbatim into `apps/dashboar
 When `data.narrator` is present (no `Connection` rows, no completed setup), the cockpit renders `EmptyState` (`cockpit.jsx:767`) instead of the KPI strip + activity stream. Two stacked blocks:
 
 1. **Narrator block** — warm-paper card with Alex's avatar + 1–2 first-person lines + a "NEXT MOVE" pill.
-2. **Setup checklist** — 4 rows: `meta` (Connect Meta Ads, primary), `inbox` (Connect HotPod inbox), `cal` (Connect tour calendar), `rules` (Review pricing & escalation — pre-checked from onboarding).
+2. **Setup checklist** — 4 rows: `meta` (Connect Meta Ads, primary), `inbox` (Connect your inbox), `cal` (Connect consultation calendar), `rules` (Review pricing & escalation — pre-checked from onboarding).
 
 Narrator copy is generated **client-side** from existing data (no new persistence — see §Backend changes §2). Default copy ships in the locked design:
 
@@ -730,7 +739,7 @@ Narrator copy is generated **client-side** from existing data (no new persistenc
 eyebrow: "Alex · 8 min ago"
 lines:
   "I'm set up and quiet. Connect Meta Ads and I'll pull the first leads in under a minute."
-  "Then I'll qualify, reply, and book tours under your standing rules. I'll only interrupt you for pricing decisions over $89 and refunds."
+  "So Alex can qualify inbound leads and book consultations under your standing rules. Alex will only interrupt you for pricing decisions over $89 and refunds."
 nextMove: "Pull overnight leads from Meta Ads"
 ```
 
@@ -787,8 +796,8 @@ If the templated copy proves insufficient — operators report the cold state fe
   agentKey: AgentKey;
   displayName: string;             // AgentRoster.displayName
   mission: {
-    role: string;                  // "SDR · qualify inbound leads, book tours"
-    pipeline: string;              // "Tours pipeline · single funnel"
+    role: string;                  // "SDR · qualify inbound leads, book consultations"
+    pipeline: string;              // "Consultations pipeline · single funnel"
     brand: string;                 // org.displayName + (tagline ?? "—")
     channels: Array<{
       kind: "meta-ads" | "whatsapp" | "telegram" | "slack" | "calendar";
@@ -1064,7 +1073,14 @@ For the plan's reference — the shell's exported types:
 
 ```ts
 // apps/dashboard/src/components/cockpit/types.ts
-export type CockpitStatus = "IDLE" | "WORKING" | "TALKING" | "WAITING" | "WATCHING" | "REVIEWING" | "HALTED";
+export type CockpitStatus =
+  | "IDLE"
+  | "WORKING"
+  | "TALKING"
+  | "WAITING"
+  | "WATCHING"
+  | "REVIEWING"
+  | "HALTED";
 
 export interface MissionViewModel {
   subtitle: string;
@@ -1104,13 +1120,18 @@ export type RoiBar = RoiBarFull | RoiBarDegraded;
 
 export interface CockpitKpiData {
   range: string;
-  tiles?: KpiTile[];          // explicit shape (Riley)
-  roi?: RoiBar;               // explicit shape (Riley)
+  tiles?: KpiTile[]; // explicit shape (Riley)
+  roi?: RoiBar; // explicit shape (Riley)
   // legacy flat shape (Alex) — adapter on client
-  booked?: number; bookedDelta?: string;
-  leads?: number; leadsDelta?: string;
-  qualifiedPct?: number; qualifiedDelta?: string;
-  spend?: number; avgValue?: number; target?: number;
+  booked?: number;
+  bookedDelta?: string;
+  leads?: number;
+  leadsDelta?: string;
+  qualifiedPct?: number;
+  qualifiedDelta?: string;
+  spend?: number;
+  avgValue?: number;
+  target?: number;
 }
 
 export interface ApprovalViewBase {
@@ -1138,18 +1159,27 @@ export type AlexApprovalView = ApprovalViewBase & {
 };
 
 export type RileyApprovalView = ApprovalViewBase & {
-  kind: "pause" | "scale" | "refresh_creative" | "restructure" | "shift_budget_to_source"
-      | "switch_optimization_event" | "harden_capi_attribution" | "hold"
-      | "add_creative" | "review_budget" | "signal_health_group";
+  kind:
+    | "pause"
+    | "scale"
+    | "refresh_creative"
+    | "restructure"
+    | "shift_budget_to_source"
+    | "switch_optimization_event"
+    | "harden_capi_attribution"
+    | "hold"
+    | "add_creative"
+    | "review_budget"
+    | "signal_health_group";
   campaign:
     | { kind: "campaign"; name: string; id: string }
-    | { kind: "account";  pixelId: string; breaches: number };
+    | { kind: "account"; pixelId: string; breaches: number };
   confidence: number;
   learningPhaseImpact: "no impact" | "will reset learning";
   reversible: boolean;
   primaryAction:
-    | { kind: "internal";  intent: string; parameters: Record<string, unknown> }
-    | { kind: "external";  url: string; service: "meta" | "google" };
+    | { kind: "internal"; intent: string; parameters: Record<string, unknown> }
+    | { kind: "external"; url: string; service: "meta" | "google" };
 };
 
 export type ApprovalView = AlexApprovalView | RileyApprovalView;
@@ -1167,11 +1197,24 @@ export interface ActivityRow {
 
 export type ActivityKind =
   // Alex
-  | "booked" | "qualified" | "replied" | "sent" | "started"
-  | "connected" | "waiting" | "escalated" | "passed"
+  | "booked"
+  | "qualified"
+  | "replied"
+  | "sent"
+  | "started"
+  | "connected"
+  | "waiting"
+  | "escalated"
+  | "passed"
   // Riley
-  | "watching" | "reviewing" | "paused" | "scaled" | "rotated"
-  | "shifted" | "restructured" | "alert";
+  | "watching"
+  | "reviewing"
+  | "paused"
+  | "scaled"
+  | "rotated"
+  | "shifted"
+  | "restructured"
+  | "alert";
 ```
 
 The shell exports these from `apps/dashboard/src/components/cockpit/types.ts`; per-agent code imports them. No duplicate type definitions anywhere.

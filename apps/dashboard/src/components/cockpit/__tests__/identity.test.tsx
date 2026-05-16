@@ -7,7 +7,7 @@ import type { CockpitStatus } from "../types";
 const BASE_PROPS = {
   statusKey: "WORKING" as const,
   halted: false,
-  subtitle: "SDR · Tours pipeline · HotPod",
+  subtitle: "SDR · Consultations pipeline · Acme Medspa",
   line: null,
   onHaltToggle: () => {},
 };
@@ -18,7 +18,7 @@ describe("Identity", () => {
       <Identity
         statusKey="WORKING"
         halted={false}
-        subtitle="SDR · Tours pipeline · HotPod"
+        subtitle="SDR · Consultations pipeline · Acme Medspa"
         line={null}
         onHaltToggle={() => {}}
       />,
@@ -32,7 +32,7 @@ describe("Identity", () => {
       <Identity
         statusKey="WORKING"
         halted={false}
-        subtitle="SDR · Tours pipeline · HotPod"
+        subtitle="SDR · Consultations pipeline · Acme Medspa"
         line="Three leads in motion."
         onHaltToggle={() => {}}
       />,
@@ -77,12 +77,12 @@ describe("Identity", () => {
       <Identity
         statusKey="WORKING"
         halted={false}
-        subtitle="SDR · Tours pipeline"
+        subtitle="SDR · Consultations pipeline"
         line={null}
         onHaltToggle={() => {}}
       />,
     );
-    expect(screen.getByText("SDR · Tours pipeline")).toBeInTheDocument();
+    expect(screen.getByText("SDR · Consultations pipeline")).toBeInTheDocument();
     // No button or anchor wrapping the subtitle — popover lands at A.2.
     expect(container.querySelector("[data-mission-trigger]")).toBeNull();
   });
@@ -90,8 +90,8 @@ describe("Identity", () => {
 
 describe("Identity — mission interactive subtitle (A.2)", () => {
   it("renders subtitle as plain text by default (A.1 behavior preserved)", () => {
-    render(<Identity {...BASE_PROPS} subtitle="SDR · Tours pipeline · HotPod" />);
-    const subtitle = screen.getByText("SDR · Tours pipeline · HotPod");
+    render(<Identity {...BASE_PROPS} subtitle="SDR · Consultations pipeline · Acme Medspa" />);
+    const subtitle = screen.getByText("SDR · Consultations pipeline · Acme Medspa");
     expect(subtitle.tagName.toLowerCase()).not.toBe("button");
   });
 
@@ -100,7 +100,7 @@ describe("Identity — mission interactive subtitle (A.2)", () => {
     render(
       <Identity
         {...BASE_PROPS}
-        subtitle="SDR · Tours pipeline · HotPod"
+        subtitle="SDR · Consultations pipeline · Acme Medspa"
         missionInteractive
         onOpenMission={onOpenMission}
       />,
@@ -112,9 +112,13 @@ describe("Identity — mission interactive subtitle (A.2)", () => {
 
   it("does not render subtitle as button when only missionInteractive is set (no handler)", () => {
     render(
-      <Identity {...BASE_PROPS} subtitle="SDR · Tours pipeline · HotPod" missionInteractive />,
+      <Identity
+        {...BASE_PROPS}
+        subtitle="SDR · Consultations pipeline · Acme Medspa"
+        missionInteractive
+      />,
     );
-    const subtitle = screen.getByText("SDR · Tours pipeline · HotPod");
+    const subtitle = screen.getByText("SDR · Consultations pipeline · Acme Medspa");
     expect(subtitle.tagName.toLowerCase()).not.toBe("button");
   });
 });

@@ -80,9 +80,9 @@ const FULL_MISSION_ALL_UNDONE: MissionAggregatorResponse = {
   agentKey: "alex",
   displayName: "Alex",
   mission: {
-    role: "SDR · qualify inbound leads, book tours",
-    pipeline: "Tours pipeline · single funnel",
-    brand: "HotPod Yoga · —",
+    role: "SDR · qualify inbound leads, book consultations",
+    pipeline: "Consultations pipeline · single funnel",
+    brand: "Acme Medspa · —",
     channels: [],
     rules: null,
   },
