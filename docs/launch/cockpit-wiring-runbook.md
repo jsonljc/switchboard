@@ -38,9 +38,9 @@ read-side this PR ships handles them correctly).
 **What's missing for "magic" auto-flow**: the OAuth callbacks should
 dual-write a `Connection` row when they write `DeploymentConnection`,
 so an operator who completes the OAuth flow gets the cockpit benefits
-without a separate /settings round-trip. Alternative: re-point mission.ts
-
-- meta-spend-provider.ts at `DeploymentConnection` directly.
+without a separate /settings round-trip. Alternative: re-point
+mission.ts and meta-spend-provider.ts at `DeploymentConnection`
+directly.
 
 **Tracked follow-up:** dual-write `Connection` rows from
 `facebook-oauth.ts` and `google-calendar-oauth.ts`. Out of scope for
