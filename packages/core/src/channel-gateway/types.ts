@@ -13,6 +13,7 @@ import type { PdpaJurisdiction } from "@switchboard/schemas";
 import type { OperatorChannelBindingStore } from "./operator-channel-binding-store.js";
 import type { RespondToApprovalDeps } from "../approval/respond-to-approval.js";
 import type { ConversationStatusUpsertContext } from "./conversation-status-types.js";
+import type { ConsentStateStore } from "../consent/consent-store.js";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -137,6 +138,21 @@ export interface ChannelGatewayConfig {
     consentService: ConsentService;
     postureCache: GovernancePostureCache;
     revocationKeywordLoader: (j: PdpaJurisdiction) => ReadonlyArray<RevocationKeywordEntry>;
+    sessionContactResolver: (sessionId: string) => Promise<string | null>;
+    verdictStore: GovernanceVerdictStore;
+    clock: () => Date;
+  };
+  // ---------------------------------------------------------------------------
+  // Pre-output consent enforcement gate (Phase 1c — egress complement).
+  // Optional — when omitted, the gate is a pass-through (backward compat).
+  // Runs immediately before replySink.send() in dispatchResponse.
+  // Shares postureCache + sessionContactResolver with the inbound revocation
+  // gate; reads consent state directly from the store (no service round-trip).
+  // ---------------------------------------------------------------------------
+  consentEnforcementGate?: {
+    governanceConfigResolver: GovernanceConfigResolver;
+    consentStore: ConsentStateStore;
+    postureCache: GovernancePostureCache;
     sessionContactResolver: (sessionId: string) => Promise<string | null>;
     verdictStore: GovernanceVerdictStore;
     clock: () => Date;
