@@ -43,11 +43,26 @@ The spec's high-level intent is **unchanged**: send-time consent gate consulting
 
 ---
 
-## PR cuts
+## PR cuts (revised 2026-05-16 post-review)
 
-- **PR 1 — gate module + ChannelGateway integration + unit/integration tests** (~80 LOC). Self-contained: ships the gate behind config; behavior is no-op when config omitted (backward-compat, matches inbound gate pattern).
-- **PR 2 — bootstrap wiring + cross-channel regression test** (~30 LOC). Turns the gate on in production by wiring deps in `apps/chat/src/bootstrap/`.
-- **PR 3 — defense-in-depth skill-runtime hook + tests** (~40 LOC). Adds `ConsentEnforcementHook` for any future non-gateway sender (Riley broadcast, operator-direct).
+Plan reorganized into 4 smaller PRs after a compliance-first review surfaced three concerns: (1) blocked sends should not persist outbound text in the transcript; (2) the no-contact-resolution fallback needs visibility, not a silent fail-open; (3) the skill-runtime hook should be discovery-led rather than speculative. PR 1 now ships the gate **behind config** with no dispatcher behavior change, so reviewers can validate policy semantics without touching the hot send path.
+
+- **PR 1 — pure gate + config type + unit tests** (~120 LOC). Adds `runConsentEnforcementGate`, `ConsentEnforcementGateConfig`, the optional `consentEnforcementGate?:` field on `ChannelGatewayConfig`, and 8 unit tests. Zero dispatcher changes.
+- **PR 2 — ChannelGateway integration + integration tests** (~50 LOC). Calls the gate from `ChannelGateway.dispatchResponse` immediately before the successful-response `replySink.send`. Stores transcript marker only (`"[suppressed:consent_revoked]"`, **no** generated text). Tests prove (a) normal assistant response is gated, (b) framework-generated technical-failure fallback is **not** gated, (c) verdict-persistence failure does not crash dispatch.
+- **PR 3 — chat bootstrap + cross-channel regression** (~40 LOC). Wires the gate in `apps/chat/src/bootstrap/` and adds the load-bearing regression: STOP on WhatsApp → blocked on Telegram, Instagram, Slack.
+- **PR 4 — egress-bypass discovery + (conditional) skill-runtime hook** (~10 LOC discovery + ~40 LOC hook). First runs a repo scan for any send paths that bypass `ChannelGateway`. If found, ships `ConsentEnforcementHook` as defense in depth. If none, the discovery output alone closes the spec — the hook becomes a tracked follow-up rather than an unjustified addition.
+
+### Behavioral corrections folded into the tasks below
+
+1. **Transcript marker is metadata-only.** The blocked-send transcript line is `"[suppressed:consent_revoked]"`, not `"[suppressed:consent_revoked] ${text}"`. Verdict already captures `outboundLength`, `channel`, `contactId`. Storing the full generated text in the transcript creates unnecessary privacy/audit exposure for a customer who just said STOP.
+
+2. **Error-fallback exemption is narrow.** The non-ok `dispatchResponse` branch (the "I'm having trouble" fallback) bypasses the gate, but the comment must be specific: _"Only framework-generated technical-failure notices may bypass consent enforcement. Any agent/composer-authored outbound text must pass the gate."_ PR 2 includes a test that proves a normal assistant response IS gated and the technical fallback is NOT.
+
+3. **No-contact resolution gets visibility.** When `sessionContactResolver(sessionId)` returns `null` in observe/enforce mode, the gate still allows the send (correct semantics for pre-contact system replies) **but** persists a verdict row with `reasonCode: "consent_revoked"` denied… actually wait — that would be misleading. Use `reasonCode: "contact_resolution_missing"` (or the nearest existing code) with `auditLevel: "warning"`, `action: "allow"`, and `details: { event: "egress_contact_resolution_missing", channel }`. This makes resolver-mapping breakage visible rather than a silent fail-open.
+
+4. **Resolver-error fail-open is intentional.** When the governance config resolver errors with cached enforce posture, the gate persists a critical audit row (`reasonCode: "governance_unavailable"`) but still returns `"allowed"`. This is fail-open with audit, **not** fail-closed. Document this explicitly in PR 1's description so reviewers don't misread the cached-enforce branch.
+
+5. **No new `as any`.** Match the inbound `runConsentRevocationGate`'s verdict-persistence typing exactly. Do not introduce additional `as any` casts beyond what the sibling already requires.
 
 ---
 
@@ -144,7 +159,30 @@ export async function runConsentEnforcementGate(
   });
 
   const contactId = await cfg.sessionContactResolver(sessionId);
-  if (!contactId) return "allowed"; // pre-contact outbound (e.g., system error reply)
+  if (!contactId) {
+    // Pre-contact outbound (e.g., system reply with no resolved contact).
+    // Allow, but emit a visibility verdict so resolver-mapping breakage
+    // never silently fails open. Severity is warning (not critical) because
+    // the legitimate pre-contact-system-reply case is not a failure.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (cfg.verdictStore.save as any)({
+        deploymentId,
+        sourceGuard: "consent_gate",
+        action: "allow",
+        reasonCode: "contact_resolution_missing",
+        jurisdiction: resolution.config.jurisdiction,
+        clinicType: resolution.config.clinicType,
+        conversationId: sessionId,
+        decidedAt: cfg.clock().toISOString(),
+        details: { event: "egress_contact_resolution_missing", channel },
+        auditLevel: "warning",
+      });
+    } catch (err) {
+      console.error("[consent-enforcement-gate] verdict persist failure", err);
+    }
+    return "allowed";
+  }
 
   const consent = await cfg.consentStore.readOrNull(contactId);
   if (!consent?.consentRevokedAt) return "allowed";
@@ -370,7 +408,9 @@ describe("runConsentEnforcementGate", () => {
     expect(verdictSave.mock.calls[0][0].reasonCode).toBe("governance_unavailable");
   });
 
-  it("allows when contact cannot be resolved (pre-contact outbound)", async () => {
+  it("allows when contact cannot be resolved AND records visibility verdict", async () => {
+    // Correction (post-review): no-contact must emit a verdict so resolver
+    // mapping breakage never silently fails open.
     const { cfg, verdictSave, sessionContactResolver } = makeStubs({});
     sessionContactResolver.mockResolvedValueOnce(null);
     const result = await runConsentEnforcementGate({
@@ -381,7 +421,34 @@ describe("runConsentEnforcementGate", () => {
       channel: "whatsapp",
     });
     expect(result).toBe("allowed");
-    expect(verdictSave).not.toHaveBeenCalled();
+    expect(verdictSave).toHaveBeenCalledOnce();
+    const verdict = verdictSave.mock.calls[0][0];
+    expect(verdict.reasonCode).toBe("contact_resolution_missing");
+    expect(verdict.action).toBe("allow");
+    expect(verdict.auditLevel).toBe("warning");
+    expect(verdict.details.event).toBe("egress_contact_resolution_missing");
+    expect(verdict.details.channel).toBe("whatsapp");
+  });
+
+  it("does not throw when verdict persistence fails", async () => {
+    // Correction (post-review): emission integrity > persistence completeness.
+    // Mirror the inbound gate's behavior on verdict-store errors.
+    const { cfg, verdictSave } = makeStubs({
+      revokedAt: new Date("2026-05-15T00:00:00Z"),
+      consentMode: "enforce",
+    });
+    verdictSave.mockRejectedValueOnce(new Error("verdict store down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await runConsentEnforcementGate({
+      cfg,
+      outboundText: "Hi",
+      sessionId: "s-1",
+      deploymentId: "d-1",
+      channel: "whatsapp",
+    });
+    expect(result).toBe("blocked");
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });
 ```
@@ -392,7 +459,7 @@ describe("runConsentEnforcementGate", () => {
 pnpm --filter @switchboard/core test consent-enforcement-gate
 ```
 
-Expected: 7 passing tests, no failures.
+Expected: 8 passing tests, no failures.
 
 - [ ] **Step 3: Commit**
 
@@ -485,22 +552,23 @@ if (consentEnforcementGate) {
     channel: message.channel,
   });
   if (outcome === "blocked") {
-    // Audit row already persisted by the gate. Persist suppressed assistant
-    // message so transcripts remain complete, then return without sending.
-    await conversationStore.addMessage(
-      conversationId,
-      "assistant",
-      `[suppressed:consent_revoked] ${text}`,
-    );
+    // Audit row already persisted by the gate. Persist a metadata-only
+    // transcript marker so operators see something happened, but do NOT
+    // include the generated text — a contact who said STOP shouldn't
+    // have the would-have-been-said reply preserved in their transcript.
+    // Verdict already captures channel + contactId + outboundLength.
+    await conversationStore.addMessage(conversationId, "assistant", "[suppressed:consent_revoked]");
     return;
   }
 }
 ```
 
-The non-ok branch (line 78–80, the "I'm having trouble" fallback) intentionally does **not** gate — system error replies are exempt and rare. Document that with a one-line comment immediately above the existing `else { await replySink.send(...) }`:
+The non-ok branch (line 78–80, the "I'm having trouble" fallback) intentionally does **not** gate. Narrow the comment so future contributors can't widen this into a loophole:
 
 ```ts
-// Error fallback is not gated — system error replies must reach the user.
+// Only framework-generated technical-failure notices may bypass the
+// consent gate. Any agent/composer-authored outbound text MUST pass
+// the gate above. Do not move that branch outside the `if (consentEnforcementGate)` block.
 ```
 
 Then wire `consentEnforcementGate` through the caller of `dispatchResponse` (the public `dispatch` method on the gateway). Add it to the `ChannelGatewayConfig` plumbing in the constructor and pass it down. Search for `dispatchResponse({` in the file to find the call site(s) — typically one or two.
@@ -546,17 +614,23 @@ import { ChannelGateway } from "../channel-gateway.js";
 // (...rest of imports — copy from an existing channel-gateway test file)
 
 describe("ChannelGateway — consent enforcement at dispatch", () => {
-  it("suppresses outbound and records verdict when contact is revoked", async () => {
+  it("suppresses outbound and records metadata-only marker when contact is revoked", async () => {
     const replySend = vi.fn().mockResolvedValue(undefined);
     const verdictSave = vi.fn().mockResolvedValue(undefined);
     const addMessage = vi.fn().mockResolvedValue(undefined);
     // ... build gateway with consentEnforcementGate wired
-    // ... dispatch a known inbound that produces a successful response
+    // ... dispatch a known inbound that produces a successful response with text "Hi there"
     expect(replySend).not.toHaveBeenCalled();
+    // Marker is metadata-only — must NOT contain the generated text.
     expect(addMessage).toHaveBeenCalledWith(
       expect.any(String),
       "assistant",
-      expect.stringContaining("[suppressed:consent_revoked]"),
+      "[suppressed:consent_revoked]",
+    );
+    expect(addMessage).not.toHaveBeenCalledWith(
+      expect.any(String),
+      "assistant",
+      expect.stringContaining("Hi there"),
     );
     expect(verdictSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -567,10 +641,37 @@ describe("ChannelGateway — consent enforcement at dispatch", () => {
     );
   });
 
-  it("sends normally when consent is active", async () => {
+  it("sends a normal agent-authored response when consent is active", async () => {
     // ... same setup, but consentStore.readOrNull returns { consentRevokedAt: null }
     expect(replySend).toHaveBeenCalledWith(expect.any(String));
     expect(verdictSave).not.toHaveBeenCalled();
+  });
+
+  it("PROVES a normal successful assistant response IS gated", async () => {
+    // Load-bearing safety test — guards against future regressions where
+    // someone moves the gate call outside the response.ok branch.
+    // Setup: revoked consent + successful platformIngress response with assistant text.
+    // Assert: replySend NOT called; verdict recorded; transcript marker recorded.
+    // (Same fixtures as test 1; this duplication is intentional clarity.)
+  });
+
+  it("PROVES the framework-generated technical-failure fallback is NOT gated", async () => {
+    // Load-bearing safety test — guards the narrow exemption from
+    // becoming a loophole. Setup: revoked consent + platformIngress
+    // returns { ok: false, ... }. Assert: replySend IS called with the
+    // canonical "I'm having trouble right now. Let me connect you with
+    // the team." string; verdict NOT recorded; no suppressed marker.
+  });
+
+  it("does not crash dispatch if verdict persistence throws", async () => {
+    // Setup: revoked consent + verdictSave rejects. Assert: replySend
+    // still NOT called (block decision is honored even when audit fails);
+    // dispatchResponse returns cleanly; error is logged.
+  });
+
+  it("sends normally when consentEnforcementGate config is omitted (backward compat)", async () => {
+    // Setup: ChannelGatewayConfig without consentEnforcementGate.
+    // Assert: existing behavior unchanged — replySend called, no verdict.
   });
 });
 ```
