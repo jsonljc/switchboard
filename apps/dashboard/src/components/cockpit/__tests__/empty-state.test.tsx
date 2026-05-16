@@ -54,17 +54,38 @@ describe("EmptyState", () => {
     expect(screen.getByTestId("setup-row-inbox").getAttribute("data-primary")).toBe("false");
   });
 
-  it("invokes onConnect with the row key when a setup row is clicked", () => {
+  it("invokes onConnect with the row key when a setup row's Connect button is clicked", () => {
     const onConnect = vi.fn();
     render(<EmptyState rules={null} setup={setupAllUndone} onConnect={onConnect} />);
-    fireEvent.click(screen.getByTestId("setup-row-inbox"));
+    // The primary row uses "Connect →"; non-primary uses "Connect".
+    fireEvent.click(screen.getAllByRole("button", { name: /^Connect$/i })[0]!);
+    // First non-primary in setupAllUndone is "inbox"
     expect(onConnect).toHaveBeenCalledWith("inbox");
+  });
+
+  it("primary row uses 'Connect →' label", () => {
+    render(<EmptyState rules={null} setup={setupAllUndone} onConnect={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /Connect →/i })).toBeInTheDocument();
   });
 
   it("shows the NEXT MOVE pill from the primary row", () => {
     render(<EmptyState rules={null} setup={setupAllUndone} onConnect={vi.fn()} />);
     const pill = screen.getByTestId("next-move-pill");
     expect(pill).toHaveTextContent(/NEXT MOVE/i);
-    expect(pill).toHaveTextContent(/Connect Meta Ads/i);
+    // Sibling text node carries the connect label
+    const wrapper = pill.parentElement;
+    expect(wrapper?.textContent).toMatch(/Connect Meta Ads/i);
+  });
+
+  it("shows 'Setup · X of N ready' counter eyebrow", () => {
+    render(<EmptyState rules={null} setup={setupPartialDone} onConnect={vi.fn()} />);
+    expect(screen.getByText(/Setup · 1 of 4 ready/i)).toBeInTheDocument();
+  });
+
+  it("done row hides the Connect button", () => {
+    render(<EmptyState rules={null} setup={setupPartialDone} onConnect={vi.fn()} />);
+    // setupPartialDone has 'meta' done — Connect buttons count = 3 (one per remaining)
+    const connectButtons = screen.getAllByRole("button", { name: /Connect/i });
+    expect(connectButtons).toHaveLength(3);
   });
 });

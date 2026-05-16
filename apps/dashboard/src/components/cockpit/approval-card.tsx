@@ -22,6 +22,13 @@ export interface ApprovalCardProps {
   compact?: boolean;
   accent?: ApprovalAccent;
   senderLabel?: string;
+  /**
+   * Single-character agent monogram rendered inside the inline avatar chip
+   * beside the eyebrow. Defaults to "A" (Alex). Pass "R" / "M" / etc. for
+   * other agents — the value is independent of `senderLabel` so labels like
+   * "Needs review" don't accidentally render as "N" in the chip.
+   */
+  avatarLetter?: string;
 }
 
 export function ApprovalCard({
@@ -32,6 +39,7 @@ export function ApprovalCard({
   compact = false,
   accent = ALEX_APPROVAL_ACCENT,
   senderLabel = "Alex needs you",
+  avatarLetter = "A",
 }: ApprovalCardProps) {
   return (
     <section
@@ -43,6 +51,24 @@ export function ApprovalCard({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span
+          data-testid="approval-card-avatar-chip"
+          aria-hidden="true"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 4,
+            background: accent.soft,
+            display: "inline-grid",
+            placeItems: "center",
+            color: accent.deep,
+            fontWeight: 700,
+            fontSize: 11,
+            flexShrink: 0,
+          }}
+        >
+          {avatarLetter}
+        </span>
         <span
           style={{
             fontSize: 10,

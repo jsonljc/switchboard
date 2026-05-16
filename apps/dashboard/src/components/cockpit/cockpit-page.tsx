@@ -35,6 +35,41 @@ const URGENCY_ORDER: Record<"immediate" | "this_week" | "next_cycle", number> = 
   next_cycle: 2,
 };
 
+// Mirrors the design's `data.suggestions` per state. Backend has no
+// suggestion source today; deriving locally from status/halt/approval
+// presence preserves the v3 design's contextual chip row without
+// inventing a wire format.
+function deriveSuggestions(args: {
+  halted: boolean;
+  coldState: boolean;
+  hasOpenApproval: boolean;
+  statusKey: string;
+}): readonly string[] {
+  const { halted, coldState, hasOpenApproval, statusKey } = args;
+  // Composer is disabled while halted — suggestion chips would only be
+  // dead affordances. The Identity row's "▶ Resume" button is the
+  // canonical resume control, so don't double up.
+  if (halted) return [];
+  // Day-1 cold state: the EmptyState narrator + setup checklist owns
+  // the entire signal layer (matches design data.jsx::empty.suggestions = []).
+  // Floating "Pause until 3 PM" chips beneath the narrator would distract
+  // from "Connect Meta Ads."
+  if (coldState) return [];
+  if (hasOpenApproval) {
+    return ["Pause new threads for 30 min", "Brief me at noon"];
+  }
+  if (statusKey === "WORKING" || statusKey === "TALKING") {
+    return ["Hold all replies for 10 min", "Brief me at end of day"];
+  }
+  // IDLE / fallback
+  return ["Brief me at noon", "Pause until 3 PM"];
+}
+
+// "Mon May 12" — operator-local short weekday + month + day.
+function formatToday(d: Date): string {
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
 export function CockpitPage() {
   const haltCtx = useHalt();
   const approvalsQ = usePendingApprovals();
@@ -176,13 +211,25 @@ export function CockpitPage() {
             onConnect={(key) => router.push(`/setup?step=${key}`)}
           />
         ) : (
-          <ActivityStream rows={activityRows} filter={filter} setFilter={setFilter} />
+          <ActivityStream
+            rows={activityRows}
+            filter={filter}
+            setFilter={setFilter}
+            today={formatToday(now)}
+          />
         )}
       </div>
       <Composer
         placeholder={ALEX_COMPOSER_PLACEHOLDER}
         onDispatch={(action) => dispatch(action)}
         halted={haltCtx.halted}
+        suggestions={deriveSuggestions({
+          halted: haltCtx.halted,
+          coldState,
+          hasOpenApproval: approvals.length > 0,
+          statusKey,
+        })}
+        onOpenPalette={() => setPaletteOpen(true)}
       />
       <CommandPalette
         open={paletteOpen}

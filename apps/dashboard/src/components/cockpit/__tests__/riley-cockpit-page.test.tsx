@@ -609,31 +609,37 @@ describe("RileyCockpitPage — composer adoption", () => {
     );
   });
 
-  it("typing 'pause for 1h' + Enter dispatches a pause toast", async () => {
-    wrap(<RileyCockpitPage />);
+  // Composer adopted the design's stage-then-confirm flow: typing + Enter
+  // stages a structured chip; the operator must click Confirm to commit.
+  // Tests below click the Confirm button after the staged chip appears,
+  // matching the Alex Home v2 design flow shared across both cockpits.
+  async function stageAndConfirm(value: string) {
     const input = screen.getByRole("textbox", { name: "Composer input" });
-    fireEvent.change(input, { target: { value: "pause for 1h" } });
+    fireEvent.change(input, { target: { value } });
     fireEvent.keyDown(input, { key: "Enter" });
+    const confirm = await screen.findByRole("button", { name: /confirm/i });
+    fireEvent.click(confirm);
+  }
+
+  it("typing 'pause for 1h' + stage+confirm dispatches a pause toast", async () => {
+    wrap(<RileyCockpitPage />);
+    await stageAndConfirm("pause for 1h");
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     const payload = toast.mock.calls[0]![0] as { title: string; description?: string };
     expect(payload.title).toBe("Paused — standing by.");
     expect(payload.description).toMatch(/^until /);
   });
 
-  it("typing 'resume' + Enter fires Riley-specific resume copy", async () => {
+  it("typing 'resume' + stage+confirm fires Riley-specific resume copy", async () => {
     wrap(<RileyCockpitPage />);
-    const input = screen.getByRole("textbox", { name: "Composer input" });
-    fireEvent.change(input, { target: { value: "resume" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    await stageAndConfirm("resume");
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     expect(toast).toHaveBeenCalledWith({ title: "Resumed — back to scanning." });
   });
 
   it("ad-ops free-form ('raise daily budget to $200') falls through to 'not automated yet' (no mutation)", async () => {
     wrap(<RileyCockpitPage />);
-    const input = screen.getByRole("textbox", { name: "Composer input" });
-    fireEvent.change(input, { target: { value: "raise daily budget to $200" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    await stageAndConfirm("raise daily budget to $200");
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     const payload = toast.mock.calls[0]![0] as { title: string; description: string };
     expect(payload.title).toBe("Noted.");
@@ -642,9 +648,7 @@ describe("RileyCockpitPage — composer adoption", () => {
 
   it("campaign-targeted NL ('pause the Cold Interests adset') stays inert (no halt, no router push)", async () => {
     wrap(<RileyCockpitPage />);
-    const input = screen.getByRole("textbox", { name: "Composer input" });
-    fireEvent.change(input, { target: { value: "pause the Cold Interests adset" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    await stageAndConfirm("pause the Cold Interests adset");
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     const payload = toast.mock.calls[0]![0] as { title: string; description: string };
     // Critical regression guard: "pause the Cold Interests adset" must NOT
@@ -656,24 +660,40 @@ describe("RileyCockpitPage — composer adoption", () => {
 
   it("'follow up with Maya tonight' folds into 'not automated yet' toast", async () => {
     wrap(<RileyCockpitPage />);
-    const input = screen.getByRole("textbox", { name: "Composer input" });
-    fireEvent.change(input, { target: { value: "follow up with Maya tonight" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    await stageAndConfirm("follow up with Maya tonight");
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     expect(toast.mock.calls[0]![0]).toMatchObject({ title: "Noted." });
   });
 
-  it("'stop offering free consults' + Enter routes to rules and toasts", async () => {
+  it("'stop offering free consults' + stage+confirm routes to rules and toasts", async () => {
     wrap(<RileyCockpitPage />);
-    const input = screen.getByRole("textbox", { name: "Composer input" });
-    fireEvent.change(input, { target: { value: "stop offering free consults" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    await stageAndConfirm("stop offering free consults");
     await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
     const payload = toast.mock.calls[0]![0] as { title: string };
     expect(payload.title).toBe("Opening rules.");
   });
 
-  it("Escape clears the staged input without dispatching", () => {
+  it("Enter stages the parsed action — never dispatches without Confirm", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "pause for 1h" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    // Staged chip should be visible; toast should NOT have fired.
+    expect(await screen.findByTestId("composer-pending")).toBeInTheDocument();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("Undo discards a staged action without dispatching", async () => {
+    wrap(<RileyCockpitPage />);
+    const input = screen.getByRole("textbox", { name: "Composer input" });
+    fireEvent.change(input, { target: { value: "pause" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    const undo = await screen.findByRole("button", { name: /undo/i });
+    fireEvent.click(undo);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("Escape clears the input without staging", () => {
     wrap(<RileyCockpitPage />);
     const input = screen.getByRole("textbox", { name: "Composer input" }) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "pause" } });

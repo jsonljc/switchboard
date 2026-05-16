@@ -60,4 +60,15 @@ describe("Topbar", () => {
     expect(screen.getByText("Tell Riley…")).toBeInTheDocument();
     expect(screen.queryByText("Tell Alex…")).not.toBeInTheDocument();
   });
+
+  it("renders a Settings ghost link in non-compact mode", () => {
+    render(<Topbar paletteEnabled compact={false} onOpenPalette={() => {}} />);
+    const settings = screen.getByRole("link", { name: /^settings$/i });
+    expect(settings).toHaveAttribute("href", "/settings");
+  });
+
+  it("hides the Settings ghost link in compact mode", () => {
+    render(<Topbar paletteEnabled compact onOpenPalette={() => {}} />);
+    expect(screen.queryByRole("link", { name: /^settings$/i })).not.toBeInTheDocument();
+  });
 });
