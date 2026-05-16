@@ -739,7 +739,7 @@ Narrator copy is generated **client-side** from existing data (no new persistenc
 eyebrow: "Alex · 8 min ago"
 lines:
   "I'm set up and quiet. Connect Meta Ads and I'll pull the first leads in under a minute."
-  "So Alex can qualify inbound leads and book consultations under your standing rules. I'll only interrupt you for pricing decisions over $89 and refunds."
+  "So Alex can qualify inbound leads and book consultations under your standing rules. Alex will only interrupt you for pricing decisions over $89 and refunds."
 nextMove: "Pull overnight leads from Meta Ads"
 ```
 
