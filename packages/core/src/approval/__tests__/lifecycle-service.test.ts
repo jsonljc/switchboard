@@ -160,6 +160,7 @@ describe("ApprovalLifecycleService", () => {
       expect(result).toEqual(newRevision);
       expect(store.createRevision).toHaveBeenCalledWith({
         lifecycleId: "lc-1",
+        organizationId: "org-1",
         parametersSnapshot: { foo: "baz" },
         approvalScopeSnapshot: { risk: "medium" },
         bindingHash: "hash-new",

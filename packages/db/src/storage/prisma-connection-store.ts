@@ -96,11 +96,16 @@ export class PrismaConnectionStore {
     return rows.map(toConnectionRecord);
   }
 
-  async updateStatus(id: string, status: string): Promise<void> {
-    await this.prisma.connection.update({
-      where: { id },
+  async updateStatus(id: string, status: string, organizationId: string | null): Promise<void> {
+    // organizationId is part of WHERE for tenant isolation (audit follow-up to TI-7/TI-8).
+    // Connection.organizationId is nullable (null = global connection).
+    const result = await this.prisma.connection.updateMany({
+      where: { id, organizationId },
       data: { status, lastHealthCheck: new Date() },
     });
+    if (result.count === 0) {
+      throw new Error(`Connection not found or tenant mismatch: ${id}`);
+    }
   }
 
   async delete(id: string): Promise<void> {

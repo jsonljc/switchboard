@@ -15,6 +15,7 @@ function createMockPrisma() {
       findFirst: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
     },
   };
@@ -92,14 +93,41 @@ describe("PrismaConnectionStore", () => {
   });
 
   it("updates connection status", async () => {
-    prisma.connection.update.mockResolvedValue({});
+    prisma.connection.updateMany.mockResolvedValue({ count: 1 });
 
-    await store.updateStatus("conn_1", "error");
-    expect(prisma.connection.update).toHaveBeenCalledWith(
+    await store.updateStatus("conn_1", "error", "org_1");
+    expect(prisma.connection.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "conn_1" },
+        where: { id: "conn_1", organizationId: "org_1" },
         data: expect.objectContaining({ status: "error" }),
       }),
+    );
+  });
+
+  // Sibling-isolation regression — audit follow-up to TI-7/TI-8 (issue #594).
+  it("scopes updateStatus WHERE by organizationId (TI sibling)", async () => {
+    prisma.connection.updateMany.mockResolvedValue({ count: 1 });
+
+    await store.updateStatus("conn_1", "error", "org_1");
+
+    const callArgs = prisma.connection.updateMany.mock.calls[0]![0];
+    expect(callArgs.where).toEqual({ id: "conn_1", organizationId: "org_1" });
+  });
+
+  it("scopes updateStatus WHERE by organizationId=null when caller passes null", async () => {
+    prisma.connection.updateMany.mockResolvedValue({ count: 1 });
+
+    await store.updateStatus("conn_1", "error", null);
+
+    const callArgs = prisma.connection.updateMany.mock.calls[0]![0];
+    expect(callArgs.where).toEqual({ id: "conn_1", organizationId: null });
+  });
+
+  it("throws when updateStatus count=0 (tenant mismatch or missing row)", async () => {
+    prisma.connection.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(store.updateStatus("conn_1", "error", "org_X")).rejects.toThrow(
+      /not found or tenant mismatch/,
     );
   });
 

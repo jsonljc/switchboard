@@ -35,14 +35,22 @@ export class PrismaPauseStore implements PauseStore {
     return toAgentPause(row);
   }
 
-  async update(id: string, updates: Partial<AgentPause>): Promise<void> {
+  async update(id: string, updates: Partial<AgentPause>, organizationId: string): Promise<void> {
     const data: Record<string, unknown> = {};
     if (updates.resumeStatus !== undefined) data.resumeStatus = updates.resumeStatus;
     if (updates.approvalOutcome !== undefined)
       data.approvalOutcome = updates.approvalOutcome as object;
     if (updates.resumedAt !== undefined) data.resumedAt = updates.resumedAt;
 
-    await this.prisma.agentPause.update({ where: { id }, data });
+    // AgentPause has no direct `organizationId` column; scope via session FK
+    // relation filter for tenant isolation (audit follow-up to TI-7/TI-8).
+    const result = await this.prisma.agentPause.updateMany({
+      where: { id, session: { organizationId } },
+      data,
+    });
+    if (result.count === 0) {
+      throw new Error(`AgentPause not found or tenant mismatch: ${id}`);
+    }
   }
 
   async listBySession(sessionId: string): Promise<AgentPause[]> {
@@ -57,6 +65,7 @@ export class PrismaPauseStore implements PauseStore {
     id: string,
     expectedStatus: ResumeStatus,
     newStatus: ResumeStatus,
+    organizationId: string,
     updates?: Partial<AgentPause>,
   ): Promise<boolean> {
     const data: Record<string, unknown> = { resumeStatus: newStatus };
@@ -64,8 +73,12 @@ export class PrismaPauseStore implements PauseStore {
       data.approvalOutcome = updates.approvalOutcome as object;
     if (updates?.resumedAt !== undefined) data.resumedAt = updates.resumedAt;
 
+    // CAS + tenant isolation in a single WHERE (audit follow-up to TI-7/TI-8).
+    // AgentPause has no direct `organizationId` column; scope via session FK
+    // relation filter. count===0 conflates "status drift", "row missing",
+    // AND "tenant mismatch" — caller sees false.
     const result = await this.prisma.agentPause.updateMany({
-      where: { id, resumeStatus: expectedStatus },
+      where: { id, resumeStatus: expectedStatus, session: { organizationId } },
       data,
     });
 

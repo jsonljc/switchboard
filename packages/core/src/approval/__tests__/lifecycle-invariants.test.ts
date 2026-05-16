@@ -199,6 +199,7 @@ describe("Lifecycle Trust Invariants", () => {
       expect(result.supersedesRevisionId).toBe("rev-1");
       expect(store.createRevision).toHaveBeenCalledWith({
         lifecycleId: "lc-1",
+        organizationId: "org-1",
         parametersSnapshot: { foo: "updated" },
         approvalScopeSnapshot: { risk: "medium" },
         bindingHash: "hash-new",

@@ -15,7 +15,7 @@ import type {
 export interface SessionStore {
   create(session: AgentSession): Promise<void>;
   getById(id: string): Promise<AgentSession | null>;
-  update(id: string, updates: Partial<AgentSession>): Promise<void>;
+  update(id: string, updates: Partial<AgentSession>, organizationId: string): Promise<void>;
   list(filter: {
     organizationId?: string;
     roleId?: string;
@@ -43,7 +43,12 @@ export interface SessionStore {
 export interface RunStore {
   save(run: AgentRun): Promise<void>;
   getById(id: string): Promise<AgentRun | null>;
-  update(id: string, updates: Partial<AgentRun>): Promise<void>;
+  /**
+   * AgentRun has no direct `organizationId` column; org is derived via the
+   * `session` FK. The Prisma store uses a relation filter
+   * `where: { id, session: { organizationId } }` to scope by tenant.
+   */
+  update(id: string, updates: Partial<AgentRun>, organizationId: string): Promise<void>;
   listBySession(sessionId: string): Promise<AgentRun[]>;
 }
 
@@ -56,18 +61,24 @@ export interface PauseStore {
   getById(id: string): Promise<AgentPause | null>;
   /** Lookup pause by the approval that caused it (for resume hook) */
   getByApprovalId(approvalId: string): Promise<AgentPause | null>;
-  update(id: string, updates: Partial<AgentPause>): Promise<void>;
+  /**
+   * AgentPause has no direct `organizationId` column; org is derived via the
+   * `session` FK. The Prisma store uses a relation filter
+   * `where: { id, session: { organizationId } }` to scope by tenant.
+   */
+  update(id: string, updates: Partial<AgentPause>, organizationId: string): Promise<void>;
   listBySession(sessionId: string): Promise<AgentPause[]>;
   /**
    * Atomic CAS: transition resumeStatus from expectedStatus to newStatus.
-   * Returns true if the update succeeded (status matched), false if it didn't
-   * (concurrent resume). This follows the same optimistic concurrency pattern
-   * as PrismaApprovalStore.updateState with expectedVersion.
+   * Returns true if the update succeeded (status matched + org scope), false
+   * if it didn't (concurrent resume or tenant mismatch). Same optimistic
+   * concurrency pattern as PrismaApprovalStore.updateState with expectedVersion.
    */
   compareAndSwapResumeStatus(
     id: string,
     expectedStatus: ResumeStatus,
     newStatus: ResumeStatus,
+    organizationId: string,
     updates?: Partial<AgentPause>,
   ): Promise<boolean>;
 }
@@ -95,5 +106,5 @@ export interface ToolEventStore {
 export interface RoleOverrideStore {
   save(override: AgentRoleOverride): Promise<void>;
   getByOrgAndRole(organizationId: string, roleId: string): Promise<AgentRoleOverride | null>;
-  update(id: string, updates: Partial<AgentRoleOverride>): Promise<void>;
+  update(id: string, updates: Partial<AgentRoleOverride>, organizationId: string): Promise<void>;
 }

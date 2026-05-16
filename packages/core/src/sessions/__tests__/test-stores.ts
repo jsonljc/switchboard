@@ -31,7 +31,7 @@ export class InMemorySessionStore implements SessionStore {
     return s ? { ...s } : null;
   }
 
-  async update(id: string, updates: Partial<AgentSession>): Promise<void> {
+  async update(id: string, updates: Partial<AgentSession>, _organizationId: string): Promise<void> {
     const existing = this.items.get(id);
     if (!existing) throw new Error(`Session ${id} not found`);
     this.items.set(id, { ...existing, ...updates });
@@ -92,7 +92,7 @@ export class InMemoryRunStore implements RunStore {
     return r ? { ...r } : null;
   }
 
-  async update(id: string, updates: Partial<AgentRun>): Promise<void> {
+  async update(id: string, updates: Partial<AgentRun>, _organizationId: string): Promise<void> {
     const existing = this.items.get(id);
     if (!existing) throw new Error(`Run ${id} not found`);
     this.items.set(id, { ...existing, ...updates });
@@ -126,7 +126,7 @@ export class InMemoryPauseStore implements PauseStore {
     return p ? { ...p } : null;
   }
 
-  async update(id: string, updates: Partial<AgentPause>): Promise<void> {
+  async update(id: string, updates: Partial<AgentPause>, _organizationId: string): Promise<void> {
     const existing = this.items.get(id);
     if (!existing) throw new Error(`Pause ${id} not found`);
     this.items.set(id, { ...existing, ...updates });
@@ -142,6 +142,7 @@ export class InMemoryPauseStore implements PauseStore {
     id: string,
     expectedStatus: ResumeStatus,
     newStatus: ResumeStatus,
+    _organizationId: string,
     updates?: Partial<AgentPause>,
   ): Promise<boolean> {
     const existing = this.items.get(id);
@@ -202,7 +203,11 @@ export class InMemoryRoleOverrideStore implements RoleOverrideStore {
     return o ? { ...o } : null;
   }
 
-  async update(id: string, updates: Partial<AgentRoleOverride>): Promise<void> {
+  async update(
+    id: string,
+    updates: Partial<AgentRoleOverride>,
+    _organizationId: string,
+  ): Promise<void> {
     const existing = this.items.get(id);
     if (!existing) throw new Error(`Override ${id} not found`);
     this.items.set(id, { ...existing, ...updates });

@@ -364,6 +364,7 @@ describe("PlatformLifecycle", () => {
       expect(stores.envelopeStore.update).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ status: "approved" }),
+        expect.anything(),
       );
 
       // Trace was updated with approval info
@@ -411,9 +412,11 @@ describe("PlatformLifecycle", () => {
       expect(result.executionResult).toBeNull();
 
       // Envelope status updated to "denied"
-      expect(stores.envelopeStore.update).toHaveBeenCalledWith(envelopeId, {
-        status: "denied",
-      });
+      expect(stores.envelopeStore.update).toHaveBeenCalledWith(
+        envelopeId,
+        { status: "denied" },
+        expect.anything(),
+      );
 
       // Trace updated with failed outcome and rejected approvalOutcome
       expect(stores.traceStore.update).toHaveBeenCalledWith(
@@ -454,9 +457,11 @@ describe("PlatformLifecycle", () => {
 
       // Envelope status updated to "expired"
       expect(result.envelope.status).toBe("expired");
-      expect(stores.envelopeStore.update).toHaveBeenCalledWith(envelopeId, {
-        status: "expired",
-      });
+      expect(stores.envelopeStore.update).toHaveBeenCalledWith(
+        envelopeId,
+        { status: "expired" },
+        expect.anything(),
+      );
 
       // Trace updated with failed outcome
       expect(stores.traceStore.update).toHaveBeenCalledWith(

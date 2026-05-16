@@ -45,7 +45,11 @@ export class PrismaRoleOverrideStore implements RoleOverrideStore {
     };
   }
 
-  async update(id: string, updates: Partial<AgentRoleOverride>): Promise<void> {
+  async update(
+    id: string,
+    updates: Partial<AgentRoleOverride>,
+    organizationId: string,
+  ): Promise<void> {
     const data: Record<string, unknown> = {};
     if (updates.allowedTools !== undefined) data.allowedTools = updates.allowedTools;
     if (updates.safetyEnvelopeOverride !== undefined)
@@ -55,6 +59,13 @@ export class PrismaRoleOverrideStore implements RoleOverrideStore {
     if (updates.additionalGuardrails !== undefined)
       data.additionalGuardrails = updates.additionalGuardrails as object;
 
-    await this.prisma.agentRoleOverride.update({ where: { id }, data });
+    // organizationId is part of WHERE for tenant isolation (audit follow-up to TI-7/TI-8).
+    const result = await this.prisma.agentRoleOverride.updateMany({
+      where: { id, organizationId },
+      data,
+    });
+    if (result.count === 0) {
+      throw new Error(`AgentRoleOverride not found or tenant mismatch: ${id}`);
+    }
   }
 }

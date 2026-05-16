@@ -124,7 +124,12 @@ export class PlatformLifecycle {
     const workUnitId = approval.envelopeId;
 
     if (params.action === "approve" && newState.status === "approved") {
-      if (envelope) await envelopeStore.update(envelope.id, { status: "approved" });
+      if (envelope)
+        await envelopeStore.update(
+          envelope.id,
+          { status: "approved" },
+          approval.organizationId ?? null,
+        );
 
       await this.updateWorkTraceApproval(workUnitId, {
         approvalId: params.approvalId,
@@ -149,7 +154,12 @@ export class PlatformLifecycle {
         traceId: trace?.traceId ?? envelope?.traceId,
       });
     } else if (params.action === "reject") {
-      if (envelope) await envelopeStore.update(envelope.id, { status: "denied" });
+      if (envelope)
+        await envelopeStore.update(
+          envelope.id,
+          { status: "denied" },
+          approval.organizationId ?? null,
+        );
 
       await this.updateWorkTraceApproval(workUnitId, {
         approvalId: params.approvalId,
@@ -185,10 +195,14 @@ export class PlatformLifecycle {
         delete patchedParameters["_principalId"];
         delete patchedParameters["_cartridgeId"];
         delete patchedParameters["_organizationId"];
-        await envelopeStore.update(envelope.id, {
-          status: "approved",
-          proposals: envelope.proposals,
-        });
+        await envelopeStore.update(
+          envelope.id,
+          {
+            status: "approved",
+            proposals: envelope.proposals,
+          },
+          approval.organizationId ?? null,
+        );
       }
 
       await this.updateWorkTraceApproval(workUnitId, {
@@ -382,7 +396,8 @@ export class PlatformLifecycle {
 
     if (envelope) {
       const newStatus = executionResult.outcome === "completed" ? "executed" : "failed";
-      await envelopeStore.update(workUnitId, { status: newStatus });
+      const orgId = (envelope.proposals[0]?.parameters["_organizationId"] as string) ?? null;
+      await envelopeStore.update(workUnitId, { status: newStatus }, orgId);
     }
 
     const updateResult = await traceStore.update(
@@ -469,7 +484,7 @@ export class PlatformLifecycle {
     const envelope = await envelopeStore.getById(approval.envelopeId);
     if (!envelope) throw new Error("Envelope not found for expired approval");
 
-    await envelopeStore.update(envelope.id, { status: "expired" });
+    await envelopeStore.update(envelope.id, { status: "expired" }, approval.organizationId ?? null);
     envelope.status = "expired";
 
     await ledger.record({

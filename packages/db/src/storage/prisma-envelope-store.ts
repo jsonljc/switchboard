@@ -62,7 +62,11 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
     return toEnvelope(row);
   }
 
-  async update(id: string, updates: Partial<ActionEnvelope>): Promise<void> {
+  async update(
+    id: string,
+    updates: Partial<ActionEnvelope>,
+    organizationId: string | null,
+  ): Promise<void> {
     const data: Record<string, unknown> = { updatedAt: new Date() };
 
     if (updates.version !== undefined) data["version"] = updates.version;
@@ -82,7 +86,14 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
     if (updates.status !== undefined) data["status"] = updates.status;
     if (updates.parentEnvelopeId !== undefined) data["parentEnvelopeId"] = updates.parentEnvelopeId;
 
-    await this.prisma.actionEnvelope.update({ where: { id }, data });
+    // organizationId is part of WHERE for tenant isolation (audit follow-up to TI-7/TI-8).
+    const result = await this.prisma.actionEnvelope.updateMany({
+      where: { id, organizationId },
+      data,
+    });
+    if (result.count === 0) {
+      throw new Error(`ActionEnvelope not found or tenant mismatch: ${id}`);
+    }
   }
 
   async list(filter?: {

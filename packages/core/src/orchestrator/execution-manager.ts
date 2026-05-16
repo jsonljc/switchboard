@@ -183,7 +183,8 @@ export class ExecutionManager {
       durationMs: 0,
       undoRecipe: null,
     };
-    await this.ctx.storage.envelopes.update(envelopeId, { status: "failed" });
+    const orgId = (proposal.parameters["_organizationId"] as string) ?? null;
+    await this.ctx.storage.envelopes.update(envelopeId, { status: "failed" }, orgId);
     return result;
   }
 
@@ -193,7 +194,8 @@ export class ExecutionManager {
     decision: import("@switchboard/schemas").DecisionTrace | undefined,
     execCartridgeId: string,
   ): Promise<void> {
-    await this.ctx.storage.envelopes.update(envelope.id, { status: "executing" });
+    const orgId = (proposal.parameters["_organizationId"] as string) ?? null;
+    await this.ctx.storage.envelopes.update(envelope.id, { status: "executing" }, orgId);
 
     await this.ctx.ledger.record({
       eventType: "action.executing",
@@ -333,25 +335,30 @@ export class ExecutionManager {
     preMutationSnapshot: Record<string, unknown> | undefined,
   ): Promise<void> {
     const newStatus = executeResult.success ? "executed" : "failed";
-    await this.ctx.storage.envelopes.update(envelopeId, {
-      status: newStatus,
-      executionResults: [
-        ...envelope.executionResults,
-        {
-          actionId: proposal.id,
-          envelopeId: envelope.id,
-          success: executeResult.success,
-          summary: executeResult.summary,
-          externalRefs: executeResult.externalRefs,
-          rollbackAvailable: executeResult.rollbackAvailable,
-          partialFailures: executeResult.partialFailures,
-          durationMs: executeResult.durationMs,
-          undoRecipe: executeResult.undoRecipe,
-          executedAt: new Date(),
-          preMutationSnapshot,
-        },
-      ],
-    });
+    const orgId = (proposal.parameters["_organizationId"] as string) ?? null;
+    await this.ctx.storage.envelopes.update(
+      envelopeId,
+      {
+        status: newStatus,
+        executionResults: [
+          ...envelope.executionResults,
+          {
+            actionId: proposal.id,
+            envelopeId: envelope.id,
+            success: executeResult.success,
+            summary: executeResult.summary,
+            externalRefs: executeResult.externalRefs,
+            rollbackAvailable: executeResult.rollbackAvailable,
+            partialFailures: executeResult.partialFailures,
+            durationMs: executeResult.durationMs,
+            undoRecipe: executeResult.undoRecipe,
+            executedAt: new Date(),
+            preMutationSnapshot,
+          },
+        ],
+      },
+      orgId,
+    );
   }
 
   private async postExecutionProcessing(

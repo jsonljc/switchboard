@@ -287,9 +287,13 @@ export class ProposePipeline {
     });
 
     envelope.auditEntryIds = [auditEntry.id];
-    await this.ctx.storage.envelopes.update(envelope.id, {
-      auditEntryIds: envelope.auditEntryIds,
-    });
+    await this.ctx.storage.envelopes.update(
+      envelope.id,
+      {
+        auditEntryIds: envelope.auditEntryIds,
+      },
+      params.organizationId ?? null,
+    );
 
     // Record metrics
     const metrics = getMetrics();

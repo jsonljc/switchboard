@@ -89,7 +89,7 @@ export class PrismaPolicyStore implements PolicyStore {
     return toPolicy(row);
   }
 
-  async update(id: string, data: Partial<Policy>): Promise<void> {
+  async update(id: string, data: Partial<Policy>, organizationId: string | null): Promise<void> {
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
     if (data.name !== undefined) updateData["name"] = data.name;
@@ -106,7 +106,15 @@ export class PrismaPolicyStore implements PolicyStore {
     if (data.riskCategoryOverride !== undefined)
       updateData["riskCategoryOverride"] = data.riskCategoryOverride;
 
-    await this.prisma.policy.update({ where: { id }, data: updateData });
+    // organizationId is part of WHERE for tenant isolation (audit follow-up to TI-7/TI-8).
+    // Policy.organizationId is nullable (null = global policy).
+    const result = await this.prisma.policy.updateMany({
+      where: { id, organizationId },
+      data: updateData,
+    });
+    if (result.count === 0) {
+      throw new Error(`Policy not found or tenant mismatch: ${id}`);
+    }
     await this.invalidateCache();
   }
 

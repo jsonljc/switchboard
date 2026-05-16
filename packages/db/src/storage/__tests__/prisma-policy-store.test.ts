@@ -7,6 +7,7 @@ function createMockPrisma() {
       upsert: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
       findMany: vi.fn(),
     },
@@ -117,12 +118,12 @@ describe("PrismaPolicyStore", () => {
 
   describe("update", () => {
     it("updates specific fields dynamically", async () => {
-      prisma.policy.update.mockResolvedValue({});
+      prisma.policy.updateMany.mockResolvedValue({ count: 1 });
 
-      await store.update("pol_1", { name: "Updated Name", active: false });
+      await store.update("pol_1", { name: "Updated Name", active: false }, "org_1");
 
-      expect(prisma.policy.update).toHaveBeenCalledWith({
-        where: { id: "pol_1" },
+      expect(prisma.policy.updateMany).toHaveBeenCalledWith({
+        where: { id: "pol_1", organizationId: "org_1" },
         data: expect.objectContaining({
           name: "Updated Name",
           active: false,
@@ -132,15 +133,42 @@ describe("PrismaPolicyStore", () => {
     });
 
     it("only includes provided fields in update data", async () => {
-      prisma.policy.update.mockResolvedValue({});
+      prisma.policy.updateMany.mockResolvedValue({ count: 1 });
 
-      await store.update("pol_1", { priority: 5 });
+      await store.update("pol_1", { priority: 5 }, "org_1");
 
-      const callArgs = prisma.policy.update.mock.calls[0]![0];
+      const callArgs = prisma.policy.updateMany.mock.calls[0]![0];
       expect(callArgs.data).toHaveProperty("priority", 5);
       expect(callArgs.data).toHaveProperty("updatedAt");
       expect(callArgs.data).not.toHaveProperty("name");
       expect(callArgs.data).not.toHaveProperty("active");
+    });
+
+    // Sibling-isolation regression — audit follow-up to TI-7/TI-8 (issue #594).
+    it("scopes update WHERE by organizationId (TI sibling)", async () => {
+      prisma.policy.updateMany.mockResolvedValue({ count: 1 });
+
+      await store.update("pol_1", { name: "x" }, "org_1");
+
+      const callArgs = prisma.policy.updateMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({ id: "pol_1", organizationId: "org_1" });
+    });
+
+    it("scopes update WHERE by organizationId=null for global policies", async () => {
+      prisma.policy.updateMany.mockResolvedValue({ count: 1 });
+
+      await store.update("pol_1", { name: "x" }, null);
+
+      const callArgs = prisma.policy.updateMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({ id: "pol_1", organizationId: null });
+    });
+
+    it("throws when update count=0 (tenant mismatch or missing row)", async () => {
+      prisma.policy.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.update("pol_1", { name: "x" }, "org_X")).rejects.toThrow(
+        /not found or tenant mismatch/,
+      );
     });
   });
 

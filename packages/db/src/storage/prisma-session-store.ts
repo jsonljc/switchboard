@@ -33,7 +33,7 @@ export class PrismaSessionStore implements SessionStore {
     return toAgentSession(row);
   }
 
-  async update(id: string, updates: Partial<AgentSession>): Promise<void> {
+  async update(id: string, updates: Partial<AgentSession>, organizationId: string): Promise<void> {
     const data: Record<string, unknown> = {};
     if (updates.status !== undefined) data.status = updates.status;
     if (updates.toolCallCount !== undefined) data.toolCallCount = updates.toolCallCount;
@@ -44,7 +44,14 @@ export class PrismaSessionStore implements SessionStore {
     if (updates.completedAt !== undefined) data.completedAt = updates.completedAt;
     if (updates.toolHistory !== undefined) data.toolHistory = updates.toolHistory as object[];
 
-    await this.prisma.agentSession.update({ where: { id }, data });
+    // organizationId is part of WHERE for tenant isolation (audit follow-up to TI-7/TI-8).
+    const result = await this.prisma.agentSession.updateMany({
+      where: { id, organizationId },
+      data,
+    });
+    if (result.count === 0) {
+      throw new Error(`AgentSession not found or tenant mismatch: ${id}`);
+    }
   }
 
   async list(filter: {

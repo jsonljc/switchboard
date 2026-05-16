@@ -225,7 +225,7 @@ describe("proposePlan — atomic strategy", () => {
       noopExecute,
     );
     expect(result.planDecision).toBe("deny");
-    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-a", { status: "denied" });
+    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-a", { status: "denied" }, null);
     expect(result.results[0]!.envelope.status).toBe("denied");
   });
 
@@ -291,7 +291,7 @@ describe("proposePlan — sequential strategy", () => {
       noopExecute,
     );
     expect(["deny", "partial"]).toContain(result.planDecision);
-    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-b", { status: "denied" });
+    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-b", { status: "denied" }, null);
   });
 });
 
@@ -368,8 +368,8 @@ describe("proposePlan — single_approval consolidation", () => {
     expect(planAppr.riskCategory).toBe("high");
     expect(result.results[0]!.approvalRequest).toBeNull();
     expect(result.results[1]!.approvalRequest).toBeNull();
-    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-a", { status: "queued" });
-    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-b", { status: "queued" });
+    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-a", { status: "queued" }, null);
+    expect(ctx.storage.envelopes.update).toHaveBeenCalledWith("env-b", { status: "queued" }, null);
     expect(ctx.storage.envelopes.save).toHaveBeenCalled();
     expect(ctx.storage.approvals.save).toHaveBeenCalled();
   });

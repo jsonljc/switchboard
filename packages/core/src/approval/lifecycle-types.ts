@@ -34,6 +34,13 @@ export interface CreateLifecycleInput {
 
 export interface CreateRevisionInput {
   lifecycleId: string;
+  /**
+   * Organization that owns the lifecycle. Used to scope the WHERE clause when
+   * the transaction updates approvalLifecycle.currentRevisionId, providing
+   * defense-in-depth past the route-level org check (audit follow-up to
+   * TI-7/TI-8).
+   */
+  organizationId: string | null;
   parametersSnapshot: Record<string, unknown>;
   approvalScopeSnapshot: Record<string, unknown>;
   bindingHash: string;

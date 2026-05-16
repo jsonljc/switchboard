@@ -27,13 +27,21 @@ export class PrismaRunStore implements RunStore {
     return toAgentRun(row);
   }
 
-  async update(id: string, updates: Partial<AgentRun>): Promise<void> {
+  async update(id: string, updates: Partial<AgentRun>, organizationId: string): Promise<void> {
     const data: Record<string, unknown> = {};
     if (updates.outcome !== undefined) data.outcome = updates.outcome;
     if (updates.stepRange !== undefined) data.stepRange = updates.stepRange as object;
     if (updates.completedAt !== undefined) data.completedAt = updates.completedAt;
 
-    await this.prisma.agentRun.update({ where: { id }, data });
+    // AgentRun has no direct `organizationId` column; scope via session FK
+    // relation filter for tenant isolation (audit follow-up to TI-7/TI-8).
+    const result = await this.prisma.agentRun.updateMany({
+      where: { id, session: { organizationId } },
+      data,
+    });
+    if (result.count === 0) {
+      throw new Error(`AgentRun not found or tenant mismatch: ${id}`);
+    }
   }
 
   async listBySession(sessionId: string): Promise<AgentRun[]> {
