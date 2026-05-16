@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
-  ActionProposal,
   ActionEnvelope,
+  ActionProposal,
   DecisionTrace,
   ExecuteResult,
   RiskCategory,
