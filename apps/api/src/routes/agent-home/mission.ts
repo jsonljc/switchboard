@@ -135,7 +135,8 @@ export function buildAlexMissionResponse(inputs: {
   // (degraded/expired/revoked/etc.) keeps the setup row unticked. Status
   // mapping to "warn" vs "off" delegates to mapConnectionStatus. The metaDone
   // logic at mission.ts:109 is intentionally laxer (any row counts as done);
-  // see the plan's Follow-up #1.
+  // a future PR will align both reads to the strict semantic (tracked in the
+  // cockpit-wiring runbook's follow-ups).
   const calConnection = connections.find((c) => c.serviceId === "google-calendar");
   const calDone = calConnection?.status === "connected";
   const calStatus: MissionChannelStatus = calConnection

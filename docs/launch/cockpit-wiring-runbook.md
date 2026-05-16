@@ -26,7 +26,7 @@ vs `schema.prisma:1206`); the mission/spend reads have no awareness of
 
 **Today, the only way to populate the `Connection` rows that
 mission.ts/meta-spend-provider read** is via the generic
-`POST /api/connections` endpoint (`apps/api/src/routes/connections.ts:58`).
+`POST /api/connections` endpoint (`apps/api/src/routes/connections.ts:19`).
 This is a manual API call — no UI surfaces it. Until either the OAuth
 callbacks are extended to dual-write or mission/spend are re-pointed at
 `DeploymentConnection`, the KPI spend tile and the calendar/meta setup
