@@ -120,6 +120,9 @@ export const requireOrgForAuditedMutation: preHandlerAsyncHookHandler = async (r
   }
   const principalId = request.principalIdFromAuth;
   if (!principalId && process.env["NODE_ENV"] === "production") {
+    // Emit a structured warning so SREs see which decorator + org tripped
+    // the audit guard — the 403 alone is silent on the server side.
+    request.log.warn({ orgId, decorator: "requireOrgForAuditedMutation" }, "no_principal_binding");
     return reply.code(403).send({
       error: "forbidden",
       reason: "no_principal_binding",

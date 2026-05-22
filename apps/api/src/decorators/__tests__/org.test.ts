@@ -143,7 +143,21 @@ describe("requireOrgForAuditedMutation preHandler (PDPA-grade write-side)", () =
 
   it("fails closed with 403 no_principal_binding in production when principal absent", async () => {
     process.env["NODE_ENV"] = "production";
-    const app = Fastify();
+    const warnings: Array<{ orgId?: string; decorator?: string; msg?: string }> = [];
+    const app = Fastify({
+      logger: {
+        level: "warn",
+        hooks: {
+          logMethod(args: unknown[], method: (...a: unknown[]) => void) {
+            const [obj, msg] = args as [{ orgId?: string; decorator?: string }, string | undefined];
+            if (typeof obj === "object" && obj !== null) {
+              warnings.push({ ...obj, msg });
+            }
+            method.apply(this, args);
+          },
+        },
+      },
+    });
     app.decorate("authDisabled", false);
     app.addHook("preHandler", async (request) => {
       request.organizationIdFromAuth = "org_audit";
@@ -158,6 +172,14 @@ describe("requireOrgForAuditedMutation preHandler (PDPA-grade write-side)", () =
       reason: "no_principal_binding",
       statusCode: 403,
     });
+    // Server-side breadcrumb: SREs see which decorator + org tripped the guard.
+    expect(warnings).toContainEqual(
+      expect.objectContaining({
+        orgId: "org_audit",
+        decorator: "requireOrgForAuditedMutation",
+        msg: "no_principal_binding",
+      }),
+    );
     await app.close();
   });
 

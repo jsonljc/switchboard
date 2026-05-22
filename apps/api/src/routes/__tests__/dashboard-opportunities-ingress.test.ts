@@ -177,6 +177,9 @@ describe("PATCH /:id/stage — Route Governance Contract v1 PR-1", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as { opportunity: { stage: string } };
     expect(body.opportunity.stage).toBe("qualified");
+    // Confirm the resolved orgId reached ingress as "default" — proves the
+    // buildDevAuthFallback path drove the lookup, not an upstream short-circuit.
+    expect(app.lastIngressTrace?.organizationId).toBe("default");
     await app.close();
   });
 });
