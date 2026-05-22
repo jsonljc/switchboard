@@ -214,12 +214,12 @@ Already implemented at `apps/api/src/utils/ingress-error-to-reply.ts`. Maps:
 ```ts
 reply.code(403).send({
   error: "forbidden",
-  reason: "organization_mismatch" | "no_org_binding",
+  reason: "organization_mismatch" | "no_org_binding" | "no_principal_binding",
   statusCode: 403,
 });
 ```
 
-Routes never write this directly — the `app.requireOrg` / `app.requireOrgForMutation` decorators emit it (Section 6).
+Routes never write this directly — the `requireOrg` / `requireOrgForMutation` / `requireOrgForAuditedMutation` decorators emit it (Section 6). `no_principal_binding` is emitted only by `requireOrgForAuditedMutation` and only in production: it fails closed when a PDPA-regulated mutation lacks a bound principal, restoring the pre-Impl-PR-1 `bootstrap/routes.ts` `resolveActor` guard that ensured the audit trail always records a real actor for consent grant/revoke/clear.
 
 ### 4.6 Unexpected handler exception
 
