@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { EmptyState, shouldRenderEmptyState } from "../empty-state";
+import { ALEX_VARIANTS } from "../sprite/alex-variants";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 
 const setupAllUndone: MissionAggregatorResponse["setup"] = [
@@ -87,5 +88,30 @@ describe("EmptyState", () => {
     // setupPartialDone has 'meta' done — Connect buttons count = 3 (one per remaining)
     const connectButtons = screen.getAllByRole("button", { name: /Connect/i });
     expect(connectButtons).toHaveLength(3);
+  });
+
+  it("renders a sprite SVG in the narrator block when bundle is provided", () => {
+    const { container } = render(
+      <EmptyState
+        rules={null}
+        setup={[{ key: "meta", done: false, primary: true }]}
+        onConnect={() => {}}
+        bundle={ALEX_VARIANTS}
+        variant="classic"
+      />,
+    );
+    // The 48px sprite frame is the first <svg> inside the narrator block.
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("falls back to the literal 'A' letter when bundle is omitted (current behavior)", () => {
+    const { getByText } = render(
+      <EmptyState
+        rules={null}
+        setup={[{ key: "meta", done: false, primary: true }]}
+        onConnect={() => {}}
+      />,
+    );
+    expect(getByText("A")).toBeInTheDocument();
   });
 });
