@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import { Project, SourceFile } from "ts-morph";
 import { resolve, relative } from "path";
+import { execSync } from "child_process";
 import { glob } from "glob";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -13,6 +14,7 @@ import {
   validateTemporaryEntries,
   type AllowlistEntry,
 } from "./allowlist.js";
+import { validateRouteClass, type ValidatorWarning } from "./route-class-validator.js";
 
 export type FindingKind = "ingress" | "approval";
 
@@ -105,6 +107,55 @@ export function formatFinding(f: Finding): string {
   return `${f.path}:${f.line}: ${f.kind} — ${f.message}`;
 }
 
+export interface AdvisoryOptions {
+  /** If omitted, detects via `git diff --name-only origin/main...HEAD`. */
+  touchedFiles?: string[];
+  repoRoot: string;
+}
+
+export interface AdvisoryResult {
+  warnings: ValidatorWarning[];
+  exitCode: 0;
+}
+
+const ROUTE_GLOBS: ReadonlyArray<RegExp> = [
+  /^apps\/api\/src\/routes\//,
+  /^apps\/chat\/src\/routes\//,
+  /^apps\/dashboard\/src\/app\/api\//,
+];
+
+export async function runRouteClassAdvisory(opts: AdvisoryOptions): Promise<AdvisoryResult> {
+  const touched = opts.touchedFiles ?? detectTouchedFiles();
+  const routeFiles = touched.filter((f) => ROUTE_GLOBS.some((rx) => rx.test(f)));
+
+  if (routeFiles.length === 0) {
+    return { warnings: [], exitCode: 0 };
+  }
+
+  const project = new Project({ useInMemoryFileSystem: false });
+  const warnings: ValidatorWarning[] = [];
+  for (const repoPath of routeFiles) {
+    const abs = join(opts.repoRoot, repoPath);
+    try {
+      const sf = project.addSourceFileAtPath(abs);
+      warnings.push(...validateRouteClass(sf, repoPath));
+    } catch {
+      // File missing or unreadable — skip.
+    }
+  }
+
+  return { warnings, exitCode: 0 };
+}
+
+function detectTouchedFiles(): string[] {
+  try {
+    const out = execSync("git diff --name-only origin/main...HEAD", { encoding: "utf8" });
+    return out.split("\n").filter((line) => line.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
 // CLI entry point — only executed when run directly, not when imported by tests.
 const isMain = (() => {
   try {
@@ -117,6 +168,19 @@ const isMain = (() => {
 if (isMain) {
   const here = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(here, "..", "..");
+
+  const mode = process.argv.find((arg) => arg.startsWith("--mode="))?.split("=")[1];
+  if (mode === "warn-touched") {
+    const advisory = await runRouteClassAdvisory({ repoRoot });
+    for (const w of advisory.warnings) {
+      console.warn(`::warning file=${w.path}::${w.message}`);
+    }
+    if (advisory.warnings.length > 0) {
+      console.warn(`\n${advisory.warnings.length} route-class advisory warning(s).`);
+    }
+    process.exit(advisory.exitCode);
+  }
+
   const result = await runCheckRoutes({
     includePaths: [
       join(repoRoot, "apps/api/src/routes/**/*.ts"),
