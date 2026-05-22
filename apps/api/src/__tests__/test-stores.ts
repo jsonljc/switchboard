@@ -23,6 +23,7 @@ import type {
 } from "@switchboard/core";
 import { OpportunityNotFoundError } from "@switchboard/core";
 import type {
+  ExecutionError,
   WorkTrace,
   WorkTraceStore,
   WorkTraceUpdateResult,
@@ -87,6 +88,7 @@ export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
     mode: string;
     outcome: string;
     organizationId: string;
+    error?: Pick<ExecutionError, "code" | "message">;
   } | null = null;
   public persistCount = 0;
 
@@ -96,6 +98,7 @@ export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
       mode: trace.mode,
       outcome: trace.outcome,
       organizationId: trace.organizationId,
+      ...(trace.error ? { error: { code: trace.error.code, message: trace.error.message } } : {}),
     };
     this.persistCount += 1;
     await super.persist(trace);

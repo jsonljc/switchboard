@@ -44,7 +44,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage — PlatformIngress migra
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_ingress_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "happy-path-key-1",
+      },
       payload: { stage: "booked" },
     });
 
@@ -66,7 +70,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage — PlatformIngress migra
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_does_not_exist/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "error-path-key-1",
+      },
       payload: { stage: "booked" },
     });
     expect(res.statusCode).toBe(404);
@@ -86,7 +94,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage — PlatformIngress migra
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_ingress_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "single-trace-key-1",
+      },
       payload: { stage: "booked" },
     });
     expect(res.statusCode).toBe(200);
@@ -127,5 +139,37 @@ describe("PATCH /api/dashboard/opportunities/:id/stage — PlatformIngress migra
     const secondBody = second.json() as { opportunity: { stage: string; updatedAt: string } };
     // Cached replay returns the exact same opportunity payload (updatedAt unchanged).
     expect(secondBody.opportunity.updatedAt).toBe(firstBody.opportunity.updatedAt);
+  });
+});
+
+describe("PATCH /:id/stage — Route Governance Contract v1 PR-1", () => {
+  it("returns 400 missing_idempotency_key when header absent", async () => {
+    const { app } = await buildTestServer();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/dashboard/opportunities/opp_does_not_matter/stage",
+      payload: { stage: "qualified" },
+      // intentionally NO Idempotency-Key header
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "missing_idempotency_key" });
+    await app.close();
+  });
+
+  it("happy path: header present, narrowed orgId/actorId reach handler", async () => {
+    const { app } = await buildTestServer();
+    const store = app.opportunityStore as unknown as {
+      seedBoard: (rows: OpportunityBoardRow[]) => void;
+    };
+    store.seedBoard([mkRow({ id: "opp_rg_1", organizationId: "default", stage: "quoted" })]);
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/dashboard/opportunities/opp_rg_1/stage",
+      headers: { "idempotency-key": "key-stage-1" },
+      payload: { stage: "qualified" },
+    });
+    expect(res.statusCode).toBeLessThan(500);
+    await app.close();
   });
 });

@@ -1,6 +1,11 @@
 // apps/api/src/bootstrap/operator-intents/recommendation.ts
 // ---------------------------------------------------------------------------
-// Phase 1b.2 — operator.act_on_recommendation handler factory
+// Phase 1b.2 / Route Governance Contract v1 PR-1 — operator.act_on_recommendation
+//
+// Cohort B → A migration (spec §5.1): the row-existence + tenant-isolation
+// check now lives in the handler instead of a route pre-flight, so
+// cross-tenant attempts produce a persisted WorkTrace with
+// `failed-RECOMMENDATION_NOT_FOUND`. The route no longer pre-fetches.
 // ---------------------------------------------------------------------------
 import { actOnRecommendation } from "@switchboard/core";
 import type { RecommendationStore } from "@switchboard/core";
@@ -14,6 +19,23 @@ export function buildActOnRecommendationHandler(
   return {
     async execute(workUnit) {
       const params = ActOnRecommendationParametersSchema.parse(workUnit.parameters);
+
+      // Tenant-isolation reject: fold the route's former pre-flight check into
+      // the handler so the failure path persists a WorkTrace. Cross-tenant
+      // attempts surface as RECOMMENDATION_NOT_FOUND (not TENANT_MISMATCH) per
+      // spec §5.1 — the conflation is intentional (do not leak existence).
+      const row = await recommendationStore.getById(params.recommendationId);
+      if (!row || row.orgId !== workUnit.organizationId) {
+        return {
+          outcome: "failed" as const,
+          summary: "Recommendation not found",
+          error: {
+            code: OPERATOR_INTENT_ERROR_CODES.RECOMMENDATION_NOT_FOUND,
+            message: "Recommendation not found",
+          },
+        };
+      }
+
       try {
         const result = await actOnRecommendation(recommendationStore, {
           recommendationId: params.recommendationId,
@@ -39,9 +61,7 @@ export function buildActOnRecommendationHandler(
             },
           };
         }
-        // "not found" and "org mismatch" are made unreachable by the pre-flight
-        // checks in the route. If they surface here despite that, treat as
-        // unexpected — rethrow so the global handler returns a scrubbed 500.
+        // Genuine unexpected — rethrow so the global handler returns scrubbed 500.
         throw err;
       }
     },

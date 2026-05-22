@@ -50,6 +50,7 @@ import {
   registerCartridgeIntents,
 } from "@switchboard/core/platform";
 import type {
+  ExecutionError,
   GovernanceCartridge,
   CartridgeManifestForRegistration,
 } from "@switchboard/core/platform";
@@ -96,6 +97,7 @@ declare module "fastify" {
       mode: string;
       outcome: string;
       organizationId: string;
+      error?: Pick<ExecutionError, "code" | "message">;
     } | null;
     /** Test-only counter of WorkTrace persist() calls. */
     ingressTraceCount?: number;
@@ -509,16 +511,6 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     const { registerAdminConsentRoutes } = await import("../routes/admin-consent.js");
     registerAdminConsentRoutes(app, {
       consentReader: options.consentReader,
-      resolveActor: async (req) => {
-        const principal = req.principalIdFromAuth;
-        if (principal) return principal;
-        return "operator_test";
-      },
-      resolveOrganizationId: async (req) => {
-        const orgId = req.organizationIdFromAuth;
-        if (orgId) return orgId;
-        return "system:admin-endpoint";
-      },
     });
   }
 

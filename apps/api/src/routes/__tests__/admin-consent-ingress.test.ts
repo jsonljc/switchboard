@@ -113,7 +113,11 @@ describe("POST /api/admin/consent/grant — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/grant",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: grantBody,
     });
 
@@ -141,7 +145,11 @@ describe("POST /api/admin/consent/grant — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/grant",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: grantBody,
     });
 
@@ -164,7 +172,11 @@ describe("POST /api/admin/consent/grant — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/grant",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: grantBody,
     });
 
@@ -192,7 +204,11 @@ describe("POST /api/admin/consent/grant — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/grant",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: grantBody,
     });
 
@@ -212,7 +228,11 @@ describe("POST /api/admin/consent/grant — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/grant",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: { contactId: "" }, // missing jurisdiction etc.
     });
 
@@ -277,7 +297,11 @@ describe("POST /api/admin/consent/revoke — PlatformIngress migration (Phase 1b
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/revoke",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: revokeBody,
     });
 
@@ -303,7 +327,11 @@ describe("POST /api/admin/consent/revoke — PlatformIngress migration (Phase 1b
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/revoke",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: revokeBody,
     });
 
@@ -321,7 +349,11 @@ describe("POST /api/admin/consent/revoke — PlatformIngress migration (Phase 1b
     await app.inject({
       method: "POST",
       url: "/api/admin/consent/revoke",
-      headers: { "x-org-id": "org-sg-001", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-sg-001",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: revokeBody,
     });
 
@@ -386,7 +418,11 @@ describe("POST /api/admin/consent/clear — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/clear",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: clearBody,
     });
 
@@ -412,7 +448,11 @@ describe("POST /api/admin/consent/clear — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/clear",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: clearBody,
     });
 
@@ -429,7 +469,11 @@ describe("POST /api/admin/consent/clear — PlatformIngress migration (Phase 1b.
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/consent/clear",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: { ...clearBody, notes: "" },
     });
 
@@ -471,5 +515,46 @@ describe("POST /api/admin/consent/clear — PlatformIngress migration (Phase 1b.
     expect(second.statusCode).toBe(200);
 
     expect(consentService.clearConsent).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Route Governance Contract v1 PR-1 — mandatory Idempotency-Key on all 3 POSTs
+// ---------------------------------------------------------------------------
+
+describe("admin consent — Route Governance Contract v1 PR-1", () => {
+  it.each([
+    [
+      "/api/admin/consent/grant",
+      {
+        contactId: "c1",
+        jurisdiction: "SG",
+        source: "operator_recorded",
+        grantedAt: new Date().toISOString(),
+      },
+    ],
+    [
+      "/api/admin/consent/revoke",
+      {
+        contactId: "c1",
+        source: "operator_recorded_revocation",
+        revokedAt: new Date().toISOString(),
+      },
+    ],
+    ["/api/admin/consent/clear", { contactId: "c1", notes: "test" }],
+  ])("returns 400 missing_idempotency_key on %s when header absent", async (url, payload) => {
+    const { app } = await buildTestServer({
+      consentService: makeService(),
+      consentReader: makeReader(),
+    });
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      payload,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "missing_idempotency_key" });
+    await app.close();
   });
 });

@@ -1,4 +1,4 @@
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 
 /**
  * Reads the `Idempotency-Key` HTTP header from a Fastify request.
@@ -23,4 +23,26 @@ export function getIdempotencyKey(request: FastifyRequest): string | undefined {
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * Mandatory variant of {@link getIdempotencyKey}: when the `Idempotency-Key`
+ * header is missing or invalid, sends a 400 response and returns `null`. Route
+ * handlers short-circuit on a `null` return with `if (!key) return;`.
+ *
+ * Used by operator-direct routes per the Route Governance Contract v1 (§7.1).
+ * Other route classes use `getIdempotencyKey` (optional) or omit the contract
+ * entirely.
+ */
+export function requireIdempotencyKey(request: FastifyRequest, reply: FastifyReply): string | null {
+  const key = getIdempotencyKey(request);
+  if (!key) {
+    reply.code(400).send({
+      error: "missing_idempotency_key",
+      hint: "Idempotency-Key header is required for this endpoint",
+      statusCode: 400,
+    });
+    return null;
+  }
+  return key;
 }

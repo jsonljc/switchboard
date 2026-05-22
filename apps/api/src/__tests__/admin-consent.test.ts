@@ -40,9 +40,9 @@ const buildApp = async (
   };
 
   const app = Fastify({ logger: false });
+  app.decorate("authDisabled", true);
   registerAdminConsentRoutes(app, {
     consentReader,
-    resolveActor: async () => "operator_42",
   });
   return { app, consentReader };
 };

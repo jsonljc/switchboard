@@ -1,12 +1,12 @@
+// @route-class: operator-direct
 import type { FastifyPluginAsync, FastifyInstance } from "fastify";
-import {
-  type RecommendationAction,
-  type RecommendationSurface,
-  type RecommendationStatus,
-} from "@switchboard/core";
-import { requireOrganizationScope } from "../utils/require-org.js";
-import { getIdempotencyKey } from "../utils/idempotency-key.js";
+import { z } from "zod";
+import { type RecommendationSurface, type RecommendationStatus } from "@switchboard/core";
+import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
+import { replyValidationError } from "../utils/validation-error.js";
+import { buildDevAuthFallback } from "../utils/auth-fallback.js";
+import { requireOrg, requireOrgForMutation } from "../decorators/org.js";
 import {
   ACT_ON_RECOMMENDATION_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
@@ -22,13 +22,11 @@ const ACT_HTTP_RATE_LIMIT_WINDOW_MS = parseInt(
 );
 
 const VALID_SURFACES: ReadonlySet<RecommendationSurface> = new Set(["queue", "shadow_action"]);
-const VALID_ACTIONS: ReadonlySet<RecommendationAction> = new Set([
-  "primary",
-  "secondary",
-  "dismiss",
-  "confirm",
-  "undo",
-]);
+
+const ActBodySchema = z.object({
+  action: z.enum(["primary", "secondary", "dismiss", "confirm", "undo"]),
+  note: z.string().optional(),
+});
 
 function parseSinceMs(s: string | undefined): number | undefined {
   if (!s) return undefined;
@@ -73,24 +71,15 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
     app.log.warn("[recommendations] route registered without store; will 503 on every request");
   }
 
-  // Dev/test mode (authDisabled): default organizationIdFromAuth + principalIdFromAuth
-  // so requireOrganizationScope and acting actor have sensible values. In production
-  // (authDisabled === false) the auth middleware sets these from API_KEY_METADATA, and
-  // requireOrganizationScope correctly 403s when they are missing.
-  app.addHook("preHandler", async (request) => {
-    if (app.authDisabled === true) {
-      if (!request.organizationIdFromAuth) {
-        request.organizationIdFromAuth = "default";
-      }
-      if (!request.principalIdFromAuth) {
-        request.principalIdFromAuth = "default";
-      }
-    }
-  });
+  // Dev/test mode (authDisabled): populate organizationIdFromAuth + principalIdFromAuth
+  // from x-org-id / x-principal-id headers (or fall back to "default"). In production
+  // this hook is a no-op; the real auth middleware has already populated the fields.
+  app.addHook("preHandler", buildDevAuthFallback(app));
 
   app.get(
     "/",
     {
+      preHandler: requireOrg,
       schema: {
         description: "List recommendations by surface",
         tags: ["Recommendations"],
@@ -102,8 +91,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
           .code(503)
           .send({ error: "Recommendations store unavailable", statusCode: 503 });
       }
-      const orgId = requireOrganizationScope(request, reply);
-      if (!orgId) return;
+      const { orgId } = request;
 
       const q = request.query as {
         surface?: string;
@@ -132,6 +120,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/:id/act",
     {
+      preHandler: requireOrgForMutation,
       schema: {
         description: "Act on a recommendation (primary | secondary | dismiss | confirm | undo).",
         tags: ["Recommendations"],
@@ -162,46 +151,33 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
           .code(503)
           .send({ error: "Recommendations store unavailable", statusCode: 503 });
       }
-      const orgId = requireOrganizationScope(request, reply);
-      if (!orgId) return;
-
-      const { id } = request.params as { id: string };
-      const body = request.body as { action?: string; note?: string };
-
-      if (!body?.action || !VALID_ACTIONS.has(body.action as RecommendationAction)) {
-        return reply.code(400).send({
-          error: `action must be one of ${[...VALID_ACTIONS].join("|")}`,
-          statusCode: 400,
-        });
-      }
-
-      const row = await app.recommendationStore.getById(id);
-      if (!row) {
-        return reply.code(404).send({ error: "Recommendation not found", statusCode: 404 });
-      }
-      if (row.orgId !== orgId) {
-        return reply.code(404).send({ error: "Recommendation not found", statusCode: 404 });
-      }
-
-      const principalId = request.principalIdFromAuth ?? "dashboard-user";
-      const idempotencyKey = getIdempotencyKey(request);
-
       if (!app.platformIngress) {
         return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
       }
 
+      const { orgId, actorId } = request;
+      const { id } = request.params as { id: string };
+
+      const parsed = ActBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return replyValidationError(reply, parsed.error);
+      }
+
+      const idempotencyKey = requireIdempotencyKey(request, reply);
+      if (!idempotencyKey) return;
+
       const response = await app.platformIngress.submit({
         organizationId: orgId,
-        actor: { id: principalId, type: "user" },
+        actor: { id: actorId, type: "user" },
         intent: ACT_ON_RECOMMENDATION_INTENT,
         parameters: {
           recommendationId: id,
-          action: body.action as RecommendationAction,
-          note: body.note,
+          action: parsed.data.action,
+          note: parsed.data.note,
         },
         trigger: "api",
         surface: { surface: "api" },
-        ...(idempotencyKey ? { idempotencyKey } : {}),
+        idempotencyKey,
       });
 
       if (!response.ok) {
@@ -210,6 +186,9 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 
       const { result } = response;
       if (result.outcome === "failed") {
+        if (result.error?.code === OPERATOR_INTENT_ERROR_CODES.RECOMMENDATION_NOT_FOUND) {
+          return reply.code(404).send({ error: "Recommendation not found", statusCode: 404 });
+        }
         if (result.error?.code === OPERATOR_INTENT_ERROR_CODES.RECOMMENDATION_INVALID_ACTION) {
           return reply.code(400).send({ error: result.error.message, statusCode: 400 });
         }

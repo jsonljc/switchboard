@@ -3,6 +3,29 @@ import type { FastifyInstance } from "fastify";
 import { emitRecommendation } from "@switchboard/core";
 import { buildTestServer } from "../../__tests__/test-server.js";
 
+async function seedRec(app: FastifyInstance, orgId = "default") {
+  const result = await emitRecommendation(app.recommendationStore!, {
+    orgId,
+    agentKey: "alex",
+    intent: "recommendation.ad_set_pause",
+    action: "pause",
+    humanSummary: "PR-1 test rec",
+    confidence: 0.6,
+    dollarsAtRisk: 100,
+    riskLevel: "low",
+    parameters: {},
+    presentation: {
+      primaryLabel: "Pause",
+      secondaryLabel: "Reduce",
+      dismissLabel: "Dismiss",
+      dataLines: [],
+    },
+    targetEntities: { campaignId: `c-pr1-${Date.now()}` },
+  });
+  if (result.surface === "dropped") throw new Error("seed must not drop");
+  return result;
+}
+
 describe("POST /api/recommendations/:id/act — PlatformIngress migration (Phase 1b.2)", () => {
   let app: FastifyInstance;
 
@@ -44,6 +67,7 @@ describe("POST /api/recommendations/:id/act — PlatformIngress migration (Phase
     const res = await app.inject({
       method: "POST",
       url: `/api/recommendations/${rec.id}/act`,
+      headers: { "Idempotency-Key": `happy-${rec.id}` },
       payload: { action: "primary" },
     });
 
@@ -68,6 +92,7 @@ describe("POST /api/recommendations/:id/act — PlatformIngress migration (Phase
     const res = await app.inject({
       method: "POST",
       url: `/api/recommendations/${rec.id}/act`,
+      headers: { "Idempotency-Key": `invalid-${rec.id}` },
       payload: { action: "confirm" },
     });
 
@@ -121,5 +146,53 @@ describe("POST /api/recommendations/:id/act — PlatformIngress migration (Phase
     };
     // Cached replay returns the exact same recommendation payload (actedAt unchanged).
     expect(secondBody.recommendation.actedAt).toBe(firstBody.recommendation.actedAt);
+  });
+});
+
+describe("POST /:id/act — Route Governance Contract v1 PR-1", () => {
+  it("returns 400 missing_idempotency_key when Idempotency-Key header absent", async () => {
+    const { app } = await buildTestServer();
+    const rec = await seedRec(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/recommendations/${rec.id}/act`,
+      payload: { action: "primary" },
+      // intentionally NO Idempotency-Key header
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "missing_idempotency_key" });
+    await app.close();
+  });
+
+  it("persists a WorkTrace with failed-RECOMMENDATION_NOT_FOUND for cross-tenant act", async () => {
+    const { app } = await buildTestServer();
+    const rec = await seedRec(app, "org_other");
+    const prev = app.ingressTraceCount ?? 0;
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/recommendations/${rec.id}/act`,
+      headers: { "Idempotency-Key": "key-xtenant-1", "x-org-id": "org_a" },
+      payload: { action: "primary" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(app.ingressTraceCount).toBe(prev + 1);
+    expect(app.lastIngressTrace?.outcome).toBe("failed");
+    expect(app.lastIngressTrace?.error?.code).toBe("RECOMMENDATION_NOT_FOUND");
+    await app.close();
+  });
+
+  it("happy path still passes with new contract", async () => {
+    const { app } = await buildTestServer();
+    const rec = await seedRec(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/recommendations/${rec.id}/act`,
+      headers: { "Idempotency-Key": "key-happy-1" },
+      payload: { action: "primary" },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
   });
 });

@@ -80,7 +80,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/confirm",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -105,7 +109,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/confirm",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -126,7 +134,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/confirm",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -147,7 +159,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/confirm",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -167,7 +183,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-missing/confirm",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -187,7 +207,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/confirm",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -211,7 +235,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/confirm — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/confirm",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -244,7 +272,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/dismiss",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: { operatorNote: "Actually interested" },
     });
 
@@ -269,7 +301,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/dismiss",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -286,7 +322,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/dismiss",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -307,7 +347,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-missing/dismiss",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -327,7 +371,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/dismiss",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -348,7 +396,11 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss — 
     const res = await app.inject({
       method: "POST",
       url: "/api/dashboard/lifecycle/disqualifications/thread-1/dismiss",
-      headers: { "x-org-id": "org-1", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org-1",
+        "content-type": "application/json",
+        "Idempotency-Key": "test-key",
+      },
       payload: {},
     });
 
@@ -358,5 +410,55 @@ describe("POST /api/dashboard/lifecycle/disqualifications/:threadId/dismiss — 
     // WorkTrace is persisted even for throws (governed evidence).
     const last = app.lastIngressTrace;
     expect(last?.outcome).toBe("failed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Route Governance Contract v1 PR-1 — mandatory Idempotency-Key + Cohort A
+// WorkTrace persistence on tenant-reject / not_found.
+// ---------------------------------------------------------------------------
+
+describe("POST /:threadId/confirm — Route Governance Contract v1 PR-1", () => {
+  it("returns 400 missing_idempotency_key when header absent", async () => {
+    const { app } = await buildTestServer({
+      disqualificationHook: {
+        confirm: async () => ({ result: "confirmed" as const }),
+        dismiss: async () => ({
+          result: "dismissed" as const,
+          restoredStatus: "qualified" as const,
+        }),
+      },
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/dashboard/lifecycle/disqualifications/thread_x/confirm",
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "missing_idempotency_key" });
+    await app.close();
+  });
+
+  it("persists WorkTrace with outcome=failed when hook reports not_found", async () => {
+    const { app } = await buildTestServer({
+      disqualificationHook: {
+        confirm: async () => ({ result: "not_found" as const }),
+        dismiss: async () => ({ result: "not_found" as const }),
+      },
+    });
+    const prev = app.ingressTraceCount ?? 0;
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/dashboard/lifecycle/disqualifications/missing_thread/confirm",
+      headers: { "Idempotency-Key": "key-nf-1" },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(app.ingressTraceCount).toBe(prev + 1);
+    expect(app.lastIngressTrace?.outcome).toBe("failed");
+    expect(res.json()).toMatchObject({ reason: "not_found" });
+    await app.close();
   });
 });
