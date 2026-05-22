@@ -72,6 +72,7 @@ describe("Recommendations API — multi-org isolation", () => {
     const res = await app.inject({
       method: "POST",
       url: `/api/recommendations/${seeded.id}/act`,
+      headers: { "Idempotency-Key": `iso-${seeded.id}` },
       payload: { action: "primary" },
     });
     expect([403, 404]).toContain(res.statusCode);

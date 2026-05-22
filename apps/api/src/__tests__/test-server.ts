@@ -96,6 +96,7 @@ declare module "fastify" {
       mode: string;
       outcome: string;
       organizationId: string;
+      error?: { code: string; message: string };
     } | null;
     /** Test-only counter of WorkTrace persist() calls. */
     ingressTraceCount?: number;

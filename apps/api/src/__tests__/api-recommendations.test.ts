@@ -114,6 +114,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `act-${rec.id}` },
         payload: { action: "primary" },
       });
       expect(res.statusCode).toBe(200);
@@ -125,6 +126,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `dismiss-${rec.id}` },
         payload: { action: "dismiss" },
       });
       expect(res.statusCode).toBe(200);
@@ -139,6 +141,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `confirm-${rec.id}` },
         payload: { action: "confirm" },
       });
       expect(res.statusCode).toBe(200);
@@ -153,6 +156,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `undo-${rec.id}` },
         payload: { action: "undo" },
       });
       expect(res.statusCode).toBe(200);
@@ -164,6 +168,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `qconfirm-${rec.id}` },
         payload: { action: "confirm" },
       });
       expect(res.statusCode).toBe(400);
@@ -177,6 +182,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `sprimary-${rec.id}` },
         payload: { action: "primary" },
       });
       expect(res.statusCode).toBe(400);
@@ -187,11 +193,13 @@ describe("Recommendations API", () => {
       await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `term1-${rec.id}` },
         payload: { action: "primary" },
       });
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `term2-${rec.id}` },
         payload: { action: "dismiss" },
       });
       expect(res.statusCode).toBe(409);
@@ -202,6 +210,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/missing-id/act`,
+        headers: { "Idempotency-Key": "miss-1" },
         payload: { action: "primary" },
       });
       expect(res.statusCode).toBe(404);
@@ -212,6 +221,7 @@ describe("Recommendations API", () => {
       const res = await app.inject({
         method: "POST",
         url: `/api/recommendations/${rec.id}/act`,
+        headers: { "Idempotency-Key": `bad-${rec.id}` },
         payload: { action: "nope" },
       });
       expect(res.statusCode).toBe(400);
