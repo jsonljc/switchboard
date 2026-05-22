@@ -8,7 +8,9 @@
 
 **Tech Stack:** TypeScript, vitest, JSONL fixtures, pnpm workspaces, GitHub CLI (`gh`), Anthropic SDK (Haiku 4.5) for baseline generation in Phase B.
 
-**Spec:** `docs/superpowers/specs/2026-05-22-classifier-eval-pr2-completion-design.md`
+**Spec:** `docs/superpowers/specs/2026-05-22-classifier-eval-pr2-completion-design.md` (lives on docs branch `docs/classifier-eval-pr2-completion-spec`; must land on `main` before this plan opens PR-2 — see Pre-flight verification).
+
+**Vertical note:** Alex/Riley are locked to the medspa / aesthetic-clinic vertical (memory: `project_alex_vertical_medspa`, locked 2026-05-15). The 90 existing fixtures use medspa-specific brand/treatment names. The 5 neutral fixtures intentionally use clinic-themed plain copy (hours, parking, consultations, KL clinic location, language availability) for consistency with the dataset. Do not generalize to non-medspa copy unless the vertical decision is explicitly revisited.
 
 ---
 
@@ -28,6 +30,8 @@
 
 ## Pre-flight verification (do this once before Task 1)
 
+- [ ] **Step 1: Worktree exists**
+
 Run from the primary repo root (`/Users/jasonli/switchboard`):
 
 ```bash
@@ -41,6 +45,28 @@ Expected output (paths may vary):
 ```
 
 If the worktree is missing, stop and ask. Do NOT recreate it — the 6 unpushed commits live on its checked-out branch.
+
+- [ ] **Step 2: Spec is reachable from `main`**
+
+The PR body in Task 4 links the spec path. That path must exist in the repo state reviewers see. The spec lives on docs branch `docs/classifier-eval-pr2-completion-spec` and ships as its own focused PR per CLAUDE.md doctrine ("Specs and plans land on main via focused PRs").
+
+From the primary repo root:
+
+```bash
+git fetch origin main
+git ls-tree --name-only origin/main docs/superpowers/specs/2026-05-22-classifier-eval-pr2-completion-design.md
+```
+
+Expected: the path is printed.
+
+If the path is NOT printed, the spec PR has not merged yet. Stop and either:
+
+1. (Recommended) Merge the spec docs PR into `main` first, then re-run this check.
+2. Or proceed without linking the spec in the PR body — strip the spec link out of Task 4 Step 3's body and add the rationale inline instead.
+
+Decision must be made before Task 4. Tasks 1–3 can proceed independently.
+
+- [ ] **Step 3: Move into the worktree**
 
 All remaining tasks run **inside the worktree**:
 
@@ -253,7 +279,7 @@ Expected: branch created on origin, 7 commits pushed (6 existing + 1 neutrals).
 Run from the worktree root:
 
 ```bash
-gh pr create --base main --head feat-claim-classifier-eval-golden-set --title "feat(eval-classifier): PR-2 golden set fixtures (90 SG/MY EN + 5 neutral)" --body "$(cat <<'EOF'
+gh pr create --base main --head feat-claim-classifier-eval-golden-set --title "feat(eval-classifier): PR-2 SG/MY golden fixtures + neutral none set" --body "$(cat <<'EOF'
 ## Summary
 
 - 30 SG + 30 MY English positive fixtures (3 per claim type).
@@ -288,7 +314,7 @@ Both legitimately use `expectedClaimType: "none"`, but they test different failu
 - [x] `pnpm exec vitest run evals/claim-classifier/__tests__/fixtures-shape.test.ts` passes (105 fixtures, ≥3 per type, unique IDs, SG ≥ 30, MY ≥ 30).
 - [x] `pnpm format:check` clean.
 - [x] `pnpm --filter @switchboard/eval-claim-classifier exec tsc --noEmit` clean.
-- [ ] Reviewer dataset review of all 100 hand-authored fixtures (90 positive/adversarial + 5 neutral + 10 smoke).
+- [ ] Reviewer dataset review of the PR-2 fixture set: 90 SG/MY positive/adversarial fixtures + 5 neutral fixtures. (Smoke fixtures are exercised by the harness but were landed in PR #611 and are not in this PR's review scope.)
 - [ ] After approval: baseline commit lands on this PR (separate review).
 
 ## Related
@@ -304,25 +330,40 @@ EOF
 
 Expected: `gh` prints the PR URL. Capture it.
 
-- [ ] **Step 4: Verify the PR diff does NOT include `baseline.json`**
+- [ ] **Step 4: Verify the PR diff includes `neutral.jsonl` and excludes `baseline.json`**
 
 Run (replace `<PR#>` with the number from Step 3 output):
 
 ```bash
-gh pr diff <PR#> --name-only | grep -E "(baseline\.json|neutral\.jsonl)"
+gh pr diff <PR#> --name-only > /tmp/pr-files.txt
+cat /tmp/pr-files.txt
+grep -q "evals/claim-classifier/fixtures/neutral.jsonl" /tmp/pr-files.txt && echo "neutral present"
+! grep -q "evals/claim-classifier/baseline.json" /tmp/pr-files.txt && echo "baseline absent"
 ```
 
-Expected:
+Expected: both `neutral present` and `baseline absent` print.
 
-```
-evals/claim-classifier/fixtures/neutral.jsonl
-```
-
-`baseline.json` MUST NOT appear in this output. If it does, something has gone wrong — stop and investigate.
+If either fails, stop and investigate. Do NOT proceed.
 
 - [ ] **Step 5: STOP — wait for fixture review**
 
 Phase A is complete. Do not proceed to Phase B until reviewers approve the fixture phase on the PR. Phase B is gated on human review.
+
+- [ ] **Step 6: After reviewer approval — record the approved SHA**
+
+Once reviewers approve the fixture phase, run from the worktree root:
+
+```bash
+git rev-parse HEAD
+```
+
+Capture the output as `FIXTURE_APPROVED_SHA` and keep it for Phase B Task 5:
+
+```bash
+export FIXTURE_APPROVED_SHA=<sha-from-above>
+```
+
+This is the load-bearing artifact that lets Phase B verify "no fixture edits since approval." If you skip this step, Phase B cannot reliably prove the fixture set is unchanged.
 
 ---
 
@@ -336,13 +377,18 @@ Phase A is complete. Do not proceed to Phase B until reviewers approve the fixtu
 
 - [ ] **Step 1: Confirm no fixture edits since approval**
 
-Compare the approved commit (the HEAD at PR approval time) with current HEAD:
+This step uses `FIXTURE_APPROVED_SHA` recorded in Phase A Task 4 Step 6. If you don't have it, stop — you cannot prove fixture-set parity without it. Find the approval comment on the PR, then run `git log` to identify the SHA at that approval time and export it before continuing.
+
+Run:
 
 ```bash
-git log --oneline origin/main..HEAD
+echo "Comparing against approved SHA: $FIXTURE_APPROVED_SHA"
+git diff --name-only "$FIXTURE_APPROVED_SHA"..HEAD -- evals/claim-classifier/fixtures/
 ```
 
-If commits have been added since the approved fixture-phase HEAD, list them. If any of those new commits modify files under `evals/claim-classifier/fixtures/`, **stop**: any fixture edit after approval invalidates the baseline. Re-request fixture review before generating the baseline.
+Expected: no output (no fixture paths changed since approval).
+
+If any fixture path appears, **stop**: any fixture edit after approval invalidates the baseline. Re-request fixture review on the PR, get fresh approval, update `FIXTURE_APPROVED_SHA` to the new approved HEAD, and only then proceed.
 
 - [ ] **Step 2: Rebase on `main` if needed**
 
