@@ -40,6 +40,8 @@ If a Task code-block in this plan shows `z.coerce.date()`, that's a plan bug —
 
 **Optional defaults for backwards-compatibility:** schemas that gain previously-absent fields (Task 6, `ConversationStateSchema` expansion) use `.default(...)` rather than requiring the field outright. Persisted state today does not parse through these schemas (the prisma-store mapper populates defaults manually at `apps/chat/src/conversation/prisma-store.ts:145-170`), but `.default()` is defensive at near-zero cost and matches the principle "schemas accept any in-flight shape."
 
+**Reconciliation with existing `z.coerce.date()` usages:** the EXISTING `ConversationStateSchema` (`packages/schemas/src/chat.ts:58-61`) uses `z.coerce.date()` for `firstReplyAt`, `lastInboundAt`, `lastActivityAt`, `expiresAt`; `ApprovalRequestSchema` (`chat.ts:102-114`) does the same for its dates. PR-2 leaves these existing fields untouched — flipping them would churn the chat package without behavior change (all current callers pass `Date` objects). Inside an `ApprovalRecord = { request, state }`, this means `request.expiresAt` accepts strings (coerce) while `state.expiresAt` does not (strict, per Task 1). The mixed posture is deliberate: PR-2 introduces strict for new schemas and accepts the inconsistency on existing ones. A blanket sweep of the legacy coerce-date usages is a candidate for PR-3 or a small follow-up; out of scope here.
+
 ---
 
 ## Known smells flagged during plan-writing (deferred)
@@ -97,7 +99,7 @@ No coordination with the cockpit-v2 owner is required for PR-2.
 | `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts` | Replace `makeApprovalRecord(overrides): ApprovalRecord` local-typed helper with the imported schema type.                                                                                                                                                                                                                     |
 | `apps/api/src/routes/dashboard-overview.ts`                                    | Remove local `interface ApprovalRecord` (lines 64-73); import from `@switchboard/schemas`. Rename `buildDashboardOverview` → `buildOperatorOverview` and update its return type. (The function rename is internal — the route's URL stays `/api/dashboard/overview`.)                                                         |
 | `packages/core/src/handoff/types.ts`                                           | Replace each `export interface` / `export type` with a re-export from `@switchboard/schemas` (`HandoffPackage` becomes `Handoff` from schemas; keep a `HandoffPackage` alias for back-compat during the migration). `HandoffStore` stays in core (it's a store interface, not a cross-app value type — appropriate location). |
-| `apps/api/src/routes/escalations.ts`                                           | Update imports to pull `Handoff` shape from `@switchboard/schemas` where the route currently relies on ad-hoc shapes (lines 100, 182, 191-204, 311-322). The Prisma `Handoff` row shape and the schema type need a Zod-or-mapper boundary — Task 5 picks the minimal-change option.                                           |
+| `apps/api/src/routes/escalations.ts`                                           | **No edit expected.** Route works with Prisma row shapes directly (no `HandoffPackage`/`Handoff` import). Task 5 Step 4 verifies via typecheck. Listed in this table only so reviewers can see it was considered and intentionally skipped.                                                                                   |
 | `packages/core/src/decisions/adapters/handoff-adapter.ts`                      | Update `HandoffPackage` import (line 2) to source `Handoff` from schemas. The inline `/contacts/...` URL literal at line 22 is left untouched — its extraction is PR-2.5's job (routeTemplates).                                                                                                                              |
 | `apps/chat/src/conversation/state.ts`                                          | Replace local `interface ConversationStateData` + `interface ConversationMessage` with re-exports of the schema types from `@switchboard/schemas`. Helpers (`createConversation`, `transitionConversation`) stay in this file.                                                                                                |
 | `apps/chat/src/conversation/store.ts`                                          | No change to logic — only the import switches from `./state.js` to `@switchboard/schemas`. Same for `apps/chat/src/conversation/prisma-store.ts` and `apps/chat/src/conversation/threads.ts`.                                                                                                                                 |
@@ -136,7 +138,7 @@ Expected: `5617dbf0 feat(audit): Route Governance Contract v1 — Impl PR-1 ...`
 Run:
 
 ```bash
-rg -n 'ApprovalRecord' apps packages --type ts | grep -v node_modules | grep -v __tests__ | grep -E 'interface ApprovalRecord|type ApprovalRecord'
+rg -n 'ApprovalRecord' apps packages --type ts | grep -v node_modules | grep -v __tests__ | grep -E 'interface ApprovalRecord\b|type ApprovalRecord\b' | grep -v ApprovalRecordForResponse
 ```
 
 Expected: 3 hits (`apps/api/src/routes/dashboard-overview.ts:64` interface, `packages/db/src/storage/prisma-approval-store.ts:6` type, `packages/core/src/platform/platform-lifecycle.ts:36` derived `NonNullable<...>` type). The 4th site is in the test file (`channel-gateway-approval.test.ts`) — it doesn't have a `interface ApprovalRecord` declaration; it has a `makeApprovalRecord` helper that takes a derived type. Re-grep with `--include='*test.ts'` to confirm the helper still exists.
@@ -871,7 +873,7 @@ EOF
 
 - Modify: `packages/core/src/handoff/types.ts`.
 - Modify: `packages/core/src/decisions/adapters/handoff-adapter.ts`.
-- Modify: `apps/api/src/routes/escalations.ts`.
+- Verify (no edits expected): `apps/api/src/routes/escalations.ts`.
 
 - [ ] **Step 0: Defensive cycle check.**
 
@@ -927,7 +929,7 @@ export interface HandoffStore {
 }
 ```
 
-Note: the `import type` lines for the local aliases must come AFTER the `export type` re-export block; TypeScript allows the same name to be both imported (locally) and re-exported (publicly) only with this ordering.
+Note: the `import type { Handoff } ...` line below the `export type { ... }` block uses `Handoff` as a local binding to construct the `HandoffPackage` alias type. The two declarations refer to the same imported symbol; ordering is cosmetic, not semantic.
 
 - [ ] **Step 2: Verify core builds + tests pass.**
 
@@ -958,12 +960,12 @@ Update the function signature: `adaptHandoff(row: HandoffPackage, ...)` → `ada
 
 (`routeTemplates` injection at line 22 lands in PR-2.5, not PR-2 — keep the inline `\`/contacts/${contact?.id}/conversations/${thread.id}\`` template untouched here.)
 
-- [ ] **Step 4: Verify `apps/api/src/routes/escalations.ts` still compiles.**
+- [ ] **Step 4: Verify `apps/api/src/routes/escalations.ts` still compiles (no edits expected).**
 
-The route uses `app.prisma.handoff.update({...})` (Prisma row shape) and shapes responses from those rows. After the rename in core, anywhere `escalations.ts` imports `HandoffPackage` should still work via the back-compat alias. Verify:
+Verified during plan-writing: `escalations.ts` does NOT import `HandoffPackage` or `Handoff`. It works with Prisma row shapes directly (`app.prisma.handoff.update({...})`) and emits a richer wire shape than `HandoffSchema` describes (the Prisma row carries `leadId`, `updatedAt`, `resolutionNote`, `resolvedAt` that are not in the schema). PR-2 deliberately leaves the route's Prisma access pattern alone — bringing the wire shape under `HandoffSchema` would change the response envelope, which is out of scope.
 
 Run: `pnpm --filter @switchboard/api typecheck 2>&1 | tail -20`
-Expected: green. If a type error fires, change `HandoffPackage` → `Handoff` in the route or accept the alias.
+Expected: green with no file edits. If a type error fires, that indicates an unexpected dependency on the renamed type — investigate before editing.
 
 - [ ] **Step 5: Run the api + core test suites.**
 
@@ -976,10 +978,29 @@ pnpm --filter @switchboard/core test -- --run 2>&1 | tail -20
 
 Expected: green.
 
-- [ ] **Step 6: Commit.**
+- [ ] **Step 6: Visibility sweep — which sites stay on back-compat aliases?**
+
+The rename introduces back-compat aliases (`HandoffPackage` → `Handoff`, `ConversationSummary` → `HandoffConversationSummary`). Document which consumer sites compile via those aliases so the PR description (and PR-4's removal step) has clear scope. Run:
 
 ```bash
-git add packages/core/src/handoff/types.ts packages/core/src/decisions/adapters/handoff-adapter.ts apps/api/src/routes/escalations.ts
+rg -n 'HandoffPackage\b' packages apps --type ts | grep -v __tests__ | grep -v 'packages/core/src/handoff/types.ts'
+rg -n 'ConversationSummary\b' packages apps --type ts | grep -v __tests__ | grep -v HandoffConversationSummary | grep -v 'packages/schemas/src/conversations.ts' | grep -v 'apps/api/src/routes/conversations.ts'
+```
+
+Expected non-zero hits (consumers still on the alias):
+
+- `packages/core/src/handoff/package-assembler.ts` — uses `ConversationSummary` as a return type via `./types.js` import.
+- `packages/db/src/stores/handoff-store.ts` — uses `ConversationSummary` for a Prisma row cast.
+- `packages/core/src/index.ts` — publicly re-exports `ConversationSummary` from `handoff/types.js`.
+
+Plus any `HandoffPackage` consumer (verify count during impl — likely 2-4 sites in core/db/test mocks).
+
+These compile via the alias and are intentionally NOT migrated in PR-2 (one PR per concern; the alias is the safety net). Capture the grep output into the PR description so PR-4's "remove alias" task knows what it's actually removing.
+
+- [ ] **Step 7: Commit.**
+
+```bash
+git add packages/core/src/handoff/types.ts packages/core/src/decisions/adapters/handoff-adapter.ts
 git commit -m "$(cat <<'EOF'
 refactor: migrate Handoff consumers to @switchboard/schemas
 
@@ -1040,7 +1061,7 @@ Find the existing `ConversationStateSchema` block (currently ends at line 64 wit
 
 **Why `.default(...)` and not required?** Persisted state today does not parse through this schema (the prisma-store mapper at `apps/chat/src/conversation/prisma-store.ts:145-170` populates these fields manually), so a strict-required field would not break hydration in the current architecture. But if any future API endpoint, fixture loader, or third-party adapter parses a partial in-flight shape, `.default(...)` matches the principle "schemas accept any in-flight shape" at near-zero cost. The Schema boundary rule lists this explicitly.
 
-`LeadProfileSchema` must already exist in schemas — confirm with `rg -n 'LeadProfileSchema' packages/schemas/src`. If it exists, import it (`import { LeadProfileSchema } from "./lead-profile.js"` or via the barrel). If it does NOT exist, the chat-side `LeadProfile` is a TypeScript interface that needs hoisting too — bail out of this task with a note, and run a separate sub-task to hoist `LeadProfile` first.
+`LeadProfileSchema` exists in schemas at `packages/schemas/src/crm.ts:102` (verified during plan-writing). Import it as `import { LeadProfileSchema } from "./crm.js"` — or via the barrel if `chat.ts` doesn't already include it transitively.
 
 **Verification:**
 
@@ -1673,7 +1694,7 @@ Expected: green. Per `feedback_ci_prettier_not_in_local_lint.md`.
 rg -n 'DashboardOverview' apps packages --type ts | grep -v 'export.*DashboardOverview' | grep -v __tests__
 
 # No local ApprovalRecord interfaces survive:
-rg -n 'interface ApprovalRecord\|type ApprovalRecord' apps packages --type ts | grep -v __tests__
+rg -n 'interface ApprovalRecord\b|type ApprovalRecord\b' apps packages --type ts | grep -v __tests__ | grep -v ApprovalRecordForResponse
 
 # No local Handoff or HandoffPackage interfaces outside the back-compat shim:
 rg -n 'interface (Handoff|HandoffPackage)\b|type (Handoff|HandoffPackage)\b' apps packages --type ts | grep -v __tests__ | grep -v 'packages/core/src/handoff/types.ts'
