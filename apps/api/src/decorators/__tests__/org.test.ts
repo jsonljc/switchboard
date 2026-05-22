@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Fastify from "fastify";
-import { requireOrg, requireOrgForMutation } from "../require-org.js";
+import { requireOrg, requireOrgForMutation } from "../org.js";
 import { buildDevAuthFallback } from "../../utils/auth-fallback.js";
 
 describe("requireOrg preHandler (read-side)", () => {

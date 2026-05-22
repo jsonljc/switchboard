@@ -6,7 +6,7 @@ import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import { replyValidationError } from "../utils/validation-error.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
-import { requireOrg, requireOrgForMutation } from "../decorators/require-org.js";
+import { requireOrg, requireOrgForMutation } from "../decorators/org.js";
 import {
   ACT_ON_RECOMMENDATION_INTENT,
   OPERATOR_INTENT_ERROR_CODES,

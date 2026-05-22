@@ -25,7 +25,7 @@ import {
 import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
-import { requireOrg, requireOrgForMutation } from "../decorators/require-org.js";
+import { requireOrg, requireOrgForMutation } from "../decorators/org.js";
 import {
   CONFIRM_DISQUALIFICATION_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,

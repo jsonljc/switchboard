@@ -1,10 +1,10 @@
 /**
  * Generate a fresh Idempotency-Key for an operator-direct mutation.
  *
- * Preflight for Route Governance Contract v1 PR-1: the upcoming server-side
- * mandate requires every POST/PATCH/DELETE on the 7 operator-direct endpoints
- * to carry an `Idempotency-Key` header for replay protection. This helper
- * centralizes generation so callers never invent their own scheme.
+ * Route Governance Contract v1 §7.1 requires every POST/PATCH/DELETE on the
+ * operator-direct endpoints to carry an `Idempotency-Key` header for replay
+ * protection. This helper centralizes generation so callers never invent
+ * their own scheme.
  *
  * Uses `globalThis.crypto.randomUUID` when available (modern browsers, Node
  * 19+, Edge runtime). Falls back to a `idemp_<ts>_<rand>` shape when the

@@ -50,6 +50,7 @@ import {
   registerCartridgeIntents,
 } from "@switchboard/core/platform";
 import type {
+  ExecutionError,
   GovernanceCartridge,
   CartridgeManifestForRegistration,
 } from "@switchboard/core/platform";
@@ -96,7 +97,7 @@ declare module "fastify" {
       mode: string;
       outcome: string;
       organizationId: string;
-      error?: { code: string; message: string };
+      error?: Pick<ExecutionError, "code" | "message">;
     } | null;
     /** Test-only counter of WorkTrace persist() calls. */
     ingressTraceCount?: number;
