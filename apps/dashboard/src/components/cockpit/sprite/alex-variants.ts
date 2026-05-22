@@ -1,6 +1,11 @@
+/* eslint-disable max-lines */
 // Alex pixel-sprite variants — 24×24 grids.
 // Ported byte-identical from docs/design-prompts/locked/switchboard/project/agent-home-v3/sprites.jsx.
 // Frame literals are NOT to be edited; if the design updates, re-port the file.
+//
+// File-size note: the variant frames are pixel-art data, not code. Splitting
+// the file would only fragment the table without reducing density. The
+// arch-check eslint-disable above is intentional and approved by spec §11.
 
 import { mergeSprite } from "./build-sprite";
 import type { Frame, Palette, VariantBundle } from "./types";
