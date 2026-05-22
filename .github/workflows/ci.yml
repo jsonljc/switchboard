@@ -302,6 +302,10 @@ jobs:
       - name: Dependency boundary validation
         run: npx depcruise --config .dependency-cruiser.cjs packages/ cartridges/ apps/
 
+      - name: Route class advisory (Route Governance Contract v1)
+        run: pnpm exec tsx .agent/tools/check-routes.ts --mode=warn-touched
+        continue-on-error: true
+
   docker:
     runs-on: ubuntu-latest
 
