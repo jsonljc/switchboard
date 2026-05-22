@@ -48,7 +48,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "booked" },
     });
     expect(res.statusCode).toBe(200);
@@ -65,7 +69,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "booked" },
     });
     expect(app.ingressTraceCount).toBe(1);
@@ -81,7 +89,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_does_not_exist/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "booked" },
     });
     expect(res.statusCode).toBe(404);
@@ -92,7 +104,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_other_org/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "booked" },
     });
     expect(res.statusCode).toBe(404);
@@ -102,18 +118,26 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "not_a_valid_stage" },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: "INVALID_BODY" });
+    expect(res.json()).toMatchObject({ error: "invalid_body", statusCode: 400 });
   });
 
   it("returns 400 for missing stage", async () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: {},
     });
     expect(res.statusCode).toBe(400);
@@ -124,7 +148,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await built.app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "booked" },
     });
     expect(res.statusCode).toBe(503);
@@ -134,7 +162,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "quoted" },
     });
     expect(res.statusCode).toBe(200);
@@ -147,7 +179,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_1/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "won" },
     });
     const body = res.json() as { opportunity: { closedAt: string | null } };
@@ -165,7 +201,11 @@ describe("PATCH /api/dashboard/opportunities/:id/stage", () => {
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_w/stage",
-      headers: { "x-org-id": "org_acme", "content-type": "application/json" },
+      headers: {
+        "x-org-id": "org_acme",
+        "content-type": "application/json",
+        "idempotency-key": "test-key-stage",
+      },
       payload: { stage: "quoted" },
     });
     const body = res.json() as { opportunity: { closedAt: string | null } };
