@@ -74,14 +74,32 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
     sf.getImportDeclarations().some((d) => d.getNamedImports().some((n) => n.getName() === name));
 
   const callsNamed = (name: string): number => {
+    // Count CallExpression nodes whose callee is the bare Identifier `name`.
+    // We deliberately use Identifier-kind + strict equality (mirroring the
+    // requireOrgForMutation check below) rather than `endsWith(name)` so a
+    // local wrapper like `wrapRequireIdempotencyKey(...)` does not
+    // false-count and mask the cardinality check. See PR #614 ultrareview
+    // bug_005.
     let count = 0;
     sf.forEachDescendant((node) => {
-      if (node.getKindName() === "CallExpression") {
-        const expr = (
-          node as { getExpression?: () => { getText: () => string } }
-        ).getExpression?.();
-        if (expr && expr.getText().endsWith(name)) count += 1;
-      }
+      if (node.getKindName() !== "CallExpression") return;
+      const expr = (
+        node as {
+          getExpression?: () => { getKindName: () => string; getText: () => string };
+        }
+      ).getExpression?.();
+      if (expr?.getKindName() === "Identifier" && expr.getText() === name) count += 1;
+    });
+    return count;
+  };
+
+  const WRITE_SIDE_DECORATORS = ["requireOrgForMutation", "requireOrgForAuditedMutation"] as const;
+  const importsAnyWriteSide = () => WRITE_SIDE_DECORATORS.some((n) => importsNamed(n));
+  const writeSideIdentifierCount = (): number => {
+    let count = 0;
+    sf.forEachDescendant((node) => {
+      if (node.getKindName() !== "Identifier") return;
+      if ((WRITE_SIDE_DECORATORS as readonly string[]).includes(node.getText())) count += 1;
     });
     return count;
   };
@@ -119,36 +137,29 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
       });
     }
 
-    if (!importsNamed("requireOrgForMutation")) {
+    if (!importsAnyWriteSide()) {
       warnings.push({
         path: repoPath,
-        message: "operator-direct route should import requireOrgForMutation (spec §6 + §3 matrix)",
+        message:
+          "operator-direct route should import a write-side decorator (requireOrgForMutation or requireOrgForAuditedMutation; spec §6 + §3 matrix)",
       });
-    } else {
-      const identifierCount = (() => {
-        let c = 0;
-        sf.forEachDescendant((node) => {
-          if (node.getKindName() === "Identifier" && node.getText() === "requireOrgForMutation")
-            c += 1;
-        });
-        return c;
-      })();
-      if (identifierCount < 2) {
-        warnings.push({
-          path: repoPath,
-          message:
-            "operator-direct route imports requireOrgForMutation but does not register it as a preHandler (spec §6)",
-        });
-      }
+    } else if (writeSideIdentifierCount() < 2) {
+      // Identifier count < 2 means the symbol appears only at the import site.
+      // Two occurrences = import + at least one preHandler use.
+      warnings.push({
+        path: repoPath,
+        message:
+          "operator-direct route imports a write-side decorator but does not register it as a preHandler (spec §6)",
+      });
     }
   }
 
   if (cls === "read-only") {
-    if (importsNamed("requireOrgForMutation")) {
+    if (importsAnyWriteSide()) {
       warnings.push({
         path: repoPath,
         message:
-          "read-only route should not use requireOrgForMutation (use requireOrg for read-side; spec §3 matrix)",
+          "read-only route should not import a write-side decorator (use requireOrg for read-side; spec §3 matrix)",
       });
     }
   }
