@@ -63,12 +63,13 @@ This phase lands only hand-authored dataset artifacts and fixture validation. It
    - IDs: `neutral-sg-001` … `neutral-sg-003`, `neutral-my-001` … `neutral-my-002`.
    - Every row uses `language: "en"` and `expectedClaimType: "none"`.
    - Copy must be plainly operational: hours, parking, address/location, contact, or service availability.
-   - No marketing verbs, performance claims, superlatives, scarcity, time pressure, or implied outcome promises.
+   - No promotional framing, performance claims, superlatives, scarcity, time pressure, or implied outcome promises.
 3. Run the existing fixture shape test.
 4. Open the PR with a body that explicitly states:
    - `baseline.json` is intentionally deferred.
    - Fixture review must happen before baseline generation.
    - The baseline will be added as a post-review commit to the same PR.
+   - Reviewers are approving the fixture phase first; the baseline commit will receive only a light mechanical review unless fixture content changes.
 
 ### Neutral vs adversarial `none`
 
@@ -92,8 +93,9 @@ After reviewers approve the fixture set:
    - `overallAccuracy >= 0.80`.
    - Per-class accuracy is `>= 0.70` for any category with at least 3 samples.
    - The baseline was generated against the approved fixture set (no fixture edits between approval and generation).
-6. Commit `evals/claim-classifier/baseline.json` to the same PR with the canonical message from plan §Task 14 step 4: `feat(eval-classifier): lock baseline.json (v1) against current classifier prompt`.
-7. Re-request review for the baseline diff only.
+6. If any threshold fails, do not commit `baseline.json`. Stop and investigate whether the issue is fixture quality, label correctness, prompt drift, or classifier behavior.
+7. Commit `evals/claim-classifier/baseline.json` to the same PR with the canonical message from plan §Task 14 step 4: `feat(eval-classifier): lock baseline.json (v1) against current classifier prompt`.
+8. Re-request review for the baseline diff only.
 
 Any fixture edit after the fixture-phase approval requires re-review of the fixture diff before regenerating the baseline.
 
@@ -104,7 +106,7 @@ The baseline is a _regression floor_. Whatever the classifier scores against the
 1. **Reviewer flags a bad fixture.** We have to regenerate the baseline (more API calls, more diff churn) and rebase. The baseline diff and the fixture diff become entangled.
 2. **A fixture has a wrong label that nobody catches.** The classifier "gets it wrong" against the wrong label, that wrong-vs-wrong outcome bakes into the floor, and PR-3 CI will silently protect a bad expectation.
 
-Splitting puts the human-judgment step (fixture review) strictly before the irreversible machine step (baseline generation). The trade-off is one extra commit on the same branch — not even an extra PR.
+Splitting puts the human-judgment step (fixture review) strictly before the machine-generated regression-floor step (baseline generation). The trade-off is one extra commit on the same branch — not even an extra PR.
 
 ### Anti-scope (deliberately not in this spec)
 
@@ -128,7 +130,7 @@ Splitting puts the human-judgment step (fixture review) strictly before the irre
 ### PR-2 fixture phase
 
 - [ ] `evals/claim-classifier/fixtures/neutral.jsonl` exists, 5 rows, all `expectedClaimType: "none"`, distribution 3 SG / 2 MY.
-- [ ] Existing fixture shape test passes (`pnpm --filter @switchboard/eval-claim-classifier test`).
+- [ ] Existing fixture shape test passes using the package command verified in PR-1.
 - [ ] No `baseline.json` in the PR diff.
 - [ ] PR body explicitly states baseline.json is deferred and links this spec.
 
