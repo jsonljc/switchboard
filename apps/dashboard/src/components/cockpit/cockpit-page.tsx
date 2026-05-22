@@ -216,6 +216,8 @@ export function CockpitPage() {
           <EmptyState
             rules={mission.data.mission.rules}
             setup={mission.data.setup}
+            bundle={ALEX_VARIANTS}
+            variant={DEFAULT_ALEX_VARIANT}
             onConnect={(key) =>
               // Channel-connection keys land directly on /settings/channels (the cards
               // page). The existing alex/riley action dispatchers use `?focus=channels`

@@ -79,8 +79,18 @@ function RileyApprovalRow({
       onResolve={onResolve}
       accent={RILEY_APPROVAL_ACCENT}
       senderLabel="Riley needs you"
+      bundle={RILEY_VARIANTS}
+      variant={DEFAULT_RILEY_VARIANT}
+      avatarLetter="R"
     />
   );
+}
+
+// "Mon May 12" — operator-local short weekday + month + day. Mirrors the
+// private helper in cockpit-page.tsx; v1 keeps the inline duplicate to match
+// Alex's pattern. Extract if a third consumer appears.
+function formatToday(d: Date): string {
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
 export function RileyCockpitPage() {
@@ -190,7 +200,12 @@ export function RileyCockpitPage() {
             ))}
           </div>
         )}
-        <ActivityStream rows={activityRows} filter={filter} setFilter={setFilter} />
+        <ActivityStream
+          rows={activityRows}
+          filter={filter}
+          setFilter={setFilter}
+          today={formatToday(new Date())}
+        />
       </div>
       <Composer
         placeholder={RILEY_COMPOSER_PLACEHOLDER}

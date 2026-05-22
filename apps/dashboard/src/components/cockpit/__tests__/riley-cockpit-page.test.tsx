@@ -710,3 +710,11 @@ describe("RileyCockpitPage — composer adoption", () => {
     expect(input).toHaveAttribute("placeholder", "Halted — resume to send instructions");
   });
 });
+
+describe("RileyCockpitPage — Task 13 ActivityStream `today` eyebrow", () => {
+  it("passes a `today` string prop to <ActivityStream> so the eyebrow shows the date", () => {
+    haltState.halted = false;
+    wrap(<RileyCockpitPage />);
+    expect(screen.getByText(/^Today · /)).toBeInTheDocument();
+  });
+});
