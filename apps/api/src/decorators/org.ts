@@ -16,16 +16,20 @@ import type { preHandlerAsyncHookHandler } from "fastify";
 declare module "fastify" {
   interface FastifyRequest {
     /**
-     * Set by `requireOrg` or `requireOrgForMutation` preHandler. Non-null
-     * when the handler executes. See header comment for the runtime-contract
-     * caveat.
+     * Set by `requireOrg`, `requireOrgForMutation`, or
+     * `requireOrgForAuditedMutation` preHandler. Non-null when the handler
+     * executes. See header comment for the runtime-contract caveat.
      */
     orgId: string;
     /**
-     * Set by `requireOrg` or `requireOrgForMutation` preHandler. Defaults to
-     * `"unknown"` when production auth middleware did not bind a principal
-     * (rare in prod with auth middleware; common in dev mode where
-     * `devAuthFallback` populated the principal to "default").
+     * Set by `requireOrg`, `requireOrgForMutation`, or
+     * `requireOrgForAuditedMutation` preHandler. Defaults to `"unknown"`
+     * when production auth middleware did not bind a principal (rare in
+     * prod with auth middleware; common in dev mode where `devAuthFallback`
+     * populated the principal to "default"). Routes using
+     * `requireOrgForAuditedMutation` never observe `"unknown"` in
+     * production — the decorator 403s instead, preserving audit-trail
+     * integrity for PDPA-regulated mutations.
      */
     actorId: string;
   }
@@ -60,7 +64,10 @@ export const requireOrg: preHandlerAsyncHookHandler = async (request, reply) => 
  * 4 ingress-migrated routes (which do not accept body-supplied orgId). The
  * separate name + identical behavior is intentional: future tightening
  * (e.g., requiring an HMAC binding on mutating requests) lives here without
- * affecting read-side routes.
+ * affecting read-side routes. See also
+ * {@link requireOrgForAuditedMutation} — the PDPA-grade variant used by
+ * routes whose audit trail must never attribute a decision to a
+ * placeholder principal.
  *
  * Routes that DO accept body-supplied orgId in dev mode (e.g.,
  * `actions.ts:62`) keep using the legacy `resolveOrganizationForMutation`
