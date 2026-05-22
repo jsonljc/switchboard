@@ -2,21 +2,49 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move five cross-boundary types into `@switchboard/schemas` so every app consumes one canonical declaration, eliminate the 4 surface-URL string sites in core, and add a `check-routes` advisory that catches future local re-declarations.
+**Goal:** Move five cross-boundary types into `@switchboard/schemas` so every app consumes one canonical declaration.
 
-**Architecture:** Each type relocation is a paired commit — _introduce schema, then migrate consumers_ — so the schema is always the upstream source. `DashboardOverviewSchema` keeps a back-compat alias to `OperatorOverviewSchema` so cockpit-v2 consumers (and any unmigrated dashboard caller) continue to compile; PR-4 removes the alias. Core projections take a `routeTemplates` dependency injected by each surface adapter at the API boundary, completing the surface-agnostic-backend principle. The `check-routes` extension parses local `interface` / `type` declarations under `apps/*/src/**`, cross-references the live `@switchboard/schemas` export set, and emits a warning on collision.
+**Architecture:** Each type relocation is a paired commit — _introduce schema, then migrate consumers_ — so the schema is always the upstream source. `DashboardOverviewSchema`, `HandoffPackage`, and the handoff-flavored `ConversationSummary` each retain a back-compat alias so cockpit-v2 consumers and any unmigrated caller continue to compile. PR-4 removes the aliases. The schemas adopt a strict boundary rule (Date for runtime, ISO strings for wire — see "Schema boundary rule" below) so the runtime/wire seam stays sharp.
 
-**Tech Stack:** Zod (schema definitions), TypeScript (strict; no `any`), Vitest (TDD), pnpm/Turborepo monorepo, ts-morph (check-routes AST traversal).
+**Tech Stack:** Zod (schema definitions), TypeScript (strict; no `any`), Vitest (TDD), pnpm/Turborepo monorepo.
 
-**Consumes:** `docs/superpowers/specs/2026-05-16-route-governance-contract-v1.md` (Sections 8.1–8.6, §11 crosswalk, §12 PR-2 scope). PR-1 (#614, merged 2026-05-22 → `5617dbf0`) is independent — PR-2 does not depend on the operator-direct cohort migration, but `recommendations.ts` is a Cohort A route on `main` whose imports PR-2 leaves untouched.
+**Consumes:** `docs/superpowers/specs/2026-05-16-route-governance-contract-v1.md` (Sections 8.1–8.4, §8.6 doctrine reference, §11 crosswalk, §12 PR-2 scope). PR-1 (#614, merged 2026-05-22 → `5617dbf0`) is independent — PR-2 does not depend on the operator-direct cohort migration, but `recommendations.ts` is a Cohort A route on `main` whose imports PR-2 leaves untouched.
 
-**Out of scope (deferred to PR-3 / PR-4):**
+**Scope decision — split out of original spec §12 PR-2:** The spec bundled three classes of work into PR-2: (a) cross-app type relocation (§§8.1–8.4), (b) `routeTemplates` extraction (§8.5, surface-agnostic backend cleanup), (c) doctrine line + `check-routes` warning rule (§8.6). PR-2 ships only (a). (b) and (c) move to a follow-up "PR-2.5" plan (path: `docs/superpowers/plans/2026-05-XX-route-governance-contract-impl-pr2-5.md`) because they are architectural decoupling + tooling, materially different from type relocation. Splitting reduces review surface, isolates the rollback unit, and lets the schema migrations land before any caller-shape change touches the same files.
 
+**Out of scope (deferred to PR-2.5 / PR-3 / PR-4):**
+
+- `routeTemplates` extraction + the 4 surface-URL string sites in core (PR-2.5).
+- Cross-app-types doctrine line in `docs/DOCTRINE.md` (PR-2.5 — lands with the `check-routes` rule that enforces it).
+- `check-routes` cross-app-type warning rule (PR-2.5).
+- Hoisting `ApprovalRequestSchema` out of `chat.ts` into its own approval-domain module (follow-up — see "Known smells" below).
 - Store-layer mutation contract sweep (PR-3).
 - `verdictStore.save as any` removal (PR-3).
 - Removal of the `DashboardOverview` back-compat alias (PR-4 — gated on grepping zero remaining references first).
 - `@route-class:` header backfill for the remaining ~63 routes (PR-4).
-- Flipping `check-routes` cross-app-type rule from warning to error (PR-4).
+- Flipping `check-routes` rules from warning to error (PR-4).
+
+---
+
+## Schema boundary rule
+
+Every schema added or modified in this PR follows the rule below. The "switch back to `z.date()` if it bites" hedge that appeared in an earlier draft of this plan is gone — the rule is now upstream of every task.
+
+| Schema kind                                                                    | Date representation                     | Why                                                                                                                                   |
+| ------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime / persistable domain (`ApprovalState`, `Handoff`, `ConversationState`) | `z.date()` (no coercion)                | Callers always construct `Date` objects (verified during plan-writing). Coercion would silently accept strings and blur the contract. |
+| HTTP / wire projection (`ConversationSummary`, `ConversationDetail`)           | `z.string().datetime()` (ISO)           | These shapes cross the JSON boundary; dates have already been serialized.                                                             |
+| Boundary mapper (e.g., `toApprovalRecord`, `toConversationStateData`)          | manual `new Date(s)` / `.toISOString()` | Mappers are the only place coercion happens; everywhere else, types should match the wire/runtime distinction.                        |
+
+If a Task code-block in this plan shows `z.coerce.date()`, that's a plan bug — fix it to `z.date()` (or `z.string().datetime()` for projection schemas) and proceed.
+
+**Optional defaults for backwards-compatibility:** schemas that gain previously-absent fields (Task 6, `ConversationStateSchema` expansion) use `.default(...)` rather than requiring the field outright. Persisted state today does not parse through these schemas (the prisma-store mapper populates defaults manually at `apps/chat/src/conversation/prisma-store.ts:145-170`), but `.default()` is defensive at near-zero cost and matches the principle "schemas accept any in-flight shape."
+
+---
+
+## Known smells flagged during plan-writing (deferred)
+
+- **`ApprovalRequestSchema` lives in `packages/schemas/src/chat.ts:84`.** Approval composing chat is conceptual coupling — approval requests are not chat-owned. Moving the schema to `approval.ts` would touch `envelope.ts`, `index.ts`, and ripple to every `ApprovalRequest` consumer. PR-2 leaves the smell alone (composes via the current chat.ts location) and tags it for a follow-up cleanup PR. Note for the follow-up: `chat.ts` can keep `export { ApprovalRequestSchema, type ApprovalRequest } from "./approval.js"` for back-compat, so the consumer-side churn is zero.
 
 ---
 
@@ -24,16 +52,16 @@
 
 Captured here so the implementing agent does not redo this work and so future reviewers can audit the assumptions.
 
-| Question                                                                      | Answer (verified 2026-05-22 on `main` at `5617dbf0`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Does `ApprovalRecord` still appear locally in 4 sites?                        | Yes. `apps/api/src/routes/dashboard-overview.ts:64`, `packages/core/src/platform/platform-lifecycle.ts:36`, `packages/db/src/storage/prisma-approval-store.ts:6`, `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts:71` (test helper `makeApprovalRecord`).                                                                                                                                                                                                                                                                                                                                                         |
-| Does `ApprovalStateSchema` exist in `@switchboard/schemas`?                   | **No.** `ApprovalState` exists only as a TypeScript `interface` in `packages/core/src/approval/state-machine.ts:17`. PR-2 must hoist it into schemas as a Zod schema before `ApprovalRecordSchema` can compose it (Task 1).                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Where does `ConversationState` already live in schemas?                       | `packages/schemas/src/chat.ts:48` defines `ConversationStateSchema`. The schema covers MOST fields but is missing 4: `messages`, `leadProfile`, `detectedLanguage`, `machineState`. The chat-side `ConversationStateData` interface at `apps/chat/src/conversation/state.ts:10` is therefore a superset, not a redeclaration of an identical shape. PR-2 expands the schema to the canonical superset (Task 6).                                                                                                                                                                                                                                 |
-| Where do `ConversationRow`, `ConversationSummary`, `ConversationDetail` live? | Local interfaces in `apps/api/src/routes/conversations.ts:20-66`. None exist in schemas yet. **Naming collision:** `ConversationSummary` is also the name of an interface in `packages/core/src/handoff/types.ts:34` with a completely different shape. Resolving this collision is one of PR-2's load-bearing micro-decisions (Tasks 4 + 7).                                                                                                                                                                                                                                                                                                   |
-| Where does `Handoff` currently live?                                          | `packages/core/src/handoff/types.ts` exports `HandoffPackage` (the canonical shape), `LeadSnapshot`, `QualificationSnapshot`, `ConversationSummary` (handoff-flavored), `HandoffReason`, `HandoffStatus`, `HandoffStore`. The spec's §8.3 proposal does NOT match the existing shape — the existing shape is richer and is already wired through `escalations.ts` + `handoff-adapter.ts`. PR-2 hoists the _existing_ canonical shape (renamed `HandoffPackage` → `Handoff`) into schemas rather than introducing a parallel shape (Tasks 4 + 5).                                                                                                |
-| Where is `DashboardOverview` defined and consumed?                            | Defined at `packages/schemas/src/dashboard.ts:3`. Consumed at: `apps/api/src/routes/dashboard-overview.ts:6,95,98,275`, `apps/dashboard/src/lib/api-client/dashboard.ts:4,48,49`, `apps/dashboard/src/hooks/use-dashboard-overview.ts:5,7,13`, `apps/dashboard/src/app/api/dashboard/overview/route.ts:10`. **No references inside `apps/dashboard/src/components/cockpit/**`\*\* (grep verified). The back-compat alias is still mandatory because the dashboard-side consumers are 3 separate sites; PR-2 migrates all of them, and PR-4 removes the alias once grep returns 0.                                                               |
-| Where are the 4 surface-URL string sites in core?                             | Verified 3 of 4: `packages/core/src/contacts/list.ts:63` (`detailHref: \`/contacts/${c.id}\``), `packages/core/src/decisions/adapters/handoff-adapter.ts:22` (`\`/contacts/${contact?.id}/conversations/${thread.id}\``), `packages/core/src/decisions/adapters/recommendation-adapter.ts:48` (`\`/contacts/${contactId}/conversations\``). The 4th (`packages/core/src/contacts/detail.ts:39`) was not visible at exact line 39 during plan-writing — the file's `openDecisions`builder is the likely site. Task 10 includes a verification grep to find any remaining`/contacts/${...}` literal in core before declaring routeTemplates done. |
-| Is there any `@route-class:` work in PR-2 scope?                              | No. PR-1 added headers to the 4 operator-direct routes. PR-2's only `check-routes` touch is the cross-app-type rule extension. Header backfill is PR-4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Question                                                                      | Answer (verified 2026-05-22 on `main` at `5617dbf0`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does `ApprovalRecord` still appear locally in 4 sites?                        | Yes. `apps/api/src/routes/dashboard-overview.ts:64`, `packages/core/src/platform/platform-lifecycle.ts:36`, `packages/db/src/storage/prisma-approval-store.ts:6`, `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts:71` (test helper `makeApprovalRecord`).                                                                                                                                                                                                                                                                                           |
+| Does `ApprovalStateSchema` exist in `@switchboard/schemas`?                   | **No.** `ApprovalState` exists only as a TypeScript `interface` in `packages/core/src/approval/state-machine.ts:17`. PR-2 must hoist it into schemas as a Zod schema before `ApprovalRecordSchema` can compose it (Task 1).                                                                                                                                                                                                                                                                                                                                                       |
+| Where does `ConversationState` already live in schemas?                       | `packages/schemas/src/chat.ts:48` defines `ConversationStateSchema`. The schema covers MOST fields but is missing 4: `messages`, `leadProfile`, `detectedLanguage`, `machineState`. The chat-side `ConversationStateData` interface at `apps/chat/src/conversation/state.ts:10` is therefore a superset, not a redeclaration of an identical shape. PR-2 expands the schema to the canonical superset (Task 6).                                                                                                                                                                   |
+| Where do `ConversationRow`, `ConversationSummary`, `ConversationDetail` live? | Local interfaces in `apps/api/src/routes/conversations.ts:20-66`. None exist in schemas yet. **Naming collision:** `ConversationSummary` is also the name of an interface in `packages/core/src/handoff/types.ts:34` with a completely different shape. Resolving this collision is one of PR-2's load-bearing micro-decisions (Tasks 4 + 7).                                                                                                                                                                                                                                     |
+| Where does `Handoff` currently live?                                          | `packages/core/src/handoff/types.ts` exports `HandoffPackage` (the canonical shape), `LeadSnapshot`, `QualificationSnapshot`, `ConversationSummary` (handoff-flavored), `HandoffReason`, `HandoffStatus`, `HandoffStore`. The spec's §8.3 proposal does NOT match the existing shape — the existing shape is richer and is already wired through `escalations.ts` + `handoff-adapter.ts`. PR-2 hoists the _existing_ canonical shape (renamed `HandoffPackage` → `Handoff`) into schemas rather than introducing a parallel shape (Tasks 4 + 5).                                  |
+| Where is `DashboardOverview` defined and consumed?                            | Defined at `packages/schemas/src/dashboard.ts:3`. Consumed at: `apps/api/src/routes/dashboard-overview.ts:6,95,98,275`, `apps/dashboard/src/lib/api-client/dashboard.ts:4,48,49`, `apps/dashboard/src/hooks/use-dashboard-overview.ts:5,7,13`, `apps/dashboard/src/app/api/dashboard/overview/route.ts:10`. **No references inside `apps/dashboard/src/components/cockpit/**`\*\* (grep verified). The back-compat alias is still mandatory because the dashboard-side consumers are 3 separate sites; PR-2 migrates all of them, and PR-4 removes the alias once grep returns 0. |
+| Where are the 4 surface-URL string sites in core?                             | Moved to PR-2.5 scope (see "Scope decision" above). The 3 verified sites — `packages/core/src/contacts/list.ts:63`, `packages/core/src/decisions/adapters/handoff-adapter.ts:22`, `packages/core/src/decisions/adapters/recommendation-adapter.ts:48` — plus the 4th unverified site in `contacts/detail.ts` are PR-2.5's problem.                                                                                                                                                                                                                                                |
+| Is there any `@route-class:` or `check-routes` work in PR-2 scope?            | No. PR-1 added headers to the 4 operator-direct routes; the cross-app-type rule moves to PR-2.5; header backfill is PR-4.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### Collision risk with cockpit-v2
 
@@ -55,35 +83,25 @@ No coordination with the cockpit-v2 owner is required for PR-2.
 | `packages/schemas/src/__tests__/handoff.test.ts`       | Schema parse/round-trip tests.                                                                                                                                                                                                                                                                                                                                                              |
 | `packages/schemas/src/conversations.ts`                | `ConversationMessageSchema` + projection schemas `ConversationSummarySchema` + `ConversationDetailSchema` + `ConversationListResultSchema`. (Lives in its own file rather than `chat.ts` because `chat.ts` is already at moderate size and "conversations" is a distinct concern — the canonical projection for the api's `conversations.ts` route, not the channel-gateway runtime state.) |
 | `packages/schemas/src/__tests__/conversations.test.ts` | Schema parse/round-trip tests for the projection schemas.                                                                                                                                                                                                                                                                                                                                   |
-| `.agent/tools/cross-app-type-check.ts`                 | `findLocalCrossAppTypeDeclarations(sources, schemaExports): Warning[]` — scans `apps/**/src/**` for `interface X { ... }` or `type X = ...` whose `X` matches a name in `schemaExports`. Pure function.                                                                                                                                                                                     |
-| `.agent/tools/__tests__/cross-app-type-check.test.ts`  | Vitest suite for the helper.                                                                                                                                                                                                                                                                                                                                                                |
 
 ### Modify
 
-| Path                                                                                 | Change                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/schemas/src/chat.ts`                                                       | Extend `ConversationStateSchema` with `messages`, `leadProfile`, `detectedLanguage`, `machineState` so the chat-side `ConversationStateData` becomes a pure consumer (was a strict superset).                                                                                                                                                                                 |
-| `packages/schemas/src/index.ts`                                                      | Add 3 barrel re-exports: `approval.js`, `handoff.js`, `conversations.js`.                                                                                                                                                                                                                                                                                                     |
-| `packages/schemas/src/dashboard.ts`                                                  | Rename `DashboardOverviewSchema` → `OperatorOverviewSchema`; add back-compat alias `DashboardOverviewSchema = OperatorOverviewSchema` + `type DashboardOverview = OperatorOverview` with a comment flagging PR-4 removal.                                                                                                                                                     |
-| `packages/core/src/approval/state-machine.ts`                                        | Replace local `interface ApprovalState` with `type ApprovalState = z.infer<typeof ApprovalStateSchema>` imported from `@switchboard/schemas`. Re-export for back-compat at `packages/core/src/approval/index.ts`.                                                                                                                                                             |
-| `packages/core/src/platform/platform-lifecycle.ts`                                   | Replace `type ApprovalRecord = NonNullable<Awaited<ReturnType<CoreApprovalStore["getById"]>>>` (line 36) with `import type { ApprovalRecord } from "@switchboard/schemas"`.                                                                                                                                                                                                   |
-| `packages/db/src/storage/prisma-approval-store.ts`                                   | Replace local `type ApprovalRecord = { ... }` (line 6) with import; `toApprovalRecord` becomes the row→schema mapper.                                                                                                                                                                                                                                                         |
-| `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts`       | Replace `makeApprovalRecord(overrides): ApprovalRecord` local-typed helper with the imported schema type.                                                                                                                                                                                                                                                                     |
-| `apps/api/src/routes/dashboard-overview.ts`                                          | Remove local `interface ApprovalRecord` (lines 64-73); import from `@switchboard/schemas`. Rename `buildDashboardOverview` → `buildOperatorOverview` and update its return type. (The function rename is internal — the route's URL stays `/api/dashboard/overview`.)                                                                                                         |
-| `packages/core/src/handoff/types.ts`                                                 | Replace each `export interface` / `export type` with a re-export from `@switchboard/schemas` (`HandoffPackage` becomes `Handoff` from schemas; keep a `HandoffPackage` alias for back-compat during the migration). `HandoffStore` stays in core (it's a store interface, not a cross-app value type — appropriate location).                                                 |
-| `apps/api/src/routes/escalations.ts`                                                 | Update imports to pull `Handoff` shape from `@switchboard/schemas` where the route currently relies on ad-hoc shapes (lines 100, 182, 191-204, 311-322). The Prisma `Handoff` row shape and the schema type need a Zod-or-mapper boundary — Task 5 picks the minimal-change option.                                                                                           |
-| `packages/core/src/decisions/adapters/handoff-adapter.ts`                            | Update `HandoffPackage` import (line 2) to source from schemas via the core re-export. Replace inline `\`/contacts/${contact?.id}/conversations/${thread.id}\``(line 22) with`deps.routeTemplates.contactConversation(contact?.id ?? "", thread.id)`.                                                                                                                         |
-| `apps/chat/src/conversation/state.ts`                                                | Replace local `interface ConversationStateData` + `interface ConversationMessage` with re-exports of the schema types from `@switchboard/schemas`. Helpers (`createConversation`, `transitionConversation`) stay in this file.                                                                                                                                                |
-| `apps/chat/src/conversation/store.ts`                                                | No change to logic — only the import switches from `./state.js` to `@switchboard/schemas`. Same for `apps/chat/src/conversation/prisma-store.ts` and `apps/chat/src/conversation/threads.ts`.                                                                                                                                                                                 |
-| `apps/api/src/routes/conversations.ts`                                               | Remove local `interface ConversationRow`, `ConversationSummary`, `ConversationDetail`, `ConversationListResult` (lines 20-66). Import the projection types from `@switchboard/schemas`. The route's runtime logic is unchanged.                                                                                                                                               |
-| `packages/core/src/contacts/list.ts`                                                 | Add `routeTemplates: { contactDetail(id: string): string }` to `ListContactsDeps`. Replace `\`/contacts/${c.id}\``(line 63) with`deps.routeTemplates.contactDetail(c.id)`.                                                                                                                                                                                                    |
-| `packages/core/src/contacts/detail.ts`                                               | Add `routeTemplates` to `ContactDetailDeps`. Replace any `/contacts/${...}` literal found in the file with the appropriate template call (Task 10 grep step locates the exact line — likely inside `buildContactDetailOpenDecisions`).                                                                                                                                        |
-| `packages/core/src/decisions/adapters/recommendation-adapter.ts`                     | Take `routeTemplates` as a parameter on `adaptRecommendation` (or thread through the adapter's call site). Replace `\`/contacts/${contactId}/conversations\``(line 48) with`routeTemplates.contactConversations(contactId)`.                                                                                                                                                  |
-| `apps/api/src/routes/dashboard-contacts.ts`                                          | Construct `routeTemplates` at the boundary and pass into `listContactsForBrowse` + `getContactDetail` calls. (Verify file name during impl — the file housing the `/api/dashboard/contacts` route is the consumer of these core projections.)                                                                                                                                 |
-| `apps/api/src/bootstrap/decisions.ts` (or wherever the decisions adapters are wired) | Same `routeTemplates` injection at the boundary. Task 11 locates the exact wire point during impl.                                                                                                                                                                                                                                                                            |
-| `docs/DOCTRINE.md`                                                                   | Add the cross-app-types doctrine line per spec §8.6.                                                                                                                                                                                                                                                                                                                          |
-| `.agent/tools/check-routes.ts`                                                       | Add a new pass that invokes `findLocalCrossAppTypeDeclarations` and prints warnings (do not change exit-code semantics; the rule lands in warning mode per spec §8.6).                                                                                                                                                                                                        |
-| `.github/workflows/ci.yml`                                                           | The existing `architecture` job already runs `check-routes` after PR-1's warning-mode wiring; no workflow change is needed if the new pass is invoked inline. **Verify during impl** — if PR-1 wired `check-routes` only behind a `--mode=warn-touched` flag, decide whether the cross-app-type warning rides that same flag or runs unconditionally. Task 13 makes the call. |
+| Path                                                                           | Change                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/schemas/src/chat.ts`                                                 | Extend `ConversationStateSchema` with `messages`, `leadProfile`, `detectedLanguage`, `machineState` so the chat-side `ConversationStateData` becomes a pure consumer (was a strict superset).                                                                                                                                 |
+| `packages/schemas/src/index.ts`                                                | Add 3 barrel re-exports: `approval.js`, `handoff.js`, `conversations.js`.                                                                                                                                                                                                                                                     |
+| `packages/schemas/src/dashboard.ts`                                            | Rename `DashboardOverviewSchema` → `OperatorOverviewSchema`; add back-compat alias `DashboardOverviewSchema = OperatorOverviewSchema` + `type DashboardOverview = OperatorOverview` with a comment flagging PR-4 removal.                                                                                                     |
+| `packages/core/src/approval/state-machine.ts`                                  | Replace local `interface ApprovalState` with `type ApprovalState = z.infer<typeof ApprovalStateSchema>` imported from `@switchboard/schemas`. Re-export for back-compat at `packages/core/src/approval/index.ts`.                                                                                                             |
+| `packages/core/src/platform/platform-lifecycle.ts`                             | Replace `type ApprovalRecord = NonNullable<Awaited<ReturnType<CoreApprovalStore["getById"]>>>` (line 36) with `import type { ApprovalRecord } from "@switchboard/schemas"`.                                                                                                                                                   |
+| `packages/db/src/storage/prisma-approval-store.ts`                             | Replace local `type ApprovalRecord = { ... }` (line 6) with import; `toApprovalRecord` becomes the row→schema mapper.                                                                                                                                                                                                         |
+| `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts` | Replace `makeApprovalRecord(overrides): ApprovalRecord` local-typed helper with the imported schema type.                                                                                                                                                                                                                     |
+| `apps/api/src/routes/dashboard-overview.ts`                                    | Remove local `interface ApprovalRecord` (lines 64-73); import from `@switchboard/schemas`. Rename `buildDashboardOverview` → `buildOperatorOverview` and update its return type. (The function rename is internal — the route's URL stays `/api/dashboard/overview`.)                                                         |
+| `packages/core/src/handoff/types.ts`                                           | Replace each `export interface` / `export type` with a re-export from `@switchboard/schemas` (`HandoffPackage` becomes `Handoff` from schemas; keep a `HandoffPackage` alias for back-compat during the migration). `HandoffStore` stays in core (it's a store interface, not a cross-app value type — appropriate location). |
+| `apps/api/src/routes/escalations.ts`                                           | Update imports to pull `Handoff` shape from `@switchboard/schemas` where the route currently relies on ad-hoc shapes (lines 100, 182, 191-204, 311-322). The Prisma `Handoff` row shape and the schema type need a Zod-or-mapper boundary — Task 5 picks the minimal-change option.                                           |
+| `packages/core/src/decisions/adapters/handoff-adapter.ts`                      | Update `HandoffPackage` import (line 2) to source `Handoff` from schemas. The inline `/contacts/...` URL literal at line 22 is left untouched — its extraction is PR-2.5's job (routeTemplates).                                                                                                                              |
+| `apps/chat/src/conversation/state.ts`                                          | Replace local `interface ConversationStateData` + `interface ConversationMessage` with re-exports of the schema types from `@switchboard/schemas`. Helpers (`createConversation`, `transitionConversation`) stay in this file.                                                                                                |
+| `apps/chat/src/conversation/store.ts`                                          | No change to logic — only the import switches from `./state.js` to `@switchboard/schemas`. Same for `apps/chat/src/conversation/prisma-store.ts` and `apps/chat/src/conversation/threads.ts`.                                                                                                                                 |
+| `apps/api/src/routes/conversations.ts`                                         | Remove local `interface ConversationRow`, `ConversationSummary`, `ConversationDetail`, `ConversationListResult` (lines 20-66). Import the projection types from `@switchboard/schemas`. The route's runtime logic is unchanged.                                                                                               |
 
 ### Untouched but worth noting
 
@@ -142,7 +160,7 @@ rg -n '"/contacts/' packages/core/src --type ts 2>&1
 rg -n '/contacts/\$\{' packages/core/src --type ts 2>&1
 ```
 
-Expected: 3-4 hits across `contacts/list.ts`, `contacts/detail.ts`, `decisions/adapters/handoff-adapter.ts`, `decisions/adapters/recommendation-adapter.ts`. Note exact line numbers — Task 10 / Task 11 reference these.
+Expected: 3-4 hits across `contacts/list.ts`, `contacts/detail.ts`, `decisions/adapters/handoff-adapter.ts`, `decisions/adapters/recommendation-adapter.ts`. PR-2 leaves these literals in place; the PR-2.5 plan owns their extraction via `routeTemplates`. This Step 4 grep exists only so the PR-2.5 plan author has fresh line numbers.
 
 - [ ] **Step 5: No commit.** This is a verification-only task. Capture findings into a scratch note for the PR description if any assumption changed.
 
@@ -224,7 +242,7 @@ describe("ApprovalStateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("coerces ISO-string dates into Date objects", () => {
+  it("rejects ISO-string dates (domain schema is strict, no coercion)", () => {
     const result = ApprovalStateSchema.safeParse({
       status: "pending",
       respondedBy: null,
@@ -234,10 +252,7 @@ describe("ApprovalStateSchema", () => {
       version: 1,
       quorum: null,
     });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.expiresAt).toBeInstanceOf(Date);
-    }
+    expect(result.success).toBe(false);
   });
 });
 ```
@@ -266,7 +281,7 @@ export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>;
 export const QuorumEntrySchema = z.object({
   approverId: z.string(),
   hash: z.string(),
-  approvedAt: z.coerce.date(),
+  approvedAt: z.date(),
 });
 export type QuorumEntry = z.infer<typeof QuorumEntrySchema>;
 
@@ -285,9 +300,9 @@ export type QuorumState = z.infer<typeof QuorumStateSchema>;
 export const ApprovalStateSchema = z.object({
   status: ApprovalStatusSchema,
   respondedBy: z.string().nullable(),
-  respondedAt: z.coerce.date().nullable(),
+  respondedAt: z.date().nullable(),
   patchValue: z.record(z.string(), z.unknown()).nullable(),
-  expiresAt: z.coerce.date(),
+  expiresAt: z.date(),
   version: z.number().int().min(1),
   quorum: QuorumStateSchema.nullable(),
 });
@@ -324,7 +339,7 @@ Run:
 pnpm --filter @switchboard/schemas build && pnpm --filter @switchboard/core build 2>&1 | tail -20
 ```
 
-Expected: both packages build green. If `core` complains that `ApprovalState`'s `expiresAt` is now `Date | string` (Zod `coerce.date()` accepts both before transform), narrow the type at the call site OR change `z.coerce.date()` back to `z.date()` if every caller already provides a real `Date`. Check the call site behavior empirically — `prisma-approval-store.ts:save()` passes a `Date`; the state-machine helpers always pass a `Date`. `z.date()` is the safer default. Adjust the schema and re-run.
+Expected: both packages build green. Verified during plan-writing that every caller passes a real `Date` object (`prisma-approval-store.ts:save()`, the state-machine helpers, all in-memory store mocks) — so `z.date()` is the correct choice per the Schema boundary rule. If `core` complains about a `Date | string` mismatch, the offender is one of those callers passing the wrong shape; fix the caller, not the schema.
 
 - [ ] **Step 8: Run the full schemas + core test suites.**
 
@@ -350,8 +365,6 @@ Contract v1 §8.1 requires cross-app value types to live in
 inferred type so existing callers keep working.
 
 Preparatory step for ApprovalRecordSchema (next commit).
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -499,8 +512,6 @@ Closes the schema half of Cat 3.4. Consumer migration (4 local sites)
 follows in the next commit.
 
 Route Governance Contract v1 §8.1.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -611,8 +622,6 @@ type:
 - packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts (test helper)
 
 Route Governance Contract v1 §8.1.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -816,9 +825,9 @@ export const HandoffSchema = z.object({
   leadSnapshot: LeadSnapshotSchema,
   qualificationSnapshot: QualificationSnapshotSchema,
   conversationSummary: HandoffConversationSummarySchema,
-  slaDeadlineAt: z.coerce.date(),
-  createdAt: z.coerce.date(),
-  acknowledgedAt: z.coerce.date().optional(),
+  slaDeadlineAt: z.date(),
+  createdAt: z.date(),
+  acknowledgedAt: z.date().optional(),
 });
 export type Handoff = z.infer<typeof HandoffSchema>;
 ```
@@ -850,8 +859,6 @@ conversations.ts projection schema.
 
 Consumer migration (core re-exports + escalations.ts + handoff-adapter)
 follows in the next commit.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -865,6 +872,16 @@ EOF
 - Modify: `packages/core/src/handoff/types.ts`.
 - Modify: `packages/core/src/decisions/adapters/handoff-adapter.ts`.
 - Modify: `apps/api/src/routes/escalations.ts`.
+
+- [ ] **Step 0: Defensive cycle check.**
+
+The re-export shim makes `packages/core/src/handoff/types.ts` import from `@switchboard/schemas`. The dependency layer doctrine (CLAUDE.md) already forbids `schemas → core`, but cheap insurance is cheap:
+
+```bash
+rg -n '@switchboard/core|packages/core' packages/schemas/src packages/schemas/package.json 2>&1 | grep -v '//\|^#'
+```
+
+Expected: 0 import-shaped hits. (A comment reference in `governance-verdict.ts` is acceptable — only `import` / `require` / `from "..."` lines matter.) If a real import surfaces, the cycle was introduced by an earlier PR and PR-2's shim would lock it in — fix the cycle first and re-run this step.
 
 - [ ] **Step 1: Convert `packages/core/src/handoff/types.ts` to a re-export shim.**
 
@@ -939,7 +956,7 @@ import type { Handoff } from "@switchboard/schemas";
 
 Update the function signature: `adaptHandoff(row: HandoffPackage, ...)` → `adaptHandoff(row: Handoff, ...)`. The body is unchanged because field names are identical.
 
-(`routeTemplates` injection at line 22 lands in Task 10, not here — keep the inline `\`/contacts/${contact?.id}/conversations/${thread.id}\`` template for now; we want each commit small.)
+(`routeTemplates` injection at line 22 lands in PR-2.5, not PR-2 — keep the inline `\`/contacts/${contact?.id}/conversations/${thread.id}\`` template untouched here.)
 
 - [ ] **Step 4: Verify `apps/api/src/routes/escalations.ts` still compiles.**
 
@@ -975,8 +992,6 @@ Closes Cat 3.6 (schema half) and the consumer-migration half. PR-4
 removes the back-compat aliases.
 
 Route Governance Contract v1 §8.3.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1003,7 +1018,7 @@ Currently `ConversationMessage` is defined as an `interface` at `apps/chat/src/c
 export const ConversationMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   text: z.string(),
-  timestamp: z.coerce.date(),
+  timestamp: z.date(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 ```
@@ -1014,14 +1029,16 @@ Find the existing `ConversationStateSchema` block (currently ends at line 64 wit
 
 ```ts
 // Inside ConversationStateSchema, after crmContactId:
-  messages: z.array(ConversationMessageSchema),
+  messages: z.array(ConversationMessageSchema).default([]),
   /** Typed lead profile that accumulates intelligence over conversation turns. */
-  leadProfile: LeadProfileSchema.nullable(),
+  leadProfile: LeadProfileSchema.nullable().default(null),
   /** Detected language of the user (resolved from recent messages). */
-  detectedLanguage: z.string().nullable(),
+  detectedLanguage: z.string().nullable().default(null),
   /** Current lead state machine state (e.g. QUALIFYING, BOOKING_PUSH). */
-  machineState: z.string().nullable(),
+  machineState: z.string().nullable().default(null),
 ```
+
+**Why `.default(...)` and not required?** Persisted state today does not parse through this schema (the prisma-store mapper at `apps/chat/src/conversation/prisma-store.ts:145-170` populates these fields manually), so a strict-required field would not break hydration in the current architecture. But if any future API endpoint, fixture loader, or third-party adapter parses a partial in-flight shape, `.default(...)` matches the principle "schemas accept any in-flight shape" at near-zero cost. The Schema boundary rule lists this explicitly.
 
 `LeadProfileSchema` must already exist in schemas — confirm with `rg -n 'LeadProfileSchema' packages/schemas/src`. If it exists, import it (`import { LeadProfileSchema } from "./lead-profile.js"` or via the barrel). If it does NOT exist, the chat-side `LeadProfile` is a TypeScript interface that needs hoisting too — bail out of this task with a note, and run a separate sub-task to hoist `LeadProfile` first.
 
@@ -1066,8 +1083,8 @@ describe("ConversationStateSchema — expanded shape (PR-2)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("requires the 4 expanded fields", () => {
-    // missing `messages`, `leadProfile`, `detectedLanguage`, `machineState`
+  it("applies defaults when the 4 expanded fields are absent", () => {
+    // omitted: `messages`, `leadProfile`, `detectedLanguage`, `machineState`
     const result = ConversationStateSchema.safeParse({
       id: "conv_1",
       threadId: "thread_1",
@@ -1082,7 +1099,13 @@ describe("ConversationStateSchema — expanded shape (PR-2)", () => {
       lastActivityAt: new Date(),
       expiresAt: new Date(),
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.messages).toEqual([]);
+      expect(result.data.leadProfile).toBeNull();
+      expect(result.data.detectedLanguage).toBeNull();
+      expect(result.data.machineState).toBeNull();
+    }
   });
 });
 ```
@@ -1144,8 +1167,6 @@ Closes the schema half of Cat 3.5 — chat-side consumer migration via
 re-export shim keeps all 30+ existing call sites compiling unchanged.
 
 Route Governance Contract v1 §8.2.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1363,8 +1384,6 @@ that consume these now import the canonical types.
 Closes the remainder of Cat 3.5.
 
 Route Governance Contract v1 §8.2.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1471,8 +1490,6 @@ Closes the schema half of Cat 3.10. Consumer migration (api + dashboard,
 3 sites) follows in the next commit.
 
 Route Governance Contract v1 §8.4.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1598,559 +1615,13 @@ directly. Back-compat alias still in place for any consumer missed
 (removal in PR-4 gated on grep returning 0).
 
 Route Governance Contract v1 §8.4.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
 
 ---
 
-### Task 10: Add `routeTemplates` dependency to core read-side projections
-
-Core projections currently inject surface URLs as hard-coded `/contacts/${id}` literals — violating the surface-agnostic-backend principle (memory: `feedback_surface_agnostic_backend.md`). PR-2 extracts a `routeTemplates` dependency parameter; surface adapters (Task 11) wire it.
-
-**Files:**
-
-- Modify: `packages/core/src/contacts/list.ts`.
-- Modify: `packages/core/src/contacts/detail.ts`.
-- Modify: `packages/core/src/decisions/adapters/handoff-adapter.ts`.
-- Modify: `packages/core/src/decisions/adapters/recommendation-adapter.ts`.
-- Update: the core barrel + test mocks.
-
-- [ ] **Step 1: Verify the exact URL literal sites in core.**
-
-Run:
-
-```bash
-rg -n '"/contacts/' packages/core/src --type ts
-rg -n '/contacts/\$\{' packages/core/src --type ts
-```
-
-Note every hit. Expected 3-4 sites: `contacts/list.ts:63`, `contacts/detail.ts:???` (verify the line — likely inside `buildContactDetailOpenDecisions`), `decisions/adapters/handoff-adapter.ts:22`, `decisions/adapters/recommendation-adapter.ts:48`.
-
-If `contacts/detail.ts` has NO `/contacts/` literal, the spec's reference to `detail.ts:39` was likely about the deps interface, not a URL literal. In that case, Task 10 only adds the `routeTemplates` parameter to `ContactDetailDeps` without changing the function body (preparing for future projections that need a URL). Note this finding in the PR description.
-
-- [ ] **Step 2: Add a shared `RouteTemplates` interface.**
-
-Create `packages/core/src/lib/route-templates.ts` (or a similar dedicated file — locate the conventional spot during impl; if `packages/core/src/lib/` doesn't exist, place at `packages/core/src/contacts/route-templates.ts` and re-export from the contacts barrel):
-
-```ts
-/**
- * Surface-agnostic URL templates. Core read-side projections take this as a
- * dependency and call its methods rather than constructing `/contacts/${id}`
- * literals inline. Each transport (api, chat, dashboard) constructs an
- * instance at its boundary; the templates encapsulate the URL shape the
- * dashboard / chat client expects.
- *
- * Route Governance Contract v1 §8.5.
- */
-export interface RouteTemplates {
-  /** Detail page for a single contact. Used by /contacts list projection. */
-  contactDetail(contactId: string): string;
-  /** Conversations index for a contact. Used by recommendation adapter. */
-  contactConversations(contactId: string): string;
-  /** Single conversation under a contact. Used by handoff adapter. */
-  contactConversation(contactId: string, threadId: string): string;
-}
-
-/**
- * Canonical dashboard template set. Use this from api adapters that want the
- * shape the operator dashboard renders. Apps that surface URLs in a
- * different transport (mobile, embedded SDK) construct their own instance.
- */
-export const dashboardRouteTemplates: RouteTemplates = {
-  contactDetail: (id) => `/contacts/${id}`,
-  contactConversations: (contactId) => `/contacts/${contactId}/conversations`,
-  contactConversation: (contactId, threadId) => `/contacts/${contactId}/conversations/${threadId}`,
-};
-```
-
-Export the interface + value from the core barrel (`packages/core/src/index.ts` or its sub-barrels).
-
-- [ ] **Step 3: Inject into `ContactListDeps`.**
-
-Open `packages/core/src/contacts/list.ts`. Add to the deps interface (lines 23-25 at plan-writing time):
-
-```ts
-import type { RouteTemplates } from "../lib/route-templates.js"; // adjust path
-
-export interface ListContactsDeps {
-  contactStore: Pick<ContactStore, "listForBrowse">;
-  routeTemplates: RouteTemplates;
-}
-```
-
-Replace the inline literal at line 63:
-
-```ts
-// Before:
-detailHref: `/contacts/${c.id}`,
-// After:
-detailHref: deps.routeTemplates.contactDetail(c.id),
-```
-
-- [ ] **Step 4: Inject into `ContactDetailDeps`.**
-
-Open `packages/core/src/contacts/detail.ts`. Add `routeTemplates: RouteTemplates` to `ContactDetailDeps`. If a URL literal exists in the file (from Step 1 grep), replace it with the appropriate template call.
-
-If no literal exists, the parameter is added prospectively — it costs nothing and matches the pattern downstream consumers expect. Comment inline:
-
-```ts
-// routeTemplates: presently unused by this projection but kept to match
-// the surface-agnostic injection pattern used by sibling read-side
-// projections. Surface URL emission below will adopt this when the
-// follow-up projection (e.g. linking to /contacts/:id/threads/:tid) lands.
-routeTemplates: RouteTemplates;
-```
-
-(Only add the comment if the parameter is truly prospective. If it IS used, no comment.)
-
-- [ ] **Step 5: Inject into the decisions adapters.**
-
-`packages/core/src/decisions/adapters/handoff-adapter.ts`: change `adaptHandoff(row, contact, thread)` signature to `adaptHandoff(row, contact, thread, routeTemplates)` OR (preferred) introduce a deps object: `adaptHandoff(row, contact, thread, deps: { routeTemplates: RouteTemplates })`. The caller (located via grep — likely a decisions composer in `packages/core/src/decisions/`) passes the deps from its own injected RouteTemplates.
-
-Replace line 22:
-
-```ts
-// Before:
-threadHref: thread ? `/contacts/${contact?.id}/conversations/${thread.id}` : null,
-// After:
-threadHref:
-  thread && contact?.id
-    ? deps.routeTemplates.contactConversation(contact.id, thread.id)
-    : null,
-```
-
-`packages/core/src/decisions/adapters/recommendation-adapter.ts`: same pattern. Change `adaptRecommendation(row)` to accept routeTemplates as part of deps. Replace `deriveThreadHref` (line 48) to use `routeTemplates.contactConversations(contactId)`.
-
-- [ ] **Step 6: Update tests for the changed core function signatures.**
-
-Every test that calls `listContactsForBrowse`, `getContactDetail`, `adaptHandoff`, or `adaptRecommendation` now passes a `routeTemplates`. The simplest fixture is the exported `dashboardRouteTemplates`:
-
-```ts
-import { dashboardRouteTemplates } from "@switchboard/core";
-// ... in test setup:
-const deps = { contactStore: ..., routeTemplates: dashboardRouteTemplates };
-```
-
-Find all affected tests:
-
-```bash
-rg -n 'listContactsForBrowse\|getContactDetail\|adaptHandoff\|adaptRecommendation' packages/core/src --type ts | grep test
-```
-
-Update each.
-
-- [ ] **Step 7: Run core build + tests.**
-
-```bash
-pnpm --filter @switchboard/core build 2>&1 | tail -10
-pnpm --filter @switchboard/core test -- --run 2>&1 | tail -30
-```
-
-Expected: green. If a test fails with "routeTemplates is undefined", the fixture was missed — add `routeTemplates: dashboardRouteTemplates` to its deps.
-
-- [ ] **Step 8: Verify no `/contacts/${` literal remains in core.**
-
-```bash
-rg -n '"/contacts/\|/contacts/\$\{' packages/core/src --type ts 2>&1
-```
-
-Expected: 0 hits. The `dashboardRouteTemplates` constant in `route-templates.ts` is allowed (it's the canonical owner of these literals); ensure the grep excludes that file or accept 3 hits from that one file. Refine the grep if needed:
-
-```bash
-rg -n '/contacts/\$\{' packages/core/src --type ts | grep -v route-templates
-```
-
-Expected: 0 hits.
-
-- [ ] **Step 9: Commit.**
-
-```bash
-git add packages/core/src/lib/route-templates.ts packages/core/src/contacts/list.ts packages/core/src/contacts/detail.ts packages/core/src/decisions/adapters/handoff-adapter.ts packages/core/src/decisions/adapters/recommendation-adapter.ts packages/core/src/index.ts
-# Plus any updated test files
-git commit -m "$(cat <<'EOF'
-refactor(core): inject routeTemplates instead of hard-coding /contacts/...
-
-Core read-side projections take a RouteTemplates dependency; surface
-adapters construct the dashboard template set at their boundary. Removes
-4 inline /contacts/... literals from core, completing the
-surface-agnostic-backend invariant for these projections.
-
-Closes Cat 3.9.
-
-Route Governance Contract v1 §8.5.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-### Task 11: Wire `routeTemplates` from API surface adapters
-
-The core projections now require `routeTemplates`. API routes that call them must pass `dashboardRouteTemplates` (or a custom set) at the boundary.
-
-**Files:**
-
-- Modify: every api route file that calls `listContactsForBrowse`, `getContactDetail`, `adaptHandoff`, or `adaptRecommendation`. Locate via grep.
-
-- [ ] **Step 1: Locate the api consumers.**
-
-```bash
-rg -n 'listContactsForBrowse\|getContactDetail\|adaptHandoff\|adaptRecommendation' apps/api/src --type ts | grep -v __tests__
-```
-
-Expected hits — typical wiring lives in `apps/api/src/routes/dashboard-contacts.ts` (or similarly-named) and the decisions/recommendations bootstrap. Note every call site.
-
-- [ ] **Step 2: Update each call site.**
-
-Pattern:
-
-```ts
-// Before:
-const result = await listContactsForBrowse({ orgId, query }, { contactStore: app.contactStore });
-// After:
-import { dashboardRouteTemplates } from "@switchboard/core";
-// ...
-const result = await listContactsForBrowse(
-  { orgId, query },
-  { contactStore: app.contactStore, routeTemplates: dashboardRouteTemplates },
-);
-```
-
-Apply the same change to every call site. The handoff + recommendation adapters' callers (whoever composes the decisions list) take the deps the same way — find by grep at composition time.
-
-- [ ] **Step 3: Run api build + tests.**
-
-```bash
-pnpm --filter @switchboard/api build 2>&1 | tail -10
-pnpm --filter @switchboard/api test -- --run 2>&1 | tail -30
-```
-
-Expected: green.
-
-- [ ] **Step 4: Commit.**
-
-```bash
-git add apps/api/src/routes/dashboard-contacts.ts # plus other touched route files
-git commit -m "$(cat <<'EOF'
-refactor(api): wire dashboardRouteTemplates into core projection calls
-
-Final consumer-side change for the routeTemplates injection. API routes
-construct dashboardRouteTemplates at the boundary and pass it into core
-projections; core no longer constructs surface URLs.
-
-Route Governance Contract v1 §8.5.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-### Task 12: Add the cross-app-types doctrine line to `docs/DOCTRINE.md`
-
-**Files:**
-
-- Modify: `docs/DOCTRINE.md`.
-
-- [ ] **Step 1: Locate the right section.**
-
-The doctrine has a section called "Cross-app types" or similar. Open `docs/DOCTRINE.md` and find it. If no such section exists, add one near the "Schemas" / "Types" architectural area.
-
-- [ ] **Step 2: Append the line.**
-
-Add per spec §8.6 verbatim:
-
-```markdown
-> **Cross-app types live in `@switchboard/schemas`.** A type declared in `apps/api/`, `apps/chat/`, or `apps/dashboard/` that is also defined elsewhere — by name, by shape, or by structural duplication — is a contract violation. `check-routes` flags new local declarations of types that match a `@switchboard/schemas` export.
-```
-
-- [ ] **Step 3: Run lint to confirm markdown formatting.**
-
-If repo has a markdown linter step, run it. Otherwise the line is markdown-clean by construction.
-
-- [ ] **Step 4: Commit.**
-
-```bash
-git add docs/DOCTRINE.md
-git commit -m "$(cat <<'EOF'
-docs(doctrine): cross-app types live in @switchboard/schemas
-
-Spec §8.6 — load-bearing doctrine line. check-routes warns on new local
-declarations matching a @switchboard/schemas export (rule added in next
-commit).
-
-Route Governance Contract v1.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-### Task 13: Extend `check-routes` with a cross-app-type warning rule
-
-**Files:**
-
-- Create: `.agent/tools/cross-app-type-check.ts`.
-- Create: `.agent/tools/__tests__/cross-app-type-check.test.ts`.
-- Modify: `.agent/tools/check-routes.ts`.
-
-- [ ] **Step 1: Write failing tests.**
-
-Create `.agent/tools/__tests__/cross-app-type-check.test.ts`:
-
-```ts
-import { describe, expect, it } from "vitest";
-import { Project } from "ts-morph";
-import { findLocalCrossAppTypeDeclarations } from "../cross-app-type-check.js";
-
-function makeSource(content: string, fileName = "test.ts") {
-  const project = new Project({ useInMemoryFileSystem: true });
-  return project.createSourceFile(fileName, content);
-}
-
-describe("findLocalCrossAppTypeDeclarations", () => {
-  const schemaExports = new Set([
-    "ApprovalRecord",
-    "Handoff",
-    "OperatorOverview",
-    "ConversationState",
-    "ConversationSummary",
-  ]);
-
-  it("warns on local interface matching a schema export name", () => {
-    const sf = makeSource(
-      `
-      // @route-class: read-only
-      interface ApprovalRecord {
-        request: string;
-      }
-      export const x = 1;
-    `,
-      "apps/api/src/routes/foo.ts",
-    );
-
-    const result = findLocalCrossAppTypeDeclarations([sf], schemaExports);
-    expect(result).toHaveLength(1);
-    expect(result[0]?.name).toBe("ApprovalRecord");
-    expect(result[0]?.file).toBe("apps/api/src/routes/foo.ts");
-  });
-
-  it("warns on local type alias matching a schema export name", () => {
-    const sf = makeSource(
-      `
-      type Handoff = { id: string };
-    `,
-      "apps/chat/src/foo.ts",
-    );
-
-    const result = findLocalCrossAppTypeDeclarations([sf], schemaExports);
-    expect(result).toHaveLength(1);
-    expect(result[0]?.name).toBe("Handoff");
-  });
-
-  it("ignores names that do not appear in schemaExports", () => {
-    const sf = makeSource(
-      `
-      interface MyLocalThing { x: number; }
-    `,
-      "apps/api/src/foo.ts",
-    );
-
-    const result = findLocalCrossAppTypeDeclarations([sf], schemaExports);
-    expect(result).toEqual([]);
-  });
-
-  it("ignores re-exports (export type { X } from ...)", () => {
-    const sf = makeSource(
-      `
-      export type { ApprovalRecord } from "@switchboard/schemas";
-    `,
-      "apps/api/src/foo.ts",
-    );
-
-    const result = findLocalCrossAppTypeDeclarations([sf], schemaExports);
-    expect(result).toEqual([]);
-  });
-
-  it("ignores test files (path contains __tests__)", () => {
-    const sf = makeSource(
-      `
-      interface ApprovalRecord { id: string; }
-    `,
-      "apps/api/src/__tests__/foo.test.ts",
-    );
-
-    const result = findLocalCrossAppTypeDeclarations([sf], schemaExports);
-    expect(result).toEqual([]);
-  });
-
-  it("ignores files outside apps/*/src", () => {
-    const sf = makeSource(
-      `
-      interface Handoff { id: string; }
-    `,
-      "packages/core/src/foo.ts",
-    );
-
-    const result = findLocalCrossAppTypeDeclarations([sf], schemaExports);
-    expect(result).toEqual([]);
-  });
-
-  it("returns multiple warnings for multiple collisions in one file", () => {
-    const sf = makeSource(
-      `
-      interface ApprovalRecord { id: string; }
-      interface Handoff { id: string; }
-      type OperatorOverview = { x: number };
-    `,
-      "apps/dashboard/src/foo.ts",
-    );
-
-    const result = findLocalCrossAppTypeDeclarations([sf], schemaExports);
-    expect(result).toHaveLength(3);
-  });
-});
-```
-
-- [ ] **Step 2: Run the test to verify it fails.**
-
-Run: `pnpm exec vitest run .agent/tools/__tests__/cross-app-type-check.test.ts 2>&1 | tail -10`
-Expected: FAIL — module not found.
-
-- [ ] **Step 3: Implement `cross-app-type-check.ts`.**
-
-Create `.agent/tools/cross-app-type-check.ts`:
-
-```ts
-import type { SourceFile } from "ts-morph";
-
-export interface CrossAppTypeWarning {
-  file: string; // relative path
-  line: number;
-  name: string; // the duplicated type/interface name
-  kind: "interface" | "type-alias";
-  message: string;
-}
-
-/**
- * Find local interface/type-alias declarations under `apps/*/ src; /**` whose
- * name collides with an export from `@switchboard/schemas`. Re-exports
- * (`export type { X } from ...`) are not flagged; test files are skipped.
- *
- * Route Governance Contract v1 §8.6 / PR-2 warning rule. Promoted to error
- * in PR-4.
- */
-export function findLocalCrossAppTypeDeclarations(
-  sources: SourceFile[],
-  schemaExports: Set<string>,
-): CrossAppTypeWarning[] {
-  const warnings: CrossAppTypeWarning[] = [];
-
-  for (const sf of sources) {
-    const path = sf.getFilePath().replace(/^.*?(apps|packages)\//, "$1/");
-    if (!path.startsWith("apps/") || !path.includes("/src/")) continue;
-    if (path.includes("__tests__") || path.endsWith(".test.ts")) continue;
-
-    for (const decl of sf.getInterfaces()) {
-      const name = decl.getName();
-      if (schemaExports.has(name)) {
-        warnings.push({
-          file: path,
-          line: decl.getStartLineNumber(),
-          name,
-          kind: "interface",
-          message: `Local interface '${name}' shadows @switchboard/schemas export. Move to schemas or rename.`,
-        });
-      }
-    }
-
-    for (const decl of sf.getTypeAliases()) {
-      // Skip re-exports — they appear as ExportDeclarations elsewhere.
-      if (decl.isExported() && decl.getFullText().includes("from ")) continue;
-      const name = decl.getName();
-      if (schemaExports.has(name)) {
-        warnings.push({
-          file: path,
-          line: decl.getStartLineNumber(),
-          name,
-          kind: "type-alias",
-          message: `Local type alias '${name}' shadows @switchboard/schemas export. Move to schemas or rename.`,
-        });
-      }
-    }
-  }
-
-  return warnings;
-}
-```
-
-- [ ] **Step 4: Run the test to verify it passes.**
-
-Run: `pnpm exec vitest run .agent/tools/__tests__/cross-app-type-check.test.ts 2>&1 | tail -10`
-Expected: PASS — all cases green.
-
-- [ ] **Step 5: Wire into `check-routes`.**
-
-Open `.agent/tools/check-routes.ts`. Locate a good place to invoke the new rule (after existing passes, before exit). Add:
-
-```ts
-import { findLocalCrossAppTypeDeclarations } from "./cross-app-type-check.js";
-
-// inside runCheckRoutes(opts), after the existing passes:
-const schemaExports = await loadSchemaExports(); // implementation note below
-const crossAppWarnings = findLocalCrossAppTypeDeclarations(sources, schemaExports);
-for (const w of crossAppWarnings) {
-  // Use stderr + non-zero exit ONLY if warning mode flips to error;
-  // PR-2 lands in warning mode per spec §8.6.
-  console.warn(`[cross-app-type] ${w.file}:${w.line} — ${w.message}`);
-}
-```
-
-For `loadSchemaExports()`: read `packages/schemas/src/index.ts` and walk re-exports with ts-morph, OR (simpler) maintain a static list in `.agent/tools/cross-app-type-check.ts` of the names PR-2 hoisted (`ApprovalRecord`, `ApprovalState`, `Handoff`, `OperatorOverview`, `ConversationState`, `ConversationMessage`, `ConversationSummary`, `ConversationDetail`, `ConversationListResult`). Static list is the lower-risk choice for PR-2; PR-4 can swap to dynamic enumeration when the rule flips to error.
-
-Pick the static list approach in PR-2 — it's deterministic and fast.
-
-- [ ] **Step 6: Run the full check-routes self-test.**
-
-```bash
-pnpm exec vitest run .agent/tools 2>&1 | tail -30
-node .agent/tools/check-routes.ts 2>&1 | head -30
-```
-
-Expected: tests pass; the CLI runs and emits 0 warnings on `main` (because PR-2 already migrated all known consumers). Any warning that appears here points to a missed migration — fix before committing.
-
-- [ ] **Step 7: Commit.**
-
-```bash
-git add .agent/tools/cross-app-type-check.ts .agent/tools/__tests__/cross-app-type-check.test.ts .agent/tools/check-routes.ts
-git commit -m "$(cat <<'EOF'
-feat(tools): add cross-app-type warning rule to check-routes
-
-Scans apps/*/src/** for local interface/type-alias declarations whose
-name collides with a @switchboard/schemas export. Emits stderr warnings
-in PR-2; PR-4 flips to error.
-
-Doctrine reference: docs/DOCTRINE.md "Cross-app types live in
-@switchboard/schemas".
-
-Route Governance Contract v1 §8.6.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-### Task 14: End-to-end verification
+### Task 10: End-to-end verification
 
 **Files:** none touched — verification only.
 
@@ -2195,15 +1666,7 @@ pnpm format:check 2>&1 | tail -10
 
 Expected: green. Per `feedback_ci_prettier_not_in_local_lint.md`.
 
-- [ ] **Step 6: Run the new check-routes rule against `main`.**
-
-```bash
-node .agent/tools/check-routes.ts 2>&1
-```
-
-Expected: 0 cross-app-type warnings on the PR-2 branch (because PR-2 migrated all known sites). If non-zero, fix before merging.
-
-- [ ] **Step 7: Verify the grep state is clean.**
+- [ ] **Step 6: Verify the grep state is clean.**
 
 ```bash
 # DashboardOverview consumers (back-compat alias means non-zero is OK, but document):
@@ -2212,17 +1675,19 @@ rg -n 'DashboardOverview' apps packages --type ts | grep -v 'export.*DashboardOv
 # No local ApprovalRecord interfaces survive:
 rg -n 'interface ApprovalRecord\|type ApprovalRecord' apps packages --type ts | grep -v __tests__
 
-# No /contacts/${...} literals in core:
-rg -n '/contacts/\$\{' packages/core/src --type ts | grep -v route-templates
+# No local Handoff or HandoffPackage interfaces outside the back-compat shim:
+rg -n 'interface (Handoff|HandoffPackage)\b|type (Handoff|HandoffPackage)\b' apps packages --type ts | grep -v __tests__ | grep -v 'packages/core/src/handoff/types.ts'
 ```
 
 Expected:
 
 - DashboardOverview: hits in the back-compat alias declaration in dashboard.ts + zero migrated consumers (use-dashboard-overview.ts intentionally keeps the _function name_ `useDashboardOverview` per Task 9 Step 4, but its type annotation is now `OperatorOverview`).
 - ApprovalRecord: 0 hits in `interface ApprovalRecord` / `type ApprovalRecord`.
-- /contacts/${...}: 0 hits (the only literals live in `route-templates.ts`).
+- Handoff / HandoffPackage: 0 hits outside the deliberate back-compat shim in `packages/core/src/handoff/types.ts`.
 
-- [ ] **Step 8: No new commit.** Verification is a gate, not a code change. Open the PR after this step passes.
+The `routeTemplates` extraction (eliminating the 4 surface-URL string literals in core) and the `check-routes` cross-app-type warning rule moved to the PR-2.5 plan — do not assert on those here.
+
+- [ ] **Step 7: No new commit.** Verification is a gate, not a code change. Open the PR after this step passes.
 
 ---
 
@@ -2230,27 +1695,29 @@ Expected:
 
 Performed after the plan was written, against the spec sections it consumes.
 
-**Spec coverage:**
+**Spec coverage (PR-2 portion):**
 
 - §8.1 ApprovalRecord — Tasks 1 + 2 + 3.
 - §8.2 ConversationState residual — Tasks 6 + 7.
 - §8.3 Handoff — Tasks 4 + 5.
 - §8.4 DashboardOverview rename + alias — Tasks 8 + 9.
-- §8.5 Surface-URL strings (4 sites) — Tasks 10 + 11.
-- §8.6 Doctrine line + check-routes rule — Tasks 12 + 13.
-- §12 PR-2 scope (~20 files) — covered. File count: 4 + 4 + 3 + 4 + 6 + 1 + 3 = ~25, within the spec's "~20" tolerance given the test-file additions.
+- §8.5 Surface-URL strings — **deferred to PR-2.5.**
+- §8.6 Doctrine line + check-routes rule — **deferred to PR-2.5.**
+- §12 PR-2 scope (~20 files in the spec) — schema portion covered. File count: 4 (Approval) + 4 (Handoff) + 4 (ConvState) + 3 (ConvProjections) + 4 (OperatorOverview) ≈ 19 files including test additions, comfortably within the spec's tolerance for the schema-relocation subset.
 
 **Type consistency:**
 
 - `Handoff` is the canonical name in schemas; `HandoffPackage` is the back-compat alias. Tasks 4-5 use both consistently.
 - `OperatorOverview` is the canonical; `DashboardOverview` is the back-compat alias. Tasks 8-9 use both consistently.
 - `ApprovalState` is hoisted in Task 1 before `ApprovalRecord` references it in Task 2.
-- `ConversationSummary` (chat / api projection) and `HandoffConversationSummary` (handoff inner) have explicit collision resolution at Task 4 Step 4.
-- `routeTemplates` deps interface (Task 10 Step 2) is consistently referenced in Tasks 10-11.
+- `HandoffConversationSummary` (handoff inner) and `ConversationSummary` (api projection) have explicit collision resolution at Task 4 Step 4.
+- The schema boundary rule (Date for runtime, ISO strings for wire) is followed consistently across Tasks 1, 4, 6, 7.
 
 **No placeholders:** searched the document — no TBD, no "implement later", no "similar to Task N" without the code shown.
 
 **Collision risk audited:** Task 0 + the Preflight section document cockpit-v2 collision = 0 hits. Plan is safe to execute concurrently with cockpit-v2 work.
+
+**Scope discipline:** review of the original PR-2 surface (which bundled cross-app type relocation + routeTemplates extraction + tooling) flagged scope-bloat. The PR-2.5 follow-up plan owns routeTemplates + check-routes + doctrine line. The Cat 3 crosswalk for §8.5/§8.6 still closes, just in a different PR.
 
 ---
 
