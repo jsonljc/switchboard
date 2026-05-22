@@ -1,5 +1,7 @@
 // apps/dashboard/src/components/cockpit/approval-card.tsx
 import { T, type AccentTokens } from "./tokens";
+import { SpriteChip } from "./sprite/sprite-chip";
+import type { SpriteVariantKey, VariantBundle } from "./sprite/types";
 import type { ApprovalView } from "./types";
 
 // `ApprovalAccent` is retained as an alias for the shared `AccentTokens`
@@ -29,6 +31,12 @@ export interface ApprovalCardProps {
    * "Needs review" don't accidentally render as "N" in the chip.
    */
   avatarLetter?: string;
+  /** Sprite bundle for the avatar chip. When omitted, renders letter chip. */
+  bundle?: VariantBundle;
+  /** Sprite variant key. */
+  variant?: SpriteVariantKey;
+  /** Fires when the optional tertiary button (label from data.tertiaryLabel) is clicked. */
+  onTertiary?: () => void;
 }
 
 export function ApprovalCard({
@@ -40,6 +48,9 @@ export function ApprovalCard({
   accent = ALEX_APPROVAL_ACCENT,
   senderLabel = "Alex needs you",
   avatarLetter = "A",
+  bundle,
+  variant,
+  onTertiary,
 }: ApprovalCardProps) {
   return (
     <section
@@ -51,24 +62,35 @@ export function ApprovalCard({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span
-          data-testid="approval-card-avatar-chip"
-          aria-hidden="true"
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 4,
-            background: accent.soft,
-            display: "inline-grid",
-            placeItems: "center",
-            color: accent.deep,
-            fontWeight: 700,
-            fontSize: 11,
-            flexShrink: 0,
-          }}
-        >
-          {avatarLetter}
-        </span>
+        {bundle && variant ? (
+          <SpriteChip
+            bundle={bundle}
+            variant={variant}
+            state="draft"
+            accentSoft={accent.soft}
+            fallbackDeep={accent.deep}
+            fallbackLetter={avatarLetter}
+          />
+        ) : (
+          <span
+            data-testid="approval-card-avatar-chip"
+            aria-hidden="true"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 4,
+              background: accent.soft,
+              display: "inline-grid",
+              placeItems: "center",
+              color: accent.deep,
+              fontWeight: 700,
+              fontSize: 11,
+              flexShrink: 0,
+            }}
+          >
+            {avatarLetter}
+          </span>
+        )}
         <span
           style={{
             fontSize: 10,
@@ -111,6 +133,22 @@ export function ApprovalCard({
       >
         {data.title}
       </h2>
+      {"campaign" in data && data.campaign ? (
+        <div
+          style={{
+            marginTop: 6,
+            fontFamily: "JetBrains Mono",
+            fontSize: 11,
+            color: accent.deep,
+            letterSpacing: "0.02em",
+          }}
+        >
+          ·{" "}
+          {data.campaign.kind === "campaign"
+            ? data.campaign.name
+            : `${data.campaign.pixelId} (${data.campaign.breaches} breaches)`}
+        </div>
+      ) : null}
       {data.body && (
         <p
           style={{
@@ -197,6 +235,24 @@ export function ApprovalCard({
         >
           {data.secondary}
         </button>
+        {data.tertiaryLabel && onTertiary && (
+          <button
+            onClick={onTertiary}
+            style={{
+              background: "transparent",
+              color: T.ink3,
+              border: "none",
+              padding: "8px 8px",
+              borderRadius: 4,
+              fontSize: 12.5,
+              fontWeight: 500,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {data.tertiaryLabel}
+          </button>
+        )}
       </div>
     </section>
   );

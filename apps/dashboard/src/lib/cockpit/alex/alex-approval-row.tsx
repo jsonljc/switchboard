@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ApprovalCard } from "@/components/cockpit/approval-card";
 import { useRespondToApproval } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
 import { useToast } from "@/components/ui/use-toast";
+import { ALEX_VARIANTS, DEFAULT_ALEX_VARIANT } from "@/lib/cockpit/alex-config";
 import type { AlexApprovalView } from "@/components/cockpit/types";
 
 /**
@@ -100,6 +101,8 @@ export function AlexApprovalRow({ approval, idx, total }: AlexApprovalRowProps) 
       total={total}
       onResolve={(verdict) => handleResolve(verdict)}
       senderLabel="Alex needs you"
+      bundle={ALEX_VARIANTS}
+      variant={DEFAULT_ALEX_VARIANT}
     />
   );
 }

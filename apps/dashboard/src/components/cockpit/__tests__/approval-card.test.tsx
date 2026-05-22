@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ApprovalCard } from "../approval-card";
+import { ALEX_VARIANTS } from "../sprite/alex-variants";
 import type { AlexApprovalView, RileyApprovalView } from "../types";
 import { mapRecommendationsToApprovalViews } from "@/lib/cockpit/riley/recommendation-to-approval-view";
 import {
@@ -211,5 +212,61 @@ describe("ApprovalCard — B.3 accent + senderLabel props", () => {
     expect(eyebrow).toBeDefined();
     expect(eyebrow!.style.color.toLowerCase()).not.toBe("rgb(126, 69, 51)");
     expect(eyebrow!.style.color.length).toBeGreaterThan(0);
+  });
+});
+
+// --- Task 12: sprite chip + tertiaryLabel + campaign ---
+
+const baseAlexApproval = {
+  id: "appr_1",
+  urgency: "immediate" as const,
+  askedAt: "5 min ago",
+  title: "Adjust pricing on quote QA-42",
+  presentation: { primaryLabel: "Accept & send", dismissLabel: "Decline" },
+  primary: "Accept & send",
+  secondary: "Decline",
+  kind: "pricing" as const,
+  primaryAction: { kind: "respond" as const, bindingHash: "abc", verdict: "accept" as const },
+};
+
+describe("ApprovalCard — Task 12 sprite chip + tertiaryLabel + campaign", () => {
+  it("renders the sprite chip when bundle + variant are provided", () => {
+    const { container } = render(
+      <ApprovalCard
+        data={baseAlexApproval as never}
+        idx={0}
+        total={1}
+        onResolve={() => {}}
+        bundle={ALEX_VARIANTS}
+        variant="classic"
+      />,
+    );
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("renders the tertiaryLabel button and fires onTertiary when clicked", () => {
+    const onTertiary = vi.fn();
+    const { getByText } = render(
+      <ApprovalCard
+        data={{ ...baseAlexApproval, tertiaryLabel: "Ask Alex to draft" } as never}
+        idx={0}
+        total={1}
+        onResolve={() => {}}
+        onTertiary={onTertiary}
+      />,
+    );
+    fireEvent.click(getByText("Ask Alex to draft"));
+    expect(onTertiary).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the campaign line when data.campaign is set (Riley shape)", () => {
+    const rileyApproval = {
+      ...baseAlexApproval,
+      campaign: { kind: "campaign", name: "Cold Interests", id: "c_1" },
+    };
+    const { getByText } = render(
+      <ApprovalCard data={rileyApproval as never} idx={0} total={1} onResolve={() => {}} />,
+    );
+    expect(getByText(/Cold Interests/)).toBeInTheDocument();
   });
 });

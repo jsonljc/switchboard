@@ -79,6 +79,9 @@ function RileyApprovalRow({
       onResolve={onResolve}
       accent={RILEY_APPROVAL_ACCENT}
       senderLabel="Riley needs you"
+      bundle={RILEY_VARIANTS}
+      variant={DEFAULT_RILEY_VARIANT}
+      avatarLetter="R"
     />
   );
 }
