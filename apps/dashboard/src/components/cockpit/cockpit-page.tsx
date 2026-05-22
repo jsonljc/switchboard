@@ -13,7 +13,12 @@ import { MissionPopover } from "./mission-popover";
 import { EmptyState, shouldRenderEmptyState } from "./empty-state";
 import { KPIStrip } from "./kpi-strip";
 import type { CockpitKpiData } from "./types";
-import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
+import {
+  ALEX_CONFIG,
+  animState,
+  ALEX_VARIANTS,
+  DEFAULT_ALEX_VARIANT,
+} from "@/lib/cockpit/alex-config";
 import { ALEX_COMMANDS, ALEX_COMPOSER_PLACEHOLDER } from "@/lib/cockpit/alex-commands";
 import { useAlexActionDispatcher } from "@/lib/cockpit/alex-action-dispatcher";
 import { AlexApprovalRow } from "@/lib/cockpit/alex/alex-approval-row";
@@ -175,6 +180,9 @@ export function CockpitPage() {
             onHaltToggle={haltCtx.toggleHalt}
             missionInteractive={!!mission.data}
             onOpenMission={() => setMissionOpen((o) => !o)}
+            bundle={ALEX_VARIANTS}
+            variant={DEFAULT_ALEX_VARIANT}
+            spriteState={animState(statusKey, haltCtx.halted)}
           />
           {mission.data ? (
             <MissionPopover
@@ -208,6 +216,8 @@ export function CockpitPage() {
           <EmptyState
             rules={mission.data.mission.rules}
             setup={mission.data.setup}
+            bundle={ALEX_VARIANTS}
+            variant={DEFAULT_ALEX_VARIANT}
             onConnect={(key) =>
               // Channel-connection keys land directly on /settings/channels (the cards
               // page). The existing alex/riley action dispatchers use `?focus=channels`

@@ -1,6 +1,8 @@
 // apps/dashboard/src/lib/cockpit/alex-config.ts
 import { T } from "@/components/cockpit/tokens";
 import type { CockpitStatus } from "@/components/cockpit/types";
+import { ALEX_VARIANTS } from "@/components/cockpit/sprite/alex-variants";
+import type { SpriteVariantKey } from "@/components/cockpit/sprite/types";
 
 export const ALEX_CONFIG = {
   name: "Alex",
@@ -40,3 +42,10 @@ export function animState(key: CockpitStatus, halted: boolean): "sleep" | "draft
   if (key === "WORKING" || key === "WAITING" || key === "TALKING") return "draft";
   return "idle";
 }
+
+/** Hardcoded sprite variant for Alex — see spec §6.3 (intentional, not a missing
+ *  Settings feature). Operators do not pick this; a future per-operator picker
+ *  is post-launch. */
+export const DEFAULT_ALEX_VARIANT: SpriteVariantKey = "classic";
+
+export { ALEX_VARIANTS };

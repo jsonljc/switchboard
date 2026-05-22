@@ -2,7 +2,9 @@
 import { T } from "./tokens";
 import { ALEX_CONFIG } from "@/lib/cockpit/alex-config";
 import { StatusPill } from "./status-pill";
+import { SpriteFrame } from "./sprite/sprite-frame";
 import type { CockpitStatus } from "./types";
+import type { SpriteState, SpriteVariantKey, VariantBundle } from "./sprite/types";
 
 export interface IdentityProps {
   statusKey: CockpitStatus;
@@ -28,37 +30,16 @@ export interface IdentityProps {
   /** B.3 cleanup: per-agent avatar tokens. `soft` paints the avatar
    * background; `deep` paints the avatar letter. Defaults to Alex amber. */
   avatarAccent?: { soft: string; deep: string };
-}
-
-function AvatarFrame({
-  size = 64,
-  letter,
-  soft,
-  deep,
-}: {
-  size?: number;
-  letter: string;
-  soft: string;
-  deep: string;
-}) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: Math.round(size * 0.18),
-        background: soft,
-        border: `1px solid ${T.hair}`,
-        display: "grid",
-        placeItems: "center",
-        flexShrink: 0,
-        boxShadow: "inset 0 -8px 14px rgba(14,12,10,0.04)",
-        overflow: "hidden",
-      }}
-    >
-      <span style={{ fontWeight: 700, fontSize: size * 0.42, color: deep }}>{letter}</span>
-    </div>
-  );
+  /** Sprite bundle (ALEX_VARIANTS or RILEY_VARIANTS). When omitted, the frame
+   *  renders the letter-monogram fallback. */
+  bundle?: VariantBundle;
+  /** Sprite variant key into the bundle. Required only when `bundle` is set. */
+  variant?: SpriteVariantKey;
+  /** Sprite animation state. Pages compute this from their own agent-specific
+   *  animState() because Alex and Riley map different CockpitStatus values
+   *  (Alex has WORKING/TALKING/WAITING; Riley has WATCHING/REVIEWING/WAITING).
+   *  Identity stays agent-agnostic by accepting the result, not the mapper. */
+  spriteState?: SpriteState;
 }
 
 export function Identity({
@@ -74,6 +55,9 @@ export function Identity({
   pulseFor,
   displayName = ALEX_CONFIG.name,
   avatarAccent = { soft: ALEX_CONFIG.accent.soft, deep: ALEX_CONFIG.accent.deep },
+  bundle,
+  variant,
+  spriteState,
 }: IdentityProps) {
   const avatarLetter = displayName[0] ?? "?";
   return (
@@ -85,11 +69,14 @@ export function Identity({
         padding: compact ? "18px 18px 14px" : "24px 28px 18px",
       }}
     >
-      <AvatarFrame
+      <SpriteFrame
+        bundle={bundle ?? {}}
+        variant={variant ?? "__none__"}
+        state={spriteState ?? "idle"}
         size={compact ? 52 : 64}
-        letter={avatarLetter}
-        soft={avatarAccent.soft}
-        deep={avatarAccent.deep}
+        accentSoft={avatarAccent.soft}
+        fallbackDeep={avatarAccent.deep}
+        fallbackLetter={avatarLetter}
       />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>

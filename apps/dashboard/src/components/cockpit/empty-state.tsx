@@ -2,6 +2,8 @@
 "use client";
 
 import { T } from "./tokens";
+import { SpriteFrame } from "./sprite/sprite-frame";
+import type { SpriteVariantKey, VariantBundle } from "./sprite/types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 
 const DEFAULT_PRICE = 89;
@@ -30,6 +32,10 @@ type Props = {
   rules: MissionAggregatorResponse["mission"]["rules"];
   setup: MissionAggregatorResponse["setup"];
   onConnect: (key: MissionAggregatorResponse["setup"][number]["key"]) => void;
+  /** Sprite bundle for the narrator avatar. When omitted, renders letter "A". */
+  bundle?: VariantBundle;
+  /** Sprite variant key into the bundle. */
+  variant?: SpriteVariantKey;
 };
 
 const eyebrowStyle = {
@@ -39,7 +45,7 @@ const eyebrowStyle = {
   textTransform: "uppercase" as const,
 };
 
-export function EmptyState({ rules, setup, onConnect }: Props) {
+export function EmptyState({ rules, setup, onConnect, bundle, variant }: Props) {
   const price = rules?.priceApprovalThreshold ?? DEFAULT_PRICE;
   const refund = rules?.refundEscalationFloor ?? DEFAULT_REFUND;
   const primary = setup.find((row) => row.primary);
@@ -68,25 +74,37 @@ export function EmptyState({ rules, setup, onConnect }: Props) {
           alignItems: "flex-start",
         }}
       >
-        <span
-          aria-hidden="true"
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 9,
-            background: T.amberSoft,
-            border: `1px solid ${T.hair}`,
-            display: "grid",
-            placeItems: "center",
-            color: T.amberDeep,
-            fontSize: 22,
-            fontWeight: 700,
-            flexShrink: 0,
-            boxShadow: "inset 0 -8px 14px rgba(14,12,10,0.04)",
-          }}
-        >
-          A
-        </span>
+        {bundle && variant ? (
+          <SpriteFrame
+            bundle={bundle}
+            variant={variant}
+            state="idle"
+            size={48}
+            accentSoft={T.amberSoft}
+            fallbackDeep={T.amberDeep}
+            fallbackLetter="A"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 9,
+              background: T.amberSoft,
+              border: `1px solid ${T.hair}`,
+              display: "grid",
+              placeItems: "center",
+              color: T.amberDeep,
+              fontSize: 22,
+              fontWeight: 700,
+              flexShrink: 0,
+              boxShadow: "inset 0 -8px 14px rgba(14,12,10,0.04)",
+            }}
+          >
+            A
+          </span>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...eyebrowStyle, color: T.amberDeep }}>Alex · just now</div>
           <p

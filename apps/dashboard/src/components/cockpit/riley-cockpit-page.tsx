@@ -20,6 +20,9 @@ import {
   RILEY_TABS,
   statusColor,
   statusPulse,
+  animState,
+  RILEY_VARIANTS,
+  DEFAULT_RILEY_VARIANT,
 } from "@/lib/cockpit/riley/riley-config";
 import { useRileyActionDispatcher } from "@/lib/cockpit/riley-action-dispatcher";
 import { rileyToast } from "@/lib/cockpit/riley/riley-toast";
@@ -76,8 +79,18 @@ function RileyApprovalRow({
       onResolve={onResolve}
       accent={RILEY_APPROVAL_ACCENT}
       senderLabel="Riley needs you"
+      bundle={RILEY_VARIANTS}
+      variant={DEFAULT_RILEY_VARIANT}
+      avatarLetter="R"
     />
   );
+}
+
+// "Mon May 12" — operator-local short weekday + month + day. Mirrors the
+// private helper in cockpit-page.tsx; v1 keeps the inline duplicate to match
+// Alex's pattern. Extract if a third consumer appears.
+function formatToday(d: Date): string {
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
 export function RileyCockpitPage() {
@@ -152,6 +165,9 @@ export function RileyCockpitPage() {
             onOpenMission={() => setMissionOpen((o) => !o)}
             displayName="Riley"
             avatarAccent={{ soft: RILEY_ACCENT.soft, deep: RILEY_ACCENT.deep }}
+            bundle={RILEY_VARIANTS}
+            variant={DEFAULT_RILEY_VARIANT}
+            spriteState={animState(statusKey, haltCtx.halted)}
           />
           {mission.data ? (
             <MissionPopover
@@ -184,7 +200,12 @@ export function RileyCockpitPage() {
             ))}
           </div>
         )}
-        <ActivityStream rows={activityRows} filter={filter} setFilter={setFilter} />
+        <ActivityStream
+          rows={activityRows}
+          filter={filter}
+          setFilter={setFilter}
+          today={formatToday(new Date())}
+        />
       </div>
       <Composer
         placeholder={RILEY_COMPOSER_PLACEHOLDER}
