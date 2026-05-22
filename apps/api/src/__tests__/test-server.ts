@@ -510,16 +510,6 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     const { registerAdminConsentRoutes } = await import("../routes/admin-consent.js");
     registerAdminConsentRoutes(app, {
       consentReader: options.consentReader,
-      resolveActor: async (req) => {
-        const principal = req.principalIdFromAuth;
-        if (principal) return principal;
-        return "operator_test";
-      },
-      resolveOrganizationId: async (req) => {
-        const orgId = req.organizationIdFromAuth;
-        if (orgId) return orgId;
-        return "system:admin-endpoint";
-      },
     });
   }
 

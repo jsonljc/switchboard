@@ -1,3 +1,8 @@
+// @route-class: operator-direct
+// Note: this file mixes one read-only GET + 3 operator-direct POSTs. The
+// class label reflects the dominant mutation semantics; the GET handler
+// pre-dates the contract and is exempted by file-level classification.
+//
 // apps/api/src/routes/admin-consent.ts
 // ---------------------------------------------------------------------------
 // Phase 1c — admin consent endpoint
@@ -8,19 +13,15 @@
 //   POST /api/admin/consent/clear
 //   GET  /api/admin/consent/:contactId
 //
-// Auth: uses request.organizationIdFromAuth (set by authMiddleware in prod;
-// set via preHandler hook from `x-org-id` header in dev/test — mirrors the
-// dashboard-opportunities + lifecycle-disqualifications pattern). The hook
-// populates both organizationIdFromAuth and principalIdFromAuth with a
-// "default" sentinel when no header is present (so the global idempotency
-// middleware fingerprint is stable across replays). The bootstrap-layer
-// `resolveActor`/`resolveOrganizationId` then layer admin-specific fallbacks
-// on top — "system:unknown_admin" / "system:admin-endpoint" in non-production
-// mode if neither auth middleware nor the test hook populated the fields.
+// Auth: `buildDevAuthFallback` populates org/principal in dev/test mode;
+// production auth middleware does it for real. The `requireOrg` /
+// `requireOrgForMutation` decorators narrow `request.orgId` + `request.actorId`
+// and fail-closed with 403 when no org is bound (Route Governance Contract v1).
 //
 // POST routes use PlatformIngress.submit (Wave 2 Phase 1b.4 migration —
-// closes Cat 1 ingress bypass 4/4). The legacy direct consentService calls
-// were removed in favor of operator-mutation handlers registered in
+// closes Cat 1 ingress bypass 4/4) and mandate `Idempotency-Key` via
+// `requireIdempotencyKey` (Contract §7.1). The legacy direct consentService
+// calls were removed in favor of operator-mutation handlers registered in
 // `bootstrap/operator-intents.ts`. The route still owns the post-mutation
 // state read via `consentReader` (non-mutating, stays outside ingress).
 // ---------------------------------------------------------------------------
@@ -28,8 +29,11 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { PdpaJurisdictionSchema, deriveConsentStatus } from "@switchboard/schemas";
 import { type ContactConsentReader, ContactNotFound } from "@switchboard/core";
-import { getIdempotencyKey } from "../utils/idempotency-key.js";
+import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
+import { replyValidationError } from "../utils/validation-error.js";
+import { buildDevAuthFallback } from "../utils/auth-fallback.js";
+import { requireOrg, requireOrgForMutation } from "../decorators/require-org.js";
 import {
   CLEAR_CONSENT_INTENT,
   GRANT_CONSENT_INTENT,
@@ -59,44 +63,16 @@ const ClearBody = z.object({
 
 export interface AdminConsentRouteDeps {
   consentReader: ContactConsentReader;
-  /** Resolves the actor (operator userId) from the request. */
-  resolveActor: (req: import("fastify").FastifyRequest) => Promise<string>;
-  /**
-   * Resolves the organization context from the request auth.
-   * Used to scope verdicts and handoffs to the operator's tenant.
-   * Falls back to "system:admin-endpoint" when not provided (dev / legacy callers).
-   */
-  resolveOrganizationId?: (req: import("fastify").FastifyRequest) => Promise<string>;
 }
 
 export function registerAdminConsentRoutes(
   app: FastifyInstance,
   deps: AdminConsentRouteDeps,
 ): void {
-  const resolveOrganizationId = async (req: import("fastify").FastifyRequest): Promise<string> => {
-    if (deps.resolveOrganizationId) return deps.resolveOrganizationId(req);
-    return "system:admin-endpoint";
-  };
-
-  // Dev/test mode: allow `x-org-id` header to populate request fields so the
-  // global idempotency middleware fingerprint is stable across replay calls.
-  // In production the auth middleware sets these before handlers run.
-  app.addHook("preHandler", async (request) => {
-    if (app.authDisabled === true) {
-      const headerVal = request.headers["x-org-id"];
-      if (typeof headerVal === "string" && headerVal.trim()) {
-        request.organizationIdFromAuth = headerVal.trim();
-      } else if (!request.organizationIdFromAuth) {
-        request.organizationIdFromAuth = "default";
-      }
-      const principalHeader = request.headers["x-principal-id"];
-      if (typeof principalHeader === "string" && principalHeader.trim()) {
-        request.principalIdFromAuth = principalHeader.trim();
-      } else if (!request.principalIdFromAuth) {
-        request.principalIdFromAuth = "default";
-      }
-    }
-  });
+  // Dev/test mode (authDisabled): populate organizationIdFromAuth + principalIdFromAuth
+  // from x-org-id / x-principal-id headers (or fall back to "default"). In production
+  // this hook is a no-op; the real auth middleware has already populated the fields.
+  app.addHook("preHandler", buildDevAuthFallback(app));
 
   const respondWithState = async (contactId: string) => {
     const state = await deps.consentReader.read(contactId);
@@ -110,142 +86,155 @@ export function registerAdminConsentRoutes(
     };
   };
 
-  app.post("/api/admin/consent/grant", async (req, reply) => {
-    const parsed = GrantBody.safeParse(req.body);
-    if (!parsed.success)
-      return reply.status(400).send({ error: "invalid_body", issues: parsed.error.issues });
+  app.post(
+    "/api/admin/consent/grant",
+    { preHandler: requireOrgForMutation },
+    async (req, reply) => {
+      const parsed = GrantBody.safeParse(req.body);
+      if (!parsed.success) return replyValidationError(reply, parsed.error);
 
-    if (!app.platformIngress) {
-      return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
-    }
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
 
-    const actor = await deps.resolveActor(req);
-    const organizationId = await resolveOrganizationId(req);
-    const idempotencyKey = getIdempotencyKey(req);
+      const idempotencyKey = requireIdempotencyKey(req, reply);
+      if (!idempotencyKey) return;
 
-    const response = await app.platformIngress.submit({
-      organizationId,
-      actor: { id: actor, type: "user" },
-      intent: GRANT_CONSENT_INTENT,
-      parameters: {
-        contactId: parsed.data.contactId,
-        jurisdiction: parsed.data.jurisdiction,
-        source: parsed.data.source,
-        grantedAt: parsed.data.grantedAt,
-        notes: parsed.data.notes,
-        actor,
-      },
-      trigger: "api",
-      surface: { surface: "api" },
-      ...(idempotencyKey ? { idempotencyKey } : {}),
-    });
+      const { orgId, actorId } = req;
 
-    if (!response.ok) {
-      return ingressErrorToReply(response.error, reply);
-    }
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: actorId, type: "user" },
+        intent: GRANT_CONSENT_INTENT,
+        parameters: {
+          contactId: parsed.data.contactId,
+          jurisdiction: parsed.data.jurisdiction,
+          source: parsed.data.source,
+          grantedAt: parsed.data.grantedAt,
+          notes: parsed.data.notes,
+          actor: actorId,
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        idempotencyKey,
+      });
 
-    const { result } = response;
-    if (result.outcome === "failed") {
-      return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
-    }
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
+      }
 
-    try {
-      return reply.send(await respondWithState(parsed.data.contactId));
-    } catch (err) {
-      return mapReaderError(reply, err);
-    }
-  });
+      const { result } = response;
+      if (result.outcome === "failed") {
+        return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
+      }
 
-  app.post("/api/admin/consent/revoke", async (req, reply) => {
-    const parsed = RevokeBody.safeParse(req.body);
-    if (!parsed.success)
-      return reply.status(400).send({ error: "invalid_body", issues: parsed.error.issues });
+      try {
+        return reply.send(await respondWithState(parsed.data.contactId));
+      } catch (err) {
+        return mapReaderError(reply, err);
+      }
+    },
+  );
 
-    if (!app.platformIngress) {
-      return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
-    }
+  app.post(
+    "/api/admin/consent/revoke",
+    { preHandler: requireOrgForMutation },
+    async (req, reply) => {
+      const parsed = RevokeBody.safeParse(req.body);
+      if (!parsed.success) return replyValidationError(reply, parsed.error);
 
-    const actor = await deps.resolveActor(req);
-    const organizationId = await resolveOrganizationId(req);
-    const idempotencyKey = getIdempotencyKey(req);
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
 
-    const response = await app.platformIngress.submit({
-      organizationId,
-      actor: { id: actor, type: "user" },
-      intent: REVOKE_CONSENT_INTENT,
-      parameters: {
-        contactId: parsed.data.contactId,
-        source: parsed.data.source,
-        revokedAt: parsed.data.revokedAt,
-        notes: parsed.data.notes,
-        actor,
-      },
-      trigger: "api",
-      surface: { surface: "api" },
-      ...(idempotencyKey ? { idempotencyKey } : {}),
-    });
+      const idempotencyKey = requireIdempotencyKey(req, reply);
+      if (!idempotencyKey) return;
 
-    if (!response.ok) {
-      return ingressErrorToReply(response.error, reply);
-    }
+      const { orgId, actorId } = req;
 
-    const { result } = response;
-    if (result.outcome === "failed") {
-      return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
-    }
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: actorId, type: "user" },
+        intent: REVOKE_CONSENT_INTENT,
+        parameters: {
+          contactId: parsed.data.contactId,
+          source: parsed.data.source,
+          revokedAt: parsed.data.revokedAt,
+          notes: parsed.data.notes,
+          actor: actorId,
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        idempotencyKey,
+      });
 
-    try {
-      return reply.send(await respondWithState(parsed.data.contactId));
-    } catch (err) {
-      return mapReaderError(reply, err);
-    }
-  });
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
+      }
 
-  app.post("/api/admin/consent/clear", async (req, reply) => {
-    const parsed = ClearBody.safeParse(req.body);
-    if (!parsed.success)
-      return reply.status(400).send({ error: "invalid_body", issues: parsed.error.issues });
+      const { result } = response;
+      if (result.outcome === "failed") {
+        return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
+      }
 
-    if (!app.platformIngress) {
-      return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
-    }
+      try {
+        return reply.send(await respondWithState(parsed.data.contactId));
+      } catch (err) {
+        return mapReaderError(reply, err);
+      }
+    },
+  );
 
-    const actor = await deps.resolveActor(req);
-    const organizationId = await resolveOrganizationId(req);
-    const idempotencyKey = getIdempotencyKey(req);
+  app.post(
+    "/api/admin/consent/clear",
+    { preHandler: requireOrgForMutation },
+    async (req, reply) => {
+      const parsed = ClearBody.safeParse(req.body);
+      if (!parsed.success) return replyValidationError(reply, parsed.error);
 
-    const response = await app.platformIngress.submit({
-      organizationId,
-      actor: { id: actor, type: "user" },
-      intent: CLEAR_CONSENT_INTENT,
-      parameters: {
-        contactId: parsed.data.contactId,
-        notes: parsed.data.notes,
-        actor,
-      },
-      trigger: "api",
-      surface: { surface: "api" },
-      ...(idempotencyKey ? { idempotencyKey } : {}),
-    });
+      if (!app.platformIngress) {
+        return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
+      }
 
-    if (!response.ok) {
-      return ingressErrorToReply(response.error, reply);
-    }
+      const idempotencyKey = requireIdempotencyKey(req, reply);
+      if (!idempotencyKey) return;
 
-    const { result } = response;
-    if (result.outcome === "failed") {
-      return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
-    }
+      const { orgId, actorId } = req;
 
-    try {
-      return reply.send(await respondWithState(parsed.data.contactId));
-    } catch (err) {
-      return mapReaderError(reply, err);
-    }
-  });
+      const response = await app.platformIngress.submit({
+        organizationId: orgId,
+        actor: { id: actorId, type: "user" },
+        intent: CLEAR_CONSENT_INTENT,
+        parameters: {
+          contactId: parsed.data.contactId,
+          notes: parsed.data.notes,
+          actor: actorId,
+        },
+        trigger: "api",
+        surface: { surface: "api" },
+        idempotencyKey,
+      });
+
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
+      }
+
+      const { result } = response;
+      if (result.outcome === "failed") {
+        return mapFailedOutcome(reply, result.error?.code, result.outputs, result.error?.message);
+      }
+
+      try {
+        return reply.send(await respondWithState(parsed.data.contactId));
+      } catch (err) {
+        return mapReaderError(reply, err);
+      }
+    },
+  );
 
   app.get<{ Params: { contactId: string } }>(
     "/api/admin/consent/:contactId",
+    { preHandler: requireOrg },
     async (req, reply) => {
       try {
         return reply.send(await respondWithState(req.params.contactId));
