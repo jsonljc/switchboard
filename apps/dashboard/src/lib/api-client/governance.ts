@@ -13,6 +13,7 @@ import type {
   WinsViewModel,
 } from "@/lib/agent-home/types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
+import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardClientCore } from "./core";
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
@@ -379,6 +380,7 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
+        "Idempotency-Key": createIdempotencyKey(),
       },
       body: JSON.stringify(body),
     });

@@ -12,6 +12,7 @@ import type {
   PipelineBoardOpportunity,
   OpportunityStage,
 } from "@switchboard/schemas";
+import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardAgentsClient } from "./agents";
 
 export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
@@ -216,6 +217,7 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.apiKey}`,
+          "Idempotency-Key": createIdempotencyKey(),
         },
         body: JSON.stringify(body),
       },
@@ -244,6 +246,7 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
+        "Idempotency-Key": createIdempotencyKey(),
       },
       body: JSON.stringify({ stage }),
     });
