@@ -14,9 +14,12 @@
 //   GET  /api/admin/consent/:contactId
 //
 // Auth: `buildDevAuthFallback` populates org/principal in dev/test mode;
-// production auth middleware does it for real. The `requireOrg` /
-// `requireOrgForMutation` decorators narrow `request.orgId` + `request.actorId`
-// and fail-closed with 403 when no org is bound (Route Governance Contract v1).
+// production auth middleware does it for real. The `requireOrg` (GET) and
+// `requireOrgForAuditedMutation` (POST grant/revoke/clear) decorators narrow
+// `request.orgId` + `request.actorId` and fail-closed with 403 when no org is
+// bound (Route Governance Contract v1). The audited variant additionally
+// fails-closed in production when no principal is bound — PDPA-regulated
+// consent decisions never record `actor.id = "unknown"`.
 //
 // POST routes use PlatformIngress.submit (Wave 2 Phase 1b.4 migration —
 // closes Cat 1 ingress bypass 4/4) and mandate `Idempotency-Key` via
@@ -33,7 +36,7 @@ import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import { replyValidationError } from "../utils/validation-error.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
-import { requireOrg, requireOrgForMutation } from "../decorators/org.js";
+import { requireOrg, requireOrgForAuditedMutation } from "../decorators/org.js";
 import {
   CLEAR_CONSENT_INTENT,
   GRANT_CONSENT_INTENT,
@@ -88,7 +91,7 @@ export function registerAdminConsentRoutes(
 
   app.post(
     "/api/admin/consent/grant",
-    { preHandler: requireOrgForMutation },
+    { preHandler: requireOrgForAuditedMutation },
     async (req, reply) => {
       const parsed = GrantBody.safeParse(req.body);
       if (!parsed.success) return replyValidationError(reply, parsed.error);
@@ -138,7 +141,7 @@ export function registerAdminConsentRoutes(
 
   app.post(
     "/api/admin/consent/revoke",
-    { preHandler: requireOrgForMutation },
+    { preHandler: requireOrgForAuditedMutation },
     async (req, reply) => {
       const parsed = RevokeBody.safeParse(req.body);
       if (!parsed.success) return replyValidationError(reply, parsed.error);
@@ -187,7 +190,7 @@ export function registerAdminConsentRoutes(
 
   app.post(
     "/api/admin/consent/clear",
-    { preHandler: requireOrgForMutation },
+    { preHandler: requireOrgForAuditedMutation },
     async (req, reply) => {
       const parsed = ClearBody.safeParse(req.body);
       if (!parsed.success) return replyValidationError(reply, parsed.error);

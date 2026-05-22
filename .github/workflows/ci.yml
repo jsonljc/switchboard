@@ -271,6 +271,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Route-class advisory below runs `git diff origin/main...HEAD` to
+          # detect touched routes. The default shallow clone has no
+          # remote-tracking branches, so the diff fails silently and the
+          # advisory emits zero warnings on every PR. Full history fixes it.
+          # See PR #614 ultrareview bug_001.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
 

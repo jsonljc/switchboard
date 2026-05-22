@@ -163,13 +163,23 @@ describe("PATCH /:id/stage — Route Governance Contract v1 PR-1", () => {
     };
     store.seedBoard([mkRow({ id: "opp_rg_1", organizationId: "default", stage: "quoted" })]);
 
+    // Asserting `.toBe(200)` (not `.toBeLessThan(500)`) pins this as the
+    // canonical regression guard for the dev-fallback "default" org path:
+    // if buildDevAuthFallback stops defaulting the org, or replyValidationError
+    // drifts, or the org-scoped lookup misses, we want this to fail loudly
+    // instead of silently passing on a 4xx. See PR #614 ultrareview bug_002.
     const res = await app.inject({
       method: "PATCH",
       url: "/api/dashboard/opportunities/opp_rg_1/stage",
       headers: { "idempotency-key": "key-stage-1" },
       payload: { stage: "qualified" },
     });
-    expect(res.statusCode).toBeLessThan(500);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { opportunity: { stage: string } };
+    expect(body.opportunity.stage).toBe("qualified");
+    // Confirm the resolved orgId reached ingress as "default" — proves the
+    // buildDevAuthFallback path drove the lookup, not an upstream short-circuit.
+    expect(app.lastIngressTrace?.organizationId).toBe("default");
     await app.close();
   });
 });

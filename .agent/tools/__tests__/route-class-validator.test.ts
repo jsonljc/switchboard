@@ -56,7 +56,7 @@ describe("validateRouteClass — operator-direct", () => {
     expect(warnings.map((w) => w.message).join("\n")).toMatch(/requireIdempotencyKey/);
   });
 
-  it("warns when operator-direct route does not import requireOrgForMutation", () => {
+  it("warns when operator-direct route does not import any write-side decorator", () => {
     const sf = makeSource(`
       // @route-class: operator-direct
       import { requireIdempotencyKey } from "../utils/idempotency-key.js";
@@ -67,7 +67,7 @@ describe("validateRouteClass — operator-direct", () => {
       };
     `);
     const warnings = validateRouteClass(sf, "test.ts");
-    expect(warnings.map((w) => w.message).join("\n")).toMatch(/requireOrgForMutation/);
+    expect(warnings.map((w) => w.message).join("\n")).toMatch(/write-side decorator/);
   });
 
   it("warns when requireIdempotencyKey is imported but never called", () => {
@@ -85,7 +85,7 @@ describe("validateRouteClass — operator-direct", () => {
     );
   });
 
-  it("warns when requireOrgForMutation is imported but not registered as preHandler", () => {
+  it("warns when a write-side decorator is imported but not registered as preHandler", () => {
     const sf = makeSource(`
       // @route-class: operator-direct
       import { requireIdempotencyKey } from "../utils/idempotency-key.js";
@@ -98,7 +98,7 @@ describe("validateRouteClass — operator-direct", () => {
     `);
     const warnings = validateRouteClass(sf, "test.ts");
     expect(warnings.map((w) => w.message).join("\n")).toMatch(
-      /imports requireOrgForMutation but does not register/,
+      /imports a write-side decorator but does not register/,
     );
   });
 
@@ -119,6 +119,53 @@ describe("validateRouteClass — operator-direct", () => {
     expect(warnings.map((w) => w.message).join("\n")).toMatch(
       /registers 2 mutating handler\(s\) but only calls requireIdempotencyKey 1 time/,
     );
+  });
+
+  it("does NOT false-count a sibling identifier whose name only ends with requireIdempotencyKey (suffix-match regression)", () => {
+    // Regression test for PR #614 ultrareview bug_005: when `callsNamed` used
+    // `endsWith(name)`, a locally-defined wrapper like
+    // `wrapRequireIdempotencyKey(...)` would false-match and inflate the call
+    // count, masking the cardinality check on a second mutating handler that
+    // forgot to call the real helper.
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+      import { requireOrgForMutation } from "../decorators/require-org.js";
+      function wrapRequireIdempotencyKey(req: unknown, reply: unknown) {
+        return "k";
+      }
+      export const r = async (app) => {
+        app.post("/a", { preHandler: requireOrgForMutation }, async (req, reply) => {
+          const k = requireIdempotencyKey(req, reply);
+        });
+        // Second handler uses the wrapper, NOT the real helper — should warn.
+        app.patch("/b", { preHandler: requireOrgForMutation }, async (req, reply) => {
+          const k = wrapRequireIdempotencyKey(req, reply);
+        });
+      };
+    `);
+    const warnings = validateRouteClass(sf, "test.ts");
+    expect(warnings.map((w) => w.message).join("\n")).toMatch(
+      /registers 2 mutating handler\(s\) but only calls requireIdempotencyKey 1 time/,
+    );
+  });
+
+  it("accepts requireOrgForAuditedMutation as satisfying the operator-direct decorator requirement", () => {
+    // PR #614 ultrareview bug_003: PDPA-grade routes use the audited variant
+    // instead of the plain requireOrgForMutation. The validator must treat
+    // either decorator as satisfying the operator-direct contract.
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+      import { requireOrg, requireOrgForAuditedMutation } from "../decorators/require-org.js";
+      export const r = async (app) => {
+        app.get("/x/:id", { preHandler: requireOrg }, async () => {});
+        app.post("/x/grant", { preHandler: requireOrgForAuditedMutation }, async (req, reply) => {
+          const k = requireIdempotencyKey(req, reply);
+        });
+      };
+    `);
+    expect(validateRouteClass(sf, "test.ts")).toEqual([]);
   });
 
   it("does NOT warn for GET handlers in operator-direct file (admin-consent mixed-class compromise)", () => {
@@ -161,7 +208,18 @@ describe("validateRouteClass — read-only", () => {
     `);
     const warnings = validateRouteClass(sf, "test.ts");
     expect(warnings).toHaveLength(1);
-    expect(warnings[0].message).toMatch(/requireOrgForMutation/);
+    expect(warnings[0].message).toMatch(/write-side/);
+  });
+
+  it("warns when read-only route imports requireOrgForAuditedMutation (write-side guard on read route)", () => {
+    const sf = makeSource(`
+      // @route-class: read-only
+      import { requireOrgForAuditedMutation } from "../decorators/require-org.js";
+      export const r = async () => {};
+    `);
+    const warnings = validateRouteClass(sf, "test.ts");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].message).toMatch(/write-side/);
   });
 });
 

@@ -16,16 +16,20 @@ import type { preHandlerAsyncHookHandler } from "fastify";
 declare module "fastify" {
   interface FastifyRequest {
     /**
-     * Set by `requireOrg` or `requireOrgForMutation` preHandler. Non-null
-     * when the handler executes. See header comment for the runtime-contract
-     * caveat.
+     * Set by `requireOrg`, `requireOrgForMutation`, or
+     * `requireOrgForAuditedMutation` preHandler. Non-null when the handler
+     * executes. See header comment for the runtime-contract caveat.
      */
     orgId: string;
     /**
-     * Set by `requireOrg` or `requireOrgForMutation` preHandler. Defaults to
-     * `"unknown"` when production auth middleware did not bind a principal
-     * (rare in prod with auth middleware; common in dev mode where
-     * `devAuthFallback` populated the principal to "default").
+     * Set by `requireOrg`, `requireOrgForMutation`, or
+     * `requireOrgForAuditedMutation` preHandler. Defaults to `"unknown"`
+     * when production auth middleware did not bind a principal (rare in
+     * prod with auth middleware; common in dev mode where `devAuthFallback`
+     * populated the principal to "default"). Routes using
+     * `requireOrgForAuditedMutation` never observe `"unknown"` in
+     * production — the decorator 403s instead, preserving audit-trail
+     * integrity for PDPA-regulated mutations.
      */
     actorId: string;
   }
@@ -60,7 +64,10 @@ export const requireOrg: preHandlerAsyncHookHandler = async (request, reply) => 
  * 4 ingress-migrated routes (which do not accept body-supplied orgId). The
  * separate name + identical behavior is intentional: future tightening
  * (e.g., requiring an HMAC binding on mutating requests) lives here without
- * affecting read-side routes.
+ * affecting read-side routes. See also
+ * {@link requireOrgForAuditedMutation} — the PDPA-grade variant used by
+ * routes whose audit trail must never attribute a decision to a
+ * placeholder principal.
  *
  * Routes that DO accept body-supplied orgId in dev mode (e.g.,
  * `actions.ts:62`) keep using the legacy `resolveOrganizationForMutation`
@@ -77,4 +84,51 @@ export const requireOrgForMutation: preHandlerAsyncHookHandler = async (request,
   }
   request.orgId = orgId;
   request.actorId = request.principalIdFromAuth ?? "unknown";
+};
+
+/**
+ * PDPA-grade write-side preHandler. Use on routes whose audit trail must
+ * never attribute a decision to a placeholder principal — currently the
+ * admin-consent grant/revoke/clear endpoints. Adds a production-only
+ * `principalIdFromAuth` requirement on top of {@link requireOrgForMutation}.
+ *
+ * Restores the pre-Route-Governance-Contract `resolveActor` guard that lived
+ * in `bootstrap/routes.ts`: "Reject in production rather than fall back to a
+ * placeholder. The audit trail must always have a real actor." The guard
+ * was inadvertently lost when admin-consent's bespoke `resolveActor` was
+ * removed in favor of the generic decorator — see bug_003 in PR #614
+ * ultrareview.
+ *
+ * Behavior:
+ * - Org absent → §4.5 envelope, `reason: "no_org_binding"` (any NODE_ENV).
+ * - Org present, principal absent, `NODE_ENV === "production"` → §4.5
+ *   envelope, `reason: "no_principal_binding"`. Forces the misconfigured
+ *   API key (organizationId but no principalId) into a 403 the operator
+ *   will notice, instead of a silent WorkTrace under `actor.id = "unknown"`.
+ * - Org present, principal absent, non-production → `actorId = "unknown"`
+ *   fallback (preserves the dev workflow where buildDevAuthFallback may
+ *   not have populated the principal).
+ */
+export const requireOrgForAuditedMutation: preHandlerAsyncHookHandler = async (request, reply) => {
+  const orgId = request.organizationIdFromAuth;
+  if (!orgId) {
+    return reply.code(403).send({
+      error: "forbidden",
+      reason: "no_org_binding",
+      statusCode: 403,
+    });
+  }
+  const principalId = request.principalIdFromAuth;
+  if (!principalId && process.env["NODE_ENV"] === "production") {
+    // Emit a structured warning so SREs see which decorator + org tripped
+    // the audit guard — the 403 alone is silent on the server side.
+    request.log.warn({ orgId, decorator: "requireOrgForAuditedMutation" }, "no_principal_binding");
+    return reply.code(403).send({
+      error: "forbidden",
+      reason: "no_principal_binding",
+      statusCode: 403,
+    });
+  }
+  request.orgId = orgId;
+  request.actorId = principalId ?? "unknown";
 };
