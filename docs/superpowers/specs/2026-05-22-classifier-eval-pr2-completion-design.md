@@ -50,27 +50,52 @@ This is a sequencing decision, not a feature decision. The plan as written bundl
 
 ## Design
 
-### Scope of PR-2 (this PR)
+### Scope of PR-2 fixture phase
 
-Single PR off `feat-claim-classifier-eval-golden-set`, opened against `main`:
+Open one focused PR from `feat-claim-classifier-eval-golden-set` against `main`.
 
-1. **Keep the 6 existing commits as-is.** No squash, no rebase. They are already coherent per-language, per-jurisdiction units.
-2. **Add one new commit:** `evals/claim-classifier/fixtures/neutral.jsonl` with 5 `none`-class fixtures. Subject — unambiguously non-claim operational copy (hours, parking, location, contact). No marketing verbs, no superlatives, no time pressure.
-   - Distribution: 3 SG, 2 MY (matches the broader SG-leaning bias of the dataset).
+This phase lands only hand-authored dataset artifacts and fixture validation. It deliberately excludes the machine-generated baseline.
+
+1. Preserve the existing six fixture commits as logical units. Do not squash them. Rebase only if required to resolve drift from `main`.
+2. Add one new commit: `evals/claim-classifier/fixtures/neutral.jsonl`.
+   - 5 rows total.
+   - 3 SG, 2 MY.
    - IDs: `neutral-sg-001` … `neutral-sg-003`, `neutral-my-001` … `neutral-my-002`.
-   - Each row sets `expectedClaimType: "none"` and `language: "en"`.
-3. **No baseline.json in this PR.** Explicitly called out in the PR body.
-4. **PR body** uses the plan's template at line 1315, modified to declare baseline as out of scope and reference this spec for the rationale.
+   - Every row uses `language: "en"` and `expectedClaimType: "none"`.
+   - Copy must be plainly operational: hours, parking, address/location, contact, or service availability.
+   - No marketing verbs, performance claims, superlatives, scarcity, time pressure, or implied outcome promises.
+3. Run the existing fixture shape test.
+4. Open the PR with a body that explicitly states:
+   - `baseline.json` is intentionally deferred.
+   - Fixture review must happen before baseline generation.
+   - The baseline will be added as a post-review commit to the same PR.
 
-### Scope of follow-up commit (PR-2.5, same branch)
+### Neutral vs adversarial `none`
 
-After dataset reviewers approve fixtures on the open PR:
+Both adversarial and neutral fixtures may use `expectedClaimType: "none"`, but they test different failure modes.
 
-1. Run `ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY pnpm eval:classifier --write-baseline` locally (per plan §Task 14 step 1). ~95 Haiku calls, est. ~$0.10.
-2. Verify baseline per plan §Task 14 step 2: `classifierPromptHash` matches `CLASSIFIER_PROMPT_HASH` in `packages/core/src/governance/classifier/prompt.ts`, `overallAccuracy >= 0.80`, per-class accuracy ≥ 0.70 for any category with ≥3 samples.
-3. Commit `evals/claim-classifier/baseline.json` directly on the same branch with the canonical message from plan §Task 14 step 4: `feat(eval-classifier): lock baseline.json (v1) against current classifier prompt`.
-4. Re-request review (light pass — baseline is mechanical output).
-5. Merge as one squash.
+- Adversarial `none` fixtures test tempting false positives — copy that looks claim-like but should be rejected.
+- Neutral `none` fixtures test ordinary operational copy that should never be classified as a claim.
+
+This PR satisfies the planned minimum neutral coverage. Broader neutral coverage is deferred to a later eval-hardening PR.
+
+### Post-review baseline commit, same PR
+
+After reviewers approve the fixture set:
+
+1. Confirm the approved fixture diff has not changed since approval.
+2. Rebase on `main` if needed.
+3. Re-run fixture shape validation.
+4. Run `ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY pnpm eval:classifier --write-baseline` (per plan §Task 14 step 1; ~95 Haiku calls, est. ~$0.10).
+5. Verify:
+   - `classifierPromptHash` matches `CLASSIFIER_PROMPT_HASH` in `packages/core/src/governance/classifier/prompt.ts`.
+   - `overallAccuracy >= 0.80`.
+   - Per-class accuracy is `>= 0.70` for any category with at least 3 samples.
+   - The baseline was generated against the approved fixture set (no fixture edits between approval and generation).
+6. Commit `evals/claim-classifier/baseline.json` to the same PR with the canonical message from plan §Task 14 step 4: `feat(eval-classifier): lock baseline.json (v1) against current classifier prompt`.
+7. Re-request review for the baseline diff only.
+
+Any fixture edit after the fixture-phase approval requires re-review of the fixture diff before regenerating the baseline.
 
 ### Why this sequencing
 
@@ -87,17 +112,29 @@ Splitting puts the human-judgment step (fixture review) strictly before the irre
 - PR-3 (CI gate + cache) — separate plan section, separate PR.
 - Domain-expert recruitment / review checklist — process question, not architecture.
 - Any change to the harness, schema, or scoring logic.
+- Expanded neutral coverage beyond the planned minimum.
 
 ## Risks
 
 - **Neutral fixtures accidentally read as claims.** Mitigation: copy review against the claim-type enum before commit. If a reviewer flags one, swap it; cheap.
-- **Branch goes stale during review.** Mitigation: rebase on `main` before the baseline commit; baseline depends only on fixture content + classifier prompt, not on unrelated main changes.
+- **Neutral and adversarial `none` semantics blur together.** Mitigation: document that neutral fixtures test ordinary operational copy, while adversarial fixtures test false-positive traps. Both legitimately use `expectedClaimType: "none"`.
+- **Fixture edits after approval invalidate the baseline.** Mitigation: before baseline generation, confirm the approved fixture diff is unchanged. Any fixture edit after review requires re-review before regenerating the baseline.
+- **Five neutral fixtures provide only minimum coverage.** Mitigation: treat this as plan-completion coverage, not a complete neutral corpus. Defer expanded neutral coverage to a later eval-hardening PR.
+- **Baseline generated against stale main or stale prompt.** Mitigation: rebase before baseline generation and verify `classifierPromptHash` against the current constant in `packages/core/src/governance/classifier/prompt.ts`.
 - **Domain-expert review delays baseline.** Acceptable. PR-3 is gated on baseline either way; delay shifts to the cheaper artifact.
 
 ## Acceptance criteria
 
-- [ ] `evals/claim-classifier/fixtures/neutral.jsonl` exists, 5 rows, all `expectedClaimType: "none"`, all parse via the existing shape test.
-- [ ] PR-2 opened against `main` with the 7 commits described above.
+### PR-2 fixture phase
+
+- [ ] `evals/claim-classifier/fixtures/neutral.jsonl` exists, 5 rows, all `expectedClaimType: "none"`, distribution 3 SG / 2 MY.
+- [ ] Existing fixture shape test passes (`pnpm --filter @switchboard/eval-claim-classifier test`).
+- [ ] No `baseline.json` in the PR diff.
 - [ ] PR body explicitly states baseline.json is deferred and links this spec.
-- [ ] No `baseline.json` in the PR-2 diff.
-- [ ] After approval, baseline commit lands on the same branch and PR merges as one squash.
+
+### Post-review baseline phase
+
+- [ ] Baseline generated against the approved fixture diff (no fixture edits between approval and generation).
+- [ ] `classifierPromptHash` in baseline matches `CLASSIFIER_PROMPT_HASH` in `packages/core/src/governance/classifier/prompt.ts`.
+- [ ] `overallAccuracy >= 0.80` and per-class accuracy `>= 0.70` for any category with ≥3 samples.
+- [ ] Baseline committed to the same PR with canonical commit message from plan §Task 14 step 4.
