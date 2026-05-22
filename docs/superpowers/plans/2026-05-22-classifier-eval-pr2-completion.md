@@ -127,7 +127,7 @@ If any of the six titled commits is missing, stop and ask.
 Run:
 
 ```bash
-pnpm exec vitest run evals/claim-classifier/__tests__/fixtures-shape.test.ts
+pnpm exec vitest run --config evals/vitest.config.ts claim-classifier/__tests__/fixtures-shape.test.ts
 ```
 
 Expected: all 4 assertions PASS. The "contains at least 95 fixtures" assertion may fail — it expects ≥95 and current is 100 (90 + 10 smoke), so it should pass. If it fails for any other reason, stop and investigate before adding new fixtures.
@@ -169,7 +169,7 @@ Spec acceptance: each row must use `language: "en"`, `expectedClaimType: "none"`
 Run:
 
 ```bash
-pnpm exec vitest run evals/claim-classifier/__tests__/fixtures-shape.test.ts
+pnpm exec vitest run --config evals/vitest.config.ts claim-classifier/__tests__/fixtures-shape.test.ts
 ```
 
 Expected: all 4 assertions PASS. Specifically:
@@ -236,15 +236,17 @@ git commit --amend --no-edit
 
 Note: JSONL is one-object-per-line by convention. Prettier should leave it alone. If prettier reformats it across multiple lines, the existing four fixture files would have the same problem — check those weren't reformatted either. If prettier wants to mangle JSONL specifically, that's a pre-existing config issue and the right move is to confirm the existing fixtures look the same as they did pre-format-check; stop and ask.
 
-- [ ] **Step 2: Run typecheck on the eval package**
+- [ ] **Step 2: Run the CI-equivalent typecheck**
 
 Run:
 
 ```bash
-pnpm --filter @switchboard/eval-claim-classifier exec tsc --noEmit
+pnpm typecheck
 ```
 
-Expected: no errors. (No TS files changed in this task, but this confirms the workspace is healthy before opening the PR.)
+Expected: exits 0 (all packages cached or pass). This is the same command CI runs (`turbo typecheck`).
+
+Note on scope: the `@switchboard/eval-claim-classifier` package has no `typecheck` script, so turbo skips it — CI does NOT typecheck `evals/`. A direct `pnpm --filter @switchboard/eval-claim-classifier exec tsc --noEmit` will surface ~7 pre-existing strict-null errors in `load-fixtures.ts` and `score.ts` that landed with PR-1 (#611) and are out of scope for this PR. If you run that stricter form and see only those known errors, ignore them and proceed; if any new errors appear, stop.
 
 ---
 
@@ -311,9 +313,9 @@ Both legitimately use `expectedClaimType: "none"`, but they test different failu
 
 ## Test plan
 
-- [x] `pnpm exec vitest run evals/claim-classifier/__tests__/fixtures-shape.test.ts` passes (105 fixtures, ≥3 per type, unique IDs, SG ≥ 30, MY ≥ 30).
+- [x] `pnpm exec vitest run --config evals/vitest.config.ts claim-classifier/__tests__/fixtures-shape.test.ts` passes (105 fixtures, ≥3 per type, unique IDs, SG ≥ 30, MY ≥ 30).
 - [x] `pnpm format:check` clean.
-- [x] `pnpm --filter @switchboard/eval-claim-classifier exec tsc --noEmit` clean.
+- [x] `pnpm typecheck` clean.
 - [ ] Reviewer dataset review of the PR-2 fixture set: 90 SG/MY positive/adversarial fixtures + 5 neutral fixtures. (Smoke fixtures are exercised by the harness but were landed in PR #611 and are not in this PR's review scope.)
 - [ ] After approval: baseline commit lands on this PR (separate review).
 
@@ -402,7 +404,7 @@ Expected: no conflicts. If a conflict occurs in any fixture file, abort and stop
 - [ ] **Step 3: Re-run fixture shape validation**
 
 ```bash
-pnpm exec vitest run evals/claim-classifier/__tests__/fixtures-shape.test.ts
+pnpm exec vitest run --config evals/vitest.config.ts claim-classifier/__tests__/fixtures-shape.test.ts
 ```
 
 Expected: all 4 assertions PASS.
