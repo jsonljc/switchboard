@@ -280,12 +280,15 @@ pnpm exec vitest run --config evals/vitest.config.ts claim-classifier/__tests__/
 
 Expected: all 8 tests pass (3 existing + 5 new).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Format + commit**
 
 ```bash
+pnpm format
 git add evals/claim-classifier/score.ts evals/claim-classifier/__tests__/score.test.ts
 git commit -m "feat(eval-classifier): add overall-accuracy regression rule to score.ts"
 ```
+
+(Format before each commit, not batched at the end via `git commit --amend` — that would silently roll formatting fixes from earlier tasks into the wrong commit.)
 
 ---
 
@@ -307,7 +310,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isMainPush, comparePromptHash, appendStepSummary } from "../eval-preflight.js";
+import {
+  isMainPush,
+  comparePromptHash,
+  appendStepSummary,
+  SKIP_MESSAGE,
+} from "../eval-preflight.js";
 
 describe("isMainPush", () => {
   it("returns true on push to main", () => {
@@ -386,6 +394,24 @@ describe("appendStepSummary", () => {
     expect(existsSync(summaryPath)).toBe(false);
   });
 });
+
+describe("SKIP_MESSAGE constant", () => {
+  // Pins the SKIPPED wording so a refactor that accidentally changes it to "PASS"
+  // (or anything the operator might confuse with success) fails the test suite.
+  // The spec §Acceptance criteria requires that a skipped run "uses SKIPPED wording, not PASS wording."
+  it("contains 'skipped' (case-insensitive)", () => {
+    expect(SKIP_MESSAGE).toMatch(/skipped/i);
+  });
+
+  it("does NOT contain 'pass' or 'success' (case-insensitive)", () => {
+    expect(SKIP_MESSAGE).not.toMatch(/pass/i);
+    expect(SKIP_MESSAGE).not.toMatch(/success/i);
+  });
+
+  it("references the missing env var by name so the cause is obvious in the log", () => {
+    expect(SKIP_MESSAGE).toContain("ANTHROPIC_API_KEY");
+  });
+});
 ```
 
 - [ ] **Step 2: Run, expect FAIL**
@@ -402,6 +428,10 @@ Create `evals/claim-classifier/eval-preflight.ts`:
 
 ```typescript
 import { appendFileSync } from "node:fs";
+
+// Canonical SKIPPED message. Exported so tests can pin its wording and so
+// run-eval.ts imports it instead of inlining the string.
+export const SKIP_MESSAGE = "claim-classifier eval skipped: ANTHROPIC_API_KEY is not available";
 
 export function isMainPush(env: NodeJS.ProcessEnv | Record<string, string | undefined>): boolean {
   return env["GITHUB_EVENT_NAME"] === "push" && env["GITHUB_REF"] === "refs/heads/main";
@@ -434,7 +464,7 @@ export function appendStepSummary(
 Notes:
 
 - `env` is the second parameter on `appendStepSummary` (defaulting to `process.env`) purely to make it injectable for tests. Production callers in `run-eval.ts` pass no second arg.
-- Bracket-notation env reads (`env["GITHUB_EVENT_NAME"]`) avoid the noPropertyAccessFromIndexSignature lint complaint that's common in strict-mode TS configs.
+- Bracket-notation env reads (`env["GITHUB_EVENT_NAME"]`) match existing `run-eval.ts` style (which already does `process.env["ANTHROPIC_API_KEY"]`). No deeper rationale needed.
 
 - [ ] **Step 4: Run, expect PASS**
 
@@ -442,13 +472,14 @@ Notes:
 pnpm exec vitest run --config evals/vitest.config.ts claim-classifier/__tests__/eval-preflight.test.ts
 ```
 
-Expected: all 10 tests pass.
+Expected: all 12 tests pass (4 isMainPush + 2 comparePromptHash + 3 appendStepSummary + 3 SKIP_MESSAGE).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Format + commit**
 
 ```bash
+pnpm format
 git add evals/claim-classifier/eval-preflight.ts evals/claim-classifier/__tests__/eval-preflight.test.ts
-git commit -m "feat(eval-classifier): add eval-preflight helpers (isMainPush, comparePromptHash, appendStepSummary)"
+git commit -m "feat(eval-classifier): add eval-preflight helpers (isMainPush, comparePromptHash, appendStepSummary, SKIP_MESSAGE)"
 ```
 
 ---
@@ -491,9 +522,8 @@ if (!apiKey) {
     console.error("claim-classifier eval failed: ANTHROPIC_API_KEY is required on main push");
     process.exit(2);
   }
-  const skipMsg = "claim-classifier eval skipped: ANTHROPIC_API_KEY is not available";
-  console.log(skipMsg);
-  appendStepSummary(skipMsg);
+  console.log(SKIP_MESSAGE);
+  appendStepSummary(SKIP_MESSAGE);
   process.exit(0);
 }
 ```
@@ -501,8 +531,15 @@ if (!apiKey) {
 Then add the import at the top of the file (after the existing imports, before `const __dirname = ...`):
 
 ```typescript
-import { isMainPush, comparePromptHash, appendStepSummary } from "./eval-preflight.js";
+import {
+  isMainPush,
+  comparePromptHash,
+  appendStepSummary,
+  SKIP_MESSAGE,
+} from "./eval-preflight.js";
 ```
+
+Using the exported `SKIP_MESSAGE` constant rather than inlining the string ensures the wording stays in lockstep with the test that pins it (`SKIP_MESSAGE constant` describe block in `eval-preflight.test.ts`).
 
 - [ ] **Step 3: Promote prompt-hash mismatch from warn to fail**
 
@@ -544,24 +581,27 @@ If it exits non-zero with `FAIL: classifier prompt hash changed from baseline`, 
 
 - [ ] **Step 5: Smoke-test the skip path (no key, no main push)**
 
+Run from the repo root (`/Users/jasonli/switchboard`) — `pnpm eval:classifier` resolves a script that uses a relative path to `evals/claim-classifier/run-eval.ts`.
+
 ```bash
-unset ANTHROPIC_API_KEY
-unset GITHUB_EVENT_NAME GITHUB_REF
+unset ANTHROPIC_API_KEY GITHUB_EVENT_NAME GITHUB_REF GITHUB_STEP_SUMMARY
 pnpm eval:classifier
+echo "exit: $?"
 ```
 
 Expected output (final two lines):
 
 ```
 claim-classifier eval skipped: ANTHROPIC_API_KEY is not available
+exit: 0
 ```
 
-Exit code 0 (`echo $?` to confirm).
+(`GITHUB_STEP_SUMMARY` is unset to avoid writing to a stale file if the shell inherited it from another CI tool.)
 
 - [ ] **Step 6: Smoke-test the fail-on-main-push path**
 
 ```bash
-unset ANTHROPIC_API_KEY
+unset ANTHROPIC_API_KEY GITHUB_STEP_SUMMARY
 export GITHUB_EVENT_NAME=push
 export GITHUB_REF=refs/heads/main
 pnpm eval:classifier
@@ -582,11 +622,12 @@ exit: 2
 pnpm exec vitest run --config evals/vitest.config.ts
 ```
 
-Expected: all tests pass (fixtures-shape: 4, load-fixtures: existing, schema: existing, score: 8, eval-preflight: 10).
+Expected: all tests pass (fixtures-shape: 4, load-fixtures: existing, schema: existing, score: 8, eval-preflight: 12).
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Format + commit**
 
 ```bash
+pnpm format
 git add evals/claim-classifier/run-eval.ts
 git commit -m "feat(eval-classifier): wire preflight helpers — hash mismatch fails, secret absence branches on main push"
 ```
@@ -676,7 +717,7 @@ Design notes:
 
 - **No `needs:`.** The eval harness only needs `@switchboard/schemas` + `@switchboard/core` dist artifacts (built inline) and the eval workspace itself. Independent of `setup`.
 - **Filter step always runs** (no `if:` on it) so subsequent steps can read `steps.filter.outputs.classifier`. On `pull_request`, the filter compares to the PR base; on `push` to main, `dorny/paths-filter@v3` compares to the previous commit.
-- **Step guard: `steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'`.** Narrower than `github.event_name == 'push'` — only main-branch pushes always run, not pushes to arbitrary feature branches. Without this narrowing, every feature-branch push would burn the eval budget. Main-branch enforcement still fires post-merge so the "fail on main push when secret absent" branch in `run-eval.ts` actually executes.
+- **Step guard: `steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'`.** Matches spec §Secret handling: only main-branch pushes must always exercise the harness (so the "fail on main push when secret absent" branch in `run-eval.ts` actually executes after merge); PR events run only when the classifier-paths filter fires. The current `on:` block restricts pushes to `branches: [main]` only — so today `github.ref == 'refs/heads/main'` and `github.event_name == 'push'` overlap exactly. The ref check is the more defensive form: if `on:` is ever widened to include feature-branch pushes later, this guard still keeps the eval budget scoped to main.
 - **`pnpm install --no-frozen-lockfile`** — matches the existing convention in `.github/workflows/ci.yml` (every install in that file uses `--no-frozen-lockfile`; `release.yml` uses `--frozen-lockfile`, a different convention). Don't introduce a third pattern here. If the user later decides ci.yml should standardize on frozen, change all jobs at once in a separate PR.
 - **Secret sourcing.** `ANTHROPIC_API_KEY` reads from `${{ secrets.ANTHROPIC_API_KEY }}`. If unset in repo Settings → Secrets → Actions, the eval step receives an empty string and the harness writes a SKIPPED summary on PRs (or fails on main, as designed). Configure the secret before the first push to `main` lands post-merge.
 
@@ -709,17 +750,11 @@ pnpm typecheck
 pnpm format:check
 ```
 
-Expected: all three exit 0. If `format:check` flags any new file (likely `eval-preflight.ts` or the test file), run `pnpm format` and amend the relevant commit:
-
-```bash
-pnpm format
-git add -u
-git commit --amend --no-edit
-```
+Expected: all three exit 0. (If `format:check` flags anything, you skipped the `pnpm format` step in Tasks 1–3. Fix the affected file, stage it, and create a small `chore(format): apply prettier` commit — do **not** `git commit --amend` a prior task's commit, since formatting often touches files owned by multiple tasks.)
 
 - [ ] **Step 2: End-to-end smoke — confirm the gate would catch a real regression**
 
-Create a scratch worktree (avoid polluting the working branch):
+Create a scratch worktree (avoid polluting the working branch). The worktree is a full repo checkout, so `pnpm eval:classifier` resolves correctly from its root:
 
 ```bash
 git worktree add /tmp/classifier-regression-smoke main
