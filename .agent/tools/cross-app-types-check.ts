@@ -58,7 +58,7 @@ const SCHEMAS_EXPORT_NAMES: ReadonlySet<string> = new Set([
   // PR-4 should re-verify against the live schemas index.
 ]);
 
-const APP_SRC_RX = /^apps\/(api|chat|dashboard|mcp-server)\/src\//;
+const APP_SRC_RX = /^apps\/(api|chat|dashboard)\/src\//;
 const TESTS_RX = /\/__tests__\//;
 const SUPPRESS_DIRECTIVE_RX = /\/\/\s*route-governance:\s*local-view-model\b/;
 

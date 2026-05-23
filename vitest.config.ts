@@ -15,7 +15,6 @@ export default defineConfig({
         "packages/*/src/**/*.ts",
         "apps/api/src/**/*.ts",
         "apps/chat/src/**/*.ts",
-        "apps/mcp-server/src/**/*.ts",
         "cartridges/*/src/**/*.ts",
       ],
       exclude: ["**/__tests__/**", "**/*.test.ts", "**/dist/**", "**/node_modules/**"],

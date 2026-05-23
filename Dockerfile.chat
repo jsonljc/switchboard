@@ -1,7 +1,7 @@
 # Chat-only Dockerfile for Render.
 #
 # The repo's root Dockerfile is a multi-stage build with targets `api`, `chat`,
-# `dashboard`, and `mcp-server`. Render's Blueprint v2 spec does NOT support a
+# and `dashboard`. Render's Blueprint v2 spec does NOT support a
 # multi-stage `--target` selection field as of 2026-05-15 (verified against
 # https://render.com/docs/blueprint-spec); each web service therefore points at
 # its own per-service Dockerfile. The root Dockerfile is retained for local
@@ -25,7 +25,6 @@ COPY packages/ad-optimizer/package.json packages/ad-optimizer/
 COPY packages/sdk/package.json packages/sdk/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
-COPY apps/mcp-server/package.json apps/mcp-server/
 COPY apps/dashboard/package.json apps/dashboard/
 
 RUN pnpm install --frozen-lockfile

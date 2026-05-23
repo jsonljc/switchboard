@@ -116,8 +116,7 @@ packages/
 apps/
 ├── api/          # Fastify REST API — platform ingress + governance (port 3000)
 ├── chat/         # Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
-├── dashboard/    # Next.js operator UI + deployment controls (port 3002)
-└── mcp-server/   # MCP server for LLM tool use
+└── dashboard/    # Next.js operator UI + deployment controls (port 3002)
 ```
 
 ### Dependency Layers
@@ -204,7 +203,6 @@ docker compose up
 # Individual targets
 docker build --target api -t switchboard-api .
 docker build --target chat -t switchboard-chat .
-docker build --target mcp-server -t switchboard-mcp .
 docker build --target dashboard -t switchboard-dashboard .
 ```
 

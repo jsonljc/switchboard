@@ -31,7 +31,7 @@ export interface AuditResult {
   deprecatedWarnings: string[];
 }
 
-const APP_DIRS = ["apps/api/src", "apps/chat/src", "apps/dashboard/src", "apps/mcp-server/src"];
+const APP_DIRS = ["apps/api/src", "apps/chat/src", "apps/dashboard/src"];
 
 // Direct, statically-resolvable references: `process.env.FOO` and `process.env["FOO"]`.
 const ENV_KEY_RE = /process\.env\.([A-Z_][A-Z0-9_]*)|process\.env\[["']([A-Z_][A-Z0-9_]*)["']\]/g;

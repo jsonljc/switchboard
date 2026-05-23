@@ -53,7 +53,7 @@ else
 fi
 
 # Check all required stages exist
-for stage in base build api chat dashboard mcp-server; do
+for stage in base build api chat dashboard; do
   if grep -q "^FROM .* AS $stage" Dockerfile; then
     ok "Stage '$stage' defined"
   else
