@@ -4,7 +4,12 @@ import { randomUUID } from "node:crypto";
 import { PlatformLifecycle } from "../platform-lifecycle.js";
 import { createApprovalState } from "../../approval/state-machine.js";
 import type { ApprovalState } from "../../approval/state-machine.js";
-import type { ActionEnvelope, ApprovalRequest, Principal } from "@switchboard/schemas";
+import type {
+  ActionEnvelope,
+  ApprovalRecord,
+  ApprovalRequest,
+  Principal,
+} from "@switchboard/schemas";
 import type { WorkTrace } from "../work-trace.js";
 import type { WorkTraceStore, WorkTraceReadResult } from "../work-trace-recorder.js";
 import type {
@@ -130,15 +135,7 @@ interface SeedResult {
 // ---------------------------------------------------------------------------
 
 function createMockStores() {
-  const approvals = new Map<
-    string,
-    {
-      request: ApprovalRequest;
-      state: ApprovalState;
-      envelopeId: string;
-      organizationId?: string | null;
-    }
-  >();
+  const approvals = new Map<string, ApprovalRecord>();
   const envelopes = new Map<string, ActionEnvelope>();
   const traces = new Map<string, WorkTrace>();
 

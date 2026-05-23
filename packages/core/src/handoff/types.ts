@@ -1,57 +1,32 @@
 // ---------------------------------------------------------------------------
-// Human Handoff — Types
+// Human Handoff — Types (re-exports from @switchboard/schemas)
+// ---------------------------------------------------------------------------
+// HandoffPackage / LeadSnapshot / QualificationSnapshot / ConversationSummary
+// were hoisted to @switchboard/schemas per Route Governance Contract v1 §8.3.
+// This file keeps the existing import paths working via re-export and adds
+// the `HandoffPackage` back-compat alias for the renamed `Handoff` type.
+// The `HandoffStore` interface stays here — it's a store contract, not a
+// cross-app value type, and lives appropriately in core.
 // ---------------------------------------------------------------------------
 
-export type HandoffReason =
-  | "human_requested"
-  | "max_turns_exceeded"
-  | "complex_objection"
-  | "negative_sentiment"
-  | "compliance_concern"
-  | "booking_failure"
-  | "escalation_timeout"
-  | "missing_knowledge"
-  | "outside_whatsapp_window";
+import type { Handoff, HandoffStatus, HandoffConversationSummary } from "@switchboard/schemas";
 
-export type HandoffStatus = "pending" | "assigned" | "active" | "released";
+export type {
+  Handoff,
+  HandoffReason,
+  HandoffStatus,
+  LeadSnapshot,
+  QualificationSnapshot,
+  HandoffConversationSummary,
+} from "@switchboard/schemas";
 
-export interface LeadSnapshot {
-  leadId?: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  serviceInterest?: string;
-  channel: string;
-  source?: string;
-}
+// Back-compat alias — `HandoffPackage` was the original core name. Existing
+// callers (escalations.ts, handoff-store impls) keep importing this until a
+// follow-up sweep renames them. PR-4 removes this alias once grep returns 0.
+export type HandoffPackage = Handoff;
 
-export interface QualificationSnapshot {
-  signalsCaptured: Record<string, unknown>;
-  qualificationStage: string;
-  leadScore?: number;
-}
-
-export interface ConversationSummary {
-  turnCount: number;
-  keyTopics: string[];
-  objectionHistory: string[];
-  sentiment: string;
-  suggestedOpening?: string;
-}
-
-export interface HandoffPackage {
-  id: string;
-  sessionId: string;
-  organizationId: string;
-  reason: HandoffReason;
-  status: HandoffStatus;
-  leadSnapshot: LeadSnapshot;
-  qualificationSnapshot: QualificationSnapshot;
-  conversationSummary: ConversationSummary;
-  slaDeadlineAt: Date;
-  createdAt: Date;
-  acknowledgedAt?: Date;
-}
+// Back-compat alias for the renamed inner summary type.
+export type ConversationSummary = HandoffConversationSummary;
 
 export interface HandoffStore {
   save(pkg: HandoffPackage): Promise<void>;

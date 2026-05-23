@@ -4,7 +4,12 @@
    §19a. Remove this disable when the file is split (suggested seam: extract
    executeAfterApproval into its own module). */
 import { timingSafeEqual } from "node:crypto";
-import type { ActionEnvelope, ExecuteResult, RiskCategory } from "@switchboard/schemas";
+import type {
+  ActionEnvelope,
+  ApprovalRecord,
+  ExecuteResult,
+  RiskCategory,
+} from "@switchboard/schemas";
 import { transitionApproval, isExpired } from "../approval/state-machine.js";
 import { canApproveWithChain } from "../approval/delegation.js";
 import { applyPatch } from "../approval/patching.js";
@@ -32,8 +37,6 @@ import type {
 type ApprovalStore = CoreApprovalStore;
 type EnvelopeStore = CoreEnvelopeStore;
 type IdentityStore = CoreIdentityStore;
-
-type ApprovalRecord = NonNullable<Awaited<ReturnType<CoreApprovalStore["getById"]>>>;
 
 interface UndoRecipe {
   reverseActionType: string;

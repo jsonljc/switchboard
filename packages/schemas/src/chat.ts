@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LeadProfileSchema } from "./crm.js";
 
 export const ChannelSchema = z.enum([
   "telegram",
@@ -44,6 +45,13 @@ export const ConversationStatusSchema = z.enum([
 ]);
 export type ConversationStatus = z.infer<typeof ConversationStatusSchema>;
 
+export const ConversationMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  text: z.string(),
+  timestamp: z.date(),
+});
+export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
+
 export const ConversationStateSchema = z.object({
   id: z.string(),
   threadId: z.string(),
@@ -60,6 +68,15 @@ export const ConversationStateSchema = z.object({
   lastActivityAt: z.coerce.date(),
   expiresAt: z.coerce.date(),
   crmContactId: z.string().nullable().optional(),
+  // 4 chat-side superset fields — .default() makes these optional on input
+  // while guaranteeing presence on output (always use z.infer / z.output).
+  messages: z.array(ConversationMessageSchema).default([]),
+  /** Typed lead profile that accumulates intelligence over conversation turns. */
+  leadProfile: LeadProfileSchema.nullable().default(null),
+  /** Detected language of the user (resolved from recent messages). */
+  detectedLanguage: z.string().nullable().default(null),
+  /** Current lead state machine state (e.g. QUALIFYING, BOOKING_PUSH). */
+  machineState: z.string().nullable().default(null),
 });
 export type ConversationState = z.infer<typeof ConversationStateSchema>;
 

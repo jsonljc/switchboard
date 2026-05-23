@@ -1,9 +1,9 @@
 import type {
   ActionEnvelope,
+  ApprovalRecord,
   Policy,
   IdentitySpec,
   RoleOverlay,
-  ApprovalRequest,
   Principal,
   DelegationRule,
   CompetenceRecord,
@@ -211,31 +211,13 @@ export class InMemoryIdentityStore implements IdentityStore {
 }
 
 export class InMemoryApprovalStore implements ApprovalStore {
-  private store = new Map<
-    string,
-    {
-      request: ApprovalRequest;
-      state: ApprovalState;
-      envelopeId: string;
-      organizationId?: string | null;
-    }
-  >();
+  private store = new Map<string, ApprovalRecord>();
 
-  async save(approval: {
-    request: ApprovalRequest;
-    state: ApprovalState;
-    envelopeId: string;
-    organizationId?: string | null;
-  }): Promise<void> {
+  async save(approval: ApprovalRecord): Promise<void> {
     this.store.set(approval.request.id, { ...approval });
   }
 
-  async getById(id: string): Promise<{
-    request: ApprovalRequest;
-    state: ApprovalState;
-    envelopeId: string;
-    organizationId?: string | null;
-  } | null> {
+  async getById(id: string): Promise<ApprovalRecord | null> {
     const entry = this.store.get(id);
     return entry ? { ...entry } : null;
   }
@@ -261,14 +243,7 @@ export class InMemoryApprovalStore implements ApprovalStore {
     this.store.set(id, { ...entry, state });
   }
 
-  async listPending(organizationId?: string): Promise<
-    Array<{
-      request: ApprovalRequest;
-      state: ApprovalState;
-      envelopeId: string;
-      organizationId?: string | null;
-    }>
-  > {
+  async listPending(organizationId?: string): Promise<ApprovalRecord[]> {
     let results = [...this.store.values()].filter((e) => e.state.status === "pending");
     if (organizationId) {
       results = results.filter((e) => e.organizationId === organizationId);

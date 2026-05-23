@@ -10,3 +10,17 @@ describe("schemas index exports", () => {
     expect(schemas.DashboardOverviewSchema).toBeDefined();
   });
 });
+
+describe("OperatorOverview rename (PR-2)", () => {
+  it("exports OperatorOverviewSchema", () => {
+    expect(schemas.OperatorOverviewSchema).toBeDefined();
+  });
+
+  it("exports the back-compat alias DashboardOverviewSchema", () => {
+    expect(schemas.DashboardOverviewSchema).toBeDefined();
+  });
+
+  it("alias and canonical schema are the same object", () => {
+    expect(schemas.DashboardOverviewSchema).toBe(schemas.OperatorOverviewSchema);
+  });
+});

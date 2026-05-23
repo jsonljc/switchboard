@@ -126,10 +126,19 @@ export * from "./playbook.js";
 export * from "./website-scan.js";
 
 // Dashboard aggregate (operator dashboard overview)
-export { DashboardOverviewSchema, type DashboardOverview } from "./dashboard.js";
+export * from "./dashboard.js";
 
 // Approval Lifecycle (approval lifecycle authority objects)
 export * from "./approval-lifecycle.js";
+
+// Approval state machine types (hoisted from core per RGC v1 §8.1)
+export * from "./approval.js";
+
+// Handoff canonical shape (hoisted from core per RGC v1 §8.3)
+export * from "./handoff.js";
+
+// API conversation projections (wire shapes for /api/conversations)
+export * from "./conversations.js";
 
 // PCD Identity Registry
 export * from "./pcd-identity.js";

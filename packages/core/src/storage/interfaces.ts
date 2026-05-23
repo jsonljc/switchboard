@@ -1,9 +1,9 @@
 import type {
   ActionEnvelope,
+  ApprovalRecord,
   Policy,
   IdentitySpec,
   RoleOverlay,
-  ApprovalRequest,
   Principal,
   DelegationRule,
   CompetenceRecord,
@@ -50,32 +50,15 @@ export interface IdentityStore {
 }
 
 export interface ApprovalStore {
-  save(approval: {
-    request: ApprovalRequest;
-    state: ApprovalState;
-    envelopeId: string;
-    organizationId?: string | null;
-  }): Promise<void>;
-  getById(id: string): Promise<{
-    request: ApprovalRequest;
-    state: ApprovalState;
-    envelopeId: string;
-    organizationId?: string | null;
-  } | null>;
+  save(approval: ApprovalRecord): Promise<void>;
+  getById(id: string): Promise<ApprovalRecord | null>;
   updateState(
     id: string,
     state: ApprovalState,
     expectedVersion: number,
     organizationId: string | null,
   ): Promise<void>;
-  listPending(organizationId?: string): Promise<
-    Array<{
-      request: ApprovalRequest;
-      state: ApprovalState;
-      envelopeId: string;
-      organizationId?: string | null;
-    }>
-  >;
+  listPending(organizationId?: string): Promise<ApprovalRecord[]>;
 }
 
 export interface CartridgeRegistry {
