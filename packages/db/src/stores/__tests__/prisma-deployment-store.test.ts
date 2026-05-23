@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { StaleVersionError } from "@switchboard/core";
 import { PrismaDeploymentStore } from "../prisma-deployment-store.js";
 
 function createMockPrisma() {
@@ -6,9 +7,12 @@ function createMockPrisma() {
     agentDeployment: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
   };
 }
@@ -143,24 +147,43 @@ describe("PrismaDeploymentStore", () => {
   });
 
   describe("updateStatus", () => {
-    it("updates deployment status", async () => {
-      prisma.agentDeployment.update.mockResolvedValue({
+    it("updates deployment status with tenant scope (Pattern B)", async () => {
+      prisma.agentDeployment.updateMany.mockResolvedValue({ count: 1 });
+      prisma.agentDeployment.findFirstOrThrow.mockResolvedValue({
         id: "dep_1",
+        organizationId: "org-1",
         status: "paused",
       });
 
-      const result = await store.updateStatus("dep_1", "paused");
+      const result = await store.updateStatus("org-1", "dep_1", "paused");
 
-      expect(prisma.agentDeployment.update).toHaveBeenCalledWith({
-        where: { id: "dep_1" },
+      expect(prisma.agentDeployment.updateMany).toHaveBeenCalledWith({
+        where: { id: "dep_1", organizationId: "org-1" },
         data: { status: "paused" },
       });
+      expect(prisma.agentDeployment.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "dep_1", organizationId: "org-1" },
+      });
       expect(result.status).toBe("paused");
+    });
+
+    it("throws StaleVersionError when no row matches the tenant+id", async () => {
+      prisma.agentDeployment.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.updateStatus("org-other", "dep_1", "paused")).rejects.toBeInstanceOf(
+        StaleVersionError,
+      );
+      expect(prisma.agentDeployment.findFirstOrThrow).not.toHaveBeenCalled();
     });
   });
 
   describe("update", () => {
-    it("merges partial inputConfig into existing deployment", async () => {
+    it("merges partial inputConfig into existing deployment with tenant scope (Pattern B)", async () => {
+      const mergedConfig = {
+        persona: { businessName: "Acme" },
+        bookingLink: "https://old.link",
+        businessFacts: { industry: "SaaS" },
+      };
       prisma.agentDeployment.findUnique.mockResolvedValue({
         id: "dep_1",
         organizationId: "org-1",
@@ -170,64 +193,81 @@ describe("PrismaDeploymentStore", () => {
         governanceSettings: {},
         connectionIds: [],
       });
-      prisma.agentDeployment.update.mockResolvedValue({
+      prisma.agentDeployment.updateMany.mockResolvedValue({ count: 1 });
+      prisma.agentDeployment.findFirstOrThrow.mockResolvedValue({
         id: "dep_1",
         organizationId: "org-1",
         listingId: "lst-1",
         status: "active",
-        inputConfig: {
-          persona: { businessName: "Acme" },
-          bookingLink: "https://old.link",
-          businessFacts: { industry: "SaaS" },
-        },
+        inputConfig: mergedConfig,
         governanceSettings: {},
         connectionIds: [],
       });
 
-      const result = await store.update("dep_1", {
+      const result = await store.update("org-1", "dep_1", {
         inputConfig: { businessFacts: { industry: "SaaS" } },
       });
 
       expect(prisma.agentDeployment.findUnique).toHaveBeenCalledWith({
         where: { id: "dep_1" },
       });
-      expect(prisma.agentDeployment.update).toHaveBeenCalledWith({
-        where: { id: "dep_1" },
-        data: {
-          inputConfig: {
-            persona: { businessName: "Acme" },
-            bookingLink: "https://old.link",
-            businessFacts: { industry: "SaaS" },
-          },
-        },
+      expect(prisma.agentDeployment.updateMany).toHaveBeenCalledWith({
+        where: { id: "dep_1", organizationId: "org-1" },
+        data: { inputConfig: mergedConfig },
+      });
+      expect(prisma.agentDeployment.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "dep_1", organizationId: "org-1" },
       });
       expect(result).not.toBeNull();
-      expect(result?.inputConfig).toEqual({
-        persona: { businessName: "Acme" },
-        bookingLink: "https://old.link",
-        businessFacts: { industry: "SaaS" },
-      });
+      expect(result?.inputConfig).toEqual(mergedConfig);
     });
 
     it("returns null when deployment not found", async () => {
       prisma.agentDeployment.findUnique.mockResolvedValue(null);
 
-      const result = await store.update("dep_999", {
+      const result = await store.update("org-1", "dep_999", {
         inputConfig: { foo: "bar" },
       });
 
       expect(result).toBeNull();
-      expect(prisma.agentDeployment.update).not.toHaveBeenCalled();
+      expect(prisma.agentDeployment.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("returns null when organizationId mismatches existing row", async () => {
+      prisma.agentDeployment.findUnique.mockResolvedValue({
+        id: "dep_1",
+        organizationId: "org-owner",
+        listingId: "lst-1",
+        status: "active",
+        inputConfig: null,
+        governanceSettings: {},
+        connectionIds: [],
+      });
+
+      const result = await store.update("org-other", "dep_1", {
+        inputConfig: { foo: "bar" },
+      });
+
+      expect(result).toBeNull();
+      expect(prisma.agentDeployment.updateMany).not.toHaveBeenCalled();
     });
   });
 
   describe("delete", () => {
-    it("deletes a deployment", async () => {
-      prisma.agentDeployment.delete.mockResolvedValue({});
+    it("deletes a deployment with tenant scope", async () => {
+      prisma.agentDeployment.deleteMany.mockResolvedValue({ count: 1 });
 
-      await store.delete("dep_1");
+      await store.delete("org-1", "dep_1");
 
-      expect(prisma.agentDeployment.delete).toHaveBeenCalledWith({ where: { id: "dep_1" } });
+      expect(prisma.agentDeployment.deleteMany).toHaveBeenCalledWith({
+        where: { id: "dep_1", organizationId: "org-1" },
+      });
+    });
+
+    it("throws StaleVersionError when no row matches the tenant+id", async () => {
+      prisma.agentDeployment.deleteMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.delete("org-other", "dep_1")).rejects.toBeInstanceOf(StaleVersionError);
     });
   });
 });
