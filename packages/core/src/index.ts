@@ -290,3 +290,6 @@ export * as contacts from "./contacts/index.js";
 
 // Consent (reader interface, errors, PDPA utilities)
 export * from "./consent/index.js";
+
+// Route Templates (surface-URL injection contract — Route Governance Contract v1 §8.5)
+export type { RouteTemplates } from "./lib/route-templates.js";

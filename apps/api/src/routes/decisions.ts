@@ -7,6 +7,7 @@ import {
 } from "@switchboard/core";
 import { type AgentKey, isAgentKey } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { dashboardRouteTemplates } from "../lib/route-templates.js";
 
 async function listDecisions(
   app: FastifyInstance,
@@ -39,13 +40,14 @@ async function listDecisions(
   ]);
 
   const decisions: Decision[] = [
-    ...recs.map(adaptRecommendation),
+    ...recs.map((r) => adaptRecommendation(r, { routeTemplates: dashboardRouteTemplates })),
     ...handoffs.map((h) => {
       const leadId = h.leadSnapshot?.leadId;
       return adaptHandoff(
         h,
         leadId ? (contacts.get(leadId) ?? null) : null,
         leadId ? (threads.get(leadId) ?? null) : null,
+        { routeTemplates: dashboardRouteTemplates },
       );
     }),
   ];

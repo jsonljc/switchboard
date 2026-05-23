@@ -94,6 +94,16 @@ Chat channels (Telegram, WhatsApp, Slack, web widget) are ingress surfaces. They
 
 **Current state:** Multi-tenant `ChannelGateway` and single-tenant path (with `SWITCHBOARD_API_URL`) both route through PlatformIngress. Chat local mode (no `SWITCHBOARD_API_URL`) still uses the old `ChatRuntime` + `LifecycleOrchestrator` path — contained to local development.
 
+### 11. Cross-app types live in `@switchboard/schemas`
+
+A type declared in `apps/api/`, `apps/chat/`, or `apps/dashboard/` that is also defined elsewhere — by name, by shape, or by structural duplication — is a contract violation. The single source of truth for any value type that crosses an app boundary is `@switchboard/schemas`.
+
+**Why:** Local redeclarations drift. The same `interface ApprovalRecord` declared in three apps will, over time, develop three different shapes, and the seams between them become silent corruption sites. Centralising in `@switchboard/schemas` makes the contract the artifact that has to change, not the consumer.
+
+**Enforcement:** `check-routes`'s cross-app-types advisory (`.agent/tools/cross-app-types-check.ts`) flags new local `export interface` / `export type` declarations whose name matches a `@switchboard/schemas` export. Inline suppression via `// route-governance: local-view-model` on the line above the declaration is permitted for deliberately narrower local shapes (e.g. `MinimalApprovalRecord` in the MCP server) — those are not violations, they are intentionally narrower views.
+
+**Current state:** Warning mode (PR-2.5). PR-4 flips to error mode after the full `@route-class` backfill so the cross-app-types rule and the route-class matrix flip enforcement together.
+
 ---
 
 ## Legacy Bridge Registry

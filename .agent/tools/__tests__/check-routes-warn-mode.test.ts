@@ -29,3 +29,27 @@ describe("runRouteClassAdvisory (warn-touched mode)", () => {
     expect(result.exitCode).toBe(0);
   });
 });
+
+describe("runRouteClassAdvisory + cross-app-types integration (via CLI surface)", () => {
+  // This is exercised via runCrossAppTypesAdvisory directly in the
+  // sibling test file. Here we just confirm both advisories share the
+  // same touched-files scope without interfering with each other.
+  it("cross-app-types advisory and route-class advisory return independently", async () => {
+    const { runRouteClassAdvisory } = await import("../check-routes.js");
+    const { runCrossAppTypesAdvisory } = await import("../cross-app-types-check.js");
+
+    const routeOnly = await runRouteClassAdvisory({
+      touchedFiles: ["apps/api/src/routes/recommendations.ts"],
+      repoRoot: process.cwd(),
+    });
+    const crossOnly = await runCrossAppTypesAdvisory({
+      touchedFiles: ["apps/api/src/routes/recommendations.ts"],
+      repoRoot: process.cwd(),
+    });
+
+    expect(routeOnly.exitCode).toBe(0);
+    expect(crossOnly.exitCode).toBe(0);
+    expect(Array.isArray(routeOnly.warnings)).toBe(true);
+    expect(Array.isArray(crossOnly.warnings)).toBe(true);
+  });
+});

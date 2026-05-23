@@ -1,5 +1,6 @@
 import type { ConversationThread, Contact, Handoff } from "@switchboard/schemas";
 import type { Decision, DecisionPresentation } from "../types.js";
+import type { RouteTemplates } from "../../lib/route-templates.js";
 import { scoreHandoff } from "../urgency.js";
 import { resolveAgentKey } from "../agent-key-resolver.js";
 
@@ -7,6 +8,7 @@ export function adaptHandoff(
   row: Handoff,
   contact: Contact | null,
   thread: ConversationThread | null,
+  deps: { routeTemplates: RouteTemplates },
 ): Decision {
   const agentKey = thread?.assignedAgent ? resolveAgentKey(thread.assignedAgent) : "alex";
   return {
@@ -18,7 +20,10 @@ export function adaptHandoff(
     presentation: composeHandoffPresentation(),
     urgencyScore: scoreHandoff(row),
     createdAt: row.createdAt,
-    threadHref: thread ? `/contacts/${contact?.id}/conversations/${thread.id}` : null,
+    threadHref:
+      thread && contact?.id
+        ? deps.routeTemplates.contactConversationDetail(contact.id, thread.id)
+        : null,
     sourceRef: { kind: "handoff", sourceId: row.id },
     meta: {
       contactName: contact?.name ?? undefined,
