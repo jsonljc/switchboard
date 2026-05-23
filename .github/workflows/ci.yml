@@ -342,6 +342,9 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v3
         with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
           filters: |
             classifier:
               - '.github/workflows/ci.yml'
