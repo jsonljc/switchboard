@@ -10,6 +10,7 @@ function createMockPrisma() {
       findMany: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
       upsert: vi.fn(),
       updateMany: vi.fn(),
     },
@@ -21,6 +22,7 @@ function createMockPrisma() {
       findMany: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
       updateMany: vi.fn(),
     },
     activityLog: {
@@ -119,29 +121,29 @@ describe("PrismaOwnerMemoryStore", () => {
     });
   });
 
-  it("correctMemory updates content", async () => {
-    prisma.deploymentMemory.update.mockResolvedValue({});
-    await store.correctMemory("mem-1", "Updated content");
-    expect(prisma.deploymentMemory.update).toHaveBeenCalledWith({
-      where: { id: "mem-1" },
+  it("correctMemory updates content with tenant-scoped WHERE", async () => {
+    prisma.deploymentMemory.updateMany.mockResolvedValue({ count: 1 });
+    await store.correctMemory("org-1", "mem-1", "Updated content");
+    expect(prisma.deploymentMemory.updateMany).toHaveBeenCalledWith({
+      where: { id: "mem-1", organizationId: "org-1" },
       data: { content: "Updated content" },
     });
   });
 
-  it("approveDraftFAQ sets draftStatus to approved", async () => {
-    prisma.knowledgeChunk.update.mockResolvedValue({});
-    await store.approveDraftFAQ("faq-1");
-    expect(prisma.knowledgeChunk.update).toHaveBeenCalledWith({
-      where: { id: "faq-1" },
+  it("approveDraftFAQ sets draftStatus to approved with tenant-scoped WHERE", async () => {
+    prisma.knowledgeChunk.updateMany.mockResolvedValue({ count: 1 });
+    await store.approveDraftFAQ("org-1", "faq-1");
+    expect(prisma.knowledgeChunk.updateMany).toHaveBeenCalledWith({
+      where: { id: "faq-1", organizationId: "org-1" },
       data: { draftStatus: "approved" },
     });
   });
 
-  it("rejectDraftFAQ deletes the draft", async () => {
-    prisma.knowledgeChunk.delete.mockResolvedValue({});
-    await store.rejectDraftFAQ("faq-1");
-    expect(prisma.knowledgeChunk.delete).toHaveBeenCalledWith({
-      where: { id: "faq-1" },
+  it("rejectDraftFAQ deletes the draft with tenant-scoped WHERE", async () => {
+    prisma.knowledgeChunk.deleteMany.mockResolvedValue({ count: 1 });
+    await store.rejectDraftFAQ("org-1", "faq-1");
+    expect(prisma.knowledgeChunk.deleteMany).toHaveBeenCalledWith({
+      where: { id: "faq-1", organizationId: "org-1" },
     });
   });
 

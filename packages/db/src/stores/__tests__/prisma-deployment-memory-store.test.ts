@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaDeploymentMemoryStore } from "../prisma-deployment-memory-store.js";
+import { StaleVersionError } from "@switchboard/core";
 
 function createMockPrisma() {
   return {
@@ -7,6 +8,7 @@ function createMockPrisma() {
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
+      deleteMany: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
       delete: vi.fn(),
@@ -85,14 +87,32 @@ describe("PrismaDeploymentMemoryStore", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    (prisma.deploymentMemory.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+    });
+    (prisma.deploymentMemory.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...existing,
       sourceCount: 2,
       confidence: 0.6,
     });
 
-    const result = await store.incrementConfidence("mem-1", 0.6);
+    const result = await store.incrementConfidence("org-1", "mem-1", 0.6);
     expect(result.sourceCount).toBe(2);
+    expect(prisma.deploymentMemory.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "mem-1", organizationId: "org-1" },
+      }),
+    );
+  });
+
+  it("incrementConfidence throws StaleVersionError when count === 0", async () => {
+    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 0,
+    });
+
+    await expect(store.incrementConfidence("org-1", "mem-1", 0.6)).rejects.toBeInstanceOf(
+      StaleVersionError,
+    );
   });
 
   it("lists high-confidence entries", async () => {
@@ -173,10 +193,22 @@ describe("PrismaDeploymentMemoryStore", () => {
     });
   });
 
-  it("deletes a memory entry by id", async () => {
-    (prisma.deploymentMemory.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "mem-1" });
-    await store.delete("mem-1");
-    expect(prisma.deploymentMemory.delete).toHaveBeenCalledWith({ where: { id: "mem-1" } });
+  it("deletes a memory entry by id and organizationId", async () => {
+    (prisma.deploymentMemory.deleteMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+    });
+    await store.delete("org-1", "mem-1");
+    expect(prisma.deploymentMemory.deleteMany).toHaveBeenCalledWith({
+      where: { id: "mem-1", organizationId: "org-1" },
+    });
+  });
+
+  it("delete throws StaleVersionError when count === 0", async () => {
+    (prisma.deploymentMemory.deleteMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 0,
+    });
+
+    await expect(store.delete("org-1", "mem-1")).rejects.toBeInstanceOf(StaleVersionError);
   });
 
   it("counts memory entries by deployment", async () => {

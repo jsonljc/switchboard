@@ -1,3 +1,4 @@
+import { StaleVersionError } from "@switchboard/core";
 import type { PrismaDbClient } from "../prisma-db.js";
 
 export interface CreateDeploymentMemoryInput {
@@ -28,15 +29,20 @@ export class PrismaDeploymentMemoryStore {
     });
   }
 
-  async incrementConfidence(id: string, newConfidence: number) {
-    return this.prisma.deploymentMemory.update({
-      where: { id },
+  async incrementConfidence(organizationId: string, id: string, newConfidence: number) {
+    const result = await this.prisma.deploymentMemory.updateMany({
+      where: { id, organizationId },
       data: {
         sourceCount: { increment: 1 },
         confidence: newConfidence,
         lastSeenAt: new Date(),
       },
     });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    return this.prisma.deploymentMemory.findFirst({ where: { id, organizationId } }) as Promise<{
+      id: string;
+      sourceCount: number;
+    }>;
   }
 
   async listByDeployment(organizationId: string, deploymentId: string) {
@@ -80,8 +86,11 @@ export class PrismaDeploymentMemoryStore {
     });
   }
 
-  async delete(id: string) {
-    return this.prisma.deploymentMemory.delete({ where: { id } });
+  async delete(organizationId: string, id: string): Promise<void> {
+    const result = await this.prisma.deploymentMemory.deleteMany({
+      where: { id, organizationId },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
   async countByDeployment(organizationId: string, deploymentId: string): Promise<number> {

@@ -60,6 +60,7 @@ export interface CompoundingDeploymentMemoryStore {
     canonicalKey?: string | null;
   }): Promise<{ id: string }>;
   incrementConfidence(
+    organizationId: string,
     id: string,
     newConfidence: number,
   ): Promise<{ id: string; sourceCount: number }>;
@@ -334,7 +335,7 @@ export class ConversationCompoundingService {
         if (similarity >= SIMILARITY_THRESHOLD) {
           const newSourceCount = entry.sourceCount + 1;
           const newConfidence = computeConfidenceScore(newSourceCount, false);
-          await this.memoryStore.incrementConfidence(entry.id, newConfidence);
+          await this.memoryStore.incrementConfidence(organizationId, entry.id, newConfidence);
           return;
         }
       }
@@ -365,7 +366,11 @@ export class ConversationCompoundingService {
         if (similarity >= SIMILARITY_THRESHOLD) {
           const newSourceCount = entry.sourceCount + 1;
           const newConfidence = computeConfidenceScore(newSourceCount, false);
-          const result = await this.memoryStore.incrementConfidence(entry.id, newConfidence);
+          const result = await this.memoryStore.incrementConfidence(
+            organizationId,
+            entry.id,
+            newConfidence,
+          );
 
           if (result.sourceCount === FAQ_PROMOTION_THRESHOLD && this.knowledgeStore) {
             const embedding = await this.embedding.embed(entry.content);
@@ -430,7 +435,7 @@ export class ConversationCompoundingService {
       if (best) {
         const newSourceCount = best.sourceCount + 1;
         const newConfidence = computeConfidenceScore(newSourceCount, false);
-        await this.memoryStore.incrementConfidence(best.id, newConfidence);
+        await this.memoryStore.incrementConfidence(organizationId, best.id, newConfidence);
         metrics.outcomePatternsMerged.inc({ deploymentId });
         metrics.outcomePatternConfidence.observe({ deploymentId }, newConfidence);
         return best.id;
