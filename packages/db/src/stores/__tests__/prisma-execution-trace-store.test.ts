@@ -31,6 +31,7 @@ function makePrisma() {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue(undefined),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       count: vi.fn().mockResolvedValue(0),
     },
   };
@@ -103,20 +104,31 @@ describe("PrismaExecutionTraceStore", () => {
   });
 
   describe("linkOutcome", () => {
-    it("updates trace with outcome", async () => {
-      await store.linkOutcome("trace-1", {
+    it("updates trace with outcome using tenant-scoped updateMany", async () => {
+      await store.linkOutcome("org_1", "trace-1", {
         id: "opp-1",
         type: "opportunity",
         result: "stage_qualified",
       });
-      expect(prisma.executionTrace.update).toHaveBeenCalledWith({
-        where: { id: "trace-1" },
+      expect(prisma.executionTrace.updateMany).toHaveBeenCalledWith({
+        where: { id: "trace-1", organizationId: "org_1" },
         data: {
           linkedOutcomeId: "opp-1",
           linkedOutcomeType: "opportunity",
           linkedOutcomeResult: "stage_qualified",
         },
       });
+    });
+
+    it("throws StaleVersionError when updateMany count === 0", async () => {
+      prisma.executionTrace.updateMany.mockResolvedValue({ count: 0 });
+      await expect(
+        store.linkOutcome("org_1", "trace-missing", {
+          id: "opp-1",
+          type: "opportunity",
+          result: "stage_qualified",
+        }),
+      ).rejects.toThrow(/Stale version/);
     });
   });
 

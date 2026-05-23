@@ -23,7 +23,7 @@ describe("OutcomeLinker", () => {
   it("links stage update to opportunity", async () => {
     const store = makeStore();
     const linker = new OutcomeLinker(store);
-    await linker.linkFromToolCalls("trace-1", [
+    await linker.linkFromToolCalls("org_1", "trace-1", [
       makeToolCall({
         toolId: "crm-write",
         operation: "stage.update",
@@ -34,7 +34,7 @@ describe("OutcomeLinker", () => {
         ),
       }),
     ]);
-    expect(store.linkOutcome).toHaveBeenCalledWith("trace-1", {
+    expect(store.linkOutcome).toHaveBeenCalledWith("org_1", "trace-1", {
       id: "opp-1",
       type: "opportunity",
       result: "stage_qualified",
@@ -44,7 +44,7 @@ describe("OutcomeLinker", () => {
   it("links opt-out activity log as outcome", async () => {
     const store = makeStore();
     const linker = new OutcomeLinker(store);
-    await linker.linkFromToolCalls("trace-1", [
+    await linker.linkFromToolCalls("org_1", "trace-1", [
       makeToolCall({
         toolId: "crm-write",
         operation: "activity.log",
@@ -52,7 +52,7 @@ describe("OutcomeLinker", () => {
         result: ok(undefined, { entityState: { eventType: "opt-out" } }),
       }),
     ]);
-    expect(store.linkOutcome).toHaveBeenCalledWith("trace-1", {
+    expect(store.linkOutcome).toHaveBeenCalledWith("org_1", "trace-1", {
       id: "trace-1",
       type: "task",
       result: "opt_out",
@@ -62,7 +62,7 @@ describe("OutcomeLinker", () => {
   it("links only the first matching outcome (stage update wins over opt-out)", async () => {
     const store = makeStore();
     const linker = new OutcomeLinker(store);
-    await linker.linkFromToolCalls("trace-1", [
+    await linker.linkFromToolCalls("org_1", "trace-1", [
       makeToolCall({
         toolId: "crm-write",
         operation: "stage.update",
@@ -80,7 +80,7 @@ describe("OutcomeLinker", () => {
       }),
     ]);
     expect(store.linkOutcome).toHaveBeenCalledTimes(1);
-    expect(store.linkOutcome).toHaveBeenCalledWith("trace-1", {
+    expect(store.linkOutcome).toHaveBeenCalledWith("org_1", "trace-1", {
       id: "opp-1",
       type: "opportunity",
       result: "stage_quoted",
@@ -90,7 +90,7 @@ describe("OutcomeLinker", () => {
   it("does nothing when no business outcome detected", async () => {
     const store = makeStore();
     const linker = new OutcomeLinker(store);
-    await linker.linkFromToolCalls("trace-1", [
+    await linker.linkFromToolCalls("org_1", "trace-1", [
       makeToolCall({ toolId: "crm-query", operation: "contact.get" }),
     ]);
     expect(store.linkOutcome).not.toHaveBeenCalled();
@@ -99,14 +99,14 @@ describe("OutcomeLinker", () => {
   it("does nothing for empty tool calls", async () => {
     const store = makeStore();
     const linker = new OutcomeLinker(store);
-    await linker.linkFromToolCalls("trace-1", []);
+    await linker.linkFromToolCalls("org_1", "trace-1", []);
     expect(store.linkOutcome).not.toHaveBeenCalled();
   });
 
   it("skips stage update without opportunityId", async () => {
     const store = makeStore();
     const linker = new OutcomeLinker(store);
-    await linker.linkFromToolCalls("trace-1", [
+    await linker.linkFromToolCalls("org_1", "trace-1", [
       makeToolCall({
         toolId: "crm-write",
         operation: "stage.update",
