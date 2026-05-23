@@ -44,6 +44,8 @@ export interface ComparisonResult {
   regressions: string[];
 }
 
+const OVERALL_TOLERANCE_BPS = 100; // 1.00pp
+
 export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline): ComparisonResult {
   const regressions: string[] = [];
   const toleranceFraction = baseline.toleranceBps / 10_000;
@@ -58,6 +60,14 @@ export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline):
         `${type}: ${(current.accuracy * 100).toFixed(1)}% (current) vs ${(baselineMetric.accuracy * 100).toFixed(1)}% (baseline), drop ${(drop * 100).toFixed(1)}pp > ${(toleranceFraction * 100).toFixed(1)}pp tolerance`,
       );
     }
+  }
+  // Integer bps comparison avoids float drift around exact 1pp boundaries.
+  const overallDropBps = Math.round((baseline.overallAccuracy - report.overallAccuracy) * 10_000);
+  if (overallDropBps > OVERALL_TOLERANCE_BPS) {
+    const overallDropPp = overallDropBps / 100;
+    regressions.push(
+      `overall: ${(report.overallAccuracy * 100).toFixed(1)}% (current) vs ${(baseline.overallAccuracy * 100).toFixed(1)}% (baseline), drop ${overallDropPp.toFixed(2)}pp > ${(OVERALL_TOLERANCE_BPS / 100).toFixed(2)}pp tolerance`,
+    );
   }
   return { passed: regressions.length === 0, regressions };
 }
