@@ -220,7 +220,7 @@ The `baseline` fixture in this describe block is unchanged (efficacy 5/5, urgenc
 
 - [ ] **Step 2: Replace the 5 `makeReport`-based tests with the new-contract tests**
 
-Replace the five `it(...)` blocks currently between the `baseline` declaration's close and the end of the describe — i.e. the tests titled "passes when overall accuracy drops by exactly 1pp…", "fails when overall accuracy drops by more than 1pp", "fails on per-class drop only…", "fails on overall drop only…", and "fails with both per-class and overall regressions…". Leave the three `scoreResults`-based tests ("passes when accuracy holds within tolerance", "fails when a claim type drops more than tolerance", "ignores baseline categories with zero samples in the current run") untouched. Insert:
+Delete the five `makeReport`-based `it(...)` blocks currently between the `baseline` declaration's close and the end of the describe — i.e. the tests titled "passes when overall accuracy drops by exactly 1pp…", "fails when overall accuracy drops by more than 1pp", "fails on per-class drop only…", "fails on overall drop only…", and "fails with both per-class and overall regressions…". Leave the three `scoreResults`-based tests ("passes when accuracy holds within tolerance", "fails when a claim type drops more than tolerance", "ignores baseline categories with zero samples in the current run") untouched. Replace those five deleted blocks with these **six** new tests:
 
 ```typescript
 it("per-class: a single-fixture flip on a class does NOT fire (suppressed)", () => {
@@ -321,8 +321,11 @@ export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline):
     const baselineMetric = baseline.perClaimTypeAccuracy[type];
     if (!baselineMetric || baselineMetric.total === 0) continue;
     const drop = baselineMetric.accuracy - current.accuracy;
-    const additionalWrong =
-      current.total - current.correct - (baselineMetric.total - baselineMetric.correct);
+    // Clamp at 0 so the name matches the semantics: an improved class has no "additional wrong".
+    const additionalWrong = Math.max(
+      0,
+      current.total - current.correct - (baselineMetric.total - baselineMetric.correct),
+    );
     // Effective blocking threshold is additionalWrong >= PER_CLASS_MIN_ADDITIONAL_WRONG.
     // The pp drop alone never blocks: at small fixture counts one stochastic flip is a
     // large pp swing but is not statistically meaningful.
@@ -334,8 +337,10 @@ export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline):
   }
   // Integer bps comparison avoids float drift around exact 1pp boundaries.
   const overallDropBps = Math.round((baseline.overallAccuracy - report.overallAccuracy) * 10_000);
-  const overallAdditionalWrong =
-    countWrong(report.perClaimTypeAccuracy) - countWrong(baseline.perClaimTypeAccuracy);
+  const overallAdditionalWrong = Math.max(
+    0,
+    countWrong(report.perClaimTypeAccuracy) - countWrong(baseline.perClaimTypeAccuracy),
+  );
   // Effective blocking threshold is overallAdditionalWrong >= OVERALL_MIN_ADDITIONAL_WRONG.
   // The 1pp drop is only an early signal; it never blocks on its own.
   if (
@@ -459,19 +464,24 @@ Expected: FAIL with `Object is possibly 'undefined'` at `load-fixtures.ts:15` an
 
 - [ ] **Step 2: Fix `scoreResults` index typing in `score.ts`**
 
-In `evals/claim-classifier/score.ts`, change the `perType` declaration in `scoreResults` from:
+In `evals/claim-classifier/score.ts`, replace BOTH the `perType` declaration AND the loop that initializes it. `scoreResults` currently starts:
 
 ```typescript
 const perType: Record<string, { correct: number; total: number; accuracy: number }> = {};
+for (const type of ClaimTypeEnum.options) {
+  perType[type] = { correct: 0, total: 0, accuracy: 0 };
+}
 ```
 
-to a full keyed record so indexed access is typed as defined (no `noUncheckedIndexedAccess` widening):
+Replace those four lines with a single fully-initialized record — every key genuinely present (sound, not an empty-object assertion), so indexed access is typed as defined:
 
 ```typescript
-const perType = {} as Record<ClaimTypeLabel, { correct: number; total: number; accuracy: number }>;
+const perType = Object.fromEntries(
+  ClaimTypeEnum.options.map((type) => [type, { correct: 0, total: 0, accuracy: 0 }]),
+) as Record<ClaimTypeLabel, { correct: number; total: number; accuracy: number }>;
 ```
 
-`ClaimTypeLabel` is already imported at the top of `score.ts` (`import type { Baseline, ClaimTypeLabel } from "./schema.js";`). The loop that fills every `ClaimTypeEnum.options` entry makes the `as` assertion sound. No other line in `scoreResults` changes; the `perType[r.expected]` / `perType[type]` accesses now type-check because the key type is the finite `ClaimTypeLabel` union, not `string`.
+`ClaimTypeLabel` is already imported at the top of `score.ts` (`import type { Baseline, ClaimTypeLabel } from "./schema.js";`). All `ClaimTypeEnum.options` keys are initialized up front, so the later `perType[r.expected]` / `perType[type]` accesses type-check (finite `ClaimTypeLabel` key union, not `string`) and are sound at runtime. No other line in `scoreResults` changes.
 
 - [ ] **Step 3: Guard the line index in `load-fixtures.ts`**
 
@@ -523,7 +533,7 @@ Expected: turbo runs `@switchboard/eval-claim-classifier#typecheck` among the ot
   run: pnpm exec tsc -p evals/tsconfig.json --noEmit
 ```
 
-Only add this CI step if `pnpm typecheck` does not already cover evals cleanly. Record which path you took.
+Only add this CI step if `pnpm typecheck` does not already cover evals cleanly. **Acceptance condition: PR B is complete only if CI demonstrably runs the eval typecheck** — either the existing `typecheck` job's `pnpm typecheck` now includes `@switchboard/eval-claim-classifier#typecheck`, or the explicit step above was added to the `eval-classifier` job. Determine which by inspecting the CI logs of PR B's own run, and state the chosen path explicitly in the PR body (do not assume — confirm from the log).
 
 - [ ] **Step 7: Run the eval test suite (confirm no behavior change)**
 
@@ -580,6 +590,7 @@ Fixes the pre-existing strict-mode (`noUncheckedIndexedAccess`) errors that bloc
 
 - [ ] `pnpm exec tsc -p evals/tsconfig.json --noEmit` clean.
 - [ ] `pnpm typecheck` covers the eval workspace and passes.
+- [ ] **CI proof:** confirmed from this PR's CI logs that the eval typecheck actually runs — path used: _(state one)_ existing `typecheck` job picks up `@switchboard/eval-claim-classifier#typecheck`, OR explicit step in the `eval-classifier` job.
 - [ ] `pnpm exec vitest run --config evals/vitest.config.ts` — all pass (no behavior change).
 
 ## Related
@@ -593,9 +604,14 @@ EOF
 )"
 ```
 
-- [ ] **Step 3: AFTER PR A merges and main is green — reset the bake clock in #631**
+- [ ] **Step 3: Bake-clock housekeeping in #631**
 
-Once PR A is merged and a `main` run of `Eval — Claim Classifier` is green, comment on issue #631 noting the bake clock (re)starts from that date and that pre-PR-A days do not count. Do not add the job to branch protection yet — promotion needs PR A + PR B merged, ≥14 days clean bake with ≥1 real classifier-touching PR running the eval to completion, and zero false-positives.
+Two distinct milestones — keep them separate in the issue:
+
+- **Gate-stability (informational):** after PR A merges and a `main` run of `Eval — Claim Classifier` is green, note that the gate is no longer known-flaky. This is _not_ the promotion clock.
+- **Official 14-day promotion bake:** starts only **after PR B merges and main is green**, because "promotable" requires both robustness (PR A) _and_ static verification (PR B) to have landed — otherwise you'd be baking a gate whose own code isn't yet typechecked in CI. Comment on #631 recording the official bake start date.
+
+Do not add the job to branch protection until: PR A + PR B merged, the official ≥14-day bake is clean with ≥1 real classifier-touching PR running the eval to completion, and zero false-positives.
 
 ---
 

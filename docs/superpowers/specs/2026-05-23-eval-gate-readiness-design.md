@@ -81,8 +81,9 @@ Evaluate `temperature: 0` for the production classifier (`anthropic-classifier.t
 
 ## Bake / promotion semantics
 
-- The 14-day promotion bake **(re)starts after PR A merges and main is green** — pre-PR-A days do not count, since the bake already surfaced a false-positive blocker.
-- Update issue #631: note the bake-clock reset and that PR A + PR B are the promotion prerequisites alongside a clean bake.
+- **Gate-stability milestone (informational):** after PR A merges and main is green, the gate is no longer known-flaky. This is not the promotion clock.
+- **Official 14-day promotion bake starts only after PR B merges and main is green** — because "promotable" requires both robustness (PR A) and static verification (PR B) to have landed; baking a gate whose own code isn't yet typechecked in CI would be premature. Pre-PR-B days do not count.
+- Update issue #631: record both milestones; PR A + PR B are the promotion prerequisites alongside a clean official bake.
 - Promotion to a required check (`Eval — Claim Classifier` in `main` branch protection) happens only after: PR A merged, PR B merged, ≥14 days clean bake with ≥1 real classifier-touching PR running the eval to completion, and zero false-positives.
 
 ## Sequencing & dependencies
@@ -107,6 +108,7 @@ PR A and PR B both touch `score.ts` (PR A: `compareAgainstBaseline`; PR B: `scor
 - PR description states the effective-blocking-threshold framing (percentage = early signal; count = blocker; sensitivity trade is intentional).
 - The observed `testimonial` 1-flip and a synthetic 2-fixture cross-class swing both **pass**; a 2-flip small-class and a 3-fixture overall swing both **fail**; prompt-hash mismatch still fails.
 - All eval tests pass; existing single-flip per-class tests updated; overall tests use consistent count data.
-- `tsc` over the eval harness is clean and runs in CI (PR B).
+- `tsc` over the eval harness is clean and **demonstrably runs in CI** (verified from PR B's CI logs; the chosen wiring path is stated in the PR body).
+- `additionalWrong` / `overallAdditionalWrong` are clamped at `>= 0` so the values match their name.
 - No production classifier change; no baseline re-lock; `baseline.json` byte-unchanged.
 - Issue #631 updated with the bake-clock reset and promotion prerequisites.
