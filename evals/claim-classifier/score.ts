@@ -49,6 +49,24 @@ export interface ComparisonResult {
 // it avoids a Baseline schema change that would force re-locking baseline.json.
 const OVERALL_TOLERANCE_BPS = 100; // 1.00pp
 
+const _PER_CLASS_MIN_ADDITIONAL_WRONG = 2;
+const _OVERALL_MIN_ADDITIONAL_WRONG = 3;
+
+// Sum of (total - correct) across all claim types, from raw integer counts — so the
+// overall regression rule never depends on Math.round(accuracy * total). Tolerates a
+// partial record (a baseline category with no entry) by skipping undefined metrics.
+export function countWrong(
+  perClass: Record<string, { correct: number; total: number } | undefined>,
+): number {
+  let wrong = 0;
+  for (const type of ClaimTypeEnum.options) {
+    const m = perClass[type];
+    if (!m) continue;
+    wrong += m.total - m.correct;
+  }
+  return wrong;
+}
+
 export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline): ComparisonResult {
   const regressions: string[] = [];
   const toleranceFraction = baseline.toleranceBps / 10_000;

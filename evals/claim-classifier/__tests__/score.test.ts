@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scoreResults, compareAgainstBaseline, type ScoreReport } from "../score.js";
+import { scoreResults, compareAgainstBaseline, countWrong, type ScoreReport } from "../score.js";
 import type { InvocationResult } from "../invoke-classifier.js";
 import type { Baseline } from "../schema.js";
 
@@ -191,5 +191,38 @@ describe("compareAgainstBaseline", () => {
     expect(out.regressions.join("\n")).toMatch(/efficacy/);
     expect(out.regressions.join("\n")).toMatch(/overall/);
     expect(out.regressions.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("countWrong", () => {
+  const zero = { correct: 0, total: 0, accuracy: 0 };
+  const allZero: ScoreReport["perClaimTypeAccuracy"] = {
+    efficacy: zero,
+    urgency: zero,
+    "safety-claim": zero,
+    superiority: zero,
+    testimonial: zero,
+    "medical-advice": zero,
+    diagnosis: zero,
+    credentials: zero,
+    none: zero,
+  };
+
+  it("returns 0 when every class is empty", () => {
+    expect(countWrong(allZero)).toBe(0);
+  });
+
+  it("sums (total - correct) across all classes", () => {
+    expect(
+      countWrong({
+        ...allZero,
+        efficacy: { correct: 4, total: 5, accuracy: 0.8 }, // 1 wrong
+        urgency: { correct: 3, total: 5, accuracy: 0.6 }, // 2 wrong
+      }),
+    ).toBe(3);
+  });
+
+  it("skips undefined metrics (partial baseline record)", () => {
+    expect(countWrong({ efficacy: { correct: 5, total: 8, accuracy: 0.625 } })).toBe(3);
   });
 });
