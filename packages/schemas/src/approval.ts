@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApprovalRequestSchema } from "./chat.js";
 
 /**
  * Date fields here use `z.date()`, not `z.coerce.date()`. This is the
@@ -48,3 +49,17 @@ export const ApprovalStateSchema = z.object({
   quorum: QuorumStateSchema.nullable(),
 });
 export type ApprovalState = z.infer<typeof ApprovalStateSchema>;
+
+/**
+ * The persistable record shape for an approval — the pair of (request, state)
+ * plus the envelope it belongs to. Replaces the 3+ local declarations of
+ * `interface ApprovalRecord` that previously lived in `apps/api`,
+ * `packages/core`, and `packages/db`. Route Governance Contract v1 §8.1.
+ */
+export const ApprovalRecordSchema = z.object({
+  request: ApprovalRequestSchema,
+  state: ApprovalStateSchema,
+  envelopeId: z.string(),
+  organizationId: z.string().nullable(),
+});
+export type ApprovalRecord = z.infer<typeof ApprovalRecordSchema>;
