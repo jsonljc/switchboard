@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import type { DashboardOverview } from "@switchboard/schemas";
+import type { ApprovalRecord, DashboardOverview } from "@switchboard/schemas";
 import type { AuditQueryFilter } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { translateActivities } from "../services/activity-translator.js";
@@ -59,18 +59,6 @@ interface CampaignRevenueSummary {
   sourceCampaignId: string;
   totalAmount: number;
   count: number;
-}
-
-interface ApprovalRecord {
-  request: {
-    id: string;
-    summary: string;
-    riskCategory: string;
-    bindingHash: string;
-    createdAt: Date | string;
-  };
-  envelopeId: string;
-  state: { status: string };
 }
 
 export interface DashboardStores {

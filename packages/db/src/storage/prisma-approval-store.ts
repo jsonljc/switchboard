@@ -1,14 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
-import type { ApprovalRequest } from "@switchboard/schemas";
+import type { ApprovalRecord, ApprovalRequest } from "@switchboard/schemas";
 import type { ApprovalState, ApprovalStore } from "@switchboard/core";
 import { StaleVersionError } from "@switchboard/core";
-
-type ApprovalRecord = {
-  request: ApprovalRequest;
-  state: ApprovalState;
-  envelopeId: string;
-  organizationId?: string | null;
-};
 
 export class PrismaApprovalStore implements ApprovalStore {
   constructor(private prisma: PrismaClient) {}

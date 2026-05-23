@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { ChannelGateway } from "../channel-gateway.js";
 import type { ChannelGatewayConfig, IncomingChannelMessage } from "../types.js";
+import type { ApprovalRecord } from "@switchboard/schemas";
 import {
   NOT_FOUND_MSG,
   STALE_MSG,
@@ -70,13 +71,13 @@ describe("ChannelGateway approval-payload interception", () => {
 
   function makeApprovalRecord(
     overrides: Partial<{ bindingHash: string; organizationId: string | null }> = {},
-  ) {
+  ): ApprovalRecord {
     return {
       request: {
         id: "appr_1",
         bindingHash: overrides.bindingHash ?? "hash123",
-      } as never,
-      state: { status: "pending", version: 0 } as never,
+      } as unknown as ApprovalRecord["request"],
+      state: { status: "pending", version: 0 } as unknown as ApprovalRecord["state"],
       envelopeId: "env_1",
       organizationId: overrides.organizationId === undefined ? "org-1" : overrides.organizationId,
     };

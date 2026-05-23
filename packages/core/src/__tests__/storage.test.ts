@@ -308,6 +308,7 @@ describe("InMemoryApprovalStore", () => {
       version: 1,
     } as ApprovalState,
     envelopeId: "env_1",
+    organizationId: null,
   });
 
   beforeEach(() => {
