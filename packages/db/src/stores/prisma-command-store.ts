@@ -7,6 +7,7 @@ import type {
   CommandEntity,
 } from "@switchboard/schemas";
 import type { OperatorCommandStore } from "@switchboard/core";
+import { StaleVersionError } from "@switchboard/core";
 
 type CommandRow = Awaited<ReturnType<PrismaClient["operatorCommandRecord"]["findUniqueOrThrow"]>>;
 
@@ -54,12 +55,13 @@ export class PrismaOperatorCommandStore implements OperatorCommandStore {
   }
 
   async updateCommandStatus(
+    organizationId: string,
     commandId: string,
     status: CommandStatus,
     updates?: Partial<Pick<OperatorCommand, "resultSummary" | "completedAt" | "workflowIds">>,
   ): Promise<void> {
-    await this.prisma.operatorCommandRecord.update({
-      where: { id: commandId },
+    const result = await this.prisma.operatorCommandRecord.updateMany({
+      where: { id: commandId, organizationId },
       data: {
         status,
         ...(updates?.resultSummary !== undefined ? { resultSummary: updates.resultSummary } : {}),
@@ -67,12 +69,13 @@ export class PrismaOperatorCommandStore implements OperatorCommandStore {
         ...(updates?.workflowIds !== undefined
           ? {
               workflowIds: updates.workflowIds as unknown as Parameters<
-                PrismaClient["operatorCommandRecord"]["update"]
+                PrismaClient["operatorCommandRecord"]["updateMany"]
               >[0]["data"]["workflowIds"],
             }
           : {}),
       },
     });
+    if (result.count === 0) throw new StaleVersionError(commandId, -1, -1);
   }
 
   async getCommandById(commandId: string): Promise<OperatorCommand | null> {
