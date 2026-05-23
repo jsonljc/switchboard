@@ -5,6 +5,7 @@ import type {
   OrgAgentEnablementRow,
   OrgAgentEnablementStore,
 } from "@switchboard/core";
+import { StaleVersionError } from "@switchboard/core";
 
 export class PrismaOrgAgentEnablementStore implements OrgAgentEnablementStore {
   constructor(private prisma: PrismaClient) {}
@@ -27,10 +28,11 @@ export class PrismaOrgAgentEnablementStore implements OrgAgentEnablementStore {
   }
 
   async setStatus(orgId: string, agentKey: AgentKey, status: EnablementStatus): Promise<void> {
-    await this.prisma.orgAgentEnablement.update({
-      where: { orgId_agentKey: { orgId, agentKey } },
+    const result = await this.prisma.orgAgentEnablement.updateMany({
+      where: { orgId, agentKey },
       data: { status },
     });
+    if (result.count === 0) throw new StaleVersionError(`${orgId}:${agentKey}`, -1, -1);
   }
 }
 
