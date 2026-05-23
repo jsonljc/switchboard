@@ -235,13 +235,13 @@ describe("countWrong", () => {
     expect(
       countWrong({
         ...allZero,
-        efficacy: { correct: 4, total: 5, accuracy: 0.8 }, // 1 wrong
-        urgency: { correct: 3, total: 5, accuracy: 0.6 }, // 2 wrong
+        efficacy: { correct: 4, total: 5 }, // 1 wrong
+        urgency: { correct: 3, total: 5 }, // 2 wrong
       }),
     ).toBe(3);
   });
 
   it("skips undefined metrics (partial baseline record)", () => {
-    expect(countWrong({ efficacy: { correct: 5, total: 8, accuracy: 0.625 } })).toBe(3);
+    expect(countWrong({ efficacy: { correct: 5, total: 8 } })).toBe(3);
   });
 });

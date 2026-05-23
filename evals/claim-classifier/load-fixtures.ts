@@ -12,7 +12,7 @@ export function loadFixtures(dir: string): FixtureRow[] {
     const fullPath = join(dir, file);
     const lines = readFileSync(fullPath, "utf-8").split("\n");
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+      const line = (lines[i] ?? "").trim();
       if (line === "" || line.startsWith("#")) continue;
       let raw: unknown;
       try {
