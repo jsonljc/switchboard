@@ -134,6 +134,9 @@ export * from "./approval-lifecycle.js";
 // Approval state machine types (hoisted from core per RGC v1 §8.1)
 export * from "./approval.js";
 
+// Handoff canonical shape (hoisted from core per RGC v1 §8.3)
+export * from "./handoff.js";
+
 // PCD Identity Registry
 export * from "./pcd-identity.js";
 
