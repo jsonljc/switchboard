@@ -1,14 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadFixtures } from "../load-fixtures.js";
-import { ClaimTypeEnum } from "../schema.js";
+import { ClaimTypeEnum, type FixtureRow } from "../schema.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
 describe("fixtures directory", () => {
-  const fixtures = loadFixtures(FIXTURES_DIR);
+  let fixtures: FixtureRow[];
+  beforeAll(() => {
+    fixtures = loadFixtures(FIXTURES_DIR);
+  });
 
   it("contains at least 95 fixtures", () => {
     expect(fixtures.length).toBeGreaterThanOrEqual(95);
