@@ -4,6 +4,7 @@ export interface OperatorCommandStore {
   saveRequest(request: OperatorRequest): Promise<void>;
   saveCommand(command: OperatorCommand): Promise<void>;
   updateCommandStatus(
+    organizationId: string,
     commandId: string,
     status: CommandStatus,
     updates?: Partial<Pick<OperatorCommand, "resultSummary" | "completedAt" | "workflowIds">>,

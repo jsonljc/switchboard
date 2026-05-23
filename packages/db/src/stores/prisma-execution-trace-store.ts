@@ -1,4 +1,5 @@
 import type { PrismaDbClient } from "../prisma-db.js";
+import { StaleVersionError } from "@switchboard/core";
 
 // Define the trace interface locally to avoid circular dependency with @switchboard/core
 // This matches SkillExecutionTrace from packages/core/src/skill-runtime/types.ts
@@ -81,17 +82,19 @@ export class PrismaExecutionTraceStore {
   }
 
   async linkOutcome(
+    organizationId: string,
     traceId: string,
     outcome: { id: string; type: string; result: string },
   ): Promise<void> {
-    await this.prisma.executionTrace.update({
-      where: { id: traceId },
+    const result = await this.prisma.executionTrace.updateMany({
+      where: { id: traceId, organizationId },
       data: {
         linkedOutcomeId: outcome.id,
         linkedOutcomeType: outcome.type,
         linkedOutcomeResult: outcome.result,
       },
     });
+    if (result.count === 0) throw new StaleVersionError(traceId, -1, -1);
   }
 
   async countRecentFailures(deploymentId: string, windowMs: number): Promise<number> {

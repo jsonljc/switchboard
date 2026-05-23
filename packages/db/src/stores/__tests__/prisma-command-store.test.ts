@@ -11,6 +11,7 @@ function makeMockPrisma() {
     operatorCommandRecord: {
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -71,13 +72,24 @@ describe("PrismaOperatorCommandStore", () => {
     expect(prisma.operatorCommandRecord.create).toHaveBeenCalled();
   });
 
-  it("updates command status", async () => {
-    await store.updateCommandStatus("cmd-1", "completed", {
+  it("updates command status with tenant-scoped updateMany", async () => {
+    const completedAt = new Date();
+    await store.updateCommandStatus("org_1", "cmd-1", "completed", {
       resultSummary: "Done",
-      completedAt: new Date(),
+      completedAt,
     });
-    expect(prisma.operatorCommandRecord.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "cmd-1" } }),
+    expect(prisma.operatorCommandRecord.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "cmd-1", organizationId: "org_1" },
+        data: expect.objectContaining({ status: "completed", resultSummary: "Done" }),
+      }),
+    );
+  });
+
+  it("throws StaleVersionError when updateMany count === 0", async () => {
+    prisma.operatorCommandRecord.updateMany.mockResolvedValue({ count: 0 });
+    await expect(store.updateCommandStatus("org_1", "cmd-missing", "completed")).rejects.toThrow(
+      /Stale version/,
     );
   });
 

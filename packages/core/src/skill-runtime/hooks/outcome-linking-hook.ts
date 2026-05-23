@@ -9,9 +9,9 @@ export class OutcomeLinkingHook implements SkillHook {
     private getTraceId: () => string,
   ) {}
 
-  async afterSkill(_ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
+  async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
     try {
-      await this.outcomeLinker.linkFromToolCalls(this.getTraceId(), result.toolCalls);
+      await this.outcomeLinker.linkFromToolCalls(ctx.orgId, this.getTraceId(), result.toolCalls);
     } catch (err) {
       console.error("Outcome linking failed:", err);
     }

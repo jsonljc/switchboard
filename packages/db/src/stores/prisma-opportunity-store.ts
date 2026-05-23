@@ -7,7 +7,7 @@ import type {
   TransitionStageInput,
   TransitionStageResult,
 } from "@switchboard/core";
-import { OpportunityNotFoundError } from "@switchboard/core";
+import { OpportunityNotFoundError, StaleVersionError } from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
 // Store Interface (structural match with @switchboard/core)
@@ -120,28 +120,25 @@ export class PrismaOpportunityStore implements OpportunityStore {
     stage: OpportunityStage,
     closedAt?: Date | null,
   ): Promise<Opportunity> {
-    const existing = await this.prisma.opportunity.findFirst({
+    const result = await this.prisma.opportunity.updateMany({
       where: { id, organizationId: orgId },
-    });
-    if (!existing) {
-      throw new Error(`Opportunity not found or does not belong to organization: ${id}`);
-    }
-
-    const updated = await this.prisma.opportunity.update({
-      where: { id },
       data: {
         stage,
         closedAt: closedAt === undefined ? undefined : closedAt,
         updatedAt: new Date(),
       },
     });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
 
-    return mapRowToOpportunity(updated);
+    const row = await this.prisma.opportunity.findFirstOrThrow({
+      where: { id, organizationId: orgId },
+    });
+    return mapRowToOpportunity(row);
   }
 
-  async updateRevenueTotal(_orgId: string, id: string): Promise<void> {
+  async updateRevenueTotal(orgId: string, id: string): Promise<void> {
     // Aggregate SUM(amount) from LifecycleRevenueEvent WHERE opportunityId matches, status = "confirmed"
-    const result = await this.prisma.lifecycleRevenueEvent.aggregate({
+    const agg = await this.prisma.lifecycleRevenueEvent.aggregate({
       where: {
         opportunityId: id,
         status: "confirmed",
@@ -151,15 +148,16 @@ export class PrismaOpportunityStore implements OpportunityStore {
       },
     });
 
-    const totalRevenue = result._sum.amount ?? 0;
+    const totalRevenue = agg._sum.amount ?? 0;
 
-    await this.prisma.opportunity.update({
-      where: { id },
+    const result = await this.prisma.opportunity.updateMany({
+      where: { id, organizationId: orgId },
       data: {
         revenueTotal: totalRevenue,
         updatedAt: new Date(),
       },
     });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
   async countByStage(
