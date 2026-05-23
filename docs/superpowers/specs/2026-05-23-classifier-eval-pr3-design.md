@@ -30,7 +30,9 @@ evals/claim-classifier/**
 
 The workflow file itself is in the path filter so PR-3 (which modifies `ci.yml`) triggers its own gate at introduction. Side effect: any future `ci.yml` edit unrelated to the classifier also fires the eval. Acceptable cost — `ci.yml` doesn't change often.
 
-The job builds `@switchboard/schemas` and `@switchboard/core`, then runs `pnpm eval:classifier`. **No response cache step in v1.**
+**Path-filter mechanism.** GitHub Actions does not support job-level `paths:` directly. Implement path filtering using the repo's existing changed-files / path-filter pattern if one is present; otherwise add a dedicated path-filter step (`dorny/paths-filter@v3` or equivalent) and guard the eval steps with `if: steps.filter.outputs.classifier == 'true'`. **Do not put `paths:` under the job — it will be silently ignored.** Workflow-level `paths:` is also wrong here because we don't want to gate the entire workflow on classifier paths; other jobs still need to run.
+
+**Build set.** The job needs the minimal packages required by `pnpm eval:classifier` — at minimum `@switchboard/schemas` and `@switchboard/core` (verified locally during PR-2 baseline generation: those two builds plus the harness's tsx runtime are sufficient). If the current CI build order requires additional workspace setup, preserve the existing repo convention rather than inventing a classifier-only build path. **No response cache step in v1.**
 
 Job name (exact string, used by branch protection during promotion):
 
@@ -89,9 +91,22 @@ The skip path must use SKIPPED wording, never PASS wording, so a green-but-skipp
 
 ## Regression rules — all blocking when the gate runs
 
+These rules apply only after preflight passes. A missing `ANTHROPIC_API_KEY` in PR / non-main contexts produces SKIPPED, not PASS or FAIL — the rules below do not evaluate at all in that case.
+
 1. **Per-class drop > 2pp.** Existing rule in `score.ts`. Drop = `baseline.perClass[c].accuracy - current.perClass[c].accuracy`.
 2. **Overall drop > 1pp.** New rule. Drop = `baseline.overallAccuracy - current.overallAccuracy`. Strict `>`.
-3. **`classifierPromptHash` mismatch.** Promoted from warn to fail. Current prompt hash (computed at runtime in `packages/core/src/governance/classifier/prompt.ts`) must equal `baseline.classifierPromptHash`.
+3. **`classifierPromptHash` mismatch.** Promoted from warn to fail. Current prompt hash (computed at runtime in `packages/core/src/governance/classifier/prompt.ts`) must equal `baseline.classifierPromptHash`. Implement as a small pure helper that returns a result rather than throwing, so tests don't need to spawn the harness:
+
+   ```ts
+   export interface PromptHashCheck {
+     ok: boolean;
+     currentHash: string;
+     baselineHash: string;
+   }
+   export function comparePromptHash(currentHash: string, baselineHash: string): PromptHashCheck;
+   ```
+
+   `run-eval.ts` calls `comparePromptHash(...)` and exits 1 with the existing warning message if `!ok`.
 
 Latency is printed but stays informational in v1 — too noisy to gate on at fixture scale, and `score.ts` already reports `meanLatencyMs` for visibility.
 
@@ -206,13 +221,14 @@ PR-3 is ready to merge when all of the following hold:
 - [ ] All 6 new `run-eval.test.ts` cases pass, including the "skipped ≠ pass" wording assertion.
 - [ ] PR-3's own CI run shows the `eval-classifier` job ran (not skipped due to path filter).
 - [ ] End-to-end smoke test executed once locally; degraded-prompt branch discarded.
+- [ ] A missing-secret dry run writes the SKIPPED message to `$GITHUB_STEP_SUMMARY` when that env var is defined — verified either by a unit test that points the helper at a temp file or by an actual CI run in a no-secret context.
 - [ ] GitHub issue created with promotion checklist + target date (merge + 14 days).
 
 ---
 
 ## Risks
 
-- **Haiku non-determinism within tolerance.** The classifier returns identical labels for identical inputs in practice (verified by 97.1% baseline), but if a model update introduces 1–2pp run-to-run drift, the gate could false-positive. Mitigation: bake period catches this; if it fires, widen tolerance with explicit justification rather than disabling the rule.
+- **Haiku non-determinism within tolerance.** The classifier had high accuracy on the baseline run (97.1%), but that proves accuracy on one run, not repeatability across runs. If a model update or sampling variability introduces 1–2pp run-to-run drift, the gate could false-positive. Mitigation: bake period observes this directly; if real drift fires the gate, widen tolerance with explicit justification rather than disabling the rule.
 - **Anthropic rate-limit / transient 5xx during CI.** `run-eval.ts` today exits 3 on any per-fixture API failure (line 35–36), which would block the gate even on transient errors. Out of scope for PR-3 (no retry logic added), but worth flagging — if this becomes a real problem during bake, add `p-retry`-style logic in a follow-up. Until then, manual rerun of the failing job is the workaround.
 - **Path filter false negatives.** A change in `packages/schemas/src/index.ts` re-exports or in a shared util that the classifier transitively imports could affect classifier behavior without triggering the eval. Acceptable for v1; widen the filter only if a post-bake real miss demonstrates the gap. Adding indirect dependencies pre-emptively grows the trigger surface fast and erodes the path-filter's value.
 - **Stale baseline on main after a prompt change rebase.** Rule 3 (prompt-hash mismatch fails) is what prevents this. Bake will exercise this on the first prompt edit.
