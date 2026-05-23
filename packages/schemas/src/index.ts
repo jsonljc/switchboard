@@ -131,6 +131,9 @@ export { DashboardOverviewSchema, type DashboardOverview } from "./dashboard.js"
 // Approval Lifecycle (approval lifecycle authority objects)
 export * from "./approval-lifecycle.js";
 
+// Approval state machine types (hoisted from core per RGC v1 §8.1)
+export * from "./approval.js";
+
 // PCD Identity Registry
 export * from "./pcd-identity.js";
 

@@ -1,28 +1,14 @@
-import type { ApprovalRequirement, RiskCategory } from "@switchboard/schemas";
+import type {
+  ApprovalRequirement,
+  RiskCategory,
+  ApprovalState,
+  ApprovalStatus,
+  QuorumState,
+  QuorumEntry,
+} from "@switchboard/schemas";
 import type { ResolvedIdentity } from "../identity/spec.js";
 
-export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired" | "patched";
-
-export interface QuorumEntry {
-  approverId: string;
-  hash: string;
-  approvedAt: Date;
-}
-
-export interface QuorumState {
-  required: number;
-  approvalHashes: QuorumEntry[];
-}
-
-export interface ApprovalState {
-  status: ApprovalStatus;
-  respondedBy: string | null;
-  respondedAt: Date | null;
-  patchValue: Record<string, unknown> | null;
-  expiresAt: Date;
-  quorum: QuorumState | null;
-  version: number;
-}
+export type { ApprovalState, ApprovalStatus, QuorumState, QuorumEntry };
 
 export class StaleVersionError extends Error {
   constructor(id: string, expected: number, actual: number) {
