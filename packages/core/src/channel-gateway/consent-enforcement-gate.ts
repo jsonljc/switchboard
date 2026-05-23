@@ -42,8 +42,7 @@ export async function runConsentEnforcementGate(
     const cached = cfg.postureCache.lastKnown(deploymentId);
     if (cached?.mode === "enforce") {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (cfg.verdictStore.save as any)({
+        await cfg.verdictStore.save({
           deploymentId,
           sourceGuard: "consent_gate",
           action: "allow",
@@ -80,8 +79,7 @@ export async function runConsentEnforcementGate(
     // never silently fails open. Severity is warning (not critical) because
     // the legitimate pre-contact-system-reply case is not a failure.
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (cfg.verdictStore.save as any)({
+      await cfg.verdictStore.save({
         deploymentId,
         sourceGuard: "consent_gate",
         action: "allow",
@@ -109,8 +107,7 @@ export async function runConsentEnforcementGate(
   const verdictAction = consentConfig.mode === "enforce" ? "block" : "allow";
   const auditLevel = consentConfig.mode === "enforce" ? "critical" : "warning";
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (cfg.verdictStore.save as any)({
+    await cfg.verdictStore.save({
       deploymentId,
       sourceGuard: "consent_gate",
       action: verdictAction,

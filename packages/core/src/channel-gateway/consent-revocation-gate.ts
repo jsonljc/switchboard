@@ -32,8 +32,7 @@ export async function runConsentRevocationGate(
     const cached = cfg.postureCache.lastKnown(deploymentId);
     if (cached?.mode === "enforce") {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (cfg.verdictStore.save as any)({
+        await cfg.verdictStore.save({
           deploymentId,
           sourceGuard: "consent_gate",
           action: "allow",
@@ -74,8 +73,7 @@ export async function runConsentRevocationGate(
 
   if (consentConfig.mode === "observe") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (cfg.verdictStore.save as any)({
+      await cfg.verdictStore.save({
         deploymentId,
         sourceGuard: "consent_gate",
         action: "allow",
