@@ -65,7 +65,8 @@ export function createGatewayBridge(
         category: input.category,
         input: input.input,
       }),
-    submitOutput: (taskId, output) => taskStore.submitOutput(taskId, output),
+    submitOutput: (organizationId, taskId, output) =>
+      taskStore.submitOutput(organizationId, taskId, output),
   });
 
   // Shared embedding adapter — Voyage in production, zero-vector in dev

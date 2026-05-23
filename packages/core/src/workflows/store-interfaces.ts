@@ -9,7 +9,7 @@ import type {
 export interface WorkflowStore {
   create(workflow: WorkflowExecution): Promise<void>;
   getById(id: string): Promise<WorkflowExecution | null>;
-  update(id: string, updates: Partial<WorkflowExecution>): Promise<void>;
+  update(organizationId: string, id: string, updates: Partial<WorkflowExecution>): Promise<void>;
   list(filter: {
     organizationId?: string;
     status?: WorkflowStatus;
@@ -21,7 +21,7 @@ export interface WorkflowStore {
 export interface PendingActionStore {
   create(action: PendingAction): Promise<void>;
   getById(id: string): Promise<PendingAction | null>;
-  update(id: string, updates: Partial<PendingAction>): Promise<void>;
+  update(organizationId: string, id: string, updates: Partial<PendingAction>): Promise<void>;
   listByWorkflow(workflowId: string): Promise<PendingAction[]>;
   listByStatus(
     organizationId: string,
@@ -34,6 +34,6 @@ export interface ApprovalCheckpointStore {
   create(checkpoint: ApprovalCheckpoint): Promise<void>;
   getById(id: string): Promise<ApprovalCheckpoint | null>;
   getByWorkflowAndStep(workflowId: string, stepIndex: number): Promise<ApprovalCheckpoint | null>;
-  update(id: string, updates: Partial<ApprovalCheckpoint>): Promise<void>;
+  update(organizationId: string, id: string, updates: Partial<ApprovalCheckpoint>): Promise<void>;
   listPending(organizationId: string): Promise<ApprovalCheckpoint[]>;
 }

@@ -37,11 +37,15 @@ export function buildCreativeJobDecisionWorkflow(
       }
 
       if (action === "continue" && job.currentStage === "storyboard") {
-        await jobStore.updateProductionTier(input.jobId, input.productionTier ?? "basic");
+        await jobStore.updateProductionTier(
+          job.organizationId,
+          input.jobId,
+          input.productionTier ?? "basic",
+        );
       }
 
       if (action === "stop") {
-        await jobStore.stop(input.jobId, job.currentStage);
+        await jobStore.stop(job.organizationId, input.jobId, job.currentStage);
       }
 
       const { inngestClient } = await import("@switchboard/creative-pipeline");

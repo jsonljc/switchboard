@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { StaleVersionError } from "@switchboard/core";
 import { PrismaBookingStore } from "../prisma-booking-store.js";
 
 function makePrisma() {
@@ -6,8 +7,10 @@ function makePrisma() {
     booking: {
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
     },
@@ -48,19 +51,33 @@ describe("PrismaBookingStore", () => {
     });
   });
 
-  it("confirms a booking by id", async () => {
-    (prisma.booking.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+  it("confirms a booking by id with tenant scope (Pattern B)", async () => {
+    (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.booking.findFirstOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "bk_1",
+      organizationId: "org_1",
       status: "confirmed",
       calendarEventId: "gcal_abc",
     });
 
-    const result = await store.confirm("bk_1", "gcal_abc");
+    const result = await store.confirm("org_1", "bk_1", "gcal_abc");
     expect(result.status).toBe("confirmed");
-    expect(prisma.booking.update).toHaveBeenCalledWith({
-      where: { id: "bk_1" },
+    expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_1" },
       data: { status: "confirmed", calendarEventId: "gcal_abc" },
     });
+    expect(prisma.booking.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_1" },
+    });
+  });
+
+  it("throws StaleVersionError from confirm when tenant+id match fails", async () => {
+    (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+
+    await expect(store.confirm("org_other", "bk_1", "gcal_abc")).rejects.toBeInstanceOf(
+      StaleVersionError,
+    );
+    expect(prisma.booking.findFirstOrThrow).not.toHaveBeenCalled();
   });
 
   it("finds a booking by id", async () => {
@@ -98,18 +115,30 @@ describe("PrismaBookingStore", () => {
     });
   });
 
-  it("marks a booking as failed", async () => {
-    (prisma.booking.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+  it("marks a booking as failed with tenant scope (Pattern B)", async () => {
+    (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.booking.findFirstOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "bk_1",
+      organizationId: "org_1",
       status: "failed",
     });
 
-    const result = await store.markFailed("bk_1");
+    const result = await store.markFailed("org_1", "bk_1");
     expect(result.status).toBe("failed");
-    expect(prisma.booking.update).toHaveBeenCalledWith({
-      where: { id: "bk_1" },
+    expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_1" },
       data: { status: "failed" },
     });
+    expect(prisma.booking.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_1" },
+    });
+  });
+
+  it("throws StaleVersionError from markFailed when tenant+id match fails", async () => {
+    (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+
+    await expect(store.markFailed("org_other", "bk_1")).rejects.toBeInstanceOf(StaleVersionError);
+    expect(prisma.booking.findFirstOrThrow).not.toHaveBeenCalled();
   });
 
   describe("listByDate", () => {

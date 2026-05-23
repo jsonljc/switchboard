@@ -240,8 +240,12 @@ export async function registerInngest(
         category: "audit",
         input: {},
       });
-      await taskStore.submitOutput(task.id, report as Record<string, unknown>);
-      await taskStore.updateStatus(task.id, "completed");
+      await taskStore.submitOutput(
+        deployment.organizationId,
+        task.id,
+        report as Record<string, unknown>,
+      );
+      await taskStore.updateStatus(deployment.organizationId, task.id, "completed");
     },
     getDeploymentPixelId,
     createSignalHealthChecker,
@@ -266,8 +270,12 @@ export async function registerInngest(
         category: "signal_health",
         input: {},
       });
-      await taskStore.submitOutput(task.id, report as unknown as Record<string, unknown>);
-      await taskStore.updateStatus(task.id, "completed");
+      await taskStore.submitOutput(
+        deployment.organizationId,
+        task.id,
+        report as unknown as Record<string, unknown>,
+      );
+      await taskStore.updateStatus(deployment.organizationId, task.id, "completed");
     },
   };
 
@@ -564,8 +572,8 @@ export async function registerInngest(
         },
       },
       jobStore: {
-        markRegistryBackfilled: (jobId, input) =>
-          jobStore.markRegistryBackfilled(jobId, input) as unknown as Promise<{
+        markRegistryBackfilled: (organizationId, jobId, input) =>
+          jobStore.markRegistryBackfilled(organizationId, jobId, input) as unknown as Promise<{
             id: string;
             registryBackfilled: boolean;
             productIdentityId: string;

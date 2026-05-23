@@ -127,6 +127,7 @@ describe("ConversationCompoundingService", () => {
     await service.processConversationEnd(baseEvent);
 
     expect(deps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+      "org-1",
       "mem-existing",
       expect.any(Number),
     );
@@ -211,6 +212,7 @@ describe("ConversationCompoundingService", () => {
     await service.processConversationEnd(baseEvent);
 
     expect(deps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+      "org-1",
       "faq-1",
       expect.any(Number),
     );

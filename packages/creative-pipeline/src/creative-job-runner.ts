@@ -19,11 +19,12 @@ interface ImageConfig {
 interface JobStore {
   findById(id: string): Promise<CreativeJob | null>;
   updateStage(
+    organizationId: string,
     id: string,
     stage: string,
     stageOutputs: Record<string, unknown>,
   ): Promise<CreativeJob>;
-  stop(id: string, stoppedAt: string): Promise<CreativeJob>;
+  stop(organizationId: string, id: string, stoppedAt: string): Promise<CreativeJob>;
 }
 
 interface StepTools {
@@ -92,7 +93,9 @@ export async function executeCreativePipeline(
     stageOutputs = { ...stageOutputs, [stage]: output };
     const nextStage = getNextStage(stage);
 
-    await step.run(`save-${stage}`, () => jobStore.updateStage(job.id, nextStage, stageOutputs));
+    await step.run(`save-${stage}`, () =>
+      jobStore.updateStage(eventData.organizationId, job.id, nextStage, stageOutputs),
+    );
 
     // After the last stage, no approval needed
     if (nextStage === "complete") break;
@@ -106,7 +109,9 @@ export async function executeCreativePipeline(
 
     // Timeout or explicit stop → halt pipeline
     if (!approval || approval.data.action === "stop") {
-      await step.run(`stop-at-${stage}`, () => jobStore.stop(job.id, stage));
+      await step.run(`stop-at-${stage}`, () =>
+        jobStore.stop(eventData.organizationId, job.id, stage),
+      );
       return;
     }
   }

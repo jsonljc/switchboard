@@ -80,15 +80,15 @@ export interface CustomerScopedMemoryAccess {
 export interface OwnerMemoryAccess {
   listAllMemories(orgId: string, deploymentId: string): Promise<DeploymentMemoryEntry[]>;
 
-  correctMemory(id: string, content: string): Promise<void>;
+  correctMemory(organizationId: string, id: string, content: string): Promise<void>;
 
-  deleteMemory(id: string): Promise<void>;
+  deleteMemory(organizationId: string, id: string): Promise<void>;
 
   listDraftFAQs(orgId: string, deploymentId: string): Promise<DraftFAQ[]>;
 
-  approveDraftFAQ(id: string): Promise<void>;
+  approveDraftFAQ(organizationId: string, faqId: string): Promise<void>;
 
-  rejectDraftFAQ(id: string): Promise<void>;
+  rejectDraftFAQ(organizationId: string, faqId: string): Promise<void>;
 
   listActivityLog(
     orgId: string,

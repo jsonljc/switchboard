@@ -36,14 +36,8 @@ export interface UpdateWebhookStatusInput {
   messageId: string;
   status: WebhookStatus;
   at: Date;
-  /**
-   * Optional tenant guard. When provided, the update is a no-op if the row's
-   * organizationId doesn't match — defends against cross-tenant writes if a
-   * future webhook routing bug ever delivers a status update on the wrong
-   * gateway entry. Meta-signed webhooks plus globally unique wamids make this
-   * defense-in-depth today; the check is cheap.
-   */
-  organizationId?: string;
+  /** Required tenant guard. Enforces that the updated row belongs to this org. */
+  organizationId: string;
 }
 
 export class PrismaWhatsAppTestSendStore {
@@ -64,14 +58,17 @@ export class PrismaWhatsAppTestSendStore {
   }
 
   async updateWebhookStatus(input: UpdateWebhookStatusInput): Promise<WhatsAppTestSendRow | null> {
-    const existing = await this.prisma.whatsAppTestSend.findUnique({
-      where: { messageId: input.messageId },
-    });
-    if (!existing) return null;
-    if (input.organizationId && existing.organizationId !== input.organizationId) return null;
-    const updated = await this.prisma.whatsAppTestSend.update({
-      where: { messageId: input.messageId },
+    // Best-effort, tenant-scoped status sink. WhatsAppTestSend tracks only operator
+    // test sends, but WhatsApp delivery webhooks fire for ALL outbound messages — a
+    // messageId not in this table (the common case) is expected and must no-op, not
+    // throw. The required organizationId still scopes the write to the caller's tenant.
+    const result = await this.prisma.whatsAppTestSend.updateMany({
+      where: { messageId: input.messageId, organizationId: input.organizationId },
       data: { lastWebhookStatus: input.status, lastWebhookAt: input.at },
+    });
+    if (result.count === 0) return null;
+    const updated = await this.prisma.whatsAppTestSend.findFirstOrThrow({
+      where: { messageId: input.messageId, organizationId: input.organizationId },
     });
     return updated as WhatsAppTestSendRow;
   }

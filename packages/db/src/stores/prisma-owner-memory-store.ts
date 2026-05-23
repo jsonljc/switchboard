@@ -1,4 +1,4 @@
-import type { PrismaDbClient } from "../prisma-db.js";
+import { StaleVersionError } from "@switchboard/core";
 import type {
   OwnerMemoryAccess,
   DeploymentMemoryEntry,
@@ -6,6 +6,7 @@ import type {
   ActivityLogEntry,
   InteractionSummaryEntry,
 } from "@switchboard/core";
+import type { PrismaDbClient } from "../prisma-db.js";
 
 export class PrismaOwnerMemoryStore implements OwnerMemoryAccess {
   constructor(private prisma: PrismaDbClient) {}
@@ -26,15 +27,19 @@ export class PrismaOwnerMemoryStore implements OwnerMemoryAccess {
     }));
   }
 
-  async correctMemory(id: string, content: string): Promise<void> {
-    await this.prisma.deploymentMemory.update({
-      where: { id },
+  async correctMemory(organizationId: string, id: string, content: string): Promise<void> {
+    const result = await this.prisma.deploymentMemory.updateMany({
+      where: { id, organizationId },
       data: { content },
     });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
-  async deleteMemory(id: string): Promise<void> {
-    await this.prisma.deploymentMemory.delete({ where: { id } });
+  async deleteMemory(organizationId: string, id: string): Promise<void> {
+    const result = await this.prisma.deploymentMemory.deleteMany({
+      where: { id, organizationId },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
   async listDraftFAQs(orgId: string, deploymentId: string): Promise<DraftFAQ[]> {
@@ -60,15 +65,19 @@ export class PrismaOwnerMemoryStore implements OwnerMemoryAccess {
     }));
   }
 
-  async approveDraftFAQ(id: string): Promise<void> {
-    await this.prisma.knowledgeChunk.update({
-      where: { id },
+  async approveDraftFAQ(organizationId: string, faqId: string): Promise<void> {
+    const result = await this.prisma.knowledgeChunk.updateMany({
+      where: { id: faqId, organizationId },
       data: { draftStatus: "approved" },
     });
+    if (result.count === 0) throw new StaleVersionError(faqId, -1, -1);
   }
 
-  async rejectDraftFAQ(id: string): Promise<void> {
-    await this.prisma.knowledgeChunk.delete({ where: { id } });
+  async rejectDraftFAQ(organizationId: string, faqId: string): Promise<void> {
+    const result = await this.prisma.knowledgeChunk.deleteMany({
+      where: { id: faqId, organizationId },
+    });
+    if (result.count === 0) throw new StaleVersionError(faqId, -1, -1);
   }
 
   async listActivityLog(

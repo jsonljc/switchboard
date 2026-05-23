@@ -1,3 +1,4 @@
+import { StaleVersionError } from "@switchboard/core";
 import type { PrismaDbClient } from "../prisma-db.js";
 
 interface CreateBookingInput {
@@ -40,11 +41,13 @@ export class PrismaBookingStore {
     });
   }
 
-  async confirm(bookingId: string, calendarEventId: string) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
+  async confirm(organizationId: string, bookingId: string, calendarEventId: string) {
+    const result = await this.prisma.booking.updateMany({
+      where: { id: bookingId, organizationId },
       data: { status: "confirmed", calendarEventId },
     });
+    if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
+    return this.prisma.booking.findFirstOrThrow({ where: { id: bookingId, organizationId } });
   }
 
   async findById(bookingId: string) {
@@ -63,11 +66,13 @@ export class PrismaBookingStore {
     });
   }
 
-  async markFailed(bookingId: string) {
-    return this.prisma.booking.update({
-      where: { id: bookingId },
+  async markFailed(organizationId: string, bookingId: string) {
+    const result = await this.prisma.booking.updateMany({
+      where: { id: bookingId, organizationId },
       data: { status: "failed" },
     });
+    if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
+    return this.prisma.booking.findFirstOrThrow({ where: { id: bookingId, organizationId } });
   }
 
   async listByDate(

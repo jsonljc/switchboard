@@ -7,7 +7,9 @@ function makePrisma() {
       create: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   };
 }
@@ -83,24 +85,29 @@ describe("PrismaWhatsAppTestSendStore", () => {
   });
 
   describe("updateWebhookStatus", () => {
-    it("returns null when no row exists for messageId and does not call update", async () => {
-      (prisma.whatsAppTestSend.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    it("no-ops (returns null) when no row matches messageId + organizationId", async () => {
+      (prisma.whatsAppTestSend.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
+      });
 
       const result = await store.updateWebhookStatus({
         messageId: "wamid.missing",
+        organizationId: "org_1",
         status: "delivered",
         at: new Date("2026-05-15T12:00:00Z"),
       });
 
       expect(result).toBeNull();
-      expect(prisma.whatsAppTestSend.findUnique).toHaveBeenCalledWith({
-        where: { messageId: "wamid.missing" },
+      expect(prisma.whatsAppTestSend.updateMany).toHaveBeenCalledWith({
+        where: { messageId: "wamid.missing", organizationId: "org_1" },
+        data: { lastWebhookStatus: "delivered", lastWebhookAt: new Date("2026-05-15T12:00:00Z") },
       });
-      expect(prisma.whatsAppTestSend.update).not.toHaveBeenCalled();
+      expect(prisma.whatsAppTestSend.findFirstOrThrow).not.toHaveBeenCalled();
     });
 
-    it("updates lastWebhookStatus and lastWebhookAt when row exists", async () => {
-      const existing = {
+    it("updates lastWebhookStatus and lastWebhookAt and returns the row (Pattern B)", async () => {
+      const updatedAt = new Date("2026-05-15T13:00:05Z");
+      const updated = {
         id: "wts_3",
         organizationId: "org_1",
         managedChannelId: "mc_1",
@@ -112,48 +119,37 @@ describe("PrismaWhatsAppTestSendStore", () => {
         sentBy: "user_1",
         sentAt: new Date("2026-05-15T13:00:00Z"),
         apiStatus: "sent",
-        lastWebhookStatus: null,
-        lastWebhookAt: null,
-      };
-      const updatedAt = new Date("2026-05-15T13:00:05Z");
-      const updated = {
-        ...existing,
         lastWebhookStatus: "delivered",
         lastWebhookAt: updatedAt,
       };
-      (prisma.whatsAppTestSend.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(existing);
-      (prisma.whatsAppTestSend.update as ReturnType<typeof vi.fn>).mockResolvedValue(updated);
+      (prisma.whatsAppTestSend.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 1,
+      });
+      (prisma.whatsAppTestSend.findFirstOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue(
+        updated,
+      );
 
       const result = await store.updateWebhookStatus({
         messageId: "wamid.xyz789",
+        organizationId: "org_1",
         status: "delivered",
         at: updatedAt,
       });
 
       expect(result).toEqual(updated);
-      expect(prisma.whatsAppTestSend.update).toHaveBeenCalledWith({
-        where: { messageId: "wamid.xyz789" },
+      expect(prisma.whatsAppTestSend.updateMany).toHaveBeenCalledWith({
+        where: { messageId: "wamid.xyz789", organizationId: "org_1" },
         data: { lastWebhookStatus: "delivered", lastWebhookAt: updatedAt },
+      });
+      expect(prisma.whatsAppTestSend.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { messageId: "wamid.xyz789", organizationId: "org_1" },
       });
     });
 
-    it("returns null and does not call update when organizationId guard mismatches", async () => {
-      const existing = {
-        id: "wts_4",
-        organizationId: "org_owner",
-        managedChannelId: "mc_1",
-        messageId: "wamid.cross",
-        phoneNumberId: "pn_1",
-        templateName: "hello_world",
-        languageCode: "en_US",
-        toNumber: "15551234570",
-        sentBy: "user_1",
-        sentAt: new Date("2026-05-15T14:00:00Z"),
-        apiStatus: "sent",
-        lastWebhookStatus: null,
-        lastWebhookAt: null,
-      };
-      (prisma.whatsAppTestSend.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(existing);
+    it("no-ops (returns null) when organizationId mismatches (no matching row)", async () => {
+      (prisma.whatsAppTestSend.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
+      });
 
       const result = await store.updateWebhookStatus({
         messageId: "wamid.cross",
@@ -163,7 +159,7 @@ describe("PrismaWhatsAppTestSendStore", () => {
       });
 
       expect(result).toBeNull();
-      expect(prisma.whatsAppTestSend.update).not.toHaveBeenCalled();
+      expect(prisma.whatsAppTestSend.findFirstOrThrow).not.toHaveBeenCalled();
     });
   });
 });

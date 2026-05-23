@@ -1,3 +1,4 @@
+import { StaleVersionError } from "@switchboard/core";
 import type { PrismaDbClient } from "../prisma-db.js";
 import type { AgentDeployment, DeploymentStatus } from "@switchboard/schemas";
 
@@ -54,35 +55,51 @@ export class PrismaDeploymentStore {
     }) as unknown as AgentDeployment[];
   }
 
-  async updateStatus(id: string, status: DeploymentStatus): Promise<AgentDeployment> {
-    return this.prisma.agentDeployment.update({
-      where: { id },
+  async updateStatus(
+    organizationId: string,
+    id: string,
+    status: DeploymentStatus,
+  ): Promise<AgentDeployment> {
+    const result = await this.prisma.agentDeployment.updateMany({
+      where: { id, organizationId },
       data: { status },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    return this.prisma.agentDeployment.findFirstOrThrow({
+      where: { id, organizationId },
     }) as unknown as AgentDeployment;
   }
 
   async update(
+    organizationId: string,
     id: string,
     data: { inputConfig?: Record<string, unknown> },
   ): Promise<AgentDeployment | null> {
     const existing = await this.prisma.agentDeployment.findUnique({
       where: { id },
     });
-    if (!existing) return null;
+    if (!existing || existing.organizationId !== organizationId) return null;
 
     const mergedConfig = data.inputConfig
       ? { ...((existing.inputConfig as Record<string, unknown>) ?? {}), ...data.inputConfig }
       : undefined;
 
-    return this.prisma.agentDeployment.update({
-      where: { id },
+    const result = await this.prisma.agentDeployment.updateMany({
+      where: { id, organizationId },
       data: {
         ...(mergedConfig !== undefined ? { inputConfig: mergedConfig as object } : {}),
       },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    return this.prisma.agentDeployment.findFirstOrThrow({
+      where: { id, organizationId },
     }) as unknown as AgentDeployment;
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.agentDeployment.delete({ where: { id } });
+  async delete(organizationId: string, id: string): Promise<void> {
+    const result = await this.prisma.agentDeployment.deleteMany({
+      where: { id, organizationId },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 }

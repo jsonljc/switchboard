@@ -67,7 +67,7 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     if (!entry) {
       return reply.code(404).send({ error: "Memory entry not found", statusCode: 404 });
     }
-    await store.delete(memoryId);
+    await store.delete(orgId, memoryId);
     return reply.status(204).send();
   });
 
@@ -98,7 +98,7 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     if (!drafts.some((d) => d.id === faqId)) {
       return reply.code(404).send({ error: "FAQ draft not found", statusCode: 404 });
     }
-    await ownerStore.approveDraftFAQ(faqId);
+    await ownerStore.approveDraftFAQ(orgId, faqId);
     return { success: true };
   });
 
@@ -116,7 +116,7 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     if (!drafts.some((d) => d.id === faqId)) {
       return reply.code(404).send({ error: "FAQ draft not found", statusCode: 404 });
     }
-    await ownerStore.rejectDraftFAQ(faqId);
+    await ownerStore.rejectDraftFAQ(orgId, faqId);
     return reply.status(204).send();
   });
 };

@@ -88,14 +88,14 @@ export class WorkflowEngine {
   async startWorkflow(workflowId: string): Promise<WorkflowExecution> {
     const workflow = await this.requireWorkflow(workflowId);
     this.assertTransition(workflow.status, "running");
-    await this.deps.workflows.update(workflowId, { status: "running" });
+    await this.deps.workflows.update(workflow.organizationId, workflowId, { status: "running" });
     return this.runSteps(workflowId);
   }
 
   async resumeAfterApproval(workflowId: string, checkpointId: string): Promise<WorkflowExecution> {
     const workflow = await this.requireWorkflow(workflowId);
     this.assertTransition(workflow.status, "running");
-    await this.deps.workflows.update(workflowId, { status: "running" });
+    await this.deps.workflows.update(workflow.organizationId, workflowId, { status: "running" });
 
     const step = workflow.plan.steps[workflow.currentStepIndex];
     if (!step) throw new Error(`Step ${workflow.currentStepIndex} not found in plan`);
@@ -106,9 +106,12 @@ export class WorkflowEngine {
     const checkpoint = await this.deps.checkpoints.getById(checkpointId);
     if (checkpoint?.resolution?.fieldEdits) {
       const updatedParams = { ...action.parameters, ...checkpoint.resolution.fieldEdits };
-      await this.deps.actions.update(action.id, { status: "approved", parameters: updatedParams });
+      await this.deps.actions.update(action.organizationId, action.id, {
+        status: "approved",
+        parameters: updatedParams,
+      });
     } else {
-      await this.deps.actions.update(action.id, { status: "approved" });
+      await this.deps.actions.update(action.organizationId, action.id, { status: "approved" });
     }
 
     return this.runSteps(workflowId);
@@ -117,7 +120,7 @@ export class WorkflowEngine {
   async cancelWorkflow(workflowId: string): Promise<void> {
     const workflow = await this.requireWorkflow(workflowId);
     this.assertTransition(workflow.status, "cancelled");
-    await this.deps.workflows.update(workflowId, {
+    await this.deps.workflows.update(workflow.organizationId, workflowId, {
       status: "cancelled",
       completedAt: new Date(),
     });
@@ -138,7 +141,7 @@ export class WorkflowEngine {
       // Safety envelope check
       const envelopeError = this.checkSafetyEnvelope(workflow);
       if (envelopeError) {
-        return this.handleSafetyViolation(workflowId, envelopeError);
+        return this.handleSafetyViolation(workflow.organizationId, workflowId, envelopeError);
       }
 
       const nextStep = getNextPendingStep(workflow.plan);
@@ -148,7 +151,7 @@ export class WorkflowEngine {
 
       const action = await this.deps.actions.getById(nextStep.actionId);
       if (!action) {
-        return this.handleMissingAction(workflowId, nextStep.actionId);
+        return this.handleMissingAction(workflow.organizationId, workflowId, nextStep.actionId);
       }
 
       const result = await this.deps.stepExecutor.execute(action, {
@@ -178,10 +181,11 @@ export class WorkflowEngine {
   }
 
   private async handleSafetyViolation(
+    organizationId: string,
     workflowId: string,
     error: string,
   ): Promise<WorkflowExecution> {
-    await this.deps.workflows.update(workflowId, {
+    await this.deps.workflows.update(organizationId, workflowId, {
       status: "failed",
       error,
       errorCode: "SAFETY_ENVELOPE_EXCEEDED",
@@ -197,7 +201,7 @@ export class WorkflowEngine {
     if (areAllStepsTerminal(workflow.plan)) {
       const hasFailure = workflow.plan.steps.some((s) => s.status === "failed");
       const finalStatus = hasFailure ? "failed" : "completed";
-      await this.deps.workflows.update(workflowId, {
+      await this.deps.workflows.update(workflow.organizationId, workflowId, {
         status: finalStatus,
         completedAt: new Date(),
         error: hasFailure ? "One or more steps failed" : null,
@@ -207,10 +211,11 @@ export class WorkflowEngine {
   }
 
   private async handleMissingAction(
+    organizationId: string,
     workflowId: string,
     actionId: string,
   ): Promise<WorkflowExecution> {
-    await this.deps.workflows.update(workflowId, {
+    await this.deps.workflows.update(organizationId, workflowId, {
       status: "failed",
       error: `Action ${actionId} not found`,
       errorCode: "ACTION_NOT_FOUND",
@@ -238,7 +243,7 @@ export class WorkflowEngine {
     // Check if step result requests scheduling
     const stepResult = result.result as Record<string, unknown> | undefined;
     if (stepResult?.scheduleRequest) {
-      await this.deps.workflows.update(workflowId, {
+      await this.deps.workflows.update(workflow.organizationId, workflowId, {
         plan: updatedPlan,
         currentStepIndex: nextStep.index + 1,
         counters: updatedCounters,
@@ -251,7 +256,7 @@ export class WorkflowEngine {
       return this.requireWorkflow(workflowId);
     }
 
-    await this.deps.workflows.update(workflowId, {
+    await this.deps.workflows.update(workflow.organizationId, workflowId, {
       plan: updatedPlan,
       currentStepIndex: nextStep.index + 1,
       counters: updatedCounters,
@@ -273,7 +278,9 @@ export class WorkflowEngine {
       ttlMs: DEFAULT_APPROVAL_TTL_MS,
     });
     await this.deps.checkpoints.create(checkpoint);
-    await this.deps.workflows.update(workflowId, { status: "awaiting_approval" });
+    await this.deps.workflows.update(action.organizationId, workflowId, {
+      status: "awaiting_approval",
+    });
     return this.requireWorkflow(workflowId);
   }
 
@@ -286,7 +293,7 @@ export class WorkflowEngine {
     const updatedPlan = advanceStep(workflow.plan, nextStep.index, "failed", {
       error: result.error ?? result.reason ?? "Step failed",
     });
-    await this.deps.workflows.update(workflowId, {
+    await this.deps.workflows.update(workflow.organizationId, workflowId, {
       plan: updatedPlan,
       status: "failed",
       error: result.error ?? result.reason ?? "Step execution failed",

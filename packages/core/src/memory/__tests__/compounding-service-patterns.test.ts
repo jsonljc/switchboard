@@ -127,6 +127,7 @@ describe("ConversationCompoundingService — outcome-pattern writes (PR-3.1 book
     await localService.processConversationEnd({ ...baseEvent, contactId: "contact-1" });
 
     expect(localDeps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+      "org-1",
       "p-existing",
       expect.any(Number),
     );

@@ -62,6 +62,7 @@ describe("TaskRecorder", () => {
       }),
     );
     expect(mockSubmitOutput).toHaveBeenCalledWith(
+      "org-1",
       "task-1",
       expect.objectContaining({
         transcript: expect.arrayContaining([{ role: "user", content: "Hello" }]),

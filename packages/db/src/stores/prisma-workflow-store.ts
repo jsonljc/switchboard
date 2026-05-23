@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { StaleVersionError } from "@switchboard/core";
 import { mapRowToWorkflow, mapRowToAction, mapRowToCheckpoint } from "./prisma-workflow-mappers.js";
 import type {
   WorkflowExecution,
@@ -37,7 +38,7 @@ type PendingActionStatus =
 interface WorkflowStore {
   create(workflow: WorkflowExecution): Promise<void>;
   getById(id: string): Promise<WorkflowExecution | null>;
-  update(id: string, updates: Partial<WorkflowExecution>): Promise<void>;
+  update(organizationId: string, id: string, updates: Partial<WorkflowExecution>): Promise<void>;
   list(filter: {
     organizationId?: string;
     status?: WorkflowStatus;
@@ -49,7 +50,7 @@ interface WorkflowStore {
 interface PendingActionStore {
   create(action: PendingAction): Promise<void>;
   getById(id: string): Promise<PendingAction | null>;
-  update(id: string, updates: Partial<PendingAction>): Promise<void>;
+  update(organizationId: string, id: string, updates: Partial<PendingAction>): Promise<void>;
   listByWorkflow(workflowId: string): Promise<PendingAction[]>;
   listByStatus(
     organizationId: string,
@@ -62,7 +63,7 @@ interface ApprovalCheckpointStore {
   create(checkpoint: ApprovalCheckpoint): Promise<void>;
   getById(id: string): Promise<ApprovalCheckpoint | null>;
   getByWorkflowAndStep(workflowId: string, stepIndex: number): Promise<ApprovalCheckpoint | null>;
-  update(id: string, updates: Partial<ApprovalCheckpoint>): Promise<void>;
+  update(organizationId: string, id: string, updates: Partial<ApprovalCheckpoint>): Promise<void>;
   listPending(organizationId: string): Promise<ApprovalCheckpoint[]>;
 }
 
@@ -106,7 +107,11 @@ export class PrismaWorkflowStore {
         return mapRowToWorkflow(row);
       },
 
-      update: async (id: string, updates: Partial<WorkflowExecution>): Promise<void> => {
+      update: async (
+        organizationId: string,
+        id: string,
+        updates: Partial<WorkflowExecution>,
+      ): Promise<void> => {
         const data: Record<string, unknown> = {};
 
         if (updates.status !== undefined) data.status = updates.status;
@@ -121,7 +126,11 @@ export class PrismaWorkflowStore {
         if (updates.errorCode !== undefined) data.errorCode = updates.errorCode;
         if (updates.completedAt !== undefined) data.completedAt = updates.completedAt;
 
-        await this.prisma.workflowExecution.update({ where: { id }, data });
+        const result = await this.prisma.workflowExecution.updateMany({
+          where: { id, organizationId },
+          data,
+        });
+        if (result.count === 0) throw new StaleVersionError(id, -1, -1);
       },
 
       list: async (filter: {
@@ -181,14 +190,22 @@ export class PrismaWorkflowStore {
         return mapRowToAction(row);
       },
 
-      update: async (id: string, updates: Partial<PendingAction>): Promise<void> => {
+      update: async (
+        organizationId: string,
+        id: string,
+        updates: Partial<PendingAction>,
+      ): Promise<void> => {
         const data: Record<string, unknown> = {};
         if (updates.status !== undefined) data.status = updates.status;
         if (updates.parameters !== undefined) data.parameters = updates.parameters as object;
         if (updates.resolvedAt !== undefined) data.resolvedAt = updates.resolvedAt;
         if (updates.resolvedBy !== undefined) data.resolvedBy = updates.resolvedBy;
 
-        await this.prisma.pendingActionRecord.update({ where: { id }, data });
+        const result = await this.prisma.pendingActionRecord.updateMany({
+          where: { id, organizationId },
+          data,
+        });
+        if (result.count === 0) throw new StaleVersionError(id, -1, -1);
       },
 
       listByWorkflow: async (workflowId: string): Promise<PendingAction[]> => {
@@ -251,13 +268,23 @@ export class PrismaWorkflowStore {
         return mapRowToCheckpoint(row);
       },
 
-      update: async (id: string, updates: Partial<ApprovalCheckpoint>): Promise<void> => {
+      update: async (
+        organizationId: string,
+        id: string,
+        updates: Partial<ApprovalCheckpoint>,
+      ): Promise<void> => {
         const data: Record<string, unknown> = {};
         if (updates.status !== undefined) data.status = updates.status;
         if (updates.resolution !== undefined) {
           data.resolution = updates.resolution ? (updates.resolution as object) : undefined;
         }
-        await this.prisma.approvalCheckpointRecord.update({ where: { id }, data });
+        // ApprovalCheckpointRecord has no direct organizationId column — the
+        // tenant is reached through the workflow relation.
+        const result = await this.prisma.approvalCheckpointRecord.updateMany({
+          where: { id, workflow: { organizationId } },
+          data,
+        });
+        if (result.count === 0) throw new StaleVersionError(id, -1, -1);
       },
 
       listPending: async (organizationId: string): Promise<ApprovalCheckpoint[]> => {

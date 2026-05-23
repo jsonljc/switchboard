@@ -81,6 +81,7 @@ describe("ConversationCompoundingService — two-stage merge at 0.84 (PR-3.2b)",
     await service.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
 
     expect(deps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+      "org-1",
       "mem-1",
       expect.any(Number),
     );
@@ -270,6 +271,7 @@ describe("ConversationCompoundingService — two-stage merge at 0.84 (PR-3.2b)",
     await service.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
 
     expect(deps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+      "org-1",
       "mem-higher",
       expect.any(Number),
     );

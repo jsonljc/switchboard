@@ -191,11 +191,11 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
     // Persist productionTier if this is Stage 4 (storyboard) approval
     if (parsed.data.action === "continue" && job.currentStage === "storyboard") {
       const tier = parsed.data.productionTier ?? "basic";
-      await jobStore.updateProductionTier(id, tier);
+      await jobStore.updateProductionTier(orgId, id, tier);
     }
 
     if (parsed.data.action === "stop") {
-      const stopped = await jobStore.stop(id, job.currentStage);
+      const stopped = await jobStore.stop(orgId, id, job.currentStage);
 
       // Fire stop event so the running Inngest function unblocks and exits
       await inngestClient.send({

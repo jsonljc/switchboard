@@ -254,13 +254,13 @@ describe("WorkflowEngine", () => {
       });
 
       // Manually set replansUsed to trigger the check
-      await deps.workflows.update(workflow.id, {
+      await deps.workflows.update(workflow.organizationId, workflow.id, {
         status: "running",
         counters: { stepsCompleted: 0, dollarsAtRisk: 0, replansUsed: 1 },
       });
 
       // Reset to pending so startWorkflow can transition
-      await deps.workflows.update(workflow.id, { status: "pending" });
+      await deps.workflows.update(workflow.organizationId, workflow.id, { status: "pending" });
 
       const result = await engine.startWorkflow(workflow.id);
 
@@ -461,7 +461,7 @@ describe("WorkflowEngine", () => {
       if (!checkpoints[0]) throw new Error("No checkpoint found");
 
       // Simulate resolving with field edits
-      await deps.checkpoints.update(checkpoints[0].id, {
+      await deps.checkpoints.update("org-1", checkpoints[0].id, {
         status: "modified",
         resolution: {
           decidedBy: "operator-1",

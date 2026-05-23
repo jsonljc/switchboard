@@ -72,7 +72,7 @@ export class StepExecutor {
         return { outcome: "requires_approval", reason: evaluation.reason };
       }
       // Hard reject
-      await this.deps.actionStore.update(action.id, {
+      await this.deps.actionStore.update(action.organizationId, action.id, {
         status: "rejected",
         resolvedAt: new Date(),
         resolvedBy: "policy_engine",
@@ -81,8 +81,8 @@ export class StepExecutor {
     }
 
     // 2. Mark as executing
-    await this.deps.actionStore.update(action.id, { status: "approved" });
-    await this.deps.actionStore.update(action.id, { status: "executing" });
+    await this.deps.actionStore.update(action.organizationId, action.id, { status: "approved" });
+    await this.deps.actionStore.update(action.organizationId, action.id, { status: "executing" });
 
     // 3. Execute via ActionExecutor (bypass policy — already checked)
     try {
@@ -93,7 +93,7 @@ export class StepExecutor {
       );
 
       if (execResult.success) {
-        await this.deps.actionStore.update(action.id, {
+        await this.deps.actionStore.update(action.organizationId, action.id, {
           status: "completed",
           resolvedAt: new Date(),
           resolvedBy: "auto",
@@ -101,7 +101,7 @@ export class StepExecutor {
         return { outcome: "completed", result: execResult.result };
       }
 
-      await this.deps.actionStore.update(action.id, {
+      await this.deps.actionStore.update(action.organizationId, action.id, {
         status: "failed",
         resolvedAt: new Date(),
         resolvedBy: "auto",
@@ -109,7 +109,7 @@ export class StepExecutor {
       return { outcome: "failed", error: execResult.error };
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      await this.deps.actionStore.update(action.id, {
+      await this.deps.actionStore.update(action.organizationId, action.id, {
         status: "failed",
         resolvedAt: new Date(),
         resolvedBy: "auto",

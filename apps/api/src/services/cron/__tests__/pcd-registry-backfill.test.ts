@@ -46,7 +46,7 @@ describe("backfillJobOnce", () => {
     );
     expect(stores.productStore.findOrCreateForJob).toHaveBeenCalledOnce();
     expect(stores.creatorStore.findOrCreateStockForDeployment).toHaveBeenCalledWith("dep_1");
-    expect(stores.jobStore.markRegistryBackfilled).toHaveBeenCalledWith("job_1", {
+    expect(stores.jobStore.markRegistryBackfilled).toHaveBeenCalledWith("org_1", "job_1", {
       productIdentityId: "prd_new",
       creatorIdentityId: "cr_new",
     });

@@ -30,7 +30,7 @@ export function buildWhatsAppStatusBridge(deps: BridgeDeps): WhatsAppStatusBridg
         messageId: update.messageId,
         status: update.status as WebhookStatus,
         at: update.timestamp,
-        ...(orgId ? { organizationId: orgId } : {}),
+        organizationId: orgId,
       });
     },
   };

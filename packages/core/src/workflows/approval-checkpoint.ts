@@ -45,6 +45,7 @@ export interface ResolveInput {
 
 export async function resolveCheckpoint(
   store: ApprovalCheckpointStore,
+  organizationId: string,
   checkpointId: string,
   input: ResolveInput,
 ): Promise<void> {
@@ -73,7 +74,7 @@ export async function resolveCheckpoint(
     reject: "rejected",
     modify: "modified",
   };
-  await store.update(checkpointId, {
+  await store.update(organizationId, checkpointId, {
     status: statusMap[input.action],
     resolution: {
       decidedBy: input.decidedBy,
