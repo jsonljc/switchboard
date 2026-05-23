@@ -137,6 +137,9 @@ export * from "./approval.js";
 // Handoff canonical shape (hoisted from core per RGC v1 §8.3)
 export * from "./handoff.js";
 
+// API conversation projections (wire shapes for /api/conversations)
+export * from "./conversations.js";
+
 // PCD Identity Registry
 export * from "./pcd-identity.js";
 

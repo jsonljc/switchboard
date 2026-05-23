@@ -4,18 +4,18 @@ import {
   ConversationStateNotFoundError,
   ConversationStateInvalidTransitionError,
 } from "@switchboard/core/platform";
+import type {
+  ConversationMessageEntry,
+  ConversationSummary,
+  ConversationDetail,
+  ConversationListResult,
+} from "@switchboard/schemas";
 import { resolveOperatorActor } from "./operator-actor.js";
 import { finalizeOperatorTrace } from "./work-trace-delivery-enrichment.js";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface MessageEntry {
-  role: string;
-  text: string;
-  timestamp: string;
-}
 
 interface ConversationRow {
   id: string;
@@ -30,56 +30,22 @@ interface ConversationRow {
   lastActivityAt: Date;
 }
 
-export interface ConversationSummary {
-  id: string;
-  threadId: string;
-  channel: string;
-  principalId: string;
-  organizationId: string | null;
-  status: string;
-  currentIntent: string | null;
-  messageCount: number;
-  lastMessage: string | null;
-  firstReplyAt: string | null;
-  lastActivityAt: string;
-}
-
-export interface ConversationDetail {
-  id: string;
-  threadId: string;
-  channel: string;
-  principalId: string;
-  organizationId: string | null;
-  status: string;
-  currentIntent: string | null;
-  firstReplyAt: string | null;
-  lastActivityAt: string;
-  messages: MessageEntry[];
-}
-
-export interface ConversationListResult {
-  conversations: ConversationSummary[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function safeParseMessages(raw: unknown): MessageEntry[] {
-  if (Array.isArray(raw)) return raw as MessageEntry[];
+export function safeParseMessages(raw: unknown): ConversationMessageEntry[] {
+  if (Array.isArray(raw)) return raw as ConversationMessageEntry[];
   if (typeof raw !== "string") return [];
   try {
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as MessageEntry[]) : [];
+    return Array.isArray(parsed) ? (parsed as ConversationMessageEntry[]) : [];
   } catch {
     return [];
   }
 }
 
-function lastMessagePreview(messages: MessageEntry[]): string | null {
+function lastMessagePreview(messages: ConversationMessageEntry[]): string | null {
   if (messages.length === 0) return null;
   const last = messages[messages.length - 1];
   return last ? (last.text ?? null) : null;
