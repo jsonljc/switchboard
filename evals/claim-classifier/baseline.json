@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-23T01:36:51.401Z",
+  "classifierPromptHash": "6aed7131cf224c76",
+  "classifierPromptVersion": "claim-classifier@1.0.0",
+  "totalFixtures": 105,
+  "overallAccuracy": 0.9714285714285714,
+  "perClaimTypeAccuracy": {
+    "efficacy": {
+      "correct": 11,
+      "total": 11,
+      "accuracy": 1
+    },
+    "safety-claim": {
+      "correct": 9,
+      "total": 11,
+      "accuracy": 0.8181818181818182
+    },
+    "superiority": {
+      "correct": 11,
+      "total": 11,
+      "accuracy": 1
+    },
+    "urgency": {
+      "correct": 11,
+      "total": 11,
+      "accuracy": 1
+    },
+    "testimonial": {
+      "correct": 8,
+      "total": 9,
+      "accuracy": 0.8888888888888888
+    },
+    "medical-advice": {
+      "correct": 11,
+      "total": 11,
+      "accuracy": 1
+    },
+    "diagnosis": {
+      "correct": 9,
+      "total": 9,
+      "accuracy": 1
+    },
+    "credentials": {
+      "correct": 13,
+      "total": 13,
+      "accuracy": 1
+    },
+    "none": {
+      "correct": 19,
+      "total": 19,
+      "accuracy": 1
+    }
+  },
+  "toleranceBps": 200
+}
