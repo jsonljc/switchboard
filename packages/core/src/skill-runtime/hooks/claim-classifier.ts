@@ -290,8 +290,7 @@ export class ClaimClassifierHook implements SkillHook {
       conversationId: ctx.sessionId,
     };
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this.deps.verdictStore.save({ ...verdict, deploymentId: ctx.deploymentId } as any);
+      await this.deps.verdictStore.save({ ...verdict, deploymentId: ctx.deploymentId });
     } catch (err) {
       console.error("[claim-classifier] verdictStore.save threw on fail-closed", err);
     }
@@ -337,8 +336,7 @@ export class ClaimClassifierHook implements SkillHook {
       };
       try {
         const saveInput = { ...verdict, deploymentId: ctx.deploymentId, details: a.details };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await this.deps.verdictStore.save(saveInput as any);
+        await this.deps.verdictStore.save(saveInput);
       } catch (err) {
         console.error("[claim-classifier] verdictStore.save threw on escalate", err);
       }
@@ -384,8 +382,7 @@ export class ClaimClassifierHook implements SkillHook {
       };
       try {
         const saveInput = { ...verdict, deploymentId: ctx.deploymentId, details: a.details };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await this.deps.verdictStore.save(saveInput as any);
+        await this.deps.verdictStore.save(saveInput);
       } catch (err) {
         console.error("[claim-classifier] verdictStore.save threw on rewrite", err);
       }
