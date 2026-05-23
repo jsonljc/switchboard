@@ -88,22 +88,22 @@ No coordination with the cockpit-v2 owner is required for PR-2.
 
 ### Modify
 
-| Path                                                                           | Change                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/schemas/src/chat.ts`                                                 | Extend `ConversationStateSchema` with `messages`, `leadProfile`, `detectedLanguage`, `machineState` so the chat-side `ConversationStateData` becomes a pure consumer (was a strict superset).                                                                                                                                 |
-| `packages/schemas/src/index.ts`                                                | Add 3 barrel re-exports: `approval.js`, `handoff.js`, `conversations.js`.                                                                                                                                                                                                                                                     |
-| `packages/schemas/src/dashboard.ts`                                            | Rename `DashboardOverviewSchema` → `OperatorOverviewSchema`; add back-compat alias `DashboardOverviewSchema = OperatorOverviewSchema` + `type DashboardOverview = OperatorOverview` with a comment flagging PR-4 removal.                                                                                                     |
-| `packages/core/src/approval/state-machine.ts`                                  | Replace local `interface ApprovalState` with `type ApprovalState = z.infer<typeof ApprovalStateSchema>` imported from `@switchboard/schemas`. Re-export for back-compat at `packages/core/src/approval/index.ts`.                                                                                                             |
-| `packages/core/src/platform/platform-lifecycle.ts`                             | Replace `type ApprovalRecord = NonNullable<Awaited<ReturnType<CoreApprovalStore["getById"]>>>` (line 36) with `import type { ApprovalRecord } from "@switchboard/schemas"`.                                                                                                                                                   |
-| `packages/db/src/storage/prisma-approval-store.ts`                             | Replace local `type ApprovalRecord = { ... }` (line 6) with import; `toApprovalRecord` becomes the row→schema mapper.                                                                                                                                                                                                         |
-| `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts` | Replace `makeApprovalRecord(overrides): ApprovalRecord` local-typed helper with the imported schema type.                                                                                                                                                                                                                     |
-| `apps/api/src/routes/dashboard-overview.ts`                                    | Remove local `interface ApprovalRecord` (lines 64-73); import from `@switchboard/schemas`. Rename `buildDashboardOverview` → `buildOperatorOverview` and update its return type. (The function rename is internal — the route's URL stays `/api/dashboard/overview`.)                                                         |
-| `packages/core/src/handoff/types.ts`                                           | Replace each `export interface` / `export type` with a re-export from `@switchboard/schemas` (`HandoffPackage` becomes `Handoff` from schemas; keep a `HandoffPackage` alias for back-compat during the migration). `HandoffStore` stays in core (it's a store interface, not a cross-app value type — appropriate location). |
-| `apps/api/src/routes/escalations.ts`                                           | **No edit expected.** Route works with Prisma row shapes directly (no `HandoffPackage`/`Handoff` import). Task 5 Step 4 verifies via typecheck. Listed in this table only so reviewers can see it was considered and intentionally skipped.                                                                                   |
-| `packages/core/src/decisions/adapters/handoff-adapter.ts`                      | Update `HandoffPackage` import (line 2) to source `Handoff` from schemas. The inline `/contacts/...` URL literal at line 22 is left untouched — its extraction is PR-2.5's job (routeTemplates).                                                                                                                              |
-| `apps/chat/src/conversation/state.ts`                                          | Replace local `interface ConversationStateData` + `interface ConversationMessage` with re-exports of the schema types from `@switchboard/schemas`. Helpers (`createConversation`, `transitionConversation`) stay in this file.                                                                                                |
-| `apps/chat/src/conversation/store.ts`                                          | No change to logic — only the import switches from `./state.js` to `@switchboard/schemas`. Same for `apps/chat/src/conversation/prisma-store.ts` and `apps/chat/src/conversation/threads.ts`.                                                                                                                                 |
-| `apps/api/src/routes/conversations.ts`                                         | Remove local `interface ConversationRow`, `ConversationSummary`, `ConversationDetail`, `ConversationListResult` (lines 20-66). Import the projection types from `@switchboard/schemas`. The route's runtime logic is unchanged.                                                                                               |
+| Path                                                                           | Change                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/schemas/src/chat.ts`                                                 | Extend `ConversationStateSchema` with `messages`, `leadProfile`, `detectedLanguage`, `machineState` so the chat-side `ConversationStateData` becomes a pure consumer (was a strict superset).                                                                                                                                                                                                                                           |
+| `packages/schemas/src/index.ts`                                                | Add 3 barrel re-exports: `approval.js`, `handoff.js`, `conversations.js`.                                                                                                                                                                                                                                                                                                                                                               |
+| `packages/schemas/src/dashboard.ts`                                            | Rename `DashboardOverviewSchema` → `OperatorOverviewSchema`; add back-compat alias `DashboardOverviewSchema = OperatorOverviewSchema` + `type DashboardOverview = OperatorOverview` with a comment flagging PR-4 removal.                                                                                                                                                                                                               |
+| `packages/core/src/approval/state-machine.ts`                                  | Replace local `interface ApprovalState` with `type ApprovalState = z.infer<typeof ApprovalStateSchema>` imported from `@switchboard/schemas`. Re-export for back-compat at `packages/core/src/approval/index.ts`.                                                                                                                                                                                                                       |
+| `packages/core/src/platform/platform-lifecycle.ts`                             | Replace `type ApprovalRecord = NonNullable<Awaited<ReturnType<CoreApprovalStore["getById"]>>>` (line 36) with `import type { ApprovalRecord } from "@switchboard/schemas"`.                                                                                                                                                                                                                                                             |
+| `packages/db/src/storage/prisma-approval-store.ts`                             | Replace local `type ApprovalRecord = { ... }` (line 6) with import; `toApprovalRecord` becomes the row→schema mapper.                                                                                                                                                                                                                                                                                                                   |
+| `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts` | Replace `makeApprovalRecord(overrides): ApprovalRecord` local-typed helper with the imported schema type.                                                                                                                                                                                                                                                                                                                               |
+| `apps/api/src/routes/dashboard-overview.ts`                                    | Remove local `interface ApprovalRecord` (lines 64-73); import from `@switchboard/schemas`. Rename `buildDashboardOverview` → `buildOperatorOverview` and update its return type. (The function rename is internal — the route's URL stays `/api/dashboard/overview`.)                                                                                                                                                                   |
+| `packages/core/src/handoff/types.ts`                                           | Replace each `export interface` / `export type` with a re-export from `@switchboard/schemas` (`HandoffPackage` becomes `Handoff` from schemas; keep a `HandoffPackage` alias for back-compat during the migration). `HandoffStore` stays in core (it's a store interface, not a cross-app value type — appropriate location).                                                                                                           |
+| `apps/api/src/routes/escalations.ts`                                           | **No edit expected.** Route works with Prisma row shapes directly (no `HandoffPackage`/`Handoff` import). Task 5 Step 4 verifies via typecheck. Listed in this table only so reviewers can see it was considered and intentionally skipped.                                                                                                                                                                                             |
+| `packages/core/src/decisions/adapters/handoff-adapter.ts`                      | Update `HandoffPackage` import (line 2) to source `Handoff` from schemas. The inline `/contacts/...` URL literal at line 22 is left untouched — its extraction is PR-2.5's job (routeTemplates).                                                                                                                                                                                                                                        |
+| `apps/chat/src/conversation/state.ts`                                          | Replace local `interface ConversationStateData` + `interface ConversationMessage` with re-exports of the schema types from `@switchboard/schemas`. Helpers (`createConversation`, `transitionConversation`) stay in this file.                                                                                                                                                                                                          |
+| `apps/chat/src/conversation/store.ts`                                          | **No direct import changes expected.** These three files (store.ts / prisma-store.ts / threads.ts) keep importing `ConversationStateData` / `ConversationMessage` from `./state.js`, which now re-exports the schema types as a compatibility shim. Keeping the imports as-is minimizes blast radius — only `state.ts` itself moves to schemas, neighbouring files don't shift. PR-4 may collapse the shim if the cost-benefit changes. |
+| `apps/api/src/routes/conversations.ts`                                         | Remove local `interface ConversationRow`, `ConversationSummary`, `ConversationDetail`, `ConversationListResult` (lines 20-66). Import the projection types from `@switchboard/schemas`. The route's runtime logic is unchanged.                                                                                                                                                                                                         |
 
 ### Untouched but worth noting
 
@@ -468,6 +468,58 @@ describe("ApprovalRecordSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("keeps legacy request-date coercion but requires strict Date in state (mixed-boundary lock)", () => {
+    // ApprovalRequestSchema in chat.ts uses z.coerce.date() for legacy reasons
+    // (PR-2 leaves it untouched). ApprovalStateSchema (Task 1) is strict —
+    // z.date() with no coercion. The composed ApprovalRecord therefore has
+    // intentionally asymmetric date handling: request.expiresAt accepts an
+    // ISO string and coerces; state.expiresAt rejects strings outright. This
+    // test locks the asymmetry so a future reviewer doesn't "tidy up" one
+    // side without the other.
+    //
+    // The asymmetry is documented in the "Schema boundary rule" /
+    // "Reconciliation with existing z.coerce.date() usages" section of the
+    // PR-2 plan; a blanket sweep of legacy coerce-date usages is deferred
+    // to PR-3 / a follow-up.
+    const requestWithStringDate = {
+      ...validRequest,
+      // String-typed dates on the request side — should still parse via coercion.
+      expiresAt: "2026-12-31T23:59:59.000Z" as unknown as Date,
+      createdAt: "2026-05-22T10:00:00.000Z" as unknown as Date,
+    };
+    const acceptsStringOnRequest = ApprovalRecordSchema.safeParse({
+      request: requestWithStringDate,
+      state: {
+        status: "pending",
+        respondedBy: null,
+        respondedAt: null,
+        patchValue: null,
+        expiresAt: new Date(),
+        version: 1,
+        quorum: null,
+      },
+      envelopeId: "env_1",
+      organizationId: null,
+    });
+    expect(acceptsStringOnRequest.success).toBe(true);
+
+    const rejectsStringOnState = ApprovalRecordSchema.safeParse({
+      request: validRequest,
+      state: {
+        status: "pending",
+        respondedBy: null,
+        respondedAt: null,
+        patchValue: null,
+        expiresAt: "2026-12-31T23:59:59.000Z", // string — must be rejected
+        version: 1,
+        quorum: null,
+      },
+      envelopeId: "env_1",
+      organizationId: null,
+    });
+    expect(rejectsStringOnState.success).toBe(false);
+  });
 });
 ```
 
@@ -501,7 +553,7 @@ export type ApprovalRecord = z.infer<typeof ApprovalRecordSchema>;
 - [ ] **Step 4: Run the test to verify it passes.**
 
 Run: `pnpm --filter @switchboard/schemas test -- --run packages/schemas/src/__tests__/approval.test.ts 2>&1 | tail -10`
-Expected: PASS — 3 new cases green; the 4 from Task 1 still green.
+Expected: PASS — 4 new cases green (including the mixed-boundary lock); the 4 from Task 1 still green.
 
 - [ ] **Step 5: Commit.**
 
@@ -1028,7 +1080,7 @@ The chat-side `ConversationStateData` interface is a superset of the existing `C
 - Modify: `packages/schemas/src/chat.ts`.
 - Modify: `packages/schemas/src/__tests__/schemas.test.ts` (or wherever ConversationStateSchema is currently tested).
 - Modify: `apps/chat/src/conversation/state.ts`.
-- Modify: `apps/chat/src/conversation/store.ts`, `prisma-store.ts`, `threads.ts` (import-path updates only).
+- Untouched (deliberately): `apps/chat/src/conversation/store.ts`, `prisma-store.ts`, `threads.ts` — these keep importing from `./state.js`, which now re-exports the schema types as a compatibility shim. See Step 5 below for the rationale.
 
 - [ ] **Step 1: Add `ConversationMessageSchema` to `packages/schemas/src/chat.ts`.**
 
@@ -1061,15 +1113,33 @@ Find the existing `ConversationStateSchema` block (currently ends at line 64 wit
 
 **Why `.default(...)` and not required?** Persisted state today does not parse through this schema (the prisma-store mapper at `apps/chat/src/conversation/prisma-store.ts:145-170` populates these fields manually), so a strict-required field would not break hydration in the current architecture. But if any future API endpoint, fixture loader, or third-party adapter parses a partial in-flight shape, `.default(...)` matches the principle "schemas accept any in-flight shape" at near-zero cost. The Schema boundary rule lists this explicitly.
 
+**Input vs output type asymmetry.** `.default(...)` makes Zod's input type (what `safeParse` accepts) diverge from its output type (what the inferred TypeScript type contains). At the input, the four expanded fields are optional; at the output, they are always present (with the default substituted if the input omitted them). Throughout PR-2 and downstream consumers, **always use the inferred output type** — i.e. `type ConversationStateData = z.infer<typeof ConversationStateSchema>` (equivalent to `z.output<typeof ConversationStateSchema>`), never `z.input<typeof ConversationStateSchema>`. If a future caller treats the type as the input shape (and tries to read `state.messages` without checking for undefined), the bug is silent — the inferred output covers it but the input does not. Test fixtures may omit these fields at parse time, but downstream code reads them as guaranteed.
+
 `LeadProfileSchema` exists in schemas at `packages/schemas/src/crm.ts:102` (verified during plan-writing). Import it as `import { LeadProfileSchema } from "./crm.js"` — or via the barrel if `chat.ts` doesn't already include it transitively.
 
-**Verification:**
+**Verification — schema exists:**
 
 ```bash
 rg -n 'LeadProfileSchema\|export.*LeadProfile\b' packages/schemas/src --type ts 2>&1 | head -10
 ```
 
 If 0 hits, add a Task 6.5 to hoist `LeadProfile` from wherever it currently lives (chat or core) into schemas. If hits exist, proceed.
+
+**Verification — shape parity (mandatory).** The chat-side `ConversationStateData.leadProfile` field at `apps/chat/src/conversation/state.ts` may have evolved independently from the CRM schema's `LeadProfile`. Replacing the chat-side type with `z.infer<typeof LeadProfileSchema>` is a silent contract change unless the two shapes match field-for-field. Before importing the CRM schema, run:
+
+```bash
+rg -n 'interface LeadProfile\b|type LeadProfile\b|LeadProfileSchema' apps packages --type ts 2>&1 | head -40
+```
+
+Then open the two declarations side by side (CRM at `packages/schemas/src/crm.ts:102` + chat-side definition wherever it lives) and confirm:
+
+- Same field names.
+- Same field types (string vs string|null, etc.).
+- Same optionality (`?` vs required).
+
+If the shapes differ — even slightly — Task 6 must NOT swap the chat-side `LeadProfile` for the CRM `LeadProfile` blindly. Either (a) widen CRM's `LeadProfileSchema` to be a strict superset of the chat usage and migrate, or (b) introduce a separate `ChatLeadProfileSchema` in `chat.ts` for the chat usage and leave CRM's untouched. Pick (a) only if the wider shape is consistent with CRM's data model; otherwise (b) is correct and the duplication is intentional (different domain → different shape).
+
+If the shapes match, proceed with the import as planned and document the verification result in the PR description.
 
 - [ ] **Step 3: Write a regression test for the expanded schema.**
 
@@ -1297,14 +1367,14 @@ import { z } from "zod";
 export const ConversationMessageEntrySchema = z.object({
   role: z.string(),
   text: z.string(),
-  timestamp: z.string(),
+  timestamp: z.string().datetime(),
 });
 export type ConversationMessageEntry = z.infer<typeof ConversationMessageEntrySchema>;
 
 /**
  * Summary projection of ConversationState — what `/api/conversations` returns
  * in its list response. `messages` is collapsed to count + preview, dates are
- * ISO strings.
+ * ISO strings (RFC 3339 / Zod's `.datetime()`).
  */
 export const ConversationSummarySchema = z.object({
   id: z.string(),
@@ -1316,8 +1386,8 @@ export const ConversationSummarySchema = z.object({
   currentIntent: z.string().nullable(),
   messageCount: z.number().int().min(0),
   lastMessage: z.string().nullable(),
-  firstReplyAt: z.string().nullable(),
-  lastActivityAt: z.string(),
+  firstReplyAt: z.string().datetime().nullable(),
+  lastActivityAt: z.string().datetime(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 
@@ -1333,8 +1403,8 @@ export const ConversationDetailSchema = z.object({
   organizationId: z.string().nullable(),
   status: z.string(),
   currentIntent: z.string().nullable(),
-  firstReplyAt: z.string().nullable(),
-  lastActivityAt: z.string(),
+  firstReplyAt: z.string().datetime().nullable(),
+  lastActivityAt: z.string().datetime(),
   messages: z.array(ConversationMessageEntrySchema),
 });
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
@@ -1545,7 +1615,7 @@ The exported function rename is internal — no other app imports `buildDashboar
 
 - [ ] **Step 2: Update `apps/dashboard/src/lib/api-client/dashboard.ts`.**
 
-Replace at lines 4, 48, 49:
+Update **only the type annotation** at lines 4 + 48 + 49. The **method name `getDashboardOverview` stays unchanged** — it's the public API surface consumed by hooks and components, and renaming public methods is product-vocabulary churn that PR-2 explicitly does not own. PR-2 is a canonical-type migration; the method's _return type_ tightens to `OperatorOverview` (via the back-compat alias `DashboardOverview = OperatorOverview` this would compile either way, but tightening the annotation is what makes the new canonical name visible to readers of the api client).
 
 ```ts
 // Before:
@@ -1557,31 +1627,43 @@ async getDashboardOverview(orgId: string): Promise<DashboardOverview> {
 // After:
 import { OperatorOverview, ... } from "@switchboard/schemas";
 // ...
-async getOperatorOverview(orgId: string): Promise<OperatorOverview> {
+async getDashboardOverview(orgId: string): Promise<OperatorOverview> {
   return this.request<OperatorOverview>(`/api/${orgId}/dashboard/overview`);
 }
 ```
 
-The route path stays `/api/${orgId}/dashboard/overview` — only the type/method names change.
+The route path stays `/api/${orgId}/dashboard/overview`; the method name stays `getDashboardOverview`; only the inferred return type changes. Hooks and components that import this method need no change.
 
-If `getDashboardOverview` has callers outside this file, find them:
+If a future product-wide terminology cleanup wants `getOperatorOverview`, that's a separate PR — bundling the rename here is unnecessary churn.
+
+Confirm no callers expect the old type name surfaced through the method:
 
 ```bash
 rg -n 'getDashboardOverview' apps/dashboard/src 2>&1
 ```
 
-Update each caller to `getOperatorOverview`. Expected: 1 hit at `apps/dashboard/src/app/api/dashboard/overview/route.ts:10`.
+Expected: 2 hits — one at `apps/dashboard/src/lib/api-client/dashboard.ts` (the method definition), one at `apps/dashboard/src/app/api/dashboard/overview/route.ts:10` (the Next handler call site). Both compile unchanged because the type-name tightening is type-only.
 
-- [ ] **Step 3: Update the Next route handler.**
+- [ ] **Step 3: Update the Next route handler — type import only.**
 
-`apps/dashboard/src/app/api/dashboard/overview/route.ts`:
+`apps/dashboard/src/app/api/dashboard/overview/route.ts:10` currently imports `DashboardOverview` as a type. The method call `client.getDashboardOverview(...)` stays untouched (Step 2 keeps the method name). Only the type import line changes:
 
 ```ts
 // Before:
-const data = await client.getDashboardOverview(session.organizationId);
+import type { DashboardOverview } from "@switchboard/schemas";
 // After:
-const data = await client.getOperatorOverview(session.organizationId);
+import type { OperatorOverview } from "@switchboard/schemas";
 ```
+
+Then update any annotation in this file that referenced `DashboardOverview` to `OperatorOverview`. If the file uses the type inline only via `client.getDashboardOverview(...)`'s return shape (no explicit `: DashboardOverview` annotation), no further edit is needed — the call site is type-only and follows the api client's inferred return type automatically.
+
+Verify with:
+
+```bash
+rg -n 'DashboardOverview' apps/dashboard/src/app/api/dashboard/overview/route.ts
+```
+
+Expected after edit: 0 hits.
 
 - [ ] **Step 4: Update `apps/dashboard/src/hooks/use-dashboard-overview.ts`.**
 
@@ -1729,10 +1811,21 @@ Performed after the plan was written, against the spec sections it consumes.
 **Type consistency:**
 
 - `Handoff` is the canonical name in schemas; `HandoffPackage` is the back-compat alias. Tasks 4-5 use both consistently.
-- `OperatorOverview` is the canonical; `DashboardOverview` is the back-compat alias. Tasks 8-9 use both consistently.
+- `OperatorOverview` is the canonical type; `DashboardOverview` is the back-compat alias. `getDashboardOverview` (api-client method) and `useDashboardOverview` (hook) keep their names — only their inferred return types change. Tasks 8-9 use these conventions consistently.
 - `ApprovalState` is hoisted in Task 1 before `ApprovalRecord` references it in Task 2.
 - `HandoffConversationSummary` (handoff inner) and `ConversationSummary` (api projection) have explicit collision resolution at Task 4 Step 4.
-- The schema boundary rule (Date for runtime, ISO strings for wire) is followed consistently across Tasks 1, 4, 6, 7.
+- The schema boundary rule (Date for runtime, ISO strings for wire) is followed consistently across Tasks 1, 4, 6, 7. All `z.string()` fields that represent ISO dates in projection schemas use `.datetime()` (Task 7's `ConversationSummarySchema` / `ConversationDetailSchema` / `ConversationMessageEntrySchema`).
+- The mixed-boundary asymmetry inside `ApprovalRecord` (request side coerces dates via legacy `ApprovalRequestSchema`; state side requires strict `Date` via `ApprovalStateSchema`) is documented in the "Reconciliation" callout AND locked by a dedicated test in Task 2 Step 1 (the "mixed-boundary lock" case) so a future reviewer cannot silently flip one side.
+- `ConversationStateSchema`'s `.default(...)` fields use the inferred output type (`z.infer<typeof ConversationStateSchema>` ≡ `z.output<...>`); the Task 6 callout explicitly forbids `z.input<...>` for the runtime state type, locking the input-vs-output asymmetry.
+
+**Public-API stability (PR-2 explicitly does NOT touch):**
+
+- `getDashboardOverview` api-client method name — type annotation only.
+- `useDashboardOverview` hook name — type annotation only.
+- `apps/dashboard/src/hooks/use-dashboard-overview.ts` file name — content only.
+- `apps/chat/src/conversation/store.ts` / `prisma-store.ts` / `threads.ts` import paths — `./state.js` stays as the compatibility shim re-exporting the schema types.
+
+**LeadProfile shape parity (Task 6):** importing `LeadProfileSchema` from `packages/schemas/src/crm.ts` is a silent contract change UNLESS the CRM shape matches the chat-side `ConversationStateData.leadProfile` field-for-field. The plan now requires a side-by-side comparison before the import, with three possible outcomes (proceed / widen CRM / keep chat-side `ChatLeadProfileSchema` separate).
 
 **No placeholders:** searched the document — no TBD, no "implement later", no "similar to Task N" without the code shown.
 
