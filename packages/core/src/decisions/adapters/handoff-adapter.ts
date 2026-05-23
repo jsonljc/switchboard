@@ -1,11 +1,10 @@
-import type { ConversationThread, Contact } from "@switchboard/schemas";
-import type { HandoffPackage } from "../../handoff/types.js";
+import type { ConversationThread, Contact, Handoff } from "@switchboard/schemas";
 import type { Decision, DecisionPresentation } from "../types.js";
 import { scoreHandoff } from "../urgency.js";
 import { resolveAgentKey } from "../agent-key-resolver.js";
 
 export function adaptHandoff(
-  row: HandoffPackage,
+  row: Handoff,
   contact: Contact | null,
   thread: ConversationThread | null,
 ): Decision {
@@ -28,7 +27,7 @@ export function adaptHandoff(
   };
 }
 
-function composeHandoffSummary(row: HandoffPackage, contact: Contact | null): string {
+function composeHandoffSummary(row: Handoff, contact: Contact | null): string {
   const who = contact?.name ?? "A lead";
   switch (row.reason) {
     case "human_requested":
