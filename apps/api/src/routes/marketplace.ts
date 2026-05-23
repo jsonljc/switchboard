@@ -308,7 +308,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "inputConfig is required", statusCode: 400 });
     }
 
-    const updated = await store.update(id, { inputConfig });
+    const updated = await store.update(orgId, id, { inputConfig });
     if (!updated) {
       return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
     }
