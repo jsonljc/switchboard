@@ -1,7 +1,7 @@
 import type {
   Playbook,
   ScanResult,
-  DashboardOverview,
+  OperatorOverview,
   ContactsListResponse,
   ContactDetailResponse,
   ScheduledTriggersListResponse,
@@ -46,8 +46,8 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
 
   // ── Dashboard ──
 
-  async getDashboardOverview(orgId: string): Promise<DashboardOverview> {
-    return this.request<DashboardOverview>(`/api/${orgId}/dashboard/overview`);
+  async getDashboardOverview(orgId: string): Promise<OperatorOverview> {
+    return this.request<OperatorOverview>(`/api/${orgId}/dashboard/overview`);
   }
 
   async updateTask(orgId: string, taskId: string, body: Record<string, unknown>) {

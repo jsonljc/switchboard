@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import type { ApprovalRecord, DashboardOverview } from "@switchboard/schemas";
+import type { ApprovalRecord, OperatorOverview } from "@switchboard/schemas";
 import type { AuditQueryFilter } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { translateActivities } from "../services/activity-translator.js";
@@ -80,10 +80,10 @@ export interface DashboardStores {
 // Pure builder — testable without Fastify
 // ---------------------------------------------------------------------------
 
-export async function buildDashboardOverview(
+export async function buildOperatorOverview(
   orgId: string,
   stores: DashboardStores,
-): Promise<DashboardOverview> {
+): Promise<OperatorOverview> {
   const now = new Date();
 
   // Date boundaries
@@ -260,7 +260,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
     };
 
     try {
-      const overview = await buildDashboardOverview(orgId, stores);
+      const overview = await buildOperatorOverview(orgId, stores);
       return reply.send(overview);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Dashboard query failed";

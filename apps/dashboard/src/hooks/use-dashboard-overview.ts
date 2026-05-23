@@ -2,9 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
-import type { DashboardOverview } from "@switchboard/schemas";
+import type { OperatorOverview } from "@switchboard/schemas";
 
-async function fetchOverview(): Promise<DashboardOverview> {
+async function fetchOverview(): Promise<OperatorOverview> {
   const res = await fetch("/api/dashboard/overview");
   if (!res.ok) throw new Error("Failed to fetch dashboard overview");
   return res.json();
