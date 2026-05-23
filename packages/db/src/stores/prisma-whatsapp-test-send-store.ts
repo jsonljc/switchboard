@@ -1,3 +1,4 @@
+import { StaleVersionError } from "@switchboard/core";
 import type { PrismaClient } from "@prisma/client";
 
 export type ApiStatus = "sent" | "failed";
@@ -36,14 +37,8 @@ export interface UpdateWebhookStatusInput {
   messageId: string;
   status: WebhookStatus;
   at: Date;
-  /**
-   * Optional tenant guard. When provided, the update is a no-op if the row's
-   * organizationId doesn't match — defends against cross-tenant writes if a
-   * future webhook routing bug ever delivers a status update on the wrong
-   * gateway entry. Meta-signed webhooks plus globally unique wamids make this
-   * defense-in-depth today; the check is cheap.
-   */
-  organizationId?: string;
+  /** Required tenant guard. Enforces that the updated row belongs to this org. */
+  organizationId: string;
 }
 
 export class PrismaWhatsAppTestSendStore {
@@ -63,15 +58,14 @@ export class PrismaWhatsAppTestSendStore {
     return rows as WhatsAppTestSendRow[];
   }
 
-  async updateWebhookStatus(input: UpdateWebhookStatusInput): Promise<WhatsAppTestSendRow | null> {
-    const existing = await this.prisma.whatsAppTestSend.findUnique({
-      where: { messageId: input.messageId },
-    });
-    if (!existing) return null;
-    if (input.organizationId && existing.organizationId !== input.organizationId) return null;
-    const updated = await this.prisma.whatsAppTestSend.update({
-      where: { messageId: input.messageId },
+  async updateWebhookStatus(input: UpdateWebhookStatusInput): Promise<WhatsAppTestSendRow> {
+    const result = await this.prisma.whatsAppTestSend.updateMany({
+      where: { messageId: input.messageId, organizationId: input.organizationId },
       data: { lastWebhookStatus: input.status, lastWebhookAt: input.at },
+    });
+    if (result.count === 0) throw new StaleVersionError(input.messageId, -1, -1);
+    const updated = await this.prisma.whatsAppTestSend.findFirstOrThrow({
+      where: { messageId: input.messageId, organizationId: input.organizationId },
     });
     return updated as WhatsAppTestSendRow;
   }

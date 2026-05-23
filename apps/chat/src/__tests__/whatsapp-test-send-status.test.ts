@@ -107,7 +107,7 @@ describe("WhatsApp test-send status bridge", () => {
     ).rejects.toThrow("db down");
   });
 
-  it("omits organizationId from the store call when orgId is empty", async () => {
+  it("passes organizationId unconditionally even when orgId is empty string", async () => {
     const bridge = buildWhatsAppStatusBridge({ testSendStore: testSendStore as never });
     const timestamp = new Date("2026-05-15T13:00:00.000Z");
 
@@ -125,6 +125,7 @@ describe("WhatsApp test-send status bridge", () => {
       messageId: "wamid.no-org",
       status: "delivered",
       at: timestamp,
+      organizationId: "",
     });
   });
 });
