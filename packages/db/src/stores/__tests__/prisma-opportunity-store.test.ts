@@ -8,8 +8,10 @@ function makeMockPrisma() {
     opportunity: {
       create: vi.fn().mockResolvedValue({}),
       findFirst: vi.fn().mockResolvedValue(null),
+      findFirstOrThrow: vi.fn().mockResolvedValue({}),
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       groupBy: vi.fn().mockResolvedValue([]),
     },
     lifecycleRevenueEvent: {
@@ -208,42 +210,37 @@ describe("PrismaOpportunityStore", () => {
   });
 
   describe("updateStage", () => {
-    it("updates opportunity stage without closedAt", async () => {
-      const existing = makeOpportunity();
-      prisma.opportunity.findFirst.mockResolvedValue(existing);
+    it("calls updateMany with tenant-scoped WHERE and maps the read-back row", async () => {
+      prisma.opportunity.updateMany.mockResolvedValue({ count: 1 });
       const updated = makeOpportunity({ stage: "qualified" });
-      prisma.opportunity.update.mockResolvedValue(updated);
+      prisma.opportunity.findFirstOrThrow.mockResolvedValue(updated);
 
       const result = await store.updateStage("org-1", "opp-1", "qualified");
 
-      expect(prisma.opportunity.findFirst).toHaveBeenCalledWith({
+      expect(prisma.opportunity.updateMany).toHaveBeenCalledWith({
         where: { id: "opp-1", organizationId: "org-1" },
-      });
-      expect(prisma.opportunity.update).toHaveBeenCalledWith({
-        where: { id: "opp-1" },
         data: {
           stage: "qualified",
           closedAt: undefined,
           updatedAt: expect.any(Date),
         },
       });
+      expect(prisma.opportunity.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "opp-1", organizationId: "org-1" },
+      });
       expect(result.stage).toBe("qualified");
     });
 
-    it("updates opportunity stage with closedAt", async () => {
-      const existing = makeOpportunity();
-      prisma.opportunity.findFirst.mockResolvedValue(existing);
+    it("passes closedAt through to updateMany data", async () => {
       const closedDate = new Date("2026-03-25T15:00:00Z");
+      prisma.opportunity.updateMany.mockResolvedValue({ count: 1 });
       const updated = makeOpportunity({ stage: "won", closedAt: closedDate });
-      prisma.opportunity.update.mockResolvedValue(updated);
+      prisma.opportunity.findFirstOrThrow.mockResolvedValue(updated);
 
       const result = await store.updateStage("org-1", "opp-1", "won", closedDate);
 
-      expect(prisma.opportunity.findFirst).toHaveBeenCalledWith({
+      expect(prisma.opportunity.updateMany).toHaveBeenCalledWith({
         where: { id: "opp-1", organizationId: "org-1" },
-      });
-      expect(prisma.opportunity.update).toHaveBeenCalledWith({
-        where: { id: "opp-1" },
         data: {
           stage: "won",
           closedAt: closedDate,
@@ -254,20 +251,21 @@ describe("PrismaOpportunityStore", () => {
       expect(result.closedAt).toEqual(closedDate);
     });
 
-    it("throws when opportunity not found or wrong org", async () => {
-      prisma.opportunity.findFirst.mockResolvedValue(null);
+    it("throws StaleVersionError (matching /Stale version/) when count===0", async () => {
+      prisma.opportunity.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(store.updateStage("org-1", "opp-999", "qualified")).rejects.toThrow(
-        /not found or does not belong/,
+        /Stale version/,
       );
     });
   });
 
   describe("updateRevenueTotal", () => {
-    it("aggregates confirmed revenue and updates opportunity", async () => {
+    it("aggregates confirmed revenue and calls updateMany with tenant-scoped WHERE", async () => {
       prisma.lifecycleRevenueEvent.aggregate.mockResolvedValue({
         _sum: { amount: 5000 },
       });
+      prisma.opportunity.updateMany.mockResolvedValue({ count: 1 });
 
       await store.updateRevenueTotal("org-1", "opp-1");
 
@@ -281,8 +279,8 @@ describe("PrismaOpportunityStore", () => {
         },
       });
 
-      expect(prisma.opportunity.update).toHaveBeenCalledWith({
-        where: { id: "opp-1" },
+      expect(prisma.opportunity.updateMany).toHaveBeenCalledWith({
+        where: { id: "opp-1", organizationId: "org-1" },
         data: {
           revenueTotal: 5000,
           updatedAt: expect.any(Date),
@@ -290,20 +288,30 @@ describe("PrismaOpportunityStore", () => {
       });
     });
 
-    it("handles null revenue sum", async () => {
+    it("handles null revenue sum (uses 0)", async () => {
       prisma.lifecycleRevenueEvent.aggregate.mockResolvedValue({
         _sum: { amount: null },
       });
+      prisma.opportunity.updateMany.mockResolvedValue({ count: 1 });
 
       await store.updateRevenueTotal("org-1", "opp-1");
 
-      expect(prisma.opportunity.update).toHaveBeenCalledWith({
-        where: { id: "opp-1" },
+      expect(prisma.opportunity.updateMany).toHaveBeenCalledWith({
+        where: { id: "opp-1", organizationId: "org-1" },
         data: {
           revenueTotal: 0,
           updatedAt: expect.any(Date),
         },
       });
+    });
+
+    it("throws StaleVersionError (matching /Stale version/) when count===0", async () => {
+      prisma.lifecycleRevenueEvent.aggregate.mockResolvedValue({
+        _sum: { amount: 100 },
+      });
+      prisma.opportunity.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.updateRevenueTotal("org-1", "opp-999")).rejects.toThrow(/Stale version/);
     });
   });
 
