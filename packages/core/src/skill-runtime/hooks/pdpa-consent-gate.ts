@@ -1,6 +1,7 @@
 import {
   evaluateConsentGate,
   resolveConsentStateConfig,
+  type GovernanceVerdictReason,
   type PdpaJurisdiction,
 } from "@switchboard/schemas";
 import type { SkillHook, SkillHookContext, SkillExecutionResult } from "../types.js";
@@ -216,11 +217,11 @@ export class PdpaConsentGateHook implements SkillHook {
   }
 
   private async saveVerdict(input: {
-    reasonCode: string;
+    reasonCode: GovernanceVerdictReason;
     action: "allow" | "block";
     auditLevel: "info" | "warning" | "critical";
-    jurisdiction: string;
-    clinicType: string;
+    jurisdiction: "SG" | "MY";
+    clinicType: "medical" | "nonMedical";
     conversationId: string;
     originalText?: string;
     emittedText?: string;
@@ -228,9 +229,7 @@ export class PdpaConsentGateHook implements SkillHook {
     deploymentId: string;
   }) {
     try {
-      // GovernanceVerdictDetails is narrower than custom details shapes; cast justified.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (this.deps.verdictStore.save as any)({
+      await this.deps.verdictStore.save({
         deploymentId: input.deploymentId,
         sourceGuard: "consent_gate",
         action: input.action,

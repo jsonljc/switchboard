@@ -107,6 +107,7 @@ export class PrismaDeploymentMemoryStore {
     floor: number;
     startOfDay: Date;
   }): Promise<number> {
+    // route-governance: store-mutation-global — cross-org confidence decay batch.
     const result = await this.prisma.deploymentMemory.updateMany({
       where: {
         lastSeenAt: { lt: input.cutoffDate },

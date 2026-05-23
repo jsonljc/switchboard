@@ -6,6 +6,8 @@ export interface GovernanceVerdictDetails {
   matchedText?: string;
   /** Input gate only — sentence containing the match. */
   sentence?: string;
+  /** Guards persist guard-specific context; keys are not enumerated. */
+  [key: string]: unknown;
 }
 
 export interface GovernanceVerdictRecord extends GovernanceVerdict {

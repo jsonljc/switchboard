@@ -16,6 +16,7 @@ import {
 } from "./allowlist.js";
 import { validateRouteClass, type ValidatorWarning } from "./route-class-validator.js";
 import { runCrossAppTypesAdvisory } from "./cross-app-types-check.js";
+import { runStoreMutationAdvisory } from "./store-mutation-check.js";
 
 export type FindingKind = "ingress" | "approval";
 
@@ -173,17 +174,18 @@ if (isMain) {
   const mode = process.argv.find((arg) => arg.startsWith("--mode="))?.split("=")[1];
   if (mode === "warn-touched") {
     const touched = detectTouchedFiles();
-    const [routeClass, crossAppTypes] = await Promise.all([
+    const [routeClass, crossAppTypes, storeMutation] = await Promise.all([
       runRouteClassAdvisory({ repoRoot, touchedFiles: touched }),
       runCrossAppTypesAdvisory({ repoRoot, touchedFiles: touched }),
+      runStoreMutationAdvisory({ repoRoot, touchedFiles: touched }),
     ]);
-    const merged = [...routeClass.warnings, ...crossAppTypes.warnings];
+    const merged = [...routeClass.warnings, ...crossAppTypes.warnings, ...storeMutation.warnings];
     for (const w of merged) {
       console.warn(`::warning file=${w.path}::${w.message}`);
     }
     if (merged.length > 0) {
       console.warn(
-        `\n${merged.length} advisory warning(s) — ${routeClass.warnings.length} route-class, ${crossAppTypes.warnings.length} cross-app-types.`,
+        `\n${merged.length} advisory warning(s) — ${routeClass.warnings.length} route-class, ${crossAppTypes.warnings.length} cross-app-types, ${storeMutation.warnings.length} store-mutation.`,
       );
     }
     process.exit(0);

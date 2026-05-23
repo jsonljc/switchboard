@@ -1,4 +1,8 @@
-import type { ConsentSource, PdpaJurisdiction } from "@switchboard/schemas";
+import type {
+  ConsentSource,
+  GovernanceVerdictReason,
+  PdpaJurisdiction,
+} from "@switchboard/schemas";
 import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
 import type { HandoffStore } from "../handoff/types.js";
 import type { ConversationStatusSetter } from "../skill-runtime/hooks/deterministic-safety-gate.js";
@@ -114,7 +118,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
   }
 
   async function persistVerdict(input: {
-    reasonCode: string;
+    reasonCode: GovernanceVerdictReason;
     auditLevel: "info" | "warning" | "critical";
     action: "allow" | "block" | "escalate";
     jurisdiction: PdpaJurisdiction;
@@ -125,9 +129,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
   }) {
     const effectiveDeploymentId = input.deploymentId ?? deploymentId;
     try {
-      // Cast needed: GovernanceVerdictDetails is narrower than our custom details shapes.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (verdictStore.save as any)({
+      await verdictStore.save({
         deploymentId: effectiveDeploymentId,
         sourceGuard: "consent_gate",
         action: input.action,
