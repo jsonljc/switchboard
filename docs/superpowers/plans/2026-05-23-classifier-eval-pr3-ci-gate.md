@@ -112,61 +112,89 @@ Expected: all builds exit 0. The harness needs these dist artifacts to import fr
 
 **Files:**
 
-- Modify: `evals/claim-classifier/score.ts` (extends `compareAgainstBaseline`)
-- Modify: `evals/claim-classifier/__tests__/score.test.ts` (5 new cases)
+- Modify: `evals/claim-classifier/score.ts` (extends `compareAgainstBaseline`; uses bps comparison)
+- Modify: `evals/claim-classifier/__tests__/score.test.ts` (5 new cases; tests construct `ScoreReport` directly to avoid coupling to `scoreResults` and dodge floating-point noise)
 
 This task is pure refactor + new rule. No harness touch, no CI touch.
 
-- [ ] **Step 1: Add failing tests for the new overall-regression rule**
+The implementation uses integer basis-points comparison to match the existing `toleranceBps` style and avoid float drift around `0.01`:
 
-Open `evals/claim-classifier/__tests__/score.test.ts`. Append the following 5 tests at the end of the existing `describe("compareAgainstBaseline", ...)` block (after the existing "ignores baseline categories with zero samples..." test, before the closing `});` of the describe):
+```
+overallDropBps = Math.round((baseline.overallAccuracy - report.overallAccuracy) * 10_000)
+fail if overallDropBps > 100
+```
+
+- [ ] **Step 1: Add a `makeReport` test helper at the top of the existing `describe("compareAgainstBaseline", ...)` block**
+
+Open `evals/claim-classifier/__tests__/score.test.ts`. Find the `describe("compareAgainstBaseline", ...)` block (currently around line 55). Just before the existing `const baseline: Baseline = ...` declaration, insert this helper:
 
 ```typescript
-it("passes when overall accuracy drops by exactly 1pp (boundary, > not >=)", () => {
-  // baseline overall = 0.9. Construct a run at exactly 0.89.
-  // Use a wide mix to avoid tripping per-class rules.
-  // 89 of 100 fixtures correct: 89/100 = 0.89 (exact 1pp drop from baseline 0.9).
-  const results: InvocationResult[] = [];
-  // 45 of 50 efficacy correct (90% — matches baseline 100%? No, baseline is 100% with 5/5 — per-class drop = 10pp).
-  // Per-class rule would fire. Strategy: use a claim type the baseline has zero samples for.
-  // baseline urgency has 4/5 = 80%. Make current urgency 7/10 = 70% (10pp drop from 80% — fires per-class).
-  // Cleaner approach: keep all current results in a per-class category absent from baseline so per-class is ignored.
-  // baseline lists efficacy (5/5) and urgency (4/5); all other classes are 0/0 in baseline.
-  // Run 100 fixtures all of class "safety-claim" — baseline has 0 samples there, so per-class is skipped.
-  for (let i = 0; i < 89; i++) results.push(r(`p${i}`, "safety-claim", "safety-claim", true));
-  for (let i = 0; i < 11; i++) results.push(r(`f${i}`, "safety-claim", "none", false));
-  const report = scoreResults(results);
-  expect(report.overallAccuracy).toBeCloseTo(0.89, 5);
+// Constructs a ScoreReport directly so compareAgainstBaseline tests don't depend on scoreResults math.
+function makeReport(opts: {
+  overallAccuracy: number;
+  perClaimTypeAccuracy?: Partial<ScoreReport["perClaimTypeAccuracy"]>;
+  totalFixtures?: number;
+}): ScoreReport {
+  const zero = { correct: 0, total: 0, accuracy: 0 };
+  const perClass: ScoreReport["perClaimTypeAccuracy"] = {
+    efficacy: zero,
+    urgency: zero,
+    "safety-claim": zero,
+    superiority: zero,
+    testimonial: zero,
+    "medical-advice": zero,
+    diagnosis: zero,
+    credentials: zero,
+    none: zero,
+    ...opts.perClaimTypeAccuracy,
+  };
+  return {
+    totalFixtures: opts.totalFixtures ?? 100,
+    overallAccuracy: opts.overallAccuracy,
+    perClaimTypeAccuracy: perClass,
+    meanLatencyMs: 0,
+  };
+}
+```
+
+Also add `ScoreReport` to the imports at the top of the test file:
+
+```typescript
+import { scoreResults, compareAgainstBaseline, type ScoreReport } from "../score.js";
+```
+
+(If `ScoreReport` is already a type-only import or absent, adjust so it's imported as a type.)
+
+- [ ] **Step 2: Append the 5 new tests at the end of the existing `compareAgainstBaseline` describe block**
+
+Insert these tests just before the closing `});` of the `describe("compareAgainstBaseline", ...)` block:
+
+```typescript
+it("passes when overall accuracy drops by exactly 1pp (boundary, strict >)", () => {
+  // baseline.overallAccuracy = 0.9. Construct exactly 0.89.
+  // bps comparison: (0.9 - 0.89) * 10000 = 100. Rule is `> 100`, so 100 does not fail.
+  const report = makeReport({ overallAccuracy: 0.89 });
   const out = compareAgainstBaseline(report, baseline);
-  expect(out.passed).toBe(true); // exact 1pp drop is tolerated (strict >)
+  expect(out.passed).toBe(true);
   expect(out.regressions).toHaveLength(0);
 });
 
 it("fails when overall accuracy drops by more than 1pp", () => {
-  // 88 of 100 = 0.88 → 2pp drop from baseline 0.9.
-  const results: InvocationResult[] = [];
-  for (let i = 0; i < 88; i++) results.push(r(`p${i}`, "safety-claim", "safety-claim", true));
-  for (let i = 0; i < 12; i++) results.push(r(`f${i}`, "safety-claim", "none", false));
-  const report = scoreResults(results);
+  const report = makeReport({ overallAccuracy: 0.88 }); // 2pp drop → 200 bps > 100
   const out = compareAgainstBaseline(report, baseline);
   expect(out.passed).toBe(false);
   expect(out.regressions.join("\n")).toMatch(/overall/);
-  expect(out.regressions.join("\n")).toMatch(/2\.0pp/);
 });
 
 it("fails on per-class drop only (no overall regression)", () => {
-  // baseline efficacy = 100% (5/5). Drop efficacy to 80% (4/5) while keeping overall above 0.89.
-  // Mix in enough safety-claim wins to lift overall above baseline-1pp.
-  const results: InvocationResult[] = [
-    r("e1", "efficacy", "efficacy", true),
-    r("e2", "efficacy", "efficacy", true),
-    r("e3", "efficacy", "efficacy", true),
-    r("e4", "efficacy", "efficacy", true),
-    r("e5", "efficacy", "none", false), // efficacy 4/5 = 80% (20pp drop > 2pp)
-  ];
-  for (let i = 0; i < 95; i++) results.push(r(`s${i}`, "safety-claim", "safety-claim", true));
-  const report = scoreResults(results);
-  expect(report.overallAccuracy).toBeCloseTo(0.99, 5); // no overall regression
+  // efficacy baseline 100% (5/5) → current 80% (4/5) → per-class fires.
+  // Keep overall above baseline - 1pp so the overall rule does NOT fire.
+  const report = makeReport({
+    overallAccuracy: 0.95, // above 0.89 floor → overall rule silent
+    perClaimTypeAccuracy: {
+      efficacy: { correct: 4, total: 5, accuracy: 0.8 },
+    },
+  });
   const out = compareAgainstBaseline(report, baseline);
   expect(out.passed).toBe(false);
   expect(out.regressions.join("\n")).toMatch(/efficacy/);
@@ -174,32 +202,22 @@ it("fails on per-class drop only (no overall regression)", () => {
 });
 
 it("fails on overall drop only (no per-class regression)", () => {
-  // baseline has per-class data only for efficacy (5/5) and urgency (4/5).
-  // Run zero efficacy/urgency in the current report so those rules are skipped.
-  // Use only safety-claim (baseline = 0/0, per-class skipped) to hit overall < baseline-1pp.
-  const results: InvocationResult[] = [];
-  for (let i = 0; i < 85; i++) results.push(r(`p${i}`, "safety-claim", "safety-claim", true));
-  for (let i = 0; i < 15; i++) results.push(r(`f${i}`, "safety-claim", "none", false));
-  const report = scoreResults(results);
-  expect(report.overallAccuracy).toBeCloseTo(0.85, 5); // 5pp drop from baseline 0.9
+  // Baseline has per-class data only for efficacy and urgency. Leave both at 0/0
+  // in the current report so per-class checks skip. Drive overall low enough to fail.
+  const report = makeReport({ overallAccuracy: 0.85 }); // 5pp drop
   const out = compareAgainstBaseline(report, baseline);
   expect(out.passed).toBe(false);
   expect(out.regressions.join("\n")).toMatch(/overall/);
+  expect(out.regressions.join("\n")).not.toMatch(/efficacy/);
 });
 
 it("fails with both per-class and overall regressions reported", () => {
-  // efficacy drops AND overall drops below 0.89.
-  const results: InvocationResult[] = [
-    r("e1", "efficacy", "none", false),
-    r("e2", "efficacy", "none", false),
-    r("e3", "efficacy", "none", false),
-    r("e4", "efficacy", "efficacy", true),
-    r("e5", "efficacy", "efficacy", true),
-  ];
-  for (let i = 0; i < 80; i++) results.push(r(`p${i}`, "safety-claim", "safety-claim", true));
-  for (let i = 0; i < 15; i++) results.push(r(`f${i}`, "safety-claim", "none", false));
-  const report = scoreResults(results);
-  expect(report.overallAccuracy).toBeLessThan(0.89); // overall regression fires
+  const report = makeReport({
+    overallAccuracy: 0.85,
+    perClaimTypeAccuracy: {
+      efficacy: { correct: 2, total: 5, accuracy: 0.4 }, // 60pp drop
+    },
+  });
   const out = compareAgainstBaseline(report, baseline);
   expect(out.passed).toBe(false);
   expect(out.regressions.join("\n")).toMatch(/efficacy/);
@@ -223,6 +241,8 @@ If any existing test fails, stop and investigate before editing score.ts.
 Open `evals/claim-classifier/score.ts`. Replace the existing `compareAgainstBaseline` function (currently lines 47–63) with:
 
 ```typescript
+const OVERALL_TOLERANCE_BPS = 100; // 1.00pp
+
 export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline): ComparisonResult {
   const regressions: string[] = [];
   const toleranceFraction = baseline.toleranceBps / 10_000;
@@ -238,18 +258,19 @@ export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline):
       );
     }
   }
-  const OVERALL_TOLERANCE = 0.01;
-  const overallDrop = baseline.overallAccuracy - report.overallAccuracy;
-  if (overallDrop > OVERALL_TOLERANCE) {
+  // Integer bps comparison avoids float drift around exact 1pp boundaries.
+  const overallDropBps = Math.round((baseline.overallAccuracy - report.overallAccuracy) * 10_000);
+  if (overallDropBps > OVERALL_TOLERANCE_BPS) {
+    const overallDropPp = overallDropBps / 100;
     regressions.push(
-      `overall: ${(report.overallAccuracy * 100).toFixed(1)}% (current) vs ${(baseline.overallAccuracy * 100).toFixed(1)}% (baseline), drop ${(overallDrop * 100).toFixed(1)}pp > ${(OVERALL_TOLERANCE * 100).toFixed(1)}pp tolerance`,
+      `overall: ${(report.overallAccuracy * 100).toFixed(1)}% (current) vs ${(baseline.overallAccuracy * 100).toFixed(1)}% (baseline), drop ${overallDropPp.toFixed(2)}pp > ${(OVERALL_TOLERANCE_BPS / 100).toFixed(2)}pp tolerance`,
     );
   }
   return { passed: regressions.length === 0, regressions };
 }
 ```
 
-The overall constant is inlined (not added to `Baseline` schema) because changing the baseline schema would require a re-lock of `baseline.json`. If the tolerance ever needs to vary by baseline version, lift it then.
+Why bps not floats: `0.9 - 0.89` in IEEE 754 is `0.010000000000000009`, which trips a naïve `> 0.01` comparison. Rounding `(0.9 - 0.89) * 10_000` to the nearest integer gives `100` exactly, and `100 > 100` is false — boundary behaves as spec'd. The constant is inlined (not added to `Baseline` schema) because changing the schema would require re-locking `baseline.json`; lift it if the tolerance ever needs to vary by baseline version.
 
 - [ ] **Step 4: Run tests, expect all PASS**
 
@@ -580,7 +601,17 @@ git commit -m "feat(eval-classifier): wire preflight helpers — hash mismatch f
 
 The eval-classifier job is independent of `setup` (doesn't need Postgres or the full build artifact cache — just `pnpm install` + build the two packages it imports).
 
-- [ ] **Step 1: Confirm `pnpm-lock.yaml` is unchanged**
+- [ ] **Step 1: Third-party action policy preflight**
+
+`dorny/paths-filter@v3` is a third-party Action. The existing `.github/workflows/ci.yml` already uses one (`davelosert/vitest-coverage-report-action@v2`), so the repo accepts third-party Actions in principle. Confirm there's no explicit allowlist that would block `dorny/*`:
+
+```bash
+gh api "repos/jsonljc/switchboard/actions/permissions/selected-actions" 2>/dev/null || echo "no allowlist configured (all actions permitted)"
+```
+
+If the output shows a `patterns_allowed` list and `dorny/*` is not in it, fall back to a GitHub-native filter using `tj-actions/changed-files` (also third-party but more widely allowlisted) or a hand-rolled `git diff` step. If you hit this, stop and ask — the fallback is mechanical but worth confirming the user's preference before deviating from the spec's chosen mechanism.
+
+- [ ] **Step 2: Confirm `pnpm-lock.yaml` is unchanged**
 
 ```bash
 git diff --stat pnpm-lock.yaml
@@ -588,7 +619,7 @@ git diff --stat pnpm-lock.yaml
 
 Expected: no diff. This job uses no new npm dependencies; `dorny/paths-filter` is a GitHub Action, not a node module.
 
-- [ ] **Step 2: Append the new job to `.github/workflows/ci.yml`**
+- [ ] **Step 3: Append the new job to `.github/workflows/ci.yml`**
 
 The existing file has 9 jobs ending around line 350+. The new job slots in alphabetical-ish order after `docker` or before `secrets`; pick whichever keeps the file most readable. The exact position doesn't affect behavior.
 
@@ -614,28 +645,28 @@ Append (or insert) the following job block. Indentation is 2 spaces (matches the
               - 'evals/claim-classifier/**'
 
       - name: Skip notice (no classifier-relevant changes)
-        if: steps.filter.outputs.classifier != 'true' && github.event_name == 'pull_request'
-        run: echo "Eval — Claim Classifier skipped: no classifier-relevant paths changed in this PR."
+        if: steps.filter.outputs.classifier != 'true' && github.ref != 'refs/heads/main'
+        run: echo "Eval — Claim Classifier skipped: no classifier-relevant paths changed."
 
       - uses: pnpm/action-setup@v5
-        if: steps.filter.outputs.classifier == 'true' || github.event_name == 'push'
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
 
       - uses: actions/setup-node@v6
-        if: steps.filter.outputs.classifier == 'true' || github.event_name == 'push'
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
         with:
           node-version: 20
           cache: pnpm
 
       - name: Install dependencies
-        if: steps.filter.outputs.classifier == 'true' || github.event_name == 'push'
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
         run: pnpm install --no-frozen-lockfile
 
       - name: Build packages required by the harness
-        if: steps.filter.outputs.classifier == 'true' || github.event_name == 'push'
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
         run: pnpm --filter @switchboard/schemas build && pnpm --filter @switchboard/core build
 
       - name: Run claim-classifier eval
-        if: steps.filter.outputs.classifier == 'true' || github.event_name == 'push'
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm eval:classifier
@@ -643,13 +674,13 @@ Append (or insert) the following job block. Indentation is 2 spaces (matches the
 
 Design notes:
 
-- The job has no `needs:` — it's independent of `setup`. The eval harness only needs `@switchboard/schemas` + `@switchboard/core` dist artifacts (built inline) and the eval workspace itself.
-- The `dorny/paths-filter` step always runs (no `if:` on it) so subsequent steps can read `steps.filter.outputs.classifier`. On PR, the filter compares to the PR base; on push to main, `dorny/paths-filter@v3` compares to the previous commit (its documented `push` behavior).
-- Every subsequent step is guarded by `if: steps.filter.outputs.classifier == 'true' || github.event_name == 'push'` so PRs that don't touch classifier paths short-circuit after the filter step. The job still reports green to GitHub (no failure), and branch protection sees a completed check.
-- Always running on `push` events (regardless of path filter) ensures `main`-branch enforcement always fires — important so the "fail on main push when secret absent" branch in `run-eval.ts` actually executes after merge.
-- `ANTHROPIC_API_KEY` is sourced from `${{ secrets.ANTHROPIC_API_KEY }}`. If the secret is not yet provisioned in repo Settings → Secrets → Actions, the eval step receives an empty string and the harness writes a SKIPPED summary on PRs (or fails on main, as designed). After PR-3 merges, configure the secret before the first push to `main` lands.
+- **No `needs:`.** The eval harness only needs `@switchboard/schemas` + `@switchboard/core` dist artifacts (built inline) and the eval workspace itself. Independent of `setup`.
+- **Filter step always runs** (no `if:` on it) so subsequent steps can read `steps.filter.outputs.classifier`. On `pull_request`, the filter compares to the PR base; on `push` to main, `dorny/paths-filter@v3` compares to the previous commit.
+- **Step guard: `steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'`.** Narrower than `github.event_name == 'push'` — only main-branch pushes always run, not pushes to arbitrary feature branches. Without this narrowing, every feature-branch push would burn the eval budget. Main-branch enforcement still fires post-merge so the "fail on main push when secret absent" branch in `run-eval.ts` actually executes.
+- **`pnpm install --no-frozen-lockfile`** — matches the existing convention in `.github/workflows/ci.yml` (every install in that file uses `--no-frozen-lockfile`; `release.yml` uses `--frozen-lockfile`, a different convention). Don't introduce a third pattern here. If the user later decides ci.yml should standardize on frozen, change all jobs at once in a separate PR.
+- **Secret sourcing.** `ANTHROPIC_API_KEY` reads from `${{ secrets.ANTHROPIC_API_KEY }}`. If unset in repo Settings → Secrets → Actions, the eval step receives an empty string and the harness writes a SKIPPED summary on PRs (or fails on main, as designed). Configure the secret before the first push to `main` lands post-merge.
 
-- [ ] **Step 3: Verify the YAML parses**
+- [ ] **Step 4: Verify the YAML parses**
 
 ```bash
 python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"
@@ -657,7 +688,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"
 
 Expected: no output. Any parse error means the indentation is off.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -727,6 +758,8 @@ git push -u origin feat-classifier-eval-pr3-ci-gate
 
 - [ ] **Step 4: Open PR-3**
 
+**Checkbox honesty rule.** The PR body template below has unchecked `[ ]` boxes for every verification step. **Only mark `[x]` after you have actually run the command on this branch and seen it pass.** Do not pre-check based on the plan's expectations. If a check is impossible or skipped, leave it `[ ]` and add a parenthetical note explaining why (e.g., "skipped — covered by smoke test in earlier step").
+
 ```bash
 gh pr create --base main --head feat-classifier-eval-pr3-ci-gate \
   --title "feat(eval-classifier): PR-3 CI gate + tightened comparison rules" \
@@ -737,10 +770,10 @@ Wires the locked `evals/claim-classifier/baseline.json` into a path-filtered Git
 
 ## Changes
 
-- `evals/claim-classifier/score.ts` — new overall-accuracy regression rule (fail if overall drops more than 1pp from baseline).
+- `evals/claim-classifier/score.ts` — new overall-accuracy regression rule (fail if overall drops more than 1pp from baseline). Uses integer bps comparison for the boundary.
 - `evals/claim-classifier/eval-preflight.ts` (new) — pure helpers: `isMainPush`, `comparePromptHash`, `appendStepSummary`.
 - `evals/claim-classifier/run-eval.ts` — prompt-hash mismatch is now a hard fail (was warn-only); secret-absence skips with SKIPPED summary on non-main, fails on main push.
-- `.github/workflows/ci.yml` — new `eval-classifier` job with `dorny/paths-filter@v3` guard.
+- `.github/workflows/ci.yml` — new `eval-classifier` job with `dorny/paths-filter@v3` guard; step `if:` uses `github.ref == 'refs/heads/main'` (narrower than `event_name == 'push'`).
 - Tests: 5 new cases in `score.test.ts` (boundary, overall-only, per-class-only, both, no-regression), 10 new cases in `eval-preflight.test.ts`.
 
 ## Regression rules (all blocking when the gate runs)
@@ -760,20 +793,22 @@ No `pull_request_target`.
 
 ## Promotion to required check — deferred 14 days
 
-This PR lands the job **informational only**. Promotion to a required check happens via GitHub UI after a 14-day bake. Promotion criteria and tracking are captured in a follow-up issue (created at merge time).
+This PR lands the job **informational only**. Promotion to a required check happens via GitHub UI after a 14-day bake. Tracking issue is opened **immediately after this PR merges**, not before.
 
 ## Test plan
 
-- [x] `pnpm exec vitest run --config evals/vitest.config.ts` — all tests pass (existing + 5 new score, + 10 new preflight).
-- [x] `pnpm typecheck` clean.
-- [x] `pnpm format:check` clean.
-- [x] `pnpm eval:classifier` against the locked 105-fixture baseline — no regressions.
-- [x] Skip path smoke-tested locally (no key, non-main env) — exits 0 with SKIPPED message.
-- [x] Fail-on-main-push path smoke-tested locally — exits 2.
-- [x] End-to-end smoke: degraded prompt in scratch worktree triggers gate (exit 1). Scratch worktree discarded.
-- [ ] CI run on this PR shows `eval-classifier` job ran (not skipped due to path filter — `ci.yml` is in the path filter).
-- [ ] After merge: configure `ANTHROPIC_API_KEY` secret in repo settings if not already present.
-- [ ] After merge: open follow-up tracking issue for 14-day bake + branch-protection promotion.
+Check each box ONLY after running the command and observing the expected result. Do not pre-check.
+
+- [ ] `pnpm exec vitest run --config evals/vitest.config.ts` — all tests pass.
+- [ ] `pnpm typecheck` clean.
+- [ ] `pnpm format:check` clean.
+- [ ] `pnpm eval:classifier` against the locked 105-fixture baseline — no regressions.
+- [ ] Skip-path smoke: no key, non-main env → exit 0 with SKIPPED message.
+- [ ] Fail-on-main-push smoke: no key, `GITHUB_EVENT_NAME=push` + `GITHUB_REF=refs/heads/main` → exit 2.
+- [ ] End-to-end smoke: degraded prompt in scratch worktree triggers gate (exit 1). Scratch worktree discarded.
+- [ ] CI run on this PR shows `eval-classifier` job ran (not skipped — `ci.yml` is in the path filter).
+- [ ] **Post-merge action item**: configure `ANTHROPIC_API_KEY` secret in repo Settings → Secrets → Actions if not already present.
+- [ ] **Post-merge action item**: open bake-tracking issue (template in plan §Task 5 Step 6).
 
 ## Hard prerequisite
 
@@ -804,10 +839,24 @@ Expected: `Eval — Claim Classifier` appears in the list (status will be `pendi
 
 If the job appears as `skipped` (or doesn't appear at all), the path filter is wrong — `.github/workflows/ci.yml` should be in the trigger paths, and this PR modifies that file, so the filter should fire. Stop and fix before merge.
 
-- [ ] **Step 6: After CI completes successfully, open the bake-tracking issue**
+- [ ] **Step 6: STOP — do not promote to required at merge time**
 
-````bash
-gh issue create --title "Eval — Claim Classifier: 14-day informational bake + branch-protection promotion" --body "$(cat <<'EOF'
+Merge happens when reviewers approve. **Do not add the job to branch protection in the same change window.** The tracking issue (Step 7) is the durable artifact that prevents the 14-day bake from being forgotten.
+
+- [ ] **Step 7: AFTER MERGE — open the bake-tracking issue**
+
+This step runs **after** PR-3 actually merges to main (not at merge-request time, not before). Verify merge first:
+
+```bash
+gh pr view <PR#> --json state,mergedAt --jq '{state, mergedAt}'
+```
+
+Expected: `{"state":"MERGED","mergedAt":"<timestamp>"}`. If not merged yet, stop and wait — opening the issue before merge creates confusing dangling state and may be auto-closed if the PR is reverted.
+
+Save the issue body to a temp file first to avoid heredoc + nested-code-fence escaping pitfalls:
+
+```bash
+cat > /tmp/pr3-bake-issue.md <<'EOF'
 ## Context
 
 PR-3 (`feat(eval-classifier): PR-3 CI gate + tightened comparison rules`) merged the `eval-classifier` CI job as **informational only**. This issue tracks the 14-day bake and the eventual promotion to a required status check.
@@ -830,30 +879,23 @@ PR-3 (`feat(eval-classifier): PR-3 CI gate + tightened comparison rules`) merged
 
 1. Settings → Branches → Branch protection rule for `main` → "Require status checks to pass".
 2. Add the exact job name string: `Eval — Claim Classifier`.
-3. Verify:
-
-   ```bash
-   gh api repos/jsonljc/switchboard/branches/main/protection \
-     --jq '.required_status_checks.contexts'
-````
-
-Expected output includes `"Eval — Claim Classifier"`.
+3. Verify with: `gh api repos/jsonljc/switchboard/branches/main/protection --jq '.required_status_checks.contexts'`. Output should include `"Eval — Claim Classifier"`.
 
 ## Related
 
 - Spec: `docs/superpowers/specs/2026-05-23-classifier-eval-pr3-design.md`
 - Plan: `docs/superpowers/plans/2026-05-23-classifier-eval-pr3-ci-gate.md`
-- PR-3: <PR#>
-  EOF
-  )"
-
+- PR-3: #<PR#>
+EOF
 ```
 
-Replace `<PR#>` with the merged PR number.
+Replace `<PR#>` in the file with the actual PR number (sed: `sed -i '' "s/<PR#>/123/g" /tmp/pr3-bake-issue.md`), then create the issue:
 
-- [ ] **Step 7: STOP — do not promote to required at merge time**
-
-Merge happens when reviewers approve. **Do not add the job to branch protection in the same change window.** The tracking issue is the durable artifact that prevents this from being forgotten.
+```bash
+gh issue create \
+  --title "Eval — Claim Classifier: 14-day informational bake + branch-protection promotion" \
+  --body-file /tmp/pr3-bake-issue.md
+```
 
 ---
 
@@ -864,11 +906,14 @@ Merge happens when reviewers approve. **Do not add the job to branch protection 
   - Spec §Architecture surface 2 (`score.ts` overall regression) → Task 1.
   - Spec §Architecture surface 3 (`run-eval.ts` preflight + hash promotion) → Tasks 2 + 3.
   - Spec §Regression rules (per-class, overall, prompt-hash) → Tasks 1 (per-class kept unchanged + overall added) and 3 (hash promotion).
-  - Spec §Secret handling (branch-aware split, SKIPPED wording, no pull_request_target) → Tasks 2 + 3 + 4 (the `if: ... || github.event_name == 'push'` is the workflow-level guard that always runs main pushes through the harness, exercising the fail branch).
-  - Spec §Bake-to-required plan → Task 5 Steps 6 + 7 + tracking issue body.
+  - Spec §Secret handling (branch-aware split, SKIPPED wording, no pull_request_target) → Tasks 2 + 3 + 4 (the `if: ... || github.ref == 'refs/heads/main'` guard always runs main-branch pushes through the harness, exercising the fail branch, while keeping feature-branch pushes off the eval budget).
+  - Spec §Bake-to-required plan → Task 5 Steps 6 (STOP at merge) + 7 (open tracking issue **after** merge) + tracking issue body.
   - Spec §Acceptance criteria — every box checked in Task 5 Step 4's PR body or marked as post-merge action item.
 - **Placeholder scan:** No TBD/TODO. The `user provides on request` notes in Tasks 3 Step 4 and 5 Step 2 are intentional — the API key must come from the operator, not the plan.
 - **Type consistency:** `PromptHashCheck` defined in Task 2, consumed in Task 3 — fields match. `isMainPush(env)` signature stable across Task 2 (definition) and Task 3 (consumption). `appendStepSummary(message, env?)` signature stable; production caller in Task 3 uses 1-arg form.
 - **No code duplication:** the SKIPPED message string `"claim-classifier eval skipped: ANTHROPIC_API_KEY is not available"` appears in Task 2 test, Task 3 implementation, Task 4 expected output, and Task 5 PR body — that's the same canonical string, not duplicated logic. Worth a constant if it shifts again later; not worth lifting now.
 - **What this plan does NOT do (per spec §Out of scope):** no response cache, no latency gating, no nightly cron, no `pull_request_target`, no branch-protection promotion at merge time, no `packages/schemas/src/index.ts` re-export changes.
+
+```
+
 ```
