@@ -65,6 +65,8 @@ export class PrismaListingStore {
     id: string,
     data: Partial<Omit<AgentListing, "id" | "createdAt">>,
   ): Promise<AgentListing> {
+    // route-governance: store-mutation-global — AgentListing is the cross-tenant
+    // marketplace catalog; no organizationId binding by design.
     return this.prisma.agentListing.update({
       where: { id },
       data: data as never,
@@ -72,6 +74,8 @@ export class PrismaListingStore {
   }
 
   async delete(id: string): Promise<void> {
+    // route-governance: store-mutation-global — AgentListing is the cross-tenant
+    // marketplace catalog; no organizationId binding by design.
     await this.prisma.agentListing.delete({ where: { id } });
   }
 }

@@ -25,6 +25,8 @@ export class PrismaOutboxStore {
   }
 
   async markPublished(id: string) {
+    // route-governance: store-mutation-global — OutboxEvent is a system delivery
+    // queue drained by the publisher worker; no organizationId binding.
     return this.prisma.outboxEvent.update({
       where: { id },
       data: { status: "published" },
@@ -32,6 +34,8 @@ export class PrismaOutboxStore {
   }
 
   async recordFailure(id: string, attempts: number) {
+    // route-governance: store-mutation-global — OutboxEvent is a system delivery
+    // queue drained by the publisher worker; no organizationId binding.
     return this.prisma.outboxEvent.update({
       where: { id },
       data: {
