@@ -8,6 +8,7 @@ import type {
   ContactsListResponse,
   ContactBrowseRow,
 } from "@switchboard/schemas";
+import type { RouteTemplates } from "../lib/route-templates.js";
 
 /**
  * Thrown when the dashboard hands back a cursor we can't decode. The Fastify
@@ -23,6 +24,7 @@ export class InvalidCursorError extends Error {
 
 export interface ListContactsDeps {
   contactStore: Pick<ContactStore, "listForBrowse">;
+  routeTemplates: RouteTemplates;
 }
 
 /**
@@ -60,7 +62,7 @@ export async function listContactsForBrowse(
     // The store should already cap at 99; clamping again is a defensive
     // sanity check on the schema bound, not load-bearing.
     opportunityCount: Math.min(result.opportunityCounts.get(c.id) ?? 0, 99),
-    detailHref: `/contacts/${c.id}`,
+    detailHref: deps.routeTemplates.contactDetail(c.id),
   }));
 
   const nextCursor = result.nextKeyset ? encodeCursor(result.nextKeyset) : null;

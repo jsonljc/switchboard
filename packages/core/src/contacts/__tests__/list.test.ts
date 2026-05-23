@@ -2,6 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { listContactsForBrowse, InvalidCursorError } from "../list.js";
 import type { ContactStore, ContactBrowseResult } from "../../lifecycle/contact-store.js";
 import type { Contact } from "@switchboard/schemas";
+import type { RouteTemplates } from "@switchboard/core";
+
+const testRouteTemplates: RouteTemplates = {
+  contactDetail: (id) => `/contacts/${id}`,
+  contactConversations: (id) => `/contacts/${id}/conversations`,
+  contactConversationDetail: (id, threadId) => `/contacts/${id}/conversations/${threadId}`,
+};
 
 const TS_A = new Date("2026-05-09T10:00:00Z");
 const TS_B = new Date("2026-05-09T09:00:00Z");
@@ -58,7 +65,7 @@ describe("listContactsForBrowse", () => {
         orgId: "org-A",
         query: { ...baseQuery, stage: "customer", search: "lisa" },
       },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0]![0]).toMatchObject({
@@ -83,7 +90,7 @@ describe("listContactsForBrowse", () => {
 
     await listContactsForBrowse(
       { orgId: "org-A", query: { ...baseQuery, cursor } },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(spy.mock.calls[0]![0].cursor).toEqual({ ts: TS_A, id: "c-7" });
   });
@@ -98,7 +105,7 @@ describe("listContactsForBrowse", () => {
     await expect(
       listContactsForBrowse(
         { orgId: "org-A", query: { ...baseQuery, cursor: "not-base64-json" } },
-        { contactStore: store },
+        { contactStore: store, routeTemplates: testRouteTemplates },
       ),
     ).rejects.toBeInstanceOf(InvalidCursorError);
   });
@@ -114,7 +121,7 @@ describe("listContactsForBrowse", () => {
     await expect(
       listContactsForBrowse(
         { orgId: "org-A", query: { ...baseQuery, cursor: bad } },
-        { contactStore: store },
+        { contactStore: store, routeTemplates: testRouteTemplates },
       ),
     ).rejects.toBeInstanceOf(InvalidCursorError);
   });
@@ -132,7 +139,7 @@ describe("listContactsForBrowse", () => {
     await expect(
       listContactsForBrowse(
         { orgId: "org-A", query: { ...baseQuery, cursor: bad } },
-        { contactStore: store },
+        { contactStore: store, routeTemplates: testRouteTemplates },
       ),
     ).rejects.toBeInstanceOf(InvalidCursorError);
   });
@@ -146,7 +153,7 @@ describe("listContactsForBrowse", () => {
     });
     const result = await listContactsForBrowse(
       { orgId: "org-A", query: baseQuery },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(result.hasMore).toBe(true);
     expect(result.nextCursor).toBeTypeOf("string");
@@ -163,7 +170,7 @@ describe("listContactsForBrowse", () => {
     });
     const result = await listContactsForBrowse(
       { orgId: "org-A", query: baseQuery },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
@@ -183,7 +190,7 @@ describe("listContactsForBrowse", () => {
     });
     const result = await listContactsForBrowse(
       { orgId: "org-A", query: baseQuery },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(result.rows.map((r) => r.displayName)).toEqual(["Alice", "+6580000000", "x@y.com", "—"]);
   });
@@ -197,7 +204,7 @@ describe("listContactsForBrowse", () => {
     });
     const result = await listContactsForBrowse(
       { orgId: "org-A", query: baseQuery },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(result.rows.map((r) => r.detailHref)).toEqual(["/contacts/c-abc", "/contacts/c-def"]);
   });
@@ -212,7 +219,7 @@ describe("listContactsForBrowse", () => {
     });
     const result = await listContactsForBrowse(
       { orgId: "org-A", query: baseQuery },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(result.rows[0]!.opportunityCount).toBe(99);
   });
@@ -226,7 +233,7 @@ describe("listContactsForBrowse", () => {
     });
     const result = await listContactsForBrowse(
       { orgId: "org-A", query: baseQuery },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(result.rows[0]!.opportunityCount).toBe(0);
   });
@@ -240,7 +247,7 @@ describe("listContactsForBrowse", () => {
     });
     const result = await listContactsForBrowse(
       { orgId: "org-A", query: baseQuery },
-      { contactStore: store },
+      { contactStore: store, routeTemplates: testRouteTemplates },
     );
     expect(result.rows[0]!.lastActivityAt).toBe(TS_A.toISOString());
     expect(result.rows[0]!.firstContactAt).toBe(TS_B.toISOString());
@@ -256,7 +263,10 @@ describe("listContactsForBrowse", () => {
       hasMore: false,
       nextKeyset: null,
     });
-    await listContactsForBrowse({ orgId: "org-A", query: baseQuery }, { contactStore: store });
+    await listContactsForBrowse(
+      { orgId: "org-A", query: baseQuery },
+      { contactStore: store, routeTemplates: testRouteTemplates },
+    );
     const args = spy.mock.calls[0]![0];
     const stringValues = JSON.stringify(args);
     expect(stringValues).not.toContain("/contacts");

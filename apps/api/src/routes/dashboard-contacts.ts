@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { ContactsListQuerySchema } from "@switchboard/schemas";
 import { listContactsForBrowse, InvalidCursorError } from "@switchboard/core/contacts";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { dashboardRouteTemplates } from "../lib/route-templates.js";
 
 /**
  * GET /api/dashboard/contacts — read-only browse projection backing the
@@ -42,7 +43,7 @@ export const dashboardContactsRoutes: FastifyPluginAsync = async (app) => {
     try {
       return await listContactsForBrowse(
         { orgId, query: parsed.data },
-        { contactStore: app.contactStore },
+        { contactStore: app.contactStore, routeTemplates: dashboardRouteTemplates },
       );
     } catch (e) {
       if (e instanceof InvalidCursorError) {
