@@ -330,3 +330,48 @@ jobs:
 
       - name: Verify Docker build (MCP Server)
         run: docker build --target mcp-server -t switchboard-mcp-server:ci .
+
+  eval-classifier:
+    name: Eval — Claim Classifier
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter classifier-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            classifier:
+              - '.github/workflows/ci.yml'
+              - 'packages/core/src/governance/classifier/**'
+              - 'packages/schemas/src/claim-classifier.ts'
+              - 'evals/claim-classifier/**'
+
+      - name: Skip notice (no classifier-relevant changes)
+        if: steps.filter.outputs.classifier != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Claim Classifier skipped: no classifier-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+
+      - name: Run claim-classifier eval
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm eval:classifier
