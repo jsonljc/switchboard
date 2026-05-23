@@ -8,6 +8,7 @@ function mockPrisma() {
       findMany: vi.fn(),
       upsert: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   } as unknown as PrismaClient;
 }
@@ -58,14 +59,25 @@ describe("PrismaOrgAgentEnablementStore", () => {
     });
   });
 
-  it("setStatus calls update keyed on (orgId, agentKey)", async () => {
+  it("setStatus calls updateMany with WHERE { orgId, agentKey } (not composite key)", async () => {
     const prisma = mockPrisma();
-    (prisma.orgAgentEnablement.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
-    const store = new PrismaOrgAgentEnablementStore(prisma);
-    await store.setStatus("org-1", "mira", "disabled");
-    expect(prisma.orgAgentEnablement.update).toHaveBeenCalledWith({
-      where: { orgId_agentKey: { orgId: "org-1", agentKey: "mira" } },
-      data: { status: "disabled" },
+    (prisma.orgAgentEnablement.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
     });
+    const store = new PrismaOrgAgentEnablementStore(prisma);
+    await store.setStatus("org_1", "alex", "disabled");
+    const args = (prisma.orgAgentEnablement.updateMany as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(args.where).toEqual({ orgId: "org_1", agentKey: "alex" });
+    expect(args.data).toEqual({ status: "disabled" });
+  });
+
+  it("setStatus throws StaleVersionError (matching /Stale version/) when count===0", async () => {
+    const prisma = mockPrisma();
+    (prisma.orgAgentEnablement.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 0,
+    });
+    const store = new PrismaOrgAgentEnablementStore(prisma);
+    await expect(store.setStatus("org_1", "alex", "disabled")).rejects.toThrow(/Stale version/);
   });
 });
