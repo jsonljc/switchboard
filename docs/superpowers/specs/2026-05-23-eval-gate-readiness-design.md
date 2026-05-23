@@ -45,14 +45,16 @@ Modify `compareAgainstBaseline` in `evals/claim-classifier/score.ts`:
 **Overall rule** — fire only when BOTH hold:
 
 - `overallDropBps > OVERALL_TOLERANCE_BPS` (existing strict `> 100`, i.e. 1.00pp), AND
-- `overallAdditionalWrong >= 3`, where (integer counts, derived from the report's overall accuracy and fixture count so the rule is independent of the per-class loop and testable):
-  - `currentTotalWrong = report.totalFixtures - Math.round(report.overallAccuracy * report.totalFixtures)`
-  - `baselineTotalWrong = baseline.totalFixtures - Math.round(baseline.overallAccuracy * baseline.totalFixtures)`
-  - `overallAdditionalWrong = currentTotalWrong - baselineTotalWrong`
+- `overallAdditionalWrong >= 3`, computed from **raw integer counts** via a named helper — no rounded-accuracy arithmetic:
+  - `countWrong(perClaimTypeAccuracy): number` = `Σ (metric.total − metric.correct)` over all claim types. A small pure helper, unit-tested independently.
+  - `overallAdditionalWrong = countWrong(report.perClaimTypeAccuracy) − countWrong(baseline.perClaimTypeAccuracy)`
+  - Rationale: `ScoreReport` has no top-level `correctFixtures` field, but per-class `{correct, total}` are exact integers whose sums equal the overall counts (guaranteed by `scoreResults`). Summing them avoids `Math.round(accuracy × total)` entirely and needs no schema change. Do **not** inline this formula in `compareAgainstBaseline` — keep it in the helper with its own tests.
 
 **Unchanged:** prompt-hash mismatch (hard fail), secret handling, the `OVERALL_TOLERANCE_BPS = 100` constant and its config-independence comment, the bps rounding for the drop comparison.
 
 **Thresholds rationale:** per-class `>= 2` means a single noisy fixture never trips a small class; overall `>= 3` (3/105 ≈ 2.86pp) suppresses the realistic 1- and 2-fixture cross-class noise swings. A real broad regression flips many more fixtures and still fires both rules.
+
+**Honest framing of the thresholds (document in code + PR description):** with the AND-coupling, the percentage thresholds are now only _early signals_ — neither blocks on its own. The **effective blocking threshold** is `additionalWrong >= 2` (per-class) and `overallAdditionalWrong >= 3` (overall); the `> 2pp` / `> 1pp` lines have no blocking power unless the count condition is also met. Reviewers and operators must read each rule as one combined gate. State this plainly in the PR description, e.g.: _"The gate now blocks only when accuracy drop AND minimum additional wrong-count both indicate regression. This intentionally sacrifices sensitivity to 1–2 fixture movements in exchange for a promotable, non-flaky CI gate."_
 
 **Residual (documented, accepted):** a rare **3-fixture pure-noise swing** could still trip the overall rule; this residual is what the deferred temperature=0 work (PR-4) shrinks. Also, by design the gate will **not** catch a real 1-fixture regression on a tiny class — a 1-fixture change at n=9 is statistically indistinguishable from noise, so this is the correct specificity/sensitivity trade.
 
@@ -61,7 +63,8 @@ Modify `compareAgainstBaseline` in `evals/claim-classifier/score.ts`:
 - Add: small-class 1-flip → passes (per-class suppressed); small-class 2-flip → fails; per-class boundary at exactly `additionalWrong == 2`.
 - Add: overall 2-fixture swing → passes (overall suppressed); overall 3-fixture swing → fails; overall boundary at exactly `overallAdditionalWrong == 3`.
 - **Update existing PR-3 tests** that used a single-fixture flip to assert a per-class regression (e.g. `efficacy` 4/5): under the new rule a 1-flip no longer fires, so these must use `>= 2` flips to still intend a per-class regression.
-- **`makeReport` helper subtlety:** PR-3's helper sets `overallAccuracy` independently of per-class counts. The new overall rule derives wrong-counts from `overallAccuracy * totalFixtures`, so overall tests must set `overallAccuracy` and `totalFixtures` to values that yield the intended integer `overallAdditionalWrong` (relative to the `baseline` fixture's `overallAccuracy`/`totalFixtures`). Make these consistent so a test can't silently pass with `overallAdditionalWrong = 0`.
+- Add: direct unit tests for the `countWrong` helper (empty/zeroed metrics → 0; mixed correct/total → exact sum).
+- **`makeReport` helper subtlety:** the overall rule now derives wrong-counts from per-class `{correct, total}` sums, while the overall _drop_ still uses `overallAccuracy`. In real runs these agree (the `scoreResults` invariant). Tests must keep them consistent — set per-class counts that sum to the intended `overallAccuracy`, or have `makeReport` compute `overallAccuracy` from the per-class counts — so a test can't set `overallAccuracy` indicating a drop while per-class sums yield `overallAdditionalWrong = 0` (or vice-versa). Preferred: derive `overallAccuracy` from the per-class counts inside `makeReport` to make the invariant structural.
 
 ### PR B — `chore(eval-classifier): wire eval typecheck into CI + bounded strict-error cleanup`
 
@@ -100,6 +103,8 @@ PR A and PR B both touch `score.ts` (PR A: `compareAgainstBaseline`; PR B: `scor
 ## Acceptance criteria
 
 - `compareAgainstBaseline` per-class rule requires `drop > toleranceFraction && additionalWrong >= 2`; overall rule requires `overallDropBps > 100 && overallAdditionalWrong >= 3`.
+- `overallAdditionalWrong` is computed via a named, independently-tested `countWrong` helper from raw per-class integer counts (no `Math.round(accuracy × total)` in the comparison path).
+- PR description states the effective-blocking-threshold framing (percentage = early signal; count = blocker; sensitivity trade is intentional).
 - The observed `testimonial` 1-flip and a synthetic 2-fixture cross-class swing both **pass**; a 2-flip small-class and a 3-fixture overall swing both **fail**; prompt-hash mismatch still fails.
 - All eval tests pass; existing single-flip per-class tests updated; overall tests use consistent count data.
 - `tsc` over the eval harness is clean and runs in CI (PR B).
