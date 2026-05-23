@@ -1,16 +1,10 @@
 import { z } from "zod";
+import { ClaimTypeSchema } from "@switchboard/schemas";
 
-export const ClaimTypeEnum = z.enum([
-  "efficacy",
-  "safety-claim",
-  "superiority",
-  "urgency",
-  "testimonial",
-  "medical-advice",
-  "diagnosis",
-  "credentials",
-  "none",
-]);
+// Re-export the canonical claim-type enum rather than re-listing it, so a new
+// claim type added in @switchboard/schemas can never silently drift from what
+// the eval scores/validates against.
+export const ClaimTypeEnum = ClaimTypeSchema;
 
 export type ClaimTypeLabel = z.infer<typeof ClaimTypeEnum>;
 

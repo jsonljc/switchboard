@@ -44,6 +44,11 @@ export interface ComparisonResult {
   regressions: string[];
 }
 
+// Intentionally config-independent (not read from baseline.toleranceBps, which gates
+// per-class drops at 2pp): the overall gate is deliberately stricter at 1pp, and inlining
+// it avoids a Baseline schema change that would force re-locking baseline.json.
+const OVERALL_TOLERANCE_BPS = 100; // 1.00pp
+
 export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline): ComparisonResult {
   const regressions: string[] = [];
   const toleranceFraction = baseline.toleranceBps / 10_000;
@@ -58,6 +63,14 @@ export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline):
         `${type}: ${(current.accuracy * 100).toFixed(1)}% (current) vs ${(baselineMetric.accuracy * 100).toFixed(1)}% (baseline), drop ${(drop * 100).toFixed(1)}pp > ${(toleranceFraction * 100).toFixed(1)}pp tolerance`,
       );
     }
+  }
+  // Integer bps comparison avoids float drift around exact 1pp boundaries.
+  const overallDropBps = Math.round((baseline.overallAccuracy - report.overallAccuracy) * 10_000);
+  if (overallDropBps > OVERALL_TOLERANCE_BPS) {
+    const overallDropPp = overallDropBps / 100;
+    regressions.push(
+      `overall: ${(report.overallAccuracy * 100).toFixed(1)}% (current) vs ${(baseline.overallAccuracy * 100).toFixed(1)}% (baseline), drop ${overallDropPp.toFixed(2)}pp > ${(OVERALL_TOLERANCE_BPS / 100).toFixed(2)}pp tolerance`,
+    );
   }
   return { passed: regressions.length === 0, regressions };
 }

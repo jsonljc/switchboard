@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scoreResults, compareAgainstBaseline } from "../score.js";
+import { scoreResults, compareAgainstBaseline, type ScoreReport } from "../score.js";
 import type { InvocationResult } from "../invoke-classifier.js";
 import type { Baseline } from "../schema.js";
 
@@ -53,6 +53,33 @@ describe("scoreResults", () => {
 });
 
 describe("compareAgainstBaseline", () => {
+  // Constructs a ScoreReport directly so compareAgainstBaseline tests don't depend on scoreResults math.
+  function makeReport(opts: {
+    overallAccuracy: number;
+    perClaimTypeAccuracy?: Partial<ScoreReport["perClaimTypeAccuracy"]>;
+    totalFixtures?: number;
+  }): ScoreReport {
+    const zero = { correct: 0, total: 0, accuracy: 0 };
+    const perClass: ScoreReport["perClaimTypeAccuracy"] = {
+      efficacy: zero,
+      urgency: zero,
+      "safety-claim": zero,
+      superiority: zero,
+      testimonial: zero,
+      "medical-advice": zero,
+      diagnosis: zero,
+      credentials: zero,
+      none: zero,
+      ...opts.perClaimTypeAccuracy,
+    };
+    return {
+      totalFixtures: opts.totalFixtures ?? 100,
+      overallAccuracy: opts.overallAccuracy,
+      perClaimTypeAccuracy: perClass,
+      meanLatencyMs: 0,
+    };
+  }
+
   const baseline: Baseline = {
     version: 1,
     generatedAt: "2026-05-16T00:00:00.000Z",
@@ -109,5 +136,60 @@ describe("compareAgainstBaseline", () => {
     const report = scoreResults([r("a", "efficacy", "efficacy", true)]);
     const out = compareAgainstBaseline(report, baseline);
     expect(out.passed).toBe(true);
+  });
+
+  it("passes when overall accuracy drops by exactly 1pp (boundary, strict >)", () => {
+    // baseline.overallAccuracy = 0.9. Construct exactly 0.89.
+    // bps comparison: (0.9 - 0.89) * 10000 = 100. Rule is `> 100`, so 100 does not fail.
+    const report = makeReport({ overallAccuracy: 0.89 });
+    const out = compareAgainstBaseline(report, baseline);
+    expect(out.passed).toBe(true);
+    expect(out.regressions).toHaveLength(0);
+  });
+
+  it("fails when overall accuracy drops by more than 1pp", () => {
+    const report = makeReport({ overallAccuracy: 0.88 }); // 2pp drop → 200 bps > 100
+    const out = compareAgainstBaseline(report, baseline);
+    expect(out.passed).toBe(false);
+    expect(out.regressions.join("\n")).toMatch(/overall/);
+  });
+
+  it("fails on per-class drop only (no overall regression)", () => {
+    // efficacy baseline 100% (5/5) → current 80% (4/5) → per-class fires.
+    // Keep overall above baseline - 1pp so the overall rule does NOT fire.
+    const report = makeReport({
+      overallAccuracy: 0.95, // above 0.89 floor → overall rule silent
+      perClaimTypeAccuracy: {
+        efficacy: { correct: 4, total: 5, accuracy: 0.8 },
+      },
+    });
+    const out = compareAgainstBaseline(report, baseline);
+    expect(out.passed).toBe(false);
+    expect(out.regressions.join("\n")).toMatch(/efficacy/);
+    expect(out.regressions.join("\n")).not.toMatch(/overall/);
+  });
+
+  it("fails on overall drop only (no per-class regression)", () => {
+    // Baseline has per-class data only for efficacy and urgency. Leave both at 0/0
+    // in the current report so per-class checks skip. Drive overall low enough to fail.
+    const report = makeReport({ overallAccuracy: 0.85 }); // 5pp drop
+    const out = compareAgainstBaseline(report, baseline);
+    expect(out.passed).toBe(false);
+    expect(out.regressions.join("\n")).toMatch(/overall/);
+    expect(out.regressions.join("\n")).not.toMatch(/efficacy/);
+  });
+
+  it("fails with both per-class and overall regressions reported", () => {
+    const report = makeReport({
+      overallAccuracy: 0.85,
+      perClaimTypeAccuracy: {
+        efficacy: { correct: 2, total: 5, accuracy: 0.4 }, // 60pp drop
+      },
+    });
+    const out = compareAgainstBaseline(report, baseline);
+    expect(out.passed).toBe(false);
+    expect(out.regressions.join("\n")).toMatch(/efficacy/);
+    expect(out.regressions.join("\n")).toMatch(/overall/);
+    expect(out.regressions.length).toBeGreaterThanOrEqual(2);
   });
 });

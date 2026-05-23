@@ -7,6 +7,12 @@ import { loadFixtures } from "./load-fixtures.js";
 import { invokeOne, type InvocationResult } from "./invoke-classifier.js";
 import { scoreResults, compareAgainstBaseline } from "./score.js";
 import { BaselineSchema, ClaimTypeEnum, type Baseline } from "./schema.js";
+import {
+  isMainPush,
+  comparePromptHash,
+  appendStepSummary,
+  SKIP_MESSAGE,
+} from "./eval-preflight.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "fixtures");
@@ -16,8 +22,13 @@ async function main() {
   const writeBaseline = process.argv.includes("--write-baseline");
   const apiKey = process.env["ANTHROPIC_API_KEY"];
   if (!apiKey) {
-    console.error("ANTHROPIC_API_KEY is required");
-    process.exit(2);
+    if (isMainPush(process.env)) {
+      console.error("claim-classifier eval failed: ANTHROPIC_API_KEY is required on main push");
+      process.exit(2);
+    }
+    console.log(SKIP_MESSAGE);
+    appendStepSummary(SKIP_MESSAGE);
+    process.exit(0);
   }
   const client = new Anthropic({ apiKey });
   const fixtures = loadFixtures(FIXTURES_DIR);
@@ -61,10 +72,13 @@ async function main() {
 
   if (existsSync(BASELINE_PATH)) {
     const baseline = BaselineSchema.parse(JSON.parse(readFileSync(BASELINE_PATH, "utf-8")));
-    if (baseline.classifierPromptHash !== results[0]?.promptHash) {
-      console.warn(
-        `\nWARNING: classifier prompt hash changed from baseline\n  baseline: ${baseline.classifierPromptHash}\n  current:  ${results[0]?.promptHash}\n  Run \`pnpm eval:classifier --write-baseline\` to lock the new prompt.`,
+    const currentHash = results[0]?.promptHash ?? "unknown";
+    const hashCheck = comparePromptHash(currentHash, baseline.classifierPromptHash);
+    if (!hashCheck.ok) {
+      console.error(
+        `\nFAIL: classifier prompt hash changed from baseline\n  baseline: ${hashCheck.baselineHash}\n  current:  ${hashCheck.currentHash}\n  Run \`pnpm eval:classifier --write-baseline\` to lock the new prompt.`,
       );
+      process.exit(1);
     }
     const comparison = compareAgainstBaseline(report, baseline);
     if (!comparison.passed) {
