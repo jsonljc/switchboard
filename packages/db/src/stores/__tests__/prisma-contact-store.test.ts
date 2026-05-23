@@ -9,8 +9,10 @@ function makeMockPrisma() {
     contact: {
       create: vi.fn().mockResolvedValue({}),
       findFirst: vi.fn().mockResolvedValue(null),
+      findFirstOrThrow: vi.fn().mockResolvedValue({}),
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   };
 }
@@ -243,48 +245,44 @@ describe("PrismaContactStore", () => {
   });
 
   describe("updateStage", () => {
-    it("updates contact stage", async () => {
-      const existing = makeContact();
-      prisma.contact.findFirst.mockResolvedValue(existing);
+    it("calls updateMany with tenant-scoped WHERE and maps the read-back row", async () => {
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 });
       const updated = makeContact({ stage: "active" });
-      prisma.contact.update.mockResolvedValue(updated);
+      prisma.contact.findFirstOrThrow.mockResolvedValue(updated);
 
       const result = await store.updateStage("org-1", "contact-1", "active");
 
-      expect(prisma.contact.findFirst).toHaveBeenCalledWith({
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
         where: { id: "contact-1", organizationId: "org-1" },
-      });
-      expect(prisma.contact.update).toHaveBeenCalledWith({
-        where: { id: "contact-1" },
         data: {
           stage: "active",
           updatedAt: expect.any(Date),
         },
       });
+      expect(prisma.contact.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "contact-1", organizationId: "org-1" },
+      });
       expect(result.stage).toBe("active");
     });
 
-    it("throws when contact not found or wrong org", async () => {
-      prisma.contact.findFirst.mockResolvedValue(null);
+    it("throws StaleVersionError (matching /Stale version/) when count===0", async () => {
+      prisma.contact.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(store.updateStage("org-1", "contact-999", "active")).rejects.toThrow(
-        /not found or does not belong/,
+        /Stale version/,
       );
     });
   });
 
   describe("updateLastActivity", () => {
-    it("updates lastActivityAt timestamp", async () => {
-      const existing = makeContact();
-      prisma.contact.findFirst.mockResolvedValue(existing);
+    it("calls updateMany with tenant-scoped WHERE (no pre-fetch)", async () => {
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 });
 
       await store.updateLastActivity("org-1", "contact-1");
 
-      expect(prisma.contact.findFirst).toHaveBeenCalledWith({
+      expect(prisma.contact.findFirst).not.toHaveBeenCalled();
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
         where: { id: "contact-1", organizationId: "org-1" },
-      });
-      expect(prisma.contact.update).toHaveBeenCalledWith({
-        where: { id: "contact-1" },
         data: {
           lastActivityAt: expect.any(Date),
           updatedAt: expect.any(Date),
@@ -292,11 +290,11 @@ describe("PrismaContactStore", () => {
       });
     });
 
-    it("throws when contact not found or wrong org", async () => {
-      prisma.contact.findFirst.mockResolvedValue(null);
+    it("throws StaleVersionError (matching /Stale version/) when count===0", async () => {
+      prisma.contact.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(store.updateLastActivity("org-1", "contact-999")).rejects.toThrow(
-        /not found or does not belong/,
+        /Stale version/,
       );
     });
   });
@@ -307,9 +305,11 @@ describe("PrismaContactStore", () => {
         contact: {
           findFirst: vi.fn().mockResolvedValue(makeContact({ phone: "+6591234567" })),
           delete: vi.fn().mockResolvedValue({}),
+          deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
           create: vi.fn().mockResolvedValue({}),
           findMany: vi.fn().mockResolvedValue([]),
           update: vi.fn().mockResolvedValue({}),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
         conversationThread: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         opportunity: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -343,7 +343,27 @@ describe("PrismaContactStore", () => {
       await expect(cascadeStore.delete("org-1", "contact-999")).rejects.toThrow(
         /not found or does not belong/,
       );
+      expect(px.contact.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it("uses tenant-scoped deleteMany for the final contact row", async () => {
+      const px = mockPrismaWithCascade();
+      const cascadeStore = new PrismaContactStore(px as never);
+
+      await cascadeStore.delete("org-1", "contact-1");
+
+      expect(px.contact.deleteMany).toHaveBeenCalledWith({
+        where: { id: "contact-1", organizationId: "org-1" },
+      });
       expect(px.contact.delete).not.toHaveBeenCalled();
+    });
+
+    it("throws StaleVersionError (matching /Stale version/) when deleteMany count===0", async () => {
+      const px = mockPrismaWithCascade();
+      px.contact.deleteMany.mockResolvedValue({ count: 0 });
+      const cascadeStore = new PrismaContactStore(px as never);
+
+      await expect(cascadeStore.delete("org-1", "contact-1")).rejects.toThrow(/Stale version/);
     });
 
     it("deletes contact and all child records keyed by contactId", async () => {
@@ -384,7 +404,6 @@ describe("PrismaContactStore", () => {
       expect(px.pendingLeadRetry.deleteMany).toHaveBeenCalledWith({
         where: { leadId: "contact-1" },
       });
-      expect(px.contact.delete).toHaveBeenCalledWith({ where: { id: "contact-1" } });
     });
 
     it("deletes phone-keyed records (WhatsAppMessageStatus, ConversationState) when contact has a phone", async () => {
@@ -411,7 +430,7 @@ describe("PrismaContactStore", () => {
 
       expect(px.whatsAppMessageStatus.deleteMany).not.toHaveBeenCalled();
       expect(px.conversationState.deleteMany).not.toHaveBeenCalled();
-      expect(px.contact.delete).toHaveBeenCalled();
+      expect(px.contact.deleteMany).toHaveBeenCalled();
     });
 
     it("runs the cascade inside a single transaction", async () => {
@@ -425,19 +444,14 @@ describe("PrismaContactStore", () => {
   });
 
   describe("recordMessagingOptOut", () => {
-    it("sets messagingOptIn=false and messagingOptOutAt on the contact", async () => {
-      prisma.contact.findFirst.mockResolvedValue(makeContact({ messagingOptIn: true }));
-      prisma.contact.update.mockResolvedValue(
-        makeContact({ messagingOptIn: false, messagingOptOutAt: now }),
-      );
+    it("calls updateMany with tenant-scoped WHERE (no pre-fetch)", async () => {
+      prisma.contact.updateMany.mockResolvedValue({ count: 1 });
 
       await store.recordMessagingOptOut("org-1", "contact-1");
 
-      expect(prisma.contact.findFirst).toHaveBeenCalledWith({
+      expect(prisma.contact.findFirst).not.toHaveBeenCalled();
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
         where: { id: "contact-1", organizationId: "org-1" },
-      });
-      expect(prisma.contact.update).toHaveBeenCalledWith({
-        where: { id: "contact-1" },
         data: {
           messagingOptIn: false,
           messagingOptOutAt: expect.any(Date),
@@ -446,13 +460,12 @@ describe("PrismaContactStore", () => {
       });
     });
 
-    it("throws when contact not found or wrong org (tenant isolation)", async () => {
-      prisma.contact.findFirst.mockResolvedValue(null);
+    it("throws StaleVersionError (matching /Stale version/) when count===0", async () => {
+      prisma.contact.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(store.recordMessagingOptOut("org-1", "contact-999")).rejects.toThrow(
-        /not found or does not belong/,
+        /Stale version/,
       );
-      expect(prisma.contact.update).not.toHaveBeenCalled();
     });
   });
 
