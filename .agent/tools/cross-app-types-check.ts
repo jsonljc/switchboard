@@ -16,15 +16,19 @@ import type { ValidatorWarning } from "./route-class-validator.js";
  * The set covers:
  *   - Types relocated by PR-2 (ApprovalRecord, ApprovalState, Handoff,
  *     ConversationState, ConversationSummary, ConversationDetail,
- *     ConversationRow, ConversationListResult, OperatorOverview, plus
- *     the DashboardOverview back-compat alias).
- *   - A few obvious cross-app names that already lived in schemas
- *     before PR-2 (Contact, ConversationThread, Recommendation,
- *     Decision, Opportunity, ContactBrowseRow).
+ *     ConversationListResult, OperatorOverview, plus the DashboardOverview
+ *     back-compat alias).
+ *   - Cross-app names already in schemas before PR-2 (Contact,
+ *     ConversationThread, Opportunity, ContactBrowseRow).
  *
  * Names NOT in this set (e.g. MinimalApprovalRecord,
  * ApprovalRecordForResponse) are deliberately-narrower local shapes
  * and are not flagged.
+ *
+ * ConversationRow, Decision, and Recommendation were in the plan's draft
+ * set but are NOT exported from @switchboard/schemas on the PR-2.5
+ * baseline (verified by grep). Omitted to avoid false positives; PR-4
+ * should re-verify against the live schemas index.
  */
 const SCHEMAS_EXPORT_NAMES: ReadonlySet<string> = new Set([
   "ApprovalRecord",
