@@ -21,6 +21,7 @@ interface MockPrisma {
     findMany: ReturnType<typeof vi.fn>;
     findFirst: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
   };
   conversationThread: { deleteMany: ReturnType<typeof vi.fn> };
   opportunity: { deleteMany: ReturnType<typeof vi.fn> };
@@ -49,6 +50,7 @@ function makePrisma(): MockPrisma {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue({ id: "c-1", phone: "+12345" }),
       delete: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     conversationThread: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     opportunity: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -187,7 +189,7 @@ describe("POST /api/meta/deletion", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.contact.delete).toHaveBeenCalledTimes(2);
+    expect(prisma.contact.deleteMany).toHaveBeenCalledTimes(2);
     expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         deletedContactIds: ["c-1", "c-2"],
