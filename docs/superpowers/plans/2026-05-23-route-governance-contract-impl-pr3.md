@@ -14,7 +14,9 @@
 - PR-2 (#624, merged 2026-05-23 → `f99d0c6f`) — cross-app type relocation. No direct dependency; PR-3 is backend-store-only.
 - PR-2.5 (#627, merged 2026-05-23 → `295e95ab`) — landed `.agent/tools/cross-app-types-check.ts` and the **two-advisory merge block** in `check-routes.ts:174-190`. This plan's check rule (`store-mutation-check.ts`) mirrors that advisory verbatim and slots in as a **third** advisory in the same merge block.
 
-**Independence:** Entirely backend (`packages/db/**`, `packages/core/**`, `packages/schemas/**`, `.agent/tools/**`). Touches **no** `apps/dashboard/**` or `apps/chat/**` route/UI code. Can land before or after any other Phase 3A PR. PR-4 backfills `@route-class` headers and flips all three advisories (route-class, cross-app-types, store-mutation) from warning to error together.
+**Independence:** Entirely backend (`packages/db/**`, `packages/core/**`, `.agent/tools/**` — and `apps/api/**` callers as the org-threading cascade reaches them). Touches **no** `apps/dashboard/**` or `apps/chat/**` route/UI code. Can land before or after any other Phase 3A PR. PR-4 backfills `@route-class` headers and flips all three advisories (route-class, cross-app-types, store-mutation) from warning to error together — and (per "Heuristic limitation" in Task 17) must upgrade the store-mutation rule from text-scan to AST `where`-object inspection before that flip.
+
+**Execution is split into four sub-PRs (3A → 3B → 3C → 3D)** to bound the caller-cascade blast radius — see "Execution split" below. The architecture and contract are unchanged; only the landing is sequenced.
 
 ---
 
@@ -32,7 +34,7 @@ These three boundary calls were made deliberately and shape the task count. They
 
 ## Schema boundary rule
 
-This plan touches `@switchboard/schemas` in exactly **one** place: widening `GovernanceVerdictDetails` (Task 18). That type lives in core (`packages/core/src/governance/governance-verdict-store/types.ts`), **not** in the schemas package — it is a plain TypeScript interface, not a Zod schema. No Zod schema is added or modified. No `z.coerce.date()` / Date-vs-string boundary decision is made anywhere in PR-3.
+This plan does **not** touch `@switchboard/schemas`. The only type-shape change is widening `GovernanceVerdictDetails`, which lives in **core** (`packages/core/src/governance/governance-verdict-store/types.ts`) — a plain TypeScript interface, not a Zod schema. No Zod schema is added or modified. No `z.coerce.date()` / Date-vs-string boundary decision is made anywhere in PR-3.
 
 If a Task code-block shows a new `z.object(...)` or `z.infer`, that is a plan bug — flag and skip. The store sweep is pure Prisma-call + method-signature surgery; the verdict slice is a TypeScript interface widening.
 
@@ -112,6 +114,8 @@ async someMutator(organizationId: string, id: string, /* ...payload */): Promise
 }
 ```
 
+**Intentional tradeoff (Pattern B):** the guarded `updateMany` + scoped read-back is **not** atomic read-after-write. This is deliberate — Prisma cannot `update` (single-row, returns the row) with a non-unique `{ id, organizationId }` filter unless the model declares a compound unique index, and PR-3 adds no indexes/migrations. The two-step preserves the tenant guard at the cost of serializable read-after-write semantics, which these mutators do not require (no caller depends on the returned row reflecting a concurrent writer's state). Do not "fix" this by adding compound unique indexes.
+
 **Pattern C — relation-filter mutator.** Used when org is reached through a declared `@relation`. The WHERE filters on the relation. Caller passes `organizationId`.
 
 ```ts
@@ -185,9 +189,37 @@ Each store task that lacks a co-located test file creates one under `packages/db
 
 ---
 
+## Execution split — four PRs (3A → 3B → 3C → 3D)
+
+PR-3 is **not executed as one PR.** The blast radius is too large: tightening store signatures cascades into `apps/api`, `packages/core`, `packages/creative-pipeline`, cron jobs, the workflow runtime, and more. A single PR would be painful to review and would make regressions hard to isolate. The architecture below is unchanged; only the **landing** is split. Each sub-PR cuts a **fresh worktree from `origin/main`**, runs **Task 0** at its start, executes only its mapped tasks, runs its own end-of-PR gate, and opens an independent PR to `main`.
+
+| Sub-PR    | Theme                                         | Tasks                                              | Why grouped                                                                                                                                                                                                                                                                |
+| --------- | --------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PR-3A** | DeploymentConnection only — the live hot path | Task 0 → **Task 1** → gate                         | Highest-risk caller-threading (cron + OAuth + webhook). Land first to validate the relation-filter + caller-cascade pattern in isolation before touching the rest of the store layer.                                                                                      |
+| **PR-3B** | Low-cascade stores                            | Task 0 → **Tasks 2, 3, 12, 10, 11** → gate         | Mutators that already take an org arg (contact, opportunity, org-agent-enablement) or have few/contained callers (command, execution-trace). Smallest cascade; quick to review.                                                                                            |
+| **PR-3C** | High-cascade domain stores                    | Task 0 → **Tasks 4, 5, 6, 7, 8, 9, 13** → gate     | Mutators with **no** current org arg that thread through core/creative-pipeline/api/cron: memory, workflow runtime, agent-task, creative-job, deployment, booking, WhatsApp test-send. Largest cascade; review in its own PR.                                              |
+| **PR-3D** | Cleanup + tooling                             | Task 0 → **Tasks 14, 16, 17, 18, 19** → final gate | Global-store exemptions (Task 14), GovernanceVerdict cast removal (Task 16), and the store-mutation advisory (Tasks 17–18). The advisory lands **last** so it runs against a tree where the real fixes already exist — its only remaining warnings are the deferred sites. |
+
+**Per-sub-PR workflow (apply to each of 3A–3D):**
+
+1. `git fetch origin main` then cut a fresh worktree from `origin/main` (e.g. `git worktree add` + `pnpm worktree:init`, or the harness worktree tool). Never stack a sub-PR on an unmerged sibling — they touch overlapping store files and the merge order is 3A → 3B → 3C → 3D, but each is cut fresh so a sibling need not be merged first unless its files overlap (3B/3C are disjoint store sets; safe to parallelize if desired).
+2. Run **Task 0** (preflight) in the new worktree.
+3. Execute only the tasks mapped to this sub-PR. Commit per task (the commit blocks in each task already use the right messages).
+4. Run the sub-PR's end-of-PR gate: `pnpm --filter @switchboard/db test`, then `pnpm --filter @switchboard/db typecheck` plus a typecheck of every package the cascade reached (the task's Step "Typecheck" lines name them), `pnpm test`/`pnpm typecheck` for 3C/3D which touch core, and `pnpm format:check`. PR-3D additionally runs **Task 19** (full e2e) as its gate.
+5. Open the PR. **Each sub-PR body must state:** the baseline SHA from Task 0, the stores touched, the caller files threaded, and — for PR-3D — the **expected remaining advisory warnings** (see Task 19 Step 7): `packages/db/src/storage/prisma-lifecycle-store.ts` (`updateDispatchRecord`) and `packages/db/src/stores/prisma-creator-identity-store.ts` mutators. List these explicitly so reviewers do not mistake them for regressions.
+6. Tear down the worktree the day the sub-PR merges.
+
+**Merge order:** 3A first (validates the hardest pattern), then 3B, 3C, 3D. 3D's advisory is only meaningful once 3A–3C have landed the real fixes.
+
+> The task numbering below (Task 0–19) is the **catalogue**; the table above is the **execution order**. An implementer working PR-3B, for example, runs Task 0 then Tasks 2/3/12/10/11 and ignores the rest until their sub-PR.
+
+---
+
 ## Implementation tasks
 
 ### Task 0: Preflight — confirm baseline + candidate-list freshness
+
+> Run at the **start of every sub-PR (3A–3D)**, in that sub-PR's fresh worktree — not once globally.
 
 **Files:** none (verification-only).
 
@@ -429,7 +461,7 @@ Then at the call sites in the same file: `await deps.updateCredentials(conn.orga
     },
 ```
 
-And `listMetaConnections` (the adapter mapping at `:312-325`) must include `organizationId`. The source rows come from `connectionStore.listByDeployment` (no org) — join the deployment: for each connection, resolve org via `deploymentStore.findById(c.deploymentId)` (available in the bootstrap scope) and map `organizationId: deployment.organizationId`. If `listMetaConnections` aggregates across deployments, batch the deployment lookups.
+And `listMetaConnections` (the adapter at `inngest.ts:305-325`) must include `organizationId`. **Locked instruction:** that adapter already runs `app.prisma!.deploymentConnection.findMany({ where: { type: "meta-ads" } })` — add `include: { deployment: true }` to that single query and map `organizationId: c.deployment.organizationId` in the `.map(...)`. **Do NOT** call `deploymentStore.findById(c.deploymentId)` per connection — that is an N+1 over the platform-wide connection set. One query, joined.
 
 (c) `apps/api/src/routes/google-calendar-oauth.ts:188` — request-scoped; pass the route's resolved org: `await connectionStore.updateCredentials(organizationId, existing.id, credentials, { ... })`. Confirm the route already resolves `organizationId` (it is an authed dashboard route; grep for `organizationId` / `req` org in the handler).
 
@@ -1182,6 +1214,8 @@ function windowHasOrgToken(lines: string[], callLine: number): boolean {
 
 Note: the `delete`/`update` etc. method-name match is broad (any `.update(` property call). The org-token window keeps false positives low; the suppression directive covers the rest. This is advisory-only — over-flagging is acceptable in warning mode and tuned before PR-4's error flip.
 
+**Heuristic limitation (load-bearing for PR-4).** This rule is a ±10-line **text** scan: it passes a mutation if `organizationId`/`orgId` appears anywhere nearby — including in a parameter list, a comment, or an unrelated statement — even when the actual Prisma `where` object does NOT carry the org filter. That is an acceptable false-negative in warning mode (a human reviews), but **PR-4's error-mode flip MUST upgrade this to AST-level inspection of the `where` object itself** (walk the `update`/`updateMany`/`delete` call's first-argument object literal and confirm an `organizationId`/`orgId` key, or a relation key whose value object carries one). Record this as a PR-4 prerequisite in the PR body; do not flip to error mode while the check is still text-based.
+
 - [ ] **Step 4: Run → PASS.** Re-run the advisory test command.
 - [ ] **Step 5: Typecheck `.agent/tools`.** Run the tools tsconfig typecheck (match the `cross-app-types-check` workflow; e.g. `pnpm --filter @switchboard/agent-tools typecheck` or `tsc -p .agent/tools/tsconfig.json --noEmit`).
 - [ ] **Step 6: Smoke-test against the real db tree.** Run a one-off invocation feeding `touchedFiles` = the full `packages/db/src/{stores,storage}/**/*.ts` list and confirm: the deferred `CreatorIdentity` + `prisma-lifecycle-store` `updateDispatchRecord` warn (expected), the exempt annotated ones do **not**, and the tightened ones do **not**.
@@ -1252,7 +1286,7 @@ git commit -m "feat(audit): wire store-mutation advisory into check-routes warn-
 - [ ] **Step 5: Format check (CI runs this; local `pnpm lint` does not).** `pnpm format:check` → PASS. Run `pnpm format` if needed.
 - [ ] **Step 6: Confirm zero residual `as any` on verdict saves.** `rg -n "verdictStore.save as any" packages/core/src` → 0.
 - [ ] **Step 7: Confirm the advisory's expected steady-state.** Re-run the warn-touched advisory against the full `packages/db/src/{stores,storage}/**` set; the only store-mutation warnings should be the two **deferred** sites (CreatorIdentity, `updateDispatchRecord`). Record this in the PR description as the expected baseline PR-4 will resolve.
-- [ ] **Step 8: No new commit.** Open the PR. Title: `feat(audit): Route Governance Contract v1 — Impl PR-3 (store-layer mutation contract sweep)`. Body references issue #601, the deferred sites, the exempt sites, and Cat 3.14 closure.
+- [ ] **Step 8: No new commit.** This gate runs as **PR-3D's** end-of-PR gate (it observes the full tree after 3A–3C have merged). Open the PR-3D PR. Title: `feat(audit): Route Governance Contract v1 — Impl PR-3D (verdict casts + store-mutation advisory)`. Body references issue #601, Cat 3.14 closure, the exempt sites (Task 14), and — explicitly, from Step 7 — the **expected remaining advisory warnings**: `packages/db/src/storage/prisma-lifecycle-store.ts` (`updateDispatchRecord`) + `packages/db/src/stores/prisma-creator-identity-store.ts` mutators, so reviewers do not read them as regressions.
 
 ---
 
@@ -1277,10 +1311,12 @@ git commit -m "feat(audit): wire store-mutation advisory into check-routes warn-
 
 ## Execution handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-05-23-route-governance-contract-impl-pr3.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-05-23-route-governance-contract-impl-pr3.md`. **Execute one sub-PR at a time, in order 3A → 3B → 3C → 3D** (see "Execution split"). Start with **PR-3A (DeploymentConnection / Task 1)** — it validates the hardest caller-threading pattern in isolation before the rest of the store layer is touched. Do not bundle the sub-PRs.
+
+Within each sub-PR, two execution styles:
 
 **1. Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration. Given the per-store caller-cascade work, verify `git branch --show-current` after each subagent task (subagent dispatches have drifted cwd across worktrees before).
 
-**2. Inline Execution** — execute tasks in this session using executing-plans, batch execution with checkpoints for review.
+**2. Inline Execution** — execute the sub-PR's tasks in-session using executing-plans, with checkpoints for review.
 
-Which approach?
+Recommended next action: cut the PR-3A worktree from `origin/main`, run Task 0, then Task 1.
