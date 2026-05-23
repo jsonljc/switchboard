@@ -1,37 +1,15 @@
 import { randomUUID } from "node:crypto";
-import type { ConversationStatus, LeadProfile } from "@switchboard/schemas";
+import type { LeadProfile } from "@switchboard/schemas";
 
-export interface ConversationMessage {
-  role: "user" | "assistant";
-  text: string;
-  timestamp: Date;
-}
+// Re-export from @switchboard/schemas — ConversationStateData is aliased from
+// ConversationState so all 30+ existing call sites compile unchanged.
+export type {
+  ConversationMessage,
+  ConversationState as ConversationStateData,
+} from "@switchboard/schemas";
 
-export interface ConversationStateData {
-  id: string;
-  threadId: string;
-  channel: string;
-  principalId: string;
-  organizationId: string | null;
-  status: ConversationStatus;
-  currentIntent: string | null;
-  pendingProposalIds: string[];
-  pendingApprovalIds: string[];
-  clarificationQuestion: string | null;
-  messages: ConversationMessage[];
-  firstReplyAt: Date | null;
-  /** Timestamp of the last inbound (user) message. Used for WhatsApp 24h window enforcement. */
-  lastInboundAt: Date | null;
-  lastActivityAt: Date;
-  expiresAt: Date;
-  crmContactId: string | null;
-  /** Typed lead profile that accumulates intelligence over conversation turns. */
-  leadProfile: LeadProfile | null;
-  /** Detected language of the user (resolved from recent messages). */
-  detectedLanguage: string | null;
-  /** Current lead state machine state (e.g. QUALIFYING, BOOKING_PUSH). */
-  machineState: string | null;
-}
+// Local re-import for helper function signatures.
+import type { ConversationState as ConversationStateData } from "@switchboard/schemas";
 
 export function createConversation(
   threadId: string,
@@ -66,7 +44,7 @@ type ConversationAction =
   | { type: "set_clarifying"; question: string }
   | { type: "set_awaiting_approval"; approvalIds: string[] }
   | { type: "set_proposals"; proposalIds: string[] }
-  | { type: "add_message"; message: ConversationMessage }
+  | { type: "add_message"; message: { role: "user" | "assistant"; text: string; timestamp: Date } }
   | { type: "update_lead_profile"; profile: Partial<LeadProfile> }
   | { type: "complete" }
   | { type: "expire" }
