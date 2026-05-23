@@ -1,0 +1,5 @@
+{"id":"neutral-sg-001","text":"Our clinic is open Tuesday to Sunday, 10am to 7pm. Closed on Mondays and public holidays.","language":"en","jurisdiction":"SG","expectedClaimType":"none","notes":"Operating hours. No claim, no promotional framing."}
+{"id":"neutral-sg-002","text":"Parking is available at Basement 2 of the building.","language":"en","jurisdiction":"SG","expectedClaimType":"none","notes":"Parking logistics. No claim."}
+{"id":"neutral-sg-003","text":"You can reach our front desk at +65 6123 4567 or email hello@example.sg.","language":"en","jurisdiction":"SG","expectedClaimType":"none","notes":"Contact details. No claim."}
+{"id":"neutral-my-001","text":"Our Kuala Lumpur clinic is located on the third floor of Pavilion Tower 2.","language":"en","jurisdiction":"MY","expectedClaimType":"none","notes":"Address. No claim, no superlatives."}
+{"id":"neutral-my-002","text":"Consultations are available in English, Bahasa Malaysia, and Mandarin.","language":"en","jurisdiction":"MY","expectedClaimType":"none","notes":"Service availability. No claim, no outcome promise."}
