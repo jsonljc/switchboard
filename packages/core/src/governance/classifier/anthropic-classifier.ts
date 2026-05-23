@@ -50,7 +50,7 @@ const CLASSIFIER_TOOL: Tool = {
           "none",
         ],
       },
-      confidence: { type: "number", minimum: 0, maximum: 1 },
+      confidence: { type: "number" },
     },
     required: ["claimType", "confidence"],
   },
