@@ -7,6 +7,7 @@ import type {
   AttributionChain,
   MessagingOptInSource,
 } from "@switchboard/schemas";
+import { StaleVersionError } from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
 // Store Interface (structural match with @switchboard/core)
@@ -137,39 +138,30 @@ export class PrismaContactStore implements ContactStore {
   }
 
   async updateStage(orgId: string, id: string, stage: ContactStage): Promise<Contact> {
-    const existing = await this.prisma.contact.findFirst({
+    const result = await this.prisma.contact.updateMany({
       where: { id, organizationId: orgId },
-    });
-    if (!existing) {
-      throw new Error(`Contact not found or does not belong to organization: ${id}`);
-    }
-
-    const updated = await this.prisma.contact.update({
-      where: { id },
       data: {
         stage,
         updatedAt: new Date(),
       },
     });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
 
-    return mapRowToContact(updated);
+    const row = await this.prisma.contact.findFirstOrThrow({
+      where: { id, organizationId: orgId },
+    });
+    return mapRowToContact(row);
   }
 
   async updateLastActivity(orgId: string, id: string): Promise<void> {
-    const existing = await this.prisma.contact.findFirst({
+    const result = await this.prisma.contact.updateMany({
       where: { id, organizationId: orgId },
-    });
-    if (!existing) {
-      throw new Error(`Contact not found or does not belong to organization: ${id}`);
-    }
-
-    await this.prisma.contact.update({
-      where: { id },
       data: {
         lastActivityAt: new Date(),
         updatedAt: new Date(),
       },
     });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
   async delete(orgId: string, id: string): Promise<void> {
@@ -203,7 +195,8 @@ export class PrismaContactStore implements ContactStore {
         await tx.conversationState.deleteMany({ where: { principalId: phone } });
       }
 
-      await tx.contact.delete({ where: { id } });
+      const del = await tx.contact.deleteMany({ where: { id, organizationId: orgId } });
+      if (del.count === 0) throw new StaleVersionError(id, -1, -1);
     };
 
     if (isRootPrismaClient(this.prisma)) {
@@ -215,22 +208,16 @@ export class PrismaContactStore implements ContactStore {
   }
 
   async recordMessagingOptOut(orgId: string, id: string): Promise<void> {
-    const existing = await this.prisma.contact.findFirst({
-      where: { id, organizationId: orgId },
-    });
-    if (!existing) {
-      throw new Error(`Contact not found or does not belong to organization: ${id}`);
-    }
-
     const now = new Date();
-    await this.prisma.contact.update({
-      where: { id },
+    const result = await this.prisma.contact.updateMany({
+      where: { id, organizationId: orgId },
       data: {
         messagingOptIn: false,
         messagingOptOutAt: now,
         updatedAt: now,
       },
     });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
   async listByIds(orgId: string, ids: string[]): Promise<Map<string, Contact>> {
