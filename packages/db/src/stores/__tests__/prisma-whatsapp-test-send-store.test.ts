@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { StaleVersionError } from "@switchboard/core";
 import { PrismaWhatsAppTestSendStore } from "../prisma-whatsapp-test-send-store.js";
 
 function makePrisma() {
@@ -86,20 +85,19 @@ describe("PrismaWhatsAppTestSendStore", () => {
   });
 
   describe("updateWebhookStatus", () => {
-    it("throws StaleVersionError when no row matches messageId + organizationId", async () => {
+    it("no-ops (returns null) when no row matches messageId + organizationId", async () => {
       (prisma.whatsAppTestSend.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
         count: 0,
       });
 
-      await expect(
-        store.updateWebhookStatus({
-          messageId: "wamid.missing",
-          organizationId: "org_1",
-          status: "delivered",
-          at: new Date("2026-05-15T12:00:00Z"),
-        }),
-      ).rejects.toBeInstanceOf(StaleVersionError);
+      const result = await store.updateWebhookStatus({
+        messageId: "wamid.missing",
+        organizationId: "org_1",
+        status: "delivered",
+        at: new Date("2026-05-15T12:00:00Z"),
+      });
 
+      expect(result).toBeNull();
       expect(prisma.whatsAppTestSend.updateMany).toHaveBeenCalledWith({
         where: { messageId: "wamid.missing", organizationId: "org_1" },
         data: { lastWebhookStatus: "delivered", lastWebhookAt: new Date("2026-05-15T12:00:00Z") },
@@ -148,20 +146,19 @@ describe("PrismaWhatsAppTestSendStore", () => {
       });
     });
 
-    it("throws StaleVersionError when organizationId mismatches (no matching row)", async () => {
+    it("no-ops (returns null) when organizationId mismatches (no matching row)", async () => {
       (prisma.whatsAppTestSend.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
         count: 0,
       });
 
-      await expect(
-        store.updateWebhookStatus({
-          messageId: "wamid.cross",
-          status: "delivered",
-          at: new Date("2026-05-15T14:00:05Z"),
-          organizationId: "org_other",
-        }),
-      ).rejects.toBeInstanceOf(StaleVersionError);
+      const result = await store.updateWebhookStatus({
+        messageId: "wamid.cross",
+        status: "delivered",
+        at: new Date("2026-05-15T14:00:05Z"),
+        organizationId: "org_other",
+      });
 
+      expect(result).toBeNull();
       expect(prisma.whatsAppTestSend.findFirstOrThrow).not.toHaveBeenCalled();
     });
   });

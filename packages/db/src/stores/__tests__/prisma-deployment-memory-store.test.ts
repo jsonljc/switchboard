@@ -11,6 +11,7 @@ function createMockPrisma() {
       deleteMany: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       delete: vi.fn(),
       count: vi.fn(),
     },
@@ -90,7 +91,7 @@ describe("PrismaDeploymentMemoryStore", () => {
     (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
       count: 1,
     });
-    (prisma.deploymentMemory.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (prisma.deploymentMemory.findFirstOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...existing,
       sourceCount: 2,
       confidence: 0.6,

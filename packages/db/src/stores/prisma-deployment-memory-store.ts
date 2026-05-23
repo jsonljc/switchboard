@@ -39,7 +39,9 @@ export class PrismaDeploymentMemoryStore {
       },
     });
     if (result.count === 0) throw new StaleVersionError(id, -1, -1);
-    return this.prisma.deploymentMemory.findFirst({ where: { id, organizationId } }) as Promise<{
+    return this.prisma.deploymentMemory.findFirstOrThrow({
+      where: { id, organizationId },
+    }) as Promise<{
       id: string;
       sourceCount: number;
     }>;

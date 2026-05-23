@@ -1,4 +1,3 @@
-import { StaleVersionError } from "@switchboard/core";
 import type { PrismaClient } from "@prisma/client";
 
 export type ApiStatus = "sent" | "failed";
@@ -58,12 +57,16 @@ export class PrismaWhatsAppTestSendStore {
     return rows as WhatsAppTestSendRow[];
   }
 
-  async updateWebhookStatus(input: UpdateWebhookStatusInput): Promise<WhatsAppTestSendRow> {
+  async updateWebhookStatus(input: UpdateWebhookStatusInput): Promise<WhatsAppTestSendRow | null> {
+    // Best-effort, tenant-scoped status sink. WhatsAppTestSend tracks only operator
+    // test sends, but WhatsApp delivery webhooks fire for ALL outbound messages — a
+    // messageId not in this table (the common case) is expected and must no-op, not
+    // throw. The required organizationId still scopes the write to the caller's tenant.
     const result = await this.prisma.whatsAppTestSend.updateMany({
       where: { messageId: input.messageId, organizationId: input.organizationId },
       data: { lastWebhookStatus: input.status, lastWebhookAt: input.at },
     });
-    if (result.count === 0) throw new StaleVersionError(input.messageId, -1, -1);
+    if (result.count === 0) return null;
     const updated = await this.prisma.whatsAppTestSend.findFirstOrThrow({
       where: { messageId: input.messageId, organizationId: input.organizationId },
     });
