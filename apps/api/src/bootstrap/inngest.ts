@@ -305,6 +305,7 @@ export async function registerInngest(
     listMetaConnections: async () => {
       const allConnections = await app.prisma!.deploymentConnection.findMany({
         where: { type: "meta-ads" },
+        include: { deployment: true },
       });
       return allConnections.map(
         (c: {
@@ -314,8 +315,10 @@ export async function registerInngest(
           status: string;
           credentials: string;
           metadata: unknown;
+          deployment: { organizationId: string };
         }) => ({
           id: c.id,
+          organizationId: c.deployment.organizationId,
           deploymentId: c.deploymentId,
           type: c.type,
           status: c.status,
@@ -324,11 +327,11 @@ export async function registerInngest(
         }),
       );
     },
-    updateCredentials: async (id, credentials) => {
-      await connectionStore.updateCredentials(id, credentials);
+    updateCredentials: async (organizationId, id, credentials) => {
+      await connectionStore.updateCredentials(organizationId, id, credentials);
     },
-    updateStatus: async (id, status) => {
-      await connectionStore.updateStatus(id, status);
+    updateStatus: async (organizationId, id, status) => {
+      await connectionStore.updateStatus(organizationId, id, status);
     },
     refreshTokenIfNeeded: async (config, currentToken, expiresAt) => {
       const { refreshTokenIfNeeded } = await import("@switchboard/ad-optimizer");

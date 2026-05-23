@@ -1,3 +1,4 @@
+import { StaleVersionError } from "@switchboard/core";
 import type { PrismaDbClient } from "../prisma-db.js";
 
 interface CreateConnectionInput {
@@ -37,25 +38,41 @@ export class PrismaDeploymentConnectionStore {
     });
   }
 
-  async updateStatus(id: string, status: string) {
-    return this.prisma.deploymentConnection.update({
-      where: { id },
+  async updateStatus(organizationId: string, id: string, status: string): Promise<void> {
+    const result = await this.prisma.deploymentConnection.updateMany({
+      where: { id, deployment: { organizationId } },
       data: { status },
     });
+    if (result.count === 0) {
+      throw new StaleVersionError(id, -1, -1);
+    }
   }
 
-  async updateCredentials(id: string, credentials: string, metadata?: Record<string, unknown>) {
-    return this.prisma.deploymentConnection.update({
-      where: { id },
+  async updateCredentials(
+    organizationId: string,
+    id: string,
+    credentials: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    const result = await this.prisma.deploymentConnection.updateMany({
+      where: { id, deployment: { organizationId } },
       data: {
         credentials,
         ...(metadata ? { metadata: metadata as object } : {}),
       },
     });
+    if (result.count === 0) {
+      throw new StaleVersionError(id, -1, -1);
+    }
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.deploymentConnection.delete({ where: { id } });
+  async delete(organizationId: string, id: string): Promise<void> {
+    const result = await this.prisma.deploymentConnection.deleteMany({
+      where: { id, deployment: { organizationId } },
+    });
+    if (result.count === 0) {
+      throw new StaleVersionError(id, -1, -1);
+    }
   }
 
   async findByTokenHash(tokenHash: string) {
