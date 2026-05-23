@@ -395,7 +395,7 @@ rg -n "updateStatus|updateCredentials|connectionStore\.delete|deploymentConnecti
 
 Expected callers: `apps/api/src/bootstrap/inngest.ts:327,330`, `apps/api/src/routes/google-calendar-oauth.ts:188`, `apps/api/src/services/cron/meta-token-refresh.ts:78,84`. For each:
 
-(a) `apps/api/src/services/cron/meta-token-refresh.ts` — widen the deps interface and pass org. The iterated `DeploymentConnectionRecord` carries `deploymentId` but not org; add a `resolveOrgId(deploymentId) => Promise<string>` to the deps (the cron already has deployment-store access at the bootstrap site) **or** add `organizationId` to `DeploymentConnectionRecord` and populate it in `listMetaConnections`. Prefer adding `organizationId` to the record (the bootstrap adapter's `listMetaConnections` maps from rows that can join the deployment). Update:
+(a) `apps/api/src/services/cron/meta-token-refresh.ts` — widen the deps interface and pass org. The iterated `DeploymentConnectionRecord` carries `deploymentId` but not org. **The clean source is the existing `findMany` in the bootstrap adapter** (`apps/api/src/bootstrap/inngest.ts:305-308`), which already does `app.prisma!.deploymentConnection.findMany({ where: { type: "meta-ads" } })`. Add `include: { deployment: true }` to that query and map `organizationId: c.deployment.organizationId` into the returned record. **Do NOT** do a per-connection `deploymentStore.findById` lookup (N+1). Add `organizationId` to `DeploymentConnectionRecord`:
 
 ```ts
 interface DeploymentConnectionRecord {
@@ -601,7 +601,7 @@ it("updateRevenueTotal scopes by id+organizationId", async () => {
 
 - [ ] **Step 2: Run to verify it fails.** `pnpm --filter @switchboard/db test prisma-opportunity-store` → FAIL.
 
-- [ ] **Step 3: Tighten.** `updateStage` → Pattern B. `updateRevenueTotal(orgId, id)` → Pattern A (`updateMany({ where: { id, organizationId: orgId }, data })` + throw). Rename `_orgId` → `orgId` in the signature.
+- [ ] **Step 3: Tighten.** `updateStage` → Pattern B. `updateRevenueTotal(orgId, id)` → Pattern A (`updateMany({ where: { id, organizationId: orgId }, data })` + throw). Rename `_orgId` → `orgId` in the signature. **Note:** the existing `updateStage` pre-fetch (`:126`) throws a plain `Error("...not found or does not belong to organization")` on the not-found case; collapsing it into the guarded `updateMany` changes that thrown type to `StaleVersionError`. This is the contract-correct behavior, but grep callers for any `catch` keyed on the old message string and update them.
 
 - [ ] **Step 4: Run to verify it passes.** PASS.
 
