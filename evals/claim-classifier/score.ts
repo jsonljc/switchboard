@@ -13,10 +13,9 @@ export interface ScoreReport {
 }
 
 export function scoreResults(results: InvocationResult[]): ScoreReport {
-  const perType: Record<string, { correct: number; total: number; accuracy: number }> = {};
-  for (const type of ClaimTypeEnum.options) {
-    perType[type] = { correct: 0, total: 0, accuracy: 0 };
-  }
+  const perType = Object.fromEntries(
+    ClaimTypeEnum.options.map((type) => [type, { correct: 0, total: 0, accuracy: 0 }]),
+  ) as Record<ClaimTypeLabel, { correct: number; total: number; accuracy: number }>;
   let totalLatency = 0;
   let totalMatched = 0;
   for (const r of results) {
