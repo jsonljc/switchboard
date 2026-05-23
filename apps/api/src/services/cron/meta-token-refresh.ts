@@ -8,6 +8,7 @@ const REFRESH_THRESHOLD_DAYS = 7;
 
 interface DeploymentConnectionRecord {
   id: string;
+  organizationId: string;
   deploymentId: string;
   type: string;
   status: string;
@@ -17,8 +18,8 @@ interface DeploymentConnectionRecord {
 
 export interface MetaTokenRefreshDeps {
   listMetaConnections: () => Promise<DeploymentConnectionRecord[]>;
-  updateCredentials: (id: string, credentials: string) => Promise<void>;
-  updateStatus: (id: string, status: string) => Promise<void>;
+  updateCredentials: (organizationId: string, id: string, credentials: string) => Promise<void>;
+  updateStatus: (organizationId: string, id: string, status: string) => Promise<void>;
   refreshTokenIfNeeded: (
     config: FacebookOAuthConfig,
     currentToken: string,
@@ -75,13 +76,13 @@ export async function executeMetaTokenRefresh(
             tokenExpiresAt: newExpiresAt.toISOString(),
           };
           const encrypted = encryptCredentials(updatedCreds);
-          await deps.updateCredentials(conn.id, encrypted);
+          await deps.updateCredentials(conn.organizationId, conn.id, encrypted);
           refreshed++;
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`[meta-token-refresh] Failed to refresh connection ${conn.id}: ${msg}`);
-        await deps.updateStatus(conn.id, "needs_reauth");
+        await deps.updateStatus(conn.organizationId, conn.id, "needs_reauth");
         if (deps.notifyOperator) {
           await deps
             .notifyOperator(`Meta token refresh failed for connection ${conn.id}`, {

@@ -573,13 +573,13 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       });
       const setWebhookData = (await setWebhookRes.json()) as { ok: boolean };
       if (!setWebhookData.ok) {
-        await connectionStore.delete(connection.id);
+        await connectionStore.delete(orgId, connection.id);
         return reply
           .code(502)
           .send({ error: "Failed to register Telegram webhook", statusCode: 502 });
       }
     } catch {
-      await connectionStore.delete(connection.id);
+      await connectionStore.delete(orgId, connection.id);
       return reply
         .code(502)
         .send({ error: "Failed to register Telegram webhook", statusCode: 502 });
@@ -668,7 +668,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    await connectionStore.updateStatus(connectionId, "revoked");
+    await connectionStore.updateStatus(orgId, connectionId, "revoked");
     return reply.send({ ok: true });
   });
 

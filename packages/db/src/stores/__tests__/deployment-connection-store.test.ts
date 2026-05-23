@@ -6,8 +6,12 @@ function createMockPrisma() {
     deploymentConnection: {
       create: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
   };
 }
@@ -131,35 +135,26 @@ describe("PrismaDeploymentConnectionStore", () => {
   });
 
   describe("updateStatus", () => {
-    it("updates connection status", async () => {
-      const updated = {
-        id: "conn_1",
-        status: "inactive",
-        updatedAt: new Date(),
-      };
-      prisma.deploymentConnection.update.mockResolvedValue(updated);
+    it("updates connection status with org scoping", async () => {
+      prisma.deploymentConnection.updateMany.mockResolvedValue({ count: 1 });
 
-      const result = await store.updateStatus("conn_1", "inactive");
+      await store.updateStatus("org_1", "conn_1", "inactive");
 
-      expect(result).toEqual(updated);
-      expect(prisma.deploymentConnection.update).toHaveBeenCalledWith({
-        where: { id: "conn_1" },
+      expect(prisma.deploymentConnection.updateMany).toHaveBeenCalledWith({
+        where: { id: "conn_1", deployment: { organizationId: "org_1" } },
         data: { status: "inactive" },
       });
     });
   });
 
   describe("delete", () => {
-    it("deletes a connection", async () => {
-      prisma.deploymentConnection.delete.mockResolvedValue({
-        id: "conn_1",
-        deploymentId: "dep_1",
-      });
+    it("deletes a connection with org scoping", async () => {
+      prisma.deploymentConnection.deleteMany.mockResolvedValue({ count: 1 });
 
-      await store.delete("conn_1");
+      await store.delete("org_1", "conn_1");
 
-      expect(prisma.deploymentConnection.delete).toHaveBeenCalledWith({
-        where: { id: "conn_1" },
+      expect(prisma.deploymentConnection.deleteMany).toHaveBeenCalledWith({
+        where: { id: "conn_1", deployment: { organizationId: "org_1" } },
       });
     });
   });

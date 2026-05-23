@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { google } from "googleapis";
 import {
   PrismaDeploymentConnectionStore,
+  PrismaDeploymentStore,
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
@@ -177,6 +178,13 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         });
 
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
+        const deploymentStore = new PrismaDeploymentStore(app.prisma);
+
+        // Resolve organizationId from deployment — needed for tenant-scoped mutations
+        const deployment = await deploymentStore.findById(deploymentId);
+        if (!deployment) {
+          return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+        }
 
         // Upsert: check if a google_calendar connection already exists for this deployment
         const existing = await connectionStore.findByDeploymentAndType(
@@ -185,10 +193,15 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         );
 
         if (existing) {
-          await connectionStore.updateCredentials(existing.id, credentials, {
-            calendarId,
-            calendarSummary,
-          });
+          await connectionStore.updateCredentials(
+            deployment.organizationId,
+            existing.id,
+            credentials,
+            {
+              calendarId,
+              calendarSummary,
+            },
+          );
         } else {
           await connectionStore.create({
             deploymentId,

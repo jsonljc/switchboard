@@ -63,6 +63,7 @@ describe("executeMetaTokenRefresh", () => {
       listMetaConnections: vi.fn().mockResolvedValue([
         {
           id: "conn_1",
+          organizationId: "org_1",
           deploymentId: "dep_1",
           type: "meta-ads",
           status: "active",
@@ -91,6 +92,7 @@ describe("executeMetaTokenRefresh", () => {
       listMetaConnections: vi.fn().mockResolvedValue([
         {
           id: "conn_1",
+          organizationId: "org_1",
           deploymentId: "dep_1",
           type: "meta-ads",
           status: "active",
@@ -122,6 +124,7 @@ describe("executeMetaTokenRefresh", () => {
       listMetaConnections: vi.fn().mockResolvedValue([
         {
           id: "conn_1",
+          organizationId: "org_1",
           deploymentId: "dep_1",
           type: "meta-ads",
           status: "active",
@@ -135,7 +138,7 @@ describe("executeMetaTokenRefresh", () => {
     const result = await executeMetaTokenRefresh(makeStep(), deps);
 
     expect(result.failed).toBe(1);
-    expect(deps.updateStatus).toHaveBeenCalledWith("conn_1", "needs_reauth");
+    expect(deps.updateStatus).toHaveBeenCalledWith("org_1", "conn_1", "needs_reauth");
   });
 
   it("skips non-active connections", async () => {
@@ -148,6 +151,7 @@ describe("executeMetaTokenRefresh", () => {
       listMetaConnections: vi.fn().mockResolvedValue([
         {
           id: "conn_1",
+          organizationId: "org_1",
           deploymentId: "dep_1",
           type: "meta-ads",
           status: "needs_reauth",
