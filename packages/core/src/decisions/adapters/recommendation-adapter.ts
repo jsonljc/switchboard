@@ -1,5 +1,6 @@
 import type { Recommendation } from "../../recommendations/types.js";
 import type { Decision, DecisionPresentation } from "../types.js";
+import type { RouteTemplates } from "../../lib/route-templates.js";
 import { scoreRecommendation } from "../urgency.js";
 
 const FALLBACK_PRESENTATION: DecisionPresentation = {
@@ -9,7 +10,10 @@ const FALLBACK_PRESENTATION: DecisionPresentation = {
   dataLines: [],
 };
 
-export function adaptRecommendation(row: Recommendation): Decision {
+export function adaptRecommendation(
+  row: Recommendation,
+  deps: { routeTemplates: RouteTemplates },
+): Decision {
   return {
     id: `approval:${row.id}`,
     kind: "approval",
@@ -19,7 +23,7 @@ export function adaptRecommendation(row: Recommendation): Decision {
     presentation: extractPresentation(row.parameters),
     urgencyScore: scoreRecommendation(row),
     createdAt: row.createdAt,
-    threadHref: deriveThreadHref(row),
+    threadHref: deriveThreadHref(row, deps.routeTemplates),
     sourceRef: { kind: "approval", sourceId: row.id },
     meta: {
       contactName: extractContactName(row.targetEntities),
@@ -42,8 +46,8 @@ function extractContactName(targetEntities: Record<string, unknown> | null): str
   return typeof name === "string" ? name : undefined;
 }
 
-function deriveThreadHref(row: Recommendation): string | null {
+function deriveThreadHref(row: Recommendation, routeTemplates: RouteTemplates): string | null {
   if (!row.targetEntities) return null;
   const contactId = row.targetEntities["contactId"];
-  return typeof contactId === "string" ? `/contacts/${contactId}/conversations` : null;
+  return typeof contactId === "string" ? routeTemplates.contactConversations(contactId) : null;
 }
