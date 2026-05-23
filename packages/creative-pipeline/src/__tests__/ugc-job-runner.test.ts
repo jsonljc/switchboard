@@ -79,7 +79,7 @@ describe("executeUgcPipeline", () => {
 
     // load-job + preload + planning run + save + scripting run + save + stop = 7
     expect(step.run).toHaveBeenCalledTimes(7);
-    expect(deps.jobStore.stopUgc).toHaveBeenCalledWith("job_1", "scripting");
+    expect(deps.jobStore.stopUgc).toHaveBeenCalledWith("org_1", "job_1", "scripting");
   });
 
   it("stops pipeline on approval timeout (null)", async () => {
@@ -87,7 +87,7 @@ describe("executeUgcPipeline", () => {
 
     await executeUgcPipeline(eventData, step as never, deps as never);
 
-    expect(deps.jobStore.stopUgc).toHaveBeenCalledWith("job_1", "planning");
+    expect(deps.jobStore.stopUgc).toHaveBeenCalledWith("org_1", "job_1", "planning");
   });
 
   it("throws if job not found", async () => {

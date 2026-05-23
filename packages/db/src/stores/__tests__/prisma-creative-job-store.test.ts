@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaCreativeJobStore } from "../prisma-creative-job-store.js";
+import { StaleVersionError } from "@switchboard/core";
 
 function createMockPrisma() {
   return {
@@ -8,6 +9,8 @@ function createMockPrisma() {
       findUnique: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
+      findFirstOrThrow: vi.fn(),
     },
   };
 }
@@ -172,48 +175,83 @@ describe("PrismaCreativeJobStore", () => {
         stageOutputs: { trends: { angles: [] } },
       };
       prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
-      prisma.creativeJob.update.mockResolvedValue(updated);
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(updated);
 
-      const result = await store.updateStage("cj_1", "hooks", { trends: { angles: [] } });
+      const result = await store.updateStage("org_1", "cj_1", "hooks", { trends: { angles: [] } });
 
-      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
-        where: { id: "cj_1" },
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
         data: {
           currentStage: "hooks",
           stageOutputs: { trends: { angles: [] } },
         },
       });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
       expect(result.currentStage).toBe("hooks");
+    });
+
+    it("throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.updateStage("org_other", "cj_1", "hooks", {})).rejects.toThrow(
+        StaleVersionError,
+      );
     });
   });
 
   describe("stop", () => {
     it("sets stoppedAt to current stage", async () => {
       const stopped = { id: "cj_1", stoppedAt: "hooks" };
-      prisma.creativeJob.update.mockResolvedValue(stopped);
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(stopped);
 
-      const result = await store.stop("cj_1", "hooks");
+      const result = await store.stop("org_1", "cj_1", "hooks");
 
-      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
-        where: { id: "cj_1" },
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
         data: { stoppedAt: "hooks" },
       });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
       expect(result.stoppedAt).toBe("hooks");
+    });
+
+    it("throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.stop("org_other", "cj_1", "hooks")).rejects.toThrow(StaleVersionError);
     });
   });
 
   describe("updateProductionTier", () => {
     it("updates the productionTier field", async () => {
       const mockJob = { id: "cj_1", productionTier: "pro" };
-      prisma.creativeJob.update.mockResolvedValue(mockJob);
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(mockJob);
 
-      const result = await store.updateProductionTier("cj_1", "pro");
+      const result = await store.updateProductionTier("org_1", "cj_1", "pro");
 
-      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
-        where: { id: "cj_1" },
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
         data: { productionTier: "pro" },
       });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
       expect(result).toEqual(mockJob);
+    });
+
+    it("throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.updateProductionTier("org_other", "cj_1", "pro")).rejects.toThrow(
+        StaleVersionError,
+      );
     });
   });
 
@@ -273,20 +311,40 @@ describe("PrismaCreativeJobStore", () => {
         ugcPhaseOutputs: { planning: { structures: [] } },
       };
       prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
-      prisma.creativeJob.update.mockResolvedValue(updated);
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(updated);
 
-      const result = await store.updateUgcPhase("cj_1", "scripting", {
+      const result = await store.updateUgcPhase("org_1", "cj_1", "scripting", {
         planning: { structures: [] },
       });
 
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+        data: {
+          ugcPhase: "scripting",
+          ugcPhaseOutputs: { planning: { structures: [] } },
+        },
+      });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
       expect(result.ugcPhase).toBe("scripting");
     });
 
     it("rejects update on polished-mode job", async () => {
       prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
 
-      await expect(store.updateUgcPhase("cj_1", "scripting", {})).rejects.toThrow(
+      await expect(store.updateUgcPhase("org_1", "cj_1", "scripting", {})).rejects.toThrow(
         "Cannot update UGC phase on a polished-mode job",
+      );
+    });
+
+    it("throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.updateUgcPhase("org_other", "cj_1", "scripting", {})).rejects.toThrow(
+        StaleVersionError,
       );
     });
   });
@@ -299,17 +357,22 @@ describe("PrismaCreativeJobStore", () => {
         code: "NO_ELIGIBLE_CREATORS",
         message: "No creators",
       };
+      const mockResult = { id: "cj_1", ugcFailure: error };
       prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
-      prisma.creativeJob.update.mockResolvedValue({ id: "cj_1", ugcFailure: error });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(mockResult);
 
-      const result = await store.failUgc("cj_1", "planning", error);
+      const result = await store.failUgc("org_1", "cj_1", "planning", error);
 
-      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
-        where: { id: "cj_1" },
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
         data: expect.objectContaining({
           ugcFailure: error,
           ugcPhase: "planning",
         }),
+      });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
       });
       expect(result.ugcFailure).toEqual(error);
     });
@@ -318,7 +381,7 @@ describe("PrismaCreativeJobStore", () => {
       prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
 
       await expect(
-        store.failUgc("cj_1", "planning", {
+        store.failUgc("org_1", "cj_1", "planning", {
           kind: "terminal",
           phase: "planning",
           code: "X",
@@ -326,24 +389,48 @@ describe("PrismaCreativeJobStore", () => {
         }),
       ).rejects.toThrow("Cannot update UGC phase on a polished-mode job");
     });
+
+    it("throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        store.failUgc("org_other", "cj_1", "planning", {
+          kind: "terminal",
+          phase: "planning",
+          code: "X",
+          message: "X",
+        }),
+      ).rejects.toThrow(StaleVersionError);
+    });
   });
 
   describe("stopUgc", () => {
     it("stops a UGC job at the given phase", async () => {
+      const mockResult = { id: "cj_1", stoppedAt: "scripting", ugcPhase: "scripting" };
       prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
-      prisma.creativeJob.update.mockResolvedValue({
-        id: "cj_1",
-        stoppedAt: "scripting",
-        ugcPhase: "scripting",
-      });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(mockResult);
 
-      const result = await store.stopUgc("cj_1", "scripting");
+      const result = await store.stopUgc("org_1", "cj_1", "scripting");
 
-      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
-        where: { id: "cj_1" },
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
         data: { stoppedAt: "scripting", ugcPhase: "scripting" },
       });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
       expect(result.stoppedAt).toBe("scripting");
+    });
+
+    it("throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.stopUgc("org_other", "cj_1", "scripting")).rejects.toThrow(
+        StaleVersionError,
+      );
     });
   });
 
@@ -351,14 +438,14 @@ describe("PrismaCreativeJobStore", () => {
     it("rejects updateStage on ugc-mode job", async () => {
       prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
 
-      await expect(store.updateStage("cj_1", "hooks", {})).rejects.toThrow(
+      await expect(store.updateStage("org_1", "cj_1", "hooks", {})).rejects.toThrow(
         "Cannot update polished stage on a UGC-mode job",
       );
     });
   });
 
   describe("registry methods", () => {
-    it("attachIdentityRefs calls update with all identity fields", async () => {
+    it("attachIdentityRefs calls updateMany with all identity fields and correct WHERE", async () => {
       const input = {
         productIdentityId: "prod_id_1",
         creatorIdentityId: "creator_id_1",
@@ -369,12 +456,13 @@ describe("PrismaCreativeJobStore", () => {
       };
 
       const mockResult = { id: "cj_1", ...input };
-      prisma.creativeJob.update.mockResolvedValue(mockResult);
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(mockResult);
 
-      const result = await store.attachIdentityRefs("cj_1", input);
+      const result = await store.attachIdentityRefs("org_1", "cj_1", input);
 
-      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
-        where: { id: "cj_1" },
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
         data: {
           productIdentityId: "prod_id_1",
           creatorIdentityId: "creator_id_1",
@@ -384,7 +472,24 @@ describe("PrismaCreativeJobStore", () => {
           fidelityTierAtGeneration: 2,
         },
       });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
       expect(result.id).toBe("cj_1");
+    });
+
+    it("attachIdentityRefs throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        store.attachIdentityRefs("org_other", "cj_1", {
+          productIdentityId: "p",
+          creatorIdentityId: "c",
+          effectiveTier: 1,
+          allowedOutputTier: 1,
+          shotSpecVersion: "v1",
+        }),
+      ).rejects.toThrow(StaleVersionError);
     });
 
     it("markRegistryBackfilled sets fixed tiers and backfilled flag", async () => {
@@ -402,12 +507,13 @@ describe("PrismaCreativeJobStore", () => {
         registryBackfilled: true,
         fidelityTierAtGeneration: 1,
       };
-      prisma.creativeJob.update.mockResolvedValue(mockResult);
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(mockResult);
 
-      const result = await store.markRegistryBackfilled("cj_1", input);
+      const result = await store.markRegistryBackfilled("org_1", "cj_1", input);
 
-      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
-        where: { id: "cj_1" },
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
         data: {
           productIdentityId: "prod_id_1",
           creatorIdentityId: "creator_id_1",
@@ -417,7 +523,21 @@ describe("PrismaCreativeJobStore", () => {
           fidelityTierAtGeneration: 1,
         },
       });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
       expect(result.id).toBe("cj_1");
+    });
+
+    it("markRegistryBackfilled throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        store.markRegistryBackfilled("org_other", "cj_1", {
+          productIdentityId: "p",
+          creatorIdentityId: "c",
+        }),
+      ).rejects.toThrow(StaleVersionError);
     });
   });
 });

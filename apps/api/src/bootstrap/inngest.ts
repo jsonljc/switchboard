@@ -564,8 +564,8 @@ export async function registerInngest(
         },
       },
       jobStore: {
-        markRegistryBackfilled: (jobId, input) =>
-          jobStore.markRegistryBackfilled(jobId, input) as unknown as Promise<{
+        markRegistryBackfilled: (organizationId, jobId, input) =>
+          jobStore.markRegistryBackfilled(organizationId, jobId, input) as unknown as Promise<{
             id: string;
             registryBackfilled: boolean;
             productIdentityId: string;
