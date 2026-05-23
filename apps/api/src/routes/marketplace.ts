@@ -392,7 +392,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
-    const updated = await store.submitOutput(id, parsed.data.output);
+    const updated = await store.submitOutput(task.organizationId, id, parsed.data.output);
     return reply.send({ task: updated });
   });
 
@@ -429,6 +429,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const updated = await taskStore.review(
+      task.organizationId,
       id,
       parsed.data.result,
       reviewedBy,

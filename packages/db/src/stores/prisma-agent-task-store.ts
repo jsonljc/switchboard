@@ -1,3 +1,4 @@
+import { StaleVersionError } from "@switchboard/core";
 import type { PrismaDbClient } from "../prisma-db.js";
 import type { AgentTask, AgentTaskStatus } from "@switchboard/schemas";
 
@@ -66,34 +67,52 @@ export class PrismaAgentTaskStore {
     }) as unknown as AgentTask[];
   }
 
-  async updateStatus(id: string, status: AgentTaskStatus): Promise<AgentTask> {
-    return this.prisma.agentTask.update({
-      where: { id },
+  async updateStatus(
+    organizationId: string,
+    id: string,
+    status: AgentTaskStatus,
+  ): Promise<AgentTask> {
+    const result = await this.prisma.agentTask.updateMany({
+      where: { id, organizationId },
       data: { status },
-    }) as unknown as AgentTask;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.agentTask.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as AgentTask;
   }
 
-  async submitOutput(id: string, output: Record<string, unknown>): Promise<AgentTask> {
-    return this.prisma.agentTask.update({
-      where: { id },
+  async submitOutput(
+    organizationId: string,
+    id: string,
+    output: Record<string, unknown>,
+  ): Promise<AgentTask> {
+    const result = await this.prisma.agentTask.updateMany({
+      where: { id, organizationId },
       data: { output: output as object, status: "awaiting_review", completedAt: new Date() },
-    }) as unknown as AgentTask;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.agentTask.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as AgentTask;
   }
 
   async review(
+    organizationId: string,
     id: string,
     result: "approved" | "rejected",
     reviewedBy: string,
     reviewResult?: string,
   ): Promise<AgentTask> {
-    return this.prisma.agentTask.update({
-      where: { id },
+    const updateResult = await this.prisma.agentTask.updateMany({
+      where: { id, organizationId },
       data: {
         status: result,
         reviewedBy,
         reviewedAt: new Date(),
         reviewResult: reviewResult ?? null,
       },
-    }) as unknown as AgentTask;
+    });
+    if (updateResult.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.agentTask.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as AgentTask;
   }
 }

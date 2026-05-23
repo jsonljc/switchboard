@@ -36,7 +36,11 @@ interface TaskRecorderConfig {
     category: string;
     input?: Record<string, unknown>;
   }) => Promise<{ id: string }>;
-  submitOutput: (taskId: string, output: Record<string, unknown>) => Promise<unknown>;
+  submitOutput: (
+    organizationId: string,
+    taskId: string,
+    output: Record<string, unknown>,
+  ) => Promise<unknown>;
   sessionTimeoutMs?: number;
   minAssistantMessages?: number;
   maxSessions?: number;
@@ -112,7 +116,7 @@ export class TaskRecorder {
         input: { channel: session.channel },
       });
 
-      await this.config.submitOutput(task.id, {
+      await this.config.submitOutput(session.organizationId, task.id, {
         transcript: session.messages,
         messageCount: session.messages.length,
         assistantMessageCount: session.assistantCount,

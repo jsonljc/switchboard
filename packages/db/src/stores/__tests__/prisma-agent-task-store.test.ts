@@ -8,6 +8,8 @@ function createMockPrisma() {
       findUnique: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
+      findFirstOrThrow: vi.fn(),
     },
   };
 }
@@ -194,60 +196,88 @@ describe("PrismaAgentTaskStore", () => {
   });
 
   describe("updateStatus", () => {
-    it("updates task status", async () => {
-      prisma.agentTask.update.mockResolvedValue({
+    it("updates task status scoped to organizationId", async () => {
+      prisma.agentTask.updateMany.mockResolvedValue({ count: 1 });
+      prisma.agentTask.findFirstOrThrow.mockResolvedValue({
         id: "task_1",
+        organizationId: "org-1",
         status: "running",
       });
 
-      const result = await store.updateStatus("task_1", "running");
+      const result = await store.updateStatus("org-1", "task_1", "running");
 
-      expect(prisma.agentTask.update).toHaveBeenCalledWith({
-        where: { id: "task_1" },
+      expect(prisma.agentTask.updateMany).toHaveBeenCalledWith({
+        where: { id: "task_1", organizationId: "org-1" },
         data: { status: "running" },
       });
+      expect(prisma.agentTask.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "task_1", organizationId: "org-1" },
+      });
       expect(result.status).toBe("running");
+    });
+
+    it("throws StaleVersionError when task not found for org", async () => {
+      prisma.agentTask.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.updateStatus("org-other", "task_1", "running")).rejects.toThrow(
+        /Stale version/,
+      );
     });
   });
 
   describe("submitOutput", () => {
-    it("submits task output and sets status to awaiting_review", async () => {
+    it("submits task output scoped to organizationId", async () => {
       const output = { result: "Email sent successfully" };
-      prisma.agentTask.update.mockResolvedValue({
+      prisma.agentTask.updateMany.mockResolvedValue({ count: 1 });
+      prisma.agentTask.findFirstOrThrow.mockResolvedValue({
         id: "task_1",
+        organizationId: "org-1",
         status: "awaiting_review",
         output,
-        completedAt: expect.any(Date),
+        completedAt: new Date(),
       });
 
-      const result = await store.submitOutput("task_1", output);
+      const result = await store.submitOutput("org-1", "task_1", output);
 
-      expect(prisma.agentTask.update).toHaveBeenCalledWith({
-        where: { id: "task_1" },
+      expect(prisma.agentTask.updateMany).toHaveBeenCalledWith({
+        where: { id: "task_1", organizationId: "org-1" },
         data: {
           output,
           status: "awaiting_review",
           completedAt: expect.any(Date),
         },
       });
+      expect(prisma.agentTask.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "task_1", organizationId: "org-1" },
+      });
       expect(result.status).toBe("awaiting_review");
+    });
+
+    it("throws StaleVersionError when task not found for org", async () => {
+      prisma.agentTask.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.submitOutput("org-other", "task_1", { result: "x" })).rejects.toThrow(
+        /Stale version/,
+      );
     });
   });
 
   describe("review", () => {
-    it("approves a task", async () => {
-      prisma.agentTask.update.mockResolvedValue({
+    it("approves a task scoped to organizationId", async () => {
+      prisma.agentTask.updateMany.mockResolvedValue({ count: 1 });
+      prisma.agentTask.findFirstOrThrow.mockResolvedValue({
         id: "task_1",
+        organizationId: "org-1",
         status: "approved",
         reviewedBy: "user-1",
-        reviewedAt: expect.any(Date),
+        reviewedAt: new Date(),
         reviewResult: "Good work",
       });
 
-      const result = await store.review("task_1", "approved", "user-1", "Good work");
+      const result = await store.review("org-1", "task_1", "approved", "user-1", "Good work");
 
-      expect(prisma.agentTask.update).toHaveBeenCalledWith({
-        where: { id: "task_1" },
+      expect(prisma.agentTask.updateMany).toHaveBeenCalledWith({
+        where: { id: "task_1", organizationId: "org-1" },
         data: {
           status: "approved",
           reviewedBy: "user-1",
@@ -255,22 +285,27 @@ describe("PrismaAgentTaskStore", () => {
           reviewResult: "Good work",
         },
       });
+      expect(prisma.agentTask.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "task_1", organizationId: "org-1" },
+      });
       expect(result.status).toBe("approved");
     });
 
     it("rejects a task without review result", async () => {
-      prisma.agentTask.update.mockResolvedValue({
+      prisma.agentTask.updateMany.mockResolvedValue({ count: 1 });
+      prisma.agentTask.findFirstOrThrow.mockResolvedValue({
         id: "task_1",
+        organizationId: "org-1",
         status: "rejected",
         reviewedBy: "user-1",
-        reviewedAt: expect.any(Date),
+        reviewedAt: new Date(),
         reviewResult: null,
       });
 
-      await store.review("task_1", "rejected", "user-1");
+      await store.review("org-1", "task_1", "rejected", "user-1");
 
-      expect(prisma.agentTask.update).toHaveBeenCalledWith({
-        where: { id: "task_1" },
+      expect(prisma.agentTask.updateMany).toHaveBeenCalledWith({
+        where: { id: "task_1", organizationId: "org-1" },
         data: {
           status: "rejected",
           reviewedBy: "user-1",
@@ -278,6 +313,14 @@ describe("PrismaAgentTaskStore", () => {
           reviewResult: null,
         },
       });
+    });
+
+    it("throws StaleVersionError when task not found for org", async () => {
+      prisma.agentTask.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.review("org-other", "task_1", "approved", "user-1")).rejects.toThrow(
+        /Stale version/,
+      );
     });
   });
 });
