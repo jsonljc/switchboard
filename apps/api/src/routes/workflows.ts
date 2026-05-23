@@ -101,6 +101,7 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /checkpoints/:id/resolve — resolve an approval checkpoint
   fastify.post<{
     Params: { id: string };
+    Querystring: { organizationId?: string };
     Body: {
       decidedBy: string;
       action: "approve" | "reject" | "modify";
@@ -109,7 +110,27 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   }>("/checkpoints/:id/resolve", async (request, reply) => {
     try {
       const { decidedBy, action, fieldEdits } = request.body;
-      await resolveCheckpoint(store.checkpoints, request.params.id, {
+
+      // Resolve the tenant via the checkpoint's parent workflow. The checkpoint
+      // carries no organizationId column; org is reached through the workflow
+      // relation. We derive it here so the tenant-scoped update can filter on it.
+      const checkpoint = await store.checkpoints.getById(request.params.id);
+      if (!checkpoint) {
+        return reply.status(404).send({ error: "Checkpoint not found", statusCode: 404 });
+      }
+      const workflow = await workflowEngine.getWorkflow(checkpoint.workflowId);
+      if (!workflow) {
+        return reply.status(404).send({ error: "Checkpoint not found", statusCode: 404 });
+      }
+      // Verify org scoping if provided
+      if (
+        request.query.organizationId &&
+        workflow.organizationId !== request.query.organizationId
+      ) {
+        return reply.status(404).send({ error: "Checkpoint not found", statusCode: 404 });
+      }
+
+      await resolveCheckpoint(store.checkpoints, workflow.organizationId, request.params.id, {
         decidedBy,
         action,
         fieldEdits,
@@ -117,10 +138,7 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
 
       // If approved or modified, resume the workflow
       if (action === "approve" || action === "modify") {
-        const checkpoint = await store.checkpoints.getById(request.params.id);
-        if (checkpoint) {
-          await workflowEngine.resumeAfterApproval(checkpoint.workflowId, checkpoint.id);
-        }
+        await workflowEngine.resumeAfterApproval(checkpoint.workflowId, checkpoint.id);
       }
 
       return reply.send({ success: true });

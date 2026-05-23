@@ -27,9 +27,15 @@ export class InMemoryWorkflowStore implements WorkflowStore {
     return w ? { ...w } : null;
   }
 
-  async update(id: string, updates: Partial<WorkflowExecution>): Promise<void> {
+  async update(
+    organizationId: string,
+    id: string,
+    updates: Partial<WorkflowExecution>,
+  ): Promise<void> {
     const existing = this.items.get(id);
-    if (!existing) throw new Error(`Workflow ${id} not found`);
+    if (!existing || existing.organizationId !== organizationId) {
+      throw new Error(`Workflow ${id} not found`);
+    }
     this.items.set(id, { ...existing, ...updates });
   }
 
@@ -65,9 +71,11 @@ export class InMemoryPendingActionStore implements PendingActionStore {
     return a ? { ...a } : null;
   }
 
-  async update(id: string, updates: Partial<PendingAction>): Promise<void> {
+  async update(organizationId: string, id: string, updates: Partial<PendingAction>): Promise<void> {
     const existing = this.items.get(id);
-    if (!existing) throw new Error(`PendingAction ${id} not found`);
+    if (!existing || existing.organizationId !== organizationId) {
+      throw new Error(`PendingAction ${id} not found`);
+    }
     this.items.set(id, { ...existing, ...updates });
   }
 
@@ -114,7 +122,14 @@ export class InMemoryApprovalCheckpointStore implements ApprovalCheckpointStore 
     return c ? { ...c } : null;
   }
 
-  async update(id: string, updates: Partial<ApprovalCheckpoint>): Promise<void> {
+  async update(
+    _organizationId: string,
+    id: string,
+    updates: Partial<ApprovalCheckpoint>,
+  ): Promise<void> {
+    // In-memory checkpoints carry no organizationId column (org is reached via
+    // the workflow relation in the Prisma store). Accept the arg to match the
+    // interface; tenant scoping is enforced by the relation-filter in Prisma.
     const existing = this.items.get(id);
     if (!existing) throw new Error(`ApprovalCheckpoint ${id} not found`);
     this.items.set(id, { ...existing, ...updates });

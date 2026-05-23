@@ -135,8 +135,8 @@ describe("StepExecutor", () => {
 
       // Track status changes
       const originalUpdate = actionStore.update.bind(actionStore);
-      actionStore.update = vi.fn(async (id, updates) => {
-        await originalUpdate(id, updates);
+      actionStore.update = vi.fn(async (_organizationId, id, updates) => {
+        await originalUpdate(_organizationId, id, updates);
         if (updates.status) {
           statusHistory.push(updates.status);
         }
@@ -272,8 +272,8 @@ describe("StepExecutor", () => {
 
       const statusHistory: string[] = [];
       const originalUpdate = actionStore.update.bind(actionStore);
-      actionStore.update = vi.fn(async (id, updates) => {
-        await originalUpdate(id, updates);
+      actionStore.update = vi.fn(async (_organizationId, id, updates) => {
+        await originalUpdate(_organizationId, id, updates);
         if (updates.status) {
           statusHistory.push(updates.status);
         }

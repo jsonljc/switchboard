@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { StaleVersionError } from "@switchboard/core";
 import { PrismaWorkflowStore } from "../prisma-workflow-store.js";
 
 function mockPrisma() {
@@ -7,19 +8,19 @@ function mockPrisma() {
       create: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     pendingActionRecord: {
       create: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     approvalCheckpointRecord: {
       create: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   } as unknown as import("@prisma/client").PrismaClient;
 }
@@ -131,19 +132,29 @@ describe("PrismaWorkflowStore", () => {
       expect(result!.organizationId).toBe("org-1");
     });
 
-    it("update applies partial changes", async () => {
-      await store.workflows.update("wf-1", {
+    it("update applies partial changes scoped by organizationId", async () => {
+      await store.workflows.update("org-1", "wf-1", {
         status: "completed",
         completedAt: new Date(),
       });
 
-      expect(prisma.workflowExecution.update).toHaveBeenCalledWith({
-        where: { id: "wf-1" },
+      expect(prisma.workflowExecution.updateMany).toHaveBeenCalledWith({
+        where: { id: "wf-1", organizationId: "org-1" },
         data: expect.objectContaining({
           status: "completed",
           completedAt: expect.any(Date),
         }),
       });
+    });
+
+    it("update throws StaleVersionError when updateMany count === 0", async () => {
+      (prisma.workflowExecution.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        store.workflows.update("wrong-org", "wf-1", { status: "completed" }),
+      ).rejects.toThrow(StaleVersionError);
     });
 
     it("list filters by organizationId and status", async () => {
@@ -239,6 +250,31 @@ describe("PrismaWorkflowStore", () => {
         orderBy: { createdAt: "asc" },
       });
     });
+
+    it("update applies partial changes scoped by organizationId", async () => {
+      await store.actions.update("org-1", "action-1", {
+        status: "completed",
+        resolvedBy: "auto",
+      });
+
+      expect(prisma.pendingActionRecord.updateMany).toHaveBeenCalledWith({
+        where: { id: "action-1", organizationId: "org-1" },
+        data: expect.objectContaining({
+          status: "completed",
+          resolvedBy: "auto",
+        }),
+      });
+    });
+
+    it("update throws StaleVersionError when updateMany count === 0", async () => {
+      (prisma.pendingActionRecord.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        store.actions.update("wrong-org", "action-1", { status: "completed" }),
+      ).rejects.toThrow(StaleVersionError);
+    });
   });
 
   describe("checkpoints", () => {
@@ -307,6 +343,25 @@ describe("PrismaWorkflowStore", () => {
         },
         orderBy: { createdAt: "asc" },
       });
+    });
+
+    it("update scopes by organizationId via workflow relation filter", async () => {
+      await store.checkpoints.update("org-1", "cp-1", { status: "approved" });
+
+      expect(prisma.approvalCheckpointRecord.updateMany).toHaveBeenCalledWith({
+        where: { id: "cp-1", workflow: { organizationId: "org-1" } },
+        data: expect.objectContaining({ status: "approved" }),
+      });
+    });
+
+    it("update throws StaleVersionError when updateMany count === 0", async () => {
+      (prisma.approvalCheckpointRecord.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        store.checkpoints.update("wrong-org", "cp-1", { status: "approved" }),
+      ).rejects.toThrow(StaleVersionError);
     });
   });
 });

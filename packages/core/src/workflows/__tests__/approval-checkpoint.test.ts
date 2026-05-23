@@ -146,7 +146,7 @@ describe("ApprovalCheckpoint", () => {
 
       await store.create(checkpoint);
 
-      await resolveCheckpoint(store, checkpoint.id, {
+      await resolveCheckpoint(store, "org-1", checkpoint.id, {
         decidedBy: "operator-123",
         action: "approve",
       });
@@ -187,7 +187,7 @@ describe("ApprovalCheckpoint", () => {
 
       await store.create(checkpoint);
 
-      await resolveCheckpoint(store, checkpoint.id, {
+      await resolveCheckpoint(store, "org-1", checkpoint.id, {
         decidedBy: "operator-456",
         action: "reject",
       });
@@ -226,7 +226,7 @@ describe("ApprovalCheckpoint", () => {
 
       await store.create(checkpoint);
 
-      await resolveCheckpoint(store, checkpoint.id, {
+      await resolveCheckpoint(store, "org-1", checkpoint.id, {
         decidedBy: "operator-789",
         action: "modify",
         fieldEdits: { subject: "Updated Subject" },
@@ -269,7 +269,7 @@ describe("ApprovalCheckpoint", () => {
 
       await store.create(checkpoint);
 
-      await resolveCheckpoint(store, checkpoint.id, {
+      await resolveCheckpoint(store, "org-1", checkpoint.id, {
         decidedBy: "operator-999",
         action: "approve",
         selectedAlternative: 1,
@@ -309,7 +309,7 @@ describe("ApprovalCheckpoint", () => {
       await store.create(checkpoint);
 
       await expect(
-        resolveCheckpoint(store, checkpoint.id, {
+        resolveCheckpoint(store, "org-1", checkpoint.id, {
           decidedBy: "operator-1",
           action: "modify",
           fieldEdits: { subject: "New Subject", recipient: "hacker@evil.com" },
@@ -345,7 +345,7 @@ describe("ApprovalCheckpoint", () => {
       await store.create(checkpoint);
 
       // Should not throw — both fields are in modifiableFields
-      await resolveCheckpoint(store, checkpoint.id, {
+      await resolveCheckpoint(store, "org-1", checkpoint.id, {
         decidedBy: "operator-1",
         action: "modify",
         fieldEdits: { subject: "Updated" },
@@ -357,7 +357,7 @@ describe("ApprovalCheckpoint", () => {
 
     it("throws when checkpoint not found", async () => {
       await expect(
-        resolveCheckpoint(store, "nonexistent-id", {
+        resolveCheckpoint(store, "org-1", "nonexistent-id", {
           decidedBy: "operator-123",
           action: "approve",
         }),
@@ -391,14 +391,14 @@ describe("ApprovalCheckpoint", () => {
       await store.create(checkpoint);
 
       // Resolve it once
-      await resolveCheckpoint(store, checkpoint.id, {
+      await resolveCheckpoint(store, "org-1", checkpoint.id, {
         decidedBy: "operator-123",
         action: "approve",
       });
 
       // Try to resolve again
       await expect(
-        resolveCheckpoint(store, checkpoint.id, {
+        resolveCheckpoint(store, "org-1", checkpoint.id, {
           decidedBy: "operator-456",
           action: "reject",
         }),
