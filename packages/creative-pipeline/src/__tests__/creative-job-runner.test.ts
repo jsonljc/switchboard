@@ -71,7 +71,7 @@ describe("executeCreativePipeline", () => {
     step = createMockStep();
     jobStore = createMockJobStore();
     jobStore.findById.mockResolvedValue(mockJob);
-    jobStore.updateStage.mockImplementation((_id, stage, outputs) => ({
+    jobStore.updateStage.mockImplementation((_orgId, _id, stage, outputs) => ({
       ...mockJob,
       currentStage: stage,
       stageOutputs: outputs,
@@ -98,7 +98,7 @@ describe("executeCreativePipeline", () => {
     // 1 load-job + trends run + save + hooks run + save + stop = 6 step.runs
     expect(step.run).toHaveBeenCalledTimes(6);
     expect(step.waitForEvent).toHaveBeenCalledTimes(2);
-    expect(jobStore.stop).toHaveBeenCalledWith("job_1", "hooks");
+    expect(jobStore.stop).toHaveBeenCalledWith("org_1", "job_1", "hooks");
   });
 
   it("stops pipeline on waitForEvent timeout (null event)", async () => {
@@ -109,7 +109,7 @@ describe("executeCreativePipeline", () => {
 
     // 1 load-job + trends run + save + stop = 4 step.runs, 1 waitForEvent
     expect(step.run).toHaveBeenCalledTimes(4);
-    expect(jobStore.stop).toHaveBeenCalledWith("job_1", "trends");
+    expect(jobStore.stop).toHaveBeenCalledWith("org_1", "job_1", "trends");
   });
 
   it("throws if job not found", async () => {

@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaDbClient } from "../prisma-db.js";
 import type { CreativeJob } from "@switchboard/schemas";
+import { StaleVersionError } from "@switchboard/core";
 
 export interface AttachIdentityRefsInput {
   productIdentityId: string;
@@ -99,32 +100,46 @@ export class PrismaCreativeJobStore {
   }
 
   async updateStage(
+    organizationId: string,
     id: string,
     stage: string,
     stageOutputs: Record<string, unknown>,
   ): Promise<CreativeJob> {
     await this.assertMode(id, "polished");
-    return this.prisma.creativeJob.update({
-      where: { id },
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
       data: {
         currentStage: stage,
         stageOutputs: stageOutputs as object,
       },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
   }
 
-  async stop(id: string, stoppedAt: string): Promise<CreativeJob> {
-    return this.prisma.creativeJob.update({
-      where: { id },
+  async stop(organizationId: string, id: string, stoppedAt: string): Promise<CreativeJob> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
       data: { stoppedAt },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
   }
 
-  async updateProductionTier(id: string, tier: string): Promise<CreativeJob> {
-    return this.prisma.creativeJob.update({
-      where: { id },
+  async updateProductionTier(
+    organizationId: string,
+    id: string,
+    tier: string,
+  ): Promise<CreativeJob> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
       data: { productionTier: tier },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
   }
 
   // ── UGC methods ──
@@ -157,44 +172,63 @@ export class PrismaCreativeJobStore {
   }
 
   async updateUgcPhase(
+    organizationId: string,
     id: string,
     phase: string,
     phaseOutputs: Record<string, unknown>,
   ): Promise<CreativeJob> {
     await this.assertMode(id, "ugc");
-    return this.prisma.creativeJob.update({
-      where: { id },
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
       data: {
         ugcPhase: phase,
         ugcPhaseOutputs: phaseOutputs as object,
       },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
   }
 
-  async failUgc(id: string, phase: string, error: Record<string, unknown>): Promise<CreativeJob> {
+  async failUgc(
+    organizationId: string,
+    id: string,
+    phase: string,
+    error: Record<string, unknown>,
+  ): Promise<CreativeJob> {
     await this.assertMode(id, "ugc");
-    return this.prisma.creativeJob.update({
-      where: { id },
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
       data: {
         ugcPhase: phase,
         ugcFailure: error as object,
       },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
   }
 
-  async stopUgc(id: string, phase: string): Promise<CreativeJob> {
+  async stopUgc(organizationId: string, id: string, phase: string): Promise<CreativeJob> {
     await this.assertMode(id, "ugc");
-    return this.prisma.creativeJob.update({
-      where: { id },
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
       data: { stoppedAt: phase, ugcPhase: phase },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
   }
 
   // ── Registry methods ──
 
-  async attachIdentityRefs(jobId: string, input: AttachIdentityRefsInput): Promise<CreativeJob> {
-    return this.prisma.creativeJob.update({
-      where: { id: jobId },
+  async attachIdentityRefs(
+    organizationId: string,
+    jobId: string,
+    input: AttachIdentityRefsInput,
+  ): Promise<CreativeJob> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id: jobId, organizationId },
       data: {
         productIdentityId: input.productIdentityId,
         creatorIdentityId: input.creatorIdentityId,
@@ -203,15 +237,21 @@ export class PrismaCreativeJobStore {
         shotSpecVersion: input.shotSpecVersion,
         fidelityTierAtGeneration: input.fidelityTierAtGeneration,
       },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(jobId, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({
+      where: { id: jobId, organizationId },
+    });
+    return row as unknown as CreativeJob;
   }
 
   async markRegistryBackfilled(
+    organizationId: string,
     jobId: string,
     input: MarkRegistryBackfilledInput,
   ): Promise<CreativeJob> {
-    return this.prisma.creativeJob.update({
-      where: { id: jobId },
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id: jobId, organizationId },
       data: {
         productIdentityId: input.productIdentityId,
         creatorIdentityId: input.creatorIdentityId,
@@ -220,6 +260,11 @@ export class PrismaCreativeJobStore {
         registryBackfilled: true,
         fidelityTierAtGeneration: 1,
       },
-    }) as unknown as CreativeJob;
+    });
+    if (result.count === 0) throw new StaleVersionError(jobId, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({
+      where: { id: jobId, organizationId },
+    });
+    return row as unknown as CreativeJob;
   }
 }

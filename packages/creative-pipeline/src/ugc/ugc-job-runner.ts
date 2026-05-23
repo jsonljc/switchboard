@@ -31,9 +31,19 @@ interface UgcStepTools {
 
 interface UgcJobStore {
   findById(id: string): Promise<CreativeJob | null>;
-  updateUgcPhase(id: string, phase: string, outputs: Record<string, unknown>): Promise<CreativeJob>;
-  stopUgc(id: string, phase: string): Promise<CreativeJob>;
-  failUgc(id: string, phase: string, error: Record<string, unknown>): Promise<CreativeJob>;
+  updateUgcPhase(
+    organizationId: string,
+    id: string,
+    phase: string,
+    outputs: Record<string, unknown>,
+  ): Promise<CreativeJob>;
+  stopUgc(organizationId: string, id: string, phase: string): Promise<CreativeJob>;
+  failUgc(
+    organizationId: string,
+    id: string,
+    phase: string,
+    error: Record<string, unknown>,
+  ): Promise<CreativeJob>;
 }
 
 interface CreatorStore {
@@ -257,7 +267,7 @@ export async function executeUgcPipeline(
         message: err instanceof Error ? err.message : String(err),
       };
       await step.run(`fail-${phase}`, () =>
-        deps.jobStore.failUgc(job.id, phase as string, phaseError),
+        deps.jobStore.failUgc(eventData.organizationId, job.id, phase as string, phaseError),
       );
       await step.sendEvent("emit-failure", {
         name: "creative-pipeline/ugc.failed",
@@ -274,7 +284,7 @@ export async function executeUgcPipeline(
     const nextPhase = getNextPhase(phase as UgcPhase);
 
     await step.run(`save-${phase}`, () =>
-      deps.jobStore.updateUgcPhase(job.id, nextPhase, phaseOutputs),
+      deps.jobStore.updateUgcPhase(eventData.organizationId, job.id, nextPhase, phaseOutputs),
     );
 
     // Emit phase completion event
@@ -305,7 +315,9 @@ export async function executeUgcPipeline(
       });
 
       if (!approval || approval.data.action === "stop") {
-        await step.run(`stop-at-${phase}`, () => deps.jobStore.stopUgc(job.id, phase as string));
+        await step.run(`stop-at-${phase}`, () =>
+          deps.jobStore.stopUgc(eventData.organizationId, job.id, phase as string),
+        );
 
         await step.sendEvent("emit-stopped", {
           name: "creative-pipeline/ugc.stopped",

@@ -25,6 +25,7 @@ export interface BackfillStores {
   };
   jobStore: {
     markRegistryBackfilled: (
+      organizationId: string,
       jobId: string,
       input: { productIdentityId: string; creatorIdentityId: string },
     ) => Promise<{
@@ -50,7 +51,7 @@ export async function backfillJobOnce(
   }
   const product = await stores.productStore.findOrCreateForJob(job);
   const creator = await stores.creatorStore.findOrCreateStockForDeployment(job.deploymentId);
-  return stores.jobStore.markRegistryBackfilled(job.id, {
+  return stores.jobStore.markRegistryBackfilled(job.organizationId, job.id, {
     productIdentityId: product.id,
     creatorIdentityId: creator.id,
   });
