@@ -373,6 +373,10 @@ jobs:
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
         run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
 
+      - name: Run eval unit tests
+        if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
       - name: Run claim-classifier eval
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
         env:

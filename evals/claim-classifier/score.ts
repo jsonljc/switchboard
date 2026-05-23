@@ -44,6 +44,9 @@ export interface ComparisonResult {
   regressions: string[];
 }
 
+// Intentionally config-independent (not read from baseline.toleranceBps, which gates
+// per-class drops at 2pp): the overall gate is deliberately stricter at 1pp, and inlining
+// it avoids a Baseline schema change that would force re-locking baseline.json.
 const OVERALL_TOLERANCE_BPS = 100; // 1.00pp
 
 export function compareAgainstBaseline(report: ScoreReport, baseline: Baseline): ComparisonResult {
