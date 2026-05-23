@@ -47,6 +47,7 @@ async function listDecisions(
         h,
         leadId ? (contacts.get(leadId) ?? null) : null,
         leadId ? (threads.get(leadId) ?? null) : null,
+        { routeTemplates: dashboardRouteTemplates },
       );
     }),
   ];
