@@ -4,7 +4,7 @@
 **Branch:** `docs/agent-capability-portfolio`
 **Author:** Claude Opus 4.7 (1M context), at user request
 **Status:** Portfolio spec (a ranked set of tracks/slices). Approved as **direction**, not yet as an implementation plan. Each slice gets its own brainstorm → spec → plan cycle. This document does **not** authorize implementation.
-**Revised:** 2026-05-24 after review — split the over-broad lead item into discrete slices, added a concrete medspa selling corpus, reframed the learning loop as measurement-first, promoted Riley ROAS to an immediate parallel track, split bilingual into reply-propagation vs classifier expansion, and added a hard-gates callout.
+**Revised:** 2026-05-24 after review — split the over-broad lead item into discrete slices, added a concrete medspa selling corpus, reframed the learning loop as measurement-first, promoted Riley ROAS to an immediate parallel track, split bilingual into reply-propagation vs classifier expansion, and added a hard-gates callout. **Rev-2 (2026-05-24, second review):** B1 made explicitly read-only-first with sample-thresholded labels; D1 language softened to "revenue-aware recommendations"; A0 must test sales judgment (messy turns); A1 must encode medical/safety language boundaries; C3 must be reason-based.
 
 **Scope:** Improvements that make the AI agents (Alex, Riley) measurably *better at driving revenue* — not dashboard/attribution plumbing, not infra hygiene. Those remain valid but live in a separate track (see §7).
 
@@ -73,7 +73,7 @@ Each slice is its own future brainstorm → spec → plan. Lettered tracks run i
 
 ### Track A — Alex revenue engine *(Talk 2: fat skills + eval hill-climbing)* — **LEAD**
 
-**A0 — Conversation eval harness.** Small offline medspa conversation set (the regression gate for every Alex change). Trajectories: price objection, safety/downtime concern, results skepticism, hesitation, qualification, close. *Today only the classifier has evals; Alex's conversation has none — A0 is the prerequisite that makes A1 and Track B safe and trustworthy.*
+**A0 — Conversation eval harness.** Small offline medspa conversation set (the regression gate for every Alex change). Trajectories: price objection, safety/downtime concern, results skepticism, hesitation, qualification, close. The set must test **sales judgment, not polite answers** — include messy turns: asks for a discount then goes quiet; asks an unsafe medical-claim question; mixes English + Mandarin; vague goal ("just want to look fresher"); asks price before sharing a concern; resists booking ("send me info first"). *Today only the classifier has evals; Alex's conversation has none — A0 is the prerequisite that makes A1 and Track B safe and trustworthy.*
 
 **A1 — Alex Sales Skill Pack.** Author the reference files that today render empty (`{{PLAYBOOK_CONTEXT}}`, `{{QUALIFICATION_CONTEXT}}`) and hill-climb against A0. **No new tools, no routing changes in this slice.** Minimum corpus:
 
@@ -86,6 +86,8 @@ Each slice is its own future brainstorm → spec → plan. Lettered tracks run i
 | Qualification | treatment goal, timeline, prior experience, budget comfort |
 | Close | consult booking, soft next step, no pressure |
 
+**Hard language boundaries (A1 must encode):** explain generally and recommend a consultation; **never** diagnose, guarantee outcomes, assert "safe for you," or promise before/after certainty. Objection handling sits adjacent to regulated medical territory — these boundaries are part of the skill pack, not an afterthought, and are exactly what the claim classifier enforces.
+
 → **PR-1 = A0 + A1 together** (the skill pack must be hill-climbed against the harness). Highest base-rate revenue lever; no upstream dependency.
 
 **A2 — Stage-aware model routing.** Escalate objection / close / safety-sensitive turns to a stronger model (today they run on Haiku; `model-router.ts:95` escalates only on the *previous* turn's tool/escalation). Tune consultative limits (`maxLlmTurns:6`, 30s) within budget. *Separate slice.*
@@ -94,11 +96,11 @@ Each slice is its own future brainstorm → spec → plan. Lettered tracks run i
 
 ### Track B — Learning loop *(Talk 3: memory + dreaming)*
 
-**B1 — Pattern lift measurement (MVP).** Read `injectedPatternIds` → JOIN `Booking`/`ConversionRecord` → conversion rate by pattern → require minimum sample → label **promising / neutral / harmful**. **No automatic memory rewrite.** Closes the measurement half the audit found missing (`work-trace-hash.ts:17`). Build now so signal accumulates.
+**B1 — Pattern lift measurement (MVP, read-only).** Read `injectedPatternIds` → JOIN `Booking`/`ConversionRecord` → conversion rate by pattern. **Read-only at first: computes pattern-level conversion association and emits internal diagnostics only — it does NOT alter memory injection, suppress patterns, or surface lift claims** until minimum-sample thresholds and attribution quality are verified. Label rules (only past minimum sample): below threshold → *insufficient signal*; enough sample, no clear difference → *neutral*; directionally/statistically positive → *promising*; directionally negative with enough sample → *harmful*. **No automatic memory rewrite.** Closes the measurement half the audit found missing (`work-trace-hash.ts:17`). Build now so signal accumulates.
 
 **B2 — Pattern reinforcement.** Promote high-lift patterns past a sample threshold; suppress "harmful" ones from injection. *Pilot-scale caveat: per-pattern signal is thin at <10 clinics — won't fire meaningfully for weeks.*
 
-**B3 — Background consolidation ("dreaming").** Only after B1/B2. Gated sleeper job (serve/sleeper split); advisory → trusted only past an evidence threshold + claim-classifier review. Memory stays advisory/governed (CoALA tiers; see research doc).
+**B3 — Background consolidation ("dreaming").** Only after B1/B2 *and* after B1's read-only diagnostics have proven attribution quality. Gated sleeper job (serve/sleeper split); advisory → trusted only past an evidence threshold + claim-classifier review. Memory stays advisory/governed (CoALA tiers; see research doc).
 
 ### Track C — Recovery (proactive re-engagement) *(Talk 1: routines)*
 
@@ -106,11 +108,11 @@ Each slice is its own future brainstorm → spec → plan. Lettered tracks run i
 
 **C2 — Consent-bypass closure.** **Hard prerequisite.** Close the known non-gateway egress paths (`proactive-sender`, CTWA greeting, QA send) so proactive outbound can't reach a revoked contact. (= prior audit's Rec 3.)
 
-**C3 — Dormant-lead re-engagement.** Wire `lifecycle-stalled-sweep` detection → agent-composed re-engagement, dispatched via `PlatformIngress.submit()` + `runConsentEnforcementGate` + ingress idempotency. Cadence as a mode. Surfaces as a "Work in Progress" card. **Gated on C1 + C2 + A3.**
+**C3 — Dormant-lead re-engagement.** Wire `lifecycle-stalled-sweep` detection → agent-composed re-engagement, dispatched via `PlatformIngress.submit()` + `runConsentEnforcementGate` + ingress idempotency. Cadence as a mode. Surfaces as a "Work in Progress" card. Re-engagement must be **reason-based, not generic** — keyed to *why* the lead stalled (price hesitation, safety hesitation, timing, no-show / incomplete booking, asked-for-info, cold-after-quote) — or it becomes spam. **Gated on C1 + C2 + A3.**
 
 ### Track D — Riley
 
-**D1 — ROAS-aware decisions.** **Now, parallel, independent.** Riley collects ROAS but decides CPA-only (`audit-runner.ts:128`); add revenue-aware pause/scale. Conservative thresholds until volume builds. Customer story: "Riley optimizes for revenue, not just cost."
+**D1 — Revenue-aware recommendations.** **Now, parallel, independent.** Riley collects ROAS but decides CPA-only (`audit-runner.ts:128`); make recommendations *revenue-aware* (not just CPA). Conservative thresholds until volume builds — keep the language "revenue-aware recommendations," **not** "revenue-optimized decisions" (avoid implying statistical certainty the data doesn't yet support). Customer story: "Riley now weighs revenue, not just cost."
 
 **D2 — Confidence-gated recommendations.** After the Riley bake / signal-floor calibration. Minimum sample / confidence so noisy point-delta recommendations don't erode trust.
 
@@ -158,3 +160,5 @@ Track E:         E1 reply-propagation (build now, ship dark) ──[E2]──> E
 ## 8. Next step
 
 Per the brainstorming workflow, each slice becomes its own brainstorm → spec → plan. **Recommended first: PR-1 = A0 (conversation eval harness) + A1 (Alex Sales Skill Pack).** No new tool authority, no routing, no proactive flow, no learning-loop complexity — the fastest path to better bookings, and it produces the eval substrate Track B needs.
+
+**PR-1 spec must cover:** eval-harness shape (reuse the `evals/claim-classifier/` pattern); the medspa conversation golden set (corpus above + the messy turns); skill reference-file structure + how `{{PLAYBOOK_CONTEXT}}` / `{{QUALIFICATION_CONTEXT}}` resolve and get populated; required objection categories; medical/safety language boundaries; pass/fail rubric (deterministic + LLM-judge); a regression test proving the previously-empty slots are now populated; and an explicit **no routing / no tool / no proactive** scope fence.
