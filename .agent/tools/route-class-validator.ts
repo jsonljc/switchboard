@@ -5,7 +5,8 @@ export type RouteClass =
   | "lifecycle"
   | "control-plane"
   | "ingress-receiver"
-  | "read-only";
+  | "read-only"
+  | "dashboard-proxy";
 
 const KNOWN_CLASSES: ReadonlySet<RouteClass> = new Set([
   "operator-direct",
@@ -13,6 +14,7 @@ const KNOWN_CLASSES: ReadonlySet<RouteClass> = new Set([
   "control-plane",
   "ingress-receiver",
   "read-only",
+  "dashboard-proxy",
 ]);
 
 export interface ValidatorWarning {
@@ -31,6 +33,38 @@ export function parseRouteClass(sf: SourceFile): RouteClass | null {
   if (!match) return null;
   const label = match[1] as RouteClass;
   return KNOWN_CLASSES.has(label) ? label : null;
+}
+
+/**
+ * Regex for the dashboard-proxy directory convention.
+ *
+ * Only routes under `apps/dashboard/src/app/api/dashboard/**` are blessed as
+ * forwarding proxies (spec §1: "A route under
+ * apps/dashboard/src/app/api/dashboard/** is always dashboard proxy").
+ *
+ * Routes under `apps/dashboard/src/app/api/` but OUTSIDE `/dashboard/` (e.g.
+ * `waitlist/route.ts` which does a direct `db.waitlistEntry.create`, and the
+ * `auth/*` routes) are NOT forwarding proxies — they must carry explicit
+ * `@route-class` headers and must NOT silently default to `dashboard-proxy`.
+ */
+const DASHBOARD_PROXY_RX = /^apps\/dashboard\/src\/app\/api\/dashboard\//;
+
+/**
+ * Resolve the route class for a source file, applying the dashboard-proxy
+ * directory convention as a fallback when no explicit header is present.
+ *
+ * Resolution order:
+ * 1. If `parseRouteClass(sf)` returns a non-null class (explicit header), use it.
+ * 2. Else, if `repoPath` matches the dashboard-proxy directory convention
+ *    (`apps/dashboard/src/app/api/dashboard/**`), return `"dashboard-proxy"`.
+ * 3. Else return `null` (missing header — enforced as an error later by
+ *    --mode=error, not here).
+ */
+export function resolveRouteClass(sf: SourceFile, repoPath: string): RouteClass | null {
+  const explicit = parseRouteClass(sf);
+  if (explicit !== null) return explicit;
+  if (DASHBOARD_PROXY_RX.test(repoPath)) return "dashboard-proxy";
+  return null;
 }
 
 /**
