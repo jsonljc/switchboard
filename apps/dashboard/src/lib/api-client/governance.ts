@@ -1,7 +1,6 @@
 import type { AuditEntry, Policy, ActivityRow } from "@switchboard/schemas";
 import type {
   PendingApproval,
-  ApprovalDetail,
   SimulateResult,
   RecommendationApiRow,
   RecommendationActAction,
@@ -20,10 +19,6 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   // Approvals
   async listPendingApprovals() {
     return this.request<{ approvals: PendingApproval[] }>("/api/approvals/pending");
-  }
-
-  async getApproval(id: string) {
-    return this.request<ApprovalDetail>(`/api/approvals/${id}`);
   }
 
   async respondToApproval(
