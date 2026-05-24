@@ -1,4 +1,4 @@
-// @route-class: read-only
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { paginationParams, paginate } from "@switchboard/core";
 
