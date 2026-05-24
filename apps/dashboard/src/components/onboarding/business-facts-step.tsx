@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { AgentMark } from "@/components/character/agent-mark";
 
+// route-governance: local-view-model
 export interface BusinessFacts {
   serviceArea?: string;
   contactPreference?: "whatsapp" | "email" | "phone" | "in-person";

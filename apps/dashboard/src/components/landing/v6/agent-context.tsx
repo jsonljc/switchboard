@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { AgentKey } from "@switchboard/schemas";
 
-export type AgentKey = "alex" | "riley" | "mira";
+export type { AgentKey };
 
 export interface AgentMeta {
   name: string;
