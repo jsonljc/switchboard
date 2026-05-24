@@ -35,6 +35,9 @@ describe("Organizations API — Config", () => {
     orgAgentEnablement: {
       upsert: vi.fn().mockResolvedValue({}),
     },
+    knowledgeEntry: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
   };
 
   beforeEach(async () => {

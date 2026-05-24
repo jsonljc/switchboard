@@ -86,7 +86,11 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
       // agent home pages have data on first load. Idempotent — re-runs are a
       // no-op via the helper's `update: {}` upsert.
       await seedOrgDayOneAgents(app.prisma, orgId);
-      await seedAlexSkillPack(app.prisma, orgId);
+      try {
+        await seedAlexSkillPack(app.prisma, orgId);
+      } catch (err) {
+        console.warn(`[organizations] seedAlexSkillPack failed for ${orgId} (continuing):`, err);
+      }
 
       return reply.send({ config });
     },
