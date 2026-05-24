@@ -86,8 +86,9 @@ const PRISMA_NS_RX = /(^|\.)prisma\w*$/;
 /**
  * Returns true only when the call is of the form `<ns>.<model>.<method>`:
  *   - The method receiver is itself a PropertyAccessExpression `<ns>.<model>`.
- *   - The `<ns>` node either matches `/(^|\.)prisma$/` (covers `this.prisma`,
- *     `app.prisma`, bare `prisma`) OR is a bare Identifier matching a tx-like
+ *   - The `<ns>` node either matches `/(^|\.)prisma\w*$/` (covers `this.prisma`,
+ *     `app.prisma`, bare `prisma`, and `prisma`-prefixed clients like
+ *     `prismaClient`/`prismaRo`) OR is a bare Identifier matching a tx-like
  *     name (`tx`, `trx`, `transaction`).
  *
  * Rejects:
