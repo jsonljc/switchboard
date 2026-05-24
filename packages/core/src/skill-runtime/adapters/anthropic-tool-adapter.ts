@@ -17,6 +17,38 @@ const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
 const PROVIDER = "anthropic";
 
+// Anthropic tool names must match ^[a-zA-Z0-9_-]{1,128}$. Internally the
+// skill-executor uses "<toolId>.<opName>" (e.g. "crm-query.contact.get") with
+// "." as the separator — it splits on the first "." to recover toolId + op.
+// We encode at the API boundary by replacing "." with "__". This is safe
+// because current toolIds are kebab-case and opNames use dot-separated words,
+// so neither part ever contains "__" natively. If that assumption changes,
+// introduce a more collision-proof scheme before relaxing this guard.
+
+/**
+ * Encode an internal dotted tool name to an Anthropic-API-safe form.
+ * "crm-query.contact.get" → "crm-query__contact__get"
+ */
+export function encodeToolName(name: string): string {
+  if (name.includes("__")) {
+    // Guard: source names must not already contain the separator token.
+    // Violating this would make decode() ambiguous. Throw early so the
+    // mismatch is obvious in tests, not silently wrong in production.
+    throw new Error(
+      `[AnthropicToolAdapter] encodeToolName: source tool name "${name}" already contains "__". Choose a different separator or pre-sanitize the name.`,
+    );
+  }
+  return name.replace(/\./g, "__");
+}
+
+/**
+ * Decode an Anthropic-API-safe tool name back to internal dotted form.
+ * "crm-query__contact__get" → "crm-query.contact.get"
+ */
+export function decodeToolName(name: string): string {
+  return name.replace(/__/g, ".");
+}
+
 const KNOWN_STOP_REASONS: ReadonlySet<LLMStopReason> = new Set([
   "end_turn",
   "tool_use",
@@ -41,7 +73,7 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     const anthropicTools: Anthropic.Tool[] | undefined =
       params.tools.length > 0
         ? params.tools.map((t) => ({
-            name: t.name,
+            name: encodeToolName(t.name), // encode "." → "__" so the name satisfies ^[a-zA-Z0-9_-]+$
             description: t.description,
             input_schema: t.input_schema as Anthropic.Tool.InputSchema,
           }))
@@ -68,7 +100,7 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
         return {
           type: "tool_use" as const,
           id: block.id,
-          name: block.name,
+          name: decodeToolName(block.name), // decode "__" → "." so executor's name.split(".") parsing works
           input: block.input,
         };
       }
