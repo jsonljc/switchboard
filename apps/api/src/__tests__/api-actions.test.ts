@@ -148,7 +148,7 @@ describe("Actions API", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("Idempotency-Key");
+      expect(res.json().error).toContain("missing_idempotency_key");
     });
   });
 
@@ -386,7 +386,69 @@ describe("Actions API", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("Idempotency-Key");
+      expect(res.json().error).toContain("missing_idempotency_key");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Route-class split proof (#654).
+  //
+  // /propose and /batch are operator-direct ingress → Idempotency-Key is
+  // MANDATORY (400 without it). /:id/execute and /:id/undo are lifecycle
+  // transitions on an already-addressed work unit → they keep their pre-existing
+  // contract and are NOT subject to the operator-direct idempotency rule.
+  // ---------------------------------------------------------------------------
+  describe("route-class split: operator-direct enforces idempotency, lifecycle does not", () => {
+    it("POST /propose without Idempotency-Key → 400 missing_idempotency_key", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/propose",
+        payload: {
+          actionType: "digital-ads.campaign.pause",
+          parameters: { campaignId: "camp_123" },
+          principalId: "default",
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("missing_idempotency_key");
+    });
+
+    it("POST /batch without Idempotency-Key → 400 missing_idempotency_key", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/batch",
+        payload: {
+          proposals: [
+            { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_1" } },
+          ],
+          principalId: "default",
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("missing_idempotency_key");
+    });
+
+    it("POST /:id/execute without Idempotency-Key → NOT a missing-key 400 (lifecycle contract preserved)", async () => {
+      // No Idempotency-Key header. A non-approved id yields the pre-existing 400
+      // from executeApproved (not the operator-direct missing_idempotency_key 400).
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/non-existent-id/execute",
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).not.toBe("missing_idempotency_key");
+    });
+
+    it("POST /:id/undo without Idempotency-Key → NOT a missing-key 400 (lifecycle contract preserved)", async () => {
+      // No Idempotency-Key header. Unknown envelope yields the pre-existing 404
+      // (envelope not found), proving the route is not subject to the
+      // operator-direct missing_idempotency_key 400.
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/non-existent-id/undo",
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error).not.toBe("missing_idempotency_key");
     });
   });
 });

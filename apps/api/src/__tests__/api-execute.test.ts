@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildTestServer, type TestContext } from "./test-server.js";
 
-const IDEMPOTENCY_HEADERS = { "Idempotency-Key": "test-key-execute" };
 const ORG_ID = "org_test";
+// Org is bound via the x-org-id header (read by buildDevAuthFallback), not the body.
+const IDEMPOTENCY_HEADERS = { "Idempotency-Key": "test-key-execute", "x-org-id": ORG_ID };
 
 describe("Execute API (POST /api/execute)", () => {
   let app: FastifyInstance;
@@ -21,26 +22,7 @@ describe("Execute API (POST /api/execute)", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/execute",
-      payload: {
-        actorId: "default",
-        organizationId: ORG_ID,
-        action: {
-          actionType: "digital-ads.campaign.pause",
-          parameters: { campaignId: "camp_123" },
-          sideEffect: true,
-        },
-      },
-    });
-    expect(res.statusCode).toBe(400);
-    const body = res.json();
-    expect(body.error).toContain("Idempotency-Key");
-  });
-
-  it("returns 400 when organizationId is missing", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/execute",
-      headers: IDEMPOTENCY_HEADERS,
+      headers: { "x-org-id": ORG_ID },
       payload: {
         actorId: "default",
         action: {
@@ -52,7 +34,7 @@ describe("Execute API (POST /api/execute)", () => {
     });
     expect(res.statusCode).toBe(400);
     const body = res.json();
-    expect(body.error).toContain("organizationId");
+    expect(body.error).toBe("missing_idempotency_key");
   });
 
   it("returns 200 with outcome EXECUTED when auto-approved", async () => {

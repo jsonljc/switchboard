@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify from "fastify";
 import type { FastifyInstance, FastifyError } from "fastify";
 import { actionsRoutes } from "../routes/actions.js";
+import { actionLifecycleRoutes } from "../routes/action-lifecycle.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
 import { sessionRoutes } from "../routes/sessions.js";
@@ -201,6 +202,7 @@ async function buildScopedApp(): Promise<ScopedTestApp> {
   app.decorate("resolvedSkin", null);
 
   await app.register(actionsRoutes, { prefix: "/api/actions" });
+  await app.register(actionLifecycleRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
   await app.register(sessionRoutes, { prefix: "/api/sessions" });
@@ -229,11 +231,16 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
   // ── ingress/submit ──────────────────────────────────────────────────
 
   describe("POST /api/ingress/submit", () => {
-    it("rejects body.organizationId that mismatches authenticated org with 400", async () => {
+    // #654: ingress/submit now uses requireOrgForMutation, which trusts ONLY the
+    // authenticated org and ignores any body-supplied organizationId. A mismatched
+    // body org is no longer a 400 — it is silently ignored and the auth org is used.
+    // The resolved org is always the auth org (prod behavior unchanged); the dropped
+    // 400 was a defense-in-depth check the canonical decorator does not perform.
+    it("ignores body.organizationId mismatch and submits under the authenticated org", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/ingress/submit",
-        headers: HEADERS_A,
+        headers: { ...HEADERS_A, "Idempotency-Key": "ingress-mismatch" },
         payload: {
           organizationId: ORG_B,
           actor: { id: "u", type: "user" },
@@ -242,15 +249,16 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
           trigger: "api",
         },
       });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("does not match authenticated context");
+      // Submit succeeds; the platformIngress mock encodes the resolved org in the workUnit id.
+      expect(res.statusCode).toBe(200);
+      expect(res.json().workUnit.id).toBe(`wu_${ORG_A}`);
     });
 
     it("uses authenticated org when body omits organizationId", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/ingress/submit",
-        headers: HEADERS_A,
+        headers: { ...HEADERS_A, "Idempotency-Key": "ingress-noorg" },
         payload: {
           actor: { id: "u", type: "user" },
           intent: "x.y.z",
@@ -260,13 +268,30 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
       });
       // Submit succeeds against the platformIngress mock (200 envelope).
       expect(res.statusCode).toBe(200);
+      expect(res.json().workUnit.id).toBe(`wu_${ORG_A}`);
+    });
+
+    it("rejects request without Idempotency-Key with 400 (operator-direct contract)", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/ingress/submit",
+        headers: HEADERS_A,
+        payload: {
+          actor: { id: "u", type: "user" },
+          intent: "x.y.z",
+          parameters: {},
+          trigger: "api",
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("missing_idempotency_key");
     });
 
     it("rejects unscoped key with 403 (no organization binding)", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/ingress/submit",
-        headers: HEADERS_UNSCOPED,
+        headers: { ...HEADERS_UNSCOPED, "Idempotency-Key": "ingress-unscoped" },
         payload: {
           organizationId: ORG_A,
           actor: { id: "u", type: "user" },
@@ -276,7 +301,8 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         },
       });
       expect(res.statusCode).toBe(403);
-      expect(res.json().error).toContain("no organization binding");
+      // requireOrgForMutation uses the canonical §4.5 envelope reason, not the legacy phrase.
+      expect(res.json().error).toBe("forbidden");
     });
   });
 
@@ -357,7 +383,9 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
   // ── actions/propose + actions/batch ──────────────────────────────────
 
   describe("POST /api/actions/propose", () => {
-    it("rejects body.organizationId mismatch with 400", async () => {
+    // #654: propose now uses requireOrgForMutation — body org is ignored; the auth
+    // org is always used. A mismatched body org no longer 400s (it is ignored).
+    it("ignores body.organizationId mismatch and submits under the authenticated org", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
@@ -369,8 +397,9 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
           organizationId: ORG_B,
         },
       });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("does not match authenticated context");
+      // platformIngress mock returns ok; route maps to 201 EXECUTED.
+      expect(res.statusCode).toBe(201);
+      expect(res.json().workUnitId).toBe(`wu_${ORG_A}`);
     });
 
     it("rejects unscoped key with 403", async () => {
@@ -386,12 +415,12 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         },
       });
       expect(res.statusCode).toBe(403);
-      expect(res.json().error).toContain("no organization binding");
+      expect(res.json().error).toBe("forbidden");
     });
   });
 
   describe("POST /api/actions/batch", () => {
-    it("rejects body.organizationId mismatch with 400", async () => {
+    it("ignores body.organizationId mismatch and submits under the authenticated org", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/batch",
@@ -402,8 +431,8 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
           proposals: [{ actionType: "x.y.z", parameters: {} }],
         },
       });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("does not match authenticated context");
+      expect(res.statusCode).toBe(201);
+      expect(res.json().results[0].envelopeId).toBe(`wu_${ORG_A}`);
     });
 
     it("rejects unscoped key with 403", async () => {
@@ -418,7 +447,7 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         },
       });
       expect(res.statusCode).toBe(403);
-      expect(res.json().error).toContain("no organization binding");
+      expect(res.json().error).toBe("forbidden");
     });
   });
 
@@ -449,7 +478,8 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
   // ── execute ─────────────────────────────────────────────────────────
 
   describe("POST /api/execute", () => {
-    it("rejects body.organizationId mismatch with 400", async () => {
+    // #654: execute now uses requireOrgForMutation — body org is ignored; auth org used.
+    it("ignores body.organizationId mismatch and executes under the authenticated org", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/execute",
@@ -464,8 +494,9 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
           },
         },
       });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("does not match authenticated context");
+      // platformIngress mock returns ok; execute route maps to 200 EXECUTED.
+      expect(res.statusCode).toBe(200);
+      expect(res.json().envelopeId).toBe(`wu_${ORG_A}`);
     });
 
     it("rejects unscoped key with 403", async () => {
@@ -484,7 +515,7 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         },
       });
       expect(res.statusCode).toBe(403);
-      expect(res.json().error).toContain("no organization binding");
+      expect(res.json().error).toBe("forbidden");
     });
   });
 

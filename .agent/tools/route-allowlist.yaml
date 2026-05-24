@@ -55,6 +55,8 @@
   reason: "DLQ retry/resolve — operates on failed-message lifecycle records; the original message already passed (or attempted) ingress."
 - path: "apps/api/src/routes/escalations.ts"
   reason: "Escalation inbox — owner replies/resolutions on existing escalation records; lifecycle state transitions, not new governed actions."
+- path: "apps/api/src/routes/action-lifecycle.ts"
+  reason: "Lifecycle transitions on an already-addressed WorkUnit — /:id/execute dispatches a previously approved unit via PlatformLifecycle; /:id/undo submits the reverse via platformLifecycle.requestUndo. The original action already passed through ingress (per DOCTRINE: lifecycle, not a new governed action). Split out of actions.ts in the #654 route-class cleanup; actions.ts's /propose+/batch still reach PlatformIngress.submit directly."
 
 # ---------------------------------------------------------------------------
 # Governance / policy / identity — control-plane configuration
