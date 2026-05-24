@@ -1,0 +1,88 @@
+// @route-class: lifecycle
+//
+// Lifecycle transitions on an already-addressed work unit — NOT operator-direct
+// ingress. POST /:id/execute and POST /:id/undo operate on a work unit that has
+// already been created and addressed by id; they are state transitions on that
+// unit, not new mutating ingress submissions. They therefore do not carry the
+// operator-direct idempotency contract (a fresh Idempotency-Key per call would
+// lie about the operation — the id IS the dedup boundary). Deliberate route-class
+// split per #654; this is an intentional classification, not a validator bypass.
+import type { FastifyPluginAsync } from "fastify";
+import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
+import { assertOrgAccess } from "../utils/org-access.js";
+
+export const actionLifecycleRoutes: FastifyPluginAsync = async (app) => {
+  // POST /api/actions/:id/execute - Execute a previously approved work unit
+  app.post(
+    "/:id/execute",
+    {
+      schema: {
+        description: "Execute a previously approved work unit.",
+        tags: ["Actions"],
+        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      try {
+        // Compatibility shim: direct execute goes through legacy PlatformLifecycle.
+        // When lifecycle service is fully wired, this route must go through
+        // lifecycle dispatch admission (prepareDispatch + validateDispatchAdmission).
+        const result = await app.platformLifecycle.executeApproved(id);
+        return reply.code(200).send({ result });
+      } catch (err) {
+        return reply.code(400).send({
+          error: sanitizeErrorMessage(err, 400),
+          statusCode: 400,
+        });
+      }
+    },
+  );
+
+  // POST /api/actions/:id/undo - Request undo for an executed action
+  app.post(
+    "/:id/undo",
+    {
+      schema: {
+        description:
+          "Request undo for a previously executed action. Creates a new reverse proposal.",
+        tags: ["Actions"],
+        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      const envelope = await app.storageContext.envelopes.getById(id);
+      if (!envelope) {
+        return reply.code(404).send({ error: "Envelope not found", statusCode: 404 });
+      }
+
+      const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
+        | string
+        | null
+        | undefined;
+      if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
+
+      try {
+        const result = await app.platformLifecycle.requestUndo(id, app.platformIngress);
+        if (!result.undoSubmitted) {
+          return reply.code(400).send({
+            error: result.error ?? "Undo submission failed",
+            statusCode: 400,
+          });
+        }
+        return reply.code(201).send({
+          undoSubmitted: true,
+          undoWorkUnitId: result.undoWorkUnitId,
+        });
+      } catch (err) {
+        return reply.code(400).send({
+          error: sanitizeErrorMessage(err, 400),
+          statusCode: 400,
+        });
+      }
+    },
+  );
+};

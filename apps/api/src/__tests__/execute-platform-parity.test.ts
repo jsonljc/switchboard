@@ -5,8 +5,9 @@ import type { FastifyInstance } from "fastify";
 import { buildTestServer, type TestContext } from "./test-server.js";
 import type { WorkTrace } from "@switchboard/core/platform";
 
-const IDEMPOTENCY_HEADERS = { "Idempotency-Key": "parity-test-key" };
 const ORG_ID = "org_parity";
+// Org is bound via the x-org-id header (read by buildDevAuthFallback), not the body.
+const IDEMPOTENCY_HEADERS = { "Idempotency-Key": "parity-test-key", "x-org-id": ORG_ID };
 
 describe("POST /api/execute — Platform Ingress Parity", () => {
   let app: FastifyInstance;
@@ -331,7 +332,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/execute",
-      headers: { "Idempotency-Key": "parity-trace-key" },
+      headers: { "Idempotency-Key": "parity-trace-key", "x-org-id": ORG_ID },
       payload: {
         actorId: "default",
         organizationId: ORG_ID,
@@ -393,7 +394,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/execute",
-      headers: { "Idempotency-Key": "parity-deny-trace-key" },
+      headers: { "Idempotency-Key": "parity-deny-trace-key", "x-org-id": ORG_ID },
       payload: {
         actorId: "default",
         organizationId: ORG_ID,
@@ -441,7 +442,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/execute",
-      headers: { "Idempotency-Key": "parity-clienttrace-key" },
+      headers: { "Idempotency-Key": "parity-clienttrace-key", "x-org-id": ORG_ID },
       payload: {
         actorId: "default",
         organizationId: ORG_ID,

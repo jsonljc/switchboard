@@ -1,12 +1,13 @@
 // @route-class: operator-direct
-// route-governance: operator-direct-contract-deferred — enforces idempotency + org scope manually and submits via platformIngress, but not via the canonical requireIdempotencyKey/requireOrgForMutation decorators; tracked in #654
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { NeedsClarificationError, NotFoundError, matchesAny } from "@switchboard/core";
 import type { CanonicalSubmitRequest } from "@switchboard/core/platform";
 import { ExecuteBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
-import { resolveOrganizationForMutation } from "../utils/org-access.js";
+import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+import { buildDevAuthFallback } from "../utils/auth-fallback.js";
+import { requireOrgForMutation } from "../decorators/org.js";
 import { createApprovalForWorkUnit } from "./approval-factory.js";
 
 const executeJsonSchema = zodToJsonSchema(ExecuteBodySchema, { target: "openApi3" });
@@ -23,10 +24,15 @@ const EXECUTE_HTTP_RATE_LIMIT_WINDOW_MS = parseInt(
 );
 
 export const executeRoutes: FastifyPluginAsync = async (app) => {
+  // Dev/test org binding from x-org-id / x-principal-id headers. No-op in production
+  // (the real auth middleware has already populated organizationIdFromAuth).
+  app.addHook("preHandler", buildDevAuthFallback(app));
+
   // POST /api/execute - Single endpoint: propose + conditional execute, returns EXECUTED | PENDING_APPROVAL | DENIED
   app.post(
     "/execute",
     {
+      preHandler: requireOrgForMutation,
       schema: {
         description:
           "Execute an action through the governance spine. Evaluates policy and risk; returns EXECUTED, PENDING_APPROVAL, or DENIED with envelopeId and traceId. Requires Idempotency-Key header for replay protection.",
@@ -47,13 +53,8 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const idempotencyKey = request.headers["idempotency-key"];
-      if (!idempotencyKey || typeof idempotencyKey !== "string" || !idempotencyKey.trim()) {
-        return reply.code(400).send({
-          error: "Idempotency-Key header is required for POST /api/execute (replay protection)",
-          statusCode: 400,
-        });
-      }
+      const idempotencyKey = requireIdempotencyKey(request, reply);
+      if (!idempotencyKey) return;
 
       const parsed = ExecuteBodySchema.safeParse(request.body);
       if (!parsed.success) {
@@ -78,16 +79,11 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      // Auth trust binding: only request.organizationIdFromAuth is trusted in production.
-      // In dev mode (app.authDisabled), the body org may be used.
-      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
-      if (!organizationId) return reply;
-
       const submitRequest: CanonicalSubmitRequest = {
         intent: body.action.actionType,
         parameters: body.action.parameters,
         actor: { id: body.actorId, type: "user" as const },
-        organizationId,
+        organizationId: request.orgId,
         trigger: "api" as const,
         idempotencyKey,
         traceId: body.traceId,

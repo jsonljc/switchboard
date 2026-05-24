@@ -21,7 +21,8 @@ describe("API runtime convergence", () => {
     await app.inject({
       method: "POST",
       url: "/api/execute",
-      headers: { "Idempotency-Key": "conv-execute" },
+      // Org is bound via x-org-id (read by buildDevAuthFallback), not the body.
+      headers: { "Idempotency-Key": "conv-execute", "x-org-id": "org_test" },
       payload: {
         actorId: "default",
         organizationId: "org_test",

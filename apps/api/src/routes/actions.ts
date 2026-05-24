@@ -1,22 +1,29 @@
 // @route-class: operator-direct
-// route-governance: operator-direct-contract-deferred — enforces idempotency + org scope manually and submits via platformIngress, but not via the canonical requireIdempotencyKey/requireOrgForMutation decorators; tracked in #654
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { matchesAny, NeedsClarificationError, NotFoundError } from "@switchboard/core";
 import type { CanonicalSubmitRequest } from "@switchboard/core/platform";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
-import { assertOrgAccess, resolveOrganizationForMutation } from "../utils/org-access.js";
+import { assertOrgAccess } from "../utils/org-access.js";
+import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+import { buildDevAuthFallback } from "../utils/auth-fallback.js";
+import { requireOrgForMutation } from "../decorators/org.js";
 import { createApprovalForWorkUnit } from "./approval-factory.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
 const batchJsonSchema = zodToJsonSchema(BatchProposeBodySchema, { target: "openApi3" });
 
 export const actionsRoutes: FastifyPluginAsync = async (app) => {
+  // Dev/test org binding from x-org-id / x-principal-id headers. No-op in production
+  // (the real auth middleware has already populated organizationIdFromAuth).
+  app.addHook("preHandler", buildDevAuthFallback(app));
+
   // POST /api/actions/propose - Create a new action proposal via PlatformIngress
   app.post(
     "/propose",
     {
+      preHandler: requireOrgForMutation,
       schema: {
         description:
           "Create a new action proposal through PlatformIngress. Requires Idempotency-Key header.",
@@ -31,13 +38,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const idempotencyKey = request.headers["idempotency-key"];
-      if (!idempotencyKey || typeof idempotencyKey !== "string" || !idempotencyKey.trim()) {
-        return reply.code(400).send({
-          error: "Idempotency-Key header is required for POST /api/actions/propose",
-          statusCode: 400,
-        });
-      }
+      const idempotencyKey = requireIdempotencyKey(request, reply);
+      if (!idempotencyKey) return;
 
       const parsed = ProposeBodySchema.safeParse(request.body);
       if (!parsed.success) {
@@ -61,14 +63,11 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
-      if (!organizationId) return reply;
-
       const submitRequest: CanonicalSubmitRequest = {
         intent: body.actionType,
         parameters: body.message ? { ...body.parameters, _message: body.message } : body.parameters,
         actor: { id: body.principalId, type: "user" as const },
-        organizationId,
+        organizationId: request.orgId,
         trigger: "api" as const,
         idempotencyKey,
         surface: {
@@ -218,84 +217,15 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // POST /api/actions/:id/execute - Execute a previously approved work unit
-  app.post(
-    "/:id/execute",
-    {
-      schema: {
-        description: "Execute a previously approved work unit.",
-        tags: ["Actions"],
-        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-
-      try {
-        // Compatibility shim: direct execute goes through legacy PlatformLifecycle.
-        // When lifecycle service is fully wired, this route must go through
-        // lifecycle dispatch admission (prepareDispatch + validateDispatchAdmission).
-        const result = await app.platformLifecycle.executeApproved(id);
-        return reply.code(200).send({ result });
-      } catch (err) {
-        return reply.code(400).send({
-          error: sanitizeErrorMessage(err, 400),
-          statusCode: 400,
-        });
-      }
-    },
-  );
-
-  // POST /api/actions/:id/undo - Request undo for an executed action
-  app.post(
-    "/:id/undo",
-    {
-      schema: {
-        description:
-          "Request undo for a previously executed action. Creates a new reverse proposal.",
-        tags: ["Actions"],
-        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-
-      const envelope = await app.storageContext.envelopes.getById(id);
-      if (!envelope) {
-        return reply.code(404).send({ error: "Envelope not found", statusCode: 404 });
-      }
-
-      const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
-        | string
-        | null
-        | undefined;
-      if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
-
-      try {
-        const result = await app.platformLifecycle.requestUndo(id, app.platformIngress);
-        if (!result.undoSubmitted) {
-          return reply.code(400).send({
-            error: result.error ?? "Undo submission failed",
-            statusCode: 400,
-          });
-        }
-        return reply.code(201).send({
-          undoSubmitted: true,
-          undoWorkUnitId: result.undoWorkUnitId,
-        });
-      } catch (err) {
-        return reply.code(400).send({
-          error: sanitizeErrorMessage(err, 400),
-          statusCode: 400,
-        });
-      }
-    },
-  );
+  // NOTE: POST /:id/execute and POST /:id/undo moved to action-lifecycle.ts
+  // (route-class: lifecycle). They are id-addressed transitions on an existing
+  // work unit, not operator-direct ingress — see #654.
 
   // POST /api/actions/batch - Create a batch of actions with a plan
   app.post(
     "/batch",
     {
+      preHandler: requireOrgForMutation,
       schema: {
         description:
           "Submit multiple action proposals as independent WorkUnits via PlatformIngress.",
@@ -313,13 +243,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const batchKey = request.headers["idempotency-key"];
-      if (!batchKey || typeof batchKey !== "string" || !batchKey.trim()) {
-        return reply.code(400).send({
-          error: "Idempotency-Key header is required for POST /api/actions/batch",
-          statusCode: 400,
-        });
-      }
+      const batchKey = requireIdempotencyKey(request, reply);
+      if (!batchKey) return;
 
       const parsed = BatchProposeBodySchema.safeParse(request.body);
       if (!parsed.success) {
@@ -345,9 +270,6 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
-      if (!organizationId) return reply;
-
       const results = [];
       for (let i = 0; i < body.proposals.length; i++) {
         const proposal = body.proposals[i]!;
@@ -356,7 +278,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           intent: proposal.actionType,
           parameters: proposal.parameters,
           actor: { id: body.principalId, type: "user" as const },
-          organizationId,
+          organizationId: request.orgId,
           trigger: "api" as const,
           idempotencyKey: `${batchKey}:${i}`,
           surface: {

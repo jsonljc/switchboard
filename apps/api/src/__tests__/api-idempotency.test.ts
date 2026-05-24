@@ -23,11 +23,21 @@ describe("Idempotency Middleware", () => {
     organizationId: "default",
   };
 
+  // The idempotency fingerprint derives org/actor from request.organizationIdFromAuth /
+  // principalIdFromAuth, with x-organization-id / x-principal-id header fallbacks. On the
+  // replay leg the per-route org binding (buildDevAuthFallback) has not yet run when the
+  // global idempotency preHandler reads the request (it is registered before the route
+  // plugins), so the auth fields are unset and the fingerprint uses the header fallbacks.
+  // On the first leg's onSend the fallback HAS run, so the fingerprint uses the bound
+  // "default" values. We pin both headers to "default" to match the bound values and keep
+  // the fingerprint stable across both legs.
+  const ORG_HEADER = { "x-organization-id": "default", "x-principal-id": "default" };
+
   it("returns cached response for duplicate POST with same Idempotency-Key", async () => {
     const first = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
-      headers: { "idempotency-key": "key-1" },
+      headers: { "idempotency-key": "key-1", ...ORG_HEADER },
       payload: proposePayload,
     });
 
@@ -37,7 +47,7 @@ describe("Idempotency Middleware", () => {
     const second = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
-      headers: { "idempotency-key": "key-1" },
+      headers: { "idempotency-key": "key-1", ...ORG_HEADER },
       payload: proposePayload,
     });
 
@@ -163,7 +173,7 @@ describe("Idempotency Middleware", () => {
     const first = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
-      headers: { "idempotency-key": "overwrite-test-key" },
+      headers: { "idempotency-key": "overwrite-test-key", ...ORG_HEADER },
       payload: proposePayload,
     });
 
@@ -174,7 +184,7 @@ describe("Idempotency Middleware", () => {
     const mismatch = await app.inject({
       method: "POST",
       url: "/api/execute",
-      headers: { "idempotency-key": "overwrite-test-key" },
+      headers: { "idempotency-key": "overwrite-test-key", ...ORG_HEADER },
       payload: {
         actorId: "default",
         organizationId: "default",
@@ -192,7 +202,7 @@ describe("Idempotency Middleware", () => {
     const replay = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
-      headers: { "idempotency-key": "overwrite-test-key" },
+      headers: { "idempotency-key": "overwrite-test-key", ...ORG_HEADER },
       payload: proposePayload,
     });
 
@@ -201,7 +211,10 @@ describe("Idempotency Middleware", () => {
   });
 
   it("returns 409 when the same key is used by a different org", async () => {
-    // First request with org_alpha
+    // The fingerprint reads request.organizationIdFromAuth, falling back to the
+    // x-organization-id header. In dev/test the per-route buildDevAuthFallback only
+    // populates organizationIdFromAuth from x-org-id (absent here), so the fingerprint
+    // uses the x-organization-id header on both legs — distinct orgs → 409.
     const first = await app.inject({
       method: "POST",
       url: "/api/actions/propose",

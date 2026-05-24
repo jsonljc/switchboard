@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import type { FastifyInstance, FastifyError } from "fastify";
 import { actionsRoutes } from "../routes/actions.js";
+import { actionLifecycleRoutes } from "../routes/action-lifecycle.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
 import { policiesRoutes } from "../routes/policies.js";
@@ -455,6 +456,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
 
   await app.register(actionsRoutes, { prefix: "/api/actions" });
+  await app.register(actionLifecycleRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
   await app.register(policiesRoutes, { prefix: "/api/policies" });

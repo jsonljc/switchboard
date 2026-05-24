@@ -1,16 +1,20 @@
 // @route-class: operator-direct
-// route-governance: operator-direct-contract-deferred — raw operator ingress submit; canonical idempotency contract for the raw submit endpoint is unresolved, so the decorator cell is deferred; tracked in #654
 import type { FastifyPluginAsync } from "fastify";
-import { resolveOrganizationForMutation } from "../utils/org-access.js";
+import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+import { buildDevAuthFallback } from "../utils/auth-fallback.js";
+import { requireOrgForMutation } from "../decorators/org.js";
 
 export const ingressRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/ingress/submit", async (request, reply) => {
+  // Dev/test org binding from x-org-id / x-principal-id headers. No-op in production
+  // (the real auth middleware has already populated organizationIdFromAuth).
+  app.addHook("preHandler", buildDevAuthFallback(app));
+
+  app.post("/ingress/submit", { preHandler: requireOrgForMutation }, async (request, reply) => {
     if (!app.platformIngress) {
       return reply.code(503).send({ error: "PlatformIngress not available", statusCode: 503 });
     }
 
     const body = request.body as {
-      organizationId?: string;
       actor: { id: string; type: string };
       intent: string;
       parameters: Record<string, unknown>;
@@ -25,12 +29,13 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Missing intent", statusCode: 400 });
     }
 
-    const organizationId = resolveOrganizationForMutation(request, reply, body.organizationId);
-    if (!organizationId) return reply;
+    // Idempotency-Key is mandatory for raw operator ingress (DOCTRINE §6 tightening).
+    const idempotencyKey = requireIdempotencyKey(request, reply);
+    if (!idempotencyKey) return;
 
     try {
       const response = await app.platformIngress.submit({
-        organizationId,
+        organizationId: request.orgId,
         actor: { id: body.actor?.id ?? "anonymous", type: (body.actor?.type ?? "user") as "user" },
         intent: body.intent,
         parameters: body.parameters ?? {},
@@ -38,7 +43,7 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
         surface: body.surface ?? { surface: "api" },
         targetHint: body.targetHint,
         traceId: body.traceId,
-        idempotencyKey: body.idempotencyKey,
+        idempotencyKey,
       });
 
       return reply.send(response);

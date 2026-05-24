@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import type { ConsentService, ContactConsentReader } from "@switchboard/core";
 import { registerAdminConsentRoutes } from "../routes/admin-consent.js";
 import { actionsRoutes } from "../routes/actions.js";
+import { actionLifecycleRoutes } from "../routes/action-lifecycle.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
@@ -101,6 +102,9 @@ export async function registerRoutes(
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
   await app.register(setupRoutes, { prefix: "/api/setup" });
   await app.register(actionsRoutes, { prefix: "/api/actions" });
+  // Lifecycle transitions (/:id/execute, /:id/undo) share the /api/actions prefix
+  // so URLs are unchanged; they are a distinct route-class (lifecycle) per #654.
+  await app.register(actionLifecycleRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
