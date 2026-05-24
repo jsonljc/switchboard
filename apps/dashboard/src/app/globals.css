@@ -53,6 +53,16 @@
     --operator-foreground: 0 0% 98%;
     --operator-subtle: 32 45% 94%;
 
+    /* ─── Canonical: warm operational editorial (§9) ─── */
+    --canvas: 40 25% 94%;          /* warm cream base — same value as --mercury-cream */
+    --action: 30 55% 46%;          /* the ONE action amber — alias of --operator */
+    --action-foreground: 0 0% 98%;
+    --action-hover: 30 55% 40%;
+    /* Per-agent IDENTITY ONLY — never on action buttons */
+    --agent-alex: 14 70% 58%;      /* coral */
+    --agent-riley: 180 33% 40%;    /* teal */
+    --agent-mira: 270 45% 58%;     /* violet (coming soon) */
+
     /* ─── Cards ─── */
     --card: 0 0% 100%;
     --card-foreground: 30 8% 10%;
@@ -96,12 +106,12 @@
        will live alongside these once PR #363 merges; reports.module.css
        aliases mercury → editorial at .reportsPage so consumers don't
        care which lands first. */
-    --mercury-cream: hsl(40 25% 94%);
+    --mercury-cream: var(--canvas);   /* aliased → canonical --canvas */
     --mercury-ink: hsl(20 10% 12%);
     --mercury-ink-2: hsl(20 8% 28%);
     --mercury-ink-3: hsl(20 6% 46%);
     --mercury-ink-4: hsl(20 6% 62%);
-    --mercury-accent: hsl(20 90% 55%);
+    --mercury-accent: var(--action);  /* aliased → canonical --action amber */
     --mercury-accent-soft: hsl(20 60% 50%);
     --mercury-hairline: hsl(40 15% 86%);
     --mercury-hairline-soft: hsl(40 15% 90%);
