@@ -2,7 +2,7 @@
 // Handoff Notifier — alerts team members via channels
 // ---------------------------------------------------------------------------
 
-import type { HandoffPackage } from "./types.js";
+import type { Handoff } from "./types.js";
 import type { ApprovalNotifier } from "../notifications/index.js";
 
 export class HandoffNotifier {
@@ -11,7 +11,7 @@ export class HandoffNotifier {
     private defaultApprovers: string[] = [],
   ) {}
 
-  async notify(pkg: HandoffPackage): Promise<void> {
+  async notify(pkg: Handoff): Promise<void> {
     const message = this.formatMessage(pkg);
     await this.notifier.notify({
       approvalId: pkg.id,
@@ -26,7 +26,7 @@ export class HandoffNotifier {
     });
   }
 
-  private formatMessage(pkg: HandoffPackage): string {
+  private formatMessage(pkg: Handoff): string {
     const lines = [
       `HANDOFF REQUEST`,
       `Reason: ${pkg.reason.replace(/_/g, " ")}`,

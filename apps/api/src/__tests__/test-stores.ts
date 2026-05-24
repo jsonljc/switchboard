@@ -9,7 +9,7 @@
 import type {
   ContactStore,
   HandoffStore,
-  HandoffPackage,
+  Handoff,
   HandoffStatus,
   ConversationThreadStore,
   OpportunityStore,
@@ -296,17 +296,17 @@ export class TestContactStore implements ContactStore {
 }
 
 export class TestHandoffStore implements HandoffStore {
-  private rows = new Map<string, HandoffPackage>();
+  private rows = new Map<string, Handoff>();
 
-  async save(pkg: HandoffPackage): Promise<void> {
+  async save(pkg: Handoff): Promise<void> {
     this.rows.set(pkg.id, pkg);
   }
 
-  async getById(id: string): Promise<HandoffPackage | null> {
+  async getById(id: string): Promise<Handoff | null> {
     return this.rows.get(id) ?? null;
   }
 
-  async getBySessionId(sessionId: string): Promise<HandoffPackage | null> {
+  async getBySessionId(sessionId: string): Promise<Handoff | null> {
     for (const r of this.rows.values()) if (r.sessionId === sessionId) return r;
     return null;
   }
@@ -317,7 +317,7 @@ export class TestHandoffStore implements HandoffStore {
     this.rows.set(id, { ...r, status, ...(acknowledgedAt ? { acknowledgedAt } : {}) });
   }
 
-  async listPending(organizationId: string): Promise<HandoffPackage[]> {
+  async listPending(organizationId: string): Promise<Handoff[]> {
     return Array.from(this.rows.values()).filter(
       (r) =>
         r.organizationId === organizationId &&

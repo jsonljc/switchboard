@@ -4,7 +4,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type {
-  HandoffPackage,
+  Handoff,
   HandoffStatus,
   HandoffStore,
   HandoffReason,
@@ -16,7 +16,7 @@ import type {
 export class PrismaHandoffStore implements HandoffStore {
   constructor(private prisma: PrismaClient) {}
 
-  async save(pkg: HandoffPackage): Promise<void> {
+  async save(pkg: Handoff): Promise<void> {
     await this.prisma.handoff.upsert({
       where: { id: pkg.id },
       create: {
@@ -43,13 +43,13 @@ export class PrismaHandoffStore implements HandoffStore {
     });
   }
 
-  async getById(id: string): Promise<HandoffPackage | null> {
+  async getById(id: string): Promise<Handoff | null> {
     const row = await this.prisma.handoff.findUnique({ where: { id } });
     if (!row) return null;
     return toHandoffPackage(row);
   }
 
-  async getBySessionId(sessionId: string): Promise<HandoffPackage | null> {
+  async getBySessionId(sessionId: string): Promise<Handoff | null> {
     const row = await this.prisma.handoff.findFirst({
       where: { sessionId },
       orderBy: { createdAt: "desc" },
@@ -67,7 +67,7 @@ export class PrismaHandoffStore implements HandoffStore {
     await this.prisma.handoff.update({ where: { id }, data });
   }
 
-  async listPending(organizationId: string): Promise<HandoffPackage[]> {
+  async listPending(organizationId: string): Promise<Handoff[]> {
     const rows = await this.prisma.handoff.findMany({
       where: {
         organizationId,
@@ -97,7 +97,7 @@ interface HandoffRow {
   createdAt: Date;
 }
 
-function toHandoffPackage(row: HandoffRow): HandoffPackage {
+function toHandoffPackage(row: HandoffRow): Handoff {
   return {
     id: row.id,
     sessionId: row.sessionId,

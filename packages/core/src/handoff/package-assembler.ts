@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type {
-  HandoffPackage,
+  Handoff,
   HandoffReason,
   LeadSnapshot,
   QualificationSnapshot,
@@ -22,7 +22,7 @@ export interface AssemblerInput {
 }
 
 export class HandoffPackageAssembler {
-  assemble(input: AssemblerInput): HandoffPackage {
+  assemble(input: AssemblerInput): Handoff {
     const summary = this.buildSummary(input.messages);
     const slaMinutes = input.slaMinutes ?? 30;
 

@@ -10,7 +10,7 @@ import type {
   SaveGovernanceVerdictInput,
 } from "../governance/governance-verdict-store/types.js";
 import type { GovernancePostureCache } from "../governance/posture-cache.js";
-import type { HandoffStore, HandoffPackage } from "../handoff/types.js";
+import type { HandoffStore, Handoff } from "../handoff/types.js";
 
 /**
  * Pre-input deterministic gate.
@@ -339,11 +339,7 @@ async function handleInputGateResolverError(
   return true; // Short-circuit submit.
 }
 
-function buildInputHandoffPackage(
-  sessionId: string,
-  orgId: string,
-  clock: () => Date,
-): HandoffPackage {
+function buildInputHandoffPackage(sessionId: string, orgId: string, clock: () => Date): Handoff {
   return {
     id: createId(),
     sessionId,

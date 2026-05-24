@@ -2,11 +2,11 @@
 // SLA Monitor — tracks handoff SLA breaches
 // ---------------------------------------------------------------------------
 
-import type { HandoffStore, HandoffPackage } from "./types.js";
+import type { HandoffStore, Handoff } from "./types.js";
 
 export interface SlaMonitorConfig {
   handoffStore: HandoffStore;
-  onBreach: (pkg: HandoffPackage) => Promise<void>;
+  onBreach: (pkg: Handoff) => Promise<void>;
   checkIntervalMs?: number;
 }
 
@@ -32,10 +32,10 @@ export class SlaMonitor {
     }
   }
 
-  async checkBreaches(): Promise<HandoffPackage[]> {
+  async checkBreaches(): Promise<Handoff[]> {
     // This is designed to be called by a BullMQ worker in production.
     // The in-process timer is a fallback for non-Redis deployments.
-    const breached: HandoffPackage[] = [];
+    const breached: Handoff[] = [];
 
     // We'd need to scan all orgs in production; for now this is
     // called per-org from the job runner.

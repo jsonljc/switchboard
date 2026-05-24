@@ -52,10 +52,9 @@ export type HandoffConversationSummary = z.infer<typeof HandoffConversationSumma
 /**
  * Canonical Handoff shape — the package the chat layer constructs when an
  * agent escalates to a human, persisted to the `Handoff` Prisma row, surfaced
- * by `/api/escalations`, and consumed by the decisions adapter. Previously
- * `HandoffPackage` in `packages/core/src/handoff/types.ts`; renamed per Route
- * Governance Contract v1 §8.3. Core re-exports `HandoffPackage` as a
- * back-compat alias.
+ * by `/api/escalations`, and consumed by the decisions adapter. Hoisted to
+ * `@switchboard/schemas` per Route Governance Contract v1 §8.3; re-exported
+ * from `packages/core` as `Handoff`.
  *
  * Date fields use `z.date()` (no coercion) per the PR-2 plan's Schema
  * boundary rule — Handoff is the in-process domain shape; serialised inputs
