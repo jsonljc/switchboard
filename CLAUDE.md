@@ -48,7 +48,6 @@ packages/db/                 — Prisma ORM, store implementations, credential e
 apps/api/          — Fastify REST API (port 3000)
 apps/chat/         — Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
 apps/dashboard/    — Next.js UI + operator controls (port 3002)
-apps/mcp-server/   — MCP server for LLM tool use
 ```
 
 ## Dependency Layers
@@ -76,7 +75,7 @@ pnpm db:migrate                   # Run migrations
 pnpm reset                        # Clean + regenerate Prisma + rebuild schemas/db/core
 ```
 
-If `pnpm typecheck` reports missing exports from `@switchboard/schemas`, `@switchboard/db`, or `@switchboard/core` — or unknown Prisma fields like `entitlementOverride` — run `pnpm reset` first. It clears each package's `dist/` (`turbo clean`), purges the generated Prisma client, regenerates it, and rebuilds the schemas → core → db chain. Stale lower-layer artifacts cause false-alarm "main is broken" diagnostics. App packages (api, chat, dashboard, mcp-server) are not rebuilt by `reset` — `pnpm typecheck` will pick up their needs from there.
+If `pnpm typecheck` reports missing exports from `@switchboard/schemas`, `@switchboard/db`, or `@switchboard/core` — or unknown Prisma fields like `entitlementOverride` — run `pnpm reset` first. It clears each package's `dist/` (`turbo clean`), purges the generated Prisma client, regenerates it, and rebuilds the schemas → core → db chain. Stale lower-layer artifacts cause false-alarm "main is broken" diagnostics. App packages (api, chat, dashboard) are not rebuilt by `reset` — `pnpm typecheck` will pick up their needs from there.
 
 ## Code Basics
 

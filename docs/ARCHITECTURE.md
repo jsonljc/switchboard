@@ -583,42 +583,15 @@ Next.js 15 App Router application for configuring the AI assistant and monitorin
 
 ---
 
-### 14. `apps/mcp-server` — Model Context Protocol Server
-
-Exposes Switchboard capabilities as MCP tools for integration with LLM assistants (Claude, ChatGPT, etc.).
-
-**Two modes:**
-
-- **API mode:** Delegates to Switchboard API via `McpApiClient` (production)
-- **In-memory mode:** Local orchestrator for dev/testing
-
-**Tool Registration:**
-
-- Auto-registers tools from cartridge manifests
-- Manual tool definitions for governance, CRM, and payments operations
-- Categories: `SIDE_EFFECT_TOOLS`, `READ_TOOLS`, `GOVERNANCE_TOOLS`, `CRM_*`, `PAYMENTS_*`
-
-**Safety Features:**
-
-- Session guard (rate limiting, mutation count limits)
-- Forced escalation when mutation threshold exceeded (injects `_forceApproval`)
-- Error sanitization (strips SQL, stack traces, IPs, connection strings, Prisma references)
-- Auto-generated idempotency keys from SHA-256(actorId + actionType + args)
-
-**Transport:** StdioServerTransport (stdin/stdout for MCP protocol)
-
----
-
 ## Infrastructure & CI/CD
 
 ### Docker
 
-Multi-stage Dockerfile with 4 production targets:
+Multi-stage Dockerfile with 3 production targets:
 
 - `api` — Fastify API server (port 3000)
 - `chat` — Chat server (port 3001)
 - `dashboard` — Next.js standalone (port 3002)
-- `mcp-server` — MCP server (stdio)
 
 All run as `USER node` (non-root) with `NODE_ENV=production`.
 

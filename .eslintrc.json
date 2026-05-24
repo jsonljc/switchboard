@@ -111,10 +111,6 @@
               {
                 "group": ["@switchboard/dashboard", "@switchboard/dashboard/*"],
                 "message": "cartridge-sdk cannot import from apps."
-              },
-              {
-                "group": ["@switchboard/mcp-server", "@switchboard/mcp-server/*"],
-                "message": "cartridge-sdk cannot import from apps."
               }
             ]
           }
@@ -144,10 +140,6 @@
               },
               {
                 "group": ["@switchboard/dashboard", "@switchboard/dashboard/*"],
-                "message": "db cannot import from apps."
-              },
-              {
-                "group": ["@switchboard/mcp-server", "@switchboard/mcp-server/*"],
                 "message": "db cannot import from apps."
               }
             ]
@@ -187,10 +179,6 @@
               {
                 "group": ["@switchboard/dashboard", "@switchboard/dashboard/*"],
                 "message": "core cannot import from apps."
-              },
-              {
-                "group": ["@switchboard/mcp-server", "@switchboard/mcp-server/*"],
-                "message": "core cannot import from apps."
               }
             ]
           }
@@ -215,10 +203,6 @@
               },
               {
                 "group": ["@switchboard/dashboard", "@switchboard/dashboard/*"],
-                "message": "Apps cannot import from other apps."
-              },
-              {
-                "group": ["@switchboard/mcp-server", "@switchboard/mcp-server/*"],
                 "message": "Apps cannot import from other apps."
               }
             ]

@@ -16,7 +16,6 @@ COPY packages/ad-optimizer/package.json packages/ad-optimizer/
 COPY packages/sdk/package.json packages/sdk/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
-COPY apps/mcp-server/package.json apps/mcp-server/
 COPY apps/dashboard/package.json apps/dashboard/
 
 RUN pnpm install --frozen-lockfile
@@ -122,34 +121,3 @@ EXPOSE 3002
 ENV NODE_ENV=production
 ENV PORT=3002
 CMD ["node", "apps/dashboard/server.js"]
-
-# ---- Production stage: MCP server ----
-FROM node:20-slim AS mcp-server
-
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
-
-WORKDIR /app
-
-COPY --from=build /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/package.json /app/turbo.json ./
-
-COPY --from=build /app/packages/schemas/package.json packages/schemas/package.json
-COPY --from=build /app/packages/schemas/dist/ packages/schemas/dist/
-
-COPY --from=build /app/packages/core/package.json packages/core/package.json
-COPY --from=build /app/packages/core/dist/ packages/core/dist/
-
-COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
-COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
-
-COPY --from=build /app/packages/sdk/package.json packages/sdk/package.json
-COPY --from=build /app/packages/sdk/dist/ packages/sdk/dist/
-
-COPY --from=build /app/apps/mcp-server/package.json apps/mcp-server/package.json
-COPY --from=build /app/apps/mcp-server/dist/ apps/mcp-server/dist/
-
-RUN pnpm install --frozen-lockfile --prod
-
-USER node
-
-ENV NODE_ENV=production
-CMD ["node", "apps/mcp-server/dist/main.js"]
