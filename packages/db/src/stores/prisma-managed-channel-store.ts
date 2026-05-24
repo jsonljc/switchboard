@@ -44,6 +44,7 @@ export class PrismaManagedChannelStore {
     if (!existing || existing.organizationId !== organizationId) {
       throw new Error("Channel not found");
     }
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.managedChannel.delete({ where: { id } });
   }
 }

@@ -79,6 +79,7 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     });
 
     const completedAt = new Date();
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const finalize = await this.workTraceStore.update(
       txResult.workUnitId,
       {
@@ -165,6 +166,7 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     });
 
     const completedAt = new Date();
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const finalize = await this.workTraceStore.update(
       txResult.workUnitId,
       {
@@ -243,6 +245,7 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     });
 
     const completedAt = new Date();
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const finalize = await this.workTraceStore.update(
       txResult.workUnitId,
       {

@@ -120,6 +120,7 @@ export class PrismaPolicyStore implements PolicyStore {
 
   async delete(id: string): Promise<boolean> {
     try {
+      // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       await this.prisma.policy.delete({ where: { id } });
       await this.invalidateCache();
       return true;

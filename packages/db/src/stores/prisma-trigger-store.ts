@@ -75,6 +75,7 @@ export class PrismaTriggerStore implements TriggerStore {
   }
 
   async updateStatus(id: string, status: TriggerStatus): Promise<void> {
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.scheduledTriggerRecord.update({
       where: { id },
       data: { status },
@@ -82,6 +83,7 @@ export class PrismaTriggerStore implements TriggerStore {
   }
 
   async deleteExpired(before: Date): Promise<number> {
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const result = await this.prisma.scheduledTriggerRecord.deleteMany({
       where: {
         expiresAt: { lt: before },
@@ -92,6 +94,7 @@ export class PrismaTriggerStore implements TriggerStore {
   }
 
   async expireOverdue(now: Date): Promise<number> {
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const result = await this.prisma.scheduledTriggerRecord.updateMany({
       where: {
         status: "active",

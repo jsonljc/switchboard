@@ -258,6 +258,7 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
       durationMs?: number;
     },
   ): Promise<DispatchRecord> {
+    // route-governance: store-mutation-deferred — org reachable only via an FK with no Prisma @relation; tenant-scoping needs a schema migration. Tracked in #643.
     const row = await this.prisma.dispatchRecord.update({
       where: { id },
       data: {

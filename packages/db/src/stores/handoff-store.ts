@@ -63,6 +63,7 @@ export class PrismaHandoffStore implements HandoffStore {
     if (acknowledgedAt) {
       data["acknowledgedAt"] = acknowledgedAt;
     }
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.handoff.update({ where: { id }, data });
   }
 

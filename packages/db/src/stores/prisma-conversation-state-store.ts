@@ -17,6 +17,7 @@ import {
 import type { PrismaWorkTraceStore } from "./prisma-work-trace-store.js";
 
 function bodyHash(text: string): string {
+  // route-governance: store-mutation-deferred — non-Prisma crypto .update() call; flagged by AST advisory as a false positive. Tracked in #643.
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
@@ -65,6 +66,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       const nextStatus = input.override ? "human_override" : "active";
       const after = { status: nextStatus };
 
+      // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       const updated = await tx.conversationState.update({
         where: { id: existing.id },
         data: { status: nextStatus, lastActivityAt: requestedAt },
@@ -111,6 +113,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
     // "running" permanently — the conversation mutation already happened, which
     // is the audit-critical invariant. See spec §4.7.1 / §10.2.
     const completedAt = new Date();
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const finalizeResult = await this.workTraceStore.update(
       txResult.workUnitId,
       {
@@ -155,6 +158,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       };
       const nextMessages = [...safeMessages(existing.messages), ownerMessage];
 
+      // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       await tx.conversationState.update({
         where: { id: existing.id },
         data: {
@@ -231,6 +235,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       const after = { status: "active" };
       const nextMessages = [...safeMessages(existing.messages), ownerReply];
 
+      // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       await tx.conversationState.update({
         where: { id: existing.id },
         data: {

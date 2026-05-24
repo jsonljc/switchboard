@@ -69,6 +69,7 @@ export class PrismaKnowledgeEntryStore {
     }
 
     const [, newEntry] = await this.prisma.$transaction([
+      // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       this.prisma.knowledgeEntry.update({
         where: { id },
         data: { active: false },

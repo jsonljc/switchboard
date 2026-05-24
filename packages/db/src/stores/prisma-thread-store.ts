@@ -150,6 +150,7 @@ export class PrismaConversationThreadStore {
     if (updates.lastOutcomeAt !== undefined) data.lastOutcomeAt = updates.lastOutcomeAt;
     if (updates.messageCount !== undefined) data.messageCount = updates.messageCount;
 
+    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.conversationThread.update({
       where: { id: threadId },
       data,
