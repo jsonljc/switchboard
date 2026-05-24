@@ -1,3 +1,8 @@
+// Historical namespace: "marketplace" is NOT a storefront/operator-UX surface.
+// This module is live runtime infrastructure — TrustScoreAdapter feeds the
+// orchestrator trust path (propose-helpers / lifecycle / shared-context).
+// Do not delete or rename opportunistically. See docs/DOCTRINE.md → "Marketplace
+// namespace (historical, but live)".
 export {
   TrustScoreEngine,
   scoreToAutonomyLevel,
