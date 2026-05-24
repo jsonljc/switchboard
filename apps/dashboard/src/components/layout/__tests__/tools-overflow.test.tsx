@@ -91,7 +91,7 @@ describe("ToolsOverflow", () => {
   });
 
   // Case 5
-  it.each([["/contacts"], ["/contacts/abc"], ["/automations"], ["/automations/xyz"], ["/reports"]])(
+  it.each([["/contacts"], ["/contacts/abc"], ["/automations"], ["/automations/xyz"], ["/results"]])(
     "trigger has data-on-tools when pathname is %s",
     (pathname) => {
       setAllToolsLive(true);
@@ -128,7 +128,7 @@ describe("ToolsOverflow", () => {
   // Case 8
   it.each([
     ["/contacts-old", "Pipeline"],
-    ["/reports-archive", "Reports"],
+    ["/results-archive", "Reports"],
     ["/settingsness", "Settings"],
   ])("boundary matching: pathname %s does not activate %s", async (pathname, label) => {
     setAllToolsLive(true);
@@ -167,7 +167,7 @@ describe("ToolsOverflow", () => {
   it.each([
     ["/contacts", "Pipeline"],
     ["/automations", "Automations"],
-    ["/reports", "Reports"],
+    ["/results", "Reports"],
   ])("%s item is active+aria-current when pathname matches", async (pathname, label) => {
     setAllToolsLive(true);
     mockUsePathname.mockReturnValue(pathname);

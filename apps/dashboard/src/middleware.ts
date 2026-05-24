@@ -121,13 +121,9 @@ export const config = {
     "/reports/:path*",
     "/contacts/:path*",
     "/automations/:path*",
-    "/alex",
     "/alex/:path*",
-    "/riley",
     "/riley/:path*",
-    "/inbox",
     "/inbox/:path*",
-    "/results",
     "/results/:path*",
   ],
 };

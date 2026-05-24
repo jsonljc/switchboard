@@ -11,7 +11,7 @@ const NAV_LINKS = [
   { href: "/contacts", label: "Contacts" },
   { href: "/automations", label: "Automations" },
   { href: "/activity", label: "Activity" },
-  { href: "/reports", label: "Reports" },
+  { href: "/results", label: "Reports" },
   { href: "/settings", label: "Settings" },
   { href: "/onboarding", label: "Onboarding" },
   { href: "/login", label: "Login" },
