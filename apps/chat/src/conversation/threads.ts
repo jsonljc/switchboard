@@ -1,4 +1,4 @@
-import type { ConversationStateData } from "./state.js";
+import type { ConversationState } from "./state.js";
 import type { ConversationStore } from "./store.js";
 import { InMemoryConversationStore } from "./store.js";
 
@@ -15,11 +15,11 @@ export function getConversationStore(): ConversationStore {
 export async function getThread(
   threadId: string,
   organizationId: string,
-): Promise<ConversationStateData | undefined> {
+): Promise<ConversationState | undefined> {
   return store.get(threadId, organizationId);
 }
 
-export async function setThread(state: ConversationStateData): Promise<void> {
+export async function setThread(state: ConversationState): Promise<void> {
   await store.save(state);
 }
 
@@ -27,6 +27,6 @@ export async function deleteThread(threadId: string, organizationId: string): Pr
   await store.delete(threadId, organizationId);
 }
 
-export async function getActiveThreads(organizationId: string): Promise<ConversationStateData[]> {
+export async function getActiveThreads(organizationId: string): Promise<ConversationState[]> {
   return store.listActive(organizationId);
 }

@@ -365,7 +365,7 @@ describe("PrismaConversationStore cross-tenant scoping (TI-5/TI-6)", () => {
 // ---------------------------------------------------------------------------
 
 describe("PrismaConversationStore — sticky human_override guard", () => {
-  /** Minimal ConversationStateData for testing save() status logic. */
+  /** Minimal ConversationState for testing save() status logic. */
   function makeState(
     status: string,
     threadId = "thread-override",
