@@ -194,6 +194,11 @@ export async function registerRoutes(
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
   await app.register(sessionRoutes, { prefix: "/api/sessions" });
   await app.register(workflowRoutes, { prefix: "/api/workflows" });
+  // "/api/marketplace" is the historical prefix for the live provisioning backbone
+  // (listings, deployments, tasks, trust progression) — NOT a storefront. The
+  // customer-facing storefront is the distinct "/api/storefront" prefix below. Do
+  // not rename this prefix opportunistically; it is a wire contract consumed by the
+  // dashboard. See docs/DOCTRINE.md → "Marketplace namespace (historical, but live)".
   await app.register(marketplaceRoutes, { prefix: "/api/marketplace" });
   await app.register(marketplacePersonaRoutes, { prefix: "/api/marketplace" });
   await app.register(creativePipelineRoutes, { prefix: "/api/marketplace" });
