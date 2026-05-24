@@ -109,6 +109,45 @@ describe("PrismaDeploymentResolver", () => {
       expect(r2.trustLevel).toBe("supervised");
     });
 
+    it("reads trustLevelOverride from governanceSettings when present", async () => {
+      const row = makeDeploymentRow({
+        // score-derived trustLevel would be "supervised" (trustScore 10), but the
+        // explicit launch posture override pins "autonomous" independently.
+        listing: { id: "l", trustScore: 10, status: "active" },
+        governanceSettings: { trustLevelOverride: "autonomous" },
+      });
+      const prisma = makeMockPrisma(row);
+      const resolver = new PrismaDeploymentResolver(prisma);
+
+      const result = await resolver.resolveByDeploymentId("dep-1");
+
+      expect(result.trustLevelOverride).toBe("autonomous");
+      // The score-derived trustLevel field is untouched (ramp stays earned confidence).
+      expect(result.trustLevel).toBe("supervised");
+    });
+
+    it("leaves trustLevelOverride undefined when governanceSettings has no override", async () => {
+      const row = makeDeploymentRow({ governanceSettings: {} });
+      const prisma = makeMockPrisma(row);
+      const resolver = new PrismaDeploymentResolver(prisma);
+
+      const result = await resolver.resolveByDeploymentId("dep-1");
+
+      expect(result.trustLevelOverride).toBeUndefined();
+    });
+
+    it("ignores an invalid trustLevelOverride value", async () => {
+      const row = makeDeploymentRow({
+        governanceSettings: { trustLevelOverride: "yolo" },
+      });
+      const prisma = makeMockPrisma(row);
+      const resolver = new PrismaDeploymentResolver(prisma);
+
+      const result = await resolver.resolveByDeploymentId("dep-1");
+
+      expect(result.trustLevelOverride).toBeUndefined();
+    });
+
     it("extracts persona from inputConfig", async () => {
       const row = makeDeploymentRow({
         inputConfig: {

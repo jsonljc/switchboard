@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { resolvePersona, resolvePolicyOverrides } from "@switchboard/schemas";
+import {
+  resolvePersona,
+  resolvePolicyOverrides,
+  resolveTrustLevelOverride,
+} from "@switchboard/schemas";
 import type { DeploymentResolver, DeploymentResolverResult } from "./deployment-resolver.js";
 import { DeploymentInactiveError } from "./deployment-resolver.js";
 import type { TrustLevel } from "../skill-runtime/governance.js";
@@ -121,6 +125,7 @@ export class PrismaDeploymentResolver implements DeploymentResolver {
       skillSlug: row.skillSlug,
       trustScore: row.listing.trustScore,
       trustLevel: trustLevelFromScore(row.listing.trustScore),
+      trustLevelOverride: resolveTrustLevelOverride(row.governanceSettings),
       persona: resolvePersona(inputConfig),
       inputConfig,
       policyOverrides: resolvePolicyOverrides(row as unknown as Record<string, unknown>),

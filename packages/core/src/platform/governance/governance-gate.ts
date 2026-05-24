@@ -13,7 +13,7 @@ import type { PolicyEngineContext, PolicyEngineConfig } from "../../engine/polic
 import type { ResolvedIdentity } from "../../identity/spec.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { IntentRegistration } from "../intent-registration.js";
-import type { GovernanceDecision } from "../governance-types.js";
+import type { GovernanceDecision, ExecutionConstraints } from "../governance-types.js";
 import { toActionProposal, toEvaluationContext } from "./work-unit-adapter.js";
 import { toGovernanceDecision } from "./decision-adapter.js";
 import { DEFAULT_CARTRIDGE_CONSTRAINTS } from "./default-constraints.js";
@@ -82,6 +82,16 @@ export class GovernanceGate {
     workUnit: WorkUnit,
     registration: IntentRegistration,
   ): Promise<GovernanceDecision> {
+    // Launch-posture trust override: when a deployment pins an explicit
+    // trustLevelOverride (governanceSettings.trustLevelOverride), use it for
+    // tool-call admission instead of the default trust level — without consulting
+    // the score-based ramp. Absent ⇒ unchanged DEFAULT_CARTRIDGE_CONSTRAINTS.
+    // This only affects approve-vs-park; the deny-based compliance floor (banned
+    // phrase / claim classifier / consent) runs independently of trust level.
+    const constraints: ExecutionConstraints = workUnit.deployment?.trustLevelOverride
+      ? { ...DEFAULT_CARTRIDGE_CONSTRAINTS, trustLevel: workUnit.deployment.trustLevelOverride }
+      : DEFAULT_CARTRIDGE_CONSTRAINTS;
+
     // Amendment 1 — system_auto_approved short-circuit.
     // Skips the human approval-policy lookup only. Auth, idempotency,
     // WorkTrace, audit, and execution dispatch all run unchanged downstream.
@@ -90,7 +100,7 @@ export class GovernanceGate {
         outcome: "execute",
         riskScore: 0,
         budgetProfile: "cheap",
-        constraints: DEFAULT_CARTRIDGE_CONSTRAINTS,
+        constraints,
         matchedPolicies: [],
       };
     }
@@ -156,6 +166,6 @@ export class GovernanceGate {
 
     const trace = this.deps.evaluate(proposal, evalContext, engineContext, config);
 
-    return toGovernanceDecision(trace, DEFAULT_CARTRIDGE_CONSTRAINTS);
+    return toGovernanceDecision(trace, constraints);
   }
 }
