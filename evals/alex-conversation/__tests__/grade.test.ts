@@ -45,9 +45,9 @@ function makeToolCall(
     toolId,
     operation,
     params: {},
-    result: { ok: true, data: undefined },
+    result: { status: "success", data: undefined },
     durationMs: 1,
-    governanceDecision: "allowed",
+    governanceDecision: "auto-approved",
   };
 }
 
@@ -270,6 +270,78 @@ describe("gradeDeterministic — tool constraint check", () => {
     });
     const toolViolations = result.violations.filter((v) => v.code.startsWith("unexpected-tool:"));
     expect(toolViolations).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 1: per-violation investigation detail (sentence + confidence)
+// ---------------------------------------------------------------------------
+
+describe("gradeDeterministic — per-violation detail (sentence + confidence)", () => {
+  it("attaches sentence and confidence to claim violations", async () => {
+    const turn = makeTurn("I guarantee you will love the results. Book today.");
+    const result = await gradeDeterministic(turn, {
+      classifier: makeFakeClassifier(),
+      classifierModel: CLASSIFIER_MODEL,
+    });
+
+    const claimViolations = result.violations.filter((v) => v.code.startsWith("claim:"));
+    expect(claimViolations.length).toBeGreaterThan(0);
+
+    const firstViolation = claimViolations[0]!;
+    // sentence must be the exact flagged sentence text
+    expect(typeof firstViolation.sentence).toBe("string");
+    expect(firstViolation.sentence).toContain("guarantee");
+    // confidence must be the classifier's numeric confidence (fake returns 0.95)
+    expect(typeof firstViolation.confidence).toBe("number");
+    expect(firstViolation.confidence).toBe(0.95);
+  });
+
+  it("does NOT attach sentence/confidence to unexpected-tool violations", async () => {
+    const turn = makeTurn("Done.", [makeToolCall("payment-gateway", "charge.create")]);
+    const result = await gradeDeterministic(turn, {
+      classifier: makeFakeClassifier(),
+      classifierModel: CLASSIFIER_MODEL,
+    });
+
+    const toolViolations = result.violations.filter((v) => v.code.startsWith("unexpected-tool:"));
+    expect(toolViolations.length).toBe(1);
+    expect(toolViolations[0]!.sentence).toBeUndefined();
+    expect(toolViolations[0]!.confidence).toBeUndefined();
+  });
+
+  it("each flagged sentence gets its own sentence field (multiple flags)", async () => {
+    const turn = makeTurn("We guarantee the treatment works. We also guarantee no side effects.");
+    const result = await gradeDeterministic(turn, {
+      classifier: makeFakeClassifier(),
+      classifierModel: CLASSIFIER_MODEL,
+    });
+
+    const claimViolations = result.violations.filter((v) => v.code === "claim:efficacy");
+    expect(claimViolations.length).toBeGreaterThanOrEqual(2);
+
+    // Each violation has a distinct sentence containing "guarantee"
+    for (const v of claimViolations) {
+      expect(typeof v.sentence).toBe("string");
+      expect(v.sentence).toContain("guarantee");
+      expect(v.confidence).toBe(0.95);
+    }
+    // Sentences are different (not the same sentence duplicated)
+    const sentences = claimViolations.map((v) => v.sentence);
+    const unique = new Set(sentences);
+    expect(unique.size).toBe(claimViolations.length);
+  });
+
+  it("clean responses produce violations with no sentence/confidence fields", async () => {
+    const turn = makeTurn(
+      "Hi! I'd love to help you explore our laser treatments. What is your main skin concern?",
+    );
+    const result = await gradeDeterministic(turn, {
+      classifier: makeFakeClassifier(),
+      classifierModel: CLASSIFIER_MODEL,
+    });
+
+    expect(result.violations).toHaveLength(0);
   });
 });
 

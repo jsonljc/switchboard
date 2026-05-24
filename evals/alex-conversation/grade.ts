@@ -42,6 +42,18 @@ export interface DeterministicViolation {
   code: string;
   /** Human-readable detail. */
   detail: string;
+  /**
+   * Present for `claim:*` violations. The exact flagged sentence from the
+   * Alex response. Used by run-eval.ts to print investigation evidence for
+   * deciding whether a flag is genuine drift or over-flagging.
+   */
+  sentence?: string;
+  /**
+   * Present for `claim:*` violations. The classifier's confidence for this
+   * sentence (0–1). Provides signal for triage: high confidence (>0.8)
+   * likely genuine; low confidence (<0.5) likely over-flagging.
+   */
+  confidence?: number;
 }
 
 export interface DeterministicGradeResult {
@@ -111,6 +123,8 @@ export async function gradeDeterministic(
         violations.push({
           code: `claim:${callResult.result.claimType}`,
           detail: `Sentence classified as "${callResult.result.claimType}" (confidence ${callResult.result.confidence.toFixed(2)}): "${sentence}"`,
+          sentence,
+          confidence: callResult.result.confidence,
         });
       }
     } catch (err) {

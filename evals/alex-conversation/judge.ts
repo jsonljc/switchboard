@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
+import type { Tool, ToolChoiceTool } from "@anthropic-ai/sdk/resources/messages/messages.js";
 import type { GradeSpecSchema } from "./schema.js";
-import type { z } from "zod";
+import type { z as zType } from "zod";
 
 // ---------------------------------------------------------------------------
 // Rubric versioning (mirrors classifier pattern from prompt.ts)
@@ -40,13 +42,7 @@ Score criteria (each contributes roughly 1 point):
 5. Respects any mustAsk / mustDo / shouldDo hints from the fixture's grade spec
 
 ## Output Format
-Respond with a JSON object matching this exact schema (no markdown wrapper):
-{
-  "semanticHardRulePass": boolean,
-  "semanticViolations": string[],
-  "softScore": number (integer 0–5),
-  "notes": string
-}`;
+Use the judge_turn tool to return your verdict.`;
 
 /**
  * SHA-256 content hash of the rubric string. Stamped alongside
@@ -59,10 +55,64 @@ export const JUDGE_RUBRIC_HASH = createHash("sha256")
   .slice(0, 16);
 
 // ---------------------------------------------------------------------------
+// Tool definition for structured output
+// ---------------------------------------------------------------------------
+
+/**
+ * The judge_turn tool schema. Critically: NO minimum/maximum on the softScore
+ * number field — Anthropic's strict-mode API returns 400 if those are present
+ * (see project memory: feedback_anthropic_strict_tool_schema_no_minmax.md).
+ * Clamping to [0,5] is done in code after parsing.
+ *
+ * Typed as `Tool` (from the Anthropic SDK) so it is directly passable to
+ * client.messages.create without casting.
+ */
+export const JUDGE_TOOL: Tool = {
+  name: "judge_turn",
+  description: "Return a structured verdict for the Alex turn under evaluation.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      semanticHardRulePass: {
+        type: "boolean",
+        description: "True iff ALL tier-2 hard rules passed.",
+      },
+      semanticViolations: {
+        type: "array",
+        items: { type: "string" },
+        description: "List of tier-2 rule violations. Empty when semanticHardRulePass is true.",
+      },
+      softScore: {
+        type: "number",
+        description: "Tier-3 soft quality score. Integer in range 0–5.",
+      },
+      notes: {
+        type: "string",
+        description: "Judge's reasoning and noteworthy observations.",
+      },
+    },
+    required: ["semanticHardRulePass", "semanticViolations", "softScore", "notes"],
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Zod schema for parsing the tool input block
+// ---------------------------------------------------------------------------
+
+const JudgeToolInputSchema = z.object({
+  semanticHardRulePass: z.boolean(),
+  semanticViolations: z.array(z.string()),
+  softScore: z.number(),
+  notes: z.string(),
+});
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type GradeSpec = z.infer<typeof GradeSpecSchema>;
+type GradeSpec = zType.infer<typeof GradeSpecSchema>;
 
 export interface JudgeTurnInput {
   /** Brief summary of the lead context (e.g. scenario name + prior exchange). */
@@ -83,6 +133,9 @@ export interface JudgeTurnDeps {
 /**
  * Minimal Anthropic client interface that the judge uses. Keeping this narrow
  * makes it easy to stub in tests.
+ *
+ * Uses SDK-typed Tool[] and ToolChoiceTool so the real Anthropic client satisfies
+ * this interface without casting.
  */
 export interface AnthropicClientLike {
   messages: {
@@ -90,6 +143,8 @@ export interface AnthropicClientLike {
       model: string;
       max_tokens: number;
       system: string;
+      tools: Tool[];
+      tool_choice: ToolChoiceTool;
       messages: Array<{ role: "user" | "assistant"; content: string }>;
     }): Promise<{ content: ReadonlyArray<unknown> }>;
   };
@@ -111,13 +166,15 @@ export interface JudgeVerdict {
 }
 
 // ---------------------------------------------------------------------------
-// Safe-default verdict (fail-closed: hard rules fail, score 0)
+// Safe-default verdict (fail-closed)
 // ---------------------------------------------------------------------------
 
-function failClosedVerdict(notes: string): JudgeVerdict {
+function failClosedVerdict(notes: string, violationCode?: string): JudgeVerdict {
   return {
     semanticHardRulePass: false,
-    semanticViolations: ["[parse-error] Judge response could not be parsed"],
+    semanticViolations: [
+      violationCode ?? "[no-judge-tooluse] Judge tool_use block was not returned",
+    ],
     softScore: 0,
     notes,
     rubricVersion: JUDGE_RUBRIC_VERSION,
@@ -126,100 +183,83 @@ function failClosedVerdict(notes: string): JudgeVerdict {
 }
 
 // ---------------------------------------------------------------------------
-// JSON parsing: find the first {...} block in the model's response text.
-// ---------------------------------------------------------------------------
-
-function extractJsonBlock(text: string): unknown {
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("No JSON object found in response");
-  return JSON.parse(match[0]);
-}
-
-function isRawVerdict(v: unknown): v is {
-  semanticHardRulePass: boolean;
-  semanticViolations: string[];
-  softScore: number;
-  notes: string;
-} {
-  if (typeof v !== "object" || v === null) return false;
-  const obj = v as Record<string, unknown>;
-  return (
-    typeof obj["semanticHardRulePass"] === "boolean" &&
-    Array.isArray(obj["semanticViolations"]) &&
-    typeof obj["softScore"] === "number" &&
-    typeof obj["notes"] === "string"
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Tier 2 + 3: judge grading
 // ---------------------------------------------------------------------------
 
 /**
- * Run a single Alex turn through the LLM judge.
+ * Run a single Alex turn through the LLM judge using structured tool-use output.
  *
  * A single Anthropic call (injected via `deps.client`) receives:
  *   - The judge rubric as system prompt.
+ *   - The `judge_turn` tool with `tool_choice: { type: "tool", name: "judge_turn" }`
+ *     so the model is forced to return a structured verdict (no free-form JSON).
  *   - A user message containing `leadContext`, `alexResponse`, and the
  *     fixture's `grade` spec (mustAsk / mustDo / mustNot / shouldDo hints).
  *
  * Returns a structured `JudgeVerdict`. On any parse failure the verdict is
  * fail-closed (semanticHardRulePass: false, softScore: 0) with an error note,
  * so a broken judge never silently passes a turn.
+ *
+ * Note: softScore is NOT constrained by min/max in the tool schema (Anthropic
+ * strict mode rejects those; see feedback_anthropic_strict_tool_schema_no_minmax).
+ * It is clamped to [0,5] in code here instead.
  */
 export async function judgeTurn(input: JudgeTurnInput, deps: JudgeTurnDeps): Promise<JudgeVerdict> {
   const userMessage = buildUserMessage(input);
 
-  let rawText: string;
+  let content: ReadonlyArray<unknown>;
   try {
     const response = await deps.client.messages.create({
       model: deps.model,
       max_tokens: 512,
       system: JUDGE_RUBRIC,
+      tools: [JUDGE_TOOL],
+      tool_choice: { type: "tool", name: "judge_turn" },
       messages: [{ role: "user", content: userMessage }],
     });
-
-    // Extract text from response content blocks.
-    rawText = response.content
-      .map((block) => {
-        if (
-          typeof block === "object" &&
-          block !== null &&
-          (block as { type?: string }).type === "text" &&
-          typeof (block as { text?: string }).text === "string"
-        ) {
-          return (block as { text: string }).text;
-        }
-        return "";
-      })
-      .join("\n");
+    content = response.content;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return failClosedVerdict(`[client-error] Judge client call failed: ${msg}`);
   }
 
-  // Parse response defensively.
-  let parsed: unknown;
-  try {
-    parsed = extractJsonBlock(rawText);
-  } catch {
+  // Extract the judge_turn tool_use block from the response.
+  interface ToolUseBlock {
+    type: "tool_use";
+    name: string;
+    input: unknown;
+  }
+
+  const toolUse = content.find(
+    (b): b is ToolUseBlock =>
+      typeof b === "object" &&
+      b !== null &&
+      (b as { type?: string }).type === "tool_use" &&
+      (b as { name?: string }).name === "judge_turn",
+  );
+
+  if (!toolUse) {
+    return failClosedVerdict(`[no-judge-tooluse] Response contained no judge_turn tool_use block`);
+  }
+
+  // Parse and validate the tool input with Zod.
+  const parseResult = JudgeToolInputSchema.safeParse(toolUse.input);
+  if (!parseResult.success) {
     return failClosedVerdict(
-      `[parse-error] Could not extract JSON from judge response: ${rawText.slice(0, 200)}`,
+      `[parse-error] judge_turn tool input did not match schema: ${parseResult.error.message}`,
+      `[parse-error] judge_turn tool input did not match schema`,
     );
   }
 
-  if (!isRawVerdict(parsed)) {
-    return failClosedVerdict(
-      `[shape-error] Judge response did not match expected shape: ${JSON.stringify(parsed).slice(0, 200)}`,
-    );
-  }
+  const parsed = parseResult.data;
 
-  // Clamp softScore to 0–5 range.
+  // Clamp softScore to [0,5] — not enforced in schema due to Anthropic strict-mode
+  // restriction on min/max for number types.
   const softScore = Math.max(0, Math.min(5, Math.round(parsed.softScore)));
 
   return {
     semanticHardRulePass: parsed.semanticHardRulePass,
-    semanticViolations: parsed.semanticViolations.filter((v): v is string => typeof v === "string"),
+    semanticViolations: parsed.semanticViolations,
     softScore,
     notes: parsed.notes,
     rubricVersion: JUDGE_RUBRIC_VERSION,
@@ -260,6 +300,6 @@ function buildUserMessage(input: JudgeTurnInput): string {
     "",
     gradeSection,
     "",
-    "Evaluate and return the JSON verdict.",
+    "Evaluate and return the verdict via the judge_turn tool.",
   ].join("\n");
 }

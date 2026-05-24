@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { judgeTurn, JUDGE_RUBRIC_VERSION, JUDGE_RUBRIC_HASH } from "../judge.js";
+import { judgeTurn, JUDGE_RUBRIC_VERSION, JUDGE_RUBRIC_HASH, JUDGE_TOOL } from "../judge.js";
 import type { JudgeTurnDeps, JudgeTurnInput, AnthropicClientLike } from "../judge.js";
 
 // ---------------------------------------------------------------------------
@@ -18,24 +18,47 @@ const CLEAN_TURN_INPUT: JudgeTurnInput = {
   },
 };
 
-const GOOD_VERDICT_JSON = JSON.stringify({
+const GOOD_TOOL_INPUT = {
   semanticHardRulePass: true,
   semanticViolations: [],
   softScore: 4,
   notes: "Alex asked both qualifying questions and positioned consultation well.",
-});
+};
 
-const FAILING_VERDICT_JSON = JSON.stringify({
+const FAILING_TOOL_INPUT = {
   semanticHardRulePass: false,
   semanticViolations: ["Guaranteed results without qualification", "Applied booking pressure"],
   softScore: 1,
   notes: "Response made strong outcome guarantees and pressured lead to book.",
-});
+};
 
 /**
- * Build a fake Anthropic client that returns a canned text response.
+ * Build a fake Anthropic client that returns a canned tool_use block.
+ * This mirrors how the real Anthropic API responds when tool_choice forces a
+ * specific tool call.
  */
-function makeFakeClient(responseText: string): AnthropicClientLike {
+function makeToolUseClient(toolInput: Record<string, unknown>): AnthropicClientLike {
+  return {
+    messages: {
+      create: vi.fn().mockResolvedValue({
+        content: [
+          {
+            type: "tool_use",
+            name: "judge_turn",
+            input: toolInput,
+          },
+        ],
+      }),
+    },
+  };
+}
+
+/**
+ * Build a fake client that returns no tool_use block (only text).
+ */
+function makeNoToolUseClient(
+  responseText = "I cannot evaluate this right now.",
+): AnthropicClientLike {
   return {
     messages: {
       create: vi.fn().mockResolvedValue({
@@ -50,12 +73,12 @@ function makeDeps(client: AnthropicClientLike): JudgeTurnDeps {
 }
 
 // ---------------------------------------------------------------------------
-// Happy path
+// Happy path — tool_use block parsing
 // ---------------------------------------------------------------------------
 
-describe("judgeTurn — happy path", () => {
-  it("parses a passing verdict correctly", async () => {
-    const deps = makeDeps(makeFakeClient(GOOD_VERDICT_JSON));
+describe("judgeTurn — happy path (tool_use structured output)", () => {
+  it("parses a passing verdict from tool_use block correctly", async () => {
+    const deps = makeDeps(makeToolUseClient(GOOD_TOOL_INPUT));
     const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
 
     expect(verdict.semanticHardRulePass).toBe(true);
@@ -64,8 +87,8 @@ describe("judgeTurn — happy path", () => {
     expect(verdict.notes).toContain("Alex asked both qualifying questions");
   });
 
-  it("parses a failing verdict with violations", async () => {
-    const deps = makeDeps(makeFakeClient(FAILING_VERDICT_JSON));
+  it("parses a failing verdict with violations from tool_use block", async () => {
+    const deps = makeDeps(makeToolUseClient(FAILING_TOOL_INPUT));
     const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
 
     expect(verdict.semanticHardRulePass).toBe(false);
@@ -75,78 +98,99 @@ describe("judgeTurn — happy path", () => {
   });
 
   it("stamps rubricVersion and rubricHash onto every verdict", async () => {
-    const deps = makeDeps(makeFakeClient(GOOD_VERDICT_JSON));
+    const deps = makeDeps(makeToolUseClient(GOOD_TOOL_INPUT));
     const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
 
     expect(verdict.rubricVersion).toBe(JUDGE_RUBRIC_VERSION);
     expect(verdict.rubricHash).toBe(JUDGE_RUBRIC_HASH);
   });
 
-  it("passes the model to the client call", async () => {
-    const fakeClient = makeFakeClient(GOOD_VERDICT_JSON);
+  it("passes model, tools, and tool_choice to the client call", async () => {
+    const fakeClient = makeToolUseClient(GOOD_TOOL_INPUT);
     const deps: JudgeTurnDeps = { client: fakeClient, model: "claude-opus-test" };
     await judgeTurn(CLEAN_TURN_INPUT, deps);
 
-    expect(vi.mocked(fakeClient.messages.create)).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "claude-opus-test" }),
-    );
+    const call = vi.mocked(fakeClient.messages.create).mock.calls[0]![0];
+    expect(call.model).toBe("claude-opus-test");
+    expect(call.tool_choice).toEqual({ type: "tool", name: "judge_turn" });
+    expect(call.tools).toHaveLength(1);
+    expect((call.tools[0] as { name: string }).name).toBe("judge_turn");
   });
 
   it("clamps softScore to 0–5 range (e.g. 7 → 5)", async () => {
-    const json = JSON.stringify({
-      semanticHardRulePass: true,
-      semanticViolations: [],
-      softScore: 7,
-      notes: "Inflated score from model.",
-    });
-    const deps = makeDeps(makeFakeClient(json));
+    const deps = makeDeps(
+      makeToolUseClient({
+        semanticHardRulePass: true,
+        semanticViolations: [],
+        softScore: 7,
+        notes: "Inflated score from model.",
+      }),
+    );
     const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
     expect(verdict.softScore).toBe(5);
   });
 
   it("clamps softScore below 0 to 0", async () => {
-    const json = JSON.stringify({
-      semanticHardRulePass: false,
-      semanticViolations: ["something"],
-      softScore: -2,
-      notes: "Negative score from model.",
-    });
-    const deps = makeDeps(makeFakeClient(json));
+    const deps = makeDeps(
+      makeToolUseClient({
+        semanticHardRulePass: false,
+        semanticViolations: ["something"],
+        softScore: -2,
+        notes: "Negative score from model.",
+      }),
+    );
     const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
     expect(verdict.softScore).toBe(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Defensive parsing
+// Fail-closed: no tool_use block returned
 // ---------------------------------------------------------------------------
 
-describe("judgeTurn — defensive parsing", () => {
-  it("returns fail-closed verdict when response contains no JSON", async () => {
-    const deps = makeDeps(makeFakeClient("I cannot evaluate this right now."));
+describe("judgeTurn — fail-closed when no tool_use block", () => {
+  it("returns fail-closed verdict when response contains no tool_use block", async () => {
+    const deps = makeDeps(makeNoToolUseClient("I cannot evaluate this right now."));
     const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
 
-    // Fail-closed: hard rules fail.
+    expect(verdict.semanticHardRulePass).toBe(false);
+    expect(verdict.semanticViolations[0]).toMatch(/no-judge-tooluse/i);
+    expect(verdict.softScore).toBe(0);
+  });
+
+  it("returns fail-closed verdict when response is empty content array", async () => {
+    const emptyClient: AnthropicClientLike = {
+      messages: {
+        create: vi.fn().mockResolvedValue({ content: [] }),
+      },
+    };
+    const verdict = await judgeTurn(CLEAN_TURN_INPUT, makeDeps(emptyClient));
+
+    expect(verdict.semanticHardRulePass).toBe(false);
+    expect(verdict.semanticViolations[0]).toMatch(/no-judge-tooluse/i);
+    expect(verdict.softScore).toBe(0);
+  });
+
+  it("returns fail-closed verdict when tool_use has wrong name", async () => {
+    const wrongToolClient: AnthropicClientLike = {
+      messages: {
+        create: vi.fn().mockResolvedValue({
+          content: [{ type: "tool_use", name: "some_other_tool", input: GOOD_TOOL_INPUT }],
+        }),
+      },
+    };
+    const verdict = await judgeTurn(CLEAN_TURN_INPUT, makeDeps(wrongToolClient));
+
+    expect(verdict.semanticHardRulePass).toBe(false);
+    expect(verdict.semanticViolations[0]).toMatch(/no-judge-tooluse/i);
+  });
+
+  it("returns fail-closed verdict when tool input doesn't match schema", async () => {
+    const deps = makeDeps(makeToolUseClient({ someOtherField: "oops" }));
+    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
+
     expect(verdict.semanticHardRulePass).toBe(false);
     expect(verdict.semanticViolations[0]).toMatch(/parse-error/i);
-    expect(verdict.softScore).toBe(0);
-  });
-
-  it("returns fail-closed verdict when JSON is missing required fields", async () => {
-    const malformed = JSON.stringify({ someOtherField: "oops" });
-    const deps = makeDeps(makeFakeClient(malformed));
-    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
-
-    expect(verdict.semanticHardRulePass).toBe(false);
-    expect(verdict.semanticViolations[0]).toMatch(/shape-error|parse-error/i);
-    expect(verdict.softScore).toBe(0);
-  });
-
-  it("returns fail-closed verdict when JSON is syntactically invalid", async () => {
-    const deps = makeDeps(makeFakeClient("{broken json{{"));
-    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
-
-    expect(verdict.semanticHardRulePass).toBe(false);
     expect(verdict.softScore).toBe(0);
   });
 
@@ -163,35 +207,38 @@ describe("judgeTurn — defensive parsing", () => {
     expect(verdict.softScore).toBe(0);
   });
 
-  it("handles JSON embedded in surrounding text (extracts the block)", async () => {
-    const response = `Here is my evaluation:\n${GOOD_VERDICT_JSON}\nEnd of evaluation.`;
-    const deps = makeDeps(makeFakeClient(response));
-    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
-
-    expect(verdict.semanticHardRulePass).toBe(true);
-    expect(verdict.softScore).toBe(4);
-  });
-
   it("still stamps rubricVersion/hash on a fail-closed verdict", async () => {
-    const deps = makeDeps(makeFakeClient("garbage response no json"));
+    const deps = makeDeps(makeNoToolUseClient("garbage response"));
     const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
 
     expect(verdict.rubricVersion).toBe(JUDGE_RUBRIC_VERSION);
     expect(verdict.rubricHash).toBe(JUDGE_RUBRIC_HASH);
   });
+});
 
-  it("filters non-string entries from semanticViolations gracefully", async () => {
-    const json = JSON.stringify({
-      semanticHardRulePass: false,
-      semanticViolations: ["real violation", 42, null, "another violation"],
-      softScore: 2,
-      notes: "Mixed array.",
-    });
-    const deps = makeDeps(makeFakeClient(json));
-    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
+// ---------------------------------------------------------------------------
+// Tool schema: assert no min/max on number fields (Anthropic strict-mode safety)
+// ---------------------------------------------------------------------------
 
-    // Only actual strings survive.
-    expect(verdict.semanticViolations).toEqual(["real violation", "another violation"]);
+describe("JUDGE_TOOL schema — no min/max on number types", () => {
+  it("JUDGE_TOOL has no minimum or maximum keys anywhere in input_schema", () => {
+    const schemaStr = JSON.stringify(JUDGE_TOOL.input_schema);
+    expect(schemaStr).not.toContain('"minimum"');
+    expect(schemaStr).not.toContain('"maximum"');
+  });
+
+  it("softScore property has type number with no min/max constraints", () => {
+    // input_schema.properties is typed as `unknown` in the SDK Tool type; cast to inspect it.
+    const props = JUDGE_TOOL.input_schema.properties as Record<string, Record<string, unknown>>;
+    const softScoreProp = props["softScore"]!;
+    expect(softScoreProp["type"]).toBe("number");
+    expect(softScoreProp).not.toHaveProperty("minimum");
+    expect(softScoreProp).not.toHaveProperty("maximum");
+  });
+
+  it("JUDGE_TOOL is strict with additionalProperties: false", () => {
+    expect(JUDGE_TOOL.strict).toBe(true);
+    expect(JUDGE_TOOL.input_schema.additionalProperties).toBe(false);
   });
 });
 
@@ -211,18 +258,13 @@ describe("JUDGE_RUBRIC_VERSION and JUDGE_RUBRIC_HASH exports", () => {
   });
 
   it("JUDGE_RUBRIC_VERSION and JUDGE_RUBRIC_HASH are stable (deterministic)", () => {
-    // Re-import is not needed — just assert stable values can be compared.
     const v1 = JUDGE_RUBRIC_VERSION;
     const h1 = JUDGE_RUBRIC_HASH;
     expect(v1).toBe(JUDGE_RUBRIC_VERSION);
     expect(h1).toBe(JUDGE_RUBRIC_HASH);
   });
 
-  it("JUDGE_RUBRIC_HASH changes when rubric content changes (simulated)", () => {
-    // We can't easily test the hash of a *different* rubric without importing
-    // the internal JUDGE_RUBRIC string. Instead, verify the hash is not trivially
-    // empty or "0000000000000000" (zero hash), which would indicate no content
-    // was actually hashed.
+  it("JUDGE_RUBRIC_HASH is not trivially empty or zero-hash", () => {
     expect(JUDGE_RUBRIC_HASH).not.toBe("0000000000000000");
     expect(JUDGE_RUBRIC_HASH).not.toBe("");
   });
@@ -234,7 +276,7 @@ describe("JUDGE_RUBRIC_VERSION and JUDGE_RUBRIC_HASH exports", () => {
 
 describe("judgeTurn — grade spec forwarding", () => {
   it("sends a request containing the alexResponse text", async () => {
-    const fakeClient = makeFakeClient(GOOD_VERDICT_JSON);
+    const fakeClient = makeToolUseClient(GOOD_TOOL_INPUT);
     const deps = makeDeps(fakeClient);
     const input: JudgeTurnInput = {
       ...CLEAN_TURN_INPUT,
@@ -248,7 +290,7 @@ describe("judgeTurn — grade spec forwarding", () => {
   });
 
   it("includes grade mustNot hints in the user message when present", async () => {
-    const fakeClient = makeFakeClient(GOOD_VERDICT_JSON);
+    const fakeClient = makeToolUseClient(GOOD_TOOL_INPUT);
     const input: JudgeTurnInput = {
       ...CLEAN_TURN_INPUT,
       grade: {

@@ -204,6 +204,14 @@ async function main(): Promise<void> {
       requiredBehaviorsMet: string[];
     }> = [];
 
+    // Investigation evidence: per-turn flag details for post-run triage.
+    const investigationTurns: Array<{
+      turnIndex: number;
+      claimFlags: Array<{ claimType: string; confidence: number; sentence: string }>;
+      semanticHardRulePass: boolean;
+      softScore: number;
+    }> = [];
+
     const alexTurnSpecs = fixture.turns.filter((t) => t.role === "alex");
 
     for (let i = 0; i < outcome.alexTurns.length; i++) {
@@ -263,10 +271,44 @@ async function main(): Promise<void> {
         requiredBehaviorsMet,
       });
 
+      // Collect claim flags for investigation output.
+      const claimFlags = deterministicResult.violations
+        .filter((v) => v.code.startsWith("claim:") && v.sentence !== undefined)
+        .map((v) => ({
+          claimType: v.code.slice("claim:".length),
+          confidence: v.confidence ?? 0,
+          sentence: v.sentence!,
+        }));
+      investigationTurns.push({
+        turnIndex: i,
+        claimFlags,
+        semanticHardRulePass: verdict.semanticHardRulePass,
+        softScore: verdict.softScore,
+      });
+
       process.stdout.write(deterministicResult.pass && verdict.semanticHardRulePass ? "." : "x");
     }
 
     scenarioResults.push(aggregateScenarioResult(fixture.id, turnResults));
+
+    // Print investigation block for this scenario if any turn had claim flags.
+    const anyFlags = investigationTurns.some((t) => t.claimFlags.length > 0);
+    if (anyFlags) {
+      console.log(`\n[investigation] ${fixture.id} (${fixture.scenario})`);
+      for (const t of investigationTurns) {
+        if (t.claimFlags.length === 0) continue;
+        console.log(`  Turn ${t.turnIndex + 1}:`);
+        for (const flag of t.claimFlags) {
+          console.log(`    claimType: ${flag.claimType}`);
+          console.log(`    confidence: ${flag.confidence.toFixed(3)}`);
+          console.log(`    flagged: "${flag.sentence}"`);
+        }
+        const judgeStatus = t.semanticHardRulePass
+          ? `pass (softScore=${t.softScore})`
+          : `FAIL (softScore=${t.softScore})`;
+        console.log(`    judge: ${judgeStatus}`);
+      }
+    }
   }
 
   process.stdout.write("\n");
