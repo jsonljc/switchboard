@@ -138,8 +138,8 @@ Expected: all three names print with no error.
 `shipped` (archive candidates):
 - `project_phase_d_complete`, `project_phase_d7_synergy_debt_roadmap`, `project_agent_first_redesign`, `project_slice_b_polish_backlog`
 - `project_recommendations_v1_shipped`, `project_alex_home_reports_designs_locked`, `project_wave_1_5_status`
-- `project_alex_cockpit_a3_shipped`, `..._a4_shipped`, `..._a5_shipped`, `..._a6_shipped`, `..._a7_shipped`, `..._a7_followup_scope`
-- `project_riley_cockpit_wave_a_state`, `..._b2a_shipped`, `..._b2b_shipped`, `project_riley_b3_followup_shipped`, `project_riley_composer_adoption_shipped`
+- `project_alex_cockpit_a3_shipped`, `project_alex_cockpit_a4_shipped`, `project_alex_cockpit_a5_shipped`, `project_alex_cockpit_a6_shipped`, `project_alex_cockpit_a7_shipped`, `project_alex_cockpit_a7_followup_scope`
+- `project_riley_cockpit_wave_a_state`, `project_riley_cockpit_b2a_shipped`, `project_riley_cockpit_b2b_shipped`, `project_riley_b3_followup_shipped`, `project_riley_composer_adoption_shipped`
 - `project_riley_wave_b_pr1_shipped`, `project_riley_wave_b_pr3_shipped`
 - `project_local_readiness_shipped`, `project_cockpit_vertical_copy_shipped`, `project_cockpit_wiring_punchlist_shipped`, `project_cockpit_v2_sprite_system_shipped`
 - `project_agent_infra_pr3_merged`, `project_deployment_pilot_shipped`
@@ -162,15 +162,17 @@ Apply the same `status: active` insertion to every file in the active list.
 
 For each file in the `shipped` list, insert `status: shipped` into the `metadata:` block the same way.
 
-- [ ] **Step 3: Verify 100% status coverage**
+- [ ] **Step 3: Verify 100% status coverage (project files only)**
 
-Run:
+Run (counts `status:` ONLY among `type: project` files, so a stray `status:` elsewhere can't false-pass):
 ```bash
 cd /Users/jasonli/.claude/projects/-Users-jasonli-switchboard/memory
-echo "project files: $(grep -rl 'type: project' *.md | wc -l)"
-echo "with status:   $(grep -rl 'status: \(active\|shipped\)' *.md | wc -l)"
+project_count=$(grep -rl 'type: project' *.md | wc -l)
+project_status_count=$(for f in $(grep -rl 'type: project' *.md); do grep -qE 'status: (active|shipped)' "$f" && echo "$f"; done | wc -l)
+echo "$project_count project / $project_status_count with project status"
+[ "$project_count" -eq "$project_status_count" ] && echo "PASS project status" || echo "FAIL project status"
 ```
-Expected: the two counts are **equal**. If not, list the gap with `for f in $(grep -rl 'type: project' *.md); do grep -Lq 'status:' "$f" && echo "MISSING: $f"; done` and fix.
+Expected: `PASS project status`. If `FAIL`, list the gap: `for f in $(grep -rl 'type: project' *.md); do grep -qE 'status: (active|shipped)' "$f" || echo "MISSING: $f"; done` and fix.
 
 ---
 
@@ -220,6 +222,15 @@ Expected: ideally empty. For any hit, confirm the active fact is captured elsewh
 - Modify: `MEMORY-archive.md` (add one-line pointers)
 - Move (optional): long shipped topic files → `archive/`
 
+- [ ] **Step 0: Dry inventory — decide KEEP/ARCHIVE/DEMOTE per candidate before deleting anything**
+
+Generate the candidate list straight from `MEMORY.md` (filename-keyword match is a *prompt*, not a verdict):
+```bash
+cd /Users/jasonli/.claude/projects/-Users-jasonli-switchboard/memory
+grep -nE 'project_.*(shipped|merged|complete|phase|wave|cockpit|readiness|sprite|punchlist|recommendations)' MEMORY.md
+```
+For each line printed, write down one verdict — `KEEP active` / `ARCHIVE shipped` / `DEMOTE reference` — cross-checking the file's `status:` from Task 2. Never archive a line solely because its filename contains "shipped" (e.g. `project_consent_enforcement_pr596_shipped` is `active`). Only lines you marked `ARCHIVE shipped` proceed to Steps 1–2.
+
 - [ ] **Step 1: Append a one-line pointer per shipped entry to `MEMORY-archive.md`**
 
 Under `## Shipped work (archived 2026-05-24)` in `MEMORY-archive.md`, add one line per shipped file:
@@ -241,6 +252,13 @@ cd /Users/jasonli/.claude/projects/-Users-jasonli-switchboard/memory
 mv project_alex_cockpit_a7_followup_scope.md archive/   # example: a shipped file ≈15 KB
 ```
 > CAUTION: move ONLY files on the Task 2 `shipped` list. `project_audit_wave_2_phased_state.md` is the single largest file (~37 KB) but is **active** — do NOT move it. Short shipped files (<6 KB) may stay in place; moving is optional per spec.
+
+**Conservative move policy — move a shipped topic file into `archive/` ONLY if ALL hold:**
+1. `status: shipped`
+2. file > 6 KB
+3. no active fact remains solely inside it (passed Task 3 Step 4)
+4. its archive pointer link is updated to `archive/<file>`
+5. root + archive link checks pass (Step 4 below)
 
 - [ ] **Step 4: Verify archive pointers resolve**
 
@@ -379,7 +397,30 @@ grep -ohE '`[a-zA-Z0-9_./-]+\.(ts|tsx|md|css|mjs)`' MEMORY.md | tr -d '`' | sort
 ```
 For each path, check existence in the repo (`ls /Users/jasonli/switchboard/<path>`). For any that no longer exists, append a ` (stale 2026-05-24 — verify)` marker to that memory line. Exit bar: **zero stale claims left unmarked.**
 
-- [ ] **Step 5: Append the Consolidation Report**
+- [ ] **Step 5: Check for stale Markdown links to moved files**
+
+After any `archive/` moves, topic files (not just `MEMORY.md`/`MEMORY-archive.md`) may still link to a moved file by its old root path. List all `](project_*.md)` links across the tree and inspect whether any target now lives under `archive/`:
+```bash
+cd /Users/jasonli/.claude/projects/-Users-jasonli-switchboard/memory
+grep -RnE '\]\(project_[a-zA-Z0-9_]+\.md\)' . --include='*.md' | while IFS=: read -r file line rest; do
+  t=$(echo "$rest" | grep -oE 'project_[a-zA-Z0-9_]+\.md' | head -1)
+  [ -f "$t" ] || echo "REWRITE in $file: $t → archive/$t"
+done
+echo "link-rewrite scan done"
+```
+Expected: only `link-rewrite scan done`. For any `REWRITE` line, update that link to `archive/<file>`. (Note: `[[slug]]` wiki-links match by slug and need no rewrite; only Markdown `](path)` links do.)
+
+- [ ] **Step 6: Save a backup diff (git substitute, since the dir is not tracked)**
+
+Run:
+```bash
+cd /Users/jasonli/.claude/projects/-Users-jasonli-switchboard
+diff -ru "memory-backup-2026-05-24" memory > "memory/memory-maintenance-diff-2026-05-24.txt" || true
+wc -l "memory/memory-maintenance-diff-2026-05-24.txt"
+```
+Expected: a non-empty diff file. It gives reviewability of the whole pass without git. (It lives in Tier 3 — not always-loaded.)
+
+- [ ] **Step 7: Append the Consolidation Report**
 
 Append to `memory-maintenance-log.md` (fill counts from the work done):
 ```markdown
@@ -393,15 +434,18 @@ Append to `memory-maintenance-log.md` (fill counts from the work done):
 - MEMORY.md size: 31933 B / ~190 lines → <b> B / <l> lines
 ```
 
-- [ ] **Step 6: Final sign-off**
+- [ ] **Step 8: Final sign-off**
 
-Run all three gates together:
+Run all gates together. Coverage uses recursive `find` so files moved into `archive/` are still counted, and restricts the `status:` count to `type: project` files:
 ```bash
 cd /Users/jasonli/.claude/projects/-Users-jasonli-switchboard/memory
 wc -c MEMORY.md; wc -l MEMORY.md
-echo "project status coverage:"; echo "  $(grep -rl 'type: project' *.md | wc -l) project / $(grep -rl 'status:' *.md | wc -l) with status"
+proj=$(find . -name '*.md' -print0 | xargs -0 grep -l 'type: project' | wc -l)
+stat=$(find . -name '*.md' -print0 | xargs -0 grep -l 'type: project' | while read -r f; do grep -qE 'status: (active|shipped)' "$f" && echo "$f"; done | wc -l)
+echo "project=$proj status=$stat"
+[ "$proj" -eq "$stat" ] && echo "PASS coverage" || echo "FAIL coverage"
 ```
-Expected: MEMORY.md < 24576 B and < 200 lines; project count == status count. If all pass, the pass is complete — and the backup from Task 0 can be deleted once you're confident (`rm -rf ../memory-backup-2026-05-24`).
+Expected: MEMORY.md < 24576 B and < 200 lines; `PASS coverage` (project == status, including any archived files). If all pass, the pass is complete — and the backup from Task 0 can be deleted once you're confident (`rm -rf ../memory-backup-2026-05-24`).
 
 ---
 
