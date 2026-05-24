@@ -13,3 +13,4 @@ export {
   buildContactDetailRevenueEvents,
 } from "./detail.js";
 export type { ContactDetailDeps } from "./detail.js";
+export type { RouteTemplates } from "../lib/route-templates.js";
