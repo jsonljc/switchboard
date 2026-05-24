@@ -98,7 +98,7 @@ export class PrismaAssetRecordStore {
   }
 
   async updateApprovalState(id: string, state: string): Promise<AssetRecord> {
-    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     return this.prisma.assetRecord.update({
       where: { id },
       data: { approvalState: state },
@@ -110,7 +110,7 @@ export class PrismaAssetRecordStore {
     metrics: Record<string, unknown>,
     history: Record<string, unknown>[],
   ): Promise<AssetRecord> {
-    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     return this.prisma.assetRecord.update({
       where: { id },
       data: {

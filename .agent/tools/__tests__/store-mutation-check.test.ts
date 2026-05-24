@@ -143,6 +143,36 @@ describe("store-mutation advisory — AST where-object inspection", () => {
   });
 });
 
+describe("store-mutation advisory — Prisma-model receiver scoping", () => {
+  it("ignores a non-Prisma crypto .update() call", () => {
+    const w = scan(`import { createHash } from "node:crypto";
+    export function h(t: string) { return createHash("sha256").update(t).digest("hex"); }`);
+    expect(w).toHaveLength(0);
+  });
+  it("ignores a store-wrapper .update() that is not a prisma/tx model access", () => {
+    const w = scan(`export class S {
+      async f(id: string) { await this.workTraceStore.update(id, { status: "done" }); }
+    }`);
+    expect(w).toHaveLength(0);
+  });
+  it("flags a tx.<model>.update missing org", () => {
+    const w = scan(`export class S {
+      async f(tx: any, id: string) { await tx.conversationState.update({ where: { id }, data: {} }); }
+    }`);
+    expect(w).toHaveLength(1);
+  });
+  it("flags a this.prisma.<model>.updateMany missing org but passes when scoped", () => {
+    const bad = scan(`export class S {
+      async f(id: string) { await this.prisma.contact.updateMany({ where: { id }, data: {} }); }
+    }`);
+    expect(bad).toHaveLength(1);
+    const ok = scan(`export class S {
+      async f(organizationId: string, id: string) { await this.prisma.contact.updateMany({ where: { id, organizationId }, data: {} }); }
+    }`);
+    expect(ok).toHaveLength(0);
+  });
+});
+
 describe("store-mutation advisory — AST edge cases (pinned behavior)", () => {
   it("inspects deleteMany where the same way as updateMany", () => {
     const ok = scan(`export class S {

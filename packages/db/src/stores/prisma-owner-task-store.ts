@@ -114,7 +114,7 @@ export class PrismaOwnerTaskStore implements OwnerTaskStore {
       throw new Error(`Task not found or does not belong to organization: ${id}`);
     }
 
-    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const updated = await this.prisma.ownerTask.update({
       where: { id },
       data: {

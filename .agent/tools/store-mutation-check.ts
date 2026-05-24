@@ -71,8 +71,42 @@ export function scanStoreFileForTest(sf: SourceFile, repoPath: string): Validato
 function getMutationMethod(call: CallExpression): string | null {
   const expr = call.getExpression();
   if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return null;
-  const name = expr.asKind(SyntaxKind.PropertyAccessExpression)!.getName();
-  return MUTATION_METHODS.has(name) ? name : null;
+  const pae = expr.asKind(SyntaxKind.PropertyAccessExpression)!;
+  const name = pae.getName();
+  if (!MUTATION_METHODS.has(name)) return null;
+  if (!isPrismaModelMutation(pae)) return null;
+  return name;
+}
+
+const TX_LIKE_RX = /^(tx|trx|transaction)$/;
+const PRISMA_NS_RX = /(^|\.)prisma$/;
+
+/**
+ * Returns true only when the call is of the form `<ns>.<model>.<method>`:
+ *   - The method receiver is itself a PropertyAccessExpression `<ns>.<model>`.
+ *   - The `<ns>` node either matches `/(^|\.)prisma$/` (covers `this.prisma`,
+ *     `app.prisma`, bare `prisma`) OR is a bare Identifier matching a tx-like
+ *     name (`tx`, `trx`, `transaction`).
+ *
+ * Rejects:
+ *   - `createHash("x").update(d)` — receiver is a CallExpression, not a PAE.
+ *   - `this.workTraceStore.update(...)` — ns is `this` (ThisExpression), text
+ *     "this" matches neither PRISMA_NS_RX nor TX_LIKE_RX.
+ */
+function isPrismaModelMutation(
+  methodAccess: ReturnType<CallExpression["getExpression"]> & object,
+): boolean {
+  // methodAccess is `<receiver>.<method>` where method ∈ MUTATION_METHODS.
+  // We need receiver to be a PropertyAccessExpression `<ns>.<model>`.
+  if (!Node.isPropertyAccessExpression(methodAccess)) return false;
+  const receiver = methodAccess.getExpression();
+  if (!Node.isPropertyAccessExpression(receiver)) return false;
+  // ns is the left side of `<ns>.<model>`.
+  const ns = receiver.getExpression();
+  const nsText = ns.getText();
+  if (PRISMA_NS_RX.test(nsText)) return true;
+  if (Node.isIdentifier(ns) && TX_LIKE_RX.test(nsText)) return true;
+  return false;
 }
 
 function hasSuppressDirectiveAbove(lines: string[], callLine: number): boolean {

@@ -36,7 +36,7 @@ export class PrismaActivityLogStore {
   }
 
   async cleanup(olderThan: Date): Promise<number> {
-    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const result = await this.prisma.activityLog.deleteMany({
       where: { createdAt: { lt: olderThan } },
     });

@@ -40,7 +40,7 @@ export class PrismaConsentRecordStore {
   }
 
   async revoke(id: string): Promise<ConsentRecord> {
-    // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     return this.prisma.consentRecord.update({
       where: { id },
       data: { revoked: true, revokedAt: new Date() },

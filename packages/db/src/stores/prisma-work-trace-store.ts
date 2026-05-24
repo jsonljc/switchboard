@@ -477,7 +477,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
           return { ok: true as const, trace: this.mapRowToTrace(row) };
         }
         // lockedAt-only: persist the lock, skip version bump + anchor.
-        // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+        // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
         const updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
         return { ok: true as const, trace: this.mapRowToTrace(updatedRow) };
       }
@@ -493,7 +493,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       data.contentHash = nextHash;
       data.traceVersion = nextVersion;
 
-      // route-governance: store-mutation-deferred — unscoped store mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       const updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
 
       await this.auditLedger.record(
