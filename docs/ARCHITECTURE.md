@@ -521,6 +521,21 @@ The authoritative governance spine. All actions flow through the `LifecycleOrche
 - Idempotency middleware (Redis or in-memory, 5-minute TTL)
 - Trace ID propagation via `X-Request-Id` header
 
+**Route Governance:**
+
+Every route file carries a `// @route-class: <class>` header that classifies it into one of six classes:
+
+| Class              | Definition                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `operator-direct`  | Operator asks the system to change business state via `PlatformIngress.submit()`                             |
+| `lifecycle`        | Operates on an already-governed record (approval response, DLQ retry, escalation reply)                      |
+| `control-plane`    | Owner-controlled platform configuration (policies, identity, connections, governance profile)                |
+| `ingress-receiver` | External inbound event handler (webhook, OAuth callback) before a canonical submit can be constructed        |
+| `read-only`        | No business-state mutation; pure GETs, derived projections, and diagnostic-write surfaces                    |
+| `dashboard-proxy`  | Next.js forwarding proxies under `apps/dashboard/src/app/api/dashboard/**` (applied by directory convention) |
+
+The per-class contract matrix and CI enforcement are doctrine — see DOCTRINE.md invariant 12 and `docs/superpowers/specs/2026-05-16-route-governance-contract-v1.md`.
+
 ---
 
 ### 12. `apps/chat` — Multi-Channel Chat Server

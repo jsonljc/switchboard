@@ -104,6 +104,39 @@ A type declared in `apps/api/`, `apps/chat/`, or `apps/dashboard/` that is also 
 
 **Current state:** Warning mode (PR-2.5). PR-4 flips to error mode after the full `@route-class` backfill so the cross-app-types rule and the route-class matrix flip enforcement together.
 
+### 12. Routes are classified; the class is enforced
+
+Every route under `apps/api/src/routes/` and `apps/chat/src/routes/` declares its class via a first-line `// @route-class: <class>` header. Dashboard routes under `apps/dashboard/src/app/api/dashboard/**` are classified **dashboard-proxy** by directory convention (no explicit header required); dashboard routes outside `/dashboard/` — e.g. waitlist, auth callbacks — require an explicit header. Classification is permanent; promoting a route across classes carries the same migration discipline as the initial classification.
+
+**The six classes:**
+
+| Class              | One-line definition                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `operator-direct`  | Operator asks the system to change business state; flows through `PlatformIngress.submit()`                   |
+| `lifecycle`        | Operates on an already-governed record (approval response, DLQ retry, escalation reply)                       |
+| `control-plane`    | Owner-controlled platform configuration (policies, identity, connections, governance profile)                 |
+| `ingress-receiver` | External inbound event handler (webhook, OAuth callback) before a canonical submit request can be constructed |
+| `read-only`        | No business-state mutation; includes pure GETs, derived projections, and diagnostic-write surfaces            |
+| `dashboard-proxy`  | Next.js forwarding proxies under `apps/dashboard/src/app/api/dashboard/**`; applied by directory convention   |
+
+**Per-class obligations (condensed — see `docs/superpowers/specs/2026-05-16-route-governance-contract-v1.md` §3 for the full matrix):**
+
+- **Auth guard:** `operator-direct` / `lifecycle` / `control-plane` use `requireOrgForMutation`; `ingress-receiver` uses signature/secret verification; `read-only` uses `requireOrg`.
+- **Idempotency-Key header:** required (400 if absent) on `operator-direct` only.
+- **WorkTrace persistence:** required on `operator-direct` (via `PlatformIngress.submit`); `lifecycle` is service-owned; `control-plane` audits via `auditLedger.record()` in-handler; `ingress-receiver` obligation falls on the downstream worker; `read-only` has no obligation.
+- **Cross-app types:** all classes must source shared types from `@switchboard/schemas`; local declarations that collide with a schemas export are violations (suppressed via `// route-governance: local-view-model`).
+- **Store mutations:** every Prisma mutation must include `organizationId` in the WHERE clause; `updateMany` is required for single-row updates (so `count === 0` is the security-correct conflation of missing-row and tenant-mismatch).
+
+**CI enforcement — `check-routes --mode=error` blocks on:**
+
+1. Missing or invalid `@route-class` header on any route-registering api/chat route, or on any non-`/dashboard/` dashboard route.
+2. `operator-direct` and `read-only` per-class matrix cell violations.
+3. Cross-app type duplicates (local type name collides with a `@switchboard/schemas` export, minus `// route-governance: local-view-model`).
+4. Un-scoped store mutations (Prisma mutation whose WHERE lacks an org filter, minus directive-suppressed sites).
+5. Empty schemas type enumeration (validator-malfunction guard).
+
+**Tracked deferrals:** Four pre-existing `operator-direct` routes (`actions.ts`, `execute.ts`, `ingress.ts`, `revenue.ts`) carry `// route-governance: operator-direct-contract-deferred` pending decorator wiring / ingress migration — tracked in **#654**. `CreatorIdentity` (×5) and `storage/prisma-lifecycle-store.updateDispatchRecord` store tenant-scoping awaits a Prisma `@relation` migration (suppressed via `// route-governance: store-mutation-deferred`) — tracked in **#643**. Cat 3.15 (typed Graph API response wrapper) and Cat 3.16 (agentContext null guard) are tracked in **#655**. Stricter lifecycle / control-plane / ingress-receiver matrix cells are future tightening, not current enforcement.
+
 ---
 
 ## Legacy Bridge Registry
