@@ -52,8 +52,26 @@ export function useResume() {
         body: JSON.stringify({}),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to resume");
+        const data: unknown = await res.json().catch(() => ({}));
+        const body = data as {
+          error?: string;
+          readiness?: {
+            ready?: boolean;
+            checks?: Array<{ id: string; label: string; status: string; blocking?: boolean }>;
+          };
+        };
+        // Surface structured readiness blockers when the proxy forwards the
+        // upstream 400 body verbatim (checks use status:"fail", not ok:false).
+        if (Array.isArray(body.readiness?.checks)) {
+          const failed = body.readiness.checks.filter((c) => c.status === "fail");
+          if (failed.length > 0) {
+            const labels = failed.map((c) => c.label).join(", ");
+            throw new Error(`Cannot resume — blockers: ${labels}`);
+          }
+          // readiness present but no failed checks (edge case)
+          throw new Error("Cannot resume — readiness checks did not pass");
+        }
+        throw new Error(body.error ?? "Failed to resume");
       }
       return res.json();
     },

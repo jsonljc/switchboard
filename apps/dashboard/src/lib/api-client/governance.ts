@@ -196,6 +196,38 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     });
   }
 
+  /**
+   * Raw passthrough variant of resume.
+   *
+   * The base `request()` helper throws on any non-ok status, collapsing the
+   * upstream API's 400 readiness-blocker body (which carries structured
+   * `readiness.checks` data) into a generic `Error("API error: 400")`. The
+   * dashboard proxy at `/api/dashboard/governance/resume` needs to forward the
+   * 400 body verbatim so the `useResume` hook can surface readable blocker
+   * messages to the operator instead of a generic error string.
+   *
+   * Returns `{ status, body }` for any HTTP response. Only network/transport
+   * errors (or response.json() failures) escape as thrown errors. Auth/server
+   * errors arrive as a non-200 status with an error-shaped body and the proxy
+   * decides how to surface them.
+   *
+   * Mirrors `replyToEscalationRaw`; the throw-on-non-ok `resume()` variant
+   * remains in place for any existing callers.
+   */
+  async resumeRaw(body: { organizationId?: string }): Promise<{ status: number; body: unknown }> {
+    const url = `${this.baseUrl}/api/governance/resume`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const responseBody: unknown = await res.json().catch(() => ({}));
+    return { status: res.status, body: responseBody };
+  }
+
   // Escalations
   async listEscalations(status = "pending") {
     return this.request<{ escalations: unknown[] }>(`/api/escalations?status=${status}`);
