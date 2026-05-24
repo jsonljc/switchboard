@@ -163,15 +163,27 @@ describe("PrismaKnowledgeStore", () => {
   });
 
   describe("deleteByDocument()", () => {
-    it("deletes all chunks for a document", async () => {
+    it("deletes all chunks for a document scoped to the organization", async () => {
       mockPrisma.knowledgeChunk.deleteMany.mockResolvedValue({ count: 5 });
 
-      const deleted = await store.deleteByDocument("doc-1");
+      const deleted = await store.deleteByDocument("org-1", "doc-1");
 
       expect(deleted).toBe(5);
       expect(mockPrisma.knowledgeChunk.deleteMany).toHaveBeenCalledWith({
-        where: { documentId: "doc-1" },
+        where: { documentId: "doc-1", organizationId: "org-1" },
       });
+    });
+
+    it("does NOT delete chunks for the same documentId belonging to a different org", async () => {
+      mockPrisma.knowledgeChunk.deleteMany.mockResolvedValue({ count: 3 });
+
+      await store.deleteByDocument("org-A", "faq-doc");
+
+      const callArg = mockPrisma.knowledgeChunk.deleteMany.mock.calls[0]?.[0] as {
+        where: Record<string, unknown>;
+      };
+      expect(callArg.where).toHaveProperty("organizationId", "org-A");
+      expect(callArg.where).not.toEqual({ documentId: "faq-doc" });
     });
   });
 });

@@ -40,5 +40,5 @@ export interface KnowledgeStore {
   store(chunk: KnowledgeChunk): Promise<void>;
   storeBatch(chunks: KnowledgeChunk[]): Promise<void>;
   search(embedding: number[], options: KnowledgeSearchOptions): Promise<RetrievalResult[]>;
-  deleteByDocument(documentId: string): Promise<number>;
+  deleteByDocument(organizationId: string, documentId: string): Promise<number>;
 }

@@ -414,10 +414,25 @@ describe("PrismaContactStore", () => {
       await cascadeStore.delete("org-1", "contact-1");
 
       expect(px.whatsAppMessageStatus.deleteMany).toHaveBeenCalledWith({
-        where: { recipientId: "+6591234567" },
+        where: { recipientId: "+6591234567", organizationId: "org-1" },
       });
       expect(px.conversationState.deleteMany).toHaveBeenCalledWith({
-        where: { principalId: "+6591234567" },
+        where: { principalId: "+6591234567", organizationId: "org-1" },
+      });
+    });
+
+    it("scopes phone-keyed deletes (WhatsAppMessageStatus, ConversationState) by organizationId to prevent cross-org data loss", async () => {
+      const px = mockPrismaWithCascade();
+      px.contact.findFirst.mockResolvedValue(makeContact({ phone: "+6591234567" }));
+      const cascadeStore = new PrismaContactStore(px as never);
+
+      await cascadeStore.delete("org-1", "contact-1");
+
+      expect(px.whatsAppMessageStatus.deleteMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({ organizationId: "org-1" }),
+      });
+      expect(px.conversationState.deleteMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({ organizationId: "org-1" }),
       });
     });
 

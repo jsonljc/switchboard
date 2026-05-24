@@ -241,6 +241,7 @@ export class PrismaOpportunityStore implements OpportunityStore {
 
       const isTerminal = stage === "won" || stage === "lost";
       const requestedAt = new Date();
+      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       return tx.opportunity.update({
         where: { id },
         data: {

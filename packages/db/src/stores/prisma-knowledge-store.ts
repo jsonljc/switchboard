@@ -121,9 +121,9 @@ export class PrismaKnowledgeStore {
     }));
   }
 
-  async deleteByDocument(documentId: string): Promise<number> {
+  async deleteByDocument(organizationId: string, documentId: string): Promise<number> {
     const result = await this.prisma.knowledgeChunk.deleteMany({
-      where: { documentId },
+      where: { documentId, organizationId },
     });
     return result.count;
   }
