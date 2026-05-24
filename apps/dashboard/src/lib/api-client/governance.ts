@@ -176,6 +176,10 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   }
 
   // Resume
+  // Throw-on-non-ok variant; retained for symmetry with `resumeRaw` (and with
+  // the `replyToEscalation`/`replyToEscalationRaw` pair). The resume proxy uses
+  // `resumeRaw` so it can forward the readiness-400 body verbatim; this method
+  // remains for any caller that wants the simple throw-on-failure shape.
   async resume(body: { organizationId?: string }) {
     return this.request<{
       resumed: boolean;

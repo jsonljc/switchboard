@@ -67,6 +67,12 @@ export function HaltProvider({ children }: { children: ReactNode }) {
   // only updating when the derived server value actually differs from local.
   // Also skip while a mutation is in-flight — a stale refetch must not stomp
   // an optimistic update that hasn't settled yet.
+  //
+  // After a mutation settles, onSuccess invalidates and refetches status; this
+  // effect then reconciles local state to that fresh server truth. The post-
+  // success refetch is intentionally allowed to overwrite the optimistic value:
+  // for an emergency-pause control, letting the server win can only ever
+  // (briefly) over-report HALTED, never under-report it — the safe direction.
   const serverHalted = governanceStatus.data?.deploymentStatus === "paused";
   useEffect(() => {
     if (governanceStatus.data === undefined) return;
