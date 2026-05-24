@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import React from "react";
 
 const { notFoundFn, fetchEnabledFn } = vi.hoisted(() => {
   const notFoundFn = vi.fn(() => {
@@ -13,9 +12,8 @@ vi.mock("next/navigation", () => ({ notFound: notFoundFn }));
 vi.mock("@/lib/api-client/agents-server", () => ({
   fetchEnabledAgentsServer: fetchEnabledFn,
 }));
-vi.mock("@/components/layout/editorial-auth-shell", () => ({
-  EditorialAuthShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
+// The editorial shell is mounted once by the (auth) layout's AppShell — the page
+// renders RileyCockpitPage directly and no longer wraps it in a shell.
 vi.mock("@/components/cockpit/riley-cockpit-page", () => ({
   RileyCockpitPage: () => <div data-testid="riley-cockpit-page">riley-cockpit</div>,
 }));

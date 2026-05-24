@@ -29,23 +29,31 @@ vi.mock("../live-signal-popover", () => ({
     </button>
   ),
 }));
+vi.mock("../primary-nav", () => ({
+  PrimaryNav: () => (
+    <nav aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/inbox">Inbox</a>
+      <a href="/results">Results</a>
+    </nav>
+  ),
+}));
 
 describe("EditorialAuthShellInner", () => {
-  it("renders Home + only enabled agents in brand-nav", () => {
+  it("renders primary nav with inbox link and no per-agent links", () => {
     render(
-      <EditorialAuthShellInner enabledAgents={["alex", "riley"]}>
+      <EditorialAuthShellInner>
         <p>page</p>
       </EditorialAuthShellInner>,
     );
-    expect(screen.getByRole("link", { name: /home/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /alex/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /riley/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /mira/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /inbox/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^alex$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^riley$/i })).toBeNull();
   });
 
   it("renders an inbox trigger with the folio-link header contract", () => {
     render(
-      <EditorialAuthShellInner enabledAgents={["alex"]}>
+      <EditorialAuthShellInner>
         <p>page</p>
       </EditorialAuthShellInner>,
     );
@@ -55,7 +63,7 @@ describe("EditorialAuthShellInner", () => {
 
   it("wraps the children in a <main>", () => {
     render(
-      <EditorialAuthShellInner enabledAgents={["alex"]}>
+      <EditorialAuthShellInner>
         <p>page-content</p>
       </EditorialAuthShellInner>,
     );

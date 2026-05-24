@@ -1,5 +1,4 @@
 import type { CockpitStatus } from "@/components/cockpit/types";
-import type { TopbarTab } from "@/components/cockpit/topbar";
 import { RILEY_VARIANTS } from "@/components/cockpit/sprite/riley-variants";
 import type { SpriteVariantKey } from "@/components/cockpit/sprite/types";
 
@@ -9,15 +8,6 @@ export const RILEY_ACCENT = {
   soft: "#ECD4C8",
   paper: "#F6E7DE",
 } as const;
-
-// Topbar tab order with Riley active. Matches the TopbarTab shape so the page
-// can pass `tabs={RILEY_TABS}` directly.
-export const RILEY_TABS: readonly TopbarTab[] = [
-  { name: "Alex", href: "/alex" },
-  { name: "Riley", active: true, href: "/riley" },
-  // Mira: no `/mira` route exists; renders as a non-routing muted span.
-  { name: "Mira", muted: true },
-];
 
 export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";
 

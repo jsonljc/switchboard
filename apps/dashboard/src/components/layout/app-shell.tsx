@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DataModeBanner } from "@/components/layout/data-mode-banner";
+import { EditorialShellBoundary } from "@/components/layout/editorial-shell-boundary";
+import { EditorialAuthShellInner } from "@/components/layout/editorial-auth-shell";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
 // DevPanel always dynamic-loads (ssr: false). The runtime `dataModeControlsAllowed`
@@ -17,37 +19,34 @@ const DevPanel = dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevP
 });
 
 /**
- * Paths that mount their own EditorialAuthShell — either directly (agent
- * homes via /alex and /riley page.tsx) or via a route-group layout (Mercury
- * Tools surfaces via (mercury)/layout.tsx). AppShell skips its bare-<main> wrapper
- * for these so the page-owned <main> from EditorialAuthShell isn't nested.
+ * Chrome-free paths render WITHOUT the editorial app-header. The onboarding
+ * flow owns a full-bleed, distraction-free experience and must never surface
+ * the app chrome. /operator is internal staff tooling — it manages its own
+ * page-level header and must not receive the customer nav shell. Every other
+ * authed route inherits the one shared editorial shell mounted below.
  *
- * "/" is exact (Owner Home placeholder). Other entries are prefix matches so
- * /alex/setup, /contacts/[id], etc. all resolve to the editorial shell.
- * /mira is intentionally absent — /mira returns notFound().
+ * Note: /login is a top-level route (app/login/page.tsx) that never reaches
+ * AppShell, so it does not need an entry here. It is kept in
+ * ONBOARDING_EXEMPT_PATHS below only for the onboarding-gate bypass.
+ *
+ * Prefix matches use the canonical `pathname === p || pathname.startsWith(p + "/")`
+ * shape so /onboarding/step-2 stays chrome-free while /onboardingx does not.
  */
-const SHELL_OWNED_EXACT = new Set(["/"]);
-const SHELL_OWNED_PREFIXES = [
-  "/alex",
-  "/riley",
-  "/contacts",
-  "/automations",
-  "/activity",
-  "/reports",
-];
+const CHROME_FREE_PATHS = ["/onboarding", "/operator"];
 
-function ownsItsShell(pathname: string): boolean {
-  if (SHELL_OWNED_EXACT.has(pathname)) return true;
-  return SHELL_OWNED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+function isChromeFree(pathname: string): boolean {
+  return CHROME_FREE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
 /**
  * Paths exempt from the onboarding-completeness gate. Narrower than the
- * shell-ownership set — Mercury surfaces, /settings, /operator/* still
- * redirect to /onboarding when the org is incomplete. Only editorial agent
- * homes and the auth/setup flow bypass.
+ * chrome-free set — Mercury surfaces, /settings, /operator/* still redirect
+ * to /onboarding when the org is incomplete. Agent homes (/alex, /riley) bypass
+ * because they are always reachable post-auth. "/" (Home) is NOT exempt — an
+ * authenticated but not-yet-onboarded user landing on Home is redirected to
+ * /onboarding so they complete setup before accessing any content.
  */
-const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/", "/alex", "/riley"]);
+const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/alex", "/riley"]);
 export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding"];
 
 export function AppShell({
@@ -60,7 +59,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
 
-  const usesEditorialShell = ownsItsShell(pathname);
+  const chromeFree = isChromeFree(pathname);
   const isGateExempt = ONBOARDING_GATE_EXEMPT_EXACT.has(pathname);
   const isOnboardingExempt = ONBOARDING_EXEMPT_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
@@ -77,7 +76,10 @@ export function AppShell({
     }
   }, [shouldCheckOnboarding, orgLoading, onboardingComplete, router]);
 
-  if (usesEditorialShell) {
+  // Chrome-free flows (onboarding, login) render full-bleed: no app-header and
+  // no editorial <main> wrapper. The page owns its own layout. DataModeBanner +
+  // DevPanel still mount so demo-mode and the dev panel work everywhere.
+  if (chromeFree) {
     return (
       <>
         <DataModeBanner />
@@ -87,17 +89,17 @@ export function AppShell({
     );
   }
 
-  // All non-editorial routes (Mercury surfaces, /settings, /operator/reports,
-  // /login, /onboarding) get the bare <main> wrapper. The route's
-  // own layout.tsx (e.g., SettingsLayout, ReportsLayout) is responsible for
-  // any sidebar/header/back-link chrome.
+  // Every other authed route shares ONE editorial shell. EditorialAuthShellInner
+  // mounts HaltProvider + RightDrawerProvider + AmbientCream + EditorialKeys + the
+  // app-header and wraps children in <main>. DataModeBanner sits above the sticky
+  // header (matching its non-sticky contract); DevPanel mounts after the shell.
   return (
     <>
       <DataModeBanner />
-      <main className="min-h-screen bg-background">
-        {children}
-        <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
-      </main>
+      <EditorialShellBoundary>
+        <EditorialAuthShellInner>{children}</EditorialAuthShellInner>
+      </EditorialShellBoundary>
+      <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
     </>
   );
 }
