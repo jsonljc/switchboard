@@ -9,18 +9,23 @@ const statusState = {
   data: { deploymentStatus: "active" as string } as { deploymentStatus: string } | undefined,
 };
 
+// Per-test override for isPending flags so we can simulate in-flight mutations.
+const pendingState = { halt: false, resume: false };
+// Per-test override for error values.
+const errorState = { halt: null as Error | null, resume: null as Error | null };
+
 vi.mock("@/hooks/use-governance", () => ({
   useEmergencyHalt: () => ({
     mutate: haltMutate,
     mutateAsync: vi.fn().mockResolvedValue({}),
-    isPending: false,
-    error: null,
+    isPending: pendingState.halt,
+    error: errorState.halt,
   }),
   useResume: () => ({
     mutate: resumeMutate,
     mutateAsync: vi.fn().mockResolvedValue({}),
-    isPending: false,
-    error: null,
+    isPending: pendingState.resume,
+    error: errorState.resume,
   }),
   useGovernanceStatus: () => ({ data: statusState.data, isLoading: false }),
 }));
@@ -33,10 +38,12 @@ import { HaltProvider, useHalt } from "../halt-context";
 // -----------------------------------------------------------------------
 
 function Fixture({ label }: { label: string }) {
-  const { halted, toggleHalt, setHalted } = useHalt();
+  const { halted, toggleHalt, setHalted, isPending, error } = useHalt();
   return (
     <div>
       <span data-testid="status">{halted ? "HALTED" : "LIVE"}</span>
+      <span data-testid="pending">{isPending ? "pending" : "idle"}</span>
+      <span data-testid="error">{error?.message ?? "none"}</span>
       <button data-testid="toggle" onClick={toggleHalt}>
         toggle
       </button>
@@ -68,8 +75,12 @@ describe("HaltProvider + useHalt (server-backed)", () => {
     window.localStorage.clear();
     haltMutate.mockReset();
     resumeMutate.mockReset();
-    // Default: server says LIVE
+    // Default: server says LIVE, no pending, no error
     statusState.data = { deploymentStatus: "active" };
+    pendingState.halt = false;
+    pendingState.resume = false;
+    errorState.halt = null;
+    errorState.resume = null;
   });
 
   // ------- Server seeding -------
@@ -189,5 +200,77 @@ describe("HaltProvider + useHalt (server-backed)", () => {
 
   it("useHalt() outside HaltProvider throws", () => {
     expect(() => renderHook(() => useHalt())).toThrow(/useHalt must be used inside <HaltProvider>/);
+  });
+
+  // ------- Fix 2: rapid-toggle race guard (replaces dropped regression test) -------
+
+  it("rapid toggle race: second toggleHalt while mutation is pending fires NO second mutation", () => {
+    statusState.data = { deploymentStatus: "active" };
+    // First toggle: haltMutate is called; mark halt as pending so the mock
+    // reflects in-flight state for the second click.
+    haltMutate.mockImplementation(() => {
+      // Simulate mutation staying in-flight (no resolution)
+      pendingState.halt = true;
+    });
+    renderWithProvider();
+
+    // First click: LIVE → HALTED, fires emergencyHalt.mutate once
+    act(() => {
+      screen.getByTestId("toggle").click();
+    });
+    expect(haltMutate).toHaveBeenCalledTimes(1);
+
+    // Second click while halt mutation is still pending: must be a no-op.
+    // The isPendingRef guard should block it before touching resumeMutate.
+    act(() => {
+      screen.getByTestId("toggle").click();
+    });
+    expect(haltMutate).toHaveBeenCalledTimes(1); // still exactly 1
+    expect(resumeMutate).not.toHaveBeenCalled(); // no opposing mutation fired
+  });
+
+  it("rapid setHalted race: second setHalted call while pending fires NO second mutation", () => {
+    statusState.data = { deploymentStatus: "active" };
+    haltMutate.mockImplementation(() => {
+      pendingState.halt = true;
+    });
+    renderWithProvider();
+
+    // First call: LIVE → HALTED
+    act(() => {
+      screen.getByTestId("set-halt").click();
+    });
+    expect(haltMutate).toHaveBeenCalledTimes(1);
+
+    // Second call while still pending: blocked
+    act(() => {
+      screen.getByTestId("set-halt").click();
+    });
+    expect(haltMutate).toHaveBeenCalledTimes(1);
+    expect(resumeMutate).not.toHaveBeenCalled();
+  });
+
+  // ------- Fix 4: stale error — last action wins -------
+
+  it("error reflects only the last-fired action: stale resume.error not surfaced after successful halt", () => {
+    // Arrange: resume had a prior error, halt has no error.
+    // lastAction starts null — no error should show yet.
+    statusState.data = { deploymentStatus: "active" };
+    errorState.resume = new Error("Cannot resume — blockers present");
+    errorState.halt = null;
+    renderWithProvider();
+
+    // No action fired yet → error = null (lastAction is null)
+    expect(screen.getByTestId("error").textContent).toBe("none");
+
+    // Fire a halt action (emergencyHalt.mutate is called, no error on halt)
+    haltMutate.mockImplementation(() => undefined);
+    act(() => {
+      screen.getByTestId("set-halt").click();
+    });
+
+    // Last action = "halt", emergencyHalt.error = null → context error must be null
+    // even though resume.error is still set to the stale blocker error.
+    expect(screen.getByTestId("error").textContent).toBe("none");
   });
 });
