@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   RILEY_ACCENT,
-  RILEY_TABS,
   RILEY_MISSION_SUBTITLE,
   statusColor,
   statusPulse,
@@ -17,14 +16,6 @@ describe("riley-config", () => {
       soft: "#ECD4C8",
       paper: "#F6E7DE",
     });
-  });
-
-  it("RILEY_TABS orders Alex / Riley / Mira with Riley active and hrefs (Mira non-routing)", () => {
-    expect(RILEY_TABS).toEqual([
-      { name: "Alex", href: "/alex" },
-      { name: "Riley", active: true, href: "/riley" },
-      { name: "Mira", muted: true },
-    ]);
   });
 
   it("RILEY_MISSION_SUBTITLE is a plain string in B.1 (popover deferred to B.2)", () => {

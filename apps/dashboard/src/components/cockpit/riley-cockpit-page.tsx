@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from "react";
 import { T } from "./tokens";
-import { Topbar } from "./topbar";
 import { Identity } from "./identity";
 import { ApprovalCard } from "./approval-card";
 import type { ApprovalAccent } from "./approval-card";
@@ -17,7 +16,6 @@ import {
   RILEY_COMMANDS,
   RILEY_COMPOSER_PLACEHOLDER,
   RILEY_MISSION_SUBTITLE,
-  RILEY_TABS,
   statusColor,
   statusPulse,
   animState,
@@ -144,13 +142,6 @@ export function RileyCockpitPage() {
         fontFamily: "Inter, system-ui, sans-serif",
       }}
     >
-      <Topbar
-        paletteEnabled
-        onOpenPalette={() => setPaletteOpen(true)}
-        paletteLabel="Tell Riley…"
-        compact
-        tabs={RILEY_TABS}
-      />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div style={{ position: "relative" }}>
           <Identity

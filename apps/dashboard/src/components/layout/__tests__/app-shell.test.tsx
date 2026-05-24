@@ -32,6 +32,22 @@ vi.mock("../data-mode-banner", () => ({
   DataModeBanner: () => <div data-testid="data-mode-banner" />,
 }));
 
+// The editorial shell is mounted by AppShell itself now (one shared shell for all
+// authed routes). Mock it to a recognizable marker so these tests assert AppShell's
+// branch decision — "does this route get the shell?" — without pulling the real
+// shell's whole client subtree (providers, nav, popovers). The shell's own
+// behavior is covered by editorial-auth-shell.test.tsx.
+vi.mock("../editorial-shell-boundary", () => ({
+  EditorialShellBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+vi.mock("../editorial-auth-shell", () => ({
+  EditorialAuthShellInner: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="editorial-shell">
+      <main>{children}</main>
+    </div>
+  ),
+}));
+
 beforeEach(() => {
   pathnameRef.current = "/contacts";
   replaceMock.mockReset();
@@ -42,61 +58,132 @@ beforeEach(() => {
   });
 });
 
-describe("AppShell visual branches", () => {
-  it("renders editorial paths without a wrapper <main>", () => {
+describe("AppShell shell-mount branches", () => {
+  it("mounts the shared editorial shell on editorial paths", () => {
     pathnameRef.current = "/alex";
-    const { container } = render(
+    render(
       <AppShell>
         <span>editorial-content</span>
       </AppShell>,
     );
-    expect(container.querySelector("main")).toBeNull();
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
     expect(screen.getByText("editorial-content")).toBeDefined();
   });
 
-  it("renders Mercury paths without a wrapper <main> (shell mounted via (mercury)/layout)", () => {
+  it("mounts the shared editorial shell on Mercury paths", () => {
     pathnameRef.current = "/contacts";
-    const { container } = render(
+    render(
       <AppShell>
         <span>mercury-content</span>
       </AppShell>,
     );
-    expect(container.querySelector("main")).toBeNull();
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
     expect(screen.getByText("mercury-content")).toBeDefined();
   });
 
-  it("treats Mercury detail paths as shell-owned (prefix match)", () => {
+  it("mounts the shared editorial shell on Mercury detail paths", () => {
     pathnameRef.current = "/contacts/abc-123";
-    const { container } = render(
+    render(
       <AppShell>
         <span>detail-content</span>
       </AppShell>,
     );
-    expect(container.querySelector("main")).toBeNull();
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
   });
 
-  it("wraps non-shell paths in a bare <main>", () => {
+  it("mounts the shared editorial shell on /settings (gains the unified header)", () => {
     pathnameRef.current = "/settings";
-    const { container } = render(
+    render(
       <AppShell>
         <span>settings-content</span>
       </AppShell>,
     );
-    expect(container.querySelector("main")).not.toBeNull();
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
     expect(screen.getByText("settings-content")).toBeDefined();
   });
 
-  it("does not match prefix-collisions (treats /contactsx as non-shell)", () => {
-    // Guards the canonical `pathname === p || pathname.startsWith(p + "/")`
-    // shape against an accidental drop of the trailing slash, which would
-    // silently swallow paths that share a prefix with a Mercury surface.
-    pathnameRef.current = "/contactsx";
-    const { container } = render(
+  it("mounts the shared editorial shell on the authed home (/)", () => {
+    pathnameRef.current = "/";
+    render(
+      <AppShell>
+        <span>home-content</span>
+      </AppShell>,
+    );
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
+  });
+
+  it("renders /onboarding chrome-free (no editorial shell, no app-header)", () => {
+    pathnameRef.current = "/onboarding";
+    render(
+      <AppShell>
+        <span>onboarding-content</span>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId("editorial-shell")).toBeNull();
+    expect(screen.getByText("onboarding-content")).toBeDefined();
+  });
+
+  it("renders /onboarding sub-paths chrome-free (prefix match)", () => {
+    pathnameRef.current = "/onboarding/step-2";
+    render(
       <AppShell>
         <span>x</span>
       </AppShell>,
     );
-    expect(container.querySelector("main")).not.toBeNull();
+    expect(screen.queryByTestId("editorial-shell")).toBeNull();
+  });
+
+  it("renders /operator chrome-free (no customer app-header)", () => {
+    pathnameRef.current = "/operator";
+    render(
+      <AppShell>
+        <span>operator-content</span>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId("editorial-shell")).toBeNull();
+    expect(screen.getByText("operator-content")).toBeDefined();
+  });
+
+  it("renders /operator sub-paths chrome-free (prefix match)", () => {
+    pathnameRef.current = "/operator/reports";
+    render(
+      <AppShell>
+        <span>operator-reports-content</span>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId("editorial-shell")).toBeNull();
+    expect(screen.getByText("operator-reports-content")).toBeDefined();
+  });
+
+  it("/login is NOT chrome-free in AppShell (it is a top-level route that never reaches AppShell)", () => {
+    // /login lives in app/login/page.tsx outside the (auth) group — it never
+    // reaches AppShell in production. It was removed from CHROME_FREE_PATHS
+    // because that entry was dead. If /login ever did reach AppShell it would
+    // render the editorial shell, which is acceptable (the route itself guards
+    // access). The important invariant is that /onboarding and /operator are
+    // chrome-free, tested above.
+    pathnameRef.current = "/login";
+    render(
+      <AppShell>
+        <span>login-content</span>
+      </AppShell>,
+    );
+    // /login is NOT in CHROME_FREE_PATHS — it would get the editorial shell
+    // if it ever reached AppShell (it doesn't in practice).
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
+  });
+
+  it("does not match chrome-free prefix-collisions (treats /onboardingx as shelled)", () => {
+    // Guards the canonical `pathname === p || pathname.startsWith(p + "/")` shape
+    // against an accidental drop of the trailing slash, which would silently
+    // strip chrome from paths that merely share a prefix with /onboarding.
+    pathnameRef.current = "/onboardingx";
+    render(
+      <AppShell>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
   });
 
   it("source does not reference OwnerShell or OwnerTabs", () => {
@@ -187,7 +274,7 @@ describe("Onboarding-redirect behavior", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it("does not redirect from editorial paths (existing behavior preserved)", () => {
+  it("does not redirect from editorial paths /alex (existing behavior preserved)", () => {
     pathnameRef.current = "/alex";
     orgConfigMock.mockReturnValue({
       data: { config: { onboardingComplete: false } },
@@ -199,6 +286,22 @@ describe("Onboarding-redirect behavior", () => {
       </AppShell>,
     );
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects from / (Home) when onboarding is incomplete", () => {
+    // Home is NOT exempt from the onboarding gate — an authenticated but
+    // not-yet-onboarded user landing on / must be routed to /onboarding.
+    pathnameRef.current = "/";
+    orgConfigMock.mockReturnValue({
+      data: { config: { onboardingComplete: false } },
+      isLoading: false,
+    });
+    render(
+      <AppShell>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(replaceMock).toHaveBeenCalledWith("/onboarding");
   });
 
   it("does not redirect when onboarding is complete", () => {
@@ -247,7 +350,7 @@ describe("Onboarding-redirect behavior", () => {
 });
 
 describe("AppShell — dataModeControlsAllowed prop forwarding", () => {
-  it("forwards dataModeControlsAllowed=true to DevPanel in editorial branch", () => {
+  it("forwards dataModeControlsAllowed=true to DevPanel in the shell branch", () => {
     pathnameRef.current = "/alex";
     render(
       <AppShell dataModeControlsAllowed={true}>
@@ -257,8 +360,8 @@ describe("AppShell — dataModeControlsAllowed prop forwarding", () => {
     expect(devPanelProps.current.dataModeControlsAllowed).toBe(true);
   });
 
-  it("forwards dataModeControlsAllowed=false to DevPanel in bare-main branch", () => {
-    pathnameRef.current = "/settings";
+  it("forwards dataModeControlsAllowed=false to DevPanel in the chrome-free branch", () => {
+    pathnameRef.current = "/onboarding";
     render(
       <AppShell dataModeControlsAllowed={false}>
         <span>x</span>
@@ -269,7 +372,7 @@ describe("AppShell — dataModeControlsAllowed prop forwarding", () => {
 });
 
 describe("AppShell — DataModeBanner mounted in both branches", () => {
-  it("mounts DataModeBanner in editorial branch", () => {
+  it("mounts DataModeBanner in the shell branch", () => {
     pathnameRef.current = "/alex";
     render(
       <AppShell dataModeControlsAllowed={false}>
@@ -279,8 +382,8 @@ describe("AppShell — DataModeBanner mounted in both branches", () => {
     expect(screen.getByTestId("data-mode-banner")).toBeInTheDocument();
   });
 
-  it("mounts DataModeBanner in bare-main branch", () => {
-    pathnameRef.current = "/settings";
+  it("mounts DataModeBanner in the chrome-free branch", () => {
+    pathnameRef.current = "/onboarding";
     render(
       <AppShell dataModeControlsAllowed={false}>
         <span>x</span>

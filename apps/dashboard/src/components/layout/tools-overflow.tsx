@@ -20,7 +20,7 @@ export const TOOLS_NAV_ITEMS: ReadonlyArray<{
 }> = [
   { id: "contacts", label: "Pipeline", href: "/contacts" },
   { id: "automations", label: "Automations", href: "/automations" },
-  { id: "reports", label: "Reports", href: "/reports" },
+  { id: "reports", label: "Reports", href: "/results" },
 ];
 // NOTE: "/activity" (the audit-ledger viewer) is intentionally absent from the
 // operator nav. SMB clinic owners want bookings, not a forensic event log, so

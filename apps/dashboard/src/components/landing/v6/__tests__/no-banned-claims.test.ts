@@ -13,7 +13,7 @@ const sourceFiles = (): string[] => {
   const v6 = readdirSync(V6_DIR)
     .filter((f) => (f.endsWith(".tsx") || f.endsWith(".ts")) && !f.includes(".test."))
     .map((f) => join(V6_DIR, f));
-  return [...v6, join(PUBLIC_DIR, "page.tsx"), join(PUBLIC_DIR, "layout.tsx")];
+  return [...v6, join(PUBLIC_DIR, "welcome", "page.tsx"), join(PUBLIC_DIR, "layout.tsx")];
 };
 
 interface Banned {

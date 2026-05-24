@@ -4,7 +4,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "./tokens";
-import { Topbar } from "./topbar";
 import { Identity } from "./identity";
 import { ActivityStream, type ActivityFilter } from "./activity-stream";
 import { Composer } from "./composer";
@@ -169,7 +168,6 @@ export function CockpitPage() {
         fontFamily: "Inter, system-ui, sans-serif",
       }}
     >
-      <Topbar paletteEnabled onOpenPalette={() => setPaletteOpen(true)} />
       <div style={{ flex: 1, overflowY: "auto" }}>
         <div style={{ position: "relative" }}>
           <Identity
