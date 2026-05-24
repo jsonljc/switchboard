@@ -1,7 +1,7 @@
 # Operator-Direct Ingress Migration Pattern — Design
 
 **Date:** 2026-05-15
-**Status:** Spec — pending user review
+**Status:** Implemented — pattern applied across all four Phase 1 ingress migrations (PRs #568/#570/#571/#572/#582) and generalized by the Route Governance Contract v1 (`2026-05-16-route-governance-contract-v1.md`). Historical design record.
 **Source:** Wave 2 Phase 1 of the architecture cleanup audit (synthesis at `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit.md`, Phase 0 triage at `docs/audits/2026-05-15-cleanup/_phase-0-triage.md`).
 
 ## Goal
