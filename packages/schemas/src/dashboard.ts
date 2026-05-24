@@ -80,11 +80,3 @@ export const OperatorOverviewSchema = z.object({
 });
 
 export type OperatorOverview = z.infer<typeof OperatorOverviewSchema>;
-
-/**
- * Back-compat alias for the old name. Route Governance Contract v1 §8.4 —
- * the rename is gradual; PR-4 removes this alias once `rg DashboardOverview`
- * returns 0 across the monorepo. New code SHOULD import `OperatorOverview`.
- */
-export const DashboardOverviewSchema = OperatorOverviewSchema;
-export type DashboardOverview = OperatorOverview;

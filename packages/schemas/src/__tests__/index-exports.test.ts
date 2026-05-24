@@ -7,20 +7,12 @@ describe("schemas index exports", () => {
     expect(schemas.PlaybookSchema).toBeDefined();
     expect(schemas.BusinessFactsSchema).toBeDefined();
     expect(schemas.ScanResultSchema).toBeDefined();
-    expect(schemas.DashboardOverviewSchema).toBeDefined();
+    expect(schemas.OperatorOverviewSchema).toBeDefined();
   });
 });
 
-describe("OperatorOverview rename (PR-2)", () => {
+describe("OperatorOverview (canonical export)", () => {
   it("exports OperatorOverviewSchema", () => {
     expect(schemas.OperatorOverviewSchema).toBeDefined();
-  });
-
-  it("exports the back-compat alias DashboardOverviewSchema", () => {
-    expect(schemas.DashboardOverviewSchema).toBeDefined();
-  });
-
-  it("alias and canonical schema are the same object", () => {
-    expect(schemas.DashboardOverviewSchema).toBe(schemas.OperatorOverviewSchema);
   });
 });
