@@ -98,6 +98,22 @@ describe("useResume", () => {
     expect(String(result.current.error)).toMatch(/Internal server error/);
   });
 
+  it("falls back to body.error on 400 without readiness (Zod body-parse path)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: "organizationId required", statusCode: 400 }),
+      }),
+    );
+
+    const { result } = renderHook(() => useResume(), { wrapper: wrap() });
+    result.current.mutate();
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(String(result.current.error)).toMatch(/organizationId required/);
+  });
+
   it("resolves on a successful 200 resume", async () => {
     vi.stubGlobal(
       "fetch",
