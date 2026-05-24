@@ -109,6 +109,7 @@ export class PrismaConnectionStore {
   }
 
   async delete(id: string): Promise<void> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.connection.delete({ where: { id } });
   }
 }

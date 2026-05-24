@@ -24,6 +24,7 @@ export class PrismaTrustScoreStore {
       >
     >,
   ): Promise<TrustScoreRecord> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     return this.prisma.trustScoreRecord.update({
       where: { id },
       data: data as never,

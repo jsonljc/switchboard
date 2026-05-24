@@ -32,6 +32,7 @@ export class PrismaEventStore {
   }
 
   async markProcessing(id: string): Promise<void> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.agentEvent.update({
       where: { id },
       data: { status: "processing" },
@@ -39,6 +40,7 @@ export class PrismaEventStore {
   }
 
   async markDone(id: string): Promise<void> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.agentEvent.update({
       where: { id },
       data: { status: "done", processedAt: new Date() },
@@ -46,6 +48,7 @@ export class PrismaEventStore {
   }
 
   async markFailed(id: string): Promise<void> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     await this.prisma.agentEvent.update({
       where: { id },
       data: { status: "failed", retryCount: { increment: 1 } },
@@ -53,6 +56,7 @@ export class PrismaEventStore {
   }
 
   async markDeadLetters(maxRetries: number): Promise<number> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const result = await this.prisma.agentEvent.updateMany({
       where: { status: "failed", retryCount: { gte: maxRetries } },
       data: { status: "dead_letter" },
@@ -61,6 +65,7 @@ export class PrismaEventStore {
   }
 
   async cleanupDone(olderThan: Date): Promise<number> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const result = await this.prisma.agentEvent.deleteMany({
       where: { status: "done", createdAt: { lt: olderThan } },
     });
@@ -68,6 +73,7 @@ export class PrismaEventStore {
   }
 
   async resetStaleProcessing(olderThan: Date): Promise<number> {
+    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
     const result = await this.prisma.agentEvent.updateMany({
       where: { status: "processing", createdAt: { lt: olderThan } },
       data: { status: "failed", retryCount: { increment: 1 } },

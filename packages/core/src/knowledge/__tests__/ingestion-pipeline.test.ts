@@ -104,7 +104,7 @@ describe("IngestionPipeline", () => {
       sourceType: "document",
     });
 
-    expect(mockStore.deleteByDocument).toHaveBeenCalledWith("doc-1");
+    expect(mockStore.deleteByDocument).toHaveBeenCalledWith("org-1", "doc-1");
   });
 
   it("handles empty content", async () => {

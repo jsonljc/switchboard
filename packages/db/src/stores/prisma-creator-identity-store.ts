@@ -51,6 +51,7 @@ export class PrismaCreatorIdentityStore {
     id: string,
     data: Partial<Omit<CreatorIdentity, "id" | "createdAt" | "updatedAt">>,
   ): Promise<CreatorIdentity> {
+    // route-governance: store-mutation-deferred — org reachable only via an FK with no Prisma @relation; tenant-scoping needs a schema migration. Tracked in #643.
     return this.prisma.creatorIdentity.update({
       where: { id },
       data: data as never,
@@ -58,6 +59,7 @@ export class PrismaCreatorIdentityStore {
   }
 
   async approve(id: string): Promise<CreatorIdentity> {
+    // route-governance: store-mutation-deferred — org reachable only via an FK with no Prisma @relation; tenant-scoping needs a schema migration. Tracked in #643.
     return this.prisma.creatorIdentity.update({
       where: { id },
       data: { approved: true },
@@ -65,6 +67,7 @@ export class PrismaCreatorIdentityStore {
   }
 
   async deactivate(id: string): Promise<CreatorIdentity> {
+    // route-governance: store-mutation-deferred — org reachable only via an FK with no Prisma @relation; tenant-scoping needs a schema migration. Tracked in #643.
     return this.prisma.creatorIdentity.update({
       where: { id },
       data: { isActive: false },
@@ -72,6 +75,7 @@ export class PrismaCreatorIdentityStore {
   }
 
   async setQualityTier(id: string, tier: AvatarQualityTier): Promise<CreatorIdentity> {
+    // route-governance: store-mutation-deferred — org reachable only via an FK with no Prisma @relation; tenant-scoping needs a schema migration. Tracked in #643.
     return this.prisma.creatorIdentity.update({
       where: { id },
       data: { qualityTier: tier },
@@ -79,6 +83,7 @@ export class PrismaCreatorIdentityStore {
   }
 
   async attachConsentRecord(id: string, consentRecordId: string): Promise<CreatorIdentity> {
+    // route-governance: store-mutation-deferred — org reachable only via an FK with no Prisma @relation; tenant-scoping needs a schema migration. Tracked in #643.
     return this.prisma.creatorIdentity.update({
       where: { id },
       data: { consentRecordId },
