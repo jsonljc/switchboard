@@ -14,6 +14,8 @@ const MAX_REQUESTS = 120; // 120 req/min per IP
 // `/automations` is forward-compat for slice D2b's frontend page which has not
 // shipped yet (D2a backend has). Keep both this list and the matcher below in
 // sync so D2b can land without touching middleware.
+// NOTE: "/" (root) is NOT in this list — a bare "/" prefix would match every
+// path. Root auth is handled by a dedicated exact-match check below.
 const AUTH_PAGE_PREFIXES = [
   "/marketplace",
   "/deploy",
@@ -23,6 +25,10 @@ const AUTH_PAGE_PREFIXES = [
   "/reports",
   "/contacts",
   "/automations",
+  "/alex",
+  "/riley",
+  "/inbox",
+  "/results",
 ] as const;
 
 interface RateLimitEntry {
@@ -80,9 +86,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const isAuthPage = AUTH_PAGE_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  // Root "/" requires an exact match — adding it as a prefix would gate every
+  // path including public /welcome, /privacy, /terms, /login.
+  const isAuthPage =
+    pathname === "/" ||
+    AUTH_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
   if (isAuthPage) {
     if (isDevBypassEnabled()) {
@@ -103,6 +111,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/api/dashboard/:path*",
     "/marketplace/:path*",
     "/deploy/:path*",
@@ -112,5 +121,13 @@ export const config = {
     "/reports/:path*",
     "/contacts/:path*",
     "/automations/:path*",
+    "/alex",
+    "/alex/:path*",
+    "/riley",
+    "/riley/:path*",
+    "/inbox",
+    "/inbox/:path*",
+    "/results",
+    "/results/:path*",
   ],
 };

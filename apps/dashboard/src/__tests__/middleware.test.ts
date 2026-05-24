@@ -123,4 +123,105 @@ describe("dashboard middleware auth", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost/login");
   });
+
+  // P0-A: Home, Inbox, Results, Alex, Riley are now auth-gated.
+  it("redirects unauthenticated / (Home) to /login (exact match, not prefix)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /inbox to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/inbox"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /results to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/results"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /alex to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/alex"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("redirects unauthenticated /riley to /login", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/riley"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  // Public paths must STAY public — the root exact-match must NOT bleed into them.
+  it("does not gate /welcome (public marketing path)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/welcome"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not gate /privacy (public legal path)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/privacy"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not gate /terms (public legal path)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/terms"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not gate /login (auth flow)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/login"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
 });

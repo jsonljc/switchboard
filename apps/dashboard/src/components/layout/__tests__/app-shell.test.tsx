@@ -244,7 +244,7 @@ describe("Onboarding-redirect behavior", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it("does not redirect from editorial paths (existing behavior preserved)", () => {
+  it("does not redirect from editorial paths /alex (existing behavior preserved)", () => {
     pathnameRef.current = "/alex";
     orgConfigMock.mockReturnValue({
       data: { config: { onboardingComplete: false } },
@@ -256,6 +256,22 @@ describe("Onboarding-redirect behavior", () => {
       </AppShell>,
     );
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects from / (Home) when onboarding is incomplete", () => {
+    // Home is NOT exempt from the onboarding gate — an authenticated but
+    // not-yet-onboarded user landing on / must be routed to /onboarding.
+    pathnameRef.current = "/";
+    orgConfigMock.mockReturnValue({
+      data: { config: { onboardingComplete: false } },
+      isLoading: false,
+    });
+    render(
+      <AppShell>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(replaceMock).toHaveBeenCalledWith("/onboarding");
   });
 
   it("does not redirect when onboarding is complete", () => {
