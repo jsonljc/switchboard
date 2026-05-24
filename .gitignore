@@ -28,3 +28,6 @@ PLAN-V1.md
 
 # Obsidian editor state (workspace layout, view state, etc.)
 .obsidian/
+
+# Visual brainstorming companion (superpowers) — scratch mockups
+.superpowers/
