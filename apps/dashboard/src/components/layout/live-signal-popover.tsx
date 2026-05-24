@@ -62,11 +62,11 @@ export function LiveSignalPopover() {
   useEffect(() => {
     if (!error) return;
     toast({
-      title: "Couldn't pause/resume",
+      title: halted ? "Couldn't resume" : "Couldn't pause",
       description: error.message,
       variant: "destructive",
     });
-  }, [error]); // toast is stable — omitting it is safe and avoids re-fire on rerender
+  }, [error]); // re-fires per failure: use-governance throws a fresh Error instance on each failed resume (new identity); see halt-context lastAction gating — toast is stable, omitting it is safe and avoids re-fire on rerender
 
   // The audit endpoint can return HTTP 200 with a `data.error` string when the
   // upstream API is unreachable (see use-audit.ts). React Query's `isError`

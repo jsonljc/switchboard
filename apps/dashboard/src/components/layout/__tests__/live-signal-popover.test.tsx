@@ -2,8 +2,10 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { LiveSignalPopover } from "../live-signal-popover";
+import type { ReactNode } from "react";
+import { useAudit } from "@/hooks/use-audit";
 import type { AuditEntryResponse } from "@/hooks/use-audit";
+import { LiveSignalPopover } from "../live-signal-popover";
 
 // Tool B: mock useHalt directly — the popover doesn't care about provider
 // internals; we need to drive `error` from outside for the toast test.
@@ -16,7 +18,7 @@ const haltState = {
 };
 vi.mock("@/components/layout/halt/halt-context", () => ({
   useHalt: () => ({ ...haltState }),
-  HaltProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  HaltProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 // Mock useToast so we can assert toast calls without a real toast stack.
@@ -32,9 +34,6 @@ vi.mock("@/hooks/use-audit", async () => {
     useAudit: vi.fn(),
   };
 });
-
-import { useAudit } from "@/hooks/use-audit";
-import React from "react";
 
 function makeEntry(overrides: Partial<AuditEntryResponse> = {}): AuditEntryResponse {
   return {
@@ -259,14 +258,30 @@ describe("LiveSignalPopover — accessibility", () => {
 });
 
 describe("LiveSignalPopover — resume readiness error toast", () => {
-  it("fires a toast when useHalt() returns a non-null error", () => {
+  it("fires 'Couldn't resume' toast when halted=true and error is set (failed resume)", () => {
     const err = new Error("Cannot resume — blockers: Meta Ads");
+    haltState.halted = true; // failed resume → rolled back to halted
     haltState.error = err;
     render(<LiveSignalPopover />);
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "Couldn't pause/resume",
+        title: "Couldn't resume",
         description: err.message,
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("fires 'Couldn't pause' toast when halted=false and error is set (failed halt)", () => {
+    const err = new Error("Cannot pause — server rejected");
+    haltState.halted = false; // failed halt → rolled back to live
+    haltState.error = err;
+    render(<LiveSignalPopover />);
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Couldn't pause",
+        description: err.message,
+        variant: "destructive",
       }),
     );
   });
@@ -275,5 +290,29 @@ describe("LiveSignalPopover — resume readiness error toast", () => {
     haltState.error = null;
     render(<LiveSignalPopover />);
     expect(toastMock).not.toHaveBeenCalled();
+  });
+
+  // Pins the re-fire contract: use-governance throws a FRESH Error instance per
+  // failure (new object identity), with react-query passing null between runs.
+  // A future refactor that memoizes the error would silently break this behavior.
+  it("re-fires the toast for each distinct Error instance (null between fires)", () => {
+    const err1 = new Error("Cannot resume — blockers: Meta Ads");
+    const err2 = new Error("Cannot resume — blockers: Meta Ads"); // distinct instance, same message
+    haltState.halted = true;
+    haltState.error = err1;
+
+    const { rerender } = render(<LiveSignalPopover />);
+    // First non-null error: toast fires once
+    expect(toastMock).toHaveBeenCalledTimes(1);
+
+    // Null between runs (react-query clears error between mutations)
+    haltState.error = null;
+    rerender(<LiveSignalPopover />);
+    expect(toastMock).toHaveBeenCalledTimes(1); // no additional call for null
+
+    // Second distinct Error instance: toast fires again
+    haltState.error = err2;
+    rerender(<LiveSignalPopover />);
+    expect(toastMock).toHaveBeenCalledTimes(2);
   });
 });
