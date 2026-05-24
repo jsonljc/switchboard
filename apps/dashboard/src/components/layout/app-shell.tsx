@@ -21,14 +21,18 @@ const DevPanel = dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevP
 /**
  * Chrome-free paths render WITHOUT the editorial app-header. The onboarding
  * flow owns a full-bleed, distraction-free experience and must never surface
- * the app chrome; /login lives in the (public) group but is listed so this
- * predicate is the single source of truth for "no app header." Every other
+ * the app chrome. /operator is internal staff tooling — it manages its own
+ * page-level header and must not receive the customer nav shell. Every other
  * authed route inherits the one shared editorial shell mounted below.
+ *
+ * Note: /login is a top-level route (app/login/page.tsx) that never reaches
+ * AppShell, so it does not need an entry here. It is kept in
+ * ONBOARDING_EXEMPT_PATHS below only for the onboarding-gate bypass.
  *
  * Prefix matches use the canonical `pathname === p || pathname.startsWith(p + "/")`
  * shape so /onboarding/step-2 stays chrome-free while /onboardingx does not.
  */
-const CHROME_FREE_PATHS = ["/login", "/onboarding"];
+const CHROME_FREE_PATHS = ["/onboarding", "/operator"];
 
 function isChromeFree(pathname: string): boolean {
   return CHROME_FREE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));

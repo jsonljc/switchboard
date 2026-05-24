@@ -63,9 +63,11 @@ describe("ReportsPage (fixture mode, default THIS MONTH)", () => {
     expect(screen.queryByText(/no meta ads connection/i)).toBeNull();
   });
 
-  it("renders sample data pip in fixture mode", () => {
+  it("renders the fixture-mode demo-data banner (no Topbar — unified shell header handles brand/nav)", () => {
+    // The reports-local Topbar was removed in favour of the unified app-header.
+    // Fixture mode is now indicated by the FixtureModeBanner ("Demo data" label).
     renderWithQuery();
-    expect(screen.getAllByText(/Sample data/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Demo data/i)).toBeInTheDocument();
   });
 
   it("renders Refresh button (not Recompute)", () => {

@@ -133,14 +133,44 @@ describe("AppShell shell-mount branches", () => {
     expect(screen.queryByTestId("editorial-shell")).toBeNull();
   });
 
-  it("renders /login chrome-free (no editorial shell)", () => {
-    pathnameRef.current = "/login";
+  it("renders /operator chrome-free (no customer app-header)", () => {
+    pathnameRef.current = "/operator";
     render(
       <AppShell>
-        <span>x</span>
+        <span>operator-content</span>
       </AppShell>,
     );
     expect(screen.queryByTestId("editorial-shell")).toBeNull();
+    expect(screen.getByText("operator-content")).toBeDefined();
+  });
+
+  it("renders /operator sub-paths chrome-free (prefix match)", () => {
+    pathnameRef.current = "/operator/reports";
+    render(
+      <AppShell>
+        <span>operator-reports-content</span>
+      </AppShell>,
+    );
+    expect(screen.queryByTestId("editorial-shell")).toBeNull();
+    expect(screen.getByText("operator-reports-content")).toBeDefined();
+  });
+
+  it("/login is NOT chrome-free in AppShell (it is a top-level route that never reaches AppShell)", () => {
+    // /login lives in app/login/page.tsx outside the (auth) group — it never
+    // reaches AppShell in production. It was removed from CHROME_FREE_PATHS
+    // because that entry was dead. If /login ever did reach AppShell it would
+    // render the editorial shell, which is acceptable (the route itself guards
+    // access). The important invariant is that /onboarding and /operator are
+    // chrome-free, tested above.
+    pathnameRef.current = "/login";
+    render(
+      <AppShell>
+        <span>login-content</span>
+      </AppShell>,
+    );
+    // /login is NOT in CHROME_FREE_PATHS — it would get the editorial shell
+    // if it ever reached AppShell (it doesn't in practice).
+    expect(screen.getByTestId("editorial-shell")).toBeInTheDocument();
   });
 
   it("does not match chrome-free prefix-collisions (treats /onboardingx as shelled)", () => {

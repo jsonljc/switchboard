@@ -5,7 +5,6 @@ import { useReportWindow } from "./hooks/use-report-window";
 import { useReportData } from "./hooks/use-report-data";
 import { useConnections } from "@/hooks/use-connections";
 import { isMercuryToolLive } from "@/lib/route-availability";
-import { Topbar } from "./components/topbar";
 import { PageHead, type RefreshState } from "./components/page-head";
 import { NoConnectionBanner } from "./components/no-connection-banner";
 import { PullQuote } from "./components/pull-quote";
@@ -18,11 +17,8 @@ import { Colophon } from "./components/colophon";
 import { FixtureModeBanner } from "./components/fixture-mode-banner";
 import styles from "./reports.module.css";
 
-// Org and current-user wiring. These are placeholders until session/org context
-// resolution lands (spec §10.7) — keeps the page presentational while the rest
-// of the redesign goes through review.
+// Org placeholder until session/org context resolution lands (spec §10.7).
 const ORG_PLACEHOLDER = "Aurora Aesthetics";
-const USER_PLACEHOLDER = { display: "Operator", initials: "OP" };
 
 export function ReportsPage() {
   const { window: activeWindow, setWindow } = useReportWindow();
@@ -69,8 +65,6 @@ export function ReportsPage() {
   return (
     <div className={styles.reportsPage}>
       <FixtureModeBanner />
-      <Topbar org={ORG_PLACEHOLDER} currentUser={USER_PLACEHOLDER} liveMode={liveMode} />
-
       <PageHead
         dateFolio={fx?.dateFolio ?? null}
         activeWindow={activeWindow}
