@@ -7,6 +7,10 @@ describe("TOOLS_NAV_ITEMS", () => {
   it("does not include an Approvals entry (standalone queue removed)", () => {
     expect(TOOLS_NAV_ITEMS.find((i) => i.id === "approvals")).toBeUndefined();
   });
+
+  it("does not include an Activity entry (audit viewer kept reachable by URL, removed from SMB nav)", () => {
+    expect(TOOLS_NAV_ITEMS.find((i) => i.id === "activity")).toBeUndefined();
+  });
 });
 
 // Mock next/navigation. Each test sets the return value via mockReturnValue.
@@ -46,7 +50,7 @@ describe("ToolsOverflow", () => {
   });
 
   // Case 2
-  it("opens the menu and lists all four Tools items + Settings with separator", async () => {
+  it("opens the menu and lists the three Tools items + Settings with separator", async () => {
     setAllToolsLive(true);
     render(<ToolsOverflow />);
     await openMenu();
@@ -55,16 +59,17 @@ describe("ToolsOverflow", () => {
     expect(items.map((el) => el.textContent)).toEqual([
       "Pipeline",
       "Automations",
-      "Activity",
       "Reports",
       "Settings",
     ]);
+    // Activity is intentionally not in the nav (kept reachable by URL only).
+    expect(within(menu).queryByText("Activity")).not.toBeInTheDocument();
     // Separator between Reports and Settings.
     expect(within(menu).getByRole("separator")).toBeInTheDocument();
   });
 
   // Case 3
-  it("hides Automations when its flag is false; the other three Tools items remain visible", async () => {
+  it("hides Automations when its flag is false; the other Tools items remain visible", async () => {
     vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "true");
     vi.stubEnv("NEXT_PUBLIC_AUTOMATIONS_LIVE", "");
     vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
@@ -74,7 +79,6 @@ describe("ToolsOverflow", () => {
     const menu = await screen.findByRole("menu");
     expect(within(menu).queryByText("Automations")).not.toBeInTheDocument();
     expect(within(menu).getByText("Pipeline")).toBeInTheDocument();
-    expect(within(menu).getByText("Activity")).toBeInTheDocument();
     expect(within(menu).getByText("Reports")).toBeInTheDocument();
   });
 
@@ -87,20 +91,16 @@ describe("ToolsOverflow", () => {
   });
 
   // Case 5
-  it.each([
-    ["/contacts"],
-    ["/contacts/abc"],
-    ["/automations"],
-    ["/automations/xyz"],
-    ["/activity"],
-    ["/reports"],
-  ])("trigger has data-on-tools when pathname is %s", (pathname) => {
-    setAllToolsLive(true);
-    mockUsePathname.mockReturnValue(pathname);
-    render(<ToolsOverflow />);
-    const trigger = screen.getByRole("button", { name: /tools/i });
-    expect(trigger).toHaveAttribute("data-on-tools", "true");
-  });
+  it.each([["/contacts"], ["/contacts/abc"], ["/automations"], ["/automations/xyz"], ["/reports"]])(
+    "trigger has data-on-tools when pathname is %s",
+    (pathname) => {
+      setAllToolsLive(true);
+      mockUsePathname.mockReturnValue(pathname);
+      render(<ToolsOverflow />);
+      const trigger = screen.getByRole("button", { name: /tools/i });
+      expect(trigger).toHaveAttribute("data-on-tools", "true");
+    },
+  );
 
   // Case 6
   it("trigger does NOT have data-on-tools when pathname is /settings", () => {
@@ -112,7 +112,9 @@ describe("ToolsOverflow", () => {
   });
 
   // Case 7
-  it.each([["/"], ["/alex"], ["/missing"]])(
+  // "/activity" is included here on purpose: it is no longer a Tools route, so
+  // visiting it must NOT light the Tools trigger.
+  it.each([["/"], ["/alex"], ["/missing"], ["/activity"]])(
     "trigger does NOT have data-on-tools when pathname is %s",
     (pathname) => {
       setAllToolsLive(true);
@@ -165,7 +167,6 @@ describe("ToolsOverflow", () => {
   it.each([
     ["/contacts", "Pipeline"],
     ["/automations", "Automations"],
-    ["/activity", "Activity"],
     ["/reports", "Reports"],
   ])("%s item is active+aria-current when pathname matches", async (pathname, label) => {
     setAllToolsLive(true);

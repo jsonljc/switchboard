@@ -20,9 +20,15 @@ export const TOOLS_NAV_ITEMS: ReadonlyArray<{
 }> = [
   { id: "contacts", label: "Pipeline", href: "/contacts" },
   { id: "automations", label: "Automations", href: "/automations" },
-  { id: "activity", label: "Activity", href: "/activity" },
   { id: "reports", label: "Reports", href: "/reports" },
 ];
+// NOTE: "/activity" (the audit-ledger viewer) is intentionally absent from the
+// operator nav. SMB clinic owners want bookings, not a forensic event log, so
+// the surface is kept reachable by URL (and via the dev panel) for support/
+// debugging but is not advertised in the Tools menu. The WorkTrace ledger and
+// the /api/dashboard/activity read endpoint are untouched. "activity" remains a
+// ToolsNavId (its NEXT_PUBLIC_ACTIVITY_LIVE flag still gates the page itself),
+// mirroring how "approvals" stayed a ToolsNavId after PR #646 removed its nav.
 
 export const TOOLS_PREFIXES = TOOLS_NAV_ITEMS.map((it) => it.href);
 
