@@ -7,7 +7,7 @@ import type {
   HandoffReason,
   LeadSnapshot,
   QualificationSnapshot,
-  ConversationSummary,
+  HandoffConversationSummary,
 } from "./types.js";
 import { randomUUID } from "node:crypto";
 
@@ -40,7 +40,9 @@ export class HandoffPackageAssembler {
     };
   }
 
-  private buildSummary(messages: Array<{ role: string; text: string }>): ConversationSummary {
+  private buildSummary(
+    messages: Array<{ role: string; text: string }>,
+  ): HandoffConversationSummary {
     const userMessages = messages.filter((m) => m.role === "user");
     const keyTopics = this.extractKeyTopics(userMessages.map((m) => m.text));
     const objectionHistory = this.extractObjections(userMessages.map((m) => m.text));

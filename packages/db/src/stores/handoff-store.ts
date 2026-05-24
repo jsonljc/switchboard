@@ -10,7 +10,7 @@ import type {
   HandoffReason,
   LeadSnapshot,
   QualificationSnapshot,
-  ConversationSummary,
+  HandoffConversationSummary,
 } from "@switchboard/core";
 
 export class PrismaHandoffStore implements HandoffStore {
@@ -106,7 +106,7 @@ function toHandoffPackage(row: HandoffRow): Handoff {
     status: row.status as HandoffStatus,
     leadSnapshot: row.leadSnapshot as LeadSnapshot,
     qualificationSnapshot: row.qualificationSnapshot as QualificationSnapshot,
-    conversationSummary: row.conversationSummary as ConversationSummary,
+    conversationSummary: row.conversationSummary as HandoffConversationSummary,
     slaDeadlineAt: row.slaDeadlineAt,
     createdAt: row.createdAt,
     acknowledgedAt: row.acknowledgedAt ?? undefined,

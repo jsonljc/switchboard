@@ -164,7 +164,7 @@ export type {
   HandoffStore,
   LeadSnapshot,
   QualificationSnapshot,
-  ConversationSummary,
+  HandoffConversationSummary,
 } from "./handoff/types.js";
 
 // Embedding Adapter

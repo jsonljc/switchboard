@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
 // Human Handoff — Types (re-exports from @switchboard/schemas)
 // ---------------------------------------------------------------------------
-// Handoff / LeadSnapshot / QualificationSnapshot / ConversationSummary
+// Handoff / LeadSnapshot / QualificationSnapshot / HandoffConversationSummary
 // were hoisted to @switchboard/schemas per Route Governance Contract v1 §8.3.
 // This file keeps the existing import paths working via re-export.
 // The `HandoffStore` interface stays here — it's a store contract, not a
 // cross-app value type, and lives appropriately in core.
 // ---------------------------------------------------------------------------
 
-import type { Handoff, HandoffStatus, HandoffConversationSummary } from "@switchboard/schemas";
+import type { Handoff, HandoffStatus } from "@switchboard/schemas";
 
 export type {
   Handoff,
@@ -18,9 +18,6 @@ export type {
   QualificationSnapshot,
   HandoffConversationSummary,
 } from "@switchboard/schemas";
-
-// Back-compat alias for the renamed inner summary type.
-export type ConversationSummary = HandoffConversationSummary;
 
 export interface HandoffStore {
   save(pkg: Handoff): Promise<void>;
