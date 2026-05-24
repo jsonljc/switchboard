@@ -121,10 +121,9 @@ export class PrismaKnowledgeStore {
     }));
   }
 
-  async deleteByDocument(documentId: string): Promise<number> {
-    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+  async deleteByDocument(organizationId: string, documentId: string): Promise<number> {
     const result = await this.prisma.knowledgeChunk.deleteMany({
-      where: { documentId },
+      where: { documentId, organizationId },
     });
     return result.count;
   }

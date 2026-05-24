@@ -173,6 +173,21 @@ describe("store-mutation advisory — Prisma-model receiver scoping", () => {
   });
 });
 
+describe("store-mutation advisory — receiver namespace breadth", () => {
+  it("flags a prismaClient.<model>.update missing org (prisma-prefixed ns)", () => {
+    const w = scan(`export class S {
+      async f(id: string) { await this.prismaClient.contact.update({ where: { id }, data: {} }); }
+    }`);
+    expect(w).toHaveLength(1);
+  });
+  it("passes prismaClient.<model>.update when org-scoped", () => {
+    const w = scan(`export class S {
+      async f(organizationId: string, id: string) { await this.prismaClient.contact.updateMany({ where: { id, organizationId }, data: {} }); }
+    }`);
+    expect(w).toHaveLength(0);
+  });
+});
+
 describe("store-mutation advisory — AST edge cases (pinned behavior)", () => {
   it("inspects deleteMany where the same way as updateMany", () => {
     const ok = scan(`export class S {

@@ -78,8 +78,10 @@ function getMutationMethod(call: CallExpression): string | null {
   return name;
 }
 
+// Transaction-callback params MUST be named tx/trx/transaction to be recognized as
+// Prisma namespaces. Widening to db/t would over-match non-Prisma receivers.
 const TX_LIKE_RX = /^(tx|trx|transaction)$/;
-const PRISMA_NS_RX = /(^|\.)prisma$/;
+const PRISMA_NS_RX = /(^|\.)prisma\w*$/;
 
 /**
  * Returns true only when the call is of the form `<ns>.<model>.<method>`:
