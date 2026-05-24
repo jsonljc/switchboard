@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { EditorialShellBoundary } from "./editorial-shell-boundary";
 import { AmbientCream } from "./ambient-cream";
 import { EditorialKeys } from "./editorial-keys";
 import { LiveSignalPopover } from "./live-signal-popover";
@@ -11,16 +10,14 @@ import { ToolsOverflow } from "./tools-overflow";
 import { TweaksPanelMount } from "./tweaks-panel-mount";
 import { PrimaryNav } from "./primary-nav";
 
-export { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
-
-export async function EditorialAuthShell({ children }: { children: ReactNode }) {
-  return (
-    <EditorialShellBoundary>
-      <EditorialAuthShellInner>{children}</EditorialAuthShellInner>
-    </EditorialShellBoundary>
-  );
-}
-
+/**
+ * The single editorial shell. Mounted exactly once by AppShell (the (auth)
+ * layout's client shell), so every authed route — except chrome-free flows
+ * like /onboarding — shares this header + providers. It owns HaltProvider +
+ * RightDrawerProvider (context), AmbientCream + EditorialKeys (one mount each),
+ * the app-header, and the wrapping <main>. EditorialShellBoundary wraps this in
+ * AppShell to catch render errors.
+ */
 export function EditorialAuthShellInner({ children }: { children: ReactNode }) {
   return (
     <HaltProvider>
