@@ -52,3 +52,32 @@ export function resolvePolicyOverrides(
 
   return hasAny ? overrides : undefined;
 }
+
+/**
+ * Trust-level launch-posture override, stored in `AgentDeployment.governanceSettings`
+ * (the JSON column) under the `trustLevelOverride` key. This is a deliberate POSTURE
+ * decision — distinct from `listing.trustScore`, which measures *earned* confidence.
+ *
+ * When set, it lets an operator pin a deployment's runtime trust level (e.g. an SMB
+ * launch deployment that should auto-allow its revenue-path actions from day one)
+ * WITHOUT touching the global score-based trust ramp. Absent or invalid ⇒ `undefined`,
+ * so the caller keeps its existing default. Validates against the three runtime trust
+ * levels (mirrors `TrustLevel` in `@switchboard/core` skill-runtime governance — kept
+ * as a local literal union here to preserve the schemas→core dependency direction).
+ *
+ * Note: this only changes whether a tool call auto-approves vs. parks for approval.
+ * It has no effect on the deny-based compliance floor (banned-phrase / claim-classifier
+ * / consent gates), which run independently of trust level.
+ */
+export const GOVERNANCE_TRUST_LEVELS = ["supervised", "guided", "autonomous"] as const;
+export type GovernanceTrustLevel = (typeof GOVERNANCE_TRUST_LEVELS)[number];
+
+export function resolveTrustLevelOverride(
+  governanceSettings: unknown,
+): GovernanceTrustLevel | undefined {
+  if (!governanceSettings || typeof governanceSettings !== "object") return undefined;
+  const raw = (governanceSettings as Record<string, unknown>).trustLevelOverride;
+  return typeof raw === "string" && (GOVERNANCE_TRUST_LEVELS as readonly string[]).includes(raw)
+    ? (raw as GovernanceTrustLevel)
+    : undefined;
+}

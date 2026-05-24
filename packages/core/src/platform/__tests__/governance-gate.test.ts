@@ -441,4 +441,89 @@ describe("GovernanceGate", () => {
       }
     });
   });
+
+  describe("SMB launch-posture trust override", () => {
+    it("defaults constraints.trustLevel to 'guided' when no deployment override is set", async () => {
+      const deps = makeDeps();
+      const gate = new GovernanceGate(deps);
+
+      const decision = await gate.evaluate(makeWorkUnit(), makeRegistration());
+
+      expect(decision.outcome).toBe("execute");
+      if (decision.outcome === "execute") {
+        // Baseline (no override) is unchanged: DEFAULT_CARTRIDGE_CONSTRAINTS.trustLevel.
+        expect(decision.constraints.trustLevel).toBe("guided");
+      }
+    });
+
+    it("uses the deployment's trustLevelOverride for constraints when set (execute path)", async () => {
+      const deps = makeDeps();
+      const gate = new GovernanceGate(deps);
+      const workUnit = makeWorkUnit({
+        deployment: {
+          deploymentId: "dep-1",
+          skillSlug: "alex",
+          trustLevel: "guided",
+          trustScore: 0,
+          trustLevelOverride: "autonomous",
+        },
+      });
+
+      const decision = await gate.evaluate(workUnit, makeRegistration());
+
+      expect(decision.outcome).toBe("execute");
+      if (decision.outcome === "execute") {
+        // Override flows into constraints → reaches GovernanceHook as ctx.trustLevel,
+        // so external_mutation tool calls (bookings) auto-approve instead of parking.
+        expect(decision.constraints.trustLevel).toBe("autonomous");
+      }
+    });
+
+    it("carries the override into constraints on the require_approval path too", async () => {
+      const deps = makeDeps({
+        evaluate: vi.fn().mockReturnValue(makeTrace({ approvalRequired: "standard" })),
+      });
+      const gate = new GovernanceGate(deps);
+      const workUnit = makeWorkUnit({
+        deployment: {
+          deploymentId: "dep-1",
+          skillSlug: "alex",
+          trustLevel: "guided",
+          trustScore: 0,
+          trustLevelOverride: "autonomous",
+        },
+      });
+
+      const decision = await gate.evaluate(workUnit, makeRegistration());
+
+      expect(decision.outcome).toBe("require_approval");
+      if (decision.outcome === "require_approval") {
+        expect(decision.constraints?.trustLevel).toBe("autonomous");
+      }
+    });
+
+    it("carries the override into the system_auto_approved short-circuit", async () => {
+      const deps = makeDeps();
+      const gate = new GovernanceGate(deps);
+      const workUnit = makeWorkUnit({
+        deployment: {
+          deploymentId: "dep-1",
+          skillSlug: "alex",
+          trustLevel: "guided",
+          trustScore: 0,
+          trustLevelOverride: "autonomous",
+        },
+      });
+
+      const decision = await gate.evaluate(
+        workUnit,
+        makeRegistration({ approvalMode: "system_auto_approved" }),
+      );
+
+      expect(decision.outcome).toBe("execute");
+      if (decision.outcome === "execute") {
+        expect(decision.constraints.trustLevel).toBe("autonomous");
+      }
+    });
+  });
 });

@@ -25,6 +25,10 @@ export function resolveAuthoritativeDeployment(
         skillSlug: result.skillSlug,
         trustLevel: result.trustLevel,
         trustScore: result.trustScore,
+        // Forward the launch-posture trust override so GovernanceGate can honor it.
+        // Without this, the resolved override is silently dropped before reaching
+        // the gate and the auto-allow posture has no runtime effect.
+        trustLevelOverride: result.trustLevelOverride,
       };
     },
   };

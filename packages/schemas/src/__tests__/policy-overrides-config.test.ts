@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   DeploymentPolicyOverridesSchema,
   resolvePolicyOverrides,
+  resolveTrustLevelOverride,
 } from "../policy-overrides-config.js";
 
 describe("DeploymentPolicyOverridesSchema", () => {
@@ -77,5 +78,30 @@ describe("resolvePolicyOverrides", () => {
     });
     expect(result).toEqual({ circuitBreakerThreshold: 3 });
     expect(result?.allowedModelTiers).toBeUndefined();
+  });
+});
+
+describe("resolveTrustLevelOverride", () => {
+  it("returns each valid runtime trust level", () => {
+    expect(resolveTrustLevelOverride({ trustLevelOverride: "autonomous" })).toBe("autonomous");
+    expect(resolveTrustLevelOverride({ trustLevelOverride: "guided" })).toBe("guided");
+    expect(resolveTrustLevelOverride({ trustLevelOverride: "supervised" })).toBe("supervised");
+  });
+
+  it("returns undefined when the key is absent", () => {
+    expect(resolveTrustLevelOverride({})).toBeUndefined();
+    expect(resolveTrustLevelOverride({ somethingElse: "autonomous" })).toBeUndefined();
+  });
+
+  it("returns undefined for invalid or non-string values", () => {
+    expect(resolveTrustLevelOverride({ trustLevelOverride: "yolo" })).toBeUndefined();
+    expect(resolveTrustLevelOverride({ trustLevelOverride: 3 })).toBeUndefined();
+    expect(resolveTrustLevelOverride({ trustLevelOverride: null })).toBeUndefined();
+  });
+
+  it("returns undefined for non-object inputs", () => {
+    expect(resolveTrustLevelOverride(null)).toBeUndefined();
+    expect(resolveTrustLevelOverride(undefined)).toBeUndefined();
+    expect(resolveTrustLevelOverride("autonomous")).toBeUndefined();
   });
 });

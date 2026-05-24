@@ -12,6 +12,8 @@ export interface DeploymentResolverResult {
   skillSlug: string;
   trustLevel: TrustLevel;
   trustScore: number;
+  /** Explicit launch-posture trust override (see DeploymentContext.trustLevelOverride). */
+  trustLevelOverride?: TrustLevel;
   persona?: AgentPersona;
   inputConfig: Record<string, unknown>;
   policyOverrides?: DeploymentPolicyOverrides;
@@ -39,6 +41,7 @@ export function toDeploymentContext(result: DeploymentResolverResult): Deploymen
     skillSlug: result.skillSlug,
     trustLevel: result.trustLevel,
     trustScore: result.trustScore,
+    trustLevelOverride: result.trustLevelOverride,
     persona: result.persona,
     policyOverrides: result.policyOverrides,
     inputConfig: result.inputConfig,

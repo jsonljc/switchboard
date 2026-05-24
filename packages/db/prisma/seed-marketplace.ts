@@ -655,7 +655,10 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
             complaints: true,
           },
         },
-        governanceSettings: {},
+        // SMB launch posture: auto-allow Alex's revenue-path tool calls (CRM
+        // writes, bookings) without per-action approval. trustScore still rises
+        // as earned confidence; this override only sets day-one friction.
+        governanceSettings: { trustLevelOverride: "autonomous" },
         connectionIds: [],
       },
       create: {
@@ -682,7 +685,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
             complaints: true,
           },
         },
-        governanceSettings: {},
+        governanceSettings: { trustLevelOverride: "autonomous" },
         connectionIds: [],
       },
     });
@@ -747,7 +750,9 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
           targetROAS: "2.5",
           auditFrequency: "weekly",
         },
-        governanceSettings: {},
+        // SMB launch posture: auto-allow Riley's reversible ad-optimization
+        // actions without per-action approval (see Alex deployment above).
+        governanceSettings: { trustLevelOverride: "autonomous" },
         connectionIds: [],
       },
       create: {
@@ -761,7 +766,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
           targetROAS: "2.5",
           auditFrequency: "weekly",
         },
-        governanceSettings: {},
+        governanceSettings: { trustLevelOverride: "autonomous" },
         connectionIds: [],
       },
     });

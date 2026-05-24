@@ -22,6 +22,13 @@ export interface DeploymentContext {
   skillSlug: string;
   trustLevel: TrustLevel;
   trustScore: number;
+  /**
+   * Explicit launch-posture trust override from `governanceSettings.trustLevelOverride`.
+   * When set, governance uses this trust level for tool-call admission instead of the
+   * default — without consulting the score-based trust ramp. Has no effect on the
+   * deny-based compliance floor. See `resolveTrustLevelOverride` in @switchboard/schemas.
+   */
+  trustLevelOverride?: TrustLevel;
   persona?: AgentPersona;
   policyOverrides?: DeploymentPolicyOverrides;
   // PR-3.2e: raw AgentDeployment.inputConfig forwarded for builders that
