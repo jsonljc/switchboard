@@ -2,10 +2,30 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HaltProvider } from "../halt/halt-context";
-import { LiveSignalPopover } from "../live-signal-popover";
+import type { ReactNode } from "react";
+import { useAudit } from "@/hooks/use-audit";
 import type { AuditEntryResponse } from "@/hooks/use-audit";
+import { LiveSignalPopover } from "../live-signal-popover";
+
+// Tool B: mock useHalt directly — the popover doesn't care about provider
+// internals; we need to drive `error` from outside for the toast test.
+const haltState = {
+  halted: false,
+  isPending: false,
+  error: null as Error | null,
+  setHalted: vi.fn(),
+  toggleHalt: vi.fn(),
+};
+vi.mock("@/components/layout/halt/halt-context", () => ({
+  useHalt: () => ({ ...haltState }),
+  HaltProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+// Mock useToast so we can assert toast calls without a real toast stack.
+const toastMock = vi.fn();
+vi.mock("@/components/ui/use-toast", () => ({
+  useToast: () => ({ toast: toastMock }),
+}));
 
 vi.mock("@/hooks/use-audit", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/use-audit")>("@/hooks/use-audit");
@@ -14,8 +34,6 @@ vi.mock("@/hooks/use-audit", async () => {
     useAudit: vi.fn(),
   };
 });
-
-import { useAudit } from "@/hooks/use-audit";
 
 function makeEntry(overrides: Partial<AuditEntryResponse> = {}): AuditEntryResponse {
   return {
@@ -55,22 +73,19 @@ function setUseAudit(opts: {
 }
 
 function renderPopover({ initialHalted = false }: { initialHalted?: boolean } = {}) {
-  if (initialHalted) {
-    window.localStorage.setItem("sb_halt_state", "1");
-  }
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <HaltProvider>
-        <LiveSignalPopover />
-      </HaltProvider>
-    </QueryClientProvider>,
-  );
+  haltState.halted = initialHalted;
+  haltState.error = null;
+  return render(<LiveSignalPopover />);
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
+  haltState.halted = false;
+  haltState.isPending = false;
+  haltState.error = null;
+  haltState.setHalted = vi.fn();
+  haltState.toggleHalt = vi.fn();
   vi.mocked(useAudit).mockReset();
+  toastMock.mockReset();
   setUseAudit({ entries: [] });
 });
 
@@ -107,26 +122,36 @@ describe("LiveSignalPopover — pip (trigger)", () => {
 describe("LiveSignalPopover — halt action", () => {
   it("flips state and labels in lockstep when Halt is clicked", async () => {
     const user = userEvent.setup();
-    const { container } = renderPopover({ initialHalted: false });
+    haltState.halted = false;
+    haltState.toggleHalt = vi.fn(() => {
+      haltState.halted = true;
+    });
+    const { container, rerender } = render(<LiveSignalPopover />);
     await user.click(screen.getByRole("button", { name: /system live/i }));
 
     const halt = await screen.findByRole("button", { name: /^Halt$/ });
     await user.click(halt);
 
-    // After click: pip text now Halted; popover label flips
+    // Rerender so the new halted state is reflected in the DOM
+    rerender(<LiveSignalPopover />);
+
     expect(container.querySelector("button.live-pip")!.textContent).toContain("Halted");
     expect(within(screen.getByRole("dialog")).getByText(/system halted/i)).toBeInTheDocument();
-    // Halt button label flips to Resume
     expect(screen.getByRole("button", { name: /^Resume$/ })).toBeInTheDocument();
-    expect(window.localStorage.getItem("sb_halt_state")).toBe("1");
   });
 
   it("Resume from halted flips state back", async () => {
     const user = userEvent.setup();
-    renderPopover({ initialHalted: true });
+    haltState.halted = true;
+    haltState.toggleHalt = vi.fn(() => {
+      haltState.halted = false;
+    });
+    const { rerender } = render(<LiveSignalPopover />);
     await user.click(screen.getByRole("button", { name: /system halted/i }));
     await user.click(screen.getByRole("button", { name: /^Resume$/ }));
-    expect(window.localStorage.getItem("sb_halt_state")).toBe("0");
+    rerender(<LiveSignalPopover />);
+    // toggleHalt was called — state flip happens in the mock
+    expect(haltState.toggleHalt).toHaveBeenCalledOnce();
   });
 });
 
@@ -229,5 +254,65 @@ describe("LiveSignalPopover — accessibility", () => {
     await user.click(screen.getByRole("button", { name: /system live/i }));
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("aria-label", "Live signal");
+  });
+});
+
+describe("LiveSignalPopover — resume readiness error toast", () => {
+  it("fires 'Couldn't resume' toast when halted=true and error is set (failed resume)", () => {
+    const err = new Error("Cannot resume — blockers: Meta Ads");
+    haltState.halted = true; // failed resume → rolled back to halted
+    haltState.error = err;
+    render(<LiveSignalPopover />);
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Couldn't resume",
+        description: err.message,
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("fires 'Couldn't pause' toast when halted=false and error is set (failed halt)", () => {
+    const err = new Error("Cannot pause — server rejected");
+    haltState.halted = false; // failed halt → rolled back to live
+    haltState.error = err;
+    render(<LiveSignalPopover />);
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Couldn't pause",
+        description: err.message,
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("does not fire a toast when error is null", () => {
+    haltState.error = null;
+    render(<LiveSignalPopover />);
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+
+  // Pins the re-fire contract: use-governance throws a FRESH Error instance per
+  // failure (new object identity), with react-query passing null between runs.
+  // A future refactor that memoizes the error would silently break this behavior.
+  it("re-fires the toast for each distinct Error instance (null between fires)", () => {
+    const err1 = new Error("Cannot resume — blockers: Meta Ads");
+    const err2 = new Error("Cannot resume — blockers: Meta Ads"); // distinct instance, same message
+    haltState.halted = true;
+    haltState.error = err1;
+
+    const { rerender } = render(<LiveSignalPopover />);
+    // First non-null error: toast fires once
+    expect(toastMock).toHaveBeenCalledTimes(1);
+
+    // Null between runs (react-query clears error between mutations)
+    haltState.error = null;
+    rerender(<LiveSignalPopover />);
+    expect(toastMock).toHaveBeenCalledTimes(1); // no additional call for null
+
+    // Second distinct Error instance: toast fires again
+    haltState.error = err2;
+    rerender(<LiveSignalPopover />);
+    expect(toastMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,10 +1,11 @@
 // apps/dashboard/src/components/layout/live-signal-popover.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { useHalt } from "./halt/halt-context";
 import { useAudit, type AuditEntryResponse } from "@/hooks/use-audit";
+import { useToast } from "@/components/ui/use-toast";
 import "./live-signal-popover.css";
 
 const RECENT_LIMIT = 10;
@@ -52,8 +53,20 @@ function EventRow({ entry }: { entry: AuditEntryResponse }) {
 
 export function LiveSignalPopover() {
   const [open, setOpen] = useState(false);
-  const { halted, toggleHalt } = useHalt();
+  const { halted, toggleHalt, error } = useHalt();
+  const { toast } = useToast();
   const { data, isLoading, isError } = useAudit();
+
+  // Surface resume-readiness blockers (C1→C2 loop) to the operator as a toast.
+  // Fires once when a new error appears; guard prevents firing on null.
+  useEffect(() => {
+    if (!error) return;
+    toast({
+      title: halted ? "Couldn't resume" : "Couldn't pause",
+      description: error.message,
+      variant: "destructive",
+    });
+  }, [error]); // re-fires per failure: use-governance throws a fresh Error instance on each failed resume (new identity); see halt-context lastAction gating — toast is stable, omitting it is safe and avoids re-fire on rerender
 
   // The audit endpoint can return HTTP 200 with a `data.error` string when the
   // upstream API is unreachable (see use-audit.ts). React Query's `isError`

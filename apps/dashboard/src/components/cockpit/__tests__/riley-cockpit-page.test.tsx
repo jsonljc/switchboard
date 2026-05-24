@@ -9,7 +9,13 @@ import React from "react";
 
 const haltState = { halted: false };
 vi.mock("@/components/layout/halt/halt-context", () => ({
-  useHalt: () => ({ halted: haltState.halted, setHalted: vi.fn(), toggleHalt: vi.fn() }),
+  useHalt: () => ({
+    halted: haltState.halted,
+    isPending: false,
+    error: null,
+    setHalted: vi.fn(),
+    toggleHalt: vi.fn(),
+  }),
   HaltProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

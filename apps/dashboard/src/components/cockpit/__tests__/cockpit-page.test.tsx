@@ -49,6 +49,8 @@ let haltedState = false;
 vi.mock("@/components/layout/halt/halt-context", () => ({
   useHalt: () => ({
     halted: haltedState,
+    isPending: false,
+    error: null,
     setHalted: vi.fn(),
     toggleHalt: toggleHaltMock,
   }),
