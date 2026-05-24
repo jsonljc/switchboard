@@ -7,10 +7,10 @@ import type { SpriteVariantKey } from "@/components/cockpit/sprite/types";
 export const ALEX_CONFIG = {
   name: "Alex",
   accent: {
-    base: "#B8782E",
-    deep: "#7C4F1C",
-    soft: "#F1E2C2",
-    paper: "#FBF1D6",
+    base: "#E07A53" /* coral — identity only, matches --agent-alex hsl(14 70% 58%) */,
+    deep: "#8C3E1E",
+    soft: "#F4D5C5",
+    paper: "#FBF0EA",
   },
   missionSubtitle: "SDR · Consultations pipeline",
   needsYouLabel: "Alex needs you",

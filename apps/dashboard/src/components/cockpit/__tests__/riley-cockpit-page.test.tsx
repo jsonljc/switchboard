@@ -414,7 +414,7 @@ describe("RileyCockpitPage — B.2b KPI strip", () => {
     metricsState.data = buildMetricsFixture();
     wrap(<RileyCockpitPage />);
     const pill = screen.getByTestId("roi-comparator");
-    expect(pill).toHaveStyle({ background: "#F6E7DE" }); // RILEY_ACCENT.paper
+    expect(pill).toHaveStyle({ background: "#EBF5F4" }); // RILEY_ACCENT.paper (teal identity)
   });
 });
 

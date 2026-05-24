@@ -9,12 +9,12 @@ import {
 } from "../riley-config";
 
 describe("riley-config", () => {
-  it("RILEY_ACCENT carries the four warm-clay tokens from the Riley target spec", () => {
+  it("RILEY_ACCENT carries teal identity tokens (moved off amber in P0-B)", () => {
     expect(RILEY_ACCENT).toEqual({
-      base: "#B86C50",
-      deep: "#7E4533",
-      soft: "#ECD4C8",
-      paper: "#F6E7DE",
+      base: "#3F8C86",
+      deep: "#215451",
+      soft: "#C5DFDD",
+      paper: "#EBF5F4",
     });
   });
 

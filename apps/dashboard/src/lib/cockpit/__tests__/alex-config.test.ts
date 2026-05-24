@@ -3,9 +3,9 @@ import { describe, it, expect } from "vitest";
 import { ALEX_CONFIG, statusColor, statusPulse, animState } from "../alex-config";
 
 describe("alex-config", () => {
-  it("uses warm amber accent", () => {
-    expect(ALEX_CONFIG.accent.base).toBe("#B8782E");
-    expect(ALEX_CONFIG.accent.deep).toBe("#7C4F1C");
+  it("uses coral identity accent (moved off action amber in P0-B)", () => {
+    expect(ALEX_CONFIG.accent.base).toBe("#E07A53");
+    expect(ALEX_CONFIG.accent.deep).toBe("#8C3E1E");
   });
 
   it("statusColor returns red when halted regardless of key", () => {
