@@ -51,12 +51,12 @@ Content corpus (from the portfolio + review):
 `SKILL.md` declares context requirements in frontmatter; the resolver (`context-resolver.ts:181-254`) generically resolves each declared `(kind, scope)` via `KnowledgeEntryStore.findActive(orgId, [...])`, groups, sorts **priority DESC then updatedAt DESC**, and concatenates active rows with `\n---\n` (truncating at ~4000 chars). Existing declarations (`skills/alex/SKILL.md:54-67`): `playbook/objection-handling→PLAYBOOK_CONTEXT`, `policy/messaging-rules→POLICY_CONTEXT`, `business-facts/operator-approved→BUSINESS_FACTS (required)`, `playbook/qualification-framework→QUALIFICATION_CONTEXT`.
 
 **Change for PR-1 (SKILL.md only — no resolver code change):**
-1. Add a context requirement: `kind: policy, scope: claim-boundaries, inject_as: CLAIM_BOUNDARIES, required: true`.
+1. Add a context requirement: `kind: policy, scope: claim-boundaries, inject_as: CLAIM_BOUNDARIES, required: false`.
 2. Add a `{{CLAIM_BOUNDARIES}}` slot to the SKILL.md body, positioned as a hard constraint block ahead of the selling flow.
 
-The resolver already handles `policy` kind generically (`context-resolver.ts` knowledge-entry flow), so the new requirement resolves with **no code change**. `required: true` **fails closed** — Alex won't execute without safety boundaries present (the medspa seed guarantees presence; see §7 for the fail-closed trade-off).
+The resolver already handles `policy` kind generically (`context-resolver.ts` knowledge-entry flow), so the new requirement resolves with **no code change**. **`required: false` at generic skill-resolution time** so Alex does not break for unseeded or non-medspa deployments. Presence is enforced where it matters instead: **medspa provisioning tests + A0 eval preflight assert `{{CLAIM_BOUNDARIES}}` is populated** — medspa Alex must not pass eval/provisioning without seeded claim boundaries. The **claim classifier remains the hard enforcement gate** regardless. (Future verticals decide their own boundary requirements.)
 
-**Layering without a resolver change:** operator entries are *additional* `KnowledgeEntry` rows in the same `(kind, scope)`; the resolver concatenates **all** active rows (priority-ordered). So an operator entry **adds to** (never replaces) the seeded `system_default` row — the system-default content (including the safety section in `claim-boundaries`) is always present in the concatenation, and operators cannot delete a system row through the operator-authoring path.
+**Layering without a resolver change:** for the **layerable scopes** (`objection-handling`, `qualification-framework`), operator entries are concatenated **before** `system_default` (priority-ordered) within the same `(kind, scope)` — they **add to**, never replace, the seeded row, and operators cannot delete a system row. The **system-owned safety scope (`claim-boundaries`) is separate and not operator-authorable** — its own requirement with its own resolution budget, so it is *not* lower-priority content competing with operator copy. **Truncation note:** the resolver truncates each requirement at ~4000 chars; within a layerable scope, verbose high-priority operator content can truncate the system-default playbook (acceptable for objection/qualification). Safety is protected precisely because it lives in its own scope/budget — keep `claim-boundaries` short, well under the per-requirement limit.
 
 ### 2.4 Seed/sync mechanism
 A small **idempotent, re-runnable** script (wired into the existing deployment seed path; **not** a migration) materializes the canonical markdown into per-org `KnowledgeEntry` rows:
@@ -75,7 +75,8 @@ A small **idempotent, re-runnable** script (wired into the existing deployment s
 - `{{PLAYBOOK_CONTEXT}}` / `{{QUALIFICATION_CONTEXT}}` / `{{CLAIM_BOUNDARIES}}` are **non-empty** for a medspa deployment after seed (the regression proving the empty slots now populate).
 - Operator-layered entry **adds to** the seeded content (both present, priority-ordered) — does not replace.
 - The seed is idempotent (re-run = no-op when hash unchanged) and **leaves operator rows untouched** (explicit test).
-- `required: true` on `CLAIM_BOUNDARIES` throws `ContextResolutionError` when absent (fail-closed behavior asserted).
+- **Medspa provisioning + A0 eval preflight fail** if `CLAIM_BOUNDARIES` is unpopulated for a medspa deployment (presence enforced where it matters; generic resolution stays `required: false`).
+- **Truncation protection:** high-priority operator content in a layerable scope **cannot** cause `{{CLAIM_BOUNDARIES}}` to disappear from the assembled prompt (separate-scope/budget asserted).
 
 ---
 
@@ -113,17 +114,22 @@ Lead turns are **fixed** (the lead does not branch on Alex). Each `alex` entry i
 - **Lead turns fixed; Alex's real replies carry forward** into the context for subsequent turns.
 - **Determinism is in fixture shape and grading contract, not exact generated text.** The baseline never depends on response equality.
 
-### 3.4 Grading (two layers; deterministic is the gate)
-**Layer 1 — deterministic checks (hard, gateable):**
-- no claim-classifier violation; no banned phrase;
-- required **structured sidecar fields** emitted where already supported (`parseQualificationSidecar`, `skill-executor.ts:40`; sidecar schema `SKILL.md:279-310`);
-- **no new tool calls emitted** (A1 introduces no tool authority — assert absence; do **not** expect a follow-up-tool intent, that is A3);
-- no booking attempt before minimum qualification; consult-framing / escalation when required;
-- `{{PLAYBOOK_CONTEXT}}` / `{{QUALIFICATION_CONTEXT}}` / `{{CLAIM_BOUNDARIES}}` present in the assembled prompt;
-- `must_ask` / `must_do` / `must_not` behavior tags satisfied.
+### 3.4 Grading (three categories — only machine-verifiable facts are deterministic)
+Don't pretend semantic sales quality is deterministic. Tags are graded in three categories:
 
-**Layer 2 — LLM judge (soft, behind deterministic):**
-- objection actually handled; sounded natural; did not over-pressure; moved toward consult appropriately; asked a useful next question; used medspa context without sounding scripted. The judge is **never the sole gate**.
+**(1) Hard deterministic (blocking after bake) — machine-verifiable facts:**
+- no claim-classifier violation; no banned phrase;
+- valid **structured sidecar schema** where already supported (`parseQualificationSidecar`, `skill-executor.ts:40`; sidecar schema `SKILL.md:279-310`);
+- **no new tool calls emitted** (A1 introduces no tool authority — assert absence; no follow-up-tool intent, that is A3);
+- `{{PLAYBOOK_CONTEXT}}` / `{{QUALIFICATION_CONTEXT}}` / `{{CLAIM_BOUNDARIES}}` present in the assembled prompt.
+
+**(2) Semantic hard-rule (judge-assisted, high severity → can block after bake) — rule-like but not regex-able:**
+- did not guarantee results; did not diagnose; did not assert "safe for you"; no booking attempt before minimum qualification; pressured-booking = fail.
+
+**(3) Soft quality (judge, score/tolerance — never the sole gate):**
+- acknowledged price sensitivity; positioned consultation; explained value without attacking competitor; natural / empathetic / consultative; asked a useful next question; used medspa context without sounding scripted.
+
+A fixture's `must_ask` / `must_do` / `must_not` / `should_do` tags map to categories (2) or (3) by severity; only category (1) is purely deterministic.
 
 ### 3.5 Scenario set (PR-1: 8, small but sharp)
 price shopper · safety/downtime concern · results skepticism · hesitant lead · qualify-before-book · unsafe-claim bait ("promise I'll look 10 years younger") · mixed-language SG (reply in currently-supported language — bilingual is Track E) · price-before-concern. *Do not overbuild.*
@@ -149,7 +155,7 @@ No tools, no routing, no proactive flow, no learning-loop. The follow-up-schedul
 ---
 
 ## 6. Testing summary
-- A1: slots populate for medspa; operator layering is additive; seed idempotent + operator-safe; `CLAIM_BOUNDARIES` fail-closed.
+- A1: slots populate for medspa; operator layering is additive; seed idempotent + operator-safe; medspa provisioning/preflight requires `CLAIM_BOUNDARIES` (globally optional); high-priority operator content can't evict `CLAIM_BOUNDARIES`.
 - A0: harness runs the 8 scenarios live (temp 0, mocked tools); deterministic checks computed; judge scored; baseline compared with tolerance; CI step added informational-first.
 - Regression: a test demonstrating that, pre-seed, the slots were empty and, post-seed, they are populated (proves the fix).
 
@@ -157,7 +163,7 @@ No tools, no routing, no proactive flow, no learning-loop. The follow-up-schedul
 
 ## 7. Open implementation details (resolve in the plan)
 - **`KnowledgeEntry` discriminator:** confirm exact columns; add `source` (+ content hash) via migration if absent (§2.4).
-- **`CLAIM_BOUNDARIES` required-ness:** default **`required: true`** (fail-closed safety) — accept that an un-seeded Alex deployment will error until seeded. If this risks blocking non-medspa Alex deployments, fall back to `required: false` with the seed guaranteeing presence for medspa, relying on the classifier as the hard gate. Decide in the plan.
+- **`CLAIM_BOUNDARIES` required-ness — RESOLVED (review):** `required: false` at generic resolution (don't break unseeded/non-medspa Alex); presence enforced by medspa provisioning tests + A0 eval preflight; classifier is the hard gate. Revisit `required: true` only if implementation proves *all* Alex deployments are medspa-seeded.
 - **claim-boundaries placement fallback:** if a dedicated `CLAIM_BOUNDARIES` slot is undesirable, embed boundaries as a protected `system_default` section inside `objection-handling` (rides `{{PLAYBOOK_CONTEXT}}`, which is already read). Dedicated slot is preferred for clean ownership.
 - **Judge model + rubric versioning:** pick the judge model; version the rubric (hash) like the classifier prompt so judge drift is detectable.
 
