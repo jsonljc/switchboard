@@ -45,24 +45,6 @@ export interface PendingApproval {
   quoteFrom?: string;
 }
 
-export interface ApprovalDetail {
-  request: {
-    id: string;
-    summary: string;
-    riskCategory: string;
-    bindingHash: string;
-    approvers: string[];
-    createdAt: string;
-  };
-  state: {
-    status: string;
-    expiresAt: string;
-    respondedBy?: string;
-    respondedAt?: string;
-  };
-  envelopeId: string;
-}
-
 export interface HealthCheck {
   healthy: boolean;
   checks: Record<string, { status: string; latencyMs: number; error?: string; detail?: unknown }>;

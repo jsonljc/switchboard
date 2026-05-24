@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { isMercuryToolLive } from "@/lib/route-availability";
 import { APPROVALS_FIXTURES } from "./fixtures";
-import type { PendingRow, DetailRow } from "./types";
+import type { PendingRow } from "./types";
 import { useSessionPrincipal } from "./use-session-principal";
 
 const isLive = (): boolean => isMercuryToolLive("approvals");
@@ -15,9 +15,8 @@ interface PendingResponse {
 
 /**
  * Project the rich fixture rows down to the wire-truthful PendingApproval shape.
- * The detail call (useApprovalDetail) is the only place rich fields appear.
- * Mirroring this boundary in fixture mode prevents "looks great in dev, breaks
- * in prod when /pending returns less than the UI assumed".
+ * Mirroring the /pending boundary in fixture mode prevents "looks great in dev,
+ * breaks in prod when /pending returns less than the UI assumed".
  */
 const FIXTURE_RESPONSE: PendingResponse = {
   approvals: APPROVALS_FIXTURES.map((row) => ({
@@ -51,29 +50,6 @@ export function usePendingApprovals() {
     // is the explicit refresh signal — no refetchInterval (live countdown is
     // client-side; refetch is event-driven).
     refetchOnWindowFocus: live,
-  });
-}
-
-export function useApprovalDetail(id: string | null) {
-  const keys = useScopedQueryKeys();
-  const live = isLive();
-
-  return useQuery<DetailRow>({
-    queryKey:
-      keys?.approvals.detail(id ?? "__none__") ?? (["__disabled_approval_detail__", id] as const),
-    queryFn: async () => {
-      if (!id) throw new Error("missing id");
-      if (!live) {
-        const row = APPROVALS_FIXTURES.find((r) => r.id === id);
-        if (!row) throw new Error(`fixture not found: ${id}`);
-        return row;
-      }
-      const res = await fetch(`/api/dashboard/approvals?id=${encodeURIComponent(id)}`);
-      if (!res.ok) throw new Error(`Failed to load approval: ${res.status}`);
-      return res.json() as Promise<DetailRow>;
-    },
-    enabled: !!id && (!live || !!keys),
-    staleTime: 5_000,
   });
 }
 

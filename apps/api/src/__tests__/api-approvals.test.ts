@@ -289,30 +289,4 @@ describe("Approvals API", () => {
       expect(legacy.quoteFrom).toBeUndefined();
     });
   });
-
-  describe("GET /api/approvals/:id", () => {
-    it("should return 200 with approval details", async () => {
-      const { approvalRequest } = await proposeWithApproval();
-
-      const res = await app.inject({
-        method: "GET",
-        url: `/api/approvals/${approvalRequest.id}`,
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      expect(body.request).toBeDefined();
-      expect(body.state).toBeDefined();
-      expect(body.envelopeId).toBeDefined();
-    });
-
-    it("should return 404 for non-existent approval", async () => {
-      const res = await app.inject({
-        method: "GET",
-        url: "/api/approvals/non-existent-id",
-      });
-
-      expect(res.statusCode).toBe(404);
-    });
-  });
 });

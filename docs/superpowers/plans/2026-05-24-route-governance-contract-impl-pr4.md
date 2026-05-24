@@ -25,18 +25,18 @@ Recorded so reviewers can audit them. All confirmed by the user.
 
 1. **Three sub-PRs, flip lands last.** 4A = validator correctness + triage (warning-only). 4B = alias sweep + sub-barrel re-exports (no validator change). 4C = `@route-class` backfill + flip to error. You do not flip warnings to errors until the validator is trustworthy; the AST upgrade in 4A is the real prerequisite.
 
-2. **4A owns validator correctness only — it does not drift into alias cleanup, docs, or enforcement behaviour.** The dynamic `SCHEMAS_EXPORT_NAMES` swap belongs in 4A because it is *also* validator correctness; the alias sweep does not.
+2. **4A owns validator correctness only — it does not drift into alias cleanup, docs, or enforcement behaviour.** The dynamic `SCHEMAS_EXPORT_NAMES` swap belongs in 4A because it is _also_ validator correctness; the alias sweep does not.
 
 3. **Deferred store sites are allowlisted now, migrated later.** `prisma-creator-identity-store` (×5 mutators) and `storage/prisma-lifecycle-store.updateDispatchRecord` (×1) reach `organizationId` only through an FK with **no Prisma `@relation`** to walk. PR-4 stays migration-free: suppress both via the `// route-governance: store-mutation-global` directive + a 1-line rationale, and open a **tracked follow-up issue** for the `@relation`-adding migration. (The directive token is reused; the rationale text distinguishes "deferred-needs-migration" from "genuinely-global" — see Task 2.)
 
 4. **PR-4A triage rule (the load-bearing boundary).** After the AST upgrade re-baselines the store-mutation warnings:
-   - **Fix in-PR** any genuinely-unscoped store mutation whose fix is **local** — it can be closed by adding an *already-available* `organizationId`/`orgId`/relation filter, with **no** schema migration, new `@relation`, API-contract change, or business-logic ambiguity.
+   - **Fix in-PR** any genuinely-unscoped store mutation whose fix is **local** — it can be closed by adding an _already-available_ `organizationId`/`orgId`/relation filter, with **no** schema migration, new `@relation`, API-contract change, or business-logic ambiguity.
    - **Defer** (suppress + 1-line rationale + tracked issue) **only** when the fix requires a schema migration, a new relation, an API-contract change, or has unclear business semantics.
    - The AST upgrade is expected to clear the contact-store ×8 and ~26 `storage/**` false-positives (those rows are already org-scoped; the text scan over-counted). Whatever genuinely-unscoped residual remains gets the rule above applied per-site. 4A must not be a validator upgrade that knowingly leaves easy governance gaps behind.
 
-5. **Dashboard proxies use a directory-level `dashboard-proxy` convention, not per-file headers or a silent allowlist.** The validator treats `apps/dashboard/src/app/api/**` as `dashboard-proxy` *by convention* (a recognised class, machine-checkable coverage), unless a file carries an explicit `@route-class` override header. Non-dashboard `app/api` routes still require explicit headers. A dashboard route that is **not** a proxy must carry an explicit override.
+5. **Dashboard proxies use a directory-level `dashboard-proxy` convention, not per-file headers or a silent allowlist.** The validator treats `apps/dashboard/src/app/api/**` as `dashboard-proxy` _by convention_ (a recognised class, machine-checkable coverage), unless a file carries an explicit `@route-class` override header. Non-dashboard `app/api` routes still require explicit headers. A dashboard route that is **not** a proxy must carry an explicit override.
 
-6. **Flip enforcement coverage (4C).** Blocking in error mode: (a) every in-scope route carries a valid `@route-class` header *or* is covered by the `dashboard-proxy` directory convention; (b) the existing operator-direct + read-only matrix cells; (c) cross-app-type duplicate violations (minus directive-suppressed); (d) un-scoped store mutations (minus directive-suppressed). **Explicitly NOT yet blocking:** stricter lifecycle/control-plane/ingress-receiver matrix cells, Cat 3.15, Cat 3.16, and the deferred `@relation`-migration sites.
+6. **Flip enforcement coverage (4C).** Blocking in error mode: (a) every in-scope route carries a valid `@route-class` header _or_ is covered by the `dashboard-proxy` directory convention; (b) the existing operator-direct + read-only matrix cells; (c) cross-app-type duplicate violations (minus directive-suppressed); (d) un-scoped store mutations (minus directive-suppressed). **Explicitly NOT yet blocking:** stricter lifecycle/control-plane/ingress-receiver matrix cells, Cat 3.15, Cat 3.16, and the deferred `@relation`-migration sites.
 
 7. **Cat 3.15 (typed Graph API response wrapper) + Cat 3.16 (agentContext null guard) are deferred to a tracked follow-up issue.** Neither shares PR-4's theme; folding them dilutes review and couples unrelated risk to the flip.
 
@@ -46,7 +46,7 @@ Recorded so reviewers can audit them. All confirmed by the user.
 
 ## Schema boundary rule
 
-This plan does **not** add or modify any Zod schema. The only `@switchboard/schemas` edits are **deletions** of two back-compat alias *type* declarations (`DashboardOverview` in `dashboard.ts`, and the `HandoffPackage`/`ConversationSummary` aliases live in **core** `handoff/types.ts`, not schemas). No `z.object(...)`, no `z.infer`, no Date-vs-string boundary decision anywhere in PR-4. If a task code-block shows a new `z.object(...)`, that is a plan bug — flag and skip.
+This plan does **not** add or modify any Zod schema. The only `@switchboard/schemas` edits are **deletions** of two back-compat alias _type_ declarations (`DashboardOverview` in `dashboard.ts`, and the `HandoffPackage`/`ConversationSummary` aliases live in **core** `handoff/types.ts`, not schemas). No `z.object(...)`, no `z.infer`, no Date-vs-string boundary decision anywhere in PR-4. If a task code-block shows a new `z.object(...)`, that is a plan bug — flag and skip.
 
 ---
 
@@ -54,21 +54,21 @@ This plan does **not** add or modify any Zod schema. The only `@switchboard/sche
 
 Captured so the implementing agent does not redo it and reviewers can audit the assumptions. Verified on `origin/main` at `8e46b34c` (re-confirm exact SHA in each sub-PR's Task 0).
 
-| Question | Answer |
-| --- | --- |
+| Question                                             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Is `HandoffPackage` a semantic type or a pure alias? | **Pure alias.** `packages/core/src/handoff/types.ts:25` declares `export type HandoffPackage = Handoff;` and `:28` `export type ConversationSummary = HandoffConversationSummary;`. The sweep is a mechanical rename + import retarget, **not** a semantic merge. The `HandoffStore` interface in the same file references `HandoffPackage` and stays in core (it is a store contract, not a cross-app value type) — only its type references rename to `Handoff`. |
-| Where is the `DashboardOverview` alias? | `packages/schemas/src/dashboard.ts` (`export type DashboardOverview = OperatorOverview;` + `DashboardOverviewSchema = OperatorOverviewSchema`). Consumers: `apps/dashboard/src/app/api/dashboard/overview/route.ts`, `hooks/use-dashboard-overview.ts`, `lib/api-client/dashboard.ts`. Method/hook/file names (`getDashboardOverview`, `use-dashboard-overview.ts`) stay — only the **type** renames. |
-| Where is `ConversationStateData`? | `apps/chat/src/conversation/state.ts` re-export shim + consumers in `prisma-store.ts`, `store.ts`, `threads.ts` (+ test). Canonical is `ConversationState` from `@switchboard/schemas`. |
-| `HandoffPackage` consumer count? | ~18 files across `packages/core/**` (handoff/, skill-runtime/hooks/, decisions/, consent/, contacts/, channel-gateway/, index.ts), `packages/db/src/stores/handoff-store.ts`, `apps/api/src/{bootstrap/skill-mode.ts,routes/decisions.ts}`. Exact list re-derived by grep in Task 6. |
-| How many `@route-class` headers exist / are missing? | `apps/api/src/routes/` has 104 `.ts` files (incl. tests); **4** carry `@route-class` (the PR-1 ingress routes). Spec §12 PR-4 says "~63 remaining" non-test routes. `apps/chat/src/routes/` has 3 `.ts` files (0 headers). `apps/dashboard/src/app/api/**` has ~100 `route.ts(x)` proxy files → covered by the directory convention, **not** per-file headers. |
-| Header format? | First line of file: `// @route-class: operator-direct` (see `apps/api/src/routes/recommendations.ts:1`). `parseRouteClass` reads the first 2048 chars. |
-| Current advisory wiring? | `.agent/tools/check-routes.ts` `isMain` branch: `--mode=warn-touched` runs all three advisories via `Promise.all`, merges warnings, prints `::warning file=...`, **`process.exit(0)`**. CI step `.github/workflows/ci.yml:317-321` runs it with `continue-on-error: true`. |
-| Current `store-mutation-check.ts` heuristic? | **Text scan.** `windowHasOrgToken` returns true if `/\b(organizationId|orgId)\b/` appears anywhere in ±10 lines — including param lists/comments/unrelated statements. This is the false-negative Task 1 upgrades to AST `where`-object inspection. |
-| Current `cross-app-types-check.ts` matcher? | **Static `SCHEMAS_EXPORT_NAMES`** (21 hand-curated names). `scanFile` flags exported local interfaces/type-aliases whose name is in the set, minus `// route-governance: local-view-model`-suppressed decls. Task 3 swaps the static set for a ts-morph walk of `packages/schemas/src/index.ts` `getExportedDeclarations()`. |
-| Does the dashboard proxy allowlist already exist? | Yes — `route-allowlist.yaml:14` allowlists `apps/dashboard/src/app/api/dashboard/**` for the **ingress** check. That is separate from the `@route-class` header convention (Task 12 adds the latter in the validator). |
-| ts-morph available in `.agent/tools`? | Yes — both existing advisories import from `"ts-morph"`. `.agent/tools/package.json` declares it; `.agent/tools/node_modules` is cached in CI (`ci.yml:308`). |
-| Test command for `.agent/tools`? | Tests live in `.agent/tools/__tests__/*.test.ts`. Confirm the exact runner in Task 0 (`cat .agent/tools/package.json` — likely `pnpm --filter <agent-tools-pkg> test` or `vitest` invoked from `.agent/tools/`). The existing `store-mutation-check.test.ts` + `cross-app-types-check.test.ts` + `check-routes-warn-mode.test.ts` are the mirrors. |
-| `mcp-server` interaction? | `cross-app-types-check.ts` `APP_SRC_RX` includes `mcp-server`. A parallel branch (`chore/kill-mcp-server`) removes `apps/mcp-server`. Harmless either way — if the dir is gone, no files match the regex. Task 3's dynamic swap touches only the *schemas* enumeration, not `APP_SRC_RX`. Leave the regex tolerant; do **not** couple PR-4 to the mcp-server removal. |
+| Where is the `DashboardOverview` alias?              | `packages/schemas/src/dashboard.ts` (`export type DashboardOverview = OperatorOverview;` + `DashboardOverviewSchema = OperatorOverviewSchema`). Consumers: `apps/dashboard/src/app/api/dashboard/overview/route.ts`, `hooks/use-dashboard-overview.ts`, `lib/api-client/dashboard.ts`. Method/hook/file names (`getDashboardOverview`, `use-dashboard-overview.ts`) stay — only the **type** renames.                                                              |
+| Where is `ConversationStateData`?                    | `apps/chat/src/conversation/state.ts` re-export shim + consumers in `prisma-store.ts`, `store.ts`, `threads.ts` (+ test). Canonical is `ConversationState` from `@switchboard/schemas`.                                                                                                                                                                                                                                                                            |
+| `HandoffPackage` consumer count?                     | ~18 files across `packages/core/**` (handoff/, skill-runtime/hooks/, decisions/, consent/, contacts/, channel-gateway/, index.ts), `packages/db/src/stores/handoff-store.ts`, `apps/api/src/{bootstrap/skill-mode.ts,routes/decisions.ts}`. Exact list re-derived by grep in Task 6.                                                                                                                                                                               |
+| How many `@route-class` headers exist / are missing? | `apps/api/src/routes/` has 104 `.ts` files (incl. tests); **4** carry `@route-class` (the PR-1 ingress routes). Spec §12 PR-4 says "~63 remaining" non-test routes. `apps/chat/src/routes/` has 3 `.ts` files (0 headers). `apps/dashboard/src/app/api/**` has ~100 `route.ts(x)` proxy files → covered by the directory convention, **not** per-file headers.                                                                                                     |
+| Header format?                                       | First line of file: `// @route-class: operator-direct` (see `apps/api/src/routes/recommendations.ts:1`). `parseRouteClass` reads the first 2048 chars.                                                                                                                                                                                                                                                                                                             |
+| Current advisory wiring?                             | `.agent/tools/check-routes.ts` `isMain` branch: `--mode=warn-touched` runs all three advisories via `Promise.all`, merges warnings, prints `::warning file=...`, **`process.exit(0)`**. CI step `.github/workflows/ci.yml:317-321` runs it with `continue-on-error: true`.                                                                                                                                                                                         |
+| Current `store-mutation-check.ts` heuristic?         | **Text scan.** `windowHasOrgToken` returns true if `/\b(organizationId                                                                                                                                                                                                                                                                                                                                                                                             | orgId)\b/`appears anywhere in ±10 lines — including param lists/comments/unrelated statements. This is the false-negative Task 1 upgrades to AST`where`-object inspection. |
+| Current `cross-app-types-check.ts` matcher?          | **Static `SCHEMAS_EXPORT_NAMES`** (21 hand-curated names). `scanFile` flags exported local interfaces/type-aliases whose name is in the set, minus `// route-governance: local-view-model`-suppressed decls. Task 3 swaps the static set for a ts-morph walk of `packages/schemas/src/index.ts` `getExportedDeclarations()`.                                                                                                                                       |
+| Does the dashboard proxy allowlist already exist?    | Yes — `route-allowlist.yaml:14` allowlists `apps/dashboard/src/app/api/dashboard/**` for the **ingress** check. That is separate from the `@route-class` header convention (Task 12 adds the latter in the validator).                                                                                                                                                                                                                                             |
+| ts-morph available in `.agent/tools`?                | Yes — both existing advisories import from `"ts-morph"`. `.agent/tools/package.json` declares it; `.agent/tools/node_modules` is cached in CI (`ci.yml:308`).                                                                                                                                                                                                                                                                                                      |
+| Test command for `.agent/tools`?                     | Tests live in `.agent/tools/__tests__/*.test.ts`. Confirm the exact runner in Task 0 (`cat .agent/tools/package.json` — likely `pnpm --filter <agent-tools-pkg> test` or `vitest` invoked from `.agent/tools/`). The existing `store-mutation-check.test.ts` + `cross-app-types-check.test.ts` + `check-routes-warn-mode.test.ts` are the mirrors.                                                                                                                 |
+| `mcp-server` interaction?                            | `cross-app-types-check.ts` `APP_SRC_RX` includes `mcp-server`. A parallel branch (`chore/kill-mcp-server`) removes `apps/mcp-server`. Harmless either way — if the dir is gone, no files match the regex. Task 3's dynamic swap touches only the _schemas_ enumeration, not `APP_SRC_RX`. Leave the regex tolerant; do **not** couple PR-4 to the mcp-server removal.                                                                                              |
 
 ---
 
@@ -76,11 +76,11 @@ Captured so the implementing agent does not redo it and reviewers can audit the 
 
 PR-4 is **not** one PR. Each sub-PR cuts a **fresh worktree from `origin/main`**, runs **Task 0**, executes only its mapped tasks, runs its own gate, and opens an independent PR to `main`.
 
-| Sub-PR | Theme | Tasks | Posture |
-| --- | --- | --- | --- |
-| **PR-4A** | Validator correctness + triage | Task 0 → **Tasks 1, 2, 3, 4** → gate (Task 5) | Still **warning-only**. AST `where`-inspection + dynamic schema enumeration + re-baseline triage. No enforcement change, no alias sweep, no docs. |
-| **PR-4B** | Back-compat alias sweep + sub-barrel re-exports | Task 0 → **Tasks 6, 7, 8, 9, 10** → gate (Task 11) | Mechanical. Rename aliases to canonical, delete alias decls, add `RouteTemplates` sub-barrel re-exports. **No validator behaviour change.** Grep contract proves aliases gone. |
-| **PR-4C** | `@route-class` backfill + flip to error | Task 0 → **Tasks 12, 13, 14, 15, 16, 17** → gate (Task 18) | The flip. Adds `dashboard-proxy` convention + header-presence enforcement, backfills headers, adds repo-wide `--mode=error`, wires it blocking in CI, updates docs. Lands **last**. |
+| Sub-PR    | Theme                                           | Tasks                                                      | Posture                                                                                                                                                                             |
+| --------- | ----------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PR-4A** | Validator correctness + triage                  | Task 0 → **Tasks 1, 2, 3, 4** → gate (Task 5)              | Still **warning-only**. AST `where`-inspection + dynamic schema enumeration + re-baseline triage. No enforcement change, no alias sweep, no docs.                                   |
+| **PR-4B** | Back-compat alias sweep + sub-barrel re-exports | Task 0 → **Tasks 6, 7, 8, 9, 10** → gate (Task 11)         | Mechanical. Rename aliases to canonical, delete alias decls, add `RouteTemplates` sub-barrel re-exports. **No validator behaviour change.** Grep contract proves aliases gone.      |
+| **PR-4C** | `@route-class` backfill + flip to error         | Task 0 → **Tasks 12, 13, 14, 15, 16, 17** → gate (Task 18) | The flip. Adds `dashboard-proxy` convention + header-presence enforcement, backfills headers, adds repo-wide `--mode=error`, wires it blocking in CI, updates docs. Lands **last**. |
 
 **Per-sub-PR workflow (apply to each of 4A–4C):**
 
@@ -102,42 +102,42 @@ PR-4 is **not** one PR. Each sub-PR cuts a **fresh worktree from `origin/main`**
 
 ### PR-4A
 
-| Path | Change |
-| --- | --- |
-| `.agent/tools/store-mutation-check.ts` | Replace `windowHasOrgToken` text scan with `whereObjectHasOrgFilter` AST inspection of the mutation call's first-arg `where` object literal. |
-| `.agent/tools/__tests__/store-mutation-check.test.ts` | Add cases: relation-filter passes, org-only-in-param-list now **fails**, nested relation key, false-positive regressions. |
-| `.agent/tools/cross-app-types-check.ts` | Replace static `SCHEMAS_EXPORT_NAMES` with `enumerateSchemaTypeNames(repoRoot)` (ts-morph `getExportedDeclarations()` over `packages/schemas/src/index.ts`, filtered to interface/type-alias names). |
-| `.agent/tools/__tests__/cross-app-types-check.test.ts` | Add cases: dynamic enumeration picks up a schema type, ignores value-only exports, suppression directive still works. |
-| `packages/db/src/stores/*.ts` | **Triage-driven (Task 2).** Tighten any locally-fixable unscoped mutation; add suppression directive + rationale to `prisma-creator-identity-store.ts` (×5) + `storage/prisma-lifecycle-store.ts` `updateDispatchRecord`. |
-| `apps/{api,chat,dashboard}/src/**` | **Triage-driven (Task 4).** Annotate legitimate narrower local types surfaced by the broadened cross-app enumeration with `// route-governance: local-view-model`, or migrate true duplicates to `@switchboard/schemas` imports. |
+| Path                                                   | Change                                                                                                                                                                                                                           |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.agent/tools/store-mutation-check.ts`                 | Replace `windowHasOrgToken` text scan with `whereObjectHasOrgFilter` AST inspection of the mutation call's first-arg `where` object literal.                                                                                     |
+| `.agent/tools/__tests__/store-mutation-check.test.ts`  | Add cases: relation-filter passes, org-only-in-param-list now **fails**, nested relation key, false-positive regressions.                                                                                                        |
+| `.agent/tools/cross-app-types-check.ts`                | Replace static `SCHEMAS_EXPORT_NAMES` with `enumerateSchemaTypeNames(repoRoot)` (ts-morph `getExportedDeclarations()` over `packages/schemas/src/index.ts`, filtered to interface/type-alias names).                             |
+| `.agent/tools/__tests__/cross-app-types-check.test.ts` | Add cases: dynamic enumeration picks up a schema type, ignores value-only exports, suppression directive still works.                                                                                                            |
+| `packages/db/src/stores/*.ts`                          | **Triage-driven (Task 2).** Tighten any locally-fixable unscoped mutation; add suppression directive + rationale to `prisma-creator-identity-store.ts` (×5) + `storage/prisma-lifecycle-store.ts` `updateDispatchRecord`.        |
+| `apps/{api,chat,dashboard}/src/**`                     | **Triage-driven (Task 4).** Annotate legitimate narrower local types surfaced by the broadened cross-app enumeration with `// route-governance: local-view-model`, or migrate true duplicates to `@switchboard/schemas` imports. |
 
 ### PR-4B
 
-| Path | Change |
-| --- | --- |
-| `packages/core/src/handoff/types.ts` | Delete `export type HandoffPackage = Handoff;` + `export type ConversationSummary = HandoffConversationSummary;`. Rename in-file refs (`HandoffStore` methods) to `Handoff` / `HandoffConversationSummary`. |
-| ~18 `HandoffPackage` consumer files | Rename `HandoffPackage` → `Handoff` (import + usage). |
-| ~6 handoff-flavoured `ConversationSummary` consumers | Rename → `HandoffConversationSummary` (only the handoff-flavoured ones; the api `/conversations` route's projection is the *new* canonical `ConversationSummary` — do not touch). |
-| `apps/chat/src/conversation/{state.ts,prisma-store.ts,store.ts,threads.ts}` | `ConversationStateData` → `ConversationState`; delete the `state.ts` re-export shim alias. |
-| `packages/schemas/src/dashboard.ts` | Delete `DashboardOverview` type alias + `DashboardOverviewSchema` alias. |
-| `apps/dashboard/src/app/api/dashboard/overview/route.ts`, `hooks/use-dashboard-overview.ts`, `lib/api-client/dashboard.ts` | `DashboardOverview` → `OperatorOverview` (type only; keep method/hook/file names). |
-| `packages/core/src/decisions/index.ts` | Add `export type { RouteTemplates } from "../lib/route-templates.js";`. |
-| `packages/core/src/contacts/index.ts` | Add the same `RouteTemplates` re-export. |
+| Path                                                                                                                       | Change                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/handoff/types.ts`                                                                                       | Delete `export type HandoffPackage = Handoff;` + `export type ConversationSummary = HandoffConversationSummary;`. Rename in-file refs (`HandoffStore` methods) to `Handoff` / `HandoffConversationSummary`. |
+| ~18 `HandoffPackage` consumer files                                                                                        | Rename `HandoffPackage` → `Handoff` (import + usage).                                                                                                                                                       |
+| ~6 handoff-flavoured `ConversationSummary` consumers                                                                       | Rename → `HandoffConversationSummary` (only the handoff-flavoured ones; the api `/conversations` route's projection is the _new_ canonical `ConversationSummary` — do not touch).                           |
+| `apps/chat/src/conversation/{state.ts,prisma-store.ts,store.ts,threads.ts}`                                                | `ConversationStateData` → `ConversationState`; delete the `state.ts` re-export shim alias.                                                                                                                  |
+| `packages/schemas/src/dashboard.ts`                                                                                        | Delete `DashboardOverview` type alias + `DashboardOverviewSchema` alias.                                                                                                                                    |
+| `apps/dashboard/src/app/api/dashboard/overview/route.ts`, `hooks/use-dashboard-overview.ts`, `lib/api-client/dashboard.ts` | `DashboardOverview` → `OperatorOverview` (type only; keep method/hook/file names).                                                                                                                          |
+| `packages/core/src/decisions/index.ts`                                                                                     | Add `export type { RouteTemplates } from "../lib/route-templates.js";`.                                                                                                                                     |
+| `packages/core/src/contacts/index.ts`                                                                                      | Add the same `RouteTemplates` re-export.                                                                                                                                                                    |
 
 ### PR-4C
 
-| Path | Change |
-| --- | --- |
-| `.agent/tools/route-class-validator.ts` | Add `"dashboard-proxy"` to `RouteClass`/`KNOWN_CLASSES`; add `resolveRouteClass(sf, repoPath)` (explicit header ?? `dashboard-proxy` if path under `apps/dashboard/src/app/api/` else null); add header-presence warning when effective class is null. |
-| `.agent/tools/__tests__/route-class-validator.test.ts` | Cases: dashboard path defaults to proxy, explicit override beats default, non-dashboard missing header → warning, dashboard non-proxy override respected. |
-| `apps/api/src/routes/*.ts` (~63) | Add `// @route-class: <class>` first-line header per spec §1 decision table. |
-| `apps/chat/src/routes/*.ts` (3) | Same. |
-| `.agent/tools/check-routes.ts` | Add `--mode=error`: glob all in-scope files repo-wide, run all three advisories + header-presence, print `::error`, `process.exit(1)` if any. |
-| `.agent/tools/__tests__/check-routes-warn-mode.test.ts` (or new `check-routes-error-mode.test.ts`) | Cases: error mode exits 1 on a violation, exits 0 on a clean tree, scans repo-wide not just touched. |
-| `.github/workflows/ci.yml` | Add a blocking `--mode=error` step (no `continue-on-error`); keep or retire the advisory `warn-touched` step per Task 16. |
-| `docs/DOCTRINE.md` | Add the route taxonomy + per-class matrix (spec §15 criterion 7). |
-| `docs/ARCHITECTURE.md` | Same. |
-| `docs/superpowers/specs/2026-05-16-route-governance-contract-v1.md` | Update §11 crosswalk: mark 3.15/3.16 deferred-to-follow-up-issue; note deferred store-migration sites. |
+| Path                                                                                               | Change                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.agent/tools/route-class-validator.ts`                                                            | Add `"dashboard-proxy"` to `RouteClass`/`KNOWN_CLASSES`; add `resolveRouteClass(sf, repoPath)` (explicit header ?? `dashboard-proxy` if path under `apps/dashboard/src/app/api/` else null); add header-presence warning when effective class is null. |
+| `.agent/tools/__tests__/route-class-validator.test.ts`                                             | Cases: dashboard path defaults to proxy, explicit override beats default, non-dashboard missing header → warning, dashboard non-proxy override respected.                                                                                              |
+| `apps/api/src/routes/*.ts` (~63)                                                                   | Add `// @route-class: <class>` first-line header per spec §1 decision table.                                                                                                                                                                           |
+| `apps/chat/src/routes/*.ts` (3)                                                                    | Same.                                                                                                                                                                                                                                                  |
+| `.agent/tools/check-routes.ts`                                                                     | Add `--mode=error`: glob all in-scope files repo-wide, run all three advisories + header-presence, print `::error`, `process.exit(1)` if any.                                                                                                          |
+| `.agent/tools/__tests__/check-routes-warn-mode.test.ts` (or new `check-routes-error-mode.test.ts`) | Cases: error mode exits 1 on a violation, exits 0 on a clean tree, scans repo-wide not just touched.                                                                                                                                                   |
+| `.github/workflows/ci.yml`                                                                         | Add a blocking `--mode=error` step (no `continue-on-error`); keep or retire the advisory `warn-touched` step per Task 16.                                                                                                                              |
+| `docs/DOCTRINE.md`                                                                                 | Add the route taxonomy + per-class matrix (spec §15 criterion 7).                                                                                                                                                                                      |
+| `docs/ARCHITECTURE.md`                                                                             | Same.                                                                                                                                                                                                                                                  |
+| `docs/superpowers/specs/2026-05-16-route-governance-contract-v1.md`                                | Update §11 crosswalk: mark 3.15/3.16 deferred-to-follow-up-issue; note deferred store-migration sites.                                                                                                                                                 |
 
 ---
 
@@ -154,11 +154,13 @@ PR-4 is **not** one PR. Each sub-PR cuts a **fresh worktree from `origin/main`**
 - [ ] **Step 2: Confirm the `.agent/tools` test + typecheck commands.** Run: `cat .agent/tools/package.json`. Note the `test` + `typecheck` scripts and the package name (used as `pnpm --filter <name> test`, or run vitest from inside `.agent/tools`). Re-confirm how `cross-app-types-check.test.ts` is run — every advisory task below uses the same command.
 
 - [ ] **Step 3: Confirm the advisory source shapes are unchanged from this plan's assumptions.** Run:
+
 ```bash
 sed -n '1,20p' .agent/tools/store-mutation-check.ts
 sed -n '30,60p' .agent/tools/cross-app-types-check.ts
 sed -n '1,45p' .agent/tools/route-class-validator.ts
 ```
+
 Expected: `store-mutation-check.ts` has `windowHasOrgToken` (text scan); `cross-app-types-check.ts` has the static `SCHEMAS_EXPORT_NAMES` set; `route-class-validator.ts` has 5 classes (no `dashboard-proxy`). If any diverged, fix the affected task inline.
 
 - [ ] **Step 4: No commit.** Verification only.
@@ -172,6 +174,7 @@ Expected: `store-mutation-check.ts` has `windowHasOrgToken` (text scan); `cross-
 **Why:** PR-3D Task 17's hard mandate. The text scan passes a mutation if `organizationId`/`orgId` appears anywhere in ±10 lines — including a param list or comment — even when the actual Prisma `where` object carries no org filter. PR-4C cannot flip to error while the check is text-based.
 
 **Files:**
+
 - Modify: `.agent/tools/store-mutation-check.ts`
 - Modify: `.agent/tools/__tests__/store-mutation-check.test.ts`
 
@@ -272,10 +275,11 @@ describe("store-mutation advisory — AST where-object inspection", () => {
 - [ ] **Step 2: Run → FAIL.** Run the advisory test command (Task 0 Step 2). Expected: the param-list, missing-nested-org, and identifier-where cases fail (text scan currently passes them).
 
 - [ ] **Step 3a: Widen the suppression directive to two distinct tokens.** Replace `SUPPRESS_DIRECTIVE_RX` so the advisory recognises both the genuinely-global exemption and the deferred-migration marker as separate, self-documenting tokens (resolves the semantic overload — `global` and `deferred tenant-scoping migration` are not the same category):
+
 ```ts
-const SUPPRESS_DIRECTIVE_RX =
-  /\/\/\s*route-governance:\s*store-mutation-(global|deferred)\b/;
+const SUPPRESS_DIRECTIVE_RX = /\/\/\s*route-governance:\s*store-mutation-(global|deferred)\b/;
 ```
+
 `hasSuppressDirectiveAbove` is otherwise unchanged. PR-3D's existing `store-mutation-global` annotations (AgentListing, OutboxEvent, decayStale) keep working; Task 2 uses `store-mutation-deferred` for the migration-needing sites.
 
 - [ ] **Step 3b: Implement AST inspection.** In `.agent/tools/store-mutation-check.ts`, replace `windowHasOrgToken` with a `where`-object walk. Keep `getMutationMethod` + `hasSuppressDirectiveAbove` unchanged. New logic in `scanStoreFileForTest`:
@@ -383,6 +387,7 @@ Note: shorthand (`{ organizationId }`) and longhand (`{ organizationId: orgId }`
 - [ ] **Step 5: Typecheck `.agent/tools`.** Run the tools typecheck (Task 0 Step 2). Expected: PASS (remove the now-unused `WINDOW_LINES`/`ORG_TOKEN_RX`/`windowHasOrgToken` — an unused const/function would lint-fail).
 
 - [ ] **Step 6: Commit.**
+
 ```bash
 git add .agent/tools/store-mutation-check.ts .agent/tools/__tests__/store-mutation-check.test.ts
 git commit -m "feat(audit): upgrade store-mutation check to AST where-object inspection (PR-4 Task 17 mandate)"
@@ -395,6 +400,7 @@ git commit -m "feat(audit): upgrade store-mutation check to AST where-object ins
 **Files:** `packages/db/src/stores/**`, `packages/db/src/storage/prisma-lifecycle-store.ts` (triage-driven — exact set determined by Step 1).
 
 - [ ] **Step 1: Re-run the AST-correct advisory against the full store tree.** Build a one-off invocation feeding `touchedFiles` = the full `packages/db/src/{stores,storage}/**/*.ts` non-test list, e.g.:
+
 ```bash
 pnpm exec tsx -e '
 import { runStoreMutationAdvisory } from "./.agent/tools/store-mutation-check.ts";
@@ -405,6 +411,7 @@ runStoreMutationAdvisory({ touchedFiles: files, repoRoot: process.cwd() }).then(
   console.log("TOTAL:", r.warnings.length);
 });'
 ```
+
 Record the warning list. The contact-store ×8 and the bulk of the ~26 `storage/**` warnings from the old text-scan baseline should be **gone** (those rows are org-scoped; the text scan over-counted). What remains is the genuinely-unscoped set.
 
 - [ ] **Step 2: Triage each remaining warning per the locked rule (Decision 4).** For each warning, classify:
@@ -412,6 +419,7 @@ Record the warning list. The contact-store ×8 and the bulk of the ~26 `storage/
   - **Migration-needed** (`prisma-creator-identity-store` ×5 + `storage/prisma-lifecycle-store.updateDispatchRecord` ×1, or any other site needing a new `@relation`/schema migration/API-contract change/ambiguous semantics) → **defer**: see Step 3.
 
 - [ ] **Step 3: Suppress the deferred sites with the distinct deferred directive.** Above each deferred Prisma call, use the dedicated `store-mutation-deferred` token (recognised by Task 1 Step 3a) — semantically separate from the genuinely-global `store-mutation-global` exemptions (AgentListing/OutboxEvent/decayStale) so the two categories never conflate:
+
 ```ts
 // route-governance: store-mutation-deferred — org reachable only via an FK
 // with no Prisma @relation to walk; tenant-scoping needs a schema migration.
@@ -425,6 +433,7 @@ Record the warning list. The contact-store ×8 and the bulk of the ~26 `storage/
 - [ ] **Step 6: Gate.** `pnpm --filter @switchboard/db test` (minus known advisory-lock flakes) + `pnpm --filter @switchboard/db typecheck`. If any mutator signature changed, **also** `pnpm --filter @switchboard/api test && pnpm --filter @switchboard/chat test` (the store-tightening gate rule). `pnpm reset` first if stale missing-export errors appear.
 
 - [ ] **Step 7: Commit.**
+
 ```bash
 git add packages/db/src/stores packages/db/src/storage/prisma-lifecycle-store.ts <threaded callers>
 git commit -m "fix(db): tenant-scope remaining locally-fixable store mutations + suppress deferred migration sites (audit Round-2, #601)"
@@ -435,6 +444,7 @@ git commit -m "fix(db): tenant-scope remaining locally-fixable store mutations +
 ### Task 3: Dynamic `SCHEMAS_EXPORT_NAMES` enumeration (TDD)
 
 **Files:**
+
 - Modify: `.agent/tools/cross-app-types-check.ts`
 - Modify: `.agent/tools/__tests__/cross-app-types-check.test.ts`
 
@@ -448,14 +458,20 @@ import { enumerateSchemaTypeNames } from "../cross-app-types-check.js";
 describe("dynamic schema type enumeration", () => {
   it("collects exported interface + type-alias names from the schemas barrel", () => {
     const project = new Project({ useInMemoryFileSystem: true });
-    project.createSourceFile("packages/schemas/src/handoff.ts", `
+    project.createSourceFile(
+      "packages/schemas/src/handoff.ts",
+      `
       export interface Handoff { id: string; }
       export const HandoffSchema = 1; // value export — must be ignored
       export type HandoffStatus = "open" | "closed";
-    `);
-    project.createSourceFile("packages/schemas/src/index.ts", `
+    `,
+    );
+    project.createSourceFile(
+      "packages/schemas/src/index.ts",
+      `
       export * from "./handoff.js";
-    `);
+    `,
+    );
     const names = enumerateSchemaTypeNames(project, "packages/schemas/src/index.ts");
     expect(names.has("Handoff")).toBe(true);
     expect(names.has("HandoffStatus")).toBe(true);
@@ -509,6 +525,7 @@ Change `scanFile(sf, repoPath)` → `scanFile(sf, repoPath, schemaNames: Readonl
 - [ ] **Step 5: Typecheck `.agent/tools`.** PASS.
 
 - [ ] **Step 6: Commit.**
+
 ```bash
 git add .agent/tools/cross-app-types-check.ts .agent/tools/__tests__/cross-app-types-check.test.ts
 git commit -m "feat(audit): enumerate SCHEMAS_EXPORT_NAMES dynamically from schemas barrel"
@@ -521,6 +538,7 @@ git commit -m "feat(audit): enumerate SCHEMAS_EXPORT_NAMES dynamically from sche
 **Files:** `apps/{api,chat,dashboard}/src/**` (triage-driven).
 
 - [ ] **Step 1: Run the dynamic advisory against the full app tree.**
+
 ```bash
 pnpm exec tsx -e '
 import { runCrossAppTypesAdvisory } from "./.agent/tools/cross-app-types-check.ts";
@@ -531,19 +549,21 @@ runCrossAppTypesAdvisory({ touchedFiles: files, repoRoot: process.cwd() }).then(
   console.log("TOTAL:", r.warnings.length);
 });'
 ```
+
 The broadened (now-dynamic) set will surface collisions the static 21-name set missed.
 
-- [ ] **Step 2: Count the real migrations, then decide split.** Tally the warnings that need a *true-duplicate migration* (not just a directive annotation). **If that count is >~20, split the migrations into a follow-on `PR-4A2`** — keep the validator change (Task 3) **and** the directive annotations for legitimate local-view-models in PR-4A so the warning baseline is clean, but land the bulk app-type migrations as their own reviewable PR. This keeps PR-4A from becoming a mixed validator-refactor-plus-broad-app-migration PR. The flip (4C) only requires the advisory output to be *empty* (every collision either migrated or directive-suppressed) — so PR-4A2, if needed, must merge before 4C, slotting in as 4A → 4A2 → 4B → 4C.
+- [ ] **Step 2: Count the real migrations, then decide split.** Tally the warnings that need a _true-duplicate migration_ (not just a directive annotation). **If that count is >~20, split the migrations into a follow-on `PR-4A2`** — keep the validator change (Task 3) **and** the directive annotations for legitimate local-view-models in PR-4A so the warning baseline is clean, but land the bulk app-type migrations as their own reviewable PR. This keeps PR-4A from becoming a mixed validator-refactor-plus-broad-app-migration PR. The flip (4C) only requires the advisory output to be _empty_ (every collision either migrated or directive-suppressed) — so PR-4A2, if needed, must merge before 4C, slotting in as 4A → 4A2 → 4B → 4C.
 
 - [ ] **Step 3 (triage each warning):**
   - **True duplicate** of a schemas type → delete the local decl, import from `@switchboard/schemas`. (Confirm shape-identical first; if it diverges, it is a local-view-model.) Migrations beyond the ~20 threshold move to PR-4A2 per Step 2.
   - **Legitimate narrower/different local shape** that happens to share a name (e.g. a Prisma-row type, a view-model) → add `// route-governance: local-view-model` directly above the decl. Optionally rename for clarity (e.g. `ConversationDbRow`) but renaming is not required. **Annotations stay in PR-4A** regardless of the split (they are the clean-baseline work, not migration churn).
 
-- [ ] **Step 4: Re-run → empty.** The app-tree advisory output must be empty (every collision either migrated *in this PR or PR-4A2* or directive-suppressed). If PR-4A2 is in play, the empty baseline is achieved once 4A2 merges — 4A itself lands with the annotations + the validator + a documented residual-migration list.
+- [ ] **Step 4: Re-run → empty.** The app-tree advisory output must be empty (every collision either migrated _in this PR or PR-4A2_ or directive-suppressed). If PR-4A2 is in play, the empty baseline is achieved once 4A2 merges — 4A itself lands with the annotations + the validator + a documented residual-migration list.
 
 - [ ] **Step 5: Gate.** `pnpm --filter @switchboard/api typecheck && pnpm --filter @switchboard/chat typecheck && pnpm --filter @switchboard/dashboard typecheck`. For any file whose type was migrated to a schemas import, run that app's tests. `pnpm --filter @switchboard/dashboard build` if a dashboard file changed (`.js`-import + next-build gotcha; build is not in CI).
 
 - [ ] **Step 6: Commit.**
+
 ```bash
 git add apps/api apps/chat apps/dashboard
 git commit -m "refactor(apps): resolve cross-app type duplicates surfaced by dynamic enumeration"
@@ -571,13 +591,14 @@ git commit -m "refactor(apps): resolve cross-app type duplicates surfaced by dyn
 
 **Files:** ~18 consumer files + `packages/core/src/handoff/types.ts` (re-derive exact list in Step 1).
 
-- [ ] **Step 1: Enumerate consumers.** `rg -ln "\bHandoffPackage\b" packages apps | grep -v __tests__` (and a second pass *with* `__tests__` — tests reference it too and must be swept to keep the grep contract clean). Expected ~18 production files + test files.
+- [ ] **Step 1: Enumerate consumers.** `rg -ln "\bHandoffPackage\b" packages apps | grep -v __tests__` (and a second pass _with_ `__tests__` — tests reference it too and must be swept to keep the grep contract clean). Expected ~18 production files + test files.
 - [ ] **Step 2: Rename usages.** In each file, replace identifier `HandoffPackage` → `Handoff`. Where a file imports `HandoffPackage` from `@switchboard/core` or `../handoff/types.js`, change the named import to `Handoff` (re-exported from the same module). Do **not** change the file/method/store names — only the type identifier.
 - [ ] **Step 3: Update the `HandoffStore` interface** in `packages/core/src/handoff/types.ts` — its `save`/`getById`/`getBySessionId`/`listPending` signatures reference `HandoffPackage`; change to `Handoff`.
 - [ ] **Step 4: Delete the alias.** Remove `export type HandoffPackage = Handoff;` (and its comment) from `handoff/types.ts`. Leave `export type ConversationSummary = HandoffConversationSummary;` for Task 7.
 - [ ] **Step 5: Typecheck + test.** `pnpm --filter @switchboard/core typecheck && pnpm --filter @switchboard/db typecheck && pnpm --filter @switchboard/api typecheck` + `pnpm --filter @switchboard/core test && pnpm --filter @switchboard/db test`. PASS (mind core flakes). `pnpm reset` if stale.
 - [ ] **Step 6: Grep contract.** `rg "\bHandoffPackage\b" packages apps` → 0 production hits (docs/changelog references OK).
 - [ ] **Step 7: Commit.**
+
 ```bash
 git add packages apps
 git commit -m "refactor: rename HandoffPackage → Handoff, remove back-compat alias (Route Governance §8.3)"
@@ -587,7 +608,7 @@ git commit -m "refactor: rename HandoffPackage → Handoff, remove back-compat a
 
 ### Task 7: Sweep handoff-flavoured `ConversationSummary` → `HandoffConversationSummary`
 
-**Files:** the handoff-flavoured consumers only (`packages/core/src/handoff/{package-assembler.ts,types.ts}`, `packages/core/src/index.ts`, `packages/db/src/stores/handoff-store.ts`; re-derive in Step 1). **Do NOT touch** `apps/api/src/routes/conversations.ts` or `packages/schemas/src/conversations.ts` — those use the *new canonical* `ConversationSummary` (the api projection), which is a different type that legitimately keeps the name.
+**Files:** the handoff-flavoured consumers only (`packages/core/src/handoff/{package-assembler.ts,types.ts}`, `packages/core/src/index.ts`, `packages/db/src/stores/handoff-store.ts`; re-derive in Step 1). **Do NOT touch** `apps/api/src/routes/conversations.ts` or `packages/schemas/src/conversations.ts` — those use the _new canonical_ `ConversationSummary` (the api projection), which is a different type that legitimately keeps the name.
 
 - [ ] **Step 1: Disambiguate.** `rg -ln "\bConversationSummary\b" packages apps`. For each hit, check the import source: if it resolves to the handoff alias (core `handoff/types.ts` or `@switchboard/schemas`'s `HandoffConversationSummary` re-exported as `ConversationSummary`), it is in scope. If it resolves to `packages/schemas/src/conversations.ts`'s `ConversationSummary` (the api projection), it is **out of scope** — leave it.
 - [ ] **Step 2: Rename in-scope usages** `ConversationSummary` → `HandoffConversationSummary`; update imports to the canonical name (re-exported from core `handoff/types.ts` and `@switchboard/schemas`).
@@ -595,6 +616,7 @@ git commit -m "refactor: rename HandoffPackage → Handoff, remove back-compat a
 - [ ] **Step 4: Typecheck + test.** Core + db + api typecheck; core + db tests. PASS.
 - [ ] **Step 5: Grep contract.** `rg "\bConversationSummary\b" packages/core packages/db` → only the canonical api-projection re-export path remains (no handoff-alias hits). The api route keeps its `ConversationSummary` legitimately.
 - [ ] **Step 6: Commit.**
+
 ```bash
 git add packages
 git commit -m "refactor(core): rename handoff ConversationSummary → HandoffConversationSummary, remove alias"
@@ -611,6 +633,7 @@ git commit -m "refactor(core): rename handoff ConversationSummary → HandoffCon
 - [ ] **Step 3: Typecheck + test.** `pnpm --filter @switchboard/chat typecheck && pnpm --filter @switchboard/chat test`. PASS.
 - [ ] **Step 4: Grep contract.** `rg "\bConversationStateData\b" apps/chat` → 0.
 - [ ] **Step 5: Commit.**
+
 ```bash
 git add apps/chat
 git commit -m "refactor(chat): rename ConversationStateData → ConversationState, remove shim alias"
@@ -628,6 +651,7 @@ git commit -m "refactor(chat): rename ConversationStateData → ConversationStat
 - [ ] **Step 4: Typecheck + test + build.** `pnpm --filter @switchboard/schemas typecheck && pnpm --filter @switchboard/dashboard typecheck && pnpm --filter @switchboard/dashboard test && pnpm --filter @switchboard/dashboard build` (next build not in CI; `.js`-import gotcha). PASS.
 - [ ] **Step 5: Grep contract.** `rg "\bDashboardOverview\b" apps packages` → 0 production hits.
 - [ ] **Step 6: Commit.**
+
 ```bash
 git add packages/schemas apps/dashboard
 git commit -m "refactor: rename DashboardOverview → OperatorOverview, remove back-compat alias (Route Governance §8.4)"
@@ -641,12 +665,15 @@ git commit -m "refactor: rename DashboardOverview → OperatorOverview, remove b
 
 - [ ] **Step 1: Confirm the source.** `rg -n "RouteTemplates" packages/core/src/lib/route-templates.ts packages/core/src/index.ts` — confirm `RouteTemplates` is exported (type-only) from `lib/route-templates.ts` and re-exported from the root barrel.
 - [ ] **Step 2: Add the re-export** to `packages/core/src/decisions/index.ts`:
+
 ```ts
 export type { RouteTemplates } from "../lib/route-templates.js";
 ```
+
 - [ ] **Step 3: Add the same** to `packages/core/src/contacts/index.ts` (adjust the relative path if `contacts/` is one level deeper — verify with `ls packages/core/src/contacts/`; the import is `../lib/route-templates.js` from `contacts/index.ts`).
 - [ ] **Step 4: Typecheck.** `pnpm --filter @switchboard/core typecheck`. PASS.
 - [ ] **Step 5: Commit.**
+
 ```bash
 git add packages/core/src/decisions/index.ts packages/core/src/contacts/index.ts
 git commit -m "chore(core): re-export RouteTemplates from decisions + contacts sub-barrels"
@@ -672,6 +699,7 @@ git commit -m "chore(core): re-export RouteTemplates from decisions + contacts s
 ### Task 12: Add `dashboard-proxy` directory convention to the validator (TDD)
 
 **Files:**
+
 - Modify: `.agent/tools/route-class-validator.ts`
 - Modify: `.agent/tools/__tests__/route-class-validator.test.ts`
 
@@ -705,11 +733,13 @@ describe("dashboard-proxy directory convention", () => {
   });
 });
 ```
+
 (Add a `makeSf` helper that creates an in-memory ts-morph source file, mirroring the existing test setup in this file.)
 
 - [ ] **Step 2: Run → FAIL.** `resolveRouteClass` not exported.
 
 - [ ] **Step 3: Implement.** In `route-class-validator.ts`:
+
 ```ts
 export type RouteClass =
   | "operator-direct"
@@ -720,8 +750,12 @@ export type RouteClass =
   | "dashboard-proxy";
 
 const KNOWN_CLASSES: ReadonlySet<RouteClass> = new Set([
-  "operator-direct", "lifecycle", "control-plane",
-  "ingress-receiver", "read-only", "dashboard-proxy",
+  "operator-direct",
+  "lifecycle",
+  "control-plane",
+  "ingress-receiver",
+  "read-only",
+  "dashboard-proxy",
 ]);
 
 const DASHBOARD_PROXY_RX = /^apps\/dashboard\/src\/app\/api\//;
@@ -736,11 +770,13 @@ export function resolveRouteClass(sf: SourceFile, repoPath: string): RouteClass 
   return null;
 }
 ```
+
 `validateRouteClass` keeps using `parseRouteClass` for the matrix-cell checks (dashboard-proxy has no operator-direct/read-only obligations, so it produces no cell warnings). The **header-presence** enforcement lives in Task 14's error-mode entrypoint via `resolveRouteClass`.
 
 - [ ] **Step 4: Run → PASS.**
 - [ ] **Step 5: Typecheck `.agent/tools`.** PASS.
 - [ ] **Step 6: Commit.**
+
 ```bash
 git add .agent/tools/route-class-validator.ts .agent/tools/__tests__/route-class-validator.test.ts
 git commit -m "feat(audit): add dashboard-proxy directory convention to route-class validator"
@@ -755,12 +791,14 @@ git commit -m "feat(audit): add dashboard-proxy directory convention to route-cl
 This is classification work, not code logic. Apply spec §1's decision table (first "yes" wins) to each route.
 
 - [ ] **Step 1: List the routes needing headers.**
+
 ```bash
 comm -23 \
   <(rg -l --type ts "" apps/api/src/routes | grep -v __tests__ | sort) \
   <(rg -l "@route-class" apps/api/src/routes | grep -v __tests__ | sort)
 rg -L "@route-class" apps/chat/src/routes -l | grep -v __tests__
 ```
+
 Expected ~63 api + 3 chat files.
 
 - [ ] **Step 2: Classify each** per spec §1/§2. Reference points from the spec's own examples:
@@ -769,9 +807,10 @@ Expected ~63 api + 3 chat files.
   - **control-plane:** `governance.ts`, `policies.ts`, `identity.ts`, `organizations.ts`, `agents.ts` (mutating), `connections.ts`, `billing.ts`, `marketplace.ts`, `knowledge.ts`, `knowledge-entries.ts`, `deployment-memory.ts`, `playbook.ts`.
   - **ingress-receiver:** `ad-optimizer.ts`, `meta-deletion.ts`, `managed-webhook.ts`, `whatsapp-onboarding.ts`, `whatsapp-flows.ts`, `facebook-oauth.ts`, `google-calendar-oauth.ts`.
   - **read-only:** `dashboard-overview.ts`, `dashboard-activity.ts`, `dashboard-contacts.ts`, `dashboard-reports.ts`, `health.ts`, `readiness.ts`, `roi.ts`, `whatsapp-send-test.ts` (diagnostic-write, §2.5).
-  For routes not in the spec's examples, walk the §1 questions in order; when genuinely ambiguous, prefer the most restrictive applicable class and note the call in the PR body for reviewer confirmation (the warning-mode period already ran — this backfill is the considered classification).
+    For routes not in the spec's examples, walk the §1 questions in order; when genuinely ambiguous, prefer the most restrictive applicable class and note the call in the PR body for reviewer confirmation (the warning-mode period already ran — this backfill is the considered classification).
 - [ ] **Step 3: Add the header.** Prepend `// @route-class: <class>` as the **first line** of each file (before the first import). For chat routes, same.
 - [ ] **Step 4: Run the route-class advisory in warning mode against the backfilled set** to confirm no operator-direct/read-only matrix cell regressions surfaced:
+
 ```bash
 pnpm exec tsx -e '
 import { runRouteClassAdvisory } from "./.agent/tools/check-routes.ts";
@@ -779,18 +818,23 @@ import { globSync } from "glob";
 const files = [...globSync("apps/api/src/routes/**/*.ts"), ...globSync("apps/chat/src/routes/**/*.ts")].filter(f=>!f.includes("__tests__"));
 runRouteClassAdvisory({ repoRoot: process.cwd(), touchedFiles: files }).then(r => { r.warnings.forEach(w=>console.log(w.path+" :: "+w.message)); console.log("TOTAL:", r.warnings.length); });'
 ```
+
 Triage any operator-direct/read-only warnings (they indicate a route that needs `requireIdempotencyKey`/`requireOrgForMutation` wiring, or a misclassification). For this backfill, if a route is correctly operator-direct but predates the decorator wiring, **either** wire it (if local) **or** reclassify if the §1 table actually points elsewhere — do not leave a known matrix violation that will block the flip.
+
 - [ ] **Step 5: Typecheck (headers are comments — no type impact).** `pnpm --filter @switchboard/api typecheck && pnpm --filter @switchboard/chat typecheck` → PASS.
 - [ ] **Step 6: Produce the route classification appendix** (for the PR-4C body). Tally the assigned classes and capture every non-obvious call:
+
 ```bash
 for c in operator-direct lifecycle control-plane ingress-receiver read-only; do
   printf "%-18s %s\n" "$c:" "$(rg -l "@route-class:\s*$c" apps/api/src/routes apps/chat/src/routes | grep -v __tests__ | wc -l)"
 done
 echo "dashboard-proxy (by convention): $(rg -lc "" apps/dashboard/src/app/api/**/route.ts* 2>/dev/null | wc -l)"
 ```
+
 Write a `## Route classification` section listing the per-class counts **and** a bulleted list of any route whose class was non-obvious, each with a one-line §1-decision-table rationale.
 
 - [ ] **Step 7: Commit.**
+
 ```bash
 git add apps/api/src/routes apps/chat/src/routes
 git commit -m "feat(audit): backfill @route-class headers on all api + chat routes (Route Governance §1)"
@@ -801,6 +845,7 @@ git commit -m "feat(audit): backfill @route-class headers on all api + chat rout
 ### Task 14: Add repo-wide `--mode=error` to `check-routes` (TDD)
 
 **Files:**
+
 - Modify: `.agent/tools/check-routes.ts`
 - Create: `.agent/tools/__tests__/check-routes-error-mode.test.ts`
 
@@ -879,15 +924,28 @@ export async function runErrorMode(opts: { repoRoot: string }): Promise<ErrorMod
     await Promise.all(
       ROUTE_GLOB_PATTERNS.map((p) => glob(join(repoRoot, p), { absolute: true, nodir: true })),
     )
-  ).flat().filter((f) => !f.includes("__tests__")).map(rel);
+  )
+    .flat()
+    .filter((f) => !f.includes("__tests__"))
+    .map(rel);
 
   const storeFiles = (
-    await glob(join(repoRoot, "packages/db/src/{stores,storage}/**/*.ts"), { absolute: true, nodir: true })
-  ).filter((f) => !f.includes("__tests__")).map(rel);
+    await glob(join(repoRoot, "packages/db/src/{stores,storage}/**/*.ts"), {
+      absolute: true,
+      nodir: true,
+    })
+  )
+    .filter((f) => !f.includes("__tests__"))
+    .map(rel);
 
   const appTypeFiles = (
-    await glob(join(repoRoot, "apps/{api,chat,dashboard}/src/**/*.{ts,tsx}"), { absolute: true, nodir: true })
-  ).filter((f) => !f.includes("__tests__")).map(rel);
+    await glob(join(repoRoot, "apps/{api,chat,dashboard}/src/**/*.{ts,tsx}"), {
+      absolute: true,
+      nodir: true,
+    })
+  )
+    .filter((f) => !f.includes("__tests__"))
+    .map(rel);
 
   // Header-presence: every route file must resolve to a class.
   const project = new Project({ useInMemoryFileSystem: false });
@@ -896,7 +954,9 @@ export async function runErrorMode(opts: { repoRoot: string }): Promise<ErrorMod
     try {
       const sf = project.addSourceFileAtPath(join(repoRoot, repoPath));
       if (resolveRouteClass(sf, repoPath) === null) missingHeaders.push(repoPath);
-    } catch { /* skip unreadable */ }
+    } catch {
+      /* skip unreadable */
+    }
   }
 
   const [routeClass, crossAppTypes, storeMutation] = await Promise.all([
@@ -912,11 +972,14 @@ export async function runErrorMode(opts: { repoRoot: string }): Promise<ErrorMod
 ```
 
 Then in the `isMain` block add the branch:
+
 ```ts
 if (mode === "error") {
   const r = await runErrorMode({ repoRoot });
   for (const p of r.missingHeaders) {
-    console.error(`::error file=${p}::missing or invalid @route-class header (Route Governance §1)`);
+    console.error(
+      `::error file=${p}::missing or invalid @route-class header (Route Governance §1)`,
+    );
   }
   for (const w of r.violations) {
     console.error(`::error file=${w.path}::${w.message}`);
@@ -932,6 +995,7 @@ if (mode === "error") {
 - [ ] **Step 5: Smoke-test against the real tree.** `pnpm exec tsx .agent/tools/check-routes.ts --mode=error`. Expected exit **0** (after Tasks 1–13: headers backfilled, stores scoped/suppressed, types deduped). If it exits 1, the printed `::error` lines name exactly what the backfill/triage missed — fix before wiring CI.
 - [ ] **Step 6: Typecheck `.agent/tools`.** PASS.
 - [ ] **Step 7: Commit.**
+
 ```bash
 git add .agent/tools/check-routes.ts .agent/tools/__tests__/check-routes-error-mode.test.ts
 git commit -m "feat(audit): add repo-wide --mode=error to check-routes (header-presence + 3 advisories)"
@@ -954,10 +1018,12 @@ git commit -m "feat(audit): add repo-wide --mode=error to check-routes (header-p
 **Files:** `.github/workflows/ci.yml`.
 
 - [ ] **Step 1: Add a blocking step** after the existing advisory step (`:317-321`):
+
 ```yaml
-      - name: Route governance enforcement (Route Governance Contract v1)
-        run: pnpm exec tsx .agent/tools/check-routes.ts --mode=error
+- name: Route governance enforcement (Route Governance Contract v1)
+  run: pnpm exec tsx .agent/tools/check-routes.ts --mode=error
 ```
+
 **No `continue-on-error`** — this step blocks merge.
 
 - [ ] **Step 2: Decide the fate of the warn-touched step.** The `warn-touched` advisory (`:317-321`, `continue-on-error: true`) is now redundant with the blocking repo-wide check. **Remove it** to avoid duplicate output — the error mode is strictly stronger. (If you prefer to keep the touched-files advisory for richer PR annotations, leave it; it does not conflict. Default: remove.)
@@ -965,6 +1031,7 @@ git commit -m "feat(audit): add repo-wide --mode=error to check-routes (header-p
 - [ ] **Step 3: Validate the workflow YAML.** `pnpm exec tsx -e 'import {readFileSync} from "fs"; import yaml from "yaml"; yaml.parse(readFileSync(".github/workflows/ci.yml","utf8")); console.log("ok");'` (or `yamllint`/`actionlint` if available). Confirm it parses.
 
 - [ ] **Step 4: Commit.**
+
 ```bash
 git add .github/workflows/ci.yml
 git commit -m "ci(audit): flip route-governance advisories to blocking --mode=error"
@@ -980,6 +1047,7 @@ git commit -m "ci(audit): flip route-governance advisories to blocking --mode=er
 - [ ] **Step 2: Add the same taxonomy reference to `docs/ARCHITECTURE.md`** (a pointer + the class table; do not duplicate the full matrix — link to DOCTRINE).
 - [ ] **Step 3: Update the spec §11 crosswalk.** Mark rows 3.15 + 3.16 as **deferred to follow-up issue #<n>** (the issue from Task 2 / a new one). Add a one-line note under §10 that the `CreatorIdentity` + `DispatchRecord` tenant-scoping awaits the `@relation` migration tracked in the same follow-up.
 - [ ] **Step 4: Commit.**
+
 ```bash
 git add docs/DOCTRINE.md docs/ARCHITECTURE.md docs/superpowers/specs/2026-05-16-route-governance-contract-v1.md
 git commit -m "docs(audit): document route taxonomy + per-class matrix; update Cat 3 crosswalk (Route Governance §15)"
@@ -1003,6 +1071,7 @@ git commit -m "docs(audit): document route taxonomy + per-class matrix; update C
 ## Self-review
 
 **1. Spec coverage (§§8, 10.4, 12, 15).**
+
 - §8.1–8.4 alias relocation residue (back-compat alias removal) → Tasks 6–9 (PR-4B). §8.5 RouteTemplates sub-barrel → Task 10. §8.6 doctrine line is already in DOCTRINE (PR-2.5); the dynamic enumeration that makes "matches a schemas export" honest → Task 3.
 - §10.4 bullet 2 (store-mutation check upgraded to inspect the `where`) → Task 1 (AST). The contract's own store sweep was PR-3; PR-4 closes the validator + the deferred-site disposition → Task 2.
 - §12 PR-4 envelope: "@route-class headers on remaining routes" → Task 13; "flip check-routes warning→error" → Tasks 14+16; "remove DashboardOverview alias" → Task 9; "document class exceptions" → Task 16 Step 2 + the dashboard-proxy convention (Task 12); "update DOCTRINE + ARCHITECTURE" → Task 17.
@@ -1014,6 +1083,7 @@ git commit -m "docs(audit): document route taxonomy + per-class matrix; update C
 **3. Type/name consistency.** `resolveRouteClass` (Task 12) is the name used by Task 14's `runErrorMode`. `enumerateSchemaTypeNames` (Task 3) signature `(project, indexRelPath)` matches its test + call site. `runErrorMode({ repoRoot })` returns `{ violations, missingHeaders, exitCode }` consistently across Task 14's impl + test + Task 15/18 gates. `mutationWhereHasOrgFilter`/`objectHasOrgKey` (Task 1) are internal to `store-mutation-check.ts`; `scanStoreFileForTest` keeps its exported name (tests depend on it). The directive token `store-mutation-global` is unchanged (Task 1 keeps `hasSuppressDirectiveAbove`); only its rationale comment text varies (Task 2).
 
 **Open risks to verify during execution:**
+
 - Task 1 accepts inline object literals **and** same-scope `const where = {...}` (resolved via `resolveIdentifierToObjectLiteral`), so the common `const where = { id, organizationId }; updateMany({ where })` pattern does not force ugly rewrites. A `where` that resolves to neither (param-passed, or built across functions) is still flagged — Task 2's triage catches it (fix-in-PR if local, suppress if it needs refactor). Do not relax the AST rule further to silence dynamic-`where` sites; annotate (`store-mutation-global`/`-deferred`) or inline.
 - Task 3's dynamic enumeration broadens the matched name set vs the static 21 — Task 4 is the triage that absorbs the new collisions. **If true-duplicate migrations exceed ~20, split them into PR-4A2** (Task 4 Step 2): the validator + local-view-model annotations stay in 4A; the bulk migrations land as 4A → 4A2 → 4B → 4C. This is the single biggest scope-control lever — do not let 4A become a mixed validator-refactor + broad-app-migration PR.
 - Task 13's classification of the long-tail routes is judgement work; the warning-mode period already ran, so reviewers have signal, but flag any non-obvious call in the PR body.

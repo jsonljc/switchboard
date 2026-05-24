@@ -3,15 +3,10 @@ import { getApiClient } from "@/lib/get-api-client";
 import { proxyError } from "@/lib/proxy-error";
 import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await requireDashboardSession();
     const client = await getApiClient();
-    const id = request.nextUrl.searchParams.get("id");
-    if (id) {
-      const data = await client.getApproval(id);
-      return NextResponse.json(data);
-    }
     const data = await client.listPendingApprovals();
     return NextResponse.json(data);
   } catch (err: unknown) {

@@ -155,34 +155,6 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       });
     },
   );
-
-  // GET /api/approvals/:id - Get approval request details
-  app.get(
-    "/:id",
-    {
-      schema: {
-        description: "Get approval request details by ID.",
-        tags: ["Approvals"],
-        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-
-      const approval = await app.storageContext.approvals.getById(id);
-      if (!approval) {
-        return reply.code(404).send({ error: "Approval not found", statusCode: 404 });
-      }
-
-      if (!assertOrgAccess(request, approval.organizationId, reply)) return;
-
-      return reply.code(200).send({
-        request: approval.request,
-        state: approval.state,
-        envelopeId: approval.envelopeId,
-      });
-    },
-  );
 };
 
 // Lifecycle-backed and legacy approval response are now in
