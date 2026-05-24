@@ -25,7 +25,7 @@ import { AlexApprovalRow } from "@/lib/cockpit/alex/alex-approval-row";
 import { richPendingApprovalToApprovalView } from "@/lib/cockpit/rich-pending-approval-to-approval-view";
 import { metricsViewModelToLegacyKpiInput } from "@/lib/cockpit/metrics-to-kpi-input";
 import { useCockpitStatusAlex } from "@/hooks/use-cockpit-status";
-import { usePendingApprovals } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
+import { usePendingApprovals } from "@/lib/cockpit/approvals/use-approvals";
 import { useAgentActivityCockpit } from "@/hooks/use-agent-activity-cockpit";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentMission } from "@/hooks/use-agent-mission";

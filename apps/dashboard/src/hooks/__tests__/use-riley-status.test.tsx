@@ -42,7 +42,7 @@ vi.mock("../use-agent-activity", () => ({
 }));
 
 // Pin "now" to 1 minute after the activity fixture so WATCHING window check passes
-vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-now", () => ({
+vi.mock("@/lib/cockpit/approvals/use-now", () => ({
   useNow: () => new Date("2026-05-14T12:00:00.000Z").getTime(),
 }));
 

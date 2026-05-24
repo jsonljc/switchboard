@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { ApprovalCard } from "@/components/cockpit/approval-card";
-import { useRespondToApproval } from "@/app/(auth)/(mercury)/approvals/hooks/use-approvals";
+import { useRespondToApproval } from "@/lib/cockpit/approvals/use-approvals";
 import { useToast } from "@/components/ui/use-toast";
 import { ALEX_VARIANTS, DEFAULT_ALEX_VARIANT } from "@/lib/cockpit/alex-config";
 import type { AlexApprovalView } from "@/components/cockpit/types";

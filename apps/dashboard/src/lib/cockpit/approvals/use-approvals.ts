@@ -3,8 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { isMercuryToolLive } from "@/lib/route-availability";
-import { APPROVALS_FIXTURES } from "../fixtures";
-import type { PendingRow, DetailRow } from "../types";
+import { APPROVALS_FIXTURES } from "./fixtures";
+import type { PendingRow, DetailRow } from "./types";
 import { useSessionPrincipal } from "./use-session-principal";
 
 const isLive = (): boolean => isMercuryToolLive("approvals");

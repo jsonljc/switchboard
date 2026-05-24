@@ -10,7 +10,7 @@ import type { ActivityRow } from "@/components/cockpit/types";
 // approvals are present); the page itself never imports the mutation hook,
 // per the [[riley-b3-followup-shipped]] single-owner-toast doctrine.
 const respondMutateMock = vi.fn();
-vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-approvals", () => ({
+vi.mock("@/lib/cockpit/approvals/use-approvals", () => ({
   usePendingApprovals: () => ({
     data: { approvals: pendingApprovalsData },
     isLoading: false,

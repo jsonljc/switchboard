@@ -5,7 +5,7 @@ import { useHalt } from "@/components/layout/halt/halt-context";
 import { useConnections } from "./use-connections";
 import { useRecommendations } from "./use-recommendations";
 import { useAgentActivity } from "./use-agent-activity";
-import { useNow } from "@/app/(auth)/(mercury)/approvals/hooks/use-now";
+import { useNow } from "@/lib/cockpit/approvals/use-now";
 import { deriveRileyStatus } from "@/lib/cockpit/riley/riley-status-deriver";
 import type { CockpitStatus } from "@/components/cockpit/types";
 

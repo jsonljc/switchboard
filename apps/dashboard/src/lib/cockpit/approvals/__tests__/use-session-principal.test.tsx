@@ -7,7 +7,7 @@ vi.mock("next-auth/react", () => ({
   useSession: () => mockSession(),
 }));
 
-import { useSessionPrincipal } from "../hooks/use-session-principal";
+import { useSessionPrincipal } from "../use-session-principal";
 
 describe("useSessionPrincipal", () => {
   it("returns principalId when session is present", () => {
