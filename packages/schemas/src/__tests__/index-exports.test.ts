@@ -10,9 +10,3 @@ describe("schemas index exports", () => {
     expect(schemas.OperatorOverviewSchema).toBeDefined();
   });
 });
-
-describe("OperatorOverview (canonical export)", () => {
-  it("exports OperatorOverviewSchema", () => {
-    expect(schemas.OperatorOverviewSchema).toBeDefined();
-  });
-});
