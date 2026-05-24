@@ -2,7 +2,10 @@
 jurisdiction: both
 vertical: medspa
 clinicType: both
-appliesTo: policy
+appliesTo: regulatory
+riskLevel: high
+lastReviewedAt: "2026-05-24"
+owner: switchboard
 ---
 
 # Claim boundaries — non-negotiable

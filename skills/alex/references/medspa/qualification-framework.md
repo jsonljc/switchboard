@@ -2,7 +2,10 @@
 jurisdiction: both
 vertical: medspa
 clinicType: both
-appliesTo: playbook
+appliesTo: pattern
+riskLevel: medium
+lastReviewedAt: "2026-05-24"
+owner: switchboard
 ---
 
 # Qualification framework — medspa
