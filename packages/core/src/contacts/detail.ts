@@ -2,7 +2,7 @@ import type { ContactStore } from "../lifecycle/contact-store.js";
 import type { OpportunityStore } from "../lifecycle/opportunity-store.js";
 import type { ConversationThreadStore } from "../conversations/thread-store.js";
 import type { RecommendationStore } from "../recommendations/interfaces.js";
-import type { HandoffStore, HandoffPackage } from "../handoff/types.js";
+import type { HandoffStore, Handoff } from "../handoff/types.js";
 import type { RevenueStore } from "../lifecycle/revenue-store.js";
 import type {
   ContactDetailResponse,
@@ -127,7 +127,7 @@ export function buildContactDetailThreads(
 
 export function buildContactDetailOpenDecisions(
   recs: Recommendation[],
-  handoffs: HandoffPackage[],
+  handoffs: Handoff[],
   contactId: string,
 ): ContactDetailOpenDecision[] {
   const fromRecs: ContactDetailOpenDecision[] = recs
@@ -179,7 +179,7 @@ function matchesContactIdInTargetEntities(r: Recommendation, contactId: string):
   return typeof v === "string" && v.length > 0 && v === contactId;
 }
 
-function matchesContactIdInLeadSnapshot(h: HandoffPackage, contactId: string): boolean {
+function matchesContactIdInLeadSnapshot(h: Handoff, contactId: string): boolean {
   const ls = (h as unknown as { leadSnapshot?: unknown }).leadSnapshot;
   if (!ls || typeof ls !== "object") return false;
   const v = (ls as Record<string, unknown>)["leadId"];

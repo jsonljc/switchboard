@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { HandoffNotifier } from "../handoff-notifier.js";
-import type { HandoffPackage } from "../types.js";
+import type { Handoff } from "../types.js";
 
 describe("HandoffNotifier", () => {
   it("should format and send notification", async () => {
@@ -10,7 +10,7 @@ describe("HandoffNotifier", () => {
 
     const notifier = new HandoffNotifier(mockNotifier);
 
-    const pkg: HandoffPackage = {
+    const pkg: Handoff = {
       id: "handoff_123",
       sessionId: "session_456",
       organizationId: "org_789",

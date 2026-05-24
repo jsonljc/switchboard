@@ -1,4 +1,5 @@
 export type { Decision, DecisionKind, DecisionPresentation } from "./types.js";
+export type { RouteTemplates } from "../lib/route-templates.js";
 export {
   scoreRecommendation,
   scoreHandoff,

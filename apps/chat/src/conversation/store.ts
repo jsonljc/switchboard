@@ -1,4 +1,4 @@
-import type { ConversationStateData } from "./state.js";
+import type { ConversationState } from "./state.js";
 
 /**
  * ConversationStore — chat-side persistence interface for ConversationState.
@@ -12,23 +12,23 @@ import type { ConversationStateData } from "./state.js";
  * `listActive(organizationId)` variant instead.
  */
 export interface ConversationStore {
-  get(threadId: string, organizationId: string): Promise<ConversationStateData | undefined>;
-  save(state: ConversationStateData): Promise<void>;
+  get(threadId: string, organizationId: string): Promise<ConversationState | undefined>;
+  save(state: ConversationState): Promise<void>;
   delete(threadId: string, organizationId: string): Promise<void>;
-  listActive(organizationId: string): Promise<ConversationStateData[]>;
+  listActive(organizationId: string): Promise<ConversationState[]>;
   /**
    * Recovery-only: returns active conversations across ALL tenants. Intended for
    * system-startup orchestrators (e.g. resuming pending escalations after a restart).
    * Request-path code MUST NOT call this — use `listActive(organizationId)`.
    */
-  listActiveAcrossAllTenants(): Promise<ConversationStateData[]>;
+  listActiveAcrossAllTenants(): Promise<ConversationState[]>;
 }
 
 const DEFAULT_MAX_SIZE = 10_000;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export class InMemoryConversationStore implements ConversationStore {
-  private threads = new Map<string, { data: ConversationStateData; expiresAt: number }>();
+  private threads = new Map<string, { data: ConversationState; expiresAt: number }>();
   private readonly maxSize: number;
   private readonly ttlMs: number;
 
@@ -37,7 +37,7 @@ export class InMemoryConversationStore implements ConversationStore {
     this.ttlMs = ttlMs;
   }
 
-  async get(threadId: string, organizationId: string): Promise<ConversationStateData | undefined> {
+  async get(threadId: string, organizationId: string): Promise<ConversationState | undefined> {
     const entry = this.threads.get(threadId);
     if (!entry) return undefined;
     if (entry.expiresAt <= Date.now()) {
@@ -53,7 +53,7 @@ export class InMemoryConversationStore implements ConversationStore {
     return entry.data;
   }
 
-  async save(state: ConversationStateData): Promise<void> {
+  async save(state: ConversationState): Promise<void> {
     if (this.threads.size >= this.maxSize && !this.threads.has(state.threadId)) {
       this.evict();
     }
@@ -70,9 +70,9 @@ export class InMemoryConversationStore implements ConversationStore {
     this.threads.delete(threadId);
   }
 
-  async listActive(organizationId: string): Promise<ConversationStateData[]> {
+  async listActive(organizationId: string): Promise<ConversationState[]> {
     const now = Date.now();
-    const active: ConversationStateData[] = [];
+    const active: ConversationState[] = [];
     for (const [key, entry] of this.threads) {
       if (entry.expiresAt <= now) {
         this.threads.delete(key);
@@ -86,9 +86,9 @@ export class InMemoryConversationStore implements ConversationStore {
     return active;
   }
 
-  async listActiveAcrossAllTenants(): Promise<ConversationStateData[]> {
+  async listActiveAcrossAllTenants(): Promise<ConversationState[]> {
     const now = Date.now();
-    const active: ConversationStateData[] = [];
+    const active: ConversationState[] = [];
     for (const [key, entry] of this.threads) {
       if (entry.expiresAt <= now) {
         this.threads.delete(key);

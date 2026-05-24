@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { adaptHandoff } from "../handoff-adapter.js";
-import type { HandoffPackage } from "../../../handoff/types.js";
+import type { Handoff } from "../../../handoff/types.js";
 import type { ConversationThread, Contact } from "@switchboard/schemas";
 import type { RouteTemplates } from "@switchboard/core";
 
@@ -11,7 +11,7 @@ const testRouteTemplates: RouteTemplates = {
 };
 const deps = { routeTemplates: testRouteTemplates };
 
-function makeHandoff(overrides: Partial<HandoffPackage> = {}): HandoffPackage {
+function makeHandoff(overrides: Partial<Handoff> = {}): Handoff {
   return {
     id: "h-1",
     organizationId: "org-1",
@@ -32,7 +32,7 @@ function makeHandoff(overrides: Partial<HandoffPackage> = {}): HandoffPackage {
     slaDeadlineAt: new Date(Date.now() + 4 * 3_600_000), // 4h out
     createdAt: new Date(),
     ...overrides,
-  } as HandoffPackage;
+  } as Handoff;
 }
 
 const contact = { id: "c-maya", name: "Maya R." } as unknown as Contact;

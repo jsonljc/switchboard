@@ -18,7 +18,7 @@ export function scoreRecommendation(row: Recommendation): number {
   return Math.round(Math.max(base, floor));
 }
 
-// Handoff row shape (from packages/core/src/handoff/types.ts HandoffPackage).
+// Handoff row shape (from packages/core/src/handoff/types.ts Handoff).
 // Typed minimally here — only the fields the scorer reads.
 export interface HandoffLike {
   slaDeadlineAt: Date;

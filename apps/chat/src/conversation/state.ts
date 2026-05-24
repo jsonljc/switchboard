@@ -1,22 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type { LeadProfile } from "@switchboard/schemas";
 
-// Re-export from @switchboard/schemas — ConversationStateData is aliased from
-// ConversationState so all 30+ existing call sites compile unchanged.
-export type {
-  ConversationMessage,
-  ConversationState as ConversationStateData,
-} from "@switchboard/schemas";
+export type { ConversationMessage, ConversationState } from "@switchboard/schemas";
 
 // Local re-import for helper function signatures.
-import type { ConversationState as ConversationStateData } from "@switchboard/schemas";
+import type { ConversationState } from "@switchboard/schemas";
 
 export function createConversation(
   threadId: string,
   channel: string,
   principalId: string,
   organizationId?: string | null,
-): ConversationStateData {
+): ConversationState {
   return {
     id: `conv_${randomUUID()}`,
     threadId,
@@ -51,9 +46,9 @@ type ConversationAction =
   | { type: "resume" };
 
 export function transitionConversation(
-  state: ConversationStateData,
+  state: ConversationState,
   action: ConversationAction,
-): ConversationStateData {
+): ConversationState {
   const updated = { ...state, lastActivityAt: new Date() };
 
   switch (action.type) {

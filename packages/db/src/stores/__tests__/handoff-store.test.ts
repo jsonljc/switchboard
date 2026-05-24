@@ -126,7 +126,7 @@ describe("PrismaHandoffStore", () => {
       expect(result).toBeNull();
     });
 
-    it("maps row to HandoffPackage", async () => {
+    it("maps row to Handoff", async () => {
       const now = new Date();
       mockFindUnique.mockResolvedValue({
         id: "h1",

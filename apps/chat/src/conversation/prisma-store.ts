@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@switchboard/db";
-import type { ConversationStateData, ConversationMessage } from "./state.js";
+import type { ConversationState, ConversationMessage } from "./state.js";
 import type { ConversationStore } from "./store.js";
 import type { ConversationStatus } from "@switchboard/schemas";
 
@@ -13,7 +13,7 @@ import type { ConversationStatus } from "@switchboard/schemas";
 export class PrismaConversationStore implements ConversationStore {
   constructor(private prisma: PrismaClient) {}
 
-  async get(threadId: string, organizationId: string): Promise<ConversationStateData | undefined> {
+  async get(threadId: string, organizationId: string): Promise<ConversationState | undefined> {
     // findFirst (not findUnique) because we are scoping by (threadId, organizationId)
     // even though threadId is @unique — this prevents stale cross-tenant rows from
     // leaking when organizationId on the row is null or differs.
@@ -24,7 +24,7 @@ export class PrismaConversationStore implements ConversationStore {
     return toConversationStateData(row as PrismaConversationRow);
   }
 
-  async save(state: ConversationStateData): Promise<void> {
+  async save(state: ConversationState): Promise<void> {
     // Use raw upsert to handle lastInboundAt column which may not yet exist
     // in the generated Prisma client (added via migration).
     const data = {
@@ -85,7 +85,7 @@ export class PrismaConversationStore implements ConversationStore {
     });
   }
 
-  async listActive(organizationId: string): Promise<ConversationStateData[]> {
+  async listActive(organizationId: string): Promise<ConversationState[]> {
     const rows = await this.prisma.conversationState.findMany({
       where: {
         organizationId,
@@ -100,7 +100,7 @@ export class PrismaConversationStore implements ConversationStore {
    * system-startup orchestrators (e.g. resuming pending escalations after a restart).
    * Request-path code MUST NOT call this — use `listActive(organizationId)`.
    */
-  async listActiveAcrossAllTenants(): Promise<ConversationStateData[]> {
+  async listActiveAcrossAllTenants(): Promise<ConversationState[]> {
     const rows = await this.prisma.conversationState.findMany({
       where: {
         status: { notIn: ["completed", "expired"] },
@@ -142,7 +142,7 @@ function parseMessages(raw: unknown): ConversationMessage[] {
   return [];
 }
 
-function toConversationStateData(row: PrismaConversationRow): ConversationStateData {
+function toConversationStateData(row: PrismaConversationRow): ConversationState {
   return {
     id: row.id,
     threadId: row.threadId,

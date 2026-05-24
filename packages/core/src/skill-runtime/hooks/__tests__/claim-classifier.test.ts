@@ -403,7 +403,7 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
     expect(handoffStore.saved).toHaveLength(1);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const h = handoffStore.saved[0] as any;
-    // Real HandoffPackage shape — buildHandoffPackage output.
+    // Real Handoff shape — buildHandoffPackage output.
     expect(h.organizationId).toBe("org_1");
     expect(h.sessionId).toBe("sess_1");
     expect(h.reason).toBe("compliance_concern");

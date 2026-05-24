@@ -2,13 +2,13 @@ import type { SkillTool } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok } from "../tool-result.js";
 import type { AssemblerInput } from "../../handoff/package-assembler.js";
-import type { HandoffPackage, HandoffReason, HandoffStore } from "../../handoff/types.js";
+import type { Handoff, HandoffReason, HandoffStore } from "../../handoff/types.js";
 import type { SkillRequestContext } from "../types.js";
 
 interface EscalateToolBaseDeps {
-  assembler: { assemble(input: AssemblerInput): HandoffPackage };
+  assembler: { assemble(input: AssemblerInput): Handoff };
   handoffStore: Pick<HandoffStore, "save" | "getBySessionId">;
-  notifier: { notify(pkg: HandoffPackage): Promise<void> };
+  notifier: { notify(pkg: Handoff): Promise<void> };
 }
 
 interface EscalateInput {

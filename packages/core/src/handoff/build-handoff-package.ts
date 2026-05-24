@@ -1,8 +1,8 @@
 import { createId } from "@paralleldrive/cuid2";
-import type { HandoffPackage } from "./types.js";
+import type { Handoff } from "./types.js";
 
 /**
- * Build a HandoffPackage for compliance-driven escalation.
+ * Build a Handoff for compliance-driven escalation.
  *
  * Shared between DeterministicSafetyGateHook (1b-1) and ClaimClassifierHook (1b-2)
  * so both governance gates emit identically shaped handoff rows. The 4h SLA
@@ -14,7 +14,7 @@ export function buildHandoffPackage(
   orgId: string,
   turnCount: number,
   clock: () => Date,
-): HandoffPackage {
+): Handoff {
   return {
     id: createId(),
     sessionId,

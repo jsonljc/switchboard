@@ -158,13 +158,13 @@ export { HandoffPackageAssembler } from "./handoff/package-assembler.js";
 export { HandoffNotifier } from "./handoff/handoff-notifier.js";
 export { SlaMonitor } from "./handoff/sla-monitor.js";
 export type {
-  HandoffPackage,
+  Handoff,
   HandoffReason,
   HandoffStatus,
   HandoffStore,
   LeadSnapshot,
   QualificationSnapshot,
-  ConversationSummary,
+  HandoffConversationSummary,
 } from "./handoff/types.js";
 
 // Embedding Adapter

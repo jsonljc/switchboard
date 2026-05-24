@@ -30,7 +30,7 @@ async function listDecisions(
     app.handoffStore.listPending(orgId),
   ]);
 
-  // HandoffPackage stores the lead identifier in leadSnapshot.leadId, not at the top level.
+  // Handoff stores the lead identifier in leadSnapshot.leadId, not at the top level.
   const contactIds = handoffs
     .map((h) => h.leadSnapshot?.leadId)
     .filter((x): x is string => typeof x === "string" && x.length > 0);
