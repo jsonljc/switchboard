@@ -142,3 +142,40 @@ describe("store-mutation advisory — AST where-object inspection", () => {
     expect(w).toHaveLength(0);
   });
 });
+
+describe("store-mutation advisory — AST edge cases (pinned behavior)", () => {
+  it("inspects deleteMany where the same way as updateMany", () => {
+    const ok = scan(`export class S {
+      async f(organizationId: string, id: string) {
+        await this.prisma.contact.deleteMany({ where: { id, organizationId } });
+      }
+    }`);
+    expect(ok).toHaveLength(0);
+    const bad = scan(`export class S {
+      async f(id: string) {
+        await this.prisma.contact.deleteMany({ where: { id } });
+      }
+    }`);
+    expect(bad).toHaveLength(1);
+  });
+
+  it("over-flags a spread-built where it cannot statically prove carries org (conservative)", () => {
+    // A spread element is not a named property; objectHasOrgKey does not see
+    // through it, so this conservatively warns. Acceptable in warning mode.
+    const w = scan(`export class S {
+      async f(base: object, id: string) {
+        await this.prisma.contact.updateMany({ where: { ...base, id }, data: {} });
+      }
+    }`);
+    expect(w).toHaveLength(1);
+  });
+
+  it("flags a where bound to an identifier with no in-file declaration (cross-file/param)", () => {
+    const w = scan(`export class S {
+      async f(id: string) {
+        await this.prisma.contact.updateMany({ where: EXTERNAL_WHERE, data: {} });
+      }
+    }`);
+    expect(w).toHaveLength(1);
+  });
+});

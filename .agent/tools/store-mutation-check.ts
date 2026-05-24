@@ -118,9 +118,16 @@ function resolveWhereObject(
   return null;
 }
 
+/** Resolve an identifier to its object-literal initializer, but ONLY when the
+ *  declaration lives in the SAME source file as the identifier. Go-to-definition
+ *  results that cross file boundaries are deliberately ignored so that
+ *  `where: SOME_IMPORTED_CONST` is conservatively flagged rather than silently
+ *  accepted based on a definition we cannot safely inspect in this pass. */
 function resolveIdentifierToObjectLiteral(id: Node): ObjectLiteralExpression | null {
   if (!Node.isIdentifier(id)) return null;
+  const idFile = id.getSourceFile().getFilePath();
   for (const def of id.getDefinitions()) {
+    if (def.getSourceFile().getFilePath() !== idFile) continue; // single-file only
     const declNode = def.getDeclarationNode();
     if (declNode && Node.isVariableDeclaration(declNode)) {
       const init = declNode.getInitializer();
