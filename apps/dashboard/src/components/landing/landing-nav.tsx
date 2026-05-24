@@ -43,7 +43,7 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
         >
           {/* Wordmark */}
           <Link
-            href="/"
+            href="/welcome"
             style={{
               fontFamily: "var(--font-display)",
               fontWeight: 700,
