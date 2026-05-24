@@ -137,6 +137,11 @@ export { createPrismaConsentStore } from "./prisma-consent-store.js";
 export { createPrismaContactConsentReader } from "./prisma-contact-consent-reader.js";
 export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
 export {
+  seedAlexSkillPack,
+  assertAlexSkillPackSeeded,
+  ALEX_SKILL_PACK_SCOPES,
+} from "./seed/seed-alex-skill-pack.js";
+export {
   PrismaWhatsAppTestSendStore,
   type WhatsAppTestSendRow,
   type WhatsAppTestSendCreateInput,

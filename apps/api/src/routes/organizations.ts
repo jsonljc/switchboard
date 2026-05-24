@@ -1,7 +1,12 @@
 // @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
-import { encryptCredentials, decryptCredentials, seedOrgDayOneAgents } from "@switchboard/db";
+import {
+  encryptCredentials,
+  decryptCredentials,
+  seedOrgDayOneAgents,
+  seedAlexSkillPack,
+} from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
@@ -81,6 +86,11 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
       // agent home pages have data on first load. Idempotent — re-runs are a
       // no-op via the helper's `update: {}` upsert.
       await seedOrgDayOneAgents(app.prisma, orgId);
+      try {
+        await seedAlexSkillPack(app.prisma, orgId);
+      } catch (err) {
+        console.warn(`[organizations] seedAlexSkillPack failed for ${orgId} (continuing):`, err);
+      }
 
       return reply.send({ config });
     },

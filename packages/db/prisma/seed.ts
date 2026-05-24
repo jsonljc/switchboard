@@ -6,6 +6,7 @@ import { seedMarketplace, seedDemoData } from "./seed-marketplace.js";
 import { seedKnowledge } from "./seed-knowledge.js";
 import { seedDevData } from "./seed-dev-data.js";
 import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
+import { seedAlexSkillPack } from "../src/seed/seed-alex-skill-pack.js";
 
 const prisma = new PrismaClient();
 
@@ -600,6 +601,10 @@ async function main() {
   // ── Knowledge Entries ──
   console.warn("\n--- Knowledge Entries ---");
   await seedKnowledge(prisma);
+
+  // ── Alex Skill Pack ──
+  console.warn("\n--- Alex Skill Pack ---");
+  await seedAlexSkillPack(prisma, "org_demo");
 
   // ── Dev-only domain data ──
   // Skipped in production. Idempotent — keyed on `dev_*` IDs.

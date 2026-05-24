@@ -149,6 +149,9 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
       orgAgentEnablement: {
         upsert: vi.fn().mockResolvedValue({}),
       },
+      knowledgeEntry: {
+        upsert: vi.fn().mockResolvedValue({}),
+      },
       agentListing: {
         upsert: vi.fn().mockResolvedValue({ id: "listing_alex", slug: "alex-conversion" }),
       },
