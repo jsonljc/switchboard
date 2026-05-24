@@ -90,14 +90,15 @@ function computeSkillContentHash(): string {
  * Aggregate per-turn deterministic + judge results into a single ScenarioResult.
  *
  * Turn-score aggregation:
- *   - `deterministicPass`: ALL turns must pass (logical AND). A single violation
- *     in any turn fails the scenario.
+ *   - `deterministicPass`: ALL turns must pass (logical AND). A single hard
+ *     violation (unexpected-tool) in any turn fails the scenario.
  *   - `judgeScore`: MEAN of per-turn softScores, rounded to one decimal place.
  *     Mean is more representative than min for multi-turn scenarios where one
  *     awkward turn should not catastrophically sink the overall score.
  *   - `semanticHardRulePass`: ALL turns must pass the judge's hard rules (AND).
- *   - `violations`: union of all deterministic violation codes + semantic violation
- *     strings across all turns, deduplicated.
+ *   - `violations`: union of hard violation codes (unexpected-tool) + semantic
+ *     violation strings across all turns, deduplicated. Does NOT include claim flags.
+ *   - `claimWarnings`: union of all advisory claim warnings across turns.
  *   - `requiredBehaviorsMet`: union of fixture mustDo/mustAsk satisfied across
  *     turns (we record fixture-level; the judge's notes surface specifics).
  */
@@ -106,6 +107,7 @@ function aggregateScenarioResult(
   turnResults: Array<{
     deterministicPass: boolean;
     violations: string[];
+    claimWarnings?: import("./grade.js").ClaimWarning[];
     semanticHardRulePass: boolean;
     semanticViolations: string[];
     softScore: number;
@@ -132,6 +134,18 @@ function aggregateScenarioResult(
     for (const b of t.requiredBehaviorsMet) behaviorSet.add(b);
   }
 
+  // Collect advisory claim warnings (union across all turns, deduplicated by sentence).
+  const claimWarningSentences = new Set<string>();
+  const claimWarnings: import("./grade.js").ClaimWarning[] = [];
+  for (const t of turnResults) {
+    for (const w of t.claimWarnings ?? []) {
+      if (!claimWarningSentences.has(w.sentence)) {
+        claimWarningSentences.add(w.sentence);
+        claimWarnings.push(w);
+      }
+    }
+  }
+
   return {
     id,
     deterministicPass,
@@ -139,6 +153,7 @@ function aggregateScenarioResult(
     semanticHardRulePass,
     requiredBehaviorsMet: Array.from(behaviorSet),
     violations: Array.from(violationSet),
+    claimWarnings,
   };
 }
 
@@ -198,6 +213,7 @@ async function main(): Promise<void> {
     const turnResults: Array<{
       deterministicPass: boolean;
       violations: string[];
+      claimWarnings: import("./grade.js").ClaimWarning[];
       semanticHardRulePass: boolean;
       semanticViolations: string[];
       softScore: number;
@@ -255,7 +271,7 @@ async function main(): Promise<void> {
 
       // Collect which required behaviors were met based on fixture grade hints
       const requiredBehaviorsMet: string[] = [];
-      if (deterministicResult.pass && gradeSpec.grade.mustNot.length > 0) {
+      if (deterministicResult.deterministicPass && gradeSpec.grade.mustNot.length > 0) {
         requiredBehaviorsMet.push(`no-violations:${gradeSpec.grade.mustNot.join(",")}`);
       }
       if (verdict.semanticHardRulePass && gradeSpec.grade.mustDo.length > 0) {
@@ -263,22 +279,22 @@ async function main(): Promise<void> {
       }
 
       turnResults.push({
-        deterministicPass: deterministicResult.pass,
+        deterministicPass: deterministicResult.deterministicPass,
         violations: deterministicResult.violations.map((v) => v.code),
+        claimWarnings: deterministicResult.claimWarnings,
         semanticHardRulePass: verdict.semanticHardRulePass,
         semanticViolations: verdict.semanticViolations,
         softScore: verdict.softScore,
         requiredBehaviorsMet,
       });
 
-      // Collect claim flags for investigation output.
-      const claimFlags = deterministicResult.violations
-        .filter((v) => v.code.startsWith("claim:") && v.sentence !== undefined)
-        .map((v) => ({
-          claimType: v.code.slice("claim:".length),
-          confidence: v.confidence ?? 0,
-          sentence: v.sentence!,
-        }));
+      // Collect claim flags (advisory) for investigation output.
+      // These come from claimWarnings — they no longer appear in violations.
+      const claimFlags = deterministicResult.claimWarnings.map((w) => ({
+        claimType: w.claimType,
+        confidence: w.confidence,
+        sentence: w.sentence,
+      }));
       investigationTurns.push({
         turnIndex: i,
         claimFlags,
@@ -286,7 +302,9 @@ async function main(): Promise<void> {
         softScore: verdict.softScore,
       });
 
-      process.stdout.write(deterministicResult.pass && verdict.semanticHardRulePass ? "." : "x");
+      process.stdout.write(
+        deterministicResult.deterministicPass && verdict.semanticHardRulePass ? "." : "x",
+      );
     }
 
     scenarioResults.push(aggregateScenarioResult(fixture.id, turnResults));
@@ -335,6 +353,7 @@ async function main(): Promise<void> {
         judgeScore: r.judgeScore,
         requiredBehaviorsMet: r.requiredBehaviorsMet,
         violations: r.violations,
+        claimWarnings: r.claimWarnings,
       })),
     };
     writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + "\n");

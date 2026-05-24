@@ -21,12 +21,23 @@ export const ConversationFixtureSchema = z
   .refine((f) => f.turns[0]?.role === "lead", "fixture must start on a lead turn");
 export type ConversationFixture = z.infer<typeof ConversationFixtureSchema>;
 
+export const ClaimWarningSchema = z.object({
+  claimType: z.string(),
+  confidence: z.number(),
+  sentence: z.string(),
+});
+
 export const ScenarioBaselineSchema = z.object({
   id: z.string(),
   deterministicPass: z.boolean(),
   judgeScore: z.number().min(0).max(5),
   requiredBehaviorsMet: z.array(z.string()),
   violations: z.array(z.string()),
+  /**
+   * Advisory claim warnings from the per-sentence classifier. Informational
+   * only — stored in the baseline for observability, but never gate regression.
+   */
+  claimWarnings: z.array(ClaimWarningSchema).optional(),
 });
 export const BaselineSchema = z.object({
   version: z.literal(1),

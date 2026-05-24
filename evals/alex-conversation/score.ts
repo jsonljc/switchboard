@@ -1,4 +1,5 @@
 import type { Baseline } from "./schema.js";
+import type { ClaimWarning } from "./grade.js";
 
 // ---------------------------------------------------------------------------
 // ScenarioResult
@@ -11,19 +12,28 @@ import type { Baseline } from "./schema.js";
 export interface ScenarioResult {
   /** Matches the fixture / baseline scenario id. */
   id: string;
-  /** True iff Tier 1 (deterministic) grading found no violations. */
+  /** True iff Tier 1 (deterministic) grading found no HARD violations (tool/sidecar). */
   deterministicPass: boolean;
   /** Tier-3 soft quality score 0–5. */
   judgeScore: number;
   /** Tier-1 + Tier-2 required behaviors that were satisfied. */
   requiredBehaviorsMet: string[];
-  /** All violations (deterministic codes + semantic strings). */
+  /** Hard violations (unexpected-tool codes + semantic strings). Does NOT include claim flags. */
   violations: string[];
   /**
    * Tier-2 semantic hard-rule pass flag.
    * Optional: absent when the judge was not run for this scenario.
    */
   semanticHardRulePass?: boolean;
+  /**
+   * Advisory claim warnings collected from the per-sentence classifier across
+   * all turns. These are informational only — they do NOT gate `deterministicPass`
+   * or the regression check. Printed in the investigation block for human triage.
+   *
+   * The claim classifier over-flags conversational deferrals; the judge's
+   * `semanticHardRulePass` is the correct claim gate.
+   */
+  claimWarnings?: ClaimWarning[];
 }
 
 // ---------------------------------------------------------------------------

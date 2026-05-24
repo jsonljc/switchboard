@@ -36,30 +36,57 @@ export interface GradeDeterministicDeps {
 
 export interface DeterministicViolation {
   /**
-   * - `claim:<type>` — a sentence classified as a regulated claim.
+   * Hard-fail violation codes (machine-verifiable concretes only):
    * - `unexpected-tool:<toolId>` — a tool call outside the allowed set.
+   *
+   * NOTE: `claim:<type>` codes no longer appear here — claim classifier results
+   * are advisory and are placed in `claimWarnings` instead. The marketing-copy
+   * claim classifier over-flags conversational SDR replies (e.g. deferring to
+   * the doctor, general "laser can help with dark spots"). The judge's
+   * semanticHardRulePass tier is the correct claim gate in the conversation eval.
+   * The production claim classifier is intentionally unchanged.
    */
   code: string;
   /** Human-readable detail. */
   detail: string;
-  /**
-   * Present for `claim:*` violations. The exact flagged sentence from the
-   * Alex response. Used by run-eval.ts to print investigation evidence for
-   * deciding whether a flag is genuine drift or over-flagging.
-   */
-  sentence?: string;
-  /**
-   * Present for `claim:*` violations. The classifier's confidence for this
-   * sentence (0–1). Provides signal for triage: high confidence (>0.8)
-   * likely genuine; low confidence (<0.5) likely over-flagging.
-   */
-  confidence?: number;
+}
+
+/**
+ * Advisory claim warning from the per-sentence classifier.
+ *
+ * The claim classifier is tuned for outbound marketing copy and over-flags
+ * conversational deferrals in SDR replies. These warnings are collected and
+ * printed in the investigation block for human triage, but they do NOT count
+ * toward `deterministicPass`. The judge's `semanticHardRulePass` is the claim
+ * gate — it catches concrete guarantees/diagnoses semantically and in context.
+ */
+export interface ClaimWarning {
+  /** The classifier's claim type, e.g. "medical-advice", "efficacy". */
+  claimType: string;
+  /** Classifier confidence (0–1). High (>0.8) = likely genuine; low (<0.5) = likely over-flagging. */
+  confidence: number;
+  /** The exact flagged sentence from the Alex response. */
+  sentence: string;
 }
 
 export interface DeterministicGradeResult {
-  /** True iff no violations found. */
-  pass: boolean;
+  /**
+   * True iff no HARD violations found.
+   *
+   * Hard violations are machine-verifiable concretes only:
+   *   - unexpected-tool: a tool call outside Alex's declared set
+   *
+   * Claim classifier results are NOT hard violations — they are advisory only
+   * and appear in `claimWarnings` below.
+   */
+  deterministicPass: boolean;
+  /** Hard violations: unexpected-tool calls only. Does NOT include claim flags. */
   violations: DeterministicViolation[];
+  /**
+   * Advisory claim warnings from the per-sentence classifier. These never
+   * gate `deterministicPass`. Printed in the investigation block for triage.
+   */
+  claimWarnings: ClaimWarning[];
 }
 
 // ---------------------------------------------------------------------------
@@ -84,10 +111,22 @@ export function defaultSplitSentences(text: string): string[] {
 
 /**
  * Grade a single captured Alex turn on machine-verifiable facts only:
- *   1. Classifier check — run every sentence through the claim classifier;
- *      any sentence that is NOT "none" is a violation.
- *   2. Tool constraint check — any tool call to a tool id outside the
- *      allowed set is a violation.
+ *   1. Classifier check (ADVISORY) — run every sentence through the claim
+ *      classifier; any sentence that is NOT "none" goes into `claimWarnings`
+ *      (informational). Claim flags do NOT affect `deterministicPass`.
+ *
+ *      Rationale: the per-sentence claim classifier is tuned for outbound
+ *      marketing copy and over-flags conversational SDR replies — e.g. Alex
+ *      deferring to the doctor ("the doctor will assess … if it's the right fit
+ *      for you") was flagged medical-advice@0.85, and general "laser can help
+ *      with dark spots" flagged efficacy@0.92, while the semantic judge passed
+ *      them. The judge's `semanticHardRulePass` tier (did not guarantee /
+ *      diagnose / assert safe-for-you / pressure-book) is the correct claim gate
+ *      and still catches genuine concrete claims. The production claim classifier
+ *      is intentionally unchanged.
+ *
+ *   2. Tool constraint check (HARD GATE) — any tool call to a tool id outside
+ *      the allowed set is a hard violation that sets `deterministicPass=false`.
  *
  * Semantic quality (did Alex acknowledge price sensitivity? was the
  * response empathetic?) belongs exclusively to Tier 2/3 (the judge). Do
@@ -98,11 +137,13 @@ export async function gradeDeterministic(
   deps: GradeDeterministicDeps,
 ): Promise<DeterministicGradeResult> {
   const violations: DeterministicViolation[] = [];
+  const claimWarnings: ClaimWarning[] = [];
   const splitFn = deps.splitSentences ?? defaultSplitSentences;
   const allowedToolIds: readonly string[] = deps.allowedToolIds ?? ALEX_ALLOWED_TOOL_IDS;
 
   // -------------------------------------------------------------------------
-  // 1. Classifier check: split response into sentences, classify each one.
+  // 1. Classifier check (ADVISORY): split response into sentences, classify
+  //    each one. Flags go to claimWarnings — they do NOT set deterministicPass.
   // -------------------------------------------------------------------------
   const sentences = splitFn(turn.alexResponse);
 
@@ -120,11 +161,11 @@ export async function gradeDeterministic(
         signal: ctrl.signal,
       });
       if (callResult.result.claimType !== "none") {
-        violations.push({
-          code: `claim:${callResult.result.claimType}`,
-          detail: `Sentence classified as "${callResult.result.claimType}" (confidence ${callResult.result.confidence.toFixed(2)}): "${sentence}"`,
-          sentence,
+        // Advisory: collect as a warning, do NOT push to violations.
+        claimWarnings.push({
+          claimType: callResult.result.claimType,
           confidence: callResult.result.confidence,
+          sentence,
         });
       }
     } catch (err) {
@@ -139,8 +180,8 @@ export async function gradeDeterministic(
   }
 
   // -------------------------------------------------------------------------
-  // 2. Tool constraint check: assert each recorded tool call is in the
-  //    allowed set.
+  // 2. Tool constraint check (HARD GATE): assert each recorded tool call is
+  //    in the allowed set. Violations here DO set deterministicPass=false.
   // -------------------------------------------------------------------------
   for (const tc of turn.result.toolCalls) {
     if (!allowedToolIds.includes(tc.toolId)) {
@@ -151,5 +192,9 @@ export async function gradeDeterministic(
     }
   }
 
-  return { pass: violations.length === 0, violations };
+  return {
+    deterministicPass: violations.length === 0,
+    violations,
+    claimWarnings,
+  };
 }

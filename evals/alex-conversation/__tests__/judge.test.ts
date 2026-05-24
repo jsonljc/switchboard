@@ -271,6 +271,54 @@ describe("JUDGE_RUBRIC_VERSION and JUDGE_RUBRIC_HASH exports", () => {
 });
 
 // ---------------------------------------------------------------------------
+// softScore sanity: valid tool_use with softScore 4 must NOT be zeroed out
+// ---------------------------------------------------------------------------
+//
+// A live run scored a reasonable reply 0. This test verifies the parse/clamp
+// path cannot zero out a valid score from a well-formed tool_use block.
+// The 0 in the live run was a genuine model verdict; the code path is correct.
+
+describe("judgeTurn — softScore 4 from valid tool_use is preserved (not clamped to 0)", () => {
+  it("a valid tool_use returning softScore 4 yields verdict.softScore === 4", async () => {
+    const deps = makeDeps(
+      makeToolUseClient({
+        semanticHardRulePass: true,
+        semanticViolations: [],
+        softScore: 4,
+        notes: "Alex responded warmly and asked a good qualifying question.",
+      }),
+    );
+    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
+
+    // The score must be preserved exactly — not clamped to 0 or rounded away
+    expect(verdict.softScore).toBe(4);
+    expect(verdict.semanticHardRulePass).toBe(true);
+  });
+
+  it("softScore 4 is not affected by the round() call (4.0 rounds to 4)", async () => {
+    // Math.round(4) === 4; Math.max(0, Math.min(5, 4)) === 4 — confirm the chain
+    const deps = makeDeps(
+      makeToolUseClient({
+        semanticHardRulePass: true,
+        semanticViolations: [],
+        softScore: 4.0,
+        notes: "Exact integer 4.",
+      }),
+    );
+    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
+    expect(verdict.softScore).toBe(4);
+  });
+
+  it("fail-closed path still returns softScore 0 when no tool_use block present", async () => {
+    // Confirms fail-closed is intentional and separate from the valid-parse path
+    const deps = makeDeps(makeNoToolUseClient("garbage response"));
+    const verdict = await judgeTurn(CLEAN_TURN_INPUT, deps);
+    expect(verdict.softScore).toBe(0);
+    expect(verdict.semanticHardRulePass).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Grade spec hints are included in the user message
 // ---------------------------------------------------------------------------
 

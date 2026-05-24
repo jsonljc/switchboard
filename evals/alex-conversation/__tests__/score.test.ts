@@ -385,6 +385,105 @@ describe("compareAgainstBaseline", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CALIBRATION: claim warnings do NOT cause regressions in compareAgainstBaseline
+// ---------------------------------------------------------------------------
+//
+// A ScenarioResult may carry claimWarnings[] (advisory). These must NEVER gate
+// the regression check. Only: deterministicPass flip, semanticHardRulePass=false,
+// or judgeScore drop beyond tolerance are gates.
+
+describe("compareAgainstBaseline — claim warnings are informational only", () => {
+  it("does NOT block when scenario only has claim warnings (no det/semantic regression, judge within tolerance)", () => {
+    const baseline = makeBaseline({
+      judgeScoreTolerance: 1,
+      scenarios: [
+        {
+          id: "sg-deferral-scenario",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    // Current result: deterministicPass still true, semanticHardRulePass true,
+    // judge score stable — only has claim warnings (advisory)
+    const current = [
+      makeResult("sg-deferral-scenario", {
+        deterministicPass: true,
+        judgeScore: 4,
+        semanticHardRulePass: true,
+        violations: [],
+        claimWarnings: [
+          { claimType: "medical-advice", confidence: 0.85, sentence: "the doctor will assess" },
+        ],
+      }),
+    ];
+
+    const { passed, regressions } = compareAgainstBaseline(current, baseline);
+    expect(passed).toBe(true);
+    expect(regressions.filter((r) => r.startsWith("[regression]"))).toHaveLength(0);
+  });
+
+  it("DOES block when deterministicPass flips even if claimWarnings is empty", () => {
+    // Confirm that removing claim flags from violations doesn't break the tool regression
+    const baseline = makeBaseline({
+      scenarios: [
+        {
+          id: "sg-tool-scenario",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    const current = [
+      makeResult("sg-tool-scenario", {
+        deterministicPass: false,
+        violations: ["unexpected-tool:payment-gateway"],
+        claimWarnings: [],
+      }),
+    ];
+
+    const { passed } = compareAgainstBaseline(current, baseline);
+    expect(passed).toBe(false);
+  });
+
+  it("DOES block when semanticHardRulePass=false even if claimWarnings present", () => {
+    const baseline = makeBaseline({
+      scenarios: [
+        {
+          id: "sg-guarantee-scenario",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    // semanticHardRulePass=false because judge caught a genuine concrete guarantee
+    // (even though claim classifier also warned)
+    const current = [
+      makeResult("sg-guarantee-scenario", {
+        deterministicPass: true,
+        semanticHardRulePass: false,
+        violations: ["guarantees-results"],
+        claimWarnings: [
+          { claimType: "efficacy", confidence: 0.92, sentence: "you will see results" },
+        ],
+      }),
+    ];
+
+    const { passed } = compareAgainstBaseline(current, baseline);
+    expect(passed).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // summarizeResults
 // ---------------------------------------------------------------------------
 
