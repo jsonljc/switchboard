@@ -67,6 +67,40 @@ export function resolveRouteClass(sf: SourceFile, repoPath: string): RouteClass 
   return null;
 }
 
+/** Matches the `operator-direct-contract-deferred` directive comment token. */
+const DEFERRAL_DIRECTIVE_RX = /\/\/\s*route-governance:\s*operator-direct-contract-deferred\b/;
+
+/** Matches a GitHub issue reference such as `#654`. */
+const ISSUE_REF_RX = /#\d+/;
+
+/**
+ * Detect whether `text` carries an `operator-direct-contract-deferred` directive,
+ * and — if so — whether a GitHub issue reference (`#\d+`) appears on the same
+ * directive comment line OR within the 3 lines immediately following it.
+ *
+ * Returns `{ deferred: false }` when the directive is absent.
+ * Returns `{ deferred: true, hasIssueRef: boolean }` when it is present.
+ */
+function hasOperatorDirectDeferral(
+  text: string,
+): { deferred: false } | { deferred: true; hasIssueRef: boolean } {
+  const directiveMatch = DEFERRAL_DIRECTIVE_RX.exec(text);
+  if (!directiveMatch) return { deferred: false };
+
+  // Find the directive line and up to 3 following lines.
+  const directiveIndex = directiveMatch.index;
+  const lineStart = text.lastIndexOf("\n", directiveIndex - 1) + 1;
+  // Collect: directive line + 3 subsequent newline-delimited segments.
+  let searchEnd = directiveIndex;
+  let newlinesFound = 0;
+  while (searchEnd < text.length && newlinesFound <= 3) {
+    if (text[searchEnd] === "\n") newlinesFound += 1;
+    searchEnd += 1;
+  }
+  const window = text.slice(lineStart, searchEnd);
+  return { deferred: true, hasIssueRef: ISSUE_REF_RX.test(window) };
+}
+
 /**
  * Per-class matrix validator for Route Governance Contract v1 PR-1.
  *
@@ -152,6 +186,24 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
   };
 
   if (cls === "operator-direct") {
+    // Check for the contract-deferred deferral directive before running cell checks.
+    // Routes that carry the directive skip idempotency + write-side-decorator enforcement
+    // until the tracked migration issue is resolved (Route Governance §6).
+    const deferral = hasOperatorDirectDeferral(sf.getFullText());
+    if (deferral.deferred) {
+      if (!deferral.hasIssueRef) {
+        // Directive present but no issue ref in scope — the ONLY warning emitted.
+        warnings.push({
+          path: repoPath,
+          message:
+            "operator-direct route carries a 'operator-direct-contract-deferred' directive without a tracked issue reference (e.g. #654) — ref-less deferrals are forbidden (Route Governance §6)",
+        });
+      }
+      // Whether or not there is an issue ref, skip the cell enforcement below.
+      return warnings;
+    }
+
+    // No deferral directive — run the full three-stage cell checks.
     if (!importsNamed("requireIdempotencyKey")) {
       warnings.push({
         path: repoPath,
