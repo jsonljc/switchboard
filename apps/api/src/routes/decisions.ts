@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync, FastifyInstance } from "fastify";
 import {
   type Decision,

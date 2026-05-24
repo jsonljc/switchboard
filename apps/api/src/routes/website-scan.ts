@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { ScanRequestSchema, ScanResultSchema } from "@switchboard/schemas";
 import Anthropic from "@anthropic-ai/sdk";

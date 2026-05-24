@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { ContactsListQuerySchema } from "@switchboard/schemas";
 import { listContactsForBrowse, InvalidCursorError } from "@switchboard/core/contacts";

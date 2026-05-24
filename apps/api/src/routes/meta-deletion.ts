@@ -1,3 +1,4 @@
+// @route-class: ingress-receiver
 // Meta Data Deletion Callback endpoint.
 //
 // Required for Meta App Review submission: when a user requests their data

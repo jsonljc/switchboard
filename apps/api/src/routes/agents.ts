@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { deriveAgentStates } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";

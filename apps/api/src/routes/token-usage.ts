@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { computeTokenCostUSD, listModelCosts } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";

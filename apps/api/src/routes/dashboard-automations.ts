@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { ScheduledTriggersListQuerySchema } from "@switchboard/schemas";
 import { listTriggersForBrowse, InvalidCursorError } from "@switchboard/core";

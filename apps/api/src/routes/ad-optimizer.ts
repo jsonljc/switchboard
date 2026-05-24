@@ -1,3 +1,4 @@
+// @route-class: ingress-receiver
 import type { FastifyPluginAsync } from "fastify";
 import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 

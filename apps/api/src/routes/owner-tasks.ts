@@ -1,3 +1,4 @@
+// @route-class: lifecycle
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaOwnerTaskStore } from "@switchboard/db";
 import type { TaskStatus } from "@switchboard/schemas";

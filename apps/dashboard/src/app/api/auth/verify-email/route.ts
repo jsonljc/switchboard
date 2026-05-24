@@ -1,3 +1,4 @@
+// @route-class: ingress-receiver
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { verifyEmailToken } from "@/lib/email";

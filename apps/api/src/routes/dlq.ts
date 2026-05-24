@@ -1,3 +1,4 @@
+// @route-class: lifecycle
 import type { FastifyPluginAsync } from "fastify";
 import { assertOrgAccess } from "../utils/org-access.js";
 

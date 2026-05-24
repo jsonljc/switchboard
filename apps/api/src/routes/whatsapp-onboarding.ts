@@ -1,3 +1,4 @@
+// @route-class: ingress-receiver
 import type { FastifyPluginAsync } from "fastify";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
 import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";

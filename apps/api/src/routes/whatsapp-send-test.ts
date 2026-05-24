@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { WhatsAppSendTestRequestSchema, type WhatsAppSendTestRequest } from "@switchboard/schemas";
 import { fetchWhatsAppTemplates } from "./whatsapp-management.js";

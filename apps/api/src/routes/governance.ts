@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { profileToPosture } from "@switchboard/core";
 import type { GovernanceProfileStore } from "@switchboard/core";

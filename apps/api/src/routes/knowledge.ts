@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "crypto";
 import { requireOrganizationScope } from "../utils/require-org.js";

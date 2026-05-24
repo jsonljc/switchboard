@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
 import { getConnectionStore } from "../utils/connection-store.js";

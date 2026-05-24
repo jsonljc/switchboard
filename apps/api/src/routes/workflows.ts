@@ -1,3 +1,4 @@
+// @route-class: lifecycle
 // ---------------------------------------------------------------------------
 // Workflow Routes — CRUD operations for workflows, actions, and checkpoints
 // ---------------------------------------------------------------------------
