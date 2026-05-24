@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyInstance } from "fastify";
 import { renderOutcomeCopy } from "@switchboard/schemas";
 import type { ActivityRow } from "@switchboard/schemas";

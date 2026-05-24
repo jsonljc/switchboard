@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { CreateSessionRequestSchema } from "@switchboard/schemas";
 import { assertOrgAccess, resolveOrganizationForMutation } from "../utils/org-access.js";

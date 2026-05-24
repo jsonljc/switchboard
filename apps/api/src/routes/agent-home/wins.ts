@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { projectWins, type WinsSignalStore } from "@switchboard/core";

@@ -5,7 +5,8 @@ export type RouteClass =
   | "lifecycle"
   | "control-plane"
   | "ingress-receiver"
-  | "read-only";
+  | "read-only"
+  | "dashboard-proxy";
 
 const KNOWN_CLASSES: ReadonlySet<RouteClass> = new Set([
   "operator-direct",
@@ -13,6 +14,7 @@ const KNOWN_CLASSES: ReadonlySet<RouteClass> = new Set([
   "control-plane",
   "ingress-receiver",
   "read-only",
+  "dashboard-proxy",
 ]);
 
 export interface ValidatorWarning {
@@ -31,6 +33,72 @@ export function parseRouteClass(sf: SourceFile): RouteClass | null {
   if (!match) return null;
   const label = match[1] as RouteClass;
   return KNOWN_CLASSES.has(label) ? label : null;
+}
+
+/**
+ * Regex for the dashboard-proxy directory convention.
+ *
+ * Only routes under `apps/dashboard/src/app/api/dashboard/**` are blessed as
+ * forwarding proxies (spec §1: "A route under
+ * apps/dashboard/src/app/api/dashboard/** is always dashboard proxy").
+ *
+ * Routes under `apps/dashboard/src/app/api/` but OUTSIDE `/dashboard/` (e.g.
+ * `waitlist/route.ts` which does a direct `db.waitlistEntry.create`, and the
+ * `auth/*` routes) are NOT forwarding proxies — they must carry explicit
+ * `@route-class` headers and must NOT silently default to `dashboard-proxy`.
+ */
+const DASHBOARD_PROXY_RX = /^apps\/dashboard\/src\/app\/api\/dashboard\//;
+
+/**
+ * Resolve the route class for a source file, applying the dashboard-proxy
+ * directory convention as a fallback when no explicit header is present.
+ *
+ * Resolution order:
+ * 1. If `parseRouteClass(sf)` returns a non-null class (explicit header), use it.
+ * 2. Else, if `repoPath` matches the dashboard-proxy directory convention
+ *    (`apps/dashboard/src/app/api/dashboard/**`), return `"dashboard-proxy"`.
+ * 3. Else return `null` (missing header — enforced as an error later by
+ *    --mode=error, not here).
+ */
+export function resolveRouteClass(sf: SourceFile, repoPath: string): RouteClass | null {
+  const explicit = parseRouteClass(sf);
+  if (explicit !== null) return explicit;
+  if (DASHBOARD_PROXY_RX.test(repoPath)) return "dashboard-proxy";
+  return null;
+}
+
+/** Matches the `operator-direct-contract-deferred` directive comment token. */
+const DEFERRAL_DIRECTIVE_RX = /\/\/\s*route-governance:\s*operator-direct-contract-deferred\b/;
+
+/** Matches a GitHub issue reference such as `#654`. */
+const ISSUE_REF_RX = /#\d+/;
+
+/**
+ * Detect whether `text` carries an `operator-direct-contract-deferred` directive,
+ * and — if so — whether a GitHub issue reference (`#\d+`) appears on the same
+ * directive comment line OR within the 3 lines immediately following it.
+ *
+ * Returns `{ deferred: false }` when the directive is absent.
+ * Returns `{ deferred: true, hasIssueRef: boolean }` when it is present.
+ */
+function hasOperatorDirectDeferral(
+  text: string,
+): { deferred: false } | { deferred: true; hasIssueRef: boolean } {
+  const directiveMatch = DEFERRAL_DIRECTIVE_RX.exec(text);
+  if (!directiveMatch) return { deferred: false };
+
+  // Find the directive line and up to 3 following lines.
+  const directiveIndex = directiveMatch.index;
+  const lineStart = text.lastIndexOf("\n", directiveIndex - 1) + 1;
+  // Collect: directive line + 3 subsequent newline-delimited segments.
+  let searchEnd = directiveIndex;
+  let newlinesFound = 0;
+  while (searchEnd < text.length && newlinesFound <= 3) {
+    if (text[searchEnd] === "\n") newlinesFound += 1;
+    searchEnd += 1;
+  }
+  const window = text.slice(lineStart, searchEnd);
+  return { deferred: true, hasIssueRef: ISSUE_REF_RX.test(window) };
 }
 
 /**
@@ -118,6 +186,24 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
   };
 
   if (cls === "operator-direct") {
+    // Check for the contract-deferred deferral directive before running cell checks.
+    // Routes that carry the directive skip idempotency + write-side-decorator enforcement
+    // until the tracked migration issue is resolved (Route Governance §6).
+    const deferral = hasOperatorDirectDeferral(sf.getFullText());
+    if (deferral.deferred) {
+      if (!deferral.hasIssueRef) {
+        // Directive present but no issue ref in scope — the ONLY warning emitted.
+        warnings.push({
+          path: repoPath,
+          message:
+            "operator-direct route carries a 'operator-direct-contract-deferred' directive without a tracked issue reference (e.g. #654) — ref-less deferrals are forbidden (Route Governance §6)",
+        });
+      }
+      // Whether or not there is an issue ref, skip the cell enforcement below.
+      return warnings;
+    }
+
+    // No deferral directive — run the full three-stage cell checks.
     if (!importsNamed("requireIdempotencyKey")) {
       warnings.push({
         path: repoPath,

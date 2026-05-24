@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { isAgentKey, AGENT_REGISTRY } from "@switchboard/schemas";
 import { agentHome } from "@switchboard/core";

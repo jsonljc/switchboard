@@ -1,3 +1,4 @@
+// @route-class: ingress-receiver
 import type { FastifyPluginAsync } from "fastify";
 import { createHmac } from "node:crypto";
 import { google } from "googleapis";

@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { sanitizeHealthError } from "../utils/error-sanitizer.js";
 

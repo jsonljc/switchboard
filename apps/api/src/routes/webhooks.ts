@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID, createHmac } from "node:crypto";
 import { requireRole } from "../utils/require-role.js";

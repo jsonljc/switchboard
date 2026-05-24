@@ -1,3 +1,4 @@
+// @route-class: control-plane
 /* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // Marketplace routes — agent listings, deployments, tasks, and trust scores

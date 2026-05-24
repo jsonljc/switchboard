@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import type { Policy } from "@switchboard/schemas";

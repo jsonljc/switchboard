@@ -1,3 +1,5 @@
+// @route-class: operator-direct
+// route-governance: operator-direct-contract-deferred — enforces idempotency + org scope manually and submits via platformIngress, but not via the canonical requireIdempotencyKey/requireOrgForMutation decorators; tracked in #654
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { matchesAny, NeedsClarificationError, NotFoundError } from "@switchboard/core";

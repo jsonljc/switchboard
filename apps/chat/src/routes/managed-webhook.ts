@@ -1,3 +1,4 @@
+// @route-class: ingress-receiver
 import type { FastifyInstance } from "fastify";
 import type { ReplySink } from "@switchboard/core";
 import type { GatewayEntry } from "../managed/runtime-registry.js";

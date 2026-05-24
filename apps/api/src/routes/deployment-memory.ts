@@ -1,3 +1,4 @@
+// @route-class: control-plane
 // ---------------------------------------------------------------------------
 // Deployment Memory routes — owner corrections & learned memory management
 // ---------------------------------------------------------------------------

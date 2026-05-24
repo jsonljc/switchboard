@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { PlaybookSchema, createEmptyPlaybook } from "@switchboard/schemas";
 

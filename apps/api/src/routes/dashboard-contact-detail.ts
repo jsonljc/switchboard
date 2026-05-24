@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { getContactDetail, ContactNotFoundError } from "@switchboard/core/contacts";
 import { requireOrganizationScope } from "../utils/require-org.js";

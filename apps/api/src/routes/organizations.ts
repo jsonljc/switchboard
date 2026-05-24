@@ -1,3 +1,4 @@
+// @route-class: control-plane
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
 import { encryptCredentials, decryptCredentials, seedOrgDayOneAgents } from "@switchboard/db";

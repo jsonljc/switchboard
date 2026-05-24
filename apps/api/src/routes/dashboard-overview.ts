@@ -1,3 +1,4 @@
+// @route-class: read-only
 // ---------------------------------------------------------------------------
 // Dashboard aggregate endpoint — assembles all owner-today data in parallel
 // ---------------------------------------------------------------------------

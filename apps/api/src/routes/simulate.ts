@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { PlaybookSchema } from "@switchboard/schemas";
 

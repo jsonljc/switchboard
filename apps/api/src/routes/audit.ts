@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import type { AuditQueryFilter } from "@switchboard/core";
 import { assertOrgAccess } from "../utils/org-access.js";

@@ -1,3 +1,4 @@
+// @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
 import { AGENT_REGISTRY, AGENT_KEYS } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";

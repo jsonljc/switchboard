@@ -1,3 +1,5 @@
+// @route-class: operator-direct
+// route-governance: operator-direct-contract-deferred — raw operator ingress submit; canonical idempotency contract for the raw submit endpoint is unresolved, so the decorator cell is deferred; tracked in #654
 import type { FastifyPluginAsync } from "fastify";
 import { resolveOrganizationForMutation } from "../utils/org-access.js";
 

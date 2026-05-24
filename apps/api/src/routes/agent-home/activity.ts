@@ -1,3 +1,4 @@
+// @route-class: read-only
 // ---------------------------------------------------------------------------
 // GET /api/dashboard/agents/:agentId/activity (A.4)
 //

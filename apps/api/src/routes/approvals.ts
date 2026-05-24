@@ -1,3 +1,4 @@
+// @route-class: lifecycle
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { StaleVersionError, respondToApproval } from "@switchboard/core";

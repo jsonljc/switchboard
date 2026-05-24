@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Project } from "ts-morph";
-import { parseRouteClass, validateRouteClass } from "../route-class-validator.js";
+import {
+  parseRouteClass,
+  resolveRouteClass,
+  validateRouteClass,
+} from "../route-class-validator.js";
 
 function makeSource(content: string) {
   const project = new Project({ useInMemoryFileSystem: true });
@@ -237,5 +241,139 @@ describe("validateRouteClass — no header", () => {
   it("returns no warnings when no header present (PR-4 backfills; PR-1 is touched-only)", () => {
     const sf = makeSource(`export const r = async () => {};`);
     expect(validateRouteClass(sf, "test.ts")).toEqual([]);
+  });
+});
+
+describe("operator-direct contract-deferred directive", () => {
+  // Minimal operator-direct file with no decorators (no directive either).
+  // Used as baseline to confirm existing warnings still fire without the directive.
+  const BARE_OP_DIRECT = `
+    // @route-class: operator-direct
+    export const r = async (app) => {
+      app.post("/x", async () => {});
+    };
+  `;
+
+  it("no directive, no decorators → existing warnings still fire (unchanged behavior)", () => {
+    const sf = makeSource(BARE_OP_DIRECT);
+    const warnings = validateRouteClass(sf, "test.ts");
+    expect(warnings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("directive WITH issue ref (#654) on same line, no decorators → returns [] (cell checks skipped)", () => {
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      // route-governance: operator-direct-contract-deferred — migration tracked in #654
+      export const r = async (app) => {
+        app.post("/x", async () => {});
+      };
+    `);
+    expect(validateRouteClass(sf, "test.ts")).toEqual([]);
+  });
+
+  it("directive WITH issue ref on a following rationale line, no decorators → returns []", () => {
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      // route-governance: operator-direct-contract-deferred — will wire decorators in
+      //   the migration-free pass; see issue
+      //   #654 for tracking
+      export const r = async (app) => {
+        app.post("/x", async () => {});
+      };
+    `);
+    expect(validateRouteClass(sf, "test.ts")).toEqual([]);
+  });
+
+  it("directive WITHOUT any issue ref, no decorators → exactly ONE warning about missing issue reference", () => {
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      // route-governance: operator-direct-contract-deferred — no rationale or issue here
+      export const r = async (app) => {
+        app.post("/x", async () => {});
+      };
+    `);
+    const warnings = validateRouteClass(sf, "test.ts");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].message).toMatch(/without a tracked issue reference/);
+  });
+
+  it("directive present, route IS fully wired → returns [] (directive is harmless on compliant route)", () => {
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      // route-governance: operator-direct-contract-deferred — already wired, ref #654
+      import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+      import { requireOrgForMutation } from "../decorators/require-org.js";
+      export const r = async (app) => {
+        app.post("/x", { preHandler: requireOrgForMutation }, async (req, reply) => {
+          const key = requireIdempotencyKey(req, reply);
+        });
+      };
+    `);
+    expect(validateRouteClass(sf, "test.ts")).toEqual([]);
+  });
+
+  it("read-only route with the directive → directive has no effect (read-only rule unchanged)", () => {
+    const sf = makeSource(`
+      // @route-class: read-only
+      // route-governance: operator-direct-contract-deferred — should be ignored for read-only
+      import { requireOrgForMutation } from "../decorators/require-org.js";
+      export const r = async () => {};
+    `);
+    const warnings = validateRouteClass(sf, "test.ts");
+    // read-only with write-side import still warns; directive doesn't suppress it
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].message).toMatch(/write-side/);
+  });
+});
+
+describe("dashboard-proxy directory convention", () => {
+  it("returns 'dashboard-proxy' for a route under apps/dashboard/src/app/api/dashboard/ with no header", () => {
+    const sf = makeSource(`export const r = async () => {};`);
+    expect(resolveRouteClass(sf, "apps/dashboard/src/app/api/dashboard/overview/route.ts")).toBe(
+      "dashboard-proxy",
+    );
+  });
+
+  it("returns the explicit class when a dashboard/api/dashboard/ route has an explicit header", () => {
+    const sf = makeSource(`// @route-class: operator-direct\nexport const r = async () => {};`);
+    expect(resolveRouteClass(sf, "apps/dashboard/src/app/api/dashboard/overview/route.ts")).toBe(
+      "operator-direct",
+    );
+  });
+
+  it("returns null for a non-dashboard api route with no header", () => {
+    const sf = makeSource(`export const r = async () => {};`);
+    expect(resolveRouteClass(sf, "apps/api/src/routes/widgets.ts")).toBeNull();
+  });
+
+  it("returns the explicit class for a non-dashboard api route with an explicit header", () => {
+    const sf = makeSource(`// @route-class: control-plane\nexport const r = async () => {};`);
+    expect(resolveRouteClass(sf, "apps/api/src/routes/widgets.ts")).toBe("control-plane");
+  });
+
+  it("narrowing guard: a dashboard route OUTSIDE /dashboard/ (waitlist) with no header returns null, NOT dashboard-proxy", () => {
+    // routes under apps/dashboard/src/app/api/ but OUTSIDE /dashboard/ (e.g.
+    // waitlist/route.ts which does a direct db.waitlistEntry.create) are NOT
+    // forwarding proxies — they must carry an explicit @route-class header.
+    const sf = makeSource(`export const r = async () => {};`);
+    expect(resolveRouteClass(sf, "apps/dashboard/src/app/api/waitlist/route.ts")).toBeNull();
+  });
+
+  it("narrowing guard: a dashboard route OUTSIDE /dashboard/ (auth) with no header returns null, NOT dashboard-proxy", () => {
+    // auth/* routes are not forwarding proxies and must carry explicit headers.
+    const sf = makeSource(`export const r = async () => {};`);
+    expect(resolveRouteClass(sf, "apps/dashboard/src/app/api/auth/register/route.ts")).toBeNull();
+  });
+
+  it("parseRouteClass recognises 'dashboard-proxy' as a known class", () => {
+    const sf = makeSource(`// @route-class: dashboard-proxy\nexport const r = async () => {};`);
+    expect(parseRouteClass(sf)).toBe("dashboard-proxy");
+  });
+
+  it("returns 'dashboard-proxy' for a deeply-nested dashboard route with no header", () => {
+    const sf = makeSource(`export const r = async () => {};`);
+    expect(
+      resolveRouteClass(sf, "apps/dashboard/src/app/api/dashboard/meta/insights/daily/route.ts"),
+    ).toBe("dashboard-proxy");
   });
 });
