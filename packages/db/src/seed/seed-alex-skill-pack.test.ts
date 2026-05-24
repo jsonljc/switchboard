@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { seedAlexSkillPack, ALEX_SKILL_PACK_SCOPES } from "./seed-alex-skill-pack.js";
+import {
+  seedAlexSkillPack,
+  assertAlexSkillPackSeeded,
+  ALEX_SKILL_PACK_SCOPES,
+} from "./seed-alex-skill-pack.js";
 import type { PrismaClient } from "@prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -35,22 +39,86 @@ interface UpsertCall {
   create: Record<string, unknown>;
 }
 
+interface StoredRow {
+  organizationId: string;
+  kind: string;
+  scope: string;
+  version: number;
+  active: boolean;
+  content: string;
+  title: string;
+  priority: number;
+}
+
+interface FindFirstArgs {
+  where: {
+    organizationId: string;
+    kind: string;
+    scope: string;
+    active: boolean;
+  };
+}
+
 /**
- * Builds a minimal in-memory prisma mock whose knowledgeEntry.upsert records
- * each call and returns a resolved promise.
+ * Builds a minimal in-memory prisma mock whose:
+ * - knowledgeEntry.upsert records each call AND writes into a shared row store,
+ * - knowledgeEntry.findFirst queries the same in-memory store.
+ *
+ * This allows assertAlexSkillPackSeeded tests to exercise the real seed→assert
+ * flow without a real Postgres connection.
  */
 function buildMockPrisma() {
   const calls: UpsertCall[] = [];
+  // Shared in-memory row store: keyed by orgId+kind+scope+version
+  const rowStore: StoredRow[] = [];
+
   const mock = {
     knowledgeEntry: {
       upsert: vi.fn(async (args: UpsertCall) => {
         calls.push(args);
+        const key = args.where.organizationId_kind_scope_version;
+        const existing = rowStore.find(
+          (r) =>
+            r.organizationId === key.organizationId &&
+            r.kind === key.kind &&
+            r.scope === key.scope &&
+            r.version === key.version,
+        );
+        if (existing) {
+          // Simulate update branch: refresh title + content, leave active alone
+          existing.title = (args.update["title"] as string) ?? existing.title;
+          existing.content = (args.update["content"] as string) ?? existing.content;
+        } else {
+          // Simulate create branch
+          rowStore.push({
+            organizationId: key.organizationId,
+            kind: key.kind,
+            scope: key.scope,
+            version: key.version,
+            active: (args.create["active"] as boolean) ?? true,
+            content: (args.create["content"] as string) ?? "",
+            title: (args.create["title"] as string) ?? "",
+            priority: (args.create["priority"] as number) ?? 0,
+          });
+        }
         return {};
+      }),
+      findFirst: vi.fn(async (args: FindFirstArgs) => {
+        const { organizationId, kind, scope, active } = args.where;
+        const row = rowStore.find(
+          (r) =>
+            r.organizationId === organizationId &&
+            r.kind === kind &&
+            r.scope === scope &&
+            r.active === active,
+        );
+        return row ?? null;
       }),
     },
     _calls: calls,
+    _rowStore: rowStore,
   };
-  return mock as unknown as PrismaClient & { _calls: UpsertCall[] };
+  return mock as unknown as PrismaClient & { _calls: UpsertCall[]; _rowStore: StoredRow[] };
 }
 
 // ---------------------------------------------------------------------------
@@ -233,5 +301,173 @@ describe("seedAlexSkillPack", () => {
       expect(entry).toHaveProperty("file");
       expect(entry).toHaveProperty("title");
     }
+  });
+
+  // ── 6. Slot-population regression ────────────────────────────────────────
+  // Proves that after seed, the active rows for all 3 (kind,scope) pairs have
+  // non-empty content. This is the primary regression guard for the
+  // previously-empty PLAYBOOK_CONTEXT / QUALIFICATION_CONTEXT / CLAIM_BOUNDARIES
+  // slots.
+
+  it("regression: all 3 active rows have non-empty content after seed", async () => {
+    await seedAlexSkillPack(prisma, "org_demo", REFS_DIR);
+
+    for (const entry of ALEX_SKILL_PACK_SCOPES) {
+      const row = await (
+        prisma.knowledgeEntry as unknown as {
+          findFirst: (args: FindFirstArgs) => Promise<StoredRow | null>;
+        }
+      ).findFirst({
+        where: {
+          organizationId: "org_demo",
+          kind: entry.kind,
+          scope: entry.scope,
+          active: true,
+        },
+      });
+
+      expect(row).not.toBeNull();
+      expect(typeof row!.content).toBe("string");
+      expect(row!.content.trim().length).toBeGreaterThan(50);
+    }
+  });
+
+  it("regression: objection-handling slot is populated (was previously empty)", async () => {
+    await seedAlexSkillPack(prisma, "org_demo", REFS_DIR);
+    const row = await (
+      prisma.knowledgeEntry as unknown as {
+        findFirst: (args: FindFirstArgs) => Promise<StoredRow | null>;
+      }
+    ).findFirst({
+      where: {
+        organizationId: "org_demo",
+        kind: "playbook",
+        scope: "objection-handling",
+        active: true,
+      },
+    });
+    expect(row?.content.trim().length).toBeGreaterThan(50);
+  });
+
+  it("regression: qualification-framework slot is populated (was previously empty)", async () => {
+    await seedAlexSkillPack(prisma, "org_demo", REFS_DIR);
+    const row = await (
+      prisma.knowledgeEntry as unknown as {
+        findFirst: (args: FindFirstArgs) => Promise<StoredRow | null>;
+      }
+    ).findFirst({
+      where: {
+        organizationId: "org_demo",
+        kind: "playbook",
+        scope: "qualification-framework",
+        active: true,
+      },
+    });
+    expect(row?.content.trim().length).toBeGreaterThan(50);
+  });
+
+  it("regression: claim-boundaries slot is populated (was previously empty)", async () => {
+    await seedAlexSkillPack(prisma, "org_demo", REFS_DIR);
+    const row = await (
+      prisma.knowledgeEntry as unknown as {
+        findFirst: (args: FindFirstArgs) => Promise<StoredRow | null>;
+      }
+    ).findFirst({
+      where: {
+        organizationId: "org_demo",
+        kind: "policy",
+        scope: "claim-boundaries",
+        active: true,
+      },
+    });
+    expect(row?.content.trim().length).toBeGreaterThan(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assertAlexSkillPackSeeded
+// ---------------------------------------------------------------------------
+
+describe("assertAlexSkillPackSeeded", () => {
+  let prisma: ReturnType<typeof buildMockPrisma>;
+
+  beforeEach(() => {
+    prisma = buildMockPrisma();
+    vi.clearAllMocks();
+  });
+
+  it("throws when the store is empty (no rows seeded)", async () => {
+    await expect(assertAlexSkillPackSeeded(prisma, "org_demo")).rejects.toThrow(
+      /missing active KnowledgeEntry/,
+    );
+  });
+
+  it("error message names the missing kind and scope", async () => {
+    // Only seed 2 of the 3 entries so the third triggers the error
+    // We do that by intercepting the third upsert, but it's simpler to just
+    // leave the store empty and check the first scope that's missing.
+    await expect(assertAlexSkillPackSeeded(prisma, "org_demo")).rejects.toThrow(
+      /kind="playbook" scope="objection-handling"/,
+    );
+  });
+
+  it("throws when a row exists but has empty content", async () => {
+    // Manually insert a row with empty content into the mock row store
+    (prisma as unknown as { _rowStore: StoredRow[] })._rowStore.push({
+      organizationId: "org_demo",
+      kind: "playbook",
+      scope: "objection-handling",
+      version: 1,
+      active: true,
+      content: "   ", // whitespace-only
+      title: "Test",
+      priority: 0,
+    });
+
+    await expect(assertAlexSkillPackSeeded(prisma, "org_demo")).rejects.toThrow(
+      /empty content.*kind="playbook" scope="objection-handling"/,
+    );
+  });
+
+  it("resolves without throwing after seedAlexSkillPack", async () => {
+    await seedAlexSkillPack(prisma, "org_demo", REFS_DIR);
+    await expect(assertAlexSkillPackSeeded(prisma, "org_demo")).resolves.toBeUndefined();
+  });
+
+  it("passes for all 3 scopes after seed (checks each individually)", async () => {
+    await seedAlexSkillPack(prisma, "org_demo", REFS_DIR);
+
+    // Verify each scope individually to make test failure messages specific
+    for (const entry of ALEX_SKILL_PACK_SCOPES) {
+      const singleScopePrisma = buildMockPrisma();
+      // Seed all 3 — assertAlexSkillPackSeeded must not care about ordering
+      await seedAlexSkillPack(singleScopePrisma, "org_demo", REFS_DIR);
+      await expect(
+        assertAlexSkillPackSeeded(singleScopePrisma, "org_demo"),
+      ).resolves.toBeUndefined();
+      // Verify the individual scope row is present and non-empty
+      const row = await (
+        singleScopePrisma.knowledgeEntry as unknown as {
+          findFirst: (args: FindFirstArgs) => Promise<StoredRow | null>;
+        }
+      ).findFirst({
+        where: {
+          organizationId: "org_demo",
+          kind: entry.kind,
+          scope: entry.scope,
+          active: true,
+        },
+      });
+      expect(row).not.toBeNull();
+      expect(row!.content.trim().length).toBeGreaterThan(50);
+    }
+  });
+
+  it("throws for org_other even when org_demo is seeded", async () => {
+    await seedAlexSkillPack(prisma, "org_demo", REFS_DIR);
+    // org_other has no rows — assert must fail
+    await expect(assertAlexSkillPackSeeded(prisma, "org_other")).rejects.toThrow(
+      /missing active KnowledgeEntry.*org_other/,
+    );
   });
 });

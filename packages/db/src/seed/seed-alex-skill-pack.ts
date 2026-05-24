@@ -78,6 +78,47 @@ function defaultRefsDir(): string {
 }
 
 /**
+ * Preflight assertion for medspa provisioning and eval pipelines.
+ *
+ * For every entry in ALEX_SKILL_PACK_SCOPES, queries the active KnowledgeEntry
+ * row for the given org. Throws a descriptive Error if any row is absent or has
+ * empty/whitespace content.
+ *
+ * This is intentionally strict: the medspa skill-pack is required for Alex to
+ * operate; a missing slot is a provisioning failure, not a soft warning.
+ *
+ * @param prisma A PrismaClient (or compatible mock).
+ * @param orgId  The organization to check.
+ */
+export async function assertAlexSkillPackSeeded(
+  prisma: PrismaClient,
+  orgId: string,
+): Promise<void> {
+  for (const entry of ALEX_SKILL_PACK_SCOPES) {
+    const row = await prisma.knowledgeEntry.findFirst({
+      where: {
+        organizationId: orgId,
+        kind: entry.kind,
+        scope: entry.scope,
+        active: true,
+      },
+    });
+
+    if (!row) {
+      throw new Error(
+        `assertAlexSkillPackSeeded: missing active KnowledgeEntry for kind="${entry.kind}" scope="${entry.scope}" in org "${orgId}". Run seedAlexSkillPack first.`,
+      );
+    }
+
+    if (!row.content || row.content.trim().length === 0) {
+      throw new Error(
+        `assertAlexSkillPackSeeded: empty content for kind="${entry.kind}" scope="${entry.scope}" in org "${orgId}". Re-run seedAlexSkillPack to populate content.`,
+      );
+    }
+  }
+}
+
+/**
  * Seeds KnowledgeEntry rows for the medspa skill-pack at version 1.
  *
  * Operator safety: the `update` branch refreshes `title` and `content` only.
