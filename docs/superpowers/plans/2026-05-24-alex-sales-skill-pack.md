@@ -29,6 +29,7 @@
 ## Task 1: Author the canonical medspa reference markdown
 
 **Files:**
+
 - Create: `skills/alex/references/medspa/objection-handling.md`
 - Create: `skills/alex/references/medspa/qualification-framework.md`
 - Create: `skills/alex/references/medspa/claim-boundaries.md`
@@ -43,18 +44,23 @@ Must cover (spec corpus): price ("too expensive" / "discount" / "I'll compare fi
 # Objection handling — medspa
 
 ## Price: "too expensive" / "what's your cheapest option"
+
 Acknowledge the concern, anchor on value and safety over price, never lead with a discount. Offer a consultation where the doctor sets realistic expectations and pricing. Never disparage cheaper competitors.
 
 ## Price: "I saw another clinic doing it cheaper"
+
 Validate the comparison, differentiate on clinician credentials / device / aftercare without attacking the competitor. Do not claim superiority without evidence.
 
 ## Safety / downtime: "is it safe?" / "will my face look frozen?"
+
 Reassure generally, explain that suitability is assessed in consultation, never assert "safe for you" or guarantee no side effects. Defer specifics to the doctor.
 
 ## Results skepticism: "will it work for me?" / "how long before results?"
+
 Explain typical ranges generally, emphasize individual variation, route to consultation. Never guarantee results or timelines.
 
 ## Urgency / hesitation: "let me think" / "maybe later"
+
 No pressure. Offer a concrete, low-commitment next step (a consultation hold, an info follow-up). Surface the lead's hesitation reason for follow-up.
 ```
 
@@ -66,6 +72,7 @@ Must cover: treatment goal, timeline, prior experience, budget comfort — frame
 # Qualification framework — medspa
 
 Discover, conversationally (never as an interrogation):
+
 - **Treatment goal / area** — what outcome the lead wants ("look fresher", a specific area/treatment).
 - **Timeline** — how soon they want to act.
 - **Prior experience** — have they had aesthetic treatments before.
@@ -81,6 +88,7 @@ Read for buying intent (none / soft / strong) and emit the qualification sidecar
 # Claim boundaries — non-negotiable
 
 These rules override any selling instinct:
+
 - Explain treatments **generally**; route specifics to a consultation with the doctor.
 - **Never diagnose** a condition or recommend a treatment as medically necessary.
 - **Never guarantee** results, outcomes, or timelines.
@@ -101,6 +109,7 @@ git commit -m "feat(alex): add canonical medspa sales skill-pack markdown"
 ## Task 2: Add the `CLAIM_BOUNDARIES` context requirement to SKILL.md
 
 **Files:**
+
 - Modify: `skills/alex/SKILL.md` (frontmatter `context:` list + body)
 - Test: `packages/core/src/skill-runtime/__tests__/alex-skill-loads.test.ts` (or extend existing skill-loader test)
 
@@ -117,10 +126,7 @@ import { loadSkillFromMarkdown } from "../skill-loader.js"; // confirm exact exp
 
 describe("alex skill", () => {
   it("declares a claim-boundaries context requirement injected as CLAIM_BOUNDARIES (not required)", () => {
-    const md = readFileSync(
-      join(__dirname, "../../../../../skills/alex/SKILL.md"),
-      "utf-8",
-    );
+    const md = readFileSync(join(__dirname, "../../../../../skills/alex/SKILL.md"), "utf-8");
     const skill = loadSkillFromMarkdown(md);
     const req = skill.context.find((c) => c.injectAs === "CLAIM_BOUNDARIES");
     expect(req).toBeDefined();
@@ -132,17 +138,17 @@ describe("alex skill", () => {
 - [ ] **Step 2: Run it — verify it fails**
 
 Run: `pnpm --filter @switchboard/core test alex-skill-loads`
-Expected: FAIL (`req` is undefined). *(If `loadSkillFromMarkdown` is not the exported name, read `skill-loader.ts` and use the actual loader entry — the grounded loader validates `context` via `validateContext` at line ~232.)*
+Expected: FAIL (`req` is undefined). _(If `loadSkillFromMarkdown` is not the exported name, read `skill-loader.ts` and use the actual loader entry — the grounded loader validates `context` via `validateContext` at line ~232.)_
 
 - [ ] **Step 3: Add the frontmatter requirement**
 
 In `skills/alex/SKILL.md`, append to the `context:` list (after the `qualification-framework` entry):
 
 ```yaml
-  - kind: policy
-    scope: claim-boundaries
-    inject_as: CLAIM_BOUNDARIES
-    required: false
+- kind: policy
+  scope: claim-boundaries
+  inject_as: CLAIM_BOUNDARIES
+  required: false
 ```
 
 - [ ] **Step 4: Add the body slot**
@@ -172,6 +178,7 @@ git commit -m "feat(alex): add system-owned CLAIM_BOUNDARIES context slot to ski
 ## Task 3: Characterize not-required-empty slot rendering
 
 **Files:**
+
 - Create/Test: `packages/core/src/skill-runtime/__tests__/alex-claim-boundaries-slot.test.ts`
 
 The resolver does NOT set the variable for a not-required requirement with no backing row. We must confirm the template engine renders an unset `{{CLAIM_BOUNDARIES}}` as empty (NOT a literal `{{CLAIM_BOUNDARIES}}`) so non-medspa/unseeded Alex deployments are clean. `{{POLICY_CONTEXT}}` is the existing precedent (not always seeded).
@@ -188,7 +195,9 @@ const emptyStore = { findActive: async () => [] };
 
 describe("claim-boundaries slot rendering", () => {
   it("renders no literal {{CLAIM_BOUNDARIES}} when the row is absent (not-required)", async () => {
-    const resolver = new ContextResolverImpl(emptyStore /*, ...other ctor deps per context-resolver.ts:106 */);
+    const resolver = new ContextResolverImpl(
+      emptyStore /*, ...other ctor deps per context-resolver.ts:106 */,
+    );
     const { variables } = await resolver.resolve("org_x", [
       { kind: "policy", scope: "claim-boundaries", injectAs: "CLAIM_BOUNDARIES", required: false },
     ]);
@@ -205,7 +214,7 @@ Expected: PASS if the engine already drops unknown placeholders; FAIL (literal r
 
 - [ ] **Step 3: If it FAILS, make unset slots render empty**
 
-Read `template-engine.ts` interpolation. If unknown `{{VAR}}` is left literal, the minimal fix is in the resolver: for a not-required requirement with zero rows, set `variables[req.injectAs] = ""` (instead of leaving it unset) at the `context-resolver.ts` not-required-empty branch (~line 241-243). Re-run until PASS. *(Prefer the resolver fix over changing the engine globally, to avoid affecting other skills.)*
+Read `template-engine.ts` interpolation. If unknown `{{VAR}}` is left literal, the minimal fix is in the resolver: for a not-required requirement with zero rows, set `variables[req.injectAs] = ""` (instead of leaving it unset) at the `context-resolver.ts` not-required-empty branch (~line 241-243). Re-run until PASS. _(Prefer the resolver fix over changing the engine globally, to avoid affecting other skills.)_
 
 - [ ] **Step 4: Commit**
 
@@ -219,6 +228,7 @@ git commit -m "test(alex): characterize empty CLAIM_BOUNDARIES slot rendering"
 ## Task 4: `seedAlexSkillPack(prisma, orgId)` — reusable, operator-safe seed/sync
 
 **Files:**
+
 - Create: `packages/db/src/seed/seed-alex-skill-pack.ts`
 - Test: `packages/db/src/seed/seed-alex-skill-pack.test.ts`
 
@@ -239,11 +249,19 @@ function mockPrisma() {
       upsert: vi.fn(async ({ where, create, update }: any) => {
         const key = where.organizationId_kind_scope_version;
         const existing = rows.find(
-          (r) => r.organizationId === key.organizationId && r.kind === key.kind &&
-                 r.scope === key.scope && r.version === key.version,
+          (r) =>
+            r.organizationId === key.organizationId &&
+            r.kind === key.kind &&
+            r.scope === key.scope &&
+            r.version === key.version,
         );
-        if (existing) { Object.assign(existing, update); return existing; }
-        const row = { ...create }; rows.push(row); return row;
+        if (existing) {
+          Object.assign(existing, update);
+          return existing;
+        }
+        const row = { ...create };
+        rows.push(row);
+        return row;
       }),
     },
   } as any;
@@ -271,8 +289,26 @@ describe("seedAlexSkillPack", () => {
   it("is idempotent and never touches version>1 (operator) rows", async () => {
     const prisma = mockPrisma();
     // Simulate an operator override: v1 deactivated, v2 active (the store.update() shape).
-    prisma.rows.push({ organizationId: "org_demo", kind: "playbook", scope: "objection-handling", version: 1, active: false, content: "old default", title: "x", priority: 0 });
-    prisma.rows.push({ organizationId: "org_demo", kind: "playbook", scope: "objection-handling", version: 2, active: true, content: "OPERATOR COPY", title: "x", priority: 0 });
+    prisma.rows.push({
+      organizationId: "org_demo",
+      kind: "playbook",
+      scope: "objection-handling",
+      version: 1,
+      active: false,
+      content: "old default",
+      title: "x",
+      priority: 0,
+    });
+    prisma.rows.push({
+      organizationId: "org_demo",
+      kind: "playbook",
+      scope: "objection-handling",
+      version: 2,
+      active: true,
+      content: "OPERATOR COPY",
+      title: "x",
+      priority: 0,
+    });
     await seedAlexSkillPack(prisma, "org_demo");
     const v2 = prisma.rows.find((r: any) => r.scope === "objection-handling" && r.version === 2);
     expect(v2.active).toBe(true);
@@ -304,9 +340,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REF_DIR = join(__dirname, "../../../../skills/alex/references/medspa");
 
 export const ALEX_SKILL_PACK_SCOPES = [
-  { kind: "playbook" as const, scope: "objection-handling", file: "objection-handling.md", title: "Medspa objection handling" },
-  { kind: "playbook" as const, scope: "qualification-framework", file: "qualification-framework.md", title: "Medspa qualification framework" },
-  { kind: "policy" as const, scope: "claim-boundaries", file: "claim-boundaries.md", title: "Medspa claim boundaries (system-owned)" },
+  {
+    kind: "playbook" as const,
+    scope: "objection-handling",
+    file: "objection-handling.md",
+    title: "Medspa objection handling",
+  },
+  {
+    kind: "playbook" as const,
+    scope: "qualification-framework",
+    file: "qualification-framework.md",
+    title: "Medspa qualification framework",
+  },
+  {
+    kind: "policy" as const,
+    scope: "claim-boundaries",
+    file: "claim-boundaries.md",
+    title: "Medspa claim boundaries (system-owned)",
+  },
 ];
 
 export async function seedAlexSkillPack(prisma: PrismaClient, orgId: string): Promise<void> {
@@ -362,6 +413,7 @@ git commit -m "feat(db): seedAlexSkillPack — operator-safe v1 seed of medspa s
 ## Task 5: Wire the seed into dev seed + prod signup
 
 **Files:**
+
 - Modify: `packages/db/prisma/seed.ts` (import + call in `main()`)
 - Modify: `apps/api/src/routes/organizations.ts` (call on Alex-enabled provisioning)
 
@@ -376,9 +428,9 @@ import { seedAlexSkillPack } from "../src/seed/seed-alex-skill-pack.js";
 And in `main()`, after the `seedKnowledge(prisma)` call (~line 602), add:
 
 ```ts
-  // ── Alex skill pack (system-default playbook for the org running Alex) ──
-  console.warn("\n--- Alex Skill Pack ---");
-  await seedAlexSkillPack(prisma, "org_demo");
+// ── Alex skill pack (system-default playbook for the org running Alex) ──
+console.warn("\n--- Alex Skill Pack ---");
+await seedAlexSkillPack(prisma, "org_demo");
 ```
 
 - [ ] **Step 2: Wire prod signup path**
@@ -415,6 +467,7 @@ git commit -m "feat: seed Alex skill pack on dev seed + org provisioning"
 ## Task 6: Slot-population regression + provisioning preflight
 
 **Files:**
+
 - Test: `packages/db/src/seed/seed-alex-skill-pack.test.ts` (extend)
 
 This is the headline regression: prove the previously-empty slots populate for the Alex org, and that `CLAIM_BOUNDARIES` resolves from its own scope.
@@ -427,7 +480,10 @@ it("resolves non-empty PLAYBOOK/QUALIFICATION/CLAIM_BOUNDARIES after seeding", a
   await seedAlexSkillPack(prisma, "org_demo");
   // findActive(orgId, [{kind,scope},...]) returns active rows for those (kind,scope)
   const findActive = (kind: string, scope: string) =>
-    prisma.rows.filter((r: any) => r.organizationId === "org_demo" && r.active && r.kind === kind && r.scope === scope);
+    prisma.rows.filter(
+      (r: any) =>
+        r.organizationId === "org_demo" && r.active && r.kind === kind && r.scope === scope,
+    );
   expect(findActive("playbook", "objection-handling")[0]?.content.length).toBeGreaterThan(0);
   expect(findActive("playbook", "qualification-framework")[0]?.content.length).toBeGreaterThan(0);
   expect(findActive("policy", "claim-boundaries")[0]?.content.length).toBeGreaterThan(0);
@@ -445,7 +501,10 @@ Add an exported guard the A0 preflight + provisioning can call:
 
 ```ts
 // in seed-alex-skill-pack.ts
-export async function assertAlexSkillPackSeeded(prisma: PrismaClient, orgId: string): Promise<void> {
+export async function assertAlexSkillPackSeeded(
+  prisma: PrismaClient,
+  orgId: string,
+): Promise<void> {
   const needed = ALEX_SKILL_PACK_SCOPES.map((e) => ({ kind: e.kind, scope: e.scope }));
   for (const { kind, scope } of needed) {
     const row = await prisma.knowledgeEntry.findFirst({
@@ -471,6 +530,7 @@ git commit -m "test(db): Alex skill-pack slot-population + preflight regression"
 ---
 
 ## Self-review checklist (run before handoff)
+
 - Spec coverage: §2.1 (md files → Task 1), §2.2/2.3 (CLAIM_BOUNDARIES requirement + slot → Task 2), not-required render (§2.3 → Task 3), §2.4 seed/operator-safety (→ Tasks 4-5), §2.6 tests (→ Tasks 3,4,6). ✓
 - No `source` column / no migration introduced. ✓
 - Operator-safety asserted (version>1 untouched). ✓
