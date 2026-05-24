@@ -1,9 +1,9 @@
 "use client";
 
-import type { AuditEntryBrowseRow } from "@switchboard/schemas";
+import type { ActorType } from "@switchboard/schemas";
 import styles from "../activity.module.css";
 
-export type ActorType = AuditEntryBrowseRow["actorType"];
+export type { ActorType };
 
 export interface ActorPillsProps {
   /** Active actor type filter (null = no selection). */

@@ -39,5 +39,6 @@ export interface DetailRow extends PendingApproval {
  */
 export type ApprovalRow = PendingRow;
 
+// route-governance: local-view-model
 export type RiskCategory = PendingApproval["riskCategory"];
 export type LifecycleStatus = PendingApproval["status"];

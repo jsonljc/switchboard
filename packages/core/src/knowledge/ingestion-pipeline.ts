@@ -46,7 +46,7 @@ export class IngestionPipeline {
       return { documentId: input.documentId, chunksCreated: 0 };
     }
 
-    await this.store.deleteByDocument(input.documentId);
+    await this.store.deleteByDocument(input.organizationId, input.documentId);
 
     const textChunks = chunkText(input.content, {
       maxTokens: this.maxTokensPerChunk,

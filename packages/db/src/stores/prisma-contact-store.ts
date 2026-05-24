@@ -175,24 +175,43 @@ export class PrismaContactStore implements ContactStore {
 
     const cascade = async (tx: PrismaDbClient): Promise<void> => {
       // contactId-keyed children. None of these FKs cascade at the DB level,
-      // so we delete every dependent row manually.
+      // so we delete every dependent row manually. These cascade children FK to
+      // the parent contact, which is org-guarded at the top of delete() and by
+      // the final org-scoped contact.deleteMany in the same transaction; not
+      // independent tenant mutations.
+      // route-governance: store-mutation-global
       await tx.conversationThread.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.lifecycleRevenueEvent.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.ownerTask.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.opportunity.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.contactLifecycle.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.conversationMessage.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.escalationRecord.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.handoff.deleteMany({ where: { leadId: id } });
+      // route-governance: store-mutation-global
       await tx.interactionSummary.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.booking.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.conversionRecord.deleteMany({ where: { contactId: id } });
+      // route-governance: store-mutation-global
       await tx.pendingLeadRetry.deleteMany({ where: { leadId: id } });
 
       // phone-keyed children — only if we have a phone to match on
       if (phone) {
-        await tx.whatsAppMessageStatus.deleteMany({ where: { recipientId: phone } });
-        await tx.conversationState.deleteMany({ where: { principalId: phone } });
+        await tx.whatsAppMessageStatus.deleteMany({
+          where: { recipientId: phone, organizationId: orgId },
+        });
+        await tx.conversationState.deleteMany({
+          where: { principalId: phone, organizationId: orgId },
+        });
       }
 
       const del = await tx.contact.deleteMany({ where: { id, organizationId: orgId } });

@@ -20,9 +20,11 @@ function createMockStore(): KnowledgeStore {
         .slice(0, options.topK ?? 5)
         .map((c) => ({ chunk: c, similarity: 0.85 }));
     },
-    async deleteByDocument(documentId: string): Promise<number> {
+    async deleteByDocument(organizationId: string, documentId: string): Promise<number> {
       const before = chunks.length;
-      const remaining = chunks.filter((c) => c.documentId !== documentId);
+      const remaining = chunks.filter(
+        (c) => !(c.organizationId === organizationId && c.documentId === documentId),
+      );
       chunks.length = 0;
       chunks.push(...remaining);
       return before - chunks.length;
@@ -108,7 +110,7 @@ describe("KnowledgeStore interface", () => {
       },
     ]);
 
-    const deleted = await store.deleteByDocument("doc-1");
+    const deleted = await store.deleteByDocument("org-1", "doc-1");
     expect(deleted).toBe(2);
   });
 

@@ -65,6 +65,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       const nextStatus = input.override ? "human_override" : "active";
       const after = { status: nextStatus };
 
+      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       const updated = await tx.conversationState.update({
         where: { id: existing.id },
         data: { status: nextStatus, lastActivityAt: requestedAt },
@@ -155,6 +156,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       };
       const nextMessages = [...safeMessages(existing.messages), ownerMessage];
 
+      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       await tx.conversationState.update({
         where: { id: existing.id },
         data: {
@@ -231,6 +233,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       const after = { status: "active" };
       const nextMessages = [...safeMessages(existing.messages), ownerReply];
 
+      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
       await tx.conversationState.update({
         where: { id: existing.id },
         data: {

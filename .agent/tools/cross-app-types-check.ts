@@ -1,62 +1,12 @@
 import {
   Project,
+  Node,
   type SourceFile,
   type InterfaceDeclaration,
   type TypeAliasDeclaration,
 } from "ts-morph";
 import { join } from "path";
 import type { ValidatorWarning } from "./route-class-validator.js";
-
-/**
- * Static enumeration of @switchboard/schemas export names that are
- * load-bearing cross-app value types. Hand-curated for PR-2.5; PR-4
- * may swap to a dynamic enumeration that walks
- * packages/schemas/src/index.ts via ts-morph.
- *
- * The set covers:
- *   - Types relocated by PR-2 (ApprovalRecord, ApprovalState, Handoff,
- *     ConversationState, ConversationSummary, ConversationDetail,
- *     ConversationListResult, OperatorOverview, plus the DashboardOverview
- *     back-compat alias).
- *   - Cross-app names already in schemas before PR-2 (Contact,
- *     ConversationThread, Opportunity, ContactBrowseRow).
- *
- * Names NOT in this set (e.g. MinimalApprovalRecord,
- * ApprovalRecordForResponse) are deliberately-narrower local shapes
- * and are not flagged.
- *
- * ConversationRow, Decision, and Recommendation were in the plan's draft
- * set but are NOT exported from @switchboard/schemas on the PR-2.5
- * baseline (verified by grep). Omitted to avoid false positives; PR-4
- * should re-verify against the live schemas index.
- */
-const SCHEMAS_EXPORT_NAMES: ReadonlySet<string> = new Set([
-  "ApprovalRecord",
-  "ApprovalState",
-  "ApprovalStatus",
-  "QuorumState",
-  "QuorumEntry",
-  "Handoff",
-  "HandoffStatus",
-  "HandoffReason",
-  "LeadSnapshot",
-  "QualificationSnapshot",
-  "ConversationState",
-  "ConversationMessage",
-  "ConversationSummary",
-  "ConversationDetail",
-  "ConversationListResult",
-  "OperatorOverview",
-  "DashboardOverview",
-  "Contact",
-  "ConversationThread",
-  "Opportunity",
-  "ContactBrowseRow",
-  // Note: ConversationRow, Decision, and Recommendation were in the plan's
-  // draft set but are NOT exported from @switchboard/schemas on the PR-2.5
-  // baseline. They are deliberately omitted to avoid false positives.
-  // PR-4 should re-verify against the live schemas index.
-]);
 
 const APP_SRC_RX = /^apps\/(api|chat|dashboard)\/src\//;
 const TESTS_RX = /\/__tests__\//;
@@ -74,6 +24,23 @@ export interface CrossAppTypesAdvisoryResult {
   exitCode: 0;
 }
 
+/**
+ * Walk the schemas barrel's resolved exports; return the set of exported
+ * interface + type-alias names (the cross-app *type* surface). Value exports
+ * (Zod schema consts) are excluded — only their inferred types matter.
+ */
+export function enumerateSchemaTypeNames(project: Project, indexRelPath: string): Set<string> {
+  const index = project.getSourceFile((sf) => sf.getFilePath().endsWith(indexRelPath));
+  if (!index) return new Set();
+  const names = new Set<string>();
+  for (const [name, decls] of index.getExportedDeclarations()) {
+    if (decls.some((d) => Node.isInterfaceDeclaration(d) || Node.isTypeAliasDeclaration(d))) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
 export async function runCrossAppTypesAdvisory(
   opts: CrossAppTypesAdvisoryOptions,
 ): Promise<CrossAppTypesAdvisoryResult> {
@@ -83,6 +50,14 @@ export async function runCrossAppTypesAdvisory(
   if (inScope.length === 0) return { warnings: [], exitCode: 0 };
 
   const project = new Project({ useInMemoryFileSystem: false });
+  let schemaNames: ReadonlySet<string>;
+  try {
+    project.addSourceFilesAtPaths(join(opts.repoRoot, "packages/schemas/src/**/*.ts"));
+    schemaNames = enumerateSchemaTypeNames(project, "packages/schemas/src/index.ts");
+  } catch {
+    schemaNames = new Set(); // schemas unreadable — degrade to no-op rather than crash CI
+  }
+
   const warnings: ValidatorWarning[] = [];
 
   for (const repoPath of inScope) {
@@ -93,18 +68,22 @@ export async function runCrossAppTypesAdvisory(
     } catch {
       continue; // file missing — skip silently
     }
-    warnings.push(...scanFile(sf, repoPath));
+    warnings.push(...scanFile(sf, repoPath, schemaNames));
   }
 
   return { warnings, exitCode: 0 };
 }
 
-function scanFile(sf: SourceFile, repoPath: string): ValidatorWarning[] {
+export function scanFile(
+  sf: SourceFile,
+  repoPath: string,
+  schemaNames: ReadonlySet<string>,
+): ValidatorWarning[] {
   const out: ValidatorWarning[] = [];
   for (const decl of [...sf.getInterfaces(), ...sf.getTypeAliases()]) {
     if (!decl.isExported()) continue;
     const name = decl.getName();
-    if (!SCHEMAS_EXPORT_NAMES.has(name)) continue;
+    if (!schemaNames.has(name)) continue;
     if (hasSuppressDirective(decl)) continue;
     out.push({
       path: repoPath,
