@@ -35,11 +35,18 @@ import { useHalt } from "@/components/layout/halt/halt-context";
 import { metricsViewModelToRileyKpiData } from "@/lib/cockpit/riley/metrics-to-kpi-data";
 import type { CockpitKpiData, RileyApprovalView } from "./types";
 
+// The approval card is part of the ONE amber action system (spec §9): its
+// primary button must be amber, never the agent identity color. Now that
+// RILEY_ACCENT is teal, sourcing the approval accent from it would paint the
+// accept button teal — exactly the "agent color on an action button" the
+// visual direction forbids. Use the shared amber action tokens (matching
+// ALEX_APPROVAL_ACCENT); Riley's teal identity shows via the avatar + composer
+// label, not this action surface.
 const RILEY_APPROVAL_ACCENT: ApprovalAccent = {
-  base: RILEY_ACCENT.base,
-  deep: RILEY_ACCENT.deep,
-  soft: RILEY_ACCENT.soft,
-  paper: RILEY_ACCENT.paper,
+  base: T.amber,
+  deep: T.amberDeep,
+  soft: T.amberSoft,
+  paper: T.amberPaper,
 };
 
 function RileyApprovalRow({

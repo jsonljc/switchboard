@@ -246,6 +246,15 @@ describe("RileyCockpitPage — B.3 voice + accent", () => {
     expect(screen.getAllByText("Riley needs you").length).toBe(3);
   });
 
+  it("paints the primary accept button amber, NOT the Riley teal identity color (spec §9)", () => {
+    // Regression guard: the approval card's primary button is part of the ONE
+    // amber action system. It must never carry the agent identity color.
+    render(<RileyCockpitPage />);
+    const acceptButton = screen.getByText("Pause");
+    expect(acceptButton).toHaveStyle({ background: "#B8782E" }); // T.amber
+    expect(acceptButton).not.toHaveStyle({ background: "#3F8C86" }); // RILEY_ACCENT.base (teal)
+  });
+
   it("clicking accept on the first card calls primary() bound to rec-1 and fires its acceptToast", async () => {
     render(<RileyCockpitPage />);
     fireEvent.click(screen.getByText("Pause"));

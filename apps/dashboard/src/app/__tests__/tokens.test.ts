@@ -22,9 +22,14 @@ describe("canonical tokens — B1", () => {
     expect(css).toMatch(/--agent-mira:\s/);
   });
 
-  it("aliases the dead mercury register to canonical vars", () => {
-    expect(css).toMatch(/--mercury-cream:\s*var\(--canvas\)/);
-    expect(css).toMatch(/--mercury-accent:\s*var\(/);
+  it("aliases the dead mercury register to canonical vars as VALID colors", () => {
+    // --mercury-* tokens are consumed as complete color values (e.g.
+    // `background: var(--mercury-cream)`), so any alias to a raw canonical
+    // HSL triple MUST be hsl()-wrapped. Aliasing bare (`var(--canvas)`) emits
+    // `background: 40 25% 94%` — invalid CSS that silently breaks the
+    // contacts/activity/automations surfaces. Guard against that regression.
+    expect(css).toMatch(/--mercury-cream:\s*hsl\(var\(--canvas\)\)/);
+    expect(css).not.toMatch(/--mercury-[\w-]+:\s*var\(--/);
   });
 });
 
