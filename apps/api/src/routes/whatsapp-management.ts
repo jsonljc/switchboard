@@ -50,6 +50,27 @@ interface WabaAccount {
   account_review_status?: string;
 }
 
+/**
+ * A `phone_numbers` entry as returned by the WhatsApp Graph API. All fields are
+ * optional because Graph omits absent fields; consumers must null-coalesce.
+ */
+interface GraphPhoneNumber {
+  id?: string;
+  display_phone_number?: string;
+  verified_name?: string;
+  quality_rating?: string;
+  messaging_limit_tier?: string;
+  status?: string;
+  platform_type?: string;
+  code_verification_status?: string;
+  is_official_business_account?: boolean;
+}
+
+/** Envelope wrapping the `phone_numbers` edge list from the Graph API. */
+interface GraphPhoneNumbersResponse {
+  data?: GraphPhoneNumber[];
+}
+
 /** Maps Graph API quality_rating to UI badge */
 function qualityBadge(rating: string): QualityBadge {
   switch (rating) {
@@ -349,12 +370,12 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
     const phonePath = `${graphBase}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,status,messaging_limit_tier`;
     const phoneResult = await graphGet(phonePath, metaSystemUserToken, fetchImpl);
 
-    let phoneNumbers: unknown[] = [];
+    let phoneNumbers: GraphPhoneNumber[] = [];
     if (!phoneResult.ok) {
       // I4: accumulate reason but don't short-circuit — step 6 only needs WABA data
       reasons.push("Cannot read phone numbers from Meta");
     } else {
-      const phoneData = phoneResult.data as { data?: unknown[] };
+      const phoneData = phoneResult.data as GraphPhoneNumbersResponse;
       phoneNumbers = phoneData.data ?? [];
     }
 
@@ -366,18 +387,18 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
 
     // Step 7: Check if primary phone exists in Graph response (skip if step 5 failed)
     if (phoneNumbers.length > 0 || phoneResult.ok) {
-      const primaryPhone = phoneNumbers.find((p: any) => p.id === primaryPhoneNumberId);
+      const primaryPhone = phoneNumbers.find((p) => p.id === primaryPhoneNumberId);
       if (!primaryPhone) {
         reasons.push("Primary phone number not found in WABA phone numbers");
       } else {
         // Step 8: Check primary phone status — C2: check `status` not `code_verification_status`
-        const phoneStatus = (primaryPhone as any).status;
+        const phoneStatus = primaryPhone.status;
         if (!isUsablePhoneNumberStatus(phoneStatus ?? "")) {
           reasons.push(`Primary phone number status is ${phoneStatus ?? "UNKNOWN"}, not CONNECTED`);
         }
 
         // Step 9: Check primary phone quality
-        const quality = (primaryPhone as any).quality_rating;
+        const quality = primaryPhone.quality_rating;
         if (quality === "RED") {
           reasons.push("Phone number quality is low (RED rating)");
         }
@@ -466,18 +487,18 @@ export const whatsappManagementRoutes: FastifyPluginAsync<ManagementOptions> = a
       });
     }
 
-    const phoneData = phoneResult.data as { data?: any[] };
-    const phoneNumbers: PhoneNumber[] = (phoneData.data ?? []).map((p: any) => ({
-      id: p.id,
-      displayPhoneNumber: (p.display_phone_number as string) ?? null,
-      verifiedName: (p.verified_name as string) ?? null,
-      qualityRating: (p.quality_rating as string) ?? null,
+    const phoneData = phoneResult.data as GraphPhoneNumbersResponse;
+    const phoneNumbers: PhoneNumber[] = (phoneData.data ?? []).map((p) => ({
+      id: p.id ?? "",
+      displayPhoneNumber: p.display_phone_number ?? null,
+      verifiedName: p.verified_name ?? null,
+      qualityRating: p.quality_rating ?? null,
       qualityBadge: qualityBadge(p.quality_rating ?? ""),
-      messagingLimitTier: (p.messaging_limit_tier as string) ?? null,
-      status: (p.status as string) ?? null,
-      platformType: (p.platform_type as string) ?? null,
-      codeVerificationStatus: (p.code_verification_status as string) ?? null,
-      isOfficialBusinessAccount: (p.is_official_business_account as boolean) ?? null,
+      messagingLimitTier: p.messaging_limit_tier ?? null,
+      status: p.status ?? null,
+      platformType: p.platform_type ?? null,
+      codeVerificationStatus: p.code_verification_status ?? null,
+      isOfficialBusinessAccount: p.is_official_business_account ?? null,
       isPrimaryForSwitchboard: p.id === primaryPhoneNumberId,
     }));
 
