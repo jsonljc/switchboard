@@ -11,7 +11,7 @@ vi.mock("next-auth/react", () => ({
 }));
 vi.mock("@/lib/route-availability", () => ({ isMercuryToolLive: () => false }));
 
-import { useApprovalDetail } from "../hooks/use-approvals";
+import { useApprovalDetail } from "../use-approvals";
 
 function wrap({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

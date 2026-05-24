@@ -126,7 +126,9 @@ function RefRow({
   label: string;
   value: string | null;
   copyKey: string;
-  hrefBase: string;
+  // Optional: when omitted the value is copyable but not linked (e.g. the
+  // approval envelope ref — the standalone /approvals queue page was removed).
+  hrefBase?: string;
   emptyLabel: string;
 }) {
   return (
@@ -136,13 +138,15 @@ function RefRow({
       {value !== null && (
         <>
           <CopyBtn copyKey={copyKey} text={value} />
-          <a
-            className={styles.openlink}
-            href={`${hrefBase}${value}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            open ↗
-          </a>
+          {hrefBase && (
+            <a
+              className={styles.openlink}
+              href={`${hrefBase}${value}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              open ↗
+            </a>
+          )}
         </>
       )}
     </div>
@@ -268,7 +272,6 @@ export function ActivityRowDrawer({
               label="Envelope"
               value={row.envelopeId}
               copyKey="env"
-              hrefBase="/approvals/"
               emptyLabel="no approval envelope"
             />
             <RefRow

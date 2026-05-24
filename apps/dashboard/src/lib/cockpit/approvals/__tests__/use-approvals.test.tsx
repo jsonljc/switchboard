@@ -14,7 +14,7 @@ vi.mock("@/lib/route-availability", () => ({
   isMercuryToolLive: () => false,
 }));
 
-import { usePendingApprovals } from "../hooks/use-approvals";
+import { usePendingApprovals } from "../use-approvals";
 import { APPROVALS_FIXTURES } from "../fixtures";
 
 function wrap({ children }: { children: ReactNode }) {

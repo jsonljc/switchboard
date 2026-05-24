@@ -285,7 +285,7 @@ describe("ActivityRowDrawer — Hash chain section", () => {
 });
 
 describe("ActivityRowDrawer — References section", () => {
-  it("renders envelope id with copy + open link when set", () => {
+  it("renders envelope id without an open link (standalone /approvals queue removed)", () => {
     render(
       <ActivityRowDrawer
         row={makeRow({ envelopeId: "env_xyz_123" })}
@@ -295,8 +295,11 @@ describe("ActivityRowDrawer — References section", () => {
       />,
     );
     expect(screen.getByText("env_xyz_123")).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: /open ↗/i });
-    expect(link).toHaveAttribute("href", "/approvals/env_xyz_123");
+    // The envelope ref is copyable but no longer links anywhere.
+    const approvalLinks = screen
+      .queryAllByRole("link")
+      .filter((el) => el.getAttribute("href")?.startsWith("/approvals/"));
+    expect(approvalLinks).toHaveLength(0);
   });
 
   it("renders 'no approval envelope' italic when envelopeId is null", () => {

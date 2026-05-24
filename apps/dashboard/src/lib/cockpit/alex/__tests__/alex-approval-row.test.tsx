@@ -17,7 +17,7 @@ const { mockMutate, toastMock } = vi.hoisted(() => ({
 // translation from the ApprovalCard's `verdict: "accept" | "decline"` callback
 // shape into `useRespondToApproval`'s `action: "approve" | "reject"`
 // mutation input. Decline omits bindingHash; Accept includes it.
-vi.mock("@/app/(auth)/(mercury)/approvals/hooks/use-approvals", () => ({
+vi.mock("@/lib/cockpit/approvals/use-approvals", () => ({
   useRespondToApproval: () => ({
     mutate: mockMutate,
     isPending: false,

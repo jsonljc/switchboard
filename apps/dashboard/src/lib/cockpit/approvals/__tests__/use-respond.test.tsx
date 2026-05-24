@@ -11,7 +11,7 @@ vi.mock("next-auth/react", () => ({
 }));
 vi.mock("@/lib/route-availability", () => ({ isMercuryToolLive: () => true }));
 
-import { useRespondToApproval } from "../hooks/use-approvals";
+import { useRespondToApproval } from "../use-approvals";
 
 const fetchMock = vi.fn();
 beforeEach(() => {
