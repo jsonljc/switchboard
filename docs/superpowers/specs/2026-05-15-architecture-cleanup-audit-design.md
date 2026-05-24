@@ -1,7 +1,7 @@
 # Architecture & Codebase Cleanup Audit — Design
 
 **Date:** 2026-05-15
-**Status:** Spec — pending user review
+**Status:** Approved & in execution — Wave 1 + Phases 0–3A complete; Phase 5 (deferred-lane re-run) closed 2026-05-24 (see `docs/audits/2026-05-15-cleanup/phase-5-deferred-lanes.md`); Phases 3B (Inngest Failure Contract) + 4 (maintenance backlog) tracked.
 **Type:** Multi-agent audit + gated cleanup
 
 ## Goal

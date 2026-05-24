@@ -1,7 +1,7 @@
 # Claim Classifier Eval PR-2 Completion — Fixtures-First, Baseline Deferred
 
 **Date:** 2026-05-22
-**Status:** Spec — pending user review
+**Status:** Implemented — PR-2 golden fixtures shipped (#619 `9f0d5b8b`), baseline locked (#623 `38ab3e9a`); superseded by the PR-3 CI gate (#629) now on `main`. Historical design record.
 **Source plan:** `docs/superpowers/plans/2026-05-16-claim-classifier-eval-ci.md` §PR-2 (lines 1047–1335)
 **Prerequisite:** PR #611 (PR-1 harness + smoke fixtures) — MERGED 2026-05-16
 

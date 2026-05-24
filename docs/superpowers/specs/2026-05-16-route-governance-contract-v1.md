@@ -1,7 +1,7 @@
 # Route Governance Contract v1 — Classify First, Enforce by Class, Audit Every User-Initiated Mutation
 
 **Date:** 2026-05-16
-**Status:** Spec — pending user review
+**Status:** Implemented & enforced — all PRs merged 2026-05-22→2026-05-24 (PR-1 #614, PR-2 #624, PR-2.5 #627, PR-3 #632/#641/#636/#638, PR-4 #645/#651/#656); `check-routes --mode=error` is blocking on `main` as of `61d3495f`. This spec is now the historical design record.
 **Source:** Wave 2 Phase 3A of the architecture cleanup audit (synthesis at `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit-design.md`, Phase 0 triage at `docs/audits/2026-05-15-cleanup/_phase-0-triage.md`, source lane at `docs/audits/2026-05-15-cleanup/api-consistency.md`). This spec is the load-bearing prerequisite for the 17 Cat 3 findings ("contract consistency").
 **Prerequisite:** `docs/superpowers/specs/2026-05-15-operator-direct-ingress-pattern.md` — three Amendments captured the cohort variations this contract unifies.
 
