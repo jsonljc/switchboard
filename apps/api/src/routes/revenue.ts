@@ -1,4 +1,5 @@
-// @route-class: lifecycle
+// @route-class: operator-direct
+// route-governance: operator-direct-contract-deferred — records revenue directly via PrismaRevenueStore + outbox, bypassing PlatformIngress (no WorkTrace/idempotency); needs an ingress migration, out of scope for migration-free PR-4; tracked in #654
 // ---------------------------------------------------------------------------
 // Revenue routes — record and query revenue events
 // ---------------------------------------------------------------------------
