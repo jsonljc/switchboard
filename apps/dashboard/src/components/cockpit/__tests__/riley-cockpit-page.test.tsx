@@ -110,10 +110,9 @@ function wrap(node: React.ReactNode) {
 // ---------------------------------------------------------------------------
 
 describe("RileyCockpitPage", () => {
-  it("renders Topbar with Riley tab present", () => {
+  it("renders Riley Identity", () => {
     wrap(<RileyCockpitPage />);
-    const tabs = screen.getAllByText("Riley");
-    expect(tabs.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Riley").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders IDLE status pill in cold state", () => {
@@ -523,27 +522,6 @@ describe("RileyCockpitPage — B.3-followup palette wiring", () => {
     toast.mockReset();
   });
 
-  it("renders 'Tell Riley…' on the Topbar palette button, not 'Tell Alex…'", () => {
-    wrap(<RileyCockpitPage />);
-    expect(screen.getByText("Tell Riley…")).toBeInTheDocument();
-    expect(screen.queryByText("Tell Alex…")).not.toBeInTheDocument();
-  });
-
-  it("Topbar palette button is enabled (paletteEnabled=true)", () => {
-    wrap(<RileyCockpitPage />);
-    const btn = screen.getByText("Tell Riley…").closest("button")!;
-    expect(btn).not.toBeDisabled();
-    expect(btn).toHaveAttribute("aria-disabled", "false");
-  });
-
-  it("clicking the Topbar palette button opens the command palette", async () => {
-    wrap(<RileyCockpitPage />);
-    fireEvent.click(screen.getByText("Tell Riley…").closest("button")!);
-    await waitFor(() =>
-      expect(screen.getByRole("dialog", { name: /Command palette/i })).toBeInTheDocument(),
-    );
-  });
-
   it("⌘K opens the command palette", async () => {
     wrap(<RileyCockpitPage />);
     fireEvent.keyDown(document, { key: "k", metaKey: true });
@@ -554,7 +532,8 @@ describe("RileyCockpitPage — B.3-followup palette wiring", () => {
 
   it("Escape closes the palette", async () => {
     wrap(<RileyCockpitPage />);
-    fireEvent.click(screen.getByText("Tell Riley…").closest("button")!);
+    // Open via ⌘K (Topbar was removed; keydown listener on the page still works)
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
     await waitFor(() =>
       expect(screen.getByRole("dialog", { name: /Command palette/i })).toBeInTheDocument(),
     );
@@ -567,7 +546,8 @@ describe("RileyCockpitPage — B.3-followup palette wiring", () => {
 
   it("selecting 'Resume Riley' fires the dispatcher (toast fires; palette closes)", async () => {
     wrap(<RileyCockpitPage />);
-    fireEvent.click(screen.getByText("Tell Riley…").closest("button")!);
+    // Open via ⌘K (Topbar was removed; keydown listener on the page still works)
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
     await waitFor(() =>
       expect(screen.getByRole("dialog", { name: /Command palette/i })).toBeInTheDocument(),
     );

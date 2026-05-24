@@ -118,11 +118,9 @@ describe("CockpitPage", () => {
     activityRowsData = [];
   });
 
-  it("renders Topbar, Identity, and ActivityStream in the cold state", () => {
+  it("renders Identity and ActivityStream in the cold state", () => {
     render(<CockpitPage />);
-    // Topbar tab "Alex" + Identity name "Alex" = 2 matches
-    expect(screen.getAllByText("Alex").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Switchboard")).toBeInTheDocument();
+    expect(screen.getByText("Alex")).toBeInTheDocument();
     expect(screen.getByText("IDLE")).toBeInTheDocument();
     expect(screen.getByText(/Nothing here yet/i)).toBeInTheDocument();
   });
@@ -488,20 +486,6 @@ describe("CockpitPage — A.5 composer + palette", () => {
   it("renders the Composer at the bottom of the cockpit (not ComposerPlaceholder)", () => {
     render(<CockpitPage />);
     expect(screen.getByLabelText("Composer input")).toBeInTheDocument();
-  });
-
-  it("flips Topbar 'Tell Alex…' from disabled to enabled (paletteEnabled=true)", () => {
-    render(<CockpitPage />);
-    const button = screen.getByRole("button", { name: /Tell Alex…/i });
-    expect(button).not.toBeDisabled();
-  });
-
-  it("Topbar 'Tell Alex…' click opens the palette", async () => {
-    const user = (await import("@testing-library/user-event")).default.setup();
-    render(<CockpitPage />);
-    expect(screen.queryByRole("dialog", { name: /command palette/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Tell Alex…/i }));
-    expect(screen.getByRole("dialog", { name: /command palette/i })).toBeInTheDocument();
   });
 
   it("⌘K opens the palette", async () => {
