@@ -57,18 +57,27 @@ const config: Config = {
           DEFAULT: "hsl(var(--negative))",
           foreground: "hsl(var(--negative-foreground))",
         },
-        /* Operator amber */
+        /* Canonical action amber (§9 — the ONE primary action color) */
+        action: {
+          DEFAULT: "hsl(var(--action))",
+          foreground: "hsl(var(--action-foreground))",
+          hover: "hsl(var(--action-hover))",
+        },
+        /* Operator amber — migration alias; prefer `action` in new code */
         operator: {
           DEFAULT: "hsl(var(--operator))",
           foreground: "hsl(var(--operator-foreground))",
           subtle: "hsl(var(--operator-subtle))",
         },
-        /* Agent status */
+        /* Agent status + per-agent identity (identity only — never on action buttons) */
         agent: {
           active: "hsl(var(--agent-active))",
           idle: "hsl(var(--agent-idle))",
           attention: "hsl(var(--agent-attention))",
           locked: "hsl(var(--agent-locked))",
+          alex: "hsl(var(--agent-alex))",
+          riley: "hsl(var(--agent-riley))",
+          mira: "hsl(var(--agent-mira))",
         },
         /* v6 landing page palette — warm cream + graphite + coral */
         v6: {

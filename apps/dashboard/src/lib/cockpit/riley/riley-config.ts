@@ -3,10 +3,10 @@ import { RILEY_VARIANTS } from "@/components/cockpit/sprite/riley-variants";
 import type { SpriteVariantKey } from "@/components/cockpit/sprite/types";
 
 export const RILEY_ACCENT = {
-  base: "#B86C50",
-  deep: "#7E4533",
-  soft: "#ECD4C8",
-  paper: "#F6E7DE",
+  base: "#3F8C86" /* teal — identity only, matches --agent-riley hsl(180 33% 40%) */,
+  deep: "#215451",
+  soft: "#C5DFDD",
+  paper: "#EBF5F4",
 } as const;
 
 export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";
