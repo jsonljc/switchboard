@@ -4,7 +4,8 @@ export type InfrastructureErrorType =
   | "work_trace_locked_violation"
   | "work_trace_integrity_mismatch"
   | "work_trace_integrity_missing_anchor"
-  | "integrity_check_unavailable";
+  | "integrity_check_unavailable"
+  | "async_job_retry_exhausted";
 
 export interface InfrastructureFailureAlert {
   errorType: InfrastructureErrorType;
@@ -16,7 +17,7 @@ export interface InfrastructureFailureAlert {
   organizationId?: string;
   retryable: boolean;
   occurredAt: string;
-  source: "platform_ingress";
+  source: "platform_ingress" | "inngest_function";
 }
 
 export interface OperatorAlerter {
