@@ -120,6 +120,70 @@ describe("runRecommendationSink", () => {
     });
   });
 
+  it("budget/structure actions emit financialEffect:true and externalEffect:true", async () => {
+    // Safety invariant (spec §8.4 / §6): every action that writes to the ad
+    // platform or changes live spend state must have financialEffect:true AND
+    // externalEffect:true so that canSwipeApprove() returns false. An accidental
+    // swipe must be impossible for money-moving actions.
+    const financialActions: RecommendationOutput["action"][] = [
+      "scale",
+      "pause",
+      "restructure",
+      "review_budget",
+      "shift_budget_to_source",
+      "consolidate",
+      "expand_targeting",
+      "switch_optimization_event",
+    ];
+    for (const action of financialActions) {
+      const capturedInputs: RecommendationInput[] = [];
+      const emit: RecommendationEmitter = vi.fn(async (input) => {
+        capturedInputs.push(input);
+        return { surface: "queue" as const };
+      });
+      await runRecommendationSink({
+        orgId: "org-risk",
+        auditRunId: "audit-risk",
+        recommendations: [baseRec({ action })],
+        emit,
+        emissionContext: { cronId: "cron-risk", deploymentId: "dep-risk" },
+      });
+      const emitted = capturedInputs[0]!;
+      expect(emitted.financialEffect, `${action}: financialEffect must be true`).toBe(true);
+      expect(emitted.externalEffect, `${action}: externalEffect must be true`).toBe(true);
+    }
+  });
+
+  it("informational actions emit financialEffect:false and externalEffect:false", async () => {
+    // These actions queue internal work or open external links without mutating
+    // live campaign state — they are legitimately swipe-approvable.
+    const informationalActions: RecommendationOutput["action"][] = [
+      "hold",
+      "test",
+      "refresh_creative",
+      "add_creative",
+      "harden_capi_attribution",
+      "fix_signal_health",
+    ];
+    for (const action of informationalActions) {
+      const capturedInputs: RecommendationInput[] = [];
+      const emit: RecommendationEmitter = vi.fn(async (input) => {
+        capturedInputs.push(input);
+        return { surface: "queue" as const };
+      });
+      await runRecommendationSink({
+        orgId: "org-risk",
+        auditRunId: "audit-risk",
+        recommendations: [baseRec({ action })],
+        emit,
+        emissionContext: { cronId: "cron-risk", deploymentId: "dep-risk" },
+      });
+      const emitted = capturedInputs[0]!;
+      expect(emitted.financialEffect, `${action}: financialEffect must be false`).toBe(false);
+      expect(emitted.externalEffect, `${action}: externalEffect must be false`).toBe(false);
+    }
+  });
+
   it("buildPresentation emits action-specific acceptToast and declineToast for every action", async () => {
     const presentations: Array<{
       action: RecommendationOutput["action"];

@@ -90,4 +90,38 @@ describe("emitRecommendation", () => {
       emitRecommendation(store, { ...baseInput(), confidence: 5 } as RecommendationInput),
     ).rejects.toThrow();
   });
+
+  describe("risk-contract round-trip", () => {
+    it("stashes financialEffect and clientFacing inside parameters.__recommendation.riskContract", async () => {
+      const store = createInMemoryRecommendationStore();
+      await emitRecommendation(
+        store,
+        baseInput({ financialEffect: true, clientFacing: true, riskLevel: "high" }),
+      );
+
+      const row = store.rows[0]!;
+      const stash = row.parameters.__recommendation as {
+        riskContract: { financialEffect: boolean; clientFacing: boolean; riskLevel: string };
+      };
+
+      expect(stash.riskContract.financialEffect).toBe(true);
+      expect(stash.riskContract.clientFacing).toBe(true);
+      expect(stash.riskContract.riskLevel).toBe("high");
+    });
+
+    it("booleans survive emit → in-memory-store → adaptRecommendation (financialEffect must NOT be forced to false)", async () => {
+      // This proves the full round-trip. Without the emit.ts fix, the in-memory store
+      // would return financialEffect:undefined and adaptRecommendation's `?? false`
+      // would produce false — swipe-gate unsafe.
+      const store = createInMemoryRecommendationStore();
+      await emitRecommendation(
+        store,
+        baseInput({ financialEffect: true, clientFacing: true, riskLevel: "high" }),
+      );
+
+      const rec = store.rows[0]!;
+      expect(rec.financialEffect).toBe(true);
+      expect(rec.clientFacing).toBe(true);
+    });
+  });
 });

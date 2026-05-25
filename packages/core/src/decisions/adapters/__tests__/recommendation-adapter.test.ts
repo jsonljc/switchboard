@@ -95,4 +95,42 @@ describe("adaptRecommendation", () => {
     const decision = adaptRecommendation(makeRec({ targetEntities: {} }), deps);
     expect(decision.threadHref).toBeNull();
   });
+
+  describe("meta.riskContract", () => {
+    it("builds riskContract from row fields when all booleans are present", () => {
+      const decision = adaptRecommendation(
+        makeRec({
+          riskLevel: "high",
+          externalEffect: true,
+          financialEffect: true,
+          clientFacing: false,
+          requiresConfirmation: true,
+        }),
+        deps,
+      );
+      expect(decision.meta.riskContract).toEqual({
+        riskLevel: "high",
+        externalEffect: true,
+        financialEffect: true,
+        clientFacing: false,
+        requiresConfirmation: true,
+      });
+    });
+
+    it("defaults booleans to false for legacy rows missing the fields", () => {
+      const decision = adaptRecommendation(makeRec({ riskLevel: "medium" }), deps);
+      expect(decision.meta.riskContract).toEqual({
+        riskLevel: "medium",
+        externalEffect: false,
+        financialEffect: false,
+        clientFacing: false,
+        requiresConfirmation: false,
+      });
+    });
+
+    it("riskContract.riskLevel matches meta.riskLevel", () => {
+      const decision = adaptRecommendation(makeRec({ riskLevel: "low" }), deps);
+      expect(decision.meta.riskContract?.riskLevel).toBe(decision.meta.riskLevel);
+    });
+  });
 });

@@ -75,15 +75,31 @@ export async function emitRecommendation(
   const expiresAt = validated.expiresAt ?? new Date(now.getTime() + ONE_DAY_MS);
   const undoableUntil = surface === "shadow_action" ? new Date(now.getTime() + ONE_DAY_MS) : null;
 
-  // Strip `presentation` from the spread — it lives inside parameters.__recommendation.
-  // Stash `action` alongside it so the read-back can reconstruct the domain action
-  // without adding a column.
-  const { presentation, parameters: rawParameters, ...rest } = validated;
+  // Strip `presentation` and the four risk-contract booleans from the spread — they
+  // live inside parameters.__recommendation so they survive the JSONB round-trip without
+  // a DB migration. `action` is stashed alongside them so the read-back can reconstruct
+  // the domain action without adding a column.
+  const {
+    presentation,
+    parameters: rawParameters,
+    externalEffect,
+    financialEffect,
+    clientFacing,
+    requiresConfirmation,
+    ...rest
+  } = validated;
   const parameters: Record<string, unknown> = {
     ...rawParameters,
     __recommendation: {
       action: validated.action,
       presentation,
+      riskContract: {
+        riskLevel: validated.riskLevel,
+        externalEffect,
+        financialEffect,
+        clientFacing,
+        requiresConfirmation,
+      },
     },
   };
 

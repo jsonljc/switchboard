@@ -12,11 +12,20 @@ import { RecommendationStaleStatusError } from "@switchboard/core";
 
 const RECOMMENDATION_INTENT_PREFIX = "recommendation.";
 
+interface RecommendationRiskContract {
+  riskLevel?: string;
+  externalEffect?: boolean;
+  financialEffect?: boolean;
+  clientFacing?: boolean;
+  requiresConfirmation?: boolean;
+}
+
 interface RecommendationParams {
   __recommendation?: {
     action?: string;
     note?: string | null;
     presentation?: unknown;
+    riskContract?: RecommendationRiskContract;
   };
   [key: string]: unknown;
 }
@@ -51,6 +60,10 @@ export function rowToRecommendation(row: {
 }): Recommendation {
   const params = (row.parameters ?? {}) as RecommendationParams;
   const meta = params.__recommendation ?? {};
+  // Read risk-contract booleans back from the JSONB stash (written by emit.ts).
+  // Legacy rows that predate E1 will have no `riskContract` key — leave the fields
+  // as `undefined` so the adapter's `?? false` fallback applies correctly.
+  const rc = meta.riskContract;
   return {
     id: row.id,
     orgId: row.organizationId,
@@ -61,6 +74,10 @@ export function rowToRecommendation(row: {
     confidence: row.confidence,
     dollarsAtRisk: row.dollarsAtRisk,
     riskLevel: row.riskLevel as Recommendation["riskLevel"],
+    externalEffect: rc?.externalEffect,
+    financialEffect: rc?.financialEffect,
+    clientFacing: rc?.clientFacing,
+    requiresConfirmation: rc?.requiresConfirmation,
     surface: row.surface as RecommendationSurface,
     status: row.status as RecommendationStatus,
     parameters: params,

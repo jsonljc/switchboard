@@ -16,6 +16,17 @@ export function createInMemoryRecommendationStore(): RecommendationStore & {
       const existing = byKey.get(input.idempotencyKey);
       if (existing) return { row: existing, idempotent: true };
       const now = new Date();
+      // Mirror the DB projection: read risk-contract booleans from the JSONB stash
+      // so the in-memory round-trip matches the Prisma path.
+      const stash = (input.parameters.__recommendation ?? {}) as {
+        riskContract?: {
+          externalEffect?: boolean;
+          financialEffect?: boolean;
+          clientFacing?: boolean;
+          requiresConfirmation?: boolean;
+        };
+      };
+      const rc = stash.riskContract;
       const row: Recommendation = {
         id: `rec-${rows.length + 1}`,
         orgId: input.orgId,
@@ -26,6 +37,10 @@ export function createInMemoryRecommendationStore(): RecommendationStore & {
         confidence: input.confidence,
         dollarsAtRisk: input.dollarsAtRisk,
         riskLevel: input.riskLevel,
+        externalEffect: rc?.externalEffect,
+        financialEffect: rc?.financialEffect,
+        clientFacing: rc?.clientFacing,
+        requiresConfirmation: rc?.requiresConfirmation,
         surface: input.surface,
         status: "pending",
         parameters: input.parameters,

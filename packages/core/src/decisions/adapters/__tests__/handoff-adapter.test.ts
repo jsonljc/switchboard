@@ -122,4 +122,17 @@ describe("adaptHandoff", () => {
     const decision = adaptHandoff(makeHandoff(), null, thread, deps);
     expect(decision.threadHref).toBeNull();
   });
+
+  describe("meta.riskContract", () => {
+    it("sets derived default riskContract for handoffs", () => {
+      const decision = adaptHandoff(makeHandoff(), contact, thread, deps);
+      expect(decision.meta.riskContract).toEqual({
+        riskLevel: "medium",
+        externalEffect: false,
+        financialEffect: false,
+        clientFacing: true,
+        requiresConfirmation: false,
+      });
+    });
+  });
 });

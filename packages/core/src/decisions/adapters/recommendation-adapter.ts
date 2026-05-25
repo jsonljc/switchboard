@@ -29,6 +29,13 @@ export function adaptRecommendation(
       contactName: extractContactName(row.targetEntities),
       riskLevel: row.riskLevel,
       undoableUntil: row.undoableUntil ?? undefined,
+      riskContract: {
+        riskLevel: row.riskLevel,
+        externalEffect: row.externalEffect ?? false,
+        financialEffect: row.financialEffect ?? false,
+        clientFacing: row.clientFacing ?? false,
+        requiresConfirmation: row.requiresConfirmation ?? false,
+      },
     },
   };
 }

@@ -28,6 +28,13 @@ export function adaptHandoff(
     meta: {
       contactName: contact?.name ?? undefined,
       slaDeadlineAt: row.slaDeadlineAt,
+      riskContract: {
+        riskLevel: "medium",
+        externalEffect: false,
+        financialEffect: false,
+        clientFacing: true,
+        requiresConfirmation: false,
+      },
     },
   };
 }
