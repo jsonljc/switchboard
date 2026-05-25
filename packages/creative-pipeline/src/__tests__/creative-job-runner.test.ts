@@ -1,6 +1,18 @@
 // packages/core/src/creative-pipeline/__tests__/creative-job-runner.test.ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeCreativePipeline } from "../creative-job-runner.js";
+import { executeCreativePipeline, createCreativeJobRunner } from "../creative-job-runner.js";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("../inngest-client.js", () => ({
+  inngestClient: {
+    createFunction: createFunctionSpy,
+    schemas: new Map(),
+  },
+}));
 
 // Mock runStage so tests don't import the real stage implementations (which need Anthropic SDK)
 vi.mock("../stages/run-stage.js", async () => {
@@ -166,5 +178,31 @@ describe("executeCreativePipeline", () => {
 
     const firstCall = mockRunStage.mock.calls[0];
     expect(firstCall?.[1]?.imageGenerator).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createCreativeJobRunner (Class B)
+// ---------------------------------------------------------------------------
+
+describe("createCreativeJobRunner — onFailure wiring", () => {
+  const mockJobStore = { findById: vi.fn(), updateStage: vi.fn(), stop: vi.fn() };
+  const llmConf = { apiKey: "test-key" };
+
+  it("passes onFailure into createFunction config when provided", () => {
+    createFunctionSpy.mockClear();
+    const onFailure = async (_arg: unknown) => {};
+    createCreativeJobRunner(mockJobStore as never, llmConf, undefined, onFailure);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("does not set onFailure key when no callback provided", () => {
+    createFunctionSpy.mockClear();
+    createCreativeJobRunner(mockJobStore as never, llmConf);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["onFailure"]).toBeUndefined();
   });
 });

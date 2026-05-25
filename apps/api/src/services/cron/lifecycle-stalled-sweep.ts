@@ -17,6 +17,8 @@
 import {
   CRON_LOOKBACK_HOURS,
   runStalledSweep,
+  makeOnFailureHandler,
+  type AsyncFailureContext,
   type LifecycleWriter,
   type MessageHistoryReader,
 } from "@switchboard/core";
@@ -24,6 +26,7 @@ import { inngestClient } from "@switchboard/creative-pipeline";
 import type { PrismaClient } from "@switchboard/db";
 
 export interface LifecycleStalledSweepDeps {
+  failure: AsyncFailureContext;
   prisma: PrismaClient;
   writer: LifecycleWriter;
   history: MessageHistoryReader;
@@ -37,6 +40,15 @@ export function createLifecycleStalledSweepCron(deps: LifecycleStalledSweepDeps)
       name: "Lifecycle Stalled Sweep",
       retries: 2,
       triggers: [{ cron: "0 * * * *" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "lifecycle-stalled-sweep-hourly",
+          riskCategory: "low",
+          alert: false,
+          emitEvent: false,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step }) => {
       const now = new Date();

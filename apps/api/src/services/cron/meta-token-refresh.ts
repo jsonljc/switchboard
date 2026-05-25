@@ -1,6 +1,7 @@
 import { Inngest } from "inngest";
 import type { FacebookOAuthConfig, TokenResult } from "@switchboard/ad-optimizer";
 import { encryptCredentials, decryptCredentials } from "@switchboard/db";
+import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 
@@ -17,6 +18,7 @@ interface DeploymentConnectionRecord {
 }
 
 export interface MetaTokenRefreshDeps {
+  failure: AsyncFailureContext;
   listMetaConnections: () => Promise<DeploymentConnectionRecord[]>;
   updateCredentials: (organizationId: string, id: string, credentials: string) => Promise<void>;
   updateStatus: (organizationId: string, id: string, status: string) => Promise<void>;
@@ -107,6 +109,15 @@ export function createMetaTokenRefreshCron(deps: MetaTokenRefreshDeps) {
       name: "Meta Ads Token Refresh",
       retries: 2,
       triggers: [{ cron: "0 3 * * *" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "meta-token-refresh",
+          eventDomain: "meta-token-refresh",
+          riskCategory: "medium",
+          alert: false,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step }) => {
       return executeMetaTokenRefresh(step as unknown as StepTools, deps);

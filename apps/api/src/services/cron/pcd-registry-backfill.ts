@@ -1,4 +1,5 @@
 import { Inngest } from "inngest";
+import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 
@@ -38,6 +39,7 @@ export interface BackfillStores {
 }
 
 export interface PcdRegistryBackfillDeps {
+  failure: AsyncFailureContext;
   fetchJobsBatch: (limit: number, orgId?: string) => Promise<BackfillJobInput[]>;
   stores: BackfillStores;
 }
@@ -84,6 +86,15 @@ export function createPcdRegistryBackfillCron(deps: PcdRegistryBackfillDeps) {
       name: "PCD Registry Backfill",
       retries: 3,
       triggers: [{ event: "pcd/registry.backfill.requested" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "pcd-registry-backfill",
+          riskCategory: "low",
+          alert: false,
+          emitEvent: false,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step, event }) => {
       const orgId = (event as { data?: { orgId?: string } } | undefined)?.data?.orgId;

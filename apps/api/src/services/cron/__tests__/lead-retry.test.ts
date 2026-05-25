@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeLeadRetry } from "../lead-retry.js";
+import { executeLeadRetry, createLeadRetryCron } from "../lead-retry.js";
 import type { LeadRetryCronDeps, StepTools } from "../lead-retry.js";
 import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
+import type { AsyncFailureContext } from "@switchboard/core";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("inngest", () => ({
+  Inngest: vi.fn().mockImplementation(() => ({
+    createFunction: createFunctionSpy,
+  })),
+}));
 
 function makeStep(): StepTools {
   return {
@@ -37,12 +49,25 @@ function makeLead(overrides: Partial<PendingLead> = {}): PendingLead {
 const buildAdapter = (ingest: ReturnType<typeof vi.fn>): InstantFormAdapter =>
   ({ ingest }) as unknown as InstantFormAdapter;
 
+function makeFailureContext(): AsyncFailureContext {
+  return {
+    auditLedger: {
+      record: vi.fn().mockResolvedValue({}),
+    } as unknown as AsyncFailureContext["auditLedger"],
+    operatorAlerter: {
+      alert: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AsyncFailureContext["operatorAlerter"],
+    inngest: { send: vi.fn().mockResolvedValue(undefined) },
+  };
+}
+
 describe("executeLeadRetry", () => {
   it("routes resolved retries through InstantFormAdapter (no direct contact write)", async () => {
     const markResolved = vi.fn().mockResolvedValue(undefined);
     const ingest = vi.fn().mockResolvedValue({ contactId: "contact_1", duplicate: false });
 
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([makeLead()]),
       getOrgAccessToken: vi.fn().mockResolvedValue("test-token"),
       fetchLeadDetail: vi.fn().mockResolvedValue({
@@ -90,6 +115,7 @@ describe("executeLeadRetry", () => {
     const ingest = vi.fn().mockResolvedValue({ contactId: "contact_1", duplicate: true });
 
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([makeLead()]),
       getOrgAccessToken: vi.fn().mockResolvedValue("test-token"),
       fetchLeadDetail: vi.fn().mockResolvedValue({
@@ -119,6 +145,7 @@ describe("executeLeadRetry", () => {
     const ingest = vi.fn();
 
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([makeLead({ attempts: 1 })]),
       getOrgAccessToken: vi.fn().mockResolvedValue(null),
       fetchLeadDetail: vi.fn(),
@@ -145,6 +172,7 @@ describe("executeLeadRetry", () => {
     const ingest = vi.fn();
 
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([makeLead()]),
       getOrgAccessToken: vi.fn().mockResolvedValue("test-token"),
       fetchLeadDetail: vi.fn().mockResolvedValue({
@@ -175,6 +203,7 @@ describe("executeLeadRetry", () => {
     const ingest = vi.fn();
 
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([makeLead({ attempts: 5, maxAttempts: 5 })]),
       getOrgAccessToken: vi.fn(),
       fetchLeadDetail: vi.fn(),
@@ -197,6 +226,7 @@ describe("executeLeadRetry", () => {
     const ingest = vi.fn();
 
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([makeLead()]),
       getOrgAccessToken: vi.fn().mockResolvedValue("test-token"),
       fetchLeadDetail: vi.fn().mockRejectedValue(new Error("API error")),
@@ -220,6 +250,7 @@ describe("executeLeadRetry", () => {
     const ingest = vi.fn();
 
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([makeLead()]),
       getOrgAccessToken: vi.fn().mockResolvedValue("test-token"),
       fetchLeadDetail: vi.fn().mockResolvedValue({
@@ -248,6 +279,7 @@ describe("executeLeadRetry", () => {
   it("returns zeros when no pending leads", async () => {
     const ingest = vi.fn();
     const deps: LeadRetryCronDeps = {
+      failure: makeFailureContext(),
       findPendingLeads: vi.fn().mockResolvedValue([]),
       getOrgAccessToken: vi.fn(),
       fetchLeadDetail: vi.fn(),
@@ -262,5 +294,37 @@ describe("executeLeadRetry", () => {
     const result = await executeLeadRetry(makeStep(), deps);
 
     expect(result).toEqual({ processed: 0, resolved: 0, retried: 0, exhausted: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createLeadRetryCron
+// ---------------------------------------------------------------------------
+
+function makeFullDeps(overrides: Partial<LeadRetryCronDeps> = {}): LeadRetryCronDeps {
+  const ingest = vi.fn();
+  return {
+    failure: makeFailureContext(),
+    findPendingLeads: vi.fn().mockResolvedValue([]),
+    getOrgAccessToken: vi.fn().mockResolvedValue(null),
+    fetchLeadDetail: vi.fn(),
+    extractFieldValue: vi.fn(),
+    resolveDeploymentId: vi.fn(),
+    instantFormAdapter: buildAdapter(ingest),
+    markResolved: vi.fn(),
+    incrementAttempt: vi.fn(),
+    markExhausted: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe("createLeadRetryCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config", () => {
+    createFunctionSpy.mockClear();
+    const failure = makeFailureContext();
+    createLeadRetryCron({ ...makeFullDeps(), failure });
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
   });
 });

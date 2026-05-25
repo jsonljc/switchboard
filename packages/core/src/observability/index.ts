@@ -15,3 +15,10 @@ export type {
   InfrastructureFailureAuditParams,
   FailureClass,
 } from "./infrastructure-failure.js";
+export { buildAsyncFailureEnvelope, makeOnFailureHandler } from "./async-failure-handler.js";
+export type {
+  BuildAsyncFailureInput,
+  AsyncEventSender,
+  AsyncFailureContext,
+  OnFailureParams,
+} from "./async-failure-handler.js";

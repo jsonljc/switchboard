@@ -1,8 +1,36 @@
 import { describe, it, expect, vi } from "vitest";
-import { executeRileyOutcomeAttributionWorker } from "../services/cron/riley-outcome-attribution.js";
+import {
+  executeRileyOutcomeAttributionWorker,
+  createRileyOutcomeAttributionWorker,
+} from "../services/cron/riley-outcome-attribution.js";
+import type { AsyncFailureContext } from "@switchboard/core";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("inngest", () => ({
+  Inngest: vi.fn().mockImplementation(() => ({
+    createFunction: createFunctionSpy,
+  })),
+}));
+
+function makeFailureContext(): AsyncFailureContext {
+  return {
+    auditLedger: {
+      record: vi.fn().mockResolvedValue({}),
+    } as unknown as AsyncFailureContext["auditLedger"],
+    operatorAlerter: {
+      alert: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AsyncFailureContext["operatorAlerter"],
+    inngest: { send: vi.fn().mockResolvedValue(undefined) },
+  };
+}
 
 function buildDeps() {
   return {
+    failure: makeFailureContext(),
     runRileyOutcomeAttribution: vi.fn().mockResolvedValue({
       orgId: "org-1",
       candidatesScanned: 0,
@@ -52,5 +80,29 @@ describe("createRileyOutcomeAttributionWorker", () => {
     ).rejects.toThrow(/missing orgId/);
     expect(deps.logger.error).toHaveBeenCalled();
     expect(deps.runRileyOutcomeAttribution).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createRileyOutcomeAttributionWorker (Class D)
+// ---------------------------------------------------------------------------
+
+describe("createRileyOutcomeAttributionWorker — onFailure wiring", () => {
+  it("passes onFailure into createFunction config", () => {
+    createFunctionSpy.mockClear();
+    const deps = buildDeps();
+    createRileyOutcomeAttributionWorker(deps);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("sets explicit retries: 2 in createFunction config", () => {
+    createFunctionSpy.mockClear();
+    const deps = buildDeps();
+    createRileyOutcomeAttributionWorker(deps);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["retries"]).toBe(2);
   });
 });

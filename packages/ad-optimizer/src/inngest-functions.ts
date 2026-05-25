@@ -160,13 +160,17 @@ export async function executeDailyCheck(step: StepTools, deps: CronDependencies)
   }
 }
 
-export function createWeeklyAuditCron(deps: CronDependencies) {
+export function createWeeklyAuditCron(
+  deps: CronDependencies,
+  onFailure?: (arg: unknown) => Promise<void>,
+) {
   return inngestClient.createFunction(
     {
       id: "ad-optimizer-weekly-audit",
       name: "Ad Optimizer Weekly Audit",
       retries: 2,
       triggers: [{ cron: "0 9 * * 1" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ step }) => {
       await executeWeeklyAudit(step as unknown as StepTools, deps);
@@ -174,13 +178,17 @@ export function createWeeklyAuditCron(deps: CronDependencies) {
   );
 }
 
-export function createDailyCheckCron(deps: CronDependencies) {
+export function createDailyCheckCron(
+  deps: CronDependencies,
+  onFailure?: (arg: unknown) => Promise<void>,
+) {
   return inngestClient.createFunction(
     {
       id: "ad-optimizer-daily-check",
       name: "Ad Optimizer Daily Check",
       retries: 2,
       triggers: [{ cron: "0 8 * * *" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ step }) => {
       await executeDailyCheck(step as unknown as StepTools, deps);
@@ -233,7 +241,10 @@ export async function executeDailySignalHealthCheck(
   }
 }
 
-export function createDailySignalHealthCron(deps: SignalHealthCronDependencies) {
+export function createDailySignalHealthCron(
+  deps: SignalHealthCronDependencies,
+  onFailure?: (arg: unknown) => Promise<void>,
+) {
   return inngestClient.createFunction(
     {
       id: "ad-optimizer-daily-signal-health",
@@ -242,6 +253,7 @@ export function createDailySignalHealthCron(deps: SignalHealthCronDependencies) 
       // Runs at 07:00 UTC, ahead of the 08:00 daily check so signal failures
       // are visible before the rest of the daily pipeline runs.
       triggers: [{ cron: "0 7 * * *" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ step }) => {
       await executeDailySignalHealthCheck(step as unknown as StepTools, deps);
@@ -333,13 +345,17 @@ export async function executeRileyOutcomeAttributionDispatch(
   return { dispatched: orgs.length };
 }
 
-export function createRileyOutcomeAttributionDispatch(deps: RileyOutcomeAttributionDispatchDeps) {
+export function createRileyOutcomeAttributionDispatch(
+  deps: RileyOutcomeAttributionDispatchDeps,
+  onFailure?: (arg: unknown) => Promise<void>,
+) {
   return inngestClient.createFunction(
     {
       id: "riley-outcome-attribution-dispatch",
       name: "Riley Outcome Attribution Dispatch",
       retries: 2,
       triggers: [{ cron: "0 7 * * *" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ step }) => {
       return executeRileyOutcomeAttributionDispatch(

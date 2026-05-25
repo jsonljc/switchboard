@@ -34,6 +34,10 @@ import {
   emitRecommendation,
   executeDailyPatternDecay,
   getMetrics,
+  makeOnFailureHandler,
+  NoopOperatorAlerter,
+  type AsyncFailureContext,
+  type OperatorAlerter,
   type PatternDecayDependencies,
   type RecommendationInput,
   type StepTools as PatternDecayStepTools,
@@ -98,6 +102,11 @@ export interface RegisterInngestOptions {
    * primary webhook path. No parallel mutation paths.
    */
   instantFormAdapter?: InstantFormAdapter;
+  /**
+   * Operator alerter for async failure notifications. Falls back to
+   * NoopOperatorAlerter when not provided (development / test environments).
+   */
+  operatorAlerter?: OperatorAlerter;
 }
 
 export async function registerInngest(
@@ -291,6 +300,16 @@ export async function registerInngest(
     metrics: getMetrics(),
   };
 
+  // ---------------------------------------------------------------------------
+  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
+  // wiring for Class-A, Class-B, and Class-E Inngest functions (Phase 3B failure contract).
+  // ---------------------------------------------------------------------------
+  const asyncFailure: AsyncFailureContext = {
+    auditLedger: app.auditLedger,
+    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
+    inngest: { send: (e) => inngestClient.send(e) },
+  };
+
   const dailyPatternDecayCron = inngestClient.createFunction(
     {
       id: "memory-daily-pattern-decay",
@@ -302,6 +321,15 @@ export async function registerInngest(
       // Function-level idempotency: combined with the DB-level lastDecayedAt
       // guard, double-firing is impossible across orchestrator and DB layers.
       idempotency: `pattern-decay-{event.ts | dateMath "yyyy-MM-dd"}`,
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "memory-daily-pattern-decay",
+          riskCategory: "low",
+          alert: false,
+          emitEvent: false,
+        },
+        asyncFailure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step }) => {
       await executeDailyPatternDecay(step as unknown as PatternDecayStepTools, patternDecayDeps);
@@ -310,6 +338,7 @@ export async function registerInngest(
 
   // Meta token refresh cron dependencies
   const metaTokenRefreshDeps: MetaTokenRefreshDeps = {
+    failure: asyncFailure,
     listMetaConnections: async () => {
       const allConnections = await app.prisma!.deploymentConnection.findMany({
         where: { type: "meta-ads" },
@@ -354,6 +383,7 @@ export async function registerInngest(
 
   // Reconciliation cron dependencies
   const reconciliationDeps: ReconciliationCronDeps = {
+    failure: asyncFailure,
     listActiveOrganizations: async () => {
       const orgs = await app.prisma!.organizationConfig.findMany({
         where: { provisioningStatus: "active" },
@@ -376,6 +406,7 @@ export async function registerInngest(
 
   // Stripe reconciliation cron dependencies
   const stripeReconciliationDeps: StripeReconciliationDeps = {
+    failure: asyncFailure,
     listSubscribedOrganizations: async () => {
       const orgs = await app.prisma!.organizationConfig.findMany({
         where: {
@@ -421,6 +452,7 @@ export async function registerInngest(
 
   // Lead retry cron dependencies
   const leadRetryDeps: LeadRetryCronDeps = {
+    failure: asyncFailure,
     findPendingLeads: async () => {
       const now = new Date();
       const records = await app.prisma!.pendingLeadRetry.findMany({
@@ -506,6 +538,7 @@ export async function registerInngest(
   const productIdentityStore = new PrismaProductIdentityStore(app.prisma);
 
   const pcdRegistryBackfillDeps: PcdRegistryBackfillDeps = {
+    failure: asyncFailure,
     fetchJobsBatch: async (limit, orgId) => {
       const rows = await app.prisma!.creativeJob.findMany({
         where: {
@@ -640,13 +673,25 @@ export async function registerInngest(
   // up each event and runs the pure attribution orchestrator from @switchboard/core.
   // Kill-switch: set RILEY_OUTCOME_ATTRIBUTION_ENABLED=true to enable; default off
   // so the deploy is dark until the bake period completes.
-  const rileyOutcomeDispatch = createRileyOutcomeAttributionDispatch({
-    listRileyOrgs: () => listRileyActiveOrgs(app.prisma!),
-    sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
-      inngestClient.send(event),
-  });
+  const rileyOutcomeDispatch = createRileyOutcomeAttributionDispatch(
+    {
+      listRileyOrgs: () => listRileyActiveOrgs(app.prisma!),
+      sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
+        inngestClient.send(event),
+    },
+    makeOnFailureHandler(
+      {
+        functionId: "riley-outcome-attribution-dispatch",
+        eventDomain: "riley.outcome-attribution.dispatch",
+        riskCategory: "low",
+        alert: false,
+      },
+      asyncFailure,
+    ) as (arg: unknown) => Promise<void>,
+  );
 
   const rileyOutcomeWorker = createRileyOutcomeAttributionWorker({
+    failure: asyncFailure,
     runRileyOutcomeAttribution: bindRileyOutcomeOrchestrator({
       recommendationStore: attributableRecommendationStore,
       createInsightsProvider: (orgId) => createMetaInsightsProviderForOrg(orgId, app.prisma!),
@@ -659,29 +704,96 @@ export async function registerInngest(
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
-      createModeDispatcher(),
-      createCreativeJobRunner(jobStore, { apiKey }, openaiApiKey ? { openaiApiKey } : undefined),
-      createUgcJobRunner({
-        jobStore,
-        creatorStore,
-        deploymentStore: {
-          findById: async (id: string) => {
-            const deployment = await deploymentStore.findById(id);
-            if (!deployment) return null;
-            const listing = await listingStore.findById(deployment.listingId);
-            return {
-              listing: listing ? { trustScore: listing.trustScore } : undefined,
-              type: "standard",
-            };
+      createModeDispatcher(
+        makeOnFailureHandler(
+          {
+            functionId: "creative-mode-dispatcher",
+            eventDomain: "creative.dispatch",
+            riskCategory: "high",
+            alert: true,
           },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
+      createCreativeJobRunner(
+        jobStore,
+        { apiKey },
+        openaiApiKey ? { openaiApiKey } : undefined,
+        makeOnFailureHandler(
+          {
+            functionId: "creative-job-runner",
+            eventDomain: "creative.polished",
+            riskCategory: "medium",
+            alert: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
+      createUgcJobRunner(
+        {
+          jobStore,
+          creatorStore,
+          deploymentStore: {
+            findById: async (id: string) => {
+              const deployment = await deploymentStore.findById(id);
+              if (!deployment) return null;
+              const listing = await listingStore.findById(deployment.listingId);
+              return {
+                listing: listing ? { trustScore: listing.trustScore } : undefined,
+                type: "standard",
+              };
+            },
+          },
+          llmConfig: { apiKey },
+          klingClient,
+          assetStore,
         },
-        llmConfig: { apiKey },
-        klingClient,
-        assetStore,
-      }),
-      createWeeklyAuditCron(adOptimizerDeps),
-      createDailyCheckCron(adOptimizerDeps),
-      createDailySignalHealthCron(signalHealthDeps),
+        makeOnFailureHandler(
+          {
+            functionId: "ugc-job-runner",
+            riskCategory: "medium",
+            alert: false,
+            emitEvent: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
+      createWeeklyAuditCron(
+        adOptimizerDeps,
+        makeOnFailureHandler(
+          {
+            functionId: "ad-optimizer-weekly-audit",
+            eventDomain: "ad-optimizer.weekly-audit",
+            riskCategory: "medium",
+            alert: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
+      createDailyCheckCron(
+        adOptimizerDeps,
+        makeOnFailureHandler(
+          {
+            functionId: "ad-optimizer-daily-check",
+            riskCategory: "low",
+            alert: false,
+            emitEvent: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
+      createDailySignalHealthCron(
+        signalHealthDeps,
+        makeOnFailureHandler(
+          {
+            functionId: "ad-optimizer-daily-signal-health",
+            eventDomain: "ad-optimizer.signal-health",
+            riskCategory: "medium",
+            alert: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
       dailyPatternDecayCron,
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createReconciliationCron(reconciliationDeps),
@@ -689,6 +801,7 @@ export async function registerInngest(
       createLeadRetryCron(leadRetryDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
       createLifecycleStalledSweepCron({
+        failure: asyncFailure,
         prisma: app.prisma,
         writer: lifecycleWriter,
         history: lifecycleHistory,

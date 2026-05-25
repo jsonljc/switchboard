@@ -41,13 +41,14 @@ export async function executeModeDispatch(
   }
 }
 
-export function createModeDispatcher() {
+export function createModeDispatcher(onFailure?: (arg: unknown) => Promise<void>) {
   return inngestClient.createFunction(
     {
       id: "creative-mode-dispatcher",
       name: "Creative Pipeline Mode Dispatcher",
       retries: 3,
       triggers: [{ event: "creative-pipeline/job.submitted" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ event, step }: { event: { data: DispatchEventData }; step: DispatchStepTools }) => {
       await executeModeDispatch(event.data, step);

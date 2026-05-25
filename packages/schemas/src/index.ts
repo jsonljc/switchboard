@@ -106,6 +106,9 @@ export * from "./ad-optimizer-v2.js";
 // Lead Intake (CTWA + Instant Form attributed lead events)
 export * from "./lead-intake.js";
 
+// Async failure envelope (Inngest retry-exhaustion contract, Route Governance §13 seam)
+export * from "./async-failure.js";
+
 // Knowledge entries (curated playbooks, policies, domain guidance)
 export * from "./knowledge.js";
 

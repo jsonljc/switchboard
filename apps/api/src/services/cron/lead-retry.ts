@@ -1,5 +1,6 @@
 import { Inngest } from "inngest";
 import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
+import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 
@@ -23,6 +24,7 @@ interface LeadDetail {
 }
 
 export interface LeadRetryCronDeps {
+  failure: AsyncFailureContext;
   findPendingLeads: () => Promise<PendingLeadRecord[]>;
   getOrgAccessToken: (orgId: string) => Promise<string | null>;
   fetchLeadDetail: (leadId: string, accessToken: string) => Promise<LeadDetail>;
@@ -145,6 +147,15 @@ export function createLeadRetryCron(deps: LeadRetryCronDeps) {
       name: "Lead Retry Processor",
       retries: 2,
       triggers: [{ cron: "*/15 * * * *" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "lead-retry",
+          eventDomain: "lead-retry",
+          riskCategory: "high",
+          alert: true,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step }) => {
       return executeLeadRetry(step as unknown as StepTools, deps);

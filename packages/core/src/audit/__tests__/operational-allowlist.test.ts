@@ -37,6 +37,7 @@ describe("OPERATIONAL_AUDIT_EVENT_TYPES", () => {
     "overlay.activated",
     "overlay.deactivated",
     "work_trace.integrity_override",
+    "infrastructure.job.retry_exhausted",
   ];
 
   it("matches the pinned literal set (deep equal, exact order)", () => {

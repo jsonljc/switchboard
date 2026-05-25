@@ -125,6 +125,7 @@ export function createCreativeJobRunner(
   jobStore: JobStore,
   llmConfig: LLMConfig,
   imageConfig?: ImageConfig,
+  onFailure?: (arg: unknown) => Promise<void>,
 ) {
   return inngestClient.createFunction(
     {
@@ -132,6 +133,7 @@ export function createCreativeJobRunner(
       name: "Creative Pipeline Job Runner",
       retries: 3,
       triggers: [{ event: "creative-pipeline/polished.submitted" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
       await executeCreativePipeline(event.data, step, jobStore, llmConfig, imageConfig);

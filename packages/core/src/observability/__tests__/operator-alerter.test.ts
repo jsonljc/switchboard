@@ -113,3 +113,19 @@ describe("InfrastructureErrorType — work_trace_locked_violation variant", () =
     await expect(alerter.alert(payload)).resolves.toBeUndefined();
   });
 });
+
+describe("inngest_function alert source", () => {
+  it("accepts an alert sourced from an inngest function", async () => {
+    const alerter = new NoopOperatorAlerter();
+    await expect(
+      alerter.alert({
+        errorType: "async_job_retry_exhausted",
+        severity: "critical",
+        errorMessage: "lead-retry exhausted",
+        retryable: true,
+        occurredAt: "2026-05-25T07:00:00.000Z",
+        source: "inngest_function",
+      }),
+    ).resolves.toBeUndefined();
+  });
+});

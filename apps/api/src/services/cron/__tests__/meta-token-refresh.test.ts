@@ -1,7 +1,31 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { executeMetaTokenRefresh } from "../meta-token-refresh.js";
+import { executeMetaTokenRefresh, createMetaTokenRefreshCron } from "../meta-token-refresh.js";
 import type { MetaTokenRefreshDeps, StepTools } from "../meta-token-refresh.js";
+import type { AsyncFailureContext } from "@switchboard/core";
 import { encryptCredentials } from "@switchboard/db";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("inngest", () => ({
+  Inngest: vi.fn().mockImplementation(() => ({
+    createFunction: createFunctionSpy,
+  })),
+}));
+
+function makeFailureContext(): AsyncFailureContext {
+  return {
+    auditLedger: {
+      record: vi.fn().mockResolvedValue({}),
+    } as unknown as AsyncFailureContext["auditLedger"],
+    operatorAlerter: {
+      alert: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AsyncFailureContext["operatorAlerter"],
+    inngest: { send: vi.fn().mockResolvedValue(undefined) },
+  };
+}
 
 function makeStep(): StepTools {
   return {
@@ -11,6 +35,7 @@ function makeStep(): StepTools {
 
 function makeDeps(overrides: Partial<MetaTokenRefreshDeps> = {}): MetaTokenRefreshDeps {
   return {
+    failure: makeFailureContext(),
     listMetaConnections: vi.fn().mockResolvedValue([]),
     updateCredentials: vi.fn().mockResolvedValue(undefined),
     updateStatus: vi.fn().mockResolvedValue(undefined),
@@ -166,5 +191,19 @@ describe("executeMetaTokenRefresh", () => {
     expect(result.checked).toBe(1);
     expect(result.refreshed).toBe(0);
     expect(result.failed).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createMetaTokenRefreshCron (Class B)
+// ---------------------------------------------------------------------------
+
+describe("createMetaTokenRefreshCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config", () => {
+    createFunctionSpy.mockClear();
+    createMetaTokenRefreshCron(makeDeps());
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
   });
 });
