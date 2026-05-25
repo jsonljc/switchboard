@@ -13,7 +13,12 @@ import { compareAgainstBaseline, summarizeResults } from "./score.js";
 import { BaselineSchema } from "./schema.js";
 import type { Baseline } from "./schema.js";
 import { createAnthropicClaimClassifier } from "@switchboard/core";
-import { isMainPush, appendStepSummary, SKIP_MESSAGE } from "./eval-preflight.js";
+import {
+  isMainPush,
+  appendStepSummary,
+  SKIP_MESSAGE,
+  assertSkillPackContentPresent,
+} from "./eval-preflight.js";
 
 // ---------------------------------------------------------------------------
 // Model pins
@@ -180,6 +185,11 @@ async function main(): Promise<void> {
     appendStepSummary(SKIP_MESSAGE);
     process.exit(0);
   }
+
+  // ------------------------------------------------------------------
+  // Skill-pack content preflight (offline): refuse to grade Alex with an empty pack.
+  // ------------------------------------------------------------------
+  await assertSkillPackContentPresent();
 
   // ------------------------------------------------------------------
   // Build shared API clients

@@ -52,7 +52,11 @@ function stripFrontmatter(raw: string): string {
  *   playbook/qualification-framework -> QUALIFICATION_CONTEXT
  *   policy/claim-boundaries          -> CLAIM_BOUNDARIES
  */
-const SKILL_PACK_SCOPES: ReadonlyArray<{ kind: KnowledgeKind; scope: string; file: string }> = [
+export const SKILL_PACK_SCOPES: ReadonlyArray<{
+  kind: KnowledgeKind;
+  scope: string;
+  file: string;
+}> = [
   { kind: "playbook", scope: "objection-handling", file: "objection-handling.md" },
   { kind: "playbook", scope: "qualification-framework", file: "qualification-framework.md" },
   { kind: "policy", scope: "claim-boundaries", file: "claim-boundaries.md" },
