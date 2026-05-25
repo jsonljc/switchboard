@@ -1,0 +1,423 @@
+/* =========================================================
+   Risk-tiered swipe DecisionCard + ConfirmSheet (P1-B E5a).
+   Translated from the prototype's .decision* / .decision-zone* /
+   .decision-risk / .btn / .confirm* CSS into dashboard tokens.
+
+   Token rule (two conventions, per home.module.css):
+   - editorial tokens consumed bare:  var(--ink), var(--hair), var(--canvas-2)
+   - shadcn raw-triples wrapped:       hsl(var(--action)), hsl(var(--agent-alex))
+   Radii are literal px to match the prototype's scale.
+
+   Semantic colors mapped to dashboard tokens (no raw --good/--critical exist):
+   - success / "good"     -> hsl(var(--agent-active))   (warm green)
+   - medium / attention   -> hsl(var(--agent-attention))(warm amber)
+   - critical / high      -> hsl(var(--destructive))
+   - the ONE action amber -> hsl(var(--action)) — buttons ONLY.
+   Agent identity color appears ONLY on the identity stripe + name.
+   ========================================================= */
+
+.decision {
+  position: relative;
+  border-radius: 14px;
+  background: hsl(var(--surface));
+  border: 1px solid var(--hair);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+/* Per-agent identity stripe across the top — identity only. */
+.decision::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  z-index: 2;
+  pointer-events: none;
+}
+.decision[data-agent="alex"]::after {
+  background: hsl(var(--agent-alex));
+}
+.decision[data-agent="riley"]::after {
+  background: hsl(var(--agent-riley));
+}
+.decision[data-agent="mira"]::after {
+  background: hsl(var(--agent-mira));
+}
+
+/* The draggable surface. */
+.track {
+  position: relative;
+  background: hsl(var(--surface));
+  border-radius: 14px;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 320ms var(--ease-home);
+  user-select: none;
+  will-change: transform;
+  z-index: 1;
+}
+.track[data-dragging="true"] {
+  transition: none;
+}
+
+/* Swipe action zones underneath the track. */
+.zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.005em;
+  color: #fff;
+  pointer-events: none;
+}
+.zoneSkip {
+  left: 0;
+  right: 0;
+  background: linear-gradient(90deg, hsl(var(--surface-foreground)), var(--ink-3));
+  padding-right: 30px;
+}
+.zoneApprove {
+  left: 0;
+  right: 0;
+  background: linear-gradient(270deg, hsl(var(--agent-active)), hsl(var(--agent-active) / 0.82));
+  justify-content: flex-end;
+  padding-left: 30px;
+}
+.zoneLocked {
+  left: 0;
+  right: 0;
+  background: linear-gradient(270deg, hsl(var(--surface-foreground)), var(--ink-3));
+  justify-content: flex-end;
+  padding-left: 30px;
+  color: rgba(255, 255, 255, 0.95);
+}
+.zone svg {
+  width: 18px;
+  height: 18px;
+  margin: 0 6px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+}
+.from {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.fromName {
+  font-family: var(--serif);
+  font-variation-settings: "opsz" 20;
+  font-size: 18px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.008em;
+  text-transform: none;
+  line-height: 1;
+  position: relative;
+  top: 2px;
+  padding-right: 2px;
+}
+.from[data-agent="alex"] .fromName {
+  color: hsl(var(--agent-alex-deep));
+}
+.from[data-agent="riley"] .fromName {
+  color: hsl(var(--agent-riley-deep));
+}
+.from[data-agent="mira"] .fromName {
+  color: hsl(var(--agent-mira-deep));
+}
+
+/* Risk pill — semantic color, never the action amber. */
+.risk {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.risk::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.riskLow {
+  color: hsl(var(--agent-active));
+  background: hsl(var(--agent-active) / 0.12);
+}
+.riskMedium {
+  color: hsl(var(--agent-attention));
+  background: hsl(var(--agent-attention) / 0.14);
+}
+.riskHigh {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.12);
+}
+/* Missing contract — locked, "needs review". */
+.riskLocked {
+  color: var(--ink-2);
+  background: var(--canvas-3);
+}
+
+.title {
+  font-family: var(--serif);
+  font-variation-settings: "opsz" 24;
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  line-height: 1.2;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.hint {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--hair-soft);
+}
+
+/* =========================================================
+   PRIMARY ACTION — the ONE amber button system.
+   ========================================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  transition:
+    transform 160ms var(--ease-home),
+    background 160ms ease,
+    box-shadow 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.btnPrimary {
+  background: hsl(var(--action));
+  color: hsl(var(--action-foreground));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(80, 40, 0, 0.2),
+    0 2px 4px rgba(168, 101, 15, 0.25),
+    0 6px 16px rgba(201, 123, 26, 0.18);
+}
+.btnPrimary:hover {
+  background: hsl(var(--action-hover));
+  transform: translateY(-1px);
+}
+.btnPrimary:active {
+  transform: translateY(0);
+}
+.btnPrimary[data-armed="true"] {
+  animation: armPulse 1.6s ease-in-out infinite;
+}
+@keyframes armPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 1px 0 rgba(80, 40, 0, 0.18),
+      0 2px 8px rgba(201, 123, 26, 0.25),
+      0 0 0 0 hsl(var(--action) / 0.5);
+  }
+  50% {
+    box-shadow:
+      0 1px 0 rgba(80, 40, 0, 0.18),
+      0 2px 8px rgba(201, 123, 26, 0.25),
+      0 0 0 10px hsl(var(--action) / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btnPrimary[data-armed="true"] {
+    animation: none;
+    box-shadow: 0 0 0 3px hsl(var(--action) / 0.5);
+  }
+  .track {
+    transition: none;
+  }
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--ink-2);
+  padding: 11px 14px;
+}
+.btnGhost:hover {
+  color: var(--ink);
+  background: var(--canvas-2);
+}
+
+.btnSecondary {
+  background: var(--canvas-2);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+}
+.btnSecondary:hover {
+  background: hsl(var(--surface));
+}
+
+/* =========================================================
+   CONFIRM STEP — explicit affirmative for needsConfirm decisions.
+   ========================================================= */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 18, 14, 0.4);
+  z-index: 40;
+  opacity: 0;
+  transition: opacity 240ms var(--ease-home);
+}
+.scrim[data-open="true"] {
+  opacity: 1;
+}
+.scrim[data-open="false"] {
+  pointer-events: none;
+}
+
+.confirm {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: hsl(var(--surface));
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow-sheet);
+  padding: 22px 22px 24px;
+  transform: translateY(100%);
+  transition: transform 320ms var(--ease-home);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 80%;
+  overflow-y: auto;
+}
+.confirm[data-open="true"] {
+  transform: translateY(0);
+}
+@media (min-width: 768px) {
+  .confirm {
+    left: 50%;
+    right: auto;
+    bottom: 50%;
+    width: 420px;
+    border-radius: 18px;
+    transform: translate(-50%, 60%) scale(0.96);
+    opacity: 0;
+    transition:
+      transform 320ms var(--ease-home),
+      opacity 240ms ease;
+  }
+  .confirm[data-open="true"] {
+    transform: translate(-50%, 50%) scale(1);
+    opacity: 1;
+  }
+  .confirmHandle {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .confirm {
+    transition: none;
+  }
+}
+
+.confirmHandle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--canvas-3);
+  margin: -10px auto 4px;
+}
+.confirmEyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--destructive));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.confirmEyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--destructive));
+}
+.confirmTitle {
+  font-family: var(--serif);
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+  font-weight: 400;
+  text-wrap: balance;
+  margin: 0;
+}
+.confirmSummary {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.confirmActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.confirmActions .btn {
+  flex: 1;
+}
