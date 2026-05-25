@@ -11,6 +11,7 @@ import type {
   SkillExecutionResult,
   SkillExecutionParams,
 } from "../../skill-runtime/types.js";
+import type { ContextRequirement } from "@switchboard/schemas";
 
 function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
   return {
@@ -322,5 +323,67 @@ describe("SkillMode with BuilderRegistry", () => {
 
     expect(executor.lastParams?.deploymentId).toBe("dep-real");
     expect(executor.lastParams?.trustScore).toBe(85);
+  });
+});
+
+describe("SkillMode context resolution (Critical 1)", () => {
+  let executor: MockExecutor;
+  beforeEach(() => {
+    executor = new MockExecutor();
+  });
+
+  const alexLikeContext: ContextRequirement[] = [
+    {
+      kind: "playbook",
+      scope: "objection-handling",
+      injectAs: "PLAYBOOK_CONTEXT",
+      required: false,
+    },
+    {
+      kind: "business-facts",
+      scope: "operator-approved",
+      injectAs: "BUSINESS_FACTS",
+      required: true,
+    },
+  ];
+
+  it("merges resolved knowledge context into executor params and excludes business-facts", async () => {
+    const contextResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        variables: { PLAYBOOK_CONTEXT: "OBJECTION PLAYBOOK" },
+        metadata: [],
+      }),
+    };
+    const skill = makeSkill({ context: alexLikeContext });
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({ executor, skillsBySlug, contextResolver });
+
+    await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.parameters).toMatchObject({
+      PLAYBOOK_CONTEXT: "OBJECTION PLAYBOOK",
+    });
+    expect(contextResolver.resolve).toHaveBeenCalledWith("org-1", [
+      {
+        kind: "playbook",
+        scope: "objection-handling",
+        injectAs: "PLAYBOOK_CONTEXT",
+        required: false,
+      },
+    ]);
+  });
+
+  it("fails open when context resolution throws (no 500, empty context)", async () => {
+    const contextResolver = {
+      resolve: vi.fn().mockRejectedValue(new Error("knowledge store down")),
+    };
+    const skill = makeSkill({ context: alexLikeContext });
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({ executor, skillsBySlug, contextResolver });
+
+    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+
+    expect(result.outcome).toBe("completed");
+    expect(executor.lastParams?.parameters.PLAYBOOK_CONTEXT).toBeUndefined();
   });
 });
