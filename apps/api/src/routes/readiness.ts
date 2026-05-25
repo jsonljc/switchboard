@@ -66,8 +66,8 @@ export interface ReadinessContext {
     businessHours: unknown;
   };
   alexSkillPackSeeded: boolean;
-  // Internal-only: the guard's precise missing-(kind,scope) text, for the console.warn
-  // (+ the no-leak test / a deferred audit write). Read by no check; never serialized.
+  // Internal-only: the guard's missing-(kind,scope) text (pack is system-owned, not
+  // customer-fixable). For the console.warn + no-leak test; read by no check, never serialized.
   alexSkillPackDiagnostic: string | null;
 }
 
