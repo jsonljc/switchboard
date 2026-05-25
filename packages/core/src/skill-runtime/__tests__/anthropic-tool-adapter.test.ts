@@ -30,6 +30,18 @@ describe("encodeToolName", () => {
     expect(() => encodeToolName("bad__name")).toThrow(/already contains "__"/);
     expect(() => encodeToolName("crm-query__contact")).toThrow(/already contains "__"/);
   });
+
+  describe("encodeToolName encoded-output validation", () => {
+    it("throws when the encoded name violates Anthropic's tool-name pattern", () => {
+      // A space survives "."→"__" encoding and breaks ^[a-zA-Z0-9_-]{1,128}$
+      expect(() => encodeToolName("bad name.op")).toThrow(/violates Anthropic/);
+    });
+
+    it("throws when the encoded name exceeds 128 characters", () => {
+      // 129 alphanumeric chars: passes the "__" guard but fails ^...{1,128}$
+      expect(() => encodeToolName("a".repeat(129))).toThrow(/violates Anthropic/);
+    });
+  });
 });
 
 describe("decodeToolName", () => {
@@ -209,6 +221,69 @@ describe("AnthropicToolAdapter", () => {
       expect(toolUse.name).toBe("calendar.search"); // decoded from wire "calendar__search"
       expect(toolUse.input).toEqual({ date: "2026-05-20" });
     }
+  });
+
+  it("re-encodes dotted tool_use names in OUTGOING message history (multi-turn fix)", async () => {
+    const mockCreate = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "all set" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create: mockCreate } } as never);
+
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [
+        { role: "user", content: "Book me in" },
+        // Turn-1 assistant tool_use, exactly as the executor stores it: DECODED (dotted).
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tu_1",
+              name: "calendar-book.booking.create",
+              input: { slot: "x" },
+            },
+          ],
+        },
+        // Turn-1 tool_result — carries tool_use_id (no name) and must pass through.
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "tu_1", content: "ok" }] },
+      ],
+      tools: [
+        {
+          name: "calendar-book.booking.create",
+          description: "Book",
+          input_schema: { type: "object", properties: {} },
+        },
+      ],
+    });
+
+    const sent = mockCreate.mock.calls[0]![0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const assistantBlocks = sent.messages[1]!.content as Array<{ type: string; name?: string }>;
+    expect(assistantBlocks[0]!.name).toBe("calendar-book__booking__create");
+    expect(assistantBlocks[0]!.name).not.toContain(".");
+    expect(assistantBlocks[0]!.type).toBe("tool_use");
+    expect((assistantBlocks[0]! as { id?: string }).id).toBe("tu_1");
+
+    const resultBlocks = sent.messages[2]!.content as Array<{ type: string; tool_use_id?: string }>;
+    expect(resultBlocks[0]!.type).toBe("tool_result");
+    expect(resultBlocks[0]!.tool_use_id).toBe("tu_1");
+  });
+
+  it("throws on an unsupported outgoing content block type (loud, not silent)", async () => {
+    const mockCreate = vi.fn();
+    const adapter = new AnthropicToolAdapter({ messages: { create: mockCreate } } as never);
+    await expect(
+      adapter.chatWithTools({
+        system: "s",
+        messages: [{ role: "assistant", content: [{ type: "bogus_block" } as never] }],
+        tools: [],
+      }),
+    ).rejects.toThrow(/unsupported outgoing content block/);
+    expect(mockCreate).not.toHaveBeenCalled(); // throws before hitting the wire
   });
 
   it("throws LLMAdapterShapeMismatchError on unknown stop_reason", async () => {
