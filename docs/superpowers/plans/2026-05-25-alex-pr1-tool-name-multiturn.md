@@ -175,7 +175,7 @@ Expected: FAIL — the assistant block name is `"calendar-book.booking.create"` 
 
 - [ ] **Step 3: Implement the type-guarded outgoing walk**
 
-In `anthropic-tool-adapter.ts`, add a helper above the class (it needs `LLMMessage`, `LLMContentBlock`, `LLMToolResultBlock` — all already imported via `../llm-types.js`):
+In `anthropic-tool-adapter.ts`, add a helper above the class. It needs `LLMMessage`, `LLMContentBlock`, and `LLMToolResultBlock` from `../llm-types.js`. `LLMMessage` + `LLMContentBlock` are already imported there; **add `type LLMToolResultBlock` to that existing import block** (it is exported from `llm-types.ts` but not yet imported in this file):
 
 ```ts
 /**
