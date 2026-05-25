@@ -3,10 +3,14 @@
 // Integration tests for POST /api/:orgId/revenue — PlatformIngress migration
 // (#654-B Task 6). Proves WorkTrace persistence, idempotency replay,
 // missing-key rejection, and cross-tenant isolation.
+//
+// PR-2 (#677) additions: atomicity contract tests — tx context threading,
+// rollback-on-outbox-failure, and a Postgres-gated real-$transaction test.
 // ---------------------------------------------------------------------------
 import { describe, it, expect, vi } from "vitest";
-import type { RevenueStore } from "@switchboard/core";
+import type { RevenueStore, StoreTransactionContext } from "@switchboard/core";
 import type { LifecycleRevenueEvent } from "@switchboard/schemas";
+import type { RunInTransaction } from "../../bootstrap/operator-intents/revenue.js";
 import { buildTestServer } from "../../__tests__/test-server.js";
 import { RECORD_REVENUE_INTENT } from "../../bootstrap/operator-intents.js";
 
@@ -73,6 +77,7 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
     expect(revenueStore.record).toHaveBeenCalledTimes(1);
     expect(revenueStore.record).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org_a", contactId: "c1", amount: 100 }),
+      undefined, // tx context from test no-op runner (fn receives undefined)
     );
 
     // outboxWriter.write was called once with the expected arguments
@@ -87,6 +92,7 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
         source: "revenue-api",
         organizationId: "org_a",
       }),
+      undefined, // tx context from test no-op runner (fn receives undefined)
     );
 
     // WorkTrace was persisted with the expected shape
@@ -194,6 +200,7 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
     expect(revenueStore.record).toHaveBeenCalledTimes(1);
     expect(revenueStore.record).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org_a" }),
+      undefined, // tx context from test no-op runner (fn receives undefined)
     );
 
     // WorkTrace also attributed to auth org
@@ -203,3 +210,209 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
     await app.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// PR-2 atomicity contract tests (#677)
+// ---------------------------------------------------------------------------
+
+/**
+ * A fake transaction runner that only promotes staged writes to the committed
+ * arrays when the callback resolves. If the callback throws, the staged buffer
+ * is discarded and nothing reaches the committed arrays. This approximates real
+ * $transaction rollback semantics without a live Postgres connection.
+ *
+ * To make the "both-or-neither" assertion load-bearing, callers MUST wire
+ * their store mocks to push markers into `tx._staged`. Without that wiring
+ * the committed arrays would always be empty and the assertion would be vacuous.
+ */
+function makeFakeTransactionRunner(): {
+  runner: RunInTransaction;
+  committedRevenue: unknown[];
+  committedOutbox: unknown[];
+} {
+  const committedRevenue: unknown[] = [];
+  const committedOutbox: unknown[] = [];
+
+  const runner: RunInTransaction = async <T>(
+    fn: (tx: StoreTransactionContext) => Promise<T>,
+  ): Promise<T> => {
+    const staged: { type: "revenue" | "outbox"; data: unknown }[] = [];
+
+    // tx carries a staging buffer; store mocks push into _staged so the runner
+    // can observe which writes occurred before deciding to commit or discard.
+    const tx = {
+      __fakeTransaction: true,
+      _staged: staged,
+    };
+
+    // If fn throws, the exception propagates and staged writes are never promoted.
+    const result = await fn(tx as unknown as StoreTransactionContext);
+
+    // Resolved: promote staged writes to the committed arrays.
+    for (const entry of staged) {
+      if (entry.type === "revenue") committedRevenue.push(entry.data);
+      else committedOutbox.push(entry.data);
+    }
+    return result;
+  };
+
+  return { runner, committedRevenue, committedOutbox };
+}
+
+describe("PR-2 atomicity — tx rollback contract (#677)", () => {
+  it("outbox write throws → handler throws → route 500s AND failed WorkTrace with EXECUTION_EXCEPTION", async () => {
+    const revenueEvent = makeEvent({ id: "rev_tx_1" });
+    const { runner, committedRevenue, committedOutbox } = makeFakeTransactionRunner();
+
+    // Wire record to push a staging marker into tx._staged BEFORE returning.
+    // This is what makes the "both-or-neither" assertion non-vacuous: the staged
+    // buffer is populated before the outbox throws, so a runner that committed
+    // before checking would produce committedRevenue.length === 1 and FAIL the
+    // assertion below.
+    type FakeTx = StoreTransactionContext & {
+      _staged: { type: "revenue" | "outbox"; data: unknown }[];
+    };
+    const revenueStore = makeRevenueStore(async (_input, tx) => {
+      (tx as FakeTx)._staged.push({ type: "revenue", data: "revenue" });
+      return revenueEvent;
+    });
+
+    // Wire outboxWriter.write to push a staging marker THEN throw.
+    // Both stores have touched _staged by the time the callback rejects.
+    const outboxWriter = {
+      write: vi.fn(async (_id: string, _type: string, _payload: unknown, tx: unknown) => {
+        (tx as FakeTx)._staged.push({ type: "outbox", data: "outbox" });
+        throw new Error("Outbox DB blip");
+      }),
+    };
+
+    const { app } = await buildTestServer({
+      revenueStore,
+      outboxWriter,
+      runInTransaction: runner,
+    });
+    const prevCount = app.ingressTraceCount ?? 0;
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/org_a/revenue",
+      headers: {
+        "Idempotency-Key": "rev-rollback-1",
+        "x-org-id": "org_a",
+        "x-principal-id": "u1",
+      },
+      payload: { contactId: "c1", amount: 100 },
+    });
+
+    // Route returns scrubbed 500
+    expect(res.statusCode).toBe(500);
+
+    // Part 1 (PR-1): WorkTrace persisted as failed with EXECUTION_EXCEPTION
+    expect(app.ingressTraceCount).toBe(prevCount + 1);
+    expect(app.lastIngressTrace).toBeDefined();
+    expect(app.lastIngressTrace!.outcome).toBe("failed");
+    expect(app.lastIngressTrace!.error?.code).toBe("EXECUTION_EXCEPTION");
+
+    // Both writes discarded: the staged buffer had ["revenue","outbox"] entries
+    // when the callback threw, but the runner discarded them instead of promoting.
+    // A regression where the runner committed-before-throw would make these non-empty.
+    expect(committedRevenue).toHaveLength(0);
+    expect(committedOutbox).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it("success: outbox called with evt_rev_<id>/purchased and WorkTrace completed", async () => {
+    const revenueEvent = makeEvent({ id: "rev_success_1" });
+    const revenueStore = makeRevenueStore(async () => revenueEvent);
+    const outboxWriter = { write: vi.fn(async () => {}) };
+
+    const { app } = await buildTestServer({ revenueStore, outboxWriter });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/org_a/revenue",
+      headers: {
+        "Idempotency-Key": "rev-success-atom-1",
+        "x-org-id": "org_a",
+        "x-principal-id": "u1",
+      },
+      payload: { contactId: "c1", amount: 200 },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // outbox called with evt_rev_<id>/"purchased"
+    expect(outboxWriter.write).toHaveBeenCalledWith(
+      "evt_rev_rev_success_1",
+      "purchased",
+      expect.objectContaining({ type: "purchased", contactId: "c1", value: 200 }),
+      undefined,
+    );
+    expect(app.lastIngressTrace?.outcome).toBe("completed");
+
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Postgres-gated real-$transaction rollback integration test
+// Requires a live DATABASE_URL; skipped in CI and local dev without Postgres.
+// ---------------------------------------------------------------------------
+describe.skipIf(!process.env["DATABASE_URL"])(
+  "PR-2 real Prisma $transaction rollback (integration — requires DATABASE_URL)",
+  () => {
+    it("outbox write throws inside $transaction → revenue row not committed", async () => {
+      // This test requires a live Prisma client — obtain one from @switchboard/db
+      const { PrismaClient } = await import("@switchboard/db");
+      const prisma = new PrismaClient();
+
+      try {
+        const { PrismaRevenueStore } = await import("@switchboard/db");
+        const revenueStore = new PrismaRevenueStore(prisma);
+
+        // outboxWriter that always throws, so the transaction rolls back
+        const failingOutboxWriter = {
+          write: vi.fn().mockRejectedValue(new Error("Outbox forced failure")),
+        };
+
+        const runInTransaction: RunInTransaction = (fn) => prisma.$transaction((tx) => fn(tx));
+
+        const { app } = await buildTestServer({
+          revenueStore: {
+            record: (input, tx) => revenueStore.record(input, tx as never),
+            findByOpportunity: revenueStore.findByOpportunity.bind(revenueStore),
+            findByContact: revenueStore.findByContact.bind(revenueStore),
+            sumByOrg: revenueStore.sumByOrg.bind(revenueStore),
+            sumByCampaign: revenueStore.sumByCampaign.bind(revenueStore),
+          },
+          outboxWriter: failingOutboxWriter,
+          runInTransaction,
+        });
+
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/org_integration_test/revenue",
+          headers: {
+            "Idempotency-Key": "rev-real-rollback-1",
+            "x-org-id": "org_integration_test",
+            "x-principal-id": "u1",
+          },
+          payload: { contactId: "c_integration_1", amount: 50 },
+        });
+
+        // Route 500s because the transaction rolled back
+        expect(res.statusCode).toBe(500);
+
+        // No LifecycleRevenueEvent row should exist for this contact after rollback
+        const rows = await prisma.lifecycleRevenueEvent.findMany({
+          where: { contactId: "c_integration_1", organizationId: "org_integration_test" },
+        });
+        expect(rows).toHaveLength(0);
+
+        await app.close();
+      } finally {
+        await prisma.$disconnect();
+      }
+    });
+  },
+);

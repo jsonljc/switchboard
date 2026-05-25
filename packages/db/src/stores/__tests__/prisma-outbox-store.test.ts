@@ -20,6 +20,34 @@ describe("PrismaOutboxStore", () => {
     store = new PrismaOutboxStore(prisma as never);
   });
 
+  describe("write — tx threading", () => {
+    it("uses tx client instead of this.prisma when tx is provided", async () => {
+      const txClient = {
+        outboxEvent: {
+          create: vi.fn().mockResolvedValue({ id: "ob_tx", eventId: "evt_tx", status: "pending" }),
+        },
+      };
+      const payload = { type: "purchased", contactId: "ct_1" };
+      const result = await store.write("evt_tx", "purchased", payload, txClient as never);
+      expect(txClient.outboxEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ eventId: "evt_tx", type: "purchased", status: "pending" }),
+      });
+      expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
+      expect(result.status).toBe("pending");
+    });
+
+    it("falls back to this.prisma when no tx is provided", async () => {
+      const payload = { type: "purchased", contactId: "ct_1" };
+      (prisma.outboxEvent.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "ob_1",
+        eventId: "evt_1",
+        status: "pending",
+      });
+      await store.write("evt_1", "purchased", payload);
+      expect(prisma.outboxEvent.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("writes a pending outbox event", async () => {
     const payload = { type: "booked", contactId: "ct_1", organizationId: "org_1", value: 100 };
     (prisma.outboxEvent.create as ReturnType<typeof vi.fn>).mockResolvedValue({

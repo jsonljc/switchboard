@@ -39,7 +39,11 @@ import {
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
 } from "./operator-intents/shared.js";
 import { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
-import { buildRecordRevenueHandler, type OutboxWriter } from "./operator-intents/revenue.js";
+import {
+  buildRecordRevenueHandler,
+  type OutboxWriter,
+  type RunInTransaction,
+} from "./operator-intents/revenue.js";
 import { buildActOnRecommendationHandler } from "./operator-intents/recommendation.js";
 import {
   buildConfirmDisqualificationHandler,
@@ -87,6 +91,7 @@ interface OperatorIntentsBootstrapDeps {
   consentService?: ConsentService;
   revenueStore?: RevenueStore;
   outboxWriter?: OutboxWriter;
+  runInTransaction?: RunInTransaction;
   logger?: { info(msg: string): void };
 }
 
@@ -119,6 +124,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     consentService,
     revenueStore,
     outboxWriter,
+    runInTransaction,
     logger,
   } = deps;
 
@@ -155,8 +161,11 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     handlers.set(CLEAR_CONSENT_INTENT, buildClearConsentHandler(consentService));
   }
 
-  if (revenueStore && outboxWriter) {
-    handlers.set(RECORD_REVENUE_INTENT, buildRecordRevenueHandler(revenueStore, outboxWriter));
+  if (revenueStore && outboxWriter && runInTransaction) {
+    handlers.set(
+      RECORD_REVENUE_INTENT,
+      buildRecordRevenueHandler(revenueStore, outboxWriter, runInTransaction),
+    );
   }
 
   modeRegistry.register(new OperatorMutationMode({ handlers }));
@@ -176,7 +185,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
       registerOperatorIntent(intentRegistry, intent);
     }
   }
-  if (revenueStore && outboxWriter) {
+  if (revenueStore && outboxWriter && runInTransaction) {
     registerOperatorIntent(intentRegistry, RECORD_REVENUE_INTENT);
   }
 
@@ -185,7 +194,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (recommendationStore ? 1 : 0) +
     (disqualificationHook ? 2 : 0) +
     (consentService ? 3 : 0) +
-    (revenueStore && outboxWriter ? 1 : 0);
+    (revenueStore && outboxWriter && runInTransaction ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

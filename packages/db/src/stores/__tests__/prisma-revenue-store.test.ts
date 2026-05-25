@@ -45,6 +45,70 @@ describe("PrismaRevenueStore", () => {
     store = new PrismaRevenueStore(prisma as never);
   });
 
+  describe("record — tx threading", () => {
+    it("uses tx client instead of this.prisma when tx is provided", async () => {
+      const txClient = {
+        lifecycleRevenueEvent: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue(makeRevenueEvent({ externalReference: null })),
+        },
+      };
+      const result = await store.record(
+        {
+          organizationId: "org-1",
+          contactId: "contact-1",
+          opportunityId: "opp-1",
+          amount: 1000,
+          type: "payment",
+          recordedBy: "owner",
+        },
+        txClient as never,
+      );
+      expect(txClient.lifecycleRevenueEvent.create).toHaveBeenCalledTimes(1);
+      expect(prisma.lifecycleRevenueEvent.create).not.toHaveBeenCalled();
+      expect(result.amount).toBe(2000); // makeRevenueEvent default
+    });
+
+    it("falls back to this.prisma when no tx is provided", async () => {
+      prisma.lifecycleRevenueEvent.create.mockResolvedValue(makeRevenueEvent({}));
+      await store.record({
+        organizationId: "org-1",
+        contactId: "contact-1",
+        opportunityId: "opp-1",
+        amount: 1000,
+        type: "payment",
+        recordedBy: "owner",
+      });
+      expect(prisma.lifecycleRevenueEvent.create).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses tx client for idempotency findFirst when externalReference is provided", async () => {
+      const existingEvent = makeRevenueEvent({ externalReference: "pi_existing" });
+      const txClient = {
+        lifecycleRevenueEvent: {
+          findFirst: vi.fn().mockResolvedValue(existingEvent),
+          create: vi.fn(),
+        },
+      };
+      const result = await store.record(
+        {
+          organizationId: "org-1",
+          contactId: "contact-1",
+          opportunityId: "opp-1",
+          amount: 1000,
+          type: "payment",
+          recordedBy: "owner",
+          externalReference: "pi_existing",
+        },
+        txClient as never,
+      );
+      expect(txClient.lifecycleRevenueEvent.findFirst).toHaveBeenCalledTimes(1);
+      expect(txClient.lifecycleRevenueEvent.create).not.toHaveBeenCalled();
+      expect(prisma.lifecycleRevenueEvent.findFirst).not.toHaveBeenCalled();
+      expect(result.externalReference).toBe("pi_existing"); // returned by the tx mock findFirst
+    });
+  });
+
   describe("record", () => {
     it("records a new revenue event with all fields", async () => {
       const input = {

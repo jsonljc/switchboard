@@ -716,9 +716,10 @@ export async function buildServer() {
       consentService: skillModeConsentService ?? undefined,
       revenueStore: app.revenueEventStore,
       outboxWriter: {
-        write: (eventId, type, payload) =>
-          prismaOutbox.write(eventId, type, payload).then(() => {}),
+        write: (eventId, type, payload, tx) =>
+          prismaOutbox.write(eventId, type, payload, tx as never).then(() => {}),
       },
+      runInTransaction: (fn) => prismaClient.$transaction((tx) => fn(tx)),
       logger: app.log,
     });
   }

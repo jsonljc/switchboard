@@ -38,7 +38,7 @@ interface CampaignRevenueSummary {
 }
 
 interface RevenueStore {
-  record(input: RecordRevenueInput): Promise<LifecycleRevenueEvent>;
+  record(input: RecordRevenueInput, tx?: PrismaDbClient): Promise<LifecycleRevenueEvent>;
   findByOpportunity(orgId: string, opportunityId: string): Promise<LifecycleRevenueEvent[]>;
   findByContact(orgId: string, contactId: string): Promise<LifecycleRevenueEvent[]>;
   sumByOrg(orgId: string, dateRange?: DateRange): Promise<RevenueSummary>;
@@ -57,10 +57,11 @@ interface RevenueStore {
 export class PrismaRevenueStore implements RevenueStore {
   constructor(private prisma: PrismaDbClient) {}
 
-  async record(input: RecordRevenueInput): Promise<LifecycleRevenueEvent> {
+  async record(input: RecordRevenueInput, tx?: PrismaDbClient): Promise<LifecycleRevenueEvent> {
+    const client = tx ?? this.prisma;
     // Idempotency: if externalReference is provided, return existing record instead of duplicating
     if (input.externalReference) {
-      const existing = await this.prisma.lifecycleRevenueEvent.findFirst({
+      const existing = await client.lifecycleRevenueEvent.findFirst({
         where: {
           opportunityId: input.opportunityId,
           externalReference: input.externalReference,
@@ -72,7 +73,7 @@ export class PrismaRevenueStore implements RevenueStore {
     const id = randomUUID();
     const now = new Date();
 
-    const created = await this.prisma.lifecycleRevenueEvent.create({
+    const created = await client.lifecycleRevenueEvent.create({
       data: {
         id,
         organizationId: input.organizationId,

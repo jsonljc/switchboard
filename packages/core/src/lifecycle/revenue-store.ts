@@ -1,5 +1,12 @@
 import type { LifecycleRevenueEvent } from "@switchboard/schemas";
 
+/**
+ * Opaque transaction context threaded from the app-layer `runInTransaction` runner
+ * into store calls. Core never inspects or constructs this value — it only forwards
+ * whatever the runner supplies. The concrete type is `PrismaDbClient` in packages/db.
+ */
+export type StoreTransactionContext = unknown;
+
 export interface RecordRevenueInput {
   organizationId: string;
   contactId: string;
@@ -32,7 +39,7 @@ export interface CampaignRevenueSummary {
 }
 
 export interface RevenueStore {
-  record(input: RecordRevenueInput): Promise<LifecycleRevenueEvent>;
+  record(input: RecordRevenueInput, tx?: StoreTransactionContext): Promise<LifecycleRevenueEvent>;
   findByOpportunity(orgId: string, opportunityId: string): Promise<LifecycleRevenueEvent[]>;
   findByContact(orgId: string, contactId: string): Promise<LifecycleRevenueEvent[]>;
   sumByOrg(orgId: string, dateRange?: DateRange): Promise<RevenueSummary>;
