@@ -202,6 +202,26 @@
     --gap-section: 144px;
     --gap-section-tablet: 104px;
     --gap-section-mobile: 72px;
+
+    /* ─── Home: warm operational editorial supporting scale (P1-A) ─── */
+    /* --agent-*-deep/-tint, --shadow-lift, --shadow-sheet, and --canvas-3 are landed here ahead of their first consumers in P1-B / Phase-2 (risk-tiered card, sheet overlays, etc.). They are not consumed in P1-A. */
+    --canvas-2: hsl(42 33% 97%); /* lighter inset zone */
+    --canvas-3: hsl(40 24% 90%); /* deeper divider / sheet handle */
+    /* agent deep/tint as raw-triples (match --agent-* base; consume via hsl(var(--x))) */
+    --agent-alex-deep: 14 50% 45%;
+    --agent-alex-tint: 24 60% 95%;
+    --agent-riley-deep: 178 53% 26%;
+    --agent-riley-tint: 172 34% 93%;
+    --agent-mira-deep: 256 31% 45%;
+    --agent-mira-tint: 255 33% 95%;
+    /* shadows (complete values, consumed bare) */
+    --shadow-card: 0 1px 0 rgba(40, 30, 20, 0.04), 0 1px 2px rgba(40, 30, 20, 0.05);
+    --shadow-lift: 0 12px 28px rgba(40, 30, 20, 0.1), 0 2px 6px rgba(40, 30, 20, 0.06);
+    --shadow-sheet: 0 -10px 30px rgba(40, 30, 20, 0.08), 0 -1px 2px rgba(40, 30, 20, 0.04);
+    --ease-home: cubic-bezier(0.22, 1, 0.36, 1);
+    /* Home editorial font stacks (wired in layout.tsx) */
+    --font-home-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --font-home-serif: var(--font-newsreader), "Newsreader", "Iowan Old Style", Georgia, serif;
   }
 
   .dark {
@@ -506,41 +526,6 @@
     background: var(--ink);
     display: inline-block;
   }
-  .brand-nav {
-    display: flex;
-    align-items: center;
-    gap: 0;
-  }
-  .brand-nav a {
-    font-family: var(--serif);
-    font-size: 15px;
-    padding: 6px 14px;
-    border-radius: 999px;
-    color: var(--ink-3);
-    transition:
-      color 0.2s ease,
-      background 0.2s ease;
-  }
-  .brand-nav a.is-active {
-    color: var(--ink);
-    background: hsl(20 10% 12% / 0.05);
-  }
-  .brand-nav a:hover {
-    color: var(--ink);
-  }
-  .brand-nav .add {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    border: 1px solid var(--hair);
-    font-size: 14px;
-    color: var(--ink-3);
-    margin-left: 6px;
-  }
-
   .header-actions {
     display: flex;
     align-items: center;

@@ -33,6 +33,43 @@ describe("canonical tokens — B1", () => {
   });
 });
 
+describe("Home warm-operational-editorial tokens — P1-A", () => {
+  it("declares the supporting canvas zones as complete (hsl-wrapped) colors", () => {
+    // --canvas-2/3 are consumed bare (e.g. `background: var(--canvas-2)`), so
+    // they must carry a complete hsl() value, not a raw triple.
+    expect(css).toMatch(/--canvas-2:\s*hsl\(/);
+    expect(css).toMatch(/--canvas-3:\s*hsl\(/);
+  });
+
+  it("declares per-agent deep + tint identity raw-triples", () => {
+    // Raw triples (consumed via `hsl(var(--x))`) — must NOT be hsl-wrapped here.
+    expect(css).toMatch(/--agent-alex-deep:\s+\d/);
+    expect(css).not.toMatch(/--agent-alex-deep:\s*hsl\(/);
+    expect(css).toMatch(/--agent-alex-tint:\s+\d/);
+    expect(css).not.toMatch(/--agent-alex-tint:\s*hsl\(/);
+    expect(css).toMatch(/--agent-riley-deep:\s+\d/);
+    expect(css).not.toMatch(/--agent-riley-deep:\s*hsl\(/);
+    expect(css).toMatch(/--agent-riley-tint:\s+\d/);
+    expect(css).not.toMatch(/--agent-riley-tint:\s*hsl\(/);
+    expect(css).toMatch(/--agent-mira-deep:\s+\d/);
+    expect(css).not.toMatch(/--agent-mira-deep:\s*hsl\(/);
+    expect(css).toMatch(/--agent-mira-tint:\s+\d/);
+    expect(css).not.toMatch(/--agent-mira-tint:\s*hsl\(/);
+  });
+
+  it("declares the Home shadow + easing scale", () => {
+    expect(css).toMatch(/--shadow-card:\s/);
+    expect(css).toMatch(/--shadow-lift:\s/);
+    expect(css).toMatch(/--shadow-sheet:\s/);
+    expect(css).toMatch(/--ease-home:\s/);
+  });
+
+  it("declares the Home editorial font stacks", () => {
+    expect(css).toMatch(/--font-home-sans:\s*var\(--font-hanken\)/);
+    expect(css).toMatch(/--font-home-serif:\s*var\(--font-newsreader\)/);
+  });
+});
+
 describe("tailwind color keys — B2", () => {
   it("exposes action + agent identity keys", () => {
     const colors = (config.theme?.extend?.colors ?? {}) as Record<string, unknown>;

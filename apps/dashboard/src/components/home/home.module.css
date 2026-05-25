@@ -1,0 +1,475 @@
+/* =========================================================
+   HOME — Warm Operational Editorial (P1-A)
+   Module-level presentation for the six Home modules.
+   Mobile-first, light mode. Tokens come from globals.css per the
+   two-convention rule: editorial tokens consumed bare (var(--ink)),
+   shadcn raw-triples wrapped (hsl(var(--action))). Radii are literal
+   px to match the prototype's generous scale. Agent identity color
+   NEVER backs an action button — .btnPrimary is amber only (spec §9).
+   ========================================================= */
+
+/* ─── Column container — vertical stack ─── */
+.column {
+  width: 100%;
+  padding: 4px 18px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+@media (min-width: 768px) {
+  .column {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 32px 40px;
+    gap: 28px;
+  }
+}
+
+/* =========================================================
+   VERDICT — the one sentence that earns the screen
+   ========================================================= */
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 4px;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hair-soft);
+  max-width: 80px;
+}
+.hello {
+  font-size: 14px;
+  color: var(--ink-2);
+  letter-spacing: -0.005em;
+  font-weight: 500;
+}
+.line {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 60;
+  font-size: 36px;
+  line-height: 1.04;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+  font-weight: 500;
+  text-wrap: balance;
+  max-width: 22ch;
+  margin-top: -2px;
+}
+@media (min-width: 768px) {
+  .line {
+    font-size: 48px;
+    max-width: 26ch;
+    font-variation-settings: "opsz" 72;
+  }
+}
+.line em,
+.lineEm {
+  font-style: italic;
+}
+/* Agent-colored accent inside the verdict line — identity only, italic. */
+.accent {
+  color: hsl(var(--agent-alex));
+  font-style: italic;
+  font-weight: 500;
+}
+.proof {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 4px;
+}
+.proof::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.active .proof::before {
+  background: hsl(var(--action));
+}
+.calm .proof::before {
+  background: hsl(var(--agent-active));
+  box-shadow: 0 0 0 3px hsl(var(--agent-active) / 0.16);
+}
+.fallback .proof::before {
+  background: var(--ink-4);
+}
+.calm {
+  padding: 12px 4px 6px;
+}
+.calm .line {
+  font-size: 40px;
+  font-variation-settings: "opsz" 72;
+}
+@media (min-width: 768px) {
+  .calm .line {
+    font-size: 56px;
+  }
+}
+
+/* =========================================================
+   MODULE — shared section header (lowercase serif italic h2)
+   ========================================================= */
+.module {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.moduleH {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 2px;
+  border-bottom: 1px solid var(--hair-soft);
+}
+.moduleH h2 {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 24;
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.008em;
+  color: var(--ink);
+  text-transform: lowercase;
+  white-space: nowrap;
+  line-height: 1;
+}
+.moduleH .hMeta {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.moduleQuiet .moduleH h2 {
+  color: var(--ink-3);
+  font-size: 19px;
+  font-weight: 500;
+}
+/* Standalone "view all / see more" quiet link — used outside .moduleH context. */
+.moduleMore {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.moduleMore:hover {
+  color: var(--ink-1);
+}
+
+/* ─── card primitive ─── */
+.card {
+  background: hsl(var(--surface));
+  border: 1px solid var(--hair-soft);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: var(--shadow-card);
+}
+
+/* =========================================================
+   TEAM PULSE — chip ribbon
+   ========================================================= */
+.pulseRibbon {
+  display: flex;
+  gap: 8px;
+  padding: 2px 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -18px;
+}
+.pulseRibbon::-webkit-scrollbar {
+  display: none;
+}
+@media (min-width: 768px) {
+  .pulseRibbon {
+    margin: 0;
+    padding: 2px;
+  }
+}
+.agentChip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 9999px;
+  background: hsl(var(--surface));
+  border: 1px solid var(--hair-soft);
+  box-shadow: var(--shadow-card);
+  transition:
+    transform 200ms var(--ease-home),
+    border-color 200ms ease;
+}
+.agentChip:hover {
+  transform: translateY(-1px);
+  border-color: var(--hair);
+}
+.agentChip[data-disabled="true"] {
+  opacity: 0.65;
+}
+.agentChipAv {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 18;
+  font-style: italic;
+  color: #fff;
+  flex-shrink: 0;
+}
+.agentChip[data-agent="alex"] .agentChipAv {
+  background: hsl(var(--agent-alex));
+}
+.agentChip[data-agent="riley"] .agentChipAv {
+  background: hsl(var(--agent-riley));
+}
+.agentChip[data-agent="mira"] .agentChipAv {
+  background: hsl(var(--agent-mira));
+}
+.agentChip[data-disabled="true"] .agentChipAv {
+  background: var(--ink-4);
+}
+.agentChipName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.agentChipStatus {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  flex-shrink: 0;
+}
+.agentChipStatus[data-on="true"] {
+  background: hsl(var(--agent-active));
+  box-shadow: 0 0 0 3px hsl(var(--agent-active) / 0.18);
+}
+.agentChipNotSetUp {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* =========================================================
+   NEEDS YOU — decision cards live here (stack container)
+   ========================================================= */
+.needsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* =========================================================
+   QUIET LIST — While You Slept + Work in Progress
+   No ticker theater. Agent identity is a 3px stripe.
+   ========================================================= */
+.quietList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px;
+}
+.quietRow {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 12px;
+  padding: 9px 0;
+  align-items: baseline;
+  border-bottom: 1px solid var(--hair-soft);
+}
+.quietRow:last-child {
+  border-bottom: none;
+}
+.quietMark {
+  width: 3px;
+  height: 14px;
+  border-radius: 1.5px;
+  background: var(--ink-4);
+  align-self: center;
+}
+.quietRow[data-agent="alex"] .quietMark {
+  background: hsl(var(--agent-alex));
+}
+.quietRow[data-agent="riley"] .quietMark {
+  background: hsl(var(--agent-riley));
+}
+.quietRow[data-agent="mira"] .quietMark {
+  background: hsl(var(--agent-mira));
+}
+/* Split stripe — only on a real typed handoff (riley → alex). */
+.quietRow[data-handoff="true"] .quietMark {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--agent-riley)) 0 50%,
+    hsl(var(--agent-alex)) 50% 100%
+  );
+}
+.quietText {
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+}
+.quietText b {
+  font-weight: 600;
+}
+.quietTime {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+
+/* =========================================================
+   WORK IN PROGRESS — quiet stack container
+   ========================================================= */
+.wip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* =========================================================
+   PERMISSIONS — one quiet line, not a module
+   ========================================================= */
+.permsline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: 14px;
+}
+.permslineText {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.4;
+  letter-spacing: -0.003em;
+}
+.permslineText b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.permslineLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.permslineLink:hover {
+  color: var(--ink);
+}
+
+/* ─── Focus-visible rings for Home interactive links ─── */
+.moduleMore:focus-visible,
+.permslineLink:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   BUTTON SYSTEM — the ONE amber primary (identity color
+   may NEVER back an action button — spec §9).
+   ========================================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-radius: 9999px;
+  font-family: var(--font-home-sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition:
+    transform 160ms var(--ease-home),
+    background 160ms ease,
+    box-shadow 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+.btnPrimary {
+  background: hsl(var(--action));
+  color: hsl(var(--action-foreground));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(80, 40, 0, 0.2),
+    0 2px 4px rgba(168, 101, 15, 0.25),
+    0 6px 16px rgba(201, 123, 26, 0.18);
+}
+.btnPrimary:hover {
+  background: hsl(var(--action-hover));
+  transform: translateY(-1px);
+}
+.btnPrimary:active {
+  transform: translateY(0);
+}
+.btnGhost {
+  background: transparent;
+  color: var(--ink-2);
+  padding: 11px 14px;
+}
+.btnGhost:hover {
+  color: var(--ink);
+  background: var(--canvas-2);
+}
+.btnSecondary {
+  background: var(--canvas-2);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+}
+.btnSecondary:hover {
+  background: hsl(var(--surface));
+}

@@ -15,9 +15,6 @@ vi.mock("@/hooks/use-governance", () => ({
   useResume: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, error: null }),
 }));
 
-vi.mock("@/lib/api-client/agents-server", () => ({
-  fetchEnabledAgentsServer: vi.fn().mockResolvedValue(["alex"]),
-}));
 vi.mock("../inbox-drawer", () => ({
   InboxDrawer: () => (
     <button type="button" className="folio-link">

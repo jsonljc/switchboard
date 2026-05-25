@@ -1,0 +1,168 @@
+/* =========================================================
+   WEEK NOTE — an employee email, not a dashboard
+   ========================================================= */
+.weeknote {
+  background: hsl(var(--surface));
+  border: 1px solid var(--hair-soft);
+  border-radius: 28px;
+  padding: 22px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition:
+    transform 220ms var(--ease-home),
+    border-color 220ms ease;
+  position: relative;
+  overflow: hidden;
+}
+.weeknoteHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.weeknoteFrom {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.weeknoteFromAv {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--week-author-color, hsl(var(--agent-alex)));
+  color: #fff;
+  font-family: var(--font-home-serif);
+  font-style: italic;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.weeknoteFromName {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.weeknoteFromMeta {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.weeknoteTime {
+  font-feature-settings: "tnum";
+}
+.weeknoteBody {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 18;
+  font-size: 19px;
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  color: var(--ink);
+  font-weight: 400;
+  text-wrap: pretty;
+}
+@media (min-width: 768px) {
+  .weeknoteBody {
+    font-size: 22px;
+    font-variation-settings: "opsz" 22;
+  }
+}
+.weeknoteBody em {
+  font-style: italic;
+  font-weight: 500;
+}
+.num {
+  font-weight: 600;
+  font-feature-settings: "tnum";
+}
+.numUp {
+  color: hsl(var(--agent-active));
+}
+.numDown {
+  color: hsl(var(--destructive));
+}
+/* Editorial drop cap — only on the first paragraph of the note. */
+.weeknoteBody.dropcap::first-letter {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 72;
+  font-style: italic;
+  font-size: 2.8em;
+  font-weight: 500;
+  float: left;
+  line-height: 0.85;
+  padding: 0.06em 0.14em 0 0;
+  color: var(--week-author-color, hsl(var(--agent-alex)));
+}
+/* Sign-off mark at the end — monogram + name. */
+.weeknoteSignoff {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair-soft);
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 18;
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-2);
+  letter-spacing: -0.005em;
+  font-weight: 400;
+}
+.weeknoteSignoff::before {
+  content: "—";
+  color: var(--ink-3);
+  margin-right: 2px;
+  font-style: normal;
+}
+.weeknoteSignoffMark {
+  font-family: var(--font-home-serif);
+  font-style: italic;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--week-author-color, hsl(var(--agent-alex)));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: -2px;
+}
+.weeknotePs {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 16;
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink-2);
+  padding-top: 8px;
+  border-top: 1px solid var(--hair-soft);
+}
+.weeknoteFoot {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  letter-spacing: -0.005em;
+}
+.weeknoteFoot:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+.weeknote:hover { transform: translateY(-2px); border-color: var(--hair); }
