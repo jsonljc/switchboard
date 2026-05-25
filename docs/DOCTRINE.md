@@ -85,6 +85,8 @@ Idempotency is enforced at `PlatformIngress` via `idempotencyKey` on `SubmitWork
 
 Every async execution path (pipeline mode, workflow steps, channel messages) must have a dead-letter destination. `FailedMessage` (channels), `OutboxEvent` (events), and pipeline-level error handling must cover every case.
 
+**Inngest functions.** Every Inngest function with `retries > 1` MUST define an `onFailure` handler that (a) records an `infrastructure.job.retry_exhausted` AuditLedger entry carrying the `AsyncFailureEnvelope`, and (b) for classes A–D emits a domain-readable `*.failed` dead-letter event (Class E may omit the event when no downstream consumer exists). Critical-class functions additionally raise an `OperatorAlerter` alert. See `docs/superpowers/specs/2026-05-25-inngest-failure-contract-design.md`.
+
 ### 8. Human override is first-class
 
 Approval, undo, and emergency halt are not edge cases. They are core lifecycle operations with the same persistence, tracing, and governance guarantees as normal execution.
