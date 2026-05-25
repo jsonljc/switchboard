@@ -2,9 +2,34 @@ import { describe, expect, it, vi } from "vitest";
 import {
   backfillJobOnce,
   executeBackfill,
+  createPcdRegistryBackfillCron,
   type BackfillStores,
   type PcdRegistryBackfillDeps,
 } from "../pcd-registry-backfill.js";
+import type { AsyncFailureContext } from "@switchboard/core";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("inngest", () => ({
+  Inngest: vi.fn().mockImplementation(() => ({
+    createFunction: createFunctionSpy,
+  })),
+}));
+
+function makeFailureContext(): AsyncFailureContext {
+  return {
+    auditLedger: {
+      record: vi.fn().mockResolvedValue({}),
+    } as unknown as AsyncFailureContext["auditLedger"],
+    operatorAlerter: {
+      alert: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AsyncFailureContext["operatorAlerter"],
+    inngest: { send: vi.fn().mockResolvedValue(undefined) },
+  };
+}
 
 function makeStores() {
   return {
@@ -95,6 +120,7 @@ describe("executeBackfill", () => {
       ])
       .mockResolvedValueOnce([]);
     const deps: PcdRegistryBackfillDeps = {
+      failure: makeFailureContext(),
       fetchJobsBatch,
       stores: stores as unknown as BackfillStores,
     };
@@ -102,5 +128,27 @@ describe("executeBackfill", () => {
     expect(result.processed).toBe(2);
     expect(fetchJobsBatch).toHaveBeenCalledTimes(2);
     expect(stores.jobStore.markRegistryBackfilled).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createPcdRegistryBackfillCron (Class E)
+// ---------------------------------------------------------------------------
+
+function makeMinimalBackfillDeps(): PcdRegistryBackfillDeps {
+  return {
+    failure: makeFailureContext(),
+    fetchJobsBatch: vi.fn().mockResolvedValue([]),
+    stores: makeStores() as unknown as BackfillStores,
+  };
+}
+
+describe("createPcdRegistryBackfillCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config", () => {
+    createFunctionSpy.mockClear();
+    createPcdRegistryBackfillCron(makeMinimalBackfillDeps());
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
   });
 });

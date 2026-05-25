@@ -7,6 +7,7 @@ import {
   createWeeklyAuditDispatcher,
   createDailyCheckDispatcher,
   createWeeklyAuditCron,
+  createDailyCheckCron,
   createDailySignalHealthCron,
   createRileyOutcomeAttributionDispatch,
   executeRileyOutcomeAttributionDispatch,
@@ -589,6 +590,29 @@ describe("createRileyOutcomeAttributionDispatch — onFailure wiring", () => {
   it("does not set onFailure key when no callback provided", () => {
     createFunctionSpy.mockClear();
     createRileyOutcomeAttributionDispatch(makeMinimalRileyDispatchDeps());
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["onFailure"]).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createDailyCheckCron (Class E)
+// ---------------------------------------------------------------------------
+
+describe("createDailyCheckCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config when provided", () => {
+    createFunctionSpy.mockClear();
+    const onFailure = async (_arg: unknown) => {};
+    createDailyCheckCron(makeMinimalCronDeps(), onFailure);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("does not set onFailure key when no callback provided", () => {
+    createFunctionSpy.mockClear();
+    createDailyCheckCron(makeMinimalCronDeps());
 
     const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(config?.["onFailure"]).toBeUndefined();

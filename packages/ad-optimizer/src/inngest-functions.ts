@@ -178,13 +178,17 @@ export function createWeeklyAuditCron(
   );
 }
 
-export function createDailyCheckCron(deps: CronDependencies) {
+export function createDailyCheckCron(
+  deps: CronDependencies,
+  onFailure?: (arg: unknown) => Promise<void>,
+) {
   return inngestClient.createFunction(
     {
       id: "ad-optimizer-daily-check",
       name: "Ad Optimizer Daily Check",
       retries: 2,
       triggers: [{ cron: "0 8 * * *" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ step }) => {
       await executeDailyCheck(step as unknown as StepTools, deps);

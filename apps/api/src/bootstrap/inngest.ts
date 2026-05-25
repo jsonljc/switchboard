@@ -300,6 +300,16 @@ export async function registerInngest(
     metrics: getMetrics(),
   };
 
+  // ---------------------------------------------------------------------------
+  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
+  // wiring for Class-A, Class-B, and Class-E Inngest functions (Phase 3B failure contract).
+  // ---------------------------------------------------------------------------
+  const asyncFailure: AsyncFailureContext = {
+    auditLedger: app.auditLedger,
+    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
+    inngest: { send: (e) => inngestClient.send(e) },
+  };
+
   const dailyPatternDecayCron = inngestClient.createFunction(
     {
       id: "memory-daily-pattern-decay",
@@ -311,21 +321,20 @@ export async function registerInngest(
       // Function-level idempotency: combined with the DB-level lastDecayedAt
       // guard, double-firing is impossible across orchestrator and DB layers.
       idempotency: `pattern-decay-{event.ts | dateMath "yyyy-MM-dd"}`,
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "memory-daily-pattern-decay",
+          riskCategory: "low",
+          alert: false,
+          emitEvent: false,
+        },
+        asyncFailure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step }) => {
       await executeDailyPatternDecay(step as unknown as PatternDecayStepTools, patternDecayDeps);
     },
   );
-
-  // ---------------------------------------------------------------------------
-  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
-  // wiring for Class-A and Class-B Inngest functions (Phase 3B failure contract).
-  // ---------------------------------------------------------------------------
-  const asyncFailure: AsyncFailureContext = {
-    auditLedger: app.auditLedger,
-    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
-    inngest: { send: (e) => inngestClient.send(e) },
-  };
 
   // Meta token refresh cron dependencies
   const metaTokenRefreshDeps: MetaTokenRefreshDeps = {
@@ -529,6 +538,7 @@ export async function registerInngest(
   const productIdentityStore = new PrismaProductIdentityStore(app.prisma);
 
   const pcdRegistryBackfillDeps: PcdRegistryBackfillDeps = {
+    failure: asyncFailure,
     fetchJobsBatch: async (limit, orgId) => {
       const rows = await app.prisma!.creativeJob.findMany({
         where: {
@@ -760,7 +770,18 @@ export async function registerInngest(
           asyncFailure,
         ) as (arg: unknown) => Promise<void>,
       ),
-      createDailyCheckCron(adOptimizerDeps),
+      createDailyCheckCron(
+        adOptimizerDeps,
+        makeOnFailureHandler(
+          {
+            functionId: "ad-optimizer-daily-check",
+            riskCategory: "low",
+            alert: false,
+            emitEvent: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
       createDailySignalHealthCron(
         signalHealthDeps,
         makeOnFailureHandler(
@@ -780,6 +801,7 @@ export async function registerInngest(
       createLeadRetryCron(leadRetryDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
       createLifecycleStalledSweepCron({
+        failure: asyncFailure,
         prisma: app.prisma,
         writer: lifecycleWriter,
         history: lifecycleHistory,
