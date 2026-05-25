@@ -705,6 +705,8 @@ export async function buildServer() {
   // potentially-undefined stores is safe.
   if (prismaClient) {
     const { bootstrapOperatorIntents } = await import("./bootstrap/operator-intents.js");
+    const { PrismaOutboxStore } = await import("@switchboard/db");
+    const prismaOutbox = new PrismaOutboxStore(prismaClient);
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
@@ -712,6 +714,11 @@ export async function buildServer() {
       recommendationStore: app.recommendationStore,
       disqualificationHook: app.disqualificationHook ?? undefined,
       consentService: skillModeConsentService ?? undefined,
+      revenueStore: app.revenueEventStore,
+      outboxWriter: {
+        write: (eventId, type, payload) =>
+          prismaOutbox.write(eventId, type, payload).then(() => {}),
+      },
       logger: app.log,
     });
   }

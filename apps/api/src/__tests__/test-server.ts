@@ -8,6 +8,7 @@ import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
+import { revenueRoutes } from "../routes/revenue.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
@@ -128,6 +129,13 @@ export interface BuildTestServerOptions {
   /** Provide a mock ContactConsentReader for admin-consent ingress tests (Phase 1b.4).
    * Required alongside `consentService` to register admin-consent routes. */
   consentReader?: ContactConsentReader;
+  /** Provide a mock RevenueStore for revenue ingress tests (#654-B).
+   * When provided alongside `outboxWriter`, the revenue intent is registered
+   * and `app.revenueEventStore` is decorated with this store (instead of TestRevenueStore). */
+  revenueStore?: RevenueStore;
+  /** Provide a mock OutboxWriter for revenue ingress tests (#654-B).
+   * Required alongside `revenueStore` for the revenue intent to register. */
+  outboxWriter?: import("../bootstrap/operator-intents/revenue.js").OutboxWriter;
 }
 
 export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
@@ -311,7 +319,10 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
         : new TestOpportunityStore(),
     );
   }
-  app.decorate("revenueEventStore", new TestRevenueStore());
+  app.decorate(
+    "revenueEventStore",
+    options.revenueStore !== undefined ? options.revenueStore : new TestRevenueStore(),
+  );
   app.decorate("triggerStore", new TestTriggerStore());
 
   // Disqualification hook — provide via options for Phase 1b.3 ingress tests.
@@ -436,6 +447,8 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     recommendationStore: app.recommendationStore,
     disqualificationHook: app.disqualificationHook ?? undefined,
     consentService: options.consentService,
+    revenueStore: app.revenueEventStore ?? undefined,
+    outboxWriter: options.outboxWriter,
   });
 
   const platformLifecycle = new PlatformLifecycle({
@@ -463,6 +476,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
+  await app.register(revenueRoutes, { prefix: "/api" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   await app.register(winsRoute, { prefix: "/api/dashboard" });

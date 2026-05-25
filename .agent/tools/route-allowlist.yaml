@@ -118,8 +118,6 @@
 # Revenue / scheduled reports / outbound webhook registry
 # ---------------------------------------------------------------------------
 
-- path: "apps/api/src/routes/revenue.ts"
-  reason: "Revenue event recording — operator/integration data-ingestion endpoint (writes to outbox); events, not agent-executed actions."
 - path: "apps/api/src/routes/scheduled-reports.ts"
   reason: "Scheduled-report CRUD (cron-based reporting jobs); reporting configuration, not a governed agent action."
 - path: "apps/api/src/routes/webhooks.ts"
