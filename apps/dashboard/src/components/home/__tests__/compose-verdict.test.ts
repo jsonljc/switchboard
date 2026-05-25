@@ -23,10 +23,25 @@ describe("composeVerdict — eyebrow & salutation", () => {
     expect(m.eyebrow).toMatch(/9:47 AM/);
   });
 
+  it("eyebrow at midnight (hour 0) shows 12:47 AM", () => {
+    const m = composeVerdict({ ...baseSignals, now: at(0) });
+    expect(m.eyebrow).toMatch(/12:47 AM/);
+  });
+
+  it("eyebrow at noon (hour 12) shows 12:47 PM", () => {
+    const m = composeVerdict({ ...baseSignals, now: at(12) });
+    expect(m.eyebrow).toMatch(/12:47 PM/);
+  });
+
   it("says Good morning before noon", () => {
     const m = composeVerdict({ ...baseSignals, now: at(8) });
     expect(m.salutation).toMatch(/Good morning/);
     expect(m.salutation).toContain("Dana");
+  });
+
+  it("says Good morning at hour 0 (midnight boundary)", () => {
+    const m = composeVerdict({ ...baseSignals, now: at(0) });
+    expect(m.salutation).toMatch(/Good morning/);
   });
 
   it("says Good afternoon from 12:00 to 16:59", () => {
@@ -102,9 +117,10 @@ describe("composeVerdict — ACTIVE shape (decisionCount > 0)", () => {
     const m = composeVerdict({ ...baseSignals, decisionCount: 1, now: at(9) });
     const line = m.line as { pre: string; em: string; post: string };
     expect(line.pre).toMatch(/One thing needs you/);
-    // em and post still exist but post has no "has it ready" since name is missing
+    // em and post are empty — the period is already in pre
     expect(line.em).toBe("");
-    expect(line.post).toBe(".");
+    expect(line.post).toBe("");
+    expect(line.pre + line.em + line.post).not.toContain("..");
   });
 
   it("renders verdict without agent name tail when topAgentName is absent (N decisions)", () => {
@@ -113,7 +129,8 @@ describe("composeVerdict — ACTIVE shape (decisionCount > 0)", () => {
     // No "start with {name}" — just the count portion
     expect(line.pre).toMatch(/4 things need you/);
     expect(line.em).toBe("");
-    expect(line.post).toBe(".");
+    expect(line.post).toBe("");
+    expect(line.pre + line.em + line.post).not.toContain("..");
   });
 
   it("leaves accentAgent undefined when topAgentKey is absent", () => {

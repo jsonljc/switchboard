@@ -1,5 +1,4 @@
-"use client";
-
+import type { CSSProperties } from "react";
 import type { VerdictModel } from "./types";
 import styles from "./home.module.css";
 
@@ -16,7 +15,7 @@ interface VerdictProps {
 export function Verdict({ model }: VerdictProps) {
   const { shape, eyebrow, salutation, line, proof, accentAgent } = model;
 
-  const accentStyle: React.CSSProperties | undefined = accentAgent
+  const accentStyle: CSSProperties | undefined = accentAgent
     ? { color: `hsl(var(--agent-${accentAgent}))` }
     : undefined;
 

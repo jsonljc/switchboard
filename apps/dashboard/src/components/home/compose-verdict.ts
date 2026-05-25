@@ -104,7 +104,7 @@ export function composeVerdict(signals: VerdictSignals): VerdictModel {
       } else {
         pre = "One thing needs you.";
         em = "";
-        post = ".";
+        post = "";
       }
     } else {
       const word = numberWord(decisionCount);
@@ -115,7 +115,7 @@ export function composeVerdict(signals: VerdictSignals): VerdictModel {
       } else {
         pre = `${word} things need you.`;
         em = "";
-        post = ".";
+        post = "";
       }
     }
 
