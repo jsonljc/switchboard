@@ -1,6 +1,7 @@
 export type InfrastructureErrorType =
   | "governance_eval_exception"
   | "trace_persist_failed"
+  | "execution_exception"
   | "work_trace_locked_violation"
   | "work_trace_integrity_mismatch"
   | "work_trace_integrity_missing_anchor"
