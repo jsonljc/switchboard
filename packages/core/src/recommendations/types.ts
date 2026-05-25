@@ -31,6 +31,11 @@ export interface Recommendation {
   confidence: number;
   dollarsAtRisk: number;
   riskLevel: "low" | "medium" | "high";
+  /** Risk contract booleans. Optional for backwards-compat with rows persisted before E1. */
+  externalEffect?: boolean;
+  financialEffect?: boolean;
+  clientFacing?: boolean;
+  requiresConfirmation?: boolean;
   surface: RecommendationSurface;
   status: RecommendationStatus;
   parameters: Record<string, unknown>;

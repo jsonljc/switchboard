@@ -36,5 +36,17 @@ export interface Decision {
     riskLevel?: "low" | "medium" | "high";
     /** Recommendations only. */
     undoableUntil?: Date;
+    /**
+     * Five-field risk contract. Present on all approvals (from recommendation row)
+     * and handoffs (derived conservative defaults). Absent on legacy decisions
+     * predating this field — UI treats absence as unsafe (requires confirmation).
+     */
+    riskContract?: {
+      riskLevel: "low" | "medium" | "high";
+      externalEffect: boolean;
+      financialEffect: boolean;
+      clientFacing: boolean;
+      requiresConfirmation: boolean;
+    };
   };
 }
