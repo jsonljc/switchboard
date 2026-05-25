@@ -618,7 +618,8 @@ export async function bootstrapSkillMode(
   if (!consentPostureCache) missingGateDeps.push("consentPostureCache");
   // 1d whatsapp-window-gate deps
   if (!whatsAppWindowPostureCache) missingGateDeps.push("whatsAppWindowPostureCache");
-  // context-resolver construction guard (catches catastrophic construction failure)
+  // Construction-presence invariant: mirrors the other gate-dep checks. new ContextResolverImpl
+  // throws synchronously on failure, so this is a belt-and-suspenders assertion, not a real catch.
   if (!contextResolver) missingGateDeps.push("contextResolver");
   if (missingGateDeps.length > 0) {
     throw new Error(`SkillMode: gate deps incomplete — missing: ${missingGateDeps.join(", ")}`);
