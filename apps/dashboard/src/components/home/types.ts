@@ -18,6 +18,8 @@ export interface VerdictModel {
   salutation: string;
   line: { pre: string; em: string; post: string } | string;
   proof: string;
+  /** When set, the `em` accent is colored with `hsl(var(--agent-{accentAgent}))`. Calm/fallback leave this undefined. */
+  accentAgent?: AgentKey;
 }
 
 /** Raw inputs a verdict composer reads to pick shape + copy. Never rendered directly. */
@@ -28,6 +30,12 @@ export interface VerdictSignals {
   workingCount: number;
   setUpCount: number;
   ownerName?: string;
+  /** The display name of the top-priority agent (e.g. "Alex"). Used in the active verdict line. */
+  topAgentName?: string;
+  /** The key of the top-priority agent (e.g. "alex"). Used to pick the identity accent color. */
+  topAgentKey?: AgentKey;
+  /** When true, core signals are not yet available; composer uses the FALLBACK shape. */
+  unavailable?: boolean;
   now?: Date;
 }
 
