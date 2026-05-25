@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Switchboard — Morning Check-in (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --cream: #F7F4EE;
+    --cream-deep: #EFEAE0;
+    --card: #FFFDF9;
+    --ink: #2B2722;
+    --ink-soft: #6E655A;
+    --ink-faint: #9A9085;
+    --hairline: #ECE5D8;
+    --hairline-strong: #E1D9C9;
+
+    --amber: #D98A28;
+    --amber-deep: #BE7415;
+    --amber-tint: #FBF1E0;
+
+    --coral: #DC6F54;
+    --coral-tint: #FBEAE3;
+    --teal: #2C9B8B;
+    --teal-tint: #E1F0ED;
+    --violet: #8A7CB7;
+    --violet-tint: #EEEAF6;
+
+    --green: #3E9D67;
+    --grey-dot: #B6AFA4;
+    --critical: #C2563F;
+
+    --shadow-card: 0 1px 2px rgba(43,39,34,.04), 0 8px 24px rgba(43,39,34,.05);
+    --shadow-sheet: 0 -8px 40px rgba(43,39,34,.16);
+    --radius: 20px;
+    --radius-sm: 14px;
+    font-size: 16px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #F3ECDF, transparent),
+      #E7E0D2;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 26px 14px 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .serif { font-family: "Fraunces", Georgia, serif; font-optical-sizing: auto; }
+
+  /* ---- prototype state control (outside the phone) ---- */
+  .proto-bar {
+    width: 100%;
+    max-width: 412px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 16px;
+    color: #6f6557;
+  }
+  .proto-bar .label { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; font-weight: 600; }
+  .seg {
+    display: inline-flex;
+    background: rgba(255,255,255,.65);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .seg button {
+    border: 0; background: transparent; cursor: pointer;
+    font: inherit; font-size: 13px; font-weight: 600;
+    color: #80766a; padding: 6px 14px; border-radius: 999px;
+    transition: all .18s ease;
+  }
+  .seg button.on { background: var(--ink); color: #fff; }
+
+  /* ---- phone frame ---- */
+  .phone {
+    width: 100%;
+    max-width: 412px;
+    height: 860px;
+    max-height: calc(100vh - 120px);
+    background: var(--cream);
+    border-radius: 44px;
+    box-shadow: 0 0 0 11px #1c1916, 0 0 0 13px #2c2824, 0 40px 90px rgba(28,25,22,.45);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 132px; height: 26px; background: #1c1916;
+    border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;
+    z-index: 60;
+  }
+
+  /* ---- top bar ---- */
+  .topbar {
+    flex: 0 0 auto;
+    padding: 40px 20px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, var(--cream) 70%, rgba(247,244,238,0));
+    z-index: 30;
+  }
+  .wordmark { font-weight: 700; font-size: 15px; letter-spacing: -.01em; color: var(--ink); display:flex; align-items:center; gap:7px;}
+  .wordmark .glyph {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: conic-gradient(from 200deg, var(--coral), var(--amber), var(--teal), var(--violet), var(--coral));
+    display:inline-block;
+  }
+  .top-actions { display: flex; align-items: center; gap: 6px; }
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid var(--hairline); background: var(--card);
+    display: grid; place-items: center; cursor: pointer; position: relative;
+    color: var(--ink-soft); transition: transform .15s ease;
+  }
+  .icon-btn:active { transform: scale(.92); }
+  .badge-dot {
+    position: absolute; top: 6px; right: 7px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--critical); border: 2px solid var(--card);
+  }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(150deg,#3a342c,#5b5246); color: #fff;
+    display: grid; place-items: center; font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+
+  /* ---- scroll area ---- */
+  .scroll {
+    flex: 1 1 auto; overflow-y: auto; overflow-x: hidden;
+    padding: 4px 18px 120px;
+    scroll-behavior: smooth;
+  }
+  .scroll::-webkit-scrollbar { width: 0; }
+
+  /* ---- module shells ---- */
+  .module { margin-top: 22px; animation: rise .5s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px);} to {opacity:1; transform: none;} }
+  .mod-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 0 2px 11px;
+  }
+  .mod-title {
+    font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .mod-link { font-size: 13px; font-weight: 600; color: var(--amber-deep); cursor: pointer; text-decoration: none; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--hairline);
+    border-radius: var(--radius); box-shadow: var(--shadow-card);
+  }
+
+  /* ---- greeting ---- */
+  .greeting { padding-top: 6px; }
+  .greet-eyebrow { color: var(--ink-soft); font-size: 15px; font-weight: 500; }
+  .greet-hero { font-size: 29px; line-height: 1.12; margin: 4px 0 0; font-weight: 500; letter-spacing: -.01em; }
+
+  /* ---- team pulse ---- */
+  .pulse { display: flex; gap: 9px; }
+  .chip {
+    flex: 1 1 0; min-width: 0;
+    background: var(--card); border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm); padding: 11px 11px 12px;
+    display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+    box-shadow: var(--shadow-card); transition: transform .15s ease, border-color .15s ease;
+    position: relative;
+  }
+  .chip:active { transform: scale(.97); }
+  .chip-top { display: flex; align-items: center; gap: 8px; }
+  .ava {
+    width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto;
+    display: grid; place-items: center; font-weight: 600; font-size: 14px; color: #fff;
+    position: relative;
+  }
+  .ava.coral { background: linear-gradient(150deg,#E58468,#CF5d40);}
+  .ava.teal  { background: linear-gradient(150deg,#37ad9c,#1f8576);}
+  .ava.violet{ background: linear-gradient(150deg,#9b8dc6,#7868a8);}
+  .ava.off   { background: #DDD6C9; color: #8c8275;}
+  .status-dot {
+    position: absolute; right: -2px; bottom: -2px;
+    width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid var(--card);
+  }
+  .dot-green { background: var(--green); }
+  .dot-grey  { background: var(--grey-dot); }
+  .chip-name { font-weight: 600; font-size: 14px; }
+  .chip-status { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+  .chip-status.off { color: var(--ink-faint); }
+
+  /* ---- needs you cards ---- */
+  .stack { position: relative; }
+  .decision-wrap { position: relative; margin-bottom: 12px; border-radius: var(--radius); }
+  .swipe-bg {
+    position: absolute; inset: 0; border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; font-weight: 700; font-size: 14px; overflow: hidden;
+  }
+  .swipe-bg .approve-side { color: #fff; display: flex; align-items: center; gap: 8px; opacity: 0; }
+  .swipe-bg .skip-side { color: var(--ink-soft); display: flex; align-items: center; gap: 8px; opacity: 0; margin-left: auto;}
+  .swipe-bg.low { background: linear-gradient(90deg, var(--green), #4cae76); }
+  .swipe-bg.skip-fill { background: var(--cream-deep); }
+
+  .decision {
+    position: relative; background: var(--card); border: 1px solid var(--hairline);
+    border-radius: var(--radius); padding: 15px 16px 14px;
+    box-shadow: var(--shadow-card); touch-action: pan-y; user-select: none;
+    will-change: transform;
+  }
+  .dec-top { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+  .dec-ava { width: 26px; height: 26px; border-radius: 50%; display:grid; place-items:center; font-size:11px; font-weight:600; color:#fff; flex:0 0 auto;}
+  .dec-from { font-size: 12.5px; color: var(--ink-soft); font-weight: 500; }
+  .dec-from b { color: var(--ink); font-weight: 600; }
+  .risk-pill {
+    margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+  }
+  .risk-low   { background: #E7F3EC; color: #2f7d4f; }
+  .risk-med   { background: #FBEFD9; color: #9a6c12; }
+  .risk-high  { background: #F8E3DC; color: #b04527; }
+  .dec-title { font-size: 16.5px; font-weight: 600; line-height: 1.25; margin: 2px 0 4px; letter-spacing: -.01em;}
+  .dec-why { font-size: 13.5px; color: var(--ink-soft); line-height: 1.4; }
+  .dec-preview {
+    margin-top: 11px; background: var(--cream); border: 1px solid var(--hairline);
+    border-radius: 12px; padding: 11px 12px; font-size: 13.5px; line-height: 1.45; color: var(--ink);
+  }
+  .dec-preview .lbl { font-size: 11px; font-weight: 700; letter-spacing:.05em; text-transform: uppercase; color: var(--ink-faint); display:block; margin-bottom: 4px;}
+  .flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+  .flag {
+    font-size: 11px; font-weight: 600; color: var(--ink-soft);
+    background: var(--cream); border: 1px solid var(--hairline);
+    padding: 3px 8px; border-radius: 8px; display: flex; align-items: center; gap: 5px;
+  }
+
+  .dec-actions { display: flex; gap: 9px; margin-top: 13px; align-items: center; }
+  .btn {
+    border: 0; cursor: pointer; font: inherit; font-weight: 600; font-size: 14.5px;
+    border-radius: 12px; padding: 12px 14px; transition: transform .12s ease, background .15s ease;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-amber { background: var(--amber); color: #fff; flex: 1; box-shadow: 0 2px 0 var(--amber-deep); }
+  .btn-amber.glow { animation: glow 1.4s ease-in-out infinite; }
+  @keyframes glow { 0%,100%{ box-shadow: 0 2px 0 var(--amber-deep), 0 0 0 0 rgba(217,138,40,.0);} 50%{ box-shadow: 0 2px 0 var(--amber-deep), 0 0 0 7px rgba(217,138,40,.18);} }
+  .btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--hairline-strong); }
+  .swipe-hint { font-size: 11.5px; color: var(--ink-faint); text-align: center; margin: 2px 0 0; display:flex; align-items:center; justify-content:center; gap:6px;}
+
+  /* calm + empty */
+  .calm-card {
+    background: linear-gradient(160deg,#FFFDF9,#FBF6EC);
+    border: 1px solid var(--hairline); border-radius: var(--radius);
+    padding: 18px 18px; box-shadow: var(--shadow-card); text-align: left;
+    display: flex; align-items: center; gap: 13px;
+  }
+  .calm-check { width: 38px; height: 38px; border-radius: 50%; background: #E7F3EC; color: var(--green); display:grid; place-items:center; flex:0 0 auto;}
+  .calm-title { font-weight: 600; font-size: 16px; }
+  .calm-sub { font-size: 13.5px; color: var(--ink-soft); margin-top: 1px;}
+
+  /* this week editorial */
+  .week {
+    background: var(--card); border: 1px solid var(--hairline);
+    border-radius: var(--radius); padding: 20px 19px 18px; box-shadow: var(--shadow-card);
+    position: relative; overflow: hidden;
+  }
+  .week::after {
+    content:""; position:absolute; right:-30px; top:-30px; width:140px; height:140px;
+    background: radial-gradient(circle, var(--coral-tint), transparent 70%); opacity:.7;
+  }
+  .week-eyebrow { font-size: 12px; font-weight: 700; letter-spacing:.08em; text-transform: uppercase; color: var(--coral); display:flex; align-items:center; gap:7px; position:relative;}
+  .week-stat { font-size: 40px; line-height: 1; margin: 13px 0 2px; font-weight: 500; letter-spacing:-.02em; position:relative;}
+  .week-stat .unit { font-size: 17px; color: var(--ink-soft); font-weight: 500;}
+  .week-quote { font-size: 18px; line-height: 1.4; margin: 12px 0 0; font-weight: 400; font-style: italic; color: var(--ink); position:relative;}
+  .week-sign { margin-top: 13px; display: flex; align-items: center; gap: 8px; position:relative;}
+  .week-sign .nm { font-size: 13px; color: var(--ink-soft); font-weight: 600;}
+  .week.hero { padding: 26px 22px 24px; background: linear-gradient(165deg,#FFFDF9, #FBF3E9);}
+  .week.hero .week-stat { font-size: 52px; }
+  .week.hero .week-quote { font-size: 21px; }
+
+  .skeleton-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg,#EFE8DC,#F6F1E7,#EFE8DC); background-size: 200% 100%; animation: shimmer 1.4s infinite; margin: 8px 0;}
+  @keyframes shimmer { 0%{background-position: 200% 0;} 100%{background-position:-200% 0;} }
+
+  /* while you slept / wip lists */
+  .feed { background: var(--card); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: var(--shadow-card); overflow: hidden;}
+  .feed-row { display: flex; gap: 11px; padding: 13px 16px; border-bottom: 1px solid var(--hairline); align-items: flex-start;}
+  .feed-row:last-child { border-bottom: 0; }
+  .feed-time { font-size: 11.5px; color: var(--ink-faint); font-weight: 600; min-width: 52px; padding-top: 1px; flex:0 0 auto;}
+  .feed-text { font-size: 14px; line-height: 1.4; }
+  .feed-text b { font-weight: 600; }
+  .mini-dot { width: 7px; height: 7px; border-radius: 50%; display:inline-block; margin-right:2px; vertical-align: middle;}
+
+  .wip-row { display: flex; gap: 11px; padding: 14px 16px; align-items: center; border-bottom: 1px solid var(--hairline);}
+  .wip-row:last-child { border-bottom: 0;}
+  .wip-spinner { width: 9px; height: 9px; border-radius: 50%; flex:0 0 auto; position: relative;}
+  .wip-spinner::after { content:""; position:absolute; inset:-5px; border-radius:50%; border: 1.5px solid currentColor; opacity:.25; animation: ping 1.8s ease-out infinite;}
+  @keyframes ping { 0%{ transform: scale(.6); opacity:.5;} 100%{ transform: scale(1.3); opacity:0;} }
+  .wip-text { font-size: 14px; line-height: 1.35;}
+  .chain { display:flex; align-items:center; gap:6px; margin-top:5px; flex-wrap:wrap;}
+  .chain .node { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;}
+  .chain .arr { color: var(--ink-faint); font-size: 12px; }
+
+  /* permissions */
+  .perm-row { display: flex; gap: 11px; padding: 13px 16px; border-bottom: 1px solid var(--hairline); align-items: flex-start;}
+  .perm-row:last-child { border-bottom: 0;}
+  .perm-name { font-weight: 600; font-size: 14px; min-width: 46px; flex:0 0 auto;}
+  .perm-text { font-size: 13.5px; color: var(--ink-soft); line-height: 1.4;}
+  .perm-text.off { color: var(--ink-faint); font-style: italic;}
+
+  /* ---- bottom nav ---- */
+  .nav {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 40;
+    background: rgba(255,253,249,.92); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--hairline); display: flex;
+    padding: 9px 14px calc(9px + env(safe-area-inset-bottom));
+  }
+  .nav-btn { flex: 1; border: 0; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--ink-faint); font: inherit; padding: 4px 0;}
+  .nav-btn.on { color: var(--ink); }
+  .nav-btn .nb-label { font-size: 11px; font-weight: 600; }
+  .nav-btn .nb-count { position:absolute; transform: translate(14px,-4px); background: var(--critical); color:#fff; font-size:10px; font-weight:700; min-width:16px; height:16px; border-radius:999px; display:grid; place-items:center; padding:0 4px;}
+  .nav-ico-wrap { position: relative; }
+
+  /* ---- sheet (agent panel + confirm) ---- */
+  .scrim { position: absolute; inset: 0; background: rgba(28,25,22,.34); z-index: 50; opacity: 0; animation: fade .25s ease forwards; }
+  @keyframes fade { to { opacity: 1; } }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 55;
+    background: var(--cream); border-top-left-radius: 26px; border-top-right-radius: 26px;
+    box-shadow: var(--shadow-sheet); max-height: 86%; display: flex; flex-direction: column;
+    animation: slideup .32s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes slideup { from { transform: translateY(100%);} to { transform: none;} }
+  .sheet-grip { width: 38px; height: 5px; border-radius: 999px; background: var(--hairline-strong); margin: 10px auto 4px;}
+  .sheet-scroll { overflow-y: auto; padding: 8px 20px 26px;}
+  .sheet-scroll::-webkit-scrollbar{ width:0;}
+
+  .agent-hero { display: flex; align-items: center; gap: 13px; padding: 10px 0 4px;}
+  .agent-hero .ava { width: 50px; height: 50px; font-size: 19px;}
+  .agent-hero .a-name { font-size: 22px; font-weight: 600; letter-spacing: -.01em;}
+  .agent-hero .a-role { font-size: 13.5px; color: var(--ink-soft);}
+  .a-status { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; margin-top:3px;}
+
+  .keyresult {
+    margin-top: 16px; border-radius: var(--radius); padding: 16px 17px;
+    border: 1px solid var(--hairline); background: var(--card); box-shadow: var(--shadow-card);
+  }
+  .kr-label { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);}
+  .kr-value { font-size: 27px; font-weight: 500; letter-spacing: -.01em; margin-top: 5px;}
+  .kr-sub { font-size: 13px; color: var(--ink-soft); margin-top: 2px;}
+
+  .section-label { font-size: 12px; font-weight: 700; letter-spacing:.08em; text-transform: uppercase; color: var(--ink-faint); margin: 22px 2px 9px;}
+
+  .pause-btn {
+    width: 100%; margin-top: 20px; border-radius: 14px; padding: 13px;
+    background: transparent; border: 1.5px solid var(--hairline-strong); color: var(--ink);
+    font: inherit; font-weight: 600; font-size: 14.5px; cursor: pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .pause-btn.paused { background: #F8E3DC; border-color: #E9C7BC; color: #a8442b;}
+  .manage-link { display:flex; align-items:center; justify-content:space-between; width:100%; margin-top: 12px; padding: 14px 16px; background: var(--card); border:1px solid var(--hairline); border-radius:14px; cursor:pointer; font-weight:600; font-size:14px; color: var(--ink);}
+
+  .setup-empty { text-align:center; padding: 26px 10px 8px;}
+  .setup-empty .em-ico { width:56px; height:56px; border-radius:50%; background: var(--violet-tint); color: var(--violet); display:grid; place-items:center; margin:0 auto 14px;}
+  .setup-empty h3 { font-size: 19px; margin: 0 0 6px; font-weight:600;}
+  .setup-empty p { font-size: 14px; color: var(--ink-soft); line-height:1.5; margin: 0 auto 18px; max-width: 260px;}
+
+  /* confirm sheet */
+  .confirm { padding: 8px 22px 28px;}
+  .confirm h3 { font-size: 21px; margin: 6px 0 8px; font-weight:600; letter-spacing:-.01em;}
+  .confirm p { font-size: 14.5px; color: var(--ink-soft); line-height:1.5; margin: 0 0 6px;}
+  .confirm .detail-box { margin: 14px 0 4px; background: var(--card); border:1px solid var(--hairline); border-radius: 14px; padding: 4px 16px;}
+  .confirm .drow { display:flex; justify-content:space-between; padding: 11px 0; border-bottom:1px solid var(--hairline); font-size: 14px;}
+  .confirm .drow:last-child{ border-bottom:0;}
+  .confirm .drow .k { color: var(--ink-soft);}
+  .confirm .drow .v { font-weight:600;}
+  .confirm-actions { display:flex; gap:10px; margin-top: 18px;}
+
+  /* toast */
+  .toast {
+    position: absolute; left: 16px; right: 16px; bottom: 92px; z-index: 70;
+    background: #2c2824; color: #fff; border-radius: 14px; padding: 13px 16px;
+    font-size: 14px; font-weight: 500; display:flex; align-items:center; gap: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.3); animation: toastin .3s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes toastin { from { transform: translateY(20px); opacity:0;} to { transform:none; opacity:1;} }
+  .toast .t-check { color: #6fd99a; }
+
+  /* generic page (inbox/results) */
+  .page-title { font-size: 26px; font-weight: 500; letter-spacing:-.01em; margin: 6px 0 2px;}
+  .page-sub { font-size: 14px; color: var(--ink-soft); margin: 0 0 4px;}
+  .handled-row { display:flex; gap:11px; padding: 13px 16px; border-bottom:1px solid var(--hairline); align-items:center;}
+  .handled-row:last-child{border-bottom:0;}
+  .handled-ico { width:24px; height:24px; border-radius:50%; display:grid; place-items:center; flex:0 0 auto;}
+  .h-done { background:#E7F3EC; color: var(--green);}
+  .h-skip { background: var(--cream-deep); color: var(--ink-faint);}
+  .handled-text{ font-size: 13.5px; line-height:1.35;}
+  .handled-time{ font-size:11.5px; color: var(--ink-faint); margin-left:auto; flex:0 0 auto;}
+
+  .res-seg { display:flex; gap:6px; margin: 14px 0 4px;}
+  .res-seg button { flex:1; border:1px solid var(--hairline-strong); background: var(--card); border-radius: 11px; padding: 9px; font:inherit; font-weight:600; font-size:13px; color: var(--ink-soft); cursor:pointer;}
+  .res-seg button.on { background: var(--ink); color:#fff; border-color: var(--ink);}
+  .kpi { display:flex; align-items:flex-end; justify-content:space-between; padding: 16px;}
+  .kpi .kpi-num { font-size: 30px; font-weight: 500; letter-spacing:-.02em;}
+  .kpi .kpi-lbl { font-size: 13px; color: var(--ink-soft); margin-top:2px;}
+  .kpi .kpi-delta { font-size: 12.5px; font-weight:700; padding:3px 8px; border-radius:999px;}
+  .delta-up { background:#E7F3EC; color: var(--green);}
+  .delta-down { background:#F8E3DC; color: var(--critical);}
+  .res-byline { font-size: 12px; color: var(--ink-faint); margin: 4px 4px 0; display:flex; align-items:center; gap:6px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useRef, useEffect, useCallback } = React;
+
+/* ---------------- tiny inline icons ---------------- */
+const I = {
+  home: (p) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/></svg>,
+  inbox: (p) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 13h4l1.5 2.5h5L16 13h4"/><path d="M4 13 6 5h12l2 8v5H4z"/></svg>,
+  results: (p) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M5 19V10M12 19V5M19 19v-6"/></svg>,
+  bell: (p) => <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>,
+  check: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M5 12.5 10 17 19 7"/></svg>,
+  x: (p) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" {...p}><path d="M6 6l12 12M18 6 6 18"/></svg>,
+  pause: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" {...p}><path d="M8 5v14M16 5v14"/></svg>,
+  play: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M7 5l12 7-12 7z"/></svg>,
+  chevron: (p) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m9 6 6 6-6 6"/></svg>,
+  lock: (p) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>,
+  dollar: (p) => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3v18M16 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H8"/></svg>,
+  globe: (p) => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>,
+  user: (p) => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.2-3.6 4-5 7-5s5.8 1.4 7 5"/></svg>,
+  spark: (p) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6Z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8Z"/></svg>,
+  moon: (p) => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5Z"/></svg>,
+};
+
+/* ---------------- mock data ---------------- */
+const AGENTS = {
+  alex: { id:"alex", name:"Alex", color:"coral", initial:"A", role:"Front-desk closer — inbound leads, bookings, no-show follow-up", working:true,
+    statusLine:"Working · 8 leads in follow-up",
+    keyResult:{ label:"Consultations booked this week", value:"6 booked", sub:"2 of them recovered from no-shows" },
+    log:[
+      {t:"9:44 AM", x:"Drafted 3 replies for your approval"},
+      {t:"9:12 AM", x:"Booked a Botox consult — Thu 2:30 PM"},
+      {t:"8:05 AM", x:"Sent 4 appointment reminders for today"},
+      {t:"11:58 PM", x:"Replied to 2 after-hours enquiries"},
+      {t:"9:40 PM", x:"Followed up with 3 no-shows from last week"},
+    ]},
+  riley: { id:"riley", name:"Riley", color:"teal", initial:"R", role:"Growth engine — runs the ads, manages spend, flags dips", working:true,
+    statusLine:"Working · watching 3 campaigns",
+    keyResult:{ label:"Cost per lead this week", value:"$14", sub:"Down from $19 last week · $602 spent" },
+    log:[
+      {t:"9:30 AM", x:"Shifted $120 to the Botox campaign"},
+      {t:"7:15 AM", x:"Paused the Filler ad set — cost per lead hit $31"},
+      {t:"6:00 AM", x:"Morning spend report: $86 spent, 6 leads"},
+      {t:"12:40 AM", x:"Logged overnight performance for all 3 campaigns"},
+    ]},
+  mira: { id:"mira", name:"Mira", color:"violet", initial:"M", role:"Content & reactivation", working:false, notSetUp:true },
+};
+
+const WEEK = {
+  agent:"alex",
+  eyebrow:"This week with Alex",
+  stat:"6", unit:"consultations booked",
+  quote:"“Good week. I booked six consults — two were no-shows I chased back. Three are in for Botox, one for filler. Quiet Tuesday afternoon is the only soft spot.”",
+};
+
+const OVERNIGHT = [
+  { t:"11:58 PM", c:"coral", x:<><b>Alex</b> replied to 2 enquiries that came in after close.</> },
+  { t:"6:12 AM",  c:"coral", x:<><b>1 consult booked</b> for Thursday from an overnight lead.</> },
+  { t:"7:15 AM",  c:"teal",  x:<><b>Riley</b> paused the Filler ad set — cost per lead climbed to $31.</> },
+];
+
+const TOAST_MS = 2600;
+
+/* ---------------- decision feed (shared between Home + Inbox) ---------------- */
+function initialDecisions() {
+  return [
+    {
+      id:"d1", agent:"alex", risk:"low",
+      flags:{ external:false, financial:false, clientFacing:false, confirm:false },
+      title:"Reply ready for a Botox enquiry",
+      why:"Priya asked about Botox pricing & whether you treat the forehead. Alex drafted a warm reply that quotes your $11/unit and offers two consult times.",
+      preview:"Hi Priya! Yes — we treat the forehead, frown lines and crow’s feet. Botox is $11/unit (most clients use 20–40). I’ve got Thurs 2:30 or Fri 11:00 for a free consult — want me to hold one?",
+    },
+    {
+      id:"d2", agent:"riley", risk:"high",
+      flags:{ external:true, financial:true, clientFacing:false, confirm:true },
+      title:"Raise the Botox campaign budget by $400?",
+      why:"The Botox campaign is bringing leads at $14 each — your best by far. Riley wants to move the daily cap from $300 to $700 to capture more while it’s hot.",
+      detail:[
+        {k:"Current daily cap", v:"$300/day"},
+        {k:"Proposed cap", v:"$700/day"},
+        {k:"Cost per lead", v:"$14 (best of 3)"},
+        {k:"Riley stays under", v:"the new cap"},
+      ],
+    },
+  ];
+}
+
+const EXTRA_INBOX = [
+  { id:"e1", agent:"alex", risk:"low", title:"Confirm Thursday’s reminder text", why:"Standard reminder for tomorrow’s 3 consults." },
+  { id:"e2", agent:"riley", risk:"med", title:"Move $60 off the Facial ad set?", why:"Facial leads are slow this week." },
+  { id:"e3", agent:"alex", risk:"low", title:"Reply to a filler question", why:"Lead asking about lip filler longevity." },
+];
+
+const HANDLED = [
+  { ok:true, x:<><b>Approved</b> Alex’s reminder batch — 4 sent.</>, t:"8:05 AM" },
+  { ok:true, x:<><b>Booked</b> a Botox consult for Thu 2:30 PM.</>, t:"9:12 AM" },
+  { ok:false, x:<>Skipped Riley’s suggestion to test a new audience.</>, t:"Yesterday" },
+];
+
+/* ---------------- helpers ---------------- */
+const colorVar = (c) => ({ coral:"var(--coral)", teal:"var(--teal)", violet:"var(--violet)" }[c]);
+const tintVar  = (c) => ({ coral:"var(--coral-tint)", teal:"var(--teal-tint)", violet:"var(--violet-tint)" }[c]);
+function greetWord(){ const h=new Date().getHours(); if(h<12) return "Good morning"; if(h<17) return "Good afternoon"; return "Good evening"; }
+
+/* ============================================================= */
+/*  SWIPEABLE / TAP-ONLY DECISION CARD                            */
+/* ============================================================= */
+function DecisionCard({ d, onApprove, onSkip, onCommitHigh }) {
+  const [dx, setDx] = useState(0);
+  const [leaving, setLeaving] = useState(null); // 'right' | 'left'
+  const [expanded, setExpanded] = useState(false);
+  const [primed, setPrimed] = useState(false);
+  const start = useRef(null);
+  const dragging = useRef(false);
+  const agent = AGENTS[d.agent];
+
+  const isLow = d.risk === "low" && !d.flags.external && !d.flags.financial && !d.flags.clientFacing;
+  const THRESH = 96;
+
+  const onDown = (e) => { dragging.current = true; start.current = e.clientX; e.currentTarget.setPointerCapture?.(e.pointerId); };
+  const onMove = (e) => {
+    if (!dragging.current) return;
+    let delta = e.clientX - start.current;
+    if (!isLow && delta > 0) delta = Math.min(delta, 78) * 0.7 + Math.min(delta,78)*0.3; // resist right-pull on tap-only
+    if (!isLow && delta > 86) delta = 86 + (delta-86)*0.18; // hard rubber-band
+    setDx(delta);
+  };
+  const onUp = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    if (dx < -THRESH) { setLeaving("left"); setTimeout(() => onSkip(d.id), 230); return; }
+    if (dx > THRESH) {
+      if (isLow) { setLeaving("right"); setTimeout(() => onApprove(d.id), 230); return; }
+      // tap-only: swipe just OPENS detail + primes the button. never commits.
+      setExpanded(true); setPrimed(true);
+    }
+    setDx(0);
+  };
+
+  const translate = leaving === "right" ? 460 : leaving === "left" ? -460 : dx;
+  const rot = translate * 0.015;
+  const approveOpacity = isLow ? Math.max(0, Math.min(1, dx / THRESH)) : 0;
+  const lockOpacity = !isLow ? Math.max(0, Math.min(1, dx / 60)) : 0;
+  const skipOpacity = Math.max(0, Math.min(1, -dx / THRESH));
+
+  return (
+    <div className="decision-wrap" style={{ height: leaving ? 0 : "auto", marginBottom: leaving ? 0 : 12, transition: leaving ? "height .25s ease .12s, margin .25s ease .12s" : "none", overflow: leaving ? "hidden" : "visible" }}>
+      {/* swipe backgrounds */}
+      <div className={"swipe-bg " + (dx >= 0 ? (isLow ? "low" : "skip-fill") : "skip-fill")}>
+        <span className="approve-side" style={{ opacity: approveOpacity }}>{I.check()} Approve & send</span>
+        {!isLow && <span className="approve-side" style={{ opacity: lockOpacity, color:"var(--ink-soft)" }}>{I.lock()} Tap to decide</span>}
+        <span className="skip-side" style={{ opacity: skipOpacity }}>Skip {I.x()}</span>
+      </div>
+
+      <div className="decision"
+        style={{ transform: `translateX(${translate}px) rotate(${rot}deg)`, transition: dragging.current ? "none" : "transform .28s cubic-bezier(.22,1,.36,1)" }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+        <div className="dec-top">
+          <span className="dec-ava" style={{ background: colorVar(agent.color) }}>{agent.initial}</span>
+          <span className="dec-from"><b>{agent.name}</b> needs a decision</span>
+          <span className={"risk-pill " + (d.risk==="low"?"risk-low":d.risk==="med"?"risk-med":"risk-high")}>{d.risk} risk</span>
+        </div>
+        <div className="dec-title">{d.title}</div>
+        <div className="dec-why">{d.why}</div>
+
+        {isLow && (
+          <div className="dec-preview">
+            <span className="lbl">Drafted reply</span>{d.preview}
+          </div>
+        )}
+
+        {!isLow && (expanded) && (
+          <div className="dec-preview" style={{ background:"var(--amber-tint)", borderColor:"#F0DDBB" }}>
+            <span className="lbl">Why this needs your tap</span>
+            This moves money and changes a live ad. Swiping won’t commit it — read it, then press the amber button.
+          </div>
+        )}
+
+        {/* flags */}
+        {(d.flags?.financial || d.flags?.external || d.flags?.clientFacing) && (
+          <div className="flags">
+            {d.flags.financial && <span className="flag">{I.dollar()} Spends money</span>}
+            {d.flags.external && <span className="flag">{I.globe()} Changes a live ad</span>}
+            {d.flags.clientFacing && <span className="flag">{I.user()} Client-facing</span>}
+          </div>
+        )}
+
+        <div className="dec-actions">
+          {isLow ? (
+            <>
+              <button className="btn btn-amber" onClick={() => { setLeaving("right"); setTimeout(()=>onApprove(d.id),230); }}>Approve & send</button>
+              <button className="btn btn-ghost" onClick={() => { setLeaving("left"); setTimeout(()=>onSkip(d.id),230); }}>Skip</button>
+            </>
+          ) : (
+            <>
+              <button className={"btn btn-amber" + (primed ? " glow" : "")} onClick={() => onCommitHigh(d)}>Review & decide</button>
+              <button className="btn btn-ghost" onClick={() => { setLeaving("left"); setTimeout(()=>onSkip(d.id),230); }}>Skip</button>
+            </>
+          )}
+        </div>
+
+        <p className="swipe-hint">
+          {isLow
+            ? <>Swipe right to approve · left to skip</>
+            : <>{I.lock()} Swipe to open · committing needs a tap</>}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================= */
+/*  HOME MODULES                                                  */
+/* ============================================================= */
+function Greeting({ owner }) {
+  return (
+    <div className="greeting module" style={{ marginTop: 8 }}>
+      <div className="greet-eyebrow">{greetWord()}, {owner}.</div>
+      <h1 className="greet-hero">Your team is on shift.</h1>
+    </div>
+  );
+}
+
+function TeamPulse({ onOpen }) {
+  return (
+    <div className="module">
+      <div className="mod-head"><span className="mod-title">Team Pulse</span></div>
+      <div className="pulse">
+        {Object.values(AGENTS).map(a => (
+          <button key={a.id} className="chip" onClick={() => onOpen(a.id)}>
+            <div className="chip-top">
+              <span className={"ava " + (a.notSetUp ? "off" : a.color)}>
+                {a.initial}
+                <span className={"status-dot " + (a.working ? "dot-green" : "dot-grey")} />
+              </span>
+            </div>
+            <div>
+              <div className="chip-name">{a.name}</div>
+              <div className={"chip-status " + (a.notSetUp ? "off":"")}>
+                {a.notSetUp ? "Not set up" : (a.working ? "Working" : "Idle")}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NeedsYou({ decisions, extraCount, onApprove, onSkip, onCommitHigh, goInbox }) {
+  if (decisions.length === 0) {
+    return (
+      <div className="module">
+        <div className="mod-head"><span className="mod-title">Needs You</span></div>
+        <div className="calm-card">
+          <span className="calm-check">{I.check()}</span>
+          <div>
+            <div className="calm-title">Nothing needs you.</div>
+            <div className="calm-sub">Your team&rsquo;s running clean.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="module">
+      <div className="mod-head">
+        <span className="mod-title">Needs You</span>
+        {extraCount > 0 && <a className="mod-link" onClick={goInbox}>See all in Inbox →</a>}
+      </div>
+      <div className="stack">
+        {decisions.map(d => (
+          <DecisionCard key={d.id} d={d} onApprove={onApprove} onSkip={onSkip} onCommitHigh={onCommitHigh} />
+        ))}
+      </div>
+      {extraCount > 0 && (
+        <a className="swipe-hint" style={{ marginTop: 2, cursor:"pointer" }} onClick={goInbox}>
+          {extraCount} more waiting in Inbox →
+        </a>
+      )}
+    </div>
+  );
+}
+
+function ThisWeek({ hero }) {
+  const a = AGENTS[WEEK.agent];
+  return (
+    <div className="module">
+      <div className="mod-head"><span className="mod-title">This Week</span></div>
+      <div className={"week" + (hero ? " hero" : "")}>
+        <div className="week-eyebrow"><span className="mini-dot" style={{ background: colorVar(a.color) }} />{WEEK.eyebrow}</div>
+        <div className="week-stat serif">{WEEK.stat} <span className="unit serif">{WEEK.unit}</span></div>
+        <p className="week-quote serif">{WEEK.quote}</p>
+        <div className="week-sign">
+          <span className="dec-ava" style={{ background: colorVar(a.color), width:24, height:24 }}>{a.initial}</span>
+          <span className="nm">{a.name} · front desk</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WhileYouSlept() {
+  return (
+    <div className="module">
+      <div className="mod-head"><span className="mod-title" style={{ display:"flex", alignItems:"center", gap:7 }}>{I.moon()} While You Slept</span></div>
+      <div className="feed">
+        {OVERNIGHT.map((o,i) => (
+          <div className="feed-row" key={i}>
+            <span className="feed-time">{o.t}</span>
+            <span className="feed-text"><span className="mini-dot" style={{ background: colorVar(o.c) }} />{o.x}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WorkInProgress() {
+  return (
+    <div className="module">
+      <div className="mod-head"><span className="mod-title">Work in Progress</span></div>
+      <div className="feed">
+        <div className="wip-row">
+          <span className="wip-spinner" style={{ background: colorVar("coral"), color: colorVar("coral") }} />
+          <span className="wip-text"><b>Alex</b> is following up with <b>8 consultation leads</b>.</span>
+        </div>
+        <div className="wip-row">
+          <span className="wip-spinner" style={{ background: colorVar("teal"), color: colorVar("teal") }} />
+          <span className="wip-text"><b>Riley</b> shifted <b>$120</b> into the Botox campaign this morning.</span>
+        </div>
+        {/* one real, honest 2-step handoff: Riley generates leads → Alex books them */}
+        <div className="wip-row" style={{ alignItems:"flex-start" }}>
+          <span className="wip-spinner" style={{ background: colorVar("teal"), color: colorVar("teal"), marginTop:4 }} />
+          <span className="wip-text">
+            New leads from Riley’s ads are handed to Alex to book.
+            <span className="chain">
+              <span className="node" style={{ background:tintVar("teal"), color:colorVar("teal") }}>Riley</span>
+              <span className="arr">→</span>
+              <span className="node" style={{ background:tintVar("coral"), color:colorVar("coral") }}>Alex</span>
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Permissions({ onManage }) {
+  return (
+    <div className="module">
+      <div className="mod-head">
+        <span className="mod-title">What your team can do on its own</span>
+      </div>
+      <div className="feed">
+        <div className="perm-row"><span className="perm-name" style={{ color: colorVar("teal") }}>Riley</span><span className="perm-text">Adjusts ad budgets up to <b>$300</b>, then asks you. Pauses ad sets that go over <b>$25</b>/lead.</span></div>
+        <div className="perm-row"><span className="perm-name" style={{ color: colorVar("coral") }}>Alex</span><span className="perm-text">Books consultations, sends reminders, and replies to enquiries from your approved templates.</span></div>
+        <div className="perm-row"><span className="perm-name" style={{ color: "var(--ink-faint)" }}>Mira</span><span className="perm-text off">Not set up yet — does nothing until you turn her on.</span></div>
+      </div>
+      <a className="swipe-hint" style={{ marginTop: 8, cursor:"pointer" }} onClick={onManage}>Tune what each can do in Settings →</a>
+    </div>
+  );
+}
+
+/* ============================================================= */
+/*  AGENT SHEET                                                   */
+/* ============================================================= */
+function AgentSheet({ agent, decisions, paused, onClose, onTogglePause, onApprove, onSkip, onCommitHigh, toast }) {
+  const a = AGENTS[agent];
+  const myDecisions = decisions.filter(d => d.agent === agent);
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="sheet">
+        <div className="sheet-grip" />
+        <div className="sheet-scroll">
+          {a.notSetUp ? (
+            <div className="setup-empty">
+              <div className="em-ico">{I.spark()}</div>
+              <h3>Mira isn&rsquo;t set up yet</h3>
+              <p>Mira can handle content and win back lapsed clients — but she does nothing until you switch her on. No fake activity, no surprises.</p>
+              <button className="btn btn-amber" style={{ width:"100%", boxShadow:"0 2px 0 var(--amber-deep)" }} onClick={() => toast("Mira setup is coming soon in this prototype.")}>Set up Mira</button>
+              <a className="manage-link" style={{ marginTop:16 }} onClick={() => toast("Settings is out of scope for this sheet.")}>
+                <span>Learn what Mira does</span>{I.chevron()}
+              </a>
+            </div>
+          ) : (
+            <>
+              <div className="agent-hero">
+                <span className={"ava " + a.color}>{a.initial}<span className={"status-dot " + (paused ? "dot-grey" : "dot-green")} /></span>
+                <div>
+                  <div className="a-name">{a.name}</div>
+                  <div className="a-role">{a.role.split("—")[0].trim()}</div>
+                  <div className="a-status" style={{ color: paused ? "var(--ink-faint)" : "var(--green)" }}>
+                    <span className="mini-dot" style={{ background: paused ? "var(--grey-dot)" : "var(--green)" }} />
+                    {paused ? "Paused by you" : a.statusLine}
+                  </div>
+                </div>
+              </div>
+
+              <div className="keyresult">
+                <div className="kr-label">{a.keyResult.label}</div>
+                <div className="kr-value serif">{a.keyResult.value}</div>
+                <div className="kr-sub">{a.keyResult.sub}</div>
+              </div>
+
+              <div className="section-label">Open decisions ({myDecisions.length})</div>
+              {myDecisions.length === 0 ? (
+                <div className="calm-card" style={{ padding:"14px 16px" }}>
+                  <span className="calm-check" style={{ width:32, height:32 }}>{I.check()}</span>
+                  <div><div className="calm-title" style={{ fontSize:15 }}>All clear</div><div className="calm-sub">Nothing waiting on you from {a.name}.</div></div>
+                </div>
+              ) : (
+                myDecisions.map(d => (
+                  <DecisionCard key={d.id} d={d} onApprove={onApprove} onSkip={onSkip} onCommitHigh={onCommitHigh} />
+                ))
+              )}
+
+              <div className="section-label">Recent work log</div>
+              <div className="feed">
+                {a.log.map((l,i) => (
+                  <div className="feed-row" key={i}>
+                    <span className="feed-time">{l.t}</span>
+                    <span className="feed-text">{l.x}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button className={"pause-btn" + (paused ? " paused" : "")} onClick={onTogglePause}>
+                {paused ? <>{I.play()} Resume {a.name}</> : <>{I.pause()} Pause {a.name}</>}
+              </button>
+              <a className="manage-link" onClick={() => toast("Settings, charts and history live outside this sheet.")}>
+                <span>Manage {a.name} in Settings</span>{I.chevron()}
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ============================================================= */
+/*  CONFIRM SHEET (high-risk commit)                              */
+/* ============================================================= */
+function ConfirmSheet({ d, onCancel, onConfirm }) {
+  return (
+    <>
+      <div className="scrim" onClick={onCancel} />
+      <div className="sheet">
+        <div className="sheet-grip" />
+        <div className="confirm">
+          <div className="dec-top" style={{ marginBottom: 4 }}>
+            <span className="dec-ava" style={{ background: colorVar("teal") }}>R</span>
+            <span className="dec-from"><b>Riley</b> · spends money</span>
+            <span className="risk-pill risk-high">high risk</span>
+          </div>
+          <h3>{d.title}</h3>
+          <p>This raises your daily ad spend. Riley will stay under the new cap, and you can lower it any time.</p>
+          <div className="detail-box">
+            {d.detail.map((r,i) => (
+              <div className="drow" key={i}><span className="k">{r.k}</span><span className="v">{r.v}</span></div>
+            ))}
+          </div>
+          <div className="confirm-actions">
+            <button className="btn btn-ghost" style={{ flex:1 }} onClick={onCancel}>Not now</button>
+            <button className="btn btn-amber" onClick={onConfirm}>Yes, raise to $700/day</button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ============================================================= */
+/*  INBOX + RESULTS                                               */
+/* ============================================================= */
+function Inbox({ decisions, onApprove, onSkip, onCommitHigh }) {
+  return (
+    <div className="scroll">
+      <h2 className="page-title module" style={{ marginTop: 8 }}>Inbox</h2>
+      <p className="page-sub">Everything your team has sent your way.</p>
+
+      <div className="module" style={{ marginTop: 16 }}>
+        <div className="mod-head"><span className="mod-title">Needs you now ({decisions.length})</span></div>
+        {decisions.length === 0
+          ? <div className="calm-card"><span className="calm-check">{I.check()}</span><div><div className="calm-title">Inbox zero.</div><div className="calm-sub">Nothing waiting on a decision.</div></div></div>
+          : decisions.map(d => <DecisionCard key={d.id} d={d} onApprove={onApprove} onSkip={onSkip} onCommitHigh={onCommitHigh} />)
+        }
+      </div>
+
+      <div className="module">
+        <div className="mod-head"><span className="mod-title">Lower priority</span></div>
+        <div className="feed">
+          {EXTRA_INBOX.map(e => {
+            const a = AGENTS[e.agent];
+            return (
+              <div className="handled-row" key={e.id} style={{ alignItems:"flex-start" }}>
+                <span className="dec-ava" style={{ background: colorVar(a.color), width:26, height:26 }}>{a.initial}</span>
+                <div>
+                  <div className="handled-text" style={{ fontWeight:600, fontSize:14 }}>{e.title}</div>
+                  <div className="handled-text" style={{ color:"var(--ink-soft)" }}>{e.why}</div>
+                </div>
+                <span className={"risk-pill " + (e.risk==="low"?"risk-low":e.risk==="med"?"risk-med":"risk-high")} style={{ marginLeft:"auto", flex:"0 0 auto" }}>{e.risk}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="module">
+        <div className="mod-head"><span className="mod-title">Handled today</span></div>
+        <div className="feed">
+          {HANDLED.map((h,i) => (
+            <div className="handled-row" key={i}>
+              <span className={"handled-ico " + (h.ok ? "h-done" : "h-skip")}>{h.ok ? I.check() : I.x()}</span>
+              <span className="handled-text">{h.x}</span>
+              <span className="handled-time">{h.t}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const RESULTS = {
+  "This week": [
+    { num:"6", lbl:"Consultations booked", delta:"+2", up:true, who:"alex" },
+    { num:"$14", lbl:"Cost per lead", delta:"−$5", up:true, who:"riley" },
+    { num:"3 of 5", lbl:"No-shows recovered", delta:"+1", up:true, who:"alex" },
+    { num:"$602", lbl:"Ad spend", delta:"on budget", up:true, who:"riley" },
+  ],
+  "Last week": [
+    { num:"4", lbl:"Consultations booked", delta:"−1", up:false, who:"alex" },
+    { num:"$19", lbl:"Cost per lead", delta:"+$3", up:false, who:"riley" },
+    { num:"2 of 6", lbl:"No-shows recovered", delta:"−1", up:false, who:"alex" },
+    { num:"$588", lbl:"Ad spend", delta:"on budget", up:true, who:"riley" },
+  ],
+  "This month": [
+    { num:"23", lbl:"Consultations booked", delta:"+7", up:true, who:"alex" },
+    { num:"$16", lbl:"Cost per lead", delta:"−$2", up:true, who:"riley" },
+    { num:"11 of 19", lbl:"No-shows recovered", delta:"+4", up:true, who:"alex" },
+    { num:"$2,480", lbl:"Ad spend", delta:"on budget", up:true, who:"riley" },
+  ],
+};
+function Results() {
+  const [period, setPeriod] = useState("This week");
+  return (
+    <div className="scroll">
+      <h2 className="page-title module" style={{ marginTop: 8 }}>Results</h2>
+      <p className="page-sub">How your team is doing, in plain numbers.</p>
+      <div className="res-seg module" style={{ marginTop: 14 }}>
+        {Object.keys(RESULTS).map(p => (
+          <button key={p} className={period===p?"on":""} onClick={() => setPeriod(p)}>{p}</button>
+        ))}
+      </div>
+      <div className="module" style={{ marginTop: 14 }}>
+        {RESULTS[period].map((k,i) => {
+          const a = AGENTS[k.who];
+          return (
+            <div className="card" key={i} style={{ marginBottom: 11 }}>
+              <div className="kpi">
+                <div>
+                  <div className="kpi-num serif">{k.num}</div>
+                  <div className="kpi-lbl">{k.lbl}</div>
+                </div>
+                <span className={"kpi-delta " + (k.up ? "delta-up" : "delta-down")}>{k.delta}</span>
+              </div>
+              <div className="res-byline" style={{ padding:"0 16px 12px" }}><span className="mini-dot" style={{ background: colorVar(a.color) }} />tracked by {a.name}</div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="swipe-hint" style={{ marginTop: 4 }}>Deeper breakdowns &amp; charts live here in the full app.</p>
+    </div>
+  );
+}
+
+/* ============================================================= */
+/*  APP                                                           */
+/* ============================================================= */
+function App() {
+  const [tab, setTab] = useState("home");
+  const [calm, setCalm] = useState(false);
+  const [decisions, setDecisions] = useState(initialDecisions);
+  const [openAgent, setOpenAgent] = useState(null);
+  const [paused, setPaused] = useState({});
+  const [confirmHigh, setConfirmHigh] = useState(null);
+  const [toastMsg, setToastMsg] = useState(null);
+  const toastTimer = useRef(null);
+
+  const owner = "Dana";
+
+  // calm toggle is a prototype switch: empties / refills the feed
+  useEffect(() => {
+    setDecisions(calm ? [] : initialDecisions());
+  }, [calm]);
+
+  const toast = useCallback((msg) => {
+    setToastMsg(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMsg(null), TOAST_MS);
+  }, []);
+
+  const removeDecision = (id) => setDecisions(ds => ds.filter(d => d.id !== id));
+
+  const onApprove = (id) => {
+    const d = decisions.find(x => x.id === id);
+    removeDecision(id);
+    if (d?.agent === "alex") toast("Approved — Alex is sending the reply to Priya.");
+    else toast("Approved.");
+  };
+  const onSkip = (id) => { removeDecision(id); toast("Skipped — back to your team."); };
+  const onCommitHigh = (d) => setConfirmHigh(d);
+  const confirmYes = () => {
+    const d = confirmHigh; setConfirmHigh(null);
+    removeDecision(d.id);
+    toast("Done — Riley raised the Botox budget to $700/day.");
+  };
+
+  const togglePause = (id) => {
+    setPaused(p => ({ ...p, [id]: !p[id] }));
+    toast(paused[id] ? `${AGENTS[id].name} is back on shift.` : `${AGENTS[id].name} is paused. Nothing will go out until you resume.`);
+  };
+
+  const visibleNeeds = decisions.slice(0, 2);
+  const extraCount = (decisions.length > 2 ? decisions.length - 2 : 0) + EXTRA_INBOX.length * (decisions.length ? 1 : 0);
+  const inboxCount = decisions.length;
+
+  return (
+    <>
+      {/* prototype state control — outside the device */}
+      <div className="proto-bar">
+        <span className="label">◐ Prototype · home state</span>
+        <div className="seg">
+          <button className={!calm ? "on" : ""} onClick={() => setCalm(false)}>2 decisions waiting</button>
+          <button className={calm ? "on" : ""} onClick={() => setCalm(true)}>Calm state</button>
+        </div>
+      </div>
+
+      <div className="phone">
+        <div className="notch" />
+        <div className="topbar">
+          <span className="wordmark"><span className="glyph" />Switchboard</span>
+          <div className="top-actions">
+            <button className="icon-btn" onClick={() => { setTab("inbox"); }}>
+              {I.bell()}{inboxCount > 0 && <span className="badge-dot" />}
+            </button>
+            <button className="avatar" onClick={() => toast("Account menu — out of scope for the prototype.")}>{owner[0]}</button>
+          </div>
+        </div>
+
+        {tab === "home" && (
+          <div className="scroll" key={calm ? "calm" : "active"}>
+            <Greeting owner={owner} />
+            <TeamPulse onOpen={setOpenAgent} />
+            {calm ? (
+              <>
+                <NeedsYou decisions={[]} extraCount={0} goInbox={() => setTab("inbox")} />
+                <ThisWeek hero={true} />
+              </>
+            ) : (
+              <>
+                <NeedsYou decisions={visibleNeeds} extraCount={extraCount} onApprove={onApprove} onSkip={onSkip} onCommitHigh={onCommitHigh} goInbox={() => setTab("inbox")} />
+                <ThisWeek hero={false} />
+              </>
+            )}
+            <WhileYouSlept />
+            <WorkInProgress />
+            <Permissions onManage={() => toast("Permission tuning lives in Settings, not here.")} />
+            <p className="swipe-hint" style={{ marginTop: 26, marginBottom: 4 }}>That&rsquo;s everything. Your team&rsquo;s got the rest.</p>
+          </div>
+        )}
+        {tab === "inbox" && <Inbox decisions={decisions} onApprove={onApprove} onSkip={onSkip} onCommitHigh={onCommitHigh} />}
+        {tab === "results" && <Results />}
+
+        {/* bottom nav */}
+        <div className="nav">
+          {[["home","Home",I.home],["inbox","Inbox",I.inbox],["results","Results",I.results]].map(([id,label,Ico]) => (
+            <button key={id} className={"nav-btn " + (tab===id ? "on":"")} onClick={() => setTab(id)}>
+              <span className="nav-ico-wrap">
+                <Ico />
+                {id==="inbox" && inboxCount>0 && <span className="nb-count">{inboxCount}</span>}
+              </span>
+              <span className="nb-label">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* overlays */}
+        {openAgent && (
+          <AgentSheet
+            agent={openAgent}
+            decisions={decisions}
+            paused={paused[openAgent]}
+            onClose={() => setOpenAgent(null)}
+            onTogglePause={() => togglePause(openAgent)}
+            onApprove={onApprove}
+            onSkip={onSkip}
+            onCommitHigh={(d) => { setOpenAgent(null); onCommitHigh(d); }}
+            toast={toast}
+          />
+        )}
+        {confirmHigh && <ConfirmSheet d={confirmHigh} onCancel={() => setConfirmHigh(null)} onConfirm={confirmYes} />}
+
+        {toastMsg && <div className="toast"><span className="t-check">{I.check()}</span>{toastMsg}</div>}
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
