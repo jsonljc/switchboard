@@ -48,6 +48,14 @@ describe("needsConfirm", () => {
     expect(needsConfirm(base)).toBe(false);
   });
 
+  it("returns false when riskLevel is medium (swipe-blocked but no confirm step)", () => {
+    // medium is blocked from swipe but does NOT require an extra confirmation
+    // step — only high-risk or requiresConfirmation:true triggers the confirm
+    // dialog. Guards against a regression that accidentally adds/removes confirm
+    // for medium.
+    expect(needsConfirm({ ...base, riskLevel: "medium" })).toBe(false);
+  });
+
   it("returns true when contract is undefined (missing = needs confirm)", () => {
     expect(needsConfirm(undefined)).toBe(true);
   });

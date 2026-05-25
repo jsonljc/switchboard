@@ -94,6 +94,42 @@ const URGENCY_TO_EXPIRY_HOURS: Record<RecommendationOutput["urgency"], number> =
 };
 
 /**
+ * Risk-contract flags for each Riley action.
+ *
+ * Riley does NOT message clients, so clientFacing is always false.
+ * requiresConfirmation is always false here — riskLevel drives the high-risk
+ * confirm step on the UI side; the contract boolean is reserved for future
+ * emitters that need to force a confirm regardless of riskLevel.
+ *
+ * financialEffect / externalEffect are true for every action that writes to the
+ * external ad platform or changes live campaign spend state. These must NOT be
+ * swipe-approvable (spec §8.4 / §6: "accidentally approving a budget move must
+ * be impossible via swipe"). Purely informational actions that queue internal
+ * work or open external links without mutating live campaign state stay false.
+ */
+const ACTION_RISK_CONTRACT: Record<
+  RecommendationOutput["action"],
+  { financialEffect: boolean; externalEffect: boolean }
+> = {
+  // ── Money- or ad-platform-state-changing: NOT swipe-approvable ──
+  scale: { financialEffect: true, externalEffect: true },
+  pause: { financialEffect: true, externalEffect: true },
+  restructure: { financialEffect: true, externalEffect: true },
+  review_budget: { financialEffect: true, externalEffect: true },
+  shift_budget_to_source: { financialEffect: true, externalEffect: true },
+  consolidate: { financialEffect: true, externalEffect: true },
+  expand_targeting: { financialEffect: true, externalEffect: true },
+  switch_optimization_event: { financialEffect: true, externalEffect: true },
+  // ── Informational / internal-queue only: swipe-approvable ──
+  hold: { financialEffect: false, externalEffect: false },
+  test: { financialEffect: false, externalEffect: false },
+  refresh_creative: { financialEffect: false, externalEffect: false },
+  add_creative: { financialEffect: false, externalEffect: false },
+  harden_capi_attribution: { financialEffect: false, externalEffect: false },
+  fix_signal_health: { financialEffect: false, externalEffect: false },
+};
+
+/**
  * Surface-agnostic human summary. Describes the recommendation, NOT the
  * rendering surface — the same string is consumed by the /console queue card,
  * the /riley page, the inbox drawer, etc. Every action in
@@ -273,6 +309,7 @@ export async function runRecommendationSink(
 
   for (const rec of args.recommendations) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
+    const { financialEffect, externalEffect } = ACTION_RISK_CONTRACT[rec.action];
     const result = await args.emit(
       {
         orgId: args.orgId,
@@ -283,6 +320,10 @@ export async function runRecommendationSink(
         confidence: rec.confidence,
         dollarsAtRisk: estimateRisk(rec),
         riskLevel: URGENCY_TO_RISK[rec.urgency],
+        financialEffect,
+        externalEffect,
+        clientFacing: false,
+        requiresConfirmation: false,
         parameters: { ...((rec as { params?: Record<string, unknown> }).params ?? {}) },
         presentation: buildPresentation(rec),
         targetEntities: { campaignId: rec.campaignId, campaignName: rec.campaignName },
