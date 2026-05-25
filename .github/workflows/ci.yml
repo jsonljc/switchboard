@@ -384,3 +384,58 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm eval:classifier
+
+  eval-alex-conversation:
+    name: Eval — Alex Conversation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter alex-conversation-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
+          filters: |
+            alex:
+              - '.github/workflows/ci.yml'
+              - 'skills/alex/**'
+              - 'evals/alex-conversation/**'
+              - 'packages/core/src/skill-runtime/**'
+
+      - name: Skip notice (no alex-conversation-relevant changes)
+        if: steps.filter.outputs.alex != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Alex Conversation skipped: no alex-conversation-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+
+      - name: Run eval unit tests
+        if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
+      - name: Run alex-conversation eval
+        # TODO: flip continue-on-error to false after baseline bakes (≥14 days on main,
+        # baseline.json committed, zero false-positives observed). Tracking issue: TBD.
+        continue-on-error: true
+        if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm eval:alex-conversation

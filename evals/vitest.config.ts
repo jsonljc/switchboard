@@ -7,7 +7,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     root: __dirname,
-    include: ["claim-classifier/__tests__/**/*.test.ts"],
+    include: [
+      "claim-classifier/__tests__/**/*.test.ts",
+      "alex-conversation/__tests__/**/*.test.ts",
+    ],
     environment: "node",
   },
 });
