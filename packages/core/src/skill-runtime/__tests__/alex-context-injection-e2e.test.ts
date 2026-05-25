@@ -14,20 +14,20 @@
  * disappears.
  */
 import { describe, it, expect } from "vitest";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+import type { KnowledgeEntryStoreForResolver } from "../context-resolver.js";
 import { ContextResolverImpl } from "../context-resolver.js";
 import { interpolate } from "../template-engine.js";
 import { loadSkill } from "../skill-loader.js";
 
-const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../../../skills");
+const SKILLS_DIR = resolve(import.meta.dirname, "../../../../../skills");
 
-describe("Alex live context injection (resolver-to-template regression)", () => {
+describe("Alex context injection (resolver→template seam)", () => {
   it("renders resolved objection-handling content into the slot (not an empty placeholder)", async () => {
     const skill = loadSkill("alex", SKILLS_DIR);
 
-    const store = {
-      findActive: async (_orgId: string, filters: Array<{ kind: string; scope: string }>) =>
+    const store: KnowledgeEntryStoreForResolver = {
+      findActive: async (_orgId, filters) =>
         filters
           .filter((f) => f.scope === "objection-handling")
           .map((f) => ({
@@ -45,11 +45,7 @@ describe("Alex live context injection (resolver-to-template regression)", () => 
     const knowledgeReqs = skill.context.filter((r) => r.kind !== "business-facts");
     const { variables } = await resolver.resolve("org_demo", knowledgeReqs);
 
-    const rendered = interpolate(
-      "Objections:\n{{PLAYBOOK_CONTEXT}}\n--end--",
-      { ...variables },
-      [],
-    );
+    const rendered = interpolate("Objections:\n{{PLAYBOOK_CONTEXT}}\n--end--", variables, []);
 
     expect(rendered).toContain("MEDSPA-OBJECTION-PLAYBOOK-MARKER");
     expect(rendered).not.toContain("{{PLAYBOOK_CONTEXT}}");
