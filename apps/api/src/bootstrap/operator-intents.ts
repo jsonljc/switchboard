@@ -19,6 +19,7 @@ import type {
   DisqualificationResolutionHook,
   OpportunityStore,
   RecommendationStore,
+  RevenueStore,
 } from "@switchboard/core";
 import {
   OperatorMutationMode,
@@ -33,10 +34,12 @@ import {
   CONFIRM_DISQUALIFICATION_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
+  RECORD_REVENUE_INTENT,
   REVOKE_CONSENT_INTENT,
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
 } from "./operator-intents/shared.js";
 import { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
+import { buildRecordRevenueHandler, type OutboxWriter } from "./operator-intents/revenue.js";
 import { buildActOnRecommendationHandler } from "./operator-intents/recommendation.js";
 import {
   buildConfirmDisqualificationHandler,
@@ -57,10 +60,12 @@ export {
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
+  RECORD_REVENUE_INTENT,
   REVOKE_CONSENT_INTENT,
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
 } from "./operator-intents/shared.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
+export { buildRecordRevenueHandler } from "./operator-intents/revenue.js";
 export { buildActOnRecommendationHandler } from "./operator-intents/recommendation.js";
 export {
   buildConfirmDisqualificationHandler,
@@ -80,6 +85,8 @@ interface OperatorIntentsBootstrapDeps {
   recommendationStore?: RecommendationStore;
   disqualificationHook?: Pick<DisqualificationResolutionHook, "confirm" | "dismiss">;
   consentService?: ConsentService;
+  revenueStore?: RevenueStore;
+  outboxWriter?: OutboxWriter;
   logger?: { info(msg: string): void };
 }
 
@@ -110,6 +117,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     recommendationStore,
     disqualificationHook,
     consentService,
+    revenueStore,
+    outboxWriter,
     logger,
   } = deps;
 
@@ -146,6 +155,10 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     handlers.set(CLEAR_CONSENT_INTENT, buildClearConsentHandler(consentService));
   }
 
+  if (revenueStore && outboxWriter) {
+    handlers.set(RECORD_REVENUE_INTENT, buildRecordRevenueHandler(revenueStore, outboxWriter));
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -163,12 +176,16 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
       registerOperatorIntent(intentRegistry, intent);
     }
   }
+  if (revenueStore && outboxWriter) {
+    registerOperatorIntent(intentRegistry, RECORD_REVENUE_INTENT);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
     (recommendationStore ? 1 : 0) +
     (disqualificationHook ? 2 : 0) +
-    (consentService ? 3 : 0);
+    (consentService ? 3 : 0) +
+    (revenueStore && outboxWriter ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );
