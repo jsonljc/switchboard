@@ -20,7 +20,7 @@ describe("alex skill context requirements", () => {
     });
   });
 
-  it("marks advisory knowledge slots required:false (runtime fail-open; provisioning enforces presence)", () => {
+  it("enforces required posture for all five context slots (advisory=false, BUSINESS_FACTS=true)", () => {
     const skill = loadSkill("alex", join(REPO_ROOT, "skills"));
     const req = (injectAs: string) => skill.context?.find((c) => c.injectAs === injectAs);
     expect(req("PLAYBOOK_CONTEXT")?.required).toBe(false);

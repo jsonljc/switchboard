@@ -56,6 +56,7 @@ context:
   # (fail-open) rather than 500-ing a live conversation. The claim classifier is
   # the runtime hard gate; presence is enforced by provisioning + the A0 eval
   # preflight, NOT by failing live traffic. Do not flip these back to required.
+  # BUSINESS_FACTS is the exception — required:true (builder-owned, must be present).
   - kind: playbook
     scope: objection-handling
     inject_as: PLAYBOOK_CONTEXT
