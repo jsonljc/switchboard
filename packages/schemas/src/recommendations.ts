@@ -50,13 +50,30 @@ export const RecommendationInputSchema = z.object({
   confidence: z.number().min(0).max(1),
   dollarsAtRisk: z.number().min(0),
   riskLevel: z.enum(["low", "medium", "high"]),
+  externalEffect: z.boolean().default(false),
+  financialEffect: z.boolean().default(false),
+  clientFacing: z.boolean().default(false),
+  requiresConfirmation: z.boolean().default(false),
   parameters: z.record(z.unknown()),
   presentation: RecommendationPresentationSchema,
   targetEntities: z.record(z.unknown()).optional(),
   expiresAt: z.date().optional(),
   sourceWorkflow: z.string().optional(),
 });
-export type RecommendationInput = z.infer<typeof RecommendationInputSchema>;
+/**
+ * Input type for creating a recommendation (pre-parse). The four risk contract
+ * boolean fields (externalEffect, financialEffect, clientFacing, requiresConfirmation)
+ * are optional here because they have schema-level defaults of false. After
+ * RecommendationInputSchema.parse() is called inside emitRecommendation, the
+ * output shape (z.infer<>) will have them as required booleans.
+ */
+export type RecommendationInput = z.input<typeof RecommendationInputSchema>;
+
+/**
+ * Post-parse shape with all defaults applied. Use this when reading back
+ * a validated recommendation or when all fields are guaranteed to be present.
+ */
+export type RecommendationInputParsed = z.infer<typeof RecommendationInputSchema>;
 
 export const ActOnRecommendationInputSchema = z.object({
   recommendationId: z.string().min(1),
