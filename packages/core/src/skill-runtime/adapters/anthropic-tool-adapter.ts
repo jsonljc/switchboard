@@ -88,7 +88,7 @@ function encodeOutgoingContent(content: LLMMessage["content"]): Anthropic.Messag
   // through; THROW on any unknown block so a future shape can't silently bypass
   // encoding (mirrors the response-side LLMAdapterShapeMismatchError discipline).
   // The array narrowing is only to make `.map` callable over the union-of-arrays;
-  // the real guard is the exhaustive switch below.
+  // the real guard is the exhaustive if-chain below.
   return (content as Array<LLMContentBlock | LLMToolResultBlock>).map((block) => {
     if (block.type === "tool_use") {
       return { ...block, name: encodeToolName(block.name) };

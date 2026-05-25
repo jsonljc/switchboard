@@ -265,6 +265,8 @@ describe("AnthropicToolAdapter", () => {
     const assistantBlocks = sent.messages[1]!.content as Array<{ type: string; name?: string }>;
     expect(assistantBlocks[0]!.name).toBe("calendar-book__booking__create");
     expect(assistantBlocks[0]!.name).not.toContain(".");
+    expect(assistantBlocks[0]!.type).toBe("tool_use");
+    expect((assistantBlocks[0]! as { id?: string }).id).toBe("tu_1");
 
     const resultBlocks = sent.messages[2]!.content as Array<{ type: string; tool_use_id?: string }>;
     expect(resultBlocks[0]!.type).toBe("tool_result");
