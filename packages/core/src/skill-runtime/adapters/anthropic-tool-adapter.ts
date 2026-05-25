@@ -25,6 +25,26 @@ const PROVIDER = "anthropic";
 // so neither part ever contains "__" natively. If that assumption changes,
 // introduce a more collision-proof scheme before relaxing this guard.
 
+// Anthropic tool names must match this exactly (name field on tool definitions
+// AND on tool_use blocks in message history).
+const ANTHROPIC_TOOL_NAME_RE = /^[a-zA-Z0-9_-]{1,128}$/;
+
+/**
+ * Throw if an ENCODED tool name would be rejected by the Anthropic API. Call
+ * this on the post-encoding result so future naming drift (a tool id/op with an
+ * API-illegal character, or a name >128 chars) fails loudly in tests/at boot
+ * rather than as a live 400 mid-conversation.
+ */
+function assertValidAnthropicToolName(encoded: string): void {
+  if (!ANTHROPIC_TOOL_NAME_RE.test(encoded)) {
+    throw new Error(
+      `[AnthropicToolAdapter] encoded tool name "${encoded}" violates Anthropic's ` +
+        `^[a-zA-Z0-9_-]{1,128}$ pattern. Tool ids/operations must encode to that ` +
+        `charset; fix the source name or the encoding scheme before relaxing this guard.`,
+    );
+  }
+}
+
 /**
  * Encode an internal dotted tool name to an Anthropic-API-safe form.
  * "crm-query.contact.get" → "crm-query__contact__get"
@@ -38,7 +58,9 @@ export function encodeToolName(name: string): string {
       `[AnthropicToolAdapter] encodeToolName: source tool name "${name}" already contains "__". Choose a different separator or pre-sanitize the name.`,
     );
   }
-  return name.replace(/\./g, "__");
+  const encoded = name.replace(/\./g, "__");
+  assertValidAnthropicToolName(encoded);
+  return encoded;
 }
 
 /**

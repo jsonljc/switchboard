@@ -30,6 +30,17 @@ describe("encodeToolName", () => {
     expect(() => encodeToolName("bad__name")).toThrow(/already contains "__"/);
     expect(() => encodeToolName("crm-query__contact")).toThrow(/already contains "__"/);
   });
+
+  describe("encodeToolName encoded-output validation", () => {
+    it("throws when the encoded name violates Anthropic's tool-name pattern", () => {
+      // A space survives "."→"__" encoding and breaks ^[a-zA-Z0-9_-]{1,128}$
+      expect(() => encodeToolName("bad name.op")).toThrow(/violates Anthropic/);
+    });
+
+    it("accepts a normal dotted tool name (encodes cleanly)", () => {
+      expect(encodeToolName("crm-query.contact.get")).toBe("crm-query__contact__get");
+    });
+  });
 });
 
 describe("decodeToolName", () => {
