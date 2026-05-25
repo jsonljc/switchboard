@@ -7,12 +7,11 @@ import {
   type LLMResponse,
   type LLMContentBlock,
   type LLMStopReason,
+  type LLMToolResultBlock,
 } from "../llm-types.js";
 
-// Track current Anthropic model defaults centrally. Do not propagate the
-// pre-existing stale `claude-sonnet-4-5-20250514` literal from
-// tool-calling-adapter.ts into this new adapter — updating that legacy file's
-// default is a separate cleanup outside PR-4 scope.
+// encodeToolName / decodeToolName are the sole "." ↔ "__" boundary for both
+// tool definitions and outgoing message history (tool_use blocks).
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
 const PROVIDER = "anthropic";
@@ -77,6 +76,32 @@ const KNOWN_STOP_REASONS: ReadonlySet<LLMStopReason> = new Set([
   "max_tokens",
 ]);
 
+/**
+ * Map a provider-neutral message's content to the Anthropic wire shape, encoding
+ * tool_use names ("."→"__") so multi-turn history satisfies the API tool-name
+ * pattern. Outgoing content is constructed by our executor (decoded blocks),
+ * so non-tool_use blocks (text, tool_result) pass through unchanged.
+ */
+function encodeOutgoingContent(content: LLMMessage["content"]): Anthropic.MessageParam["content"] {
+  if (typeof content === "string") return content;
+  // Exhaustive block handling: encode tool_use names; pass text/tool_result
+  // through; THROW on any unknown block so a future shape can't silently bypass
+  // encoding (mirrors the response-side LLMAdapterShapeMismatchError discipline).
+  // The array narrowing is only to make `.map` callable over the union-of-arrays;
+  // the real guard is the exhaustive switch below.
+  return (content as Array<LLMContentBlock | LLMToolResultBlock>).map((block) => {
+    if (block.type === "tool_use") {
+      return { ...block, name: encodeToolName(block.name) };
+    }
+    if (block.type === "text" || block.type === "tool_result") {
+      return block;
+    }
+    throw new Error(
+      `[AnthropicToolAdapter] unsupported outgoing content block: ${JSON.stringify(block)}`,
+    );
+  }) as Anthropic.MessageParam["content"];
+}
+
 export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
   constructor(private client: Anthropic) {}
 
@@ -89,7 +114,7 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
   }): Promise<LLMResponse> {
     const anthropicMessages: Anthropic.MessageParam[] = params.messages.map((m) => ({
       role: m.role,
-      content: m.content as Anthropic.MessageParam["content"],
+      content: encodeOutgoingContent(m.content),
     }));
 
     const anthropicTools: Anthropic.Tool[] | undefined =
