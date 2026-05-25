@@ -52,12 +52,19 @@ tools:
   - escalate
 
 context:
+  # Advisory at runtime: required:false so a missing scope degrades to empty
+  # (fail-open) rather than 500-ing a live conversation. The claim classifier is
+  # the runtime hard gate; presence is enforced by provisioning + the A0 eval
+  # preflight, NOT by failing live traffic. Do not flip these back to required.
+  # BUSINESS_FACTS is the exception — required:true (builder-owned, must be present).
   - kind: playbook
     scope: objection-handling
     inject_as: PLAYBOOK_CONTEXT
+    required: false
   - kind: policy
     scope: messaging-rules
     inject_as: POLICY_CONTEXT
+    required: false
   - kind: business-facts
     scope: operator-approved
     inject_as: BUSINESS_FACTS
@@ -65,6 +72,7 @@ context:
   - kind: playbook
     scope: qualification-framework
     inject_as: QUALIFICATION_CONTEXT
+    required: false
   - kind: policy
     scope: claim-boundaries
     inject_as: CLAIM_BOUNDARIES
