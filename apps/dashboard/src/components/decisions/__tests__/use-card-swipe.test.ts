@@ -298,6 +298,61 @@ describe("useCardSwipe", () => {
     });
   });
 
+  // ---- consumeClick: suppress the trailing synthetic click after a drag ----
+
+  describe("consumeClick", () => {
+    it("returns true with no preceding gesture (a genuine tap)", () => {
+      const { onApprove, onSkip, onPrimeBlocked } = makeHandlers();
+      const { result } = renderHook(() =>
+        useCardSwipe({ swipeApproves: true, onApprove, onSkip, onPrimeBlocked }),
+      );
+      expect(result.current.consumeClick()).toBe(true);
+    });
+
+    it("returns true after a no-move down/up (tap, not drag)", () => {
+      const { onApprove, onSkip, onPrimeBlocked } = makeHandlers();
+      const { result } = renderHook(() =>
+        useCardSwipe({ swipeApproves: true, onApprove, onSkip, onPrimeBlocked }),
+      );
+      act(() => {
+        result.current.onDown({ clientX: 0, clientY: 0 } as React.MouseEvent);
+      });
+      act(() => {
+        result.current.onUp();
+      });
+      expect(result.current.consumeClick()).toBe(true);
+    });
+
+    it("returns false after a sub-threshold move (snap-back is still a drag)", () => {
+      const { onApprove, onSkip, onPrimeBlocked } = makeHandlers();
+      const { result } = renderHook(() =>
+        useCardSwipe({ swipeApproves: true, onApprove, onSkip, onPrimeBlocked }),
+      );
+      simulateDrag(result, 40);
+      expect(result.current.consumeClick()).toBe(false);
+    });
+
+    it("returns false after a committed swipe-right, then resets to true", () => {
+      const { onApprove, onSkip, onPrimeBlocked } = makeHandlers();
+      const { result } = renderHook(() =>
+        useCardSwipe({ swipeApproves: true, onApprove, onSkip, onPrimeBlocked }),
+      );
+      simulateDrag(result, 220);
+      expect(result.current.consumeClick()).toBe(false);
+      // The flag is single-use — a follow-up consume with no new gesture is a tap.
+      expect(result.current.consumeClick()).toBe(true);
+    });
+
+    it("returns false after a blocked swipe-right (primeBlocked path)", () => {
+      const { onApprove, onSkip, onPrimeBlocked } = makeHandlers();
+      const { result } = renderHook(() =>
+        useCardSwipe({ swipeApproves: false, onApprove, onSkip, onPrimeBlocked }),
+      );
+      simulateDrag(result, 220);
+      expect(result.current.consumeClick()).toBe(false);
+    });
+  });
+
   // ---- vertical drag is ignored ----
 
   describe("vertical drag is ignored (axis lock)", () => {

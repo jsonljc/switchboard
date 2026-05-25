@@ -222,6 +222,40 @@ describe("<InboxDecisionCard>", () => {
     });
   });
 
+  // The browser emits a synthetic `click` AFTER mousedown→mousemove→mouseup.
+  // testing-library does NOT synthesize it, so we fire it explicitly to exercise
+  // the trailing-click path that the consumeClick suppression guards against.
+  describe("trailing synthetic click after a gesture", () => {
+    it("sub-threshold drag then click does NOT open detail (it was a drag, not a tap)", () => {
+      const { track, container, onOpenDetail } = renderCard(makeApproval(lowSafe));
+      const body = container.querySelector("[data-card-body]") as HTMLElement;
+      drag(track, 40); // moved past the dead-zone but snapped back
+      vi.runAllTimers();
+      fireEvent.click(body); // the browser's trailing synthetic click
+      expect(onOpenDetail).not.toHaveBeenCalled();
+    });
+
+    it("blocked swipe-right then click opens detail EXACTLY ONCE (via prime, not doubled)", () => {
+      const financial: RiskContract = { ...lowSafe, financialEffect: true };
+      const { track, container, onApprove, onOpenDetail } = renderCard(makeApproval(financial));
+      const body = container.querySelector("[data-card-body]") as HTMLElement;
+      drag(track, 220); // past threshold, blocked → primeBlocked calls onOpenDetail once
+      vi.runAllTimers();
+      fireEvent.click(body); // trailing click must be suppressed, not a second open
+      expect(onApprove).not.toHaveBeenCalled();
+      expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    });
+
+    it("a genuine no-move tap (down→up then click) opens detail once", () => {
+      const { container, onOpenDetail } = renderCard(makeApproval(lowSafe));
+      const body = container.querySelector("[data-card-body]") as HTMLElement;
+      fireEvent.mouseDown(body, { clientX: 0, clientY: 0 });
+      fireEvent.mouseUp(body, { clientX: 0, clientY: 0 });
+      fireEvent.click(body);
+      expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // (e) contact line + foot render from meta
   describe("contact line + foot", () => {
     it("renders the contact name and channel from meta", () => {

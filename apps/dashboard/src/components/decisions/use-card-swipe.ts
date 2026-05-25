@@ -57,6 +57,17 @@ export interface UseCardSwipeResult {
   onDown: (e: React.MouseEvent | React.TouchEvent) => void;
   onMove: (e: React.MouseEvent | React.TouchEvent) => void;
   onUp: () => void;
+  /**
+   * Consume the trailing synthetic `click` a browser emits after a
+   * mousedown→mousemove→mouseup sequence. Returns `false` (and clears the flag)
+   * if the just-finished gesture actually moved past the dead-zone — meaning the
+   * click is a drag artifact, NOT a tap, and should be ignored. Returns `true`
+   * when the preceding interaction was a genuine no-move tap.
+   *
+   * Cards with a whole-card tap handler MUST call this first and bail on `false`.
+   * Cards without a card-tap (e.g. SwipeDecisionCard) simply never call it.
+   */
+  consumeClick: () => boolean;
 }
 
 /**
@@ -87,6 +98,11 @@ export function useCardSwipe({
   const [armed, setArmed] = useState(false);
 
   const drag = useRef<DragState>({ startX: 0, startY: 0, axis: null, rawDx: 0 });
+
+  // When a gesture moves past the dead-zone, the browser still emits a trailing
+  // synthetic `click` after onUp resets dragging/dx. That click is a drag
+  // artifact, not a tap. We flag it here and let the card consume it.
+  const suppressNextClickRef = useRef(false);
 
   // Keep refs to the latest callbacks so setTimeout closures always call the
   // most-recent versions, avoiding stale-prop captures across re-renders.
@@ -171,6 +187,12 @@ export function useCardSwipe({
     setDragging(false);
     const intent = drag.current.rawDx;
 
+    // If the pointer moved past the dead-zone at all — committed, primed, OR
+    // snapped back — the trailing synthetic click is a drag artifact, not a tap.
+    // (An axis lock to "x" only happens after the dead-zone is crossed.)
+    const moved = Math.abs(intent) > AXIS_LOCK_DEADZONE || drag.current.axis === "x";
+    if (moved) suppressNextClickRef.current = true;
+
     // Swipe-LEFT → Skip is ALWAYS allowed.
     if (intent < -COMMIT_THRESHOLD) {
       commitSkip();
@@ -189,6 +211,16 @@ export function useCardSwipe({
     setDx(0);
   };
 
+  /** See UseCardSwipeResult.consumeClick. Returns false (and clears) if the
+   *  last gesture moved; true for a genuine no-move tap. */
+  const consumeClick = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return false;
+    }
+    return true;
+  };
+
   return {
     dx,
     dragging,
@@ -199,5 +231,6 @@ export function useCardSwipe({
     onDown,
     onMove,
     onUp,
+    consumeClick,
   };
 }

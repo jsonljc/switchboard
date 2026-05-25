@@ -85,17 +85,35 @@ export function InboxDecisionCard({
 
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const { dx, dragging, exiting, armed, commitApprove, commitSkip, onDown, onMove, onUp } =
-    useCardSwipe({
-      swipeApproves,
-      onApprove,
-      onSkip,
-      onPrimeBlocked: onOpenDetail,
-    });
+  const {
+    dx,
+    dragging,
+    exiting,
+    armed,
+    commitApprove,
+    commitSkip,
+    onDown,
+    onMove,
+    onUp,
+    consumeClick,
+  } = useCardSwipe({
+    swipeApproves,
+    onApprove,
+    onSkip,
+    onPrimeBlocked: onOpenDetail,
+  });
 
-  /** Whole-card tap → detail. Only fires when no drag occurred and nothing is animating. */
+  /**
+   * Whole-card tap → detail. The browser fires a synthetic `click` after every
+   * mousedown→mousemove→mouseup, including a sub-threshold drag (snap-back) or a
+   * blocked swipe-right (which already opened detail via onPrimeBlocked). By the
+   * time that click lands, onUp has reset dragging/dx so those guards are clear —
+   * so we must first consume the suppression flag the hook set during onUp. Only
+   * a genuine no-move tap survives.
+   */
   const handleCardTap = () => {
-    if (dragging || dx !== 0 || exiting) return;
+    if (exiting) return;
+    if (!consumeClick()) return;
     onOpenDetail();
   };
 
