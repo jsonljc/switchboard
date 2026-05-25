@@ -81,14 +81,22 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
       return reply.code(200).send({ challenge: payload["challenge"] });
     }
 
-    if (gatewayEntry.adapter.verifyRequest) {
-      const rawBody =
-        ((request as unknown as Record<string, unknown>).rawBody as string) ??
-        JSON.stringify(request.body);
-      const headers = request.headers as Record<string, string | undefined>;
-      if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
-        return reply.code(401).send({ error: "Invalid signature" });
-      }
+    // Fail closed: an adapter with no verifyRequest cannot authenticate the
+    // payload, so we must not process it. (The Slack url_verification handshake
+    // above is the only path allowed through before this gate.)
+    if (!gatewayEntry.adapter.verifyRequest) {
+      app.log.warn(
+        { webhookPath, channel: gatewayEntry.channel },
+        "Managed webhook adapter has no verifyRequest — rejecting unsigned payload",
+      );
+      return reply.code(401).send({ error: "Signature verification unavailable" });
+    }
+    const rawBody =
+      ((request as unknown as Record<string, unknown>).rawBody as string) ??
+      JSON.stringify(request.body);
+    const headers = request.headers as Record<string, string | undefined>;
+    if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
+      return reply.code(401).send({ error: "Invalid signature" });
     }
 
     if (gatewayEntry.channel === "whatsapp" && deps.onStatusUpdate) {
