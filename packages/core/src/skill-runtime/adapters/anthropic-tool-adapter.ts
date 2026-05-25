@@ -95,7 +95,7 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     const anthropicTools: Anthropic.Tool[] | undefined =
       params.tools.length > 0
         ? params.tools.map((t) => ({
-            name: encodeToolName(t.name), // encode "." → "__" so the name satisfies ^[a-zA-Z0-9_-]+$
+            name: encodeToolName(t.name), // encode "." → "__" so the name satisfies ^[a-zA-Z0-9_-]{1,128}$
             description: t.description,
             input_schema: t.input_schema as Anthropic.Tool.InputSchema,
           }))

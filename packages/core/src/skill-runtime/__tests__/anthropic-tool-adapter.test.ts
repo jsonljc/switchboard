@@ -37,8 +37,9 @@ describe("encodeToolName", () => {
       expect(() => encodeToolName("bad name.op")).toThrow(/violates Anthropic/);
     });
 
-    it("accepts a normal dotted tool name (encodes cleanly)", () => {
-      expect(encodeToolName("crm-query.contact.get")).toBe("crm-query__contact__get");
+    it("throws when the encoded name exceeds 128 characters", () => {
+      // 129 alphanumeric chars: passes the "__" guard but fails ^...{1,128}$
+      expect(() => encodeToolName("a".repeat(129))).toThrow(/violates Anthropic/);
     });
   });
 });
