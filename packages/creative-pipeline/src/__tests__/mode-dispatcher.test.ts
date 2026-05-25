@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeModeDispatch } from "../mode-dispatcher.js";
+import { executeModeDispatch, createModeDispatcher } from "../mode-dispatcher.js";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("inngest", () => ({
+  Inngest: vi.fn().mockImplementation(() => ({
+    createFunction: createFunctionSpy,
+    schemas: new Map(),
+  })),
+}));
 
 function createMockStep() {
   return {
@@ -55,5 +67,28 @@ describe("executeModeDispatch", () => {
         mode: "polished",
       }),
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createModeDispatcher
+// ---------------------------------------------------------------------------
+
+describe("createModeDispatcher — onFailure wiring", () => {
+  it("passes onFailure callback into createFunction config when provided", () => {
+    createFunctionSpy.mockClear();
+    const onFailure = async (_arg: unknown) => {};
+    createModeDispatcher(onFailure);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("does not set onFailure key when no callback provided", () => {
+    createFunctionSpy.mockClear();
+    createModeDispatcher();
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["onFailure"]).toBeUndefined();
   });
 });

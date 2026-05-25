@@ -1,4 +1,5 @@
 import { Inngest } from "inngest";
+import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 
@@ -79,6 +80,7 @@ export async function executeReconciliation(
 }
 
 export interface StripeReconciliationDeps {
+  failure: AsyncFailureContext;
   listSubscribedOrganizations: () => Promise<
     Array<{
       id: string;
@@ -150,6 +152,15 @@ export function createStripeReconciliationCron(deps: StripeReconciliationDeps) {
       name: "Stripe Subscription Reconciliation",
       retries: 2,
       triggers: [{ cron: "0 * * * *" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "stripe-reconciliation-hourly",
+          eventDomain: "stripe-reconciliation",
+          riskCategory: "high",
+          alert: true,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step }) => {
       return executeStripeReconciliation(step as unknown as StepTools, deps);

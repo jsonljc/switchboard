@@ -1,10 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeReconciliation, executeStripeReconciliation } from "../reconciliation.js";
+import {
+  executeReconciliation,
+  executeStripeReconciliation,
+  createStripeReconciliationCron,
+} from "../reconciliation.js";
 import type {
   ReconciliationCronDeps,
   StripeReconciliationDeps,
   StepTools,
 } from "../reconciliation.js";
+import type { AsyncFailureContext } from "@switchboard/core";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("inngest", () => ({
+  Inngest: vi.fn().mockImplementation(() => ({
+    createFunction: createFunctionSpy,
+  })),
+}));
 
 function makeStep(): StepTools {
   return {
@@ -100,10 +116,23 @@ describe("executeReconciliation", () => {
 // Stripe Reconciliation
 // ---------------------------------------------------------------------------
 
+function makeFailureContext(): AsyncFailureContext {
+  return {
+    auditLedger: {
+      record: vi.fn().mockResolvedValue({}),
+    } as unknown as AsyncFailureContext["auditLedger"],
+    operatorAlerter: {
+      alert: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AsyncFailureContext["operatorAlerter"],
+    inngest: { send: vi.fn().mockResolvedValue(undefined) },
+  };
+}
+
 function makeStripeDeps(
   overrides: Partial<StripeReconciliationDeps> = {},
 ): StripeReconciliationDeps {
   return {
+    failure: makeFailureContext(),
     listSubscribedOrganizations: vi.fn().mockResolvedValue([]),
     retrieveStripeSubscription: vi.fn().mockResolvedValue({
       status: "active",
@@ -197,5 +226,20 @@ describe("executeStripeReconciliation", () => {
 
     const result = await executeStripeReconciliation(makeStep(), deps);
     expect(result.failed).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createStripeReconciliationCron
+// ---------------------------------------------------------------------------
+
+describe("createStripeReconciliationCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config", () => {
+    createFunctionSpy.mockClear();
+    const failure = makeFailureContext();
+    createStripeReconciliationCron({ ...makeStripeDeps(), failure });
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
   });
 });

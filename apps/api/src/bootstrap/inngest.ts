@@ -34,6 +34,7 @@ import {
   emitRecommendation,
   executeDailyPatternDecay,
   getMetrics,
+  makeOnFailureHandler,
   NoopOperatorAlerter,
   type AsyncFailureContext,
   type OperatorAlerter,
@@ -382,8 +383,19 @@ export async function registerInngest(
     },
   };
 
+  // ---------------------------------------------------------------------------
+  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
+  // wiring for Class-A Inngest functions (Phase 3B failure contract).
+  // ---------------------------------------------------------------------------
+  const asyncFailure: AsyncFailureContext = {
+    auditLedger: app.auditLedger,
+    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
+    inngest: { send: (e) => inngestClient.send(e) },
+  };
+
   // Stripe reconciliation cron dependencies
   const stripeReconciliationDeps: StripeReconciliationDeps = {
+    failure: asyncFailure,
     listSubscribedOrganizations: async () => {
       const orgs = await app.prisma!.organizationConfig.findMany({
         where: {
@@ -429,6 +441,7 @@ export async function registerInngest(
 
   // Lead retry cron dependencies
   const leadRetryDeps: LeadRetryCronDeps = {
+    failure: asyncFailure,
     findPendingLeads: async () => {
       const now = new Date();
       const records = await app.prisma!.pendingLeadRetry.findMany({
@@ -641,17 +654,6 @@ export async function registerInngest(
   });
 
   // ---------------------------------------------------------------------------
-  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
-  // wiring in subsequent tasks (Phase 3B failure contract).
-  // ---------------------------------------------------------------------------
-  const asyncFailure: AsyncFailureContext = {
-    auditLedger: app.auditLedger,
-    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
-    inngest: { send: (e) => inngestClient.send(e) },
-  };
-  void asyncFailure; // consumed by onFailure wiring in subsequent tasks
-
-  // ---------------------------------------------------------------------------
   // Riley PR-3: outcome-attribution dispatch + per-org worker (Task 10)
   // ---------------------------------------------------------------------------
   // Dispatch cron fires daily at 07:00 UTC and emits one "riley.outcome.attribute"
@@ -678,7 +680,17 @@ export async function registerInngest(
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
-      createModeDispatcher(),
+      createModeDispatcher(
+        makeOnFailureHandler(
+          {
+            functionId: "creative-mode-dispatcher",
+            eventDomain: "creative.dispatch",
+            riskCategory: "high",
+            alert: true,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
       createCreativeJobRunner(jobStore, { apiKey }, openaiApiKey ? { openaiApiKey } : undefined),
       createUgcJobRunner({
         jobStore,
