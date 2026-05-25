@@ -34,6 +34,9 @@ import {
   emitRecommendation,
   executeDailyPatternDecay,
   getMetrics,
+  NoopOperatorAlerter,
+  type AsyncFailureContext,
+  type OperatorAlerter,
   type PatternDecayDependencies,
   type RecommendationInput,
   type StepTools as PatternDecayStepTools,
@@ -98,6 +101,11 @@ export interface RegisterInngestOptions {
    * primary webhook path. No parallel mutation paths.
    */
   instantFormAdapter?: InstantFormAdapter;
+  /**
+   * Operator alerter for async failure notifications. Falls back to
+   * NoopOperatorAlerter when not provided (development / test environments).
+   */
+  operatorAlerter?: OperatorAlerter;
 }
 
 export async function registerInngest(
@@ -631,6 +639,17 @@ export async function registerInngest(
     playbookReader: { readForOrganization: async () => null },
     governanceConfigResolver: { resolve: async () => null },
   });
+
+  // ---------------------------------------------------------------------------
+  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
+  // wiring in subsequent tasks (Phase 3B failure contract).
+  // ---------------------------------------------------------------------------
+  const asyncFailure: AsyncFailureContext = {
+    auditLedger: app.auditLedger,
+    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
+    inngest: { send: (e) => inngestClient.send(e) },
+  };
+  void asyncFailure; // consumed by onFailure wiring in subsequent tasks
 
   // ---------------------------------------------------------------------------
   // Riley PR-3: outcome-attribution dispatch + per-org worker (Task 10)

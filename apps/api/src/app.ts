@@ -829,7 +829,7 @@ export async function buildServer() {
   app.get("/metrics", metricsRoute);
 
   // --- Inngest serve handler (creative pipeline orchestration) ---
-  await registerInngest(app, { instantFormAdapter });
+  await registerInngest(app, { instantFormAdapter, operatorAlerter });
 
   // --- Phase 3b: lifecycle disqualification route deps ---
   // The lifecycle hook was already bootstrapped and decorated on app earlier
