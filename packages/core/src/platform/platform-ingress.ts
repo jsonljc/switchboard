@@ -289,12 +289,39 @@ export class PlatformIngress {
 
     // 7. Execute
     const executionStartedAt = new Date().toISOString();
-    const executionResult = await modeRegistry.dispatch(
-      workUnit.resolvedMode,
-      workUnit,
-      decision.constraints,
-      { traceId: workUnit.traceId, governanceDecision: decision },
-    );
+    let executionResult: ExecutionResult;
+    try {
+      executionResult = await modeRegistry.dispatch(
+        workUnit.resolvedMode,
+        workUnit,
+        decision.constraints,
+        { traceId: workUnit.traceId, governanceDecision: decision },
+      );
+    } catch (executionErr) {
+      // Invariant (#677 §2.4): persistTrace never rethrows (it owns its own retry +
+      // infra-failure audit), and recordInfrastructureFailure is non-throwing, so the
+      // original executionErr always survives to the rethrow below — trace-persist
+      // failure can never mask it. EXECUTION_EXCEPTION is a platform code, never a
+      // domain code (#677 §2.3): it must not appear in OPERATOR_INTENT_ERROR_CODES.
+      const completedAt = new Date().toISOString();
+      const failed = this.buildFailedResult(workUnit, "EXECUTION_EXCEPTION", "Execution failed");
+      await this.persistTrace(
+        traceStore,
+        workUnit,
+        decision,
+        governanceCompletedAt,
+        failed,
+        executionStartedAt,
+        completedAt,
+      );
+      await this.recordInfrastructureFailure({
+        errorType: "execution_exception",
+        error: executionErr,
+        workUnit,
+        retryable: false,
+      });
+      throw executionErr;
+    }
     const completedAt = new Date().toISOString();
 
     await this.persistTrace(
@@ -370,7 +397,7 @@ export class PlatformIngress {
   }
 
   private async recordInfrastructureFailure(input: {
-    errorType: "governance_eval_exception" | "trace_persist_failed";
+    errorType: "governance_eval_exception" | "trace_persist_failed" | "execution_exception";
     error: unknown;
     workUnit?: WorkUnit;
     retryable: boolean;
