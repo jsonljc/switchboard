@@ -136,6 +136,13 @@ export interface BuildTestServerOptions {
   /** Provide a mock OutboxWriter for revenue ingress tests (#654-B).
    * Required alongside `revenueStore` for the revenue intent to register. */
   outboxWriter?: import("../bootstrap/operator-intents/revenue.js").OutboxWriter;
+  /**
+   * Transaction runner for the revenue handler. Defaults to a no-op sentinel
+   * `async (fn) => fn(undefined)` so handler unit tests work without a real
+   * Prisma client. Integration tests that want true rollback behaviour should
+   * supply a real `prisma.$transaction` runner.
+   */
+  runInTransaction?: import("../bootstrap/operator-intents/revenue.js").RunInTransaction;
 }
 
 export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
@@ -449,6 +456,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     consentService: options.consentService,
     revenueStore: app.revenueEventStore ?? undefined,
     outboxWriter: options.outboxWriter,
+    runInTransaction: options.runInTransaction ?? (async (fn) => fn(undefined)),
   });
 
   const platformLifecycle = new PlatformLifecycle({
