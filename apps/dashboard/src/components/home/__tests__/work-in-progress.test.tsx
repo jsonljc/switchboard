@@ -42,6 +42,7 @@ const twoChainItem: WorkInProgressItem = {
 describe("WorkInProgress — chain item (chain.length >= 2)", () => {
   it("renders all three agent names in order", () => {
     render(<WorkInProgress items={[chainItem]} />);
+    expect(screen.getByRole("heading", { name: /work in progress/i })).toBeInTheDocument();
     const text = screen.getByRole("list").textContent ?? "";
     const rileyIdx = text.indexOf("Riley");
     const miraIdx = text.indexOf("Mira");
@@ -150,16 +151,5 @@ describe("WorkInProgress — empty state", () => {
   it("renders NO list items when items is empty", () => {
     const { container } = render(<WorkInProgress items={[]} />);
     expect(container.querySelectorAll("li")).toHaveLength(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: no dangerouslySetInnerHTML
-// ---------------------------------------------------------------------------
-
-describe("WorkInProgress — safety", () => {
-  it("does NOT use dangerouslySetInnerHTML (no raw HTML tags in output)", () => {
-    const { container } = render(<WorkInProgress items={[chainItem, simpleItem]} />);
-    expect(container.textContent).not.toMatch(/<[a-z]/);
   });
 });

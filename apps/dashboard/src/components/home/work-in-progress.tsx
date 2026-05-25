@@ -55,9 +55,7 @@ export function WorkInProgress({ items }: { items: WorkInProgressItem[] }) {
               <span className={styles.quietText}>
                 {hasChain && (
                   <>
-                    <span
-                      aria-label={`Agent chain: ${item.chain!.map(agentDisplayName).join(" to ")}`}
-                    >
+                    <span>
                       {item.chain!.map((key, i) => (
                         <span key={key}>
                           {i > 0 && <span aria-hidden="true"> → </span>}

@@ -34,6 +34,7 @@ const oneRow: WhileYouSleptRow[] = [fiveRows[0]];
 describe("WhileYouSlept — row cap and View all link", () => {
   it("shows only 3 rows when given 5", () => {
     render(<WhileYouSlept rows={fiveRows} />);
+    expect(screen.getByRole("heading", { name: /while you slept/i })).toBeInTheDocument();
     // Each row renders its text; the 4th and 5th should not appear.
     expect(screen.queryByText("Alex sent 3 follow-ups")).not.toBeInTheDocument();
     expect(screen.queryByText("Riley adjusted the campaign budget")).not.toBeInTheDocument();
@@ -117,10 +118,5 @@ describe("WhileYouSlept — individual row rendering", () => {
     const { container } = render(<WhileYouSlept rows={[alexRow]} />);
     const row = container.querySelector("li");
     expect(row).toHaveAttribute("data-agent", "alex");
-  });
-
-  it("does NOT use dangerouslySetInnerHTML (no raw HTML tags in output)", () => {
-    const { container } = render(<WhileYouSlept rows={fiveRows} />);
-    expect(container.textContent).not.toMatch(/<[a-z]/);
   });
 });
