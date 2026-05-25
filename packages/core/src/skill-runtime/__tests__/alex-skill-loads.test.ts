@@ -19,4 +19,14 @@ describe("alex skill context requirements", () => {
       required: false,
     });
   });
+
+  it("marks advisory knowledge slots required:false (runtime fail-open; provisioning enforces presence)", () => {
+    const skill = loadSkill("alex", join(REPO_ROOT, "skills"));
+    const req = (injectAs: string) => skill.context?.find((c) => c.injectAs === injectAs);
+    expect(req("PLAYBOOK_CONTEXT")?.required).toBe(false);
+    expect(req("POLICY_CONTEXT")?.required).toBe(false);
+    expect(req("QUALIFICATION_CONTEXT")?.required).toBe(false);
+    expect(req("CLAIM_BOUNDARIES")?.required).toBe(false);
+    expect(req("BUSINESS_FACTS")?.required).toBe(true);
+  });
 });
