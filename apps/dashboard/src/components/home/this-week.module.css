@@ -82,14 +82,14 @@
   font-style: italic;
   font-weight: 500;
 }
-.weeknoteBody .num {
+.num {
   font-weight: 600;
   font-feature-settings: "tnum";
 }
-.weeknoteBody .numUp {
+.numUp {
   color: hsl(var(--agent-active));
 }
-.weeknoteBody .numDown {
+.numDown {
   color: hsl(var(--destructive));
 }
 /* Editorial drop cap — only on the first paragraph of the note. */
