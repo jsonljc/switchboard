@@ -1,6 +1,8 @@
 import { Inngest } from "inngest";
 import {
+  makeOnFailureHandler,
   runRileyOutcomeAttribution,
+  type AsyncFailureContext,
   type AttributableRecommendationStore,
   type MetaInsightsProvider,
   type RecommendationOutcomeStore,
@@ -12,6 +14,7 @@ import {
 const inngestClient = new Inngest({ id: "switchboard" });
 
 export interface RileyOutcomeAttributionWorkerDeps {
+  failure: AsyncFailureContext;
   runRileyOutcomeAttribution: (args: {
     orgId: string;
     now: Date;
@@ -62,7 +65,17 @@ export function createRileyOutcomeAttributionWorker(deps: RileyOutcomeAttributio
   return inngestClient.createFunction(
     {
       id: "riley-outcome-attribution-worker",
+      retries: 2,
       triggers: [{ event: "riley.outcome.attribute" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "riley-outcome-attribution-worker",
+          eventDomain: "riley.outcome-attribution",
+          riskCategory: "medium",
+          alert: false,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ event }) => executeRileyOutcomeAttributionWorker(deps, event),
   );

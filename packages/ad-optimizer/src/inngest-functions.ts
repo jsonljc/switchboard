@@ -341,13 +341,17 @@ export async function executeRileyOutcomeAttributionDispatch(
   return { dispatched: orgs.length };
 }
 
-export function createRileyOutcomeAttributionDispatch(deps: RileyOutcomeAttributionDispatchDeps) {
+export function createRileyOutcomeAttributionDispatch(
+  deps: RileyOutcomeAttributionDispatchDeps,
+  onFailure?: (arg: unknown) => Promise<void>,
+) {
   return inngestClient.createFunction(
     {
       id: "riley-outcome-attribution-dispatch",
       name: "Riley Outcome Attribution Dispatch",
       retries: 2,
       triggers: [{ cron: "0 7 * * *" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ step }) => {
       return executeRileyOutcomeAttributionDispatch(

@@ -663,13 +663,25 @@ export async function registerInngest(
   // up each event and runs the pure attribution orchestrator from @switchboard/core.
   // Kill-switch: set RILEY_OUTCOME_ATTRIBUTION_ENABLED=true to enable; default off
   // so the deploy is dark until the bake period completes.
-  const rileyOutcomeDispatch = createRileyOutcomeAttributionDispatch({
-    listRileyOrgs: () => listRileyActiveOrgs(app.prisma!),
-    sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
-      inngestClient.send(event),
-  });
+  const rileyOutcomeDispatch = createRileyOutcomeAttributionDispatch(
+    {
+      listRileyOrgs: () => listRileyActiveOrgs(app.prisma!),
+      sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
+        inngestClient.send(event),
+    },
+    makeOnFailureHandler(
+      {
+        functionId: "riley-outcome-attribution-dispatch",
+        eventDomain: "riley.outcome-attribution.dispatch",
+        riskCategory: "low",
+        alert: false,
+      },
+      asyncFailure,
+    ) as (arg: unknown) => Promise<void>,
+  );
 
   const rileyOutcomeWorker = createRileyOutcomeAttributionWorker({
+    failure: asyncFailure,
     runRileyOutcomeAttribution: bindRileyOutcomeOrchestrator({
       recommendationStore: attributableRecommendationStore,
       createInsightsProvider: (orgId) => createMetaInsightsProviderForOrg(orgId, app.prisma!),

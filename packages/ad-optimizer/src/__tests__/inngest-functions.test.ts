@@ -8,6 +8,7 @@ import {
   createDailyCheckDispatcher,
   createWeeklyAuditCron,
   createDailySignalHealthCron,
+  createRileyOutcomeAttributionDispatch,
   executeRileyOutcomeAttributionDispatch,
   type CronDependencies,
   type SignalHealthCronDependencies,
@@ -558,6 +559,36 @@ describe("createDailySignalHealthCron — onFailure wiring", () => {
   it("does not set onFailure key when no callback provided", () => {
     createFunctionSpy.mockClear();
     createDailySignalHealthCron(makeMinimalSignalHealthDeps());
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["onFailure"]).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createRileyOutcomeAttributionDispatch (Class C)
+// ---------------------------------------------------------------------------
+
+function makeMinimalRileyDispatchDeps(): RileyOutcomeAttributionDispatchDeps {
+  return {
+    listRileyOrgs: vi.fn().mockResolvedValue([]),
+    sendEvent: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+describe("createRileyOutcomeAttributionDispatch — onFailure wiring", () => {
+  it("passes onFailure into createFunction config when provided", () => {
+    createFunctionSpy.mockClear();
+    const onFailure = async (_arg: unknown) => {};
+    createRileyOutcomeAttributionDispatch(makeMinimalRileyDispatchDeps(), onFailure);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("does not set onFailure key when no callback provided", () => {
+    createFunctionSpy.mockClear();
+    createRileyOutcomeAttributionDispatch(makeMinimalRileyDispatchDeps());
 
     const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(config?.["onFailure"]).toBeUndefined();
