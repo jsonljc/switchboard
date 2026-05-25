@@ -16,7 +16,7 @@ interface TeamPulseProps {
  */
 export function TeamPulse({ agents }: TeamPulseProps) {
   return (
-    <div className={styles.pulseRibbon}>
+    <div className={styles.pulseRibbon} role="list">
       {agents.map((agent) => {
         const { key, name, status, setUp } = agent;
         const isOn = status === "working" && setUp;
@@ -28,27 +28,21 @@ export function TeamPulse({ agents }: TeamPulseProps) {
             data-agent={key}
             data-disabled={String(!setUp)}
             data-testid={`agent-chip-${key}`}
+            role="listitem"
           >
-            <span className={styles.agentChipAv}>{name[0]}</span>
+            <span className={styles.agentChipAv} aria-hidden="true">
+              {name[0]}
+            </span>
             <span className={styles.agentChipName}>{name}</span>
             {setUp ? (
               <span
                 className={styles.agentChipStatus}
                 data-on={isOn ? "true" : "false"}
                 data-testid="agent-status-dot"
+                aria-hidden="true"
               />
             ) : (
-              <span
-                style={{
-                  fontSize: "10px",
-                  fontFamily: "var(--mono)",
-                  letterSpacing: "0.04em",
-                  color: "var(--ink-3)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Not set up
-              </span>
+              <span className={styles.agentChipNotSetUp}>Not set up</span>
             )}
           </div>
         );

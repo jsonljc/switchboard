@@ -37,9 +37,11 @@ describe("TeamPulse component", () => {
 
     it("renders the correct initial for each agent in the avatar", () => {
       render(<TeamPulse agents={allAgents} />);
-      // Each avatar shows the first letter of the agent's name
-      const avatars = screen.getAllByText(/^[ARM]$/);
-      expect(avatars).toHaveLength(3);
+      // Scope each lookup to its own chip to avoid collisions with future fixture names
+      for (const agent of allAgents) {
+        const chip = screen.getByTestId(`agent-chip-${agent.key}`);
+        expect(within(chip).getByText(agent.name[0])).toBeInTheDocument();
+      }
     });
   });
 

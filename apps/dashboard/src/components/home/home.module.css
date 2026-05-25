@@ -265,6 +265,13 @@
   background: hsl(var(--agent-active));
   box-shadow: 0 0 0 3px hsl(var(--agent-active) / 0.18);
 }
+.agentChipNotSetUp {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
 
 /* =========================================================
    NEEDS YOU — decision cards live here (stack container)
