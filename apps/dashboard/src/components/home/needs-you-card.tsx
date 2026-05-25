@@ -45,6 +45,7 @@ export function NeedsYouCard({ decision, index }: NeedsYouCardProps) {
   };
 
   const handlePrimary = () => {
+    if (action.isPending) return;
     if (isHandoff) {
       // Phase 2 owns full handoff resolution; for now the primary opens the thread.
       openThread();
@@ -73,6 +74,7 @@ export function NeedsYouCard({ decision, index }: NeedsYouCardProps) {
   };
 
   const handleSecondary = () => {
+    if (action.isPending) return;
     if (isHandoff) {
       // Secondary on a handoff also routes to the thread/inbox in P1-A.
       openThread();

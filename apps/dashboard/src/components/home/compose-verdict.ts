@@ -52,7 +52,10 @@ function buildActiveProof(signals: VerdictSignals): string {
   const { openLeadCount, oldestWaitMin, workingCount, setUpCount } = signals;
   const base = `${openLeadCount} open leads`;
   const oldest = oldestWaitMin != null ? ` · oldest waiting ${oldestWaitMin} min` : "";
-  const working = ` · ${workingCount} of ${setUpCount} working`;
+  const working =
+    workingCount !== undefined && setUpCount !== undefined
+      ? ` · ${workingCount} of ${setUpCount} working`
+      : "";
   return `${base}${oldest}${working}`;
 }
 
@@ -60,7 +63,10 @@ function buildCalmProof(signals: VerdictSignals): string {
   const { openLeadCount, oldestWaitMin, workingCount, setUpCount } = signals;
   const base = `${openLeadCount} open enquiries`;
   const oldest = oldestWaitMin != null ? ` · oldest waiting ${oldestWaitMin} min` : "";
-  const working = ` · ${workingCount} of ${setUpCount} working`;
+  const working =
+    workingCount !== undefined && setUpCount !== undefined
+      ? ` · ${workingCount} of ${setUpCount} working`
+      : "";
   return `${base}${oldest}${working}`;
 }
 

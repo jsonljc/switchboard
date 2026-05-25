@@ -27,8 +27,8 @@ export interface VerdictSignals {
   decisionCount: number;
   openLeadCount: number;
   oldestWaitMin: number | null;
-  workingCount: number;
-  setUpCount: number;
+  workingCount?: number;
+  setUpCount?: number;
   ownerName?: string;
   /** The display name of the top-priority agent (e.g. "Alex"). Used in the active verdict line. */
   topAgentName?: string;

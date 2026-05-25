@@ -112,16 +112,17 @@ export function HomePage() {
   const workingCount = teamPulseAgents.filter((a) => a.status === "working").length;
 
   // ── Verdict signals (honest; fallback when core signals are unavailable) ───
-  // The proof line always prints "N of M working" + open leads, so the verdict
-  // can only render honestly when BOTH the decision feed AND the roster/state
-  // that back those numbers are available; otherwise we show the fallback.
-  const verdictUnavailable = !decisionFeedAvailable || !rosterStateAvailable;
+  // The verdict shape (active/calm/fallback) depends ONLY on the decision feed.
+  // The working-count clause in the proof line depends on roster/state — when
+  // those are down, the clause is simply omitted (workingCount/setUpCount left
+  // undefined) so the verdict shape is not dragged to fallback by a roster blip.
+  const verdictUnavailable = !decisionFeedAvailable;
   const verdictSignals: VerdictSignals = {
     decisionCount,
     openLeadCount,
     oldestWaitMin,
-    workingCount,
-    setUpCount,
+    workingCount: rosterStateAvailable ? workingCount : undefined,
+    setUpCount: rosterStateAvailable ? setUpCount : undefined,
     ownerName: firstName(session.data?.user?.name),
     topAgentName,
     topAgentKey,
@@ -179,7 +180,11 @@ export function HomePage() {
   }
 
   // ── Composition (LOAD-BEARING ordering) ────────────────────────────────────
-  const isCalm = decisionCount === 0;
+  // Only enter CALM layout when the feed is live AND reports zero decisions.
+  // A feed-error state also yields decisionCount=0 — do NOT show the all-clear
+  // CALM promotion in that case; fall through to the ACTIVE layout where
+  // NeedsYou renders null (empty decisions = nothing shown).
+  const isCalm = decisionFeedAvailable && decisionCount === 0;
 
   const verdictNode = <Verdict key="verdict" model={verdict} />;
   const needsYouNode = (

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import type { Decision } from "@/lib/decisions/types";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
@@ -45,7 +45,7 @@ export function NeedsYou({ decisions, onAction, renderItem }: NeedsYouProps) {
       <div className={styles.needsSection}>
         {visible.map((decision, i) => {
           if (renderItem) {
-            return <div key={decision.id}>{renderItem(decision, i)}</div>;
+            return <Fragment key={decision.id}>{renderItem(decision, i)}</Fragment>;
           }
           const cardProps = mapToDecisionCard(decision, i);
           return (

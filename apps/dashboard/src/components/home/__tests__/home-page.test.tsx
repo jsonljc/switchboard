@@ -5,7 +5,7 @@ import type { GreetingViewModel } from "@/lib/agent-home/types";
 import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 import type { ActivityRow } from "@/components/cockpit/types";
-import type { AgentStateEntry } from "@/lib/api-client-types";
+import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
 
 // ── Mutable mock state (house pattern: flip per test in beforeEach/body) ──────
 
@@ -24,7 +24,7 @@ interface GreetingState {
 let alexGreetingState: GreetingState = { data: undefined, isLoading: false, isError: false };
 let rileyGreetingState: GreetingState = { data: undefined, isLoading: false, isError: false };
 
-let rosterState: { data?: { roster: unknown[] }; isError: boolean } = {
+let rosterState: { data?: { roster: AgentRosterEntry[] }; isError: boolean } = {
   data: { roster: [] },
   isError: false,
 };
@@ -312,5 +312,33 @@ describe("HomePage", () => {
     expect(screen.getByText(/don't have a read/i)).toBeInTheDocument();
     // Calm/active lines must NOT appear.
     expect(screen.queryByText(/All caught up/i)).not.toBeInTheDocument();
+  });
+
+  it("roster/agentState error while feed is available → ACTIVE verdict shape, proof has no 'working' clause", () => {
+    // Feed is live with 1 decision.
+    decisionFeedState = {
+      data: {
+        decisions: [makeDecision({ id: "d1" })],
+        counts: { total: 1, approval: 1, handoff: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    };
+    alexGreetingState = { data: makeGreeting(2, 1), isLoading: false, isError: false };
+    // Both roster and agentState fail.
+    rosterState = { data: undefined, isError: true };
+    agentStateState = { data: undefined, isError: true };
+
+    render(<HomePage />);
+
+    // Verdict must be ACTIVE (not fallback) — feed is available.
+    expect(screen.queryByText(/on shift/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/don't have a read/i)).not.toBeInTheDocument();
+    // Active verdict shape: the verdict landmark exists and the fallback copy is absent.
+    const verdictEl = screen.getByLabelText("verdict");
+    expect(verdictEl).toBeInTheDocument();
+    // Active proof line must be present (open leads) but must NOT contain "working".
+    expect(verdictEl.textContent).toMatch(/open leads/i);
+    expect(verdictEl.textContent).not.toMatch(/working/i);
   });
 });
