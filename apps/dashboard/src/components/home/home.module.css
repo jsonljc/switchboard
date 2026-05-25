@@ -81,9 +81,11 @@
 .lineEm {
   font-style: italic;
 }
-/* Agent-colored accent inside the verdict line — identity only, italic. */
+/* Agent-colored accent inside the verdict line — identity only, italic.
+   Default is neutral ink; ACTIVE shape overrides via inline style={{ color: hsl(var(--agent-X)) }}.
+   CALM verdict (accentAgent: undefined) renders no inline style, so falls through to ink — never agent coral. */
 .accent {
-  color: hsl(var(--agent-alex));
+  color: var(--ink);
   font-style: italic;
   font-weight: 500;
 }
@@ -184,7 +186,7 @@
   gap: 4px;
 }
 .moduleMore:hover {
-  color: var(--ink-1);
+  color: var(--ink);
 }
 
 /* ─── card primitive ─── */
