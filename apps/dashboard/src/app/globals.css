@@ -204,6 +204,7 @@
     --gap-section-mobile: 72px;
 
     /* ─── Home: warm operational editorial supporting scale (P1-A) ─── */
+    /* --agent-*-deep/-tint, --shadow-lift, --shadow-sheet, and --canvas-3 are consumed by the forthcoming Home modules in this same PR (P1-A), so they're intentionally landed ahead of their first consumer. */
     --canvas-2: hsl(42 33% 97%); /* lighter inset zone */
     --canvas-3: hsl(40 24% 90%); /* deeper divider / sheet handle */
     /* agent deep/tint as raw-triples (match --agent-* base; consume via hsl(var(--x))) */

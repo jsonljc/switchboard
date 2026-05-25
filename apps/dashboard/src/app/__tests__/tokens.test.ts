@@ -43,12 +43,18 @@ describe("Home warm-operational-editorial tokens — P1-A", () => {
 
   it("declares per-agent deep + tint identity raw-triples", () => {
     // Raw triples (consumed via `hsl(var(--x))`) — must NOT be hsl-wrapped here.
-    expect(css).toMatch(/--agent-alex-deep:\s/);
-    expect(css).toMatch(/--agent-alex-tint:\s/);
-    expect(css).toMatch(/--agent-riley-deep:\s/);
-    expect(css).toMatch(/--agent-riley-tint:\s/);
-    expect(css).toMatch(/--agent-mira-deep:\s/);
-    expect(css).toMatch(/--agent-mira-tint:\s/);
+    expect(css).toMatch(/--agent-alex-deep:\s+\d/);
+    expect(css).not.toMatch(/--agent-alex-deep:\s*hsl\(/);
+    expect(css).toMatch(/--agent-alex-tint:\s+\d/);
+    expect(css).not.toMatch(/--agent-alex-tint:\s*hsl\(/);
+    expect(css).toMatch(/--agent-riley-deep:\s+\d/);
+    expect(css).not.toMatch(/--agent-riley-deep:\s*hsl\(/);
+    expect(css).toMatch(/--agent-riley-tint:\s+\d/);
+    expect(css).not.toMatch(/--agent-riley-tint:\s*hsl\(/);
+    expect(css).toMatch(/--agent-mira-deep:\s+\d/);
+    expect(css).not.toMatch(/--agent-mira-deep:\s*hsl\(/);
+    expect(css).toMatch(/--agent-mira-tint:\s+\d/);
+    expect(css).not.toMatch(/--agent-mira-tint:\s*hsl\(/);
   });
 
   it("declares the Home shadow + easing scale", () => {
