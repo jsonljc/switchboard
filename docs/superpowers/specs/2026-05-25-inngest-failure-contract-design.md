@@ -87,7 +87,7 @@ async function onFailure({ error, event, runId }) {
 Notes:
 
 - **(a) is the audit record.** It uses `AuditLedger.record` (`packages/core/src/audit/ledger.ts`) with `actorType: "system"` and `actorId: <functionId>`. The `entityId` falls back to a deterministic `functionId:eventName:occurredAt` composite when `runId` is unavailable, so every record is uniquely keyed.
-- **(b) is the §7 dead-letter destination.** It is a **domain-readable** event (`ugc.failed`, `riley.outcome-attribution.failed`, `stripe-reconciliation.failed`), never `${functionId}.failed` — see Section 5.4. The event payload is the `AsyncFailureEnvelope`. This event is what makes the failure replayable / consumable downstream (Section 7); it satisfies invariant §7's "dead-letter destination" requirement.
+- **(b) is the §7 dead-letter destination.** It is a **domain-readable** event (`ugc.failed`, `riley.outcome-attribution.failed`, `stripe-reconciliation.failed`), never `${functionId}.failed` — see Section 5.4. The event payload is the `AsyncFailureEnvelope`. This event is what makes the failure replayable / consumable downstream (Section 7); it satisfies invariant §7's "dead-letter destination" requirement. **Required for classes A–D.** For **Class E (best-effort/enrichment)** the event is **optional** — emit it only if a downstream/recovery consumer exists; otherwise the audit record (a) plus the cron's idempotent self-heal on the next scheduled run is the §7 discharge (these jobs degrade gracefully and have no consumer waiting on the failure signal). The audit record (a) is written for **every** class, always.
 - **(c) alerts only the classes that warrant immediate operator attention** (Section 5). Over-alerting recoverable-but-important jobs is an explicit non-goal.
 
 ---
@@ -136,7 +136,7 @@ Five classes. Each function is assigned exactly one. The class determines retry 
 | **B — business-critical, recoverable** | Important, but failure is recoverable / not immediately customer-visible        | audit + `.failed` event                                                       | No — alert only on **repeated** exhaustion or when downstream marks it customer-visible (warning severity) |
 | **C — fan-out dispatch**               | Emits per-item events; the dispatcher failing ≠ an item failing                 | audit + `.failed` event; **per-item failures isolated to the Class-D worker** | No (worker owns item-level alerting)                                                                       |
 | **D — per-item worker**                | Processes one item/org per invocation                                           | audit + `.failed` event, scoped to the item                                   | Critical items only                                                                                        |
-| **E — best-effort / enrichment**       | Quality/enrichment; failure degrades gracefully                                 | audit + `.failed` event                                                       | No                                                                                                         |
+| **E — best-effort / enrichment**       | Quality/enrichment; failure degrades gracefully                                 | audit always; `.failed` event **optional** (only if a consumer exists)        | No                                                                                                         |
 
 ### 5.2 Assignments (all 15 registered functions)
 
