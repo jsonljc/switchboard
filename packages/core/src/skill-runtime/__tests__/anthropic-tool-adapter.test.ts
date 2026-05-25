@@ -273,6 +273,19 @@ describe("AnthropicToolAdapter", () => {
     expect(resultBlocks[0]!.tool_use_id).toBe("tu_1");
   });
 
+  it("throws on an unsupported outgoing content block type (loud, not silent)", async () => {
+    const mockCreate = vi.fn();
+    const adapter = new AnthropicToolAdapter({ messages: { create: mockCreate } } as never);
+    await expect(
+      adapter.chatWithTools({
+        system: "s",
+        messages: [{ role: "assistant", content: [{ type: "bogus_block" } as never] }],
+        tools: [],
+      }),
+    ).rejects.toThrow(/unsupported outgoing content block/);
+    expect(mockCreate).not.toHaveBeenCalled(); // throws before hitting the wire
+  });
+
   it("throws LLMAdapterShapeMismatchError on unknown stop_reason", async () => {
     const mockClient = {
       messages: {
