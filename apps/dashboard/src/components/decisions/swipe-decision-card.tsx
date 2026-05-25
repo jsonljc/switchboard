@@ -120,6 +120,7 @@ export function SwipeDecisionCard({
     if (exiting) return;
     const { x, y } = point(e);
     drag.current = { startX: x, startY: y, axis: null, rawDx: 0 };
+    setArmed(false);
     setDragging(true);
   };
 

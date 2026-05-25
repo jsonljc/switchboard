@@ -1,8 +1,30 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Decision, RiskContract } from "@/lib/decisions/types";
 
 vi.mock("@/hooks/use-decision-feed", () => ({
   useDecisionFeed: vi.fn(),
+}));
+
+// Per-card hooks — NeedsYouCard owns one useRecommendationAction per card.
+vi.mock("@/hooks/use-recommendation-action", () => ({
+  useRecommendationAction: () => ({
+    primary: vi.fn(() => Promise.resolve({})),
+    secondary: vi.fn(() => Promise.resolve({})),
+    dismiss: vi.fn(() => Promise.resolve({})),
+    confirm: vi.fn(() => Promise.resolve({})),
+    undo: vi.fn(() => Promise.resolve({})),
+    isPending: false,
+    error: null,
+  }),
+}));
+
+vi.mock("@/components/ui/use-toast", () => ({
+  useToast: () => ({ toast: vi.fn() }),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }));
 
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
@@ -10,7 +32,51 @@ import InboxPage from "../page";
 
 const mockFeed = useDecisionFeed as ReturnType<typeof vi.fn>;
 
+// ── Fixtures ─────────────────────────────────────────────────────────────────
+
+const lowContract: RiskContract = {
+  riskLevel: "low",
+  externalEffect: false,
+  financialEffect: false,
+  clientFacing: false,
+  requiresConfirmation: false,
+};
+
+const financialContract: RiskContract = {
+  ...lowContract,
+  financialEffect: true,
+};
+
+function makeDecision(id: string, summary: string, contract?: RiskContract): Decision {
+  return {
+    id,
+    kind: "approval",
+    agentKey: "alex",
+    humanSummary: summary,
+    presentation: {
+      primaryLabel: "Approve",
+      secondaryLabel: "Skip",
+      dismissLabel: "Dismiss",
+      dataLines: [],
+    },
+    urgencyScore: 80,
+    createdAt: new Date().toISOString(),
+    threadHref: null,
+    sourceRef: { kind: "approval", sourceId: id },
+    meta: { riskContract: contract },
+  };
+}
+
 describe("InboxPage", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
   it("renders loading state", () => {
     mockFeed.mockReturnValue({ data: undefined, isLoading: true, isError: false });
     render(<InboxPage />);
@@ -39,8 +105,8 @@ describe("InboxPage", () => {
     mockFeed.mockReturnValue({
       data: {
         decisions: [
-          { id: "d1", humanSummary: "Approve campaign spend" },
-          { id: "d2", humanSummary: "Review ad copy" },
+          makeDecision("d1", "Approve campaign spend", lowContract),
+          makeDecision("d2", "Review ad copy", lowContract),
         ],
       },
       isLoading: false,
@@ -51,5 +117,36 @@ describe("InboxPage", () => {
     expect(screen.getByText("Review ad copy")).toBeInTheDocument();
     expect(screen.queryByText(/That's everything/i)).toBeNull();
     expect(screen.queryByText(/Couldn't load your inbox/i)).toBeNull();
+  });
+
+  // ── Risk-gate assertion (E5b) — the swipe-policy gate must be in force on Inbox ──
+
+  it("a financialEffect:true decision is NOT swipe-approvable in the Inbox", () => {
+    mockFeed.mockReturnValue({
+      data: {
+        decisions: [makeDecision("d1", "Approve budget move", financialContract)],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    render(<InboxPage />);
+    // SwipeDecisionCard exposes data-swipe-approve on the track element.
+    const track = document.querySelector("[data-swipe-track]") as HTMLElement;
+    expect(track).toHaveAttribute("data-swipe-approve", "false");
+    // The decision summary is still rendered.
+    expect(screen.getByText("Approve budget move")).toBeInTheDocument();
+  });
+
+  it("a pure low-risk decision IS swipe-approvable in the Inbox", () => {
+    mockFeed.mockReturnValue({
+      data: {
+        decisions: [makeDecision("d1", "Send intro email", lowContract)],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    render(<InboxPage />);
+    const track = document.querySelector("[data-swipe-track]") as HTMLElement;
+    expect(track).toHaveAttribute("data-swipe-approve", "true");
   });
 });

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import type { Decision } from "@/lib/decisions/types";
+import type { Decision, RiskContract } from "@/lib/decisions/types";
 
 // ── Mutable mock state (house pattern) ───────────────────────────────────────
 
@@ -36,6 +36,19 @@ import { NeedsYouCard } from "../needs-you-card";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
+const lowContract: RiskContract = {
+  riskLevel: "low",
+  externalEffect: false,
+  financialEffect: false,
+  clientFacing: false,
+  requiresConfirmation: false,
+};
+
+const financialContract: RiskContract = {
+  ...lowContract,
+  financialEffect: true,
+};
+
 function makeDecision(overrides: Partial<Decision> = {}): Decision {
   return {
     id: "dec-1",
@@ -52,7 +65,7 @@ function makeDecision(overrides: Partial<Decision> = {}): Decision {
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     threadHref: "/contacts/maya/conversations",
     sourceRef: { kind: "approval", sourceId: "rec-1" },
-    meta: { contactName: "Maya R." },
+    meta: { contactName: "Maya R.", riskContract: lowContract },
     ...overrides,
   };
 }
@@ -67,6 +80,12 @@ describe("NeedsYouCard", () => {
     primaryMock.mockClear();
     dismissMock.mockClear();
     undoMock.mockClear();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   describe("(a) approval decision — primary click → action.primary called + Undo toast shown", () => {
@@ -75,6 +94,8 @@ describe("NeedsYouCard", () => {
       render(<NeedsYouCard decision={makeDecision()} index={0} />);
 
       fireEvent.click(screen.getByRole("button", { name: "Yes, send it" }));
+      // SwipeDecisionCard uses setTimeout(onApprove, EXIT_MS=280ms) after exit animation.
+      vi.runAllTimers();
 
       // Allow the promise to resolve.
       await vi.waitFor(() => {
@@ -90,6 +111,7 @@ describe("NeedsYouCard", () => {
       render(<NeedsYouCard decision={makeDecision()} index={0} />);
 
       fireEvent.click(screen.getByRole("button", { name: "Yes, send it" }));
+      vi.runAllTimers();
 
       await vi.waitFor(() => {
         expect(primaryMock).toHaveBeenCalledTimes(1);
@@ -100,12 +122,16 @@ describe("NeedsYouCard", () => {
   });
 
   describe("(c) approval secondary click → action.dismiss called", () => {
-    it("calls action.dismiss when the secondary button is clicked", () => {
+    it("calls action.dismiss when the secondary button is clicked", async () => {
       render(<NeedsYouCard decision={makeDecision()} index={0} />);
 
       fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
+      // SwipeDecisionCard uses setTimeout(onSkip, EXIT_MS=280ms) for the exit animation.
+      vi.runAllTimers();
 
-      expect(dismissMock).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => {
+        expect(dismissMock).toHaveBeenCalledTimes(1);
+      });
       // Primary action must NOT fire on secondary click.
       expect(primaryMock).not.toHaveBeenCalled();
     });
@@ -117,6 +143,8 @@ describe("NeedsYouCard", () => {
         kind: "handoff",
         threadHref: "/inbox/thread-abc",
         sourceRef: { kind: "handoff", sourceId: "esc-1" },
+        // Handoffs use the simple DecisionCard (no riskContract needed).
+        meta: {},
       });
       render(<NeedsYouCard decision={handoff} index={0} />);
 
@@ -133,6 +161,7 @@ describe("NeedsYouCard", () => {
         kind: "handoff",
         threadHref: null,
         sourceRef: { kind: "handoff", sourceId: "esc-2" },
+        meta: {},
       });
       render(<NeedsYouCard decision={handoff} index={0} />);
 
@@ -161,10 +190,72 @@ describe("NeedsYouCard", () => {
       isPendingState = true;
       render(<NeedsYouCard decision={makeDecision()} index={0} />);
 
+      // SwipeDecisionCard renders the skip button synchronously, and handleSkip
+      // checks isPending before committing. The click fires but isPending=true
+      // means handleSkip returns early — dismissMock is never called.
       fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
       fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
 
       expect(dismissMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Risk-gate assertions (E5b) ─────────────────────────────────────────────
+  // These verify that the swipe-policy gate is in force on the Home surface.
+
+  describe("(g) financialEffect:true — swipe-approve is blocked", () => {
+    it("is NOT in swipe-approve mode (data-swipe-approve=false)", () => {
+      render(
+        <NeedsYouCard
+          decision={makeDecision({ meta: { riskContract: financialContract } })}
+          index={0}
+        />,
+      );
+      const track = document.querySelector("[data-swipe-track]") as HTMLElement;
+      expect(track).toHaveAttribute("data-swipe-approve", "false");
+    });
+
+    it("tapping Approve still commits via button (no confirm needed for financial-only)", async () => {
+      primaryMock.mockResolvedValueOnce({});
+      render(
+        <NeedsYouCard
+          decision={makeDecision({ meta: { riskContract: financialContract } })}
+          index={0}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Yes, send it" }));
+      // Financial-only: NOT needsConfirm → deliberate tap commits directly.
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      vi.runAllTimers();
+      await vi.waitFor(() => {
+        expect(primaryMock).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  describe("(h) pure low-risk contract — swipe-approve is allowed", () => {
+    it("is in swipe-approve mode (data-swipe-approve=true)", () => {
+      render(
+        <NeedsYouCard decision={makeDecision({ meta: { riskContract: lowContract } })} index={0} />,
+      );
+      const track = document.querySelector("[data-swipe-track]") as HTMLElement;
+      expect(track).toHaveAttribute("data-swipe-approve", "true");
+    });
+  });
+
+  describe("(i) missing riskContract — unsafe default (swipe-approve blocked, confirm required)", () => {
+    it("is NOT in swipe-approve mode when riskContract is absent", () => {
+      render(<NeedsYouCard decision={makeDecision({ meta: {} })} index={0} />);
+      const track = document.querySelector("[data-swipe-track]") as HTMLElement;
+      expect(track).toHaveAttribute("data-swipe-approve", "false");
+    });
+
+    it("tapping Approve opens confirm step (needsConfirm=true for missing contract)", () => {
+      render(<NeedsYouCard decision={makeDecision({ meta: {} })} index={0} />);
+      fireEvent.click(screen.getByRole("button", { name: "Yes, send it" }));
+      vi.runAllTimers();
+      // Missing contract → needsConfirm → confirm dialog appears.
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
   });
 });

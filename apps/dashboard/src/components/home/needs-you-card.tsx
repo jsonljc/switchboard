@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { AGENT_REGISTRY } from "@switchboard/schemas";
+import { SwipeDecisionCard } from "@/components/decisions/swipe-decision-card";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
@@ -10,22 +12,30 @@ import type { Decision } from "@/lib/decisions/types";
 
 interface NeedsYouCardProps {
   decision: Decision;
-  /** Position in the visible list — drives the decision-card folio number. */
+  /** Position in the visible list — drives the fallback decision-card folio number. */
   index: number;
 }
 
 /**
- * NeedsYouCard — one live, action-wired decision card on Home.
+ * NeedsYouCard — one live, risk-gated decision card on Home.
  *
  * Owns exactly ONE `useRecommendationAction` per card (hooks can't be called in
  * a variable-length loop, so the per-card hook lives here, not in the parent).
- * Wiring (matches the riley-cockpit-page single-owner-toast pattern):
- *   - approval primary  → action.primary()  ("approve")
- *   - approval secondary → action.dismiss()  ("skip")
- *   - handoff (no recommendationId) → open the thread / route to /inbox.
+ *
+ * Approvals: rendered via `SwipeDecisionCard` — the risk gate
+ * (canSwipeApprove / needsConfirm) is enforced entirely inside the card.
+ * This component only provides the commit callbacks.
+ *
+ * Handoffs: rendered via the simple `DecisionCard`. Handoffs are not
+ * recommendation-committable — they route to the thread/inbox. The risk gate
+ * is not applied here; handoff escalations are resolved in Phase 2.
+ *
+ * Wiring:
+ *   - approval onApprove  → action.primary()  + Undo toast
+ *   - approval onSkip     → action.dismiss()
+ *   - handoff primary/secondary → open the thread / route to /inbox.
  *     Full handoff resolution is Phase 2 — we never call the recommendation
  *     mutation for a handoff (the id would not be a recommendation).
- * After a successful approval action we fire an Undo toast wired to action.undo().
  */
 export function NeedsYouCard({ decision, index }: NeedsYouCardProps) {
   const router = useRouter();
@@ -35,22 +45,16 @@ export function NeedsYouCard({ decision, index }: NeedsYouCardProps) {
   // the recommendation mutation below.
   const action = useRecommendationAction(decision.sourceRef.sourceId);
 
-  const cardProps = mapToDecisionCard(decision, index);
-
   const isHandoff = decision.kind === "handoff";
+  const agentName = AGENT_REGISTRY[decision.agentKey]?.displayName ?? decision.agentKey;
 
   const openThread = () => {
     if (decision.threadHref) router.push(decision.threadHref);
     else router.push("/inbox");
   };
 
-  const handlePrimary = () => {
+  const handleApprove = () => {
     if (action.isPending) return;
-    if (isHandoff) {
-      // Phase 2 owns full handoff resolution; for now the primary opens the thread.
-      openThread();
-      return;
-    }
     void action
       .primary()
       .then((result: unknown) => {
@@ -73,19 +77,30 @@ export function NeedsYouCard({ decision, index }: NeedsYouCardProps) {
       .catch(() => {});
   };
 
-  const handleSecondary = () => {
+  const handleSkip = () => {
     if (action.isPending) return;
-    if (isHandoff) {
-      // Secondary on a handoff also routes to the thread/inbox in P1-A.
-      openThread();
-      return;
-    }
     void action.dismiss().catch(() => {});
   };
 
+  // Handoffs route to the thread — they are NOT committable via the recommendation
+  // mutation. Render with the simple DecisionCard (no risk gate needed).
+  if (isHandoff) {
+    const cardProps = mapToDecisionCard(decision, index);
+    return (
+      <div data-testid="decision-card">
+        <DecisionCard {...cardProps} onPrimary={openThread} onSecondary={openThread} />
+      </div>
+    );
+  }
+
+  // Approval: risk-gated swipe card. The gate is enforced inside SwipeDecisionCard.
   return (
-    <div data-testid="decision-card">
-      <DecisionCard {...cardProps} onPrimary={handlePrimary} onSecondary={handleSecondary} />
-    </div>
+    <SwipeDecisionCard
+      decision={decision}
+      agentName={agentName}
+      onApprove={handleApprove}
+      onSkip={handleSkip}
+      skipLabel={decision.presentation.secondaryLabel}
+    />
   );
 }
