@@ -1,5 +1,9 @@
 import { appendFileSync } from "node:fs";
-import { createStubContextStore, SKILL_PACK_SCOPES } from "./stub-context-store.js";
+import {
+  createStubContextStore,
+  SKILL_PACK_SCOPES,
+  type StubKnowledgeStore,
+} from "./stub-context-store.js";
 
 // Canonical SKIPPED message. Exported so tests can pin its wording and so
 // run-eval.ts imports it instead of inlining the string.
@@ -28,7 +32,7 @@ export function appendStepSummary(
  * @param refsDir Override the medspa references dir (tests pass a fixture dir).
  */
 export async function assertSkillPackContentPresent(refsDir?: string): Promise<void> {
-  let store;
+  let store: StubKnowledgeStore;
   try {
     store = createStubContextStore(refsDir);
   } catch (err) {
