@@ -19,8 +19,11 @@ import { isMainPush, appendStepSummary, SKIP_MESSAGE } from "./eval-preflight.js
 // Model pins
 // ---------------------------------------------------------------------------
 
-/** Alex production model (temp-0 adapter pins temperature to 0). */
-const HAIKU = "claude-haiku-4-5-20251001";
+/** Alex's live model — production wires no router, so the adapter default applies. */
+const ALEX_MODEL = "claude-sonnet-4-6";
+
+/** Claim-classifier checker model — matches the production classifier (Haiku). */
+const CLASSIFIER_MODEL = "claude-haiku-4-5-20251001";
 
 /** Judge model — stronger model for grading reliability. */
 const SONNET = "claude-sonnet-4-6";
@@ -202,7 +205,7 @@ async function main(): Promise<void> {
     try {
       outcome = await runConversation(fixture, {
         anthropicClient,
-        model: HAIKU,
+        model: ALEX_MODEL,
       });
     } catch (err) {
       console.error(`\nFixture ${fixture.id} run failed: ${(err as Error).message}`);
@@ -240,7 +243,7 @@ async function main(): Promise<void> {
       try {
         deterministicResult = await gradeDeterministic(capturedTurn, {
           classifier,
-          classifierModel: HAIKU,
+          classifierModel: CLASSIFIER_MODEL,
         });
       } catch (err) {
         console.error(`\nFixture ${fixture.id} turn ${i} grade failed: ${(err as Error).message}`);
