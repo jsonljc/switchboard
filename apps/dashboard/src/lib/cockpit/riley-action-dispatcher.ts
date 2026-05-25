@@ -41,9 +41,8 @@ const PER_ID_ROUTE: Record<string, { path: string; title: string }> = {
  * Single owner of toast firing on /riley. Both the command palette (via
  * { kind: "command", commandId }) and the live <Composer> (via parsed
  * actions from parseCommand) flow through this hook. The shared
- * <CommandPalette>, <Composer>, and <Topbar> MUST NOT import useToast
- * directly — double-toasts on dispatch are the failure mode this
- * boundary prevents.
+ * <CommandPalette> and <Composer> MUST NOT import useToast directly —
+ * double-toasts on dispatch are the failure mode this boundary prevents.
  */
 export function useRileyActionDispatcher(
   options: UseRileyActionDispatcherOptions,
