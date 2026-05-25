@@ -1,5 +1,6 @@
 // @route-class: ingress-receiver
 import type { FastifyPluginAsync } from "fastify";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 
 function getVerifyToken(): string {
@@ -11,6 +12,27 @@ function getVerifyToken(): string {
     );
   }
   return token;
+}
+
+/**
+ * Verify Meta's `X-Hub-Signature-256` HMAC over the raw request body using
+ * META_APP_SECRET. Fails closed: a missing secret, missing/empty raw body, or
+ * missing/mismatched signature all return false. Mirrors the WhatsApp/Instagram
+ * adapter verifyRequest implementations.
+ */
+export function verifyMetaWebhookSignature(
+  rawBody: string | undefined,
+  signature: string | undefined,
+  appSecret: string | undefined,
+): boolean {
+  if (!appSecret) {
+    console.warn("[ad-optimizer] verifyMetaWebhookSignature called without META_APP_SECRET");
+    return false;
+  }
+  if (!rawBody || typeof signature !== "string" || signature.length === 0) return false;
+  const expected = "sha256=" + createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  if (signature.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
 export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
@@ -42,7 +64,18 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Meta Leads webhook receiver (POST)
-  app.post("/leads/webhook", async (request, reply) => {
+  app.post("/leads/webhook", { config: { rawBody: true } }, async (request, reply) => {
+    // Verify the Meta HMAC signature before trusting any payload field. The org
+    // is resolved from the webhook entry id below, which is forgeable without
+    // this gate.
+    const rawBody = (request as unknown as { rawBody?: string }).rawBody;
+    const signatureHeader = request.headers["x-hub-signature-256"];
+    const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+    if (!verifyMetaWebhookSignature(rawBody, signature, process.env["META_APP_SECRET"])) {
+      app.log.warn("Meta lead webhook: signature verification failed");
+      return reply.code(401).send({ error: "Invalid signature", statusCode: 401 });
+    }
+
     const leads = parseLeadWebhook(request.body);
 
     if (leads.length === 0) {
