@@ -279,7 +279,8 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
-      // Gather readiness context via shared helper
+      // Resume shares the activation readiness gate (same buildReadinessContext + checkReadiness
+      // as go-live): every blocking check — incl. alex-skill-pack-seeded — must pass to resume.
       const ctx = await buildReadinessContext(app.prisma, orgId);
 
       // Override deployment status to "active" for readiness check (it's paused right now)
