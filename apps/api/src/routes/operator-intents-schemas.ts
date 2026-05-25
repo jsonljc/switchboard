@@ -79,3 +79,17 @@ export const ClearConsentParametersSchema = z.object({
 });
 
 export type ClearConsentParameters = z.infer<typeof ClearConsentParametersSchema>;
+
+export const RecordRevenueParametersSchema = z.object({
+  contactId: z.string(),
+  opportunityId: z.string().optional(),
+  amount: z.number().positive(),
+  currency: z.string().length(3).default("SGD"),
+  type: z.enum(["payment", "deposit", "invoice", "refund"]).default("payment"),
+  recordedBy: z.enum(["owner", "staff", "stripe", "integration"]).default("owner"),
+  externalReference: z.string().nullable().optional(),
+  sourceCampaignId: z.string().nullable().optional(),
+  sourceAdId: z.string().nullable().optional(),
+});
+
+export type RecordRevenueParameters = z.infer<typeof RecordRevenueParametersSchema>;

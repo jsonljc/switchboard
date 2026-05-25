@@ -18,6 +18,7 @@ export const DISMISS_DISQUALIFICATION_INTENT = "operator.dismiss_disqualificatio
 export const GRANT_CONSENT_INTENT = "operator.grant_consent";
 export const REVOKE_CONSENT_INTENT = "operator.revoke_consent";
 export const CLEAR_CONSENT_INTENT = "operator.clear_consent";
+export const RECORD_REVENUE_INTENT = "operator.record_revenue";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin
