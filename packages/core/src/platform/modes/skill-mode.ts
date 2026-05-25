@@ -151,7 +151,9 @@ export class SkillMode implements ExecutionMode {
       // FAIL-OPEN: a live conversation must never 500 on a context-resolution miss.
       // Presence is enforced loudly at provisioning / A0 preflight, not here.
       console.warn(
-        `[SkillMode] context resolution failed for ${skill.slug}/${orgId} (continuing with empty context): ${err instanceof Error ? err.message : String(err)}`,
+        `[SkillMode] context resolution failed for ${skill.slug}/${orgId} ` +
+          `(${err instanceof Error ? err.constructor.name : "unknown"}; continuing with empty context): ` +
+          `${err instanceof Error ? err.message : String(err)}`,
       );
       return {};
     }

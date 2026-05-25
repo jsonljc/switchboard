@@ -386,4 +386,50 @@ describe("SkillMode context resolution (Critical 1)", () => {
     expect(result.outcome).toBe("completed");
     expect(executor.lastParams?.parameters.PLAYBOOK_CONTEXT).toBeUndefined();
   });
+
+  it("merges context over raw workUnit.parameters (resolver wins, no builder)", async () => {
+    const contextResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        variables: { PLAYBOOK_CONTEXT: "ctx-wins" },
+        metadata: [],
+      }),
+    };
+    const skill = makeSkill({
+      context: [
+        {
+          kind: "playbook",
+          scope: "objection-handling",
+          injectAs: "PLAYBOOK_CONTEXT",
+          required: false,
+        },
+      ],
+    });
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({ executor, skillsBySlug, contextResolver });
+    const workUnit = makeWorkUnit({ parameters: { PLAYBOOK_CONTEXT: "raw-should-be-overridden" } });
+
+    await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.parameters.PLAYBOOK_CONTEXT).toBe("ctx-wins");
+  });
+
+  it("is a no-op when no resolver is wired even if the skill declares context", async () => {
+    const skill = makeSkill({
+      context: [
+        {
+          kind: "playbook",
+          scope: "objection-handling",
+          injectAs: "PLAYBOOK_CONTEXT",
+          required: false,
+        },
+      ],
+    });
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({ executor, skillsBySlug }); // no contextResolver
+
+    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+
+    expect(result.outcome).toBe("completed");
+    expect(executor.lastParams?.parameters.PLAYBOOK_CONTEXT).toBeUndefined();
+  });
 });
