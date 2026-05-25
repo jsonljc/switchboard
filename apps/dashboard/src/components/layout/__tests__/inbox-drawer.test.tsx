@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -62,6 +62,33 @@ vi.mock("@/components/decisions/decision-card", () => ({
       </button>
     </article>
   ),
+}));
+
+// ConfirmSheet: expose the confirm/cancel buttons with stable test-ids so the
+// risk-gate tests can interact with the confirm step.
+vi.mock("@/components/decisions/swipe-decision-card", () => ({
+  ConfirmSheet: ({
+    open,
+    onCancel,
+    onConfirm,
+  }: {
+    open: boolean;
+    agentName: string;
+    summary: string;
+    affirmativeLabel: string;
+    onCancel: () => void;
+    onConfirm: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="confirm-sheet" data-testid="confirm-sheet">
+        <button data-testid="confirm-cancel" onClick={onCancel}>
+          Not now
+        </button>
+        <button data-testid="confirm-affirm" onClick={onConfirm}>
+          Confirm
+        </button>
+      </div>
+    ) : null,
 }));
 
 import { InboxDrawer } from "../inbox-drawer";
@@ -359,7 +386,16 @@ describe("InboxDrawer — auto-close on inbox-zero", () => {
             createdAt: now,
             threadHref: null,
             sourceRef: { kind: "approval", sourceId: "rec-1" },
-            meta: {},
+            // Low-risk contract — single tap MUST commit directly (no confirm gate).
+            meta: {
+              riskContract: {
+                riskLevel: "low",
+                externalEffect: false,
+                financialEffect: false,
+                clientFacing: false,
+                requiresConfirmation: false,
+              },
+            },
           },
         ],
         counts: { total: 1, approval: 1, handoff: 0 },
@@ -435,5 +471,152 @@ describe("InboxDrawer — auto-close on inbox-zero", () => {
     rerender(<InboxDrawer />);
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("InboxDrawer — risk gate (P1-B coherence)", () => {
+  const now = new Date().toISOString();
+
+  /** Build an approval decision with the given riskContract. */
+  function makeApprovalFeed(riskContract?: {
+    riskLevel: "low" | "medium" | "high";
+    externalEffect: boolean;
+    financialEffect: boolean;
+    clientFacing: boolean;
+    requiresConfirmation: boolean;
+  }) {
+    return {
+      data: {
+        decisions: [
+          {
+            id: "approval:rec-gate",
+            kind: "approval",
+            orgId: "org-1",
+            agentKey: "riley",
+            humanSummary: "Move $5 000 to Meta Ads.",
+            presentation: {
+              primaryLabel: "Approve",
+              secondaryLabel: "Skip",
+              dismissLabel: "Dismiss",
+              dataLines: [],
+            },
+            urgencyScore: 90,
+            createdAt: now,
+            threadHref: null,
+            sourceRef: { kind: "approval", sourceId: "rec-gate" },
+            meta: { riskContract },
+          },
+        ],
+        counts: { total: 1, approval: 1, handoff: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    };
+  }
+
+  it("does NOT commit when primary is tapped on a high-risk approval — opens confirm instead", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeApprovalFeed({
+      riskLevel: "high",
+      externalEffect: true,
+      financialEffect: true,
+      clientFacing: false,
+      requiresConfirmation: true,
+    });
+    render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
+
+    // dispatch must NOT have been called — the confirm gate must intercept.
+    expect(dispatchMock).not.toHaveBeenCalled();
+    // The confirm sheet must be visible.
+    expect(await screen.findByTestId("confirm-sheet")).toBeInTheDocument();
+  });
+
+  it("does NOT commit when primary is tapped on an approval with no riskContract (missing = unsafe)", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeApprovalFeed(undefined); // no riskContract → needsConfirm = true
+    render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
+
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("confirm-sheet")).toBeInTheDocument();
+  });
+
+  it("commits ONLY after the confirm affirmative on a needsConfirm approval", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeApprovalFeed({
+      riskLevel: "high",
+      externalEffect: false,
+      financialEffect: true,
+      clientFacing: false,
+      requiresConfirmation: true,
+    });
+    render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
+
+    // Before confirm — no dispatch.
+    expect(dispatchMock).not.toHaveBeenCalled();
+
+    // Fire the affirmative button via fireEvent to bypass pointer-events scrim
+    // from the Radix Sheet overlay (the ConfirmSheet is rendered outside the
+    // Sheet but pointer-events from Radix may still affect descendants).
+    const affirmBtn = await screen.findByTestId("confirm-affirm");
+    fireEvent.click(affirmBtn);
+
+    await waitFor(() => expect(dispatchMock).toHaveBeenCalledTimes(1));
+    const callArgs = dispatchMock.mock.calls[0];
+    expect(callArgs[0]).toEqual({ kind: "approval", sourceId: "rec-gate" });
+    expect(callArgs[1]).toBe("primary");
+  });
+
+  it("cancels without committing when 'Not now' is tapped in the confirm sheet", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeApprovalFeed({
+      riskLevel: "high",
+      externalEffect: false,
+      financialEffect: true,
+      clientFacing: false,
+      requiresConfirmation: true,
+    });
+    render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
+    expect(await screen.findByTestId("confirm-sheet")).toBeInTheDocument();
+
+    // fireEvent to bypass pointer-events from the Radix Sheet overlay scrim.
+    fireEvent.click(screen.getByTestId("confirm-cancel"));
+
+    // Confirm sheet dismissed, dispatch never called.
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("confirm-sheet")).not.toBeInTheDocument();
+  });
+
+  it("commits immediately (no confirm) when primary is tapped on a low-risk approval", async () => {
+    const user = userEvent.setup();
+    mockFeed = makeApprovalFeed({
+      riskLevel: "low",
+      externalEffect: false,
+      financialEffect: false,
+      clientFacing: false,
+      requiresConfirmation: false,
+    });
+    render(<InboxDrawer />, { wrapper });
+
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await user.click(await screen.findByTestId("card-primary"));
+
+    // Low-risk: dispatch fires directly, no confirm sheet.
+    await waitFor(() => expect(dispatchMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId("confirm-sheet")).not.toBeInTheDocument();
+    const callArgs = dispatchMock.mock.calls[0];
+    expect(callArgs[0]).toEqual({ kind: "approval", sourceId: "rec-gate" });
+    expect(callArgs[1]).toBe("primary");
   });
 });
