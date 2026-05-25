@@ -5,8 +5,14 @@ const MAX_ATTEMPTS = 10;
 export class PrismaOutboxStore {
   constructor(private prisma: PrismaDbClient) {}
 
-  async write(eventId: string, type: string, payload: Record<string, unknown>) {
-    return this.prisma.outboxEvent.create({
+  async write(
+    eventId: string,
+    type: string,
+    payload: Record<string, unknown>,
+    tx?: PrismaDbClient,
+  ) {
+    const client = tx ?? this.prisma;
+    return client.outboxEvent.create({
       data: {
         eventId,
         type,

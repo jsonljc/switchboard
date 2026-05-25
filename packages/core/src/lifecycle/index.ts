@@ -17,6 +17,7 @@ export type {
 export { OpportunityNotFoundError } from "./opportunity-store.js";
 export { listOpportunitiesForBoard, transitionOpportunityStage } from "./opportunity-board.js";
 export type {
+  StoreTransactionContext,
   RevenueStore,
   RecordRevenueInput,
   DateRange,
