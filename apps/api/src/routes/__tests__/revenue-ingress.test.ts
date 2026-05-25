@@ -414,5 +414,107 @@ describe.skipIf(!process.env["DATABASE_URL"])(
         await prisma.$disconnect();
       }
     });
+
+    it("same externalReference + different Idempotency-Key re-records idempotently → 201 with one outbox row (#697)", async () => {
+      const { PrismaClient, PrismaRevenueStore, PrismaOutboxStore } =
+        await import("@switchboard/db");
+      const prisma = new PrismaClient();
+
+      const orgId = "org_697_dedup";
+      const externalReference = "stripe_pi_697_dedup";
+      const opportunityId = "opp_697_dedup";
+
+      try {
+        const revenueStore = new PrismaRevenueStore(prisma);
+        const outboxStore = new PrismaOutboxStore(prisma);
+        const runInTransaction: RunInTransaction = (fn) => prisma.$transaction((tx) => fn(tx));
+
+        // Clean slate so the test is rerunnable.
+        await prisma.lifecycleRevenueEvent.deleteMany({
+          where: { organizationId: orgId, externalReference },
+        });
+
+        const { app } = await buildTestServer({
+          revenueStore: {
+            record: (input, tx) => revenueStore.record(input, tx as never),
+            findByOpportunity: revenueStore.findByOpportunity.bind(revenueStore),
+            findByContact: revenueStore.findByContact.bind(revenueStore),
+            sumByOrg: revenueStore.sumByOrg.bind(revenueStore),
+            sumByCampaign: revenueStore.sumByCampaign.bind(revenueStore),
+          },
+          outboxWriter: {
+            write: (id, type, payload, tx) => outboxStore.write(id, type, payload, tx as never),
+          },
+          runInTransaction,
+        });
+
+        const payload = {
+          contactId: "c_697_dedup",
+          amount: 250,
+          opportunityId,
+          externalReference,
+        };
+
+        // First record: distinct Idempotency-Key K1 → creates the row + outbox event.
+        const first = await app.inject({
+          method: "POST",
+          url: `/api/${orgId}/revenue`,
+          headers: {
+            "Idempotency-Key": "rev-697-k1",
+            "x-org-id": orgId,
+            "x-principal-id": "u1",
+          },
+          payload,
+        });
+        expect(first.statusCode).toBe(201);
+
+        // Second record: DIFFERENT Idempotency-Key K2 (so ingress dedup does NOT
+        // short-circuit), same externalReference + opportunityId. record() returns
+        // the existing row, so the handler re-issues outbox write with the SAME
+        // eventId. Pre-#697 the unique violation rolled back the $transaction → 500.
+        const second = await app.inject({
+          method: "POST",
+          url: `/api/${orgId}/revenue`,
+          headers: {
+            "Idempotency-Key": "rev-697-k2",
+            "x-org-id": orgId,
+            "x-principal-id": "u1",
+          },
+          payload,
+        });
+        expect(second.statusCode).toBe(201);
+
+        // Both responses describe the same revenue event (idempotent replay).
+        const firstEvent = (first.json() as { event: LifecycleRevenueEvent }).event;
+        const secondEvent = (second.json() as { event: LifecycleRevenueEvent }).event;
+        expect(secondEvent.id).toBe(firstEvent.id);
+
+        // Exactly one revenue row and exactly one outbox row — no duplicate.
+        const rows = await prisma.lifecycleRevenueEvent.findMany({
+          where: { organizationId: orgId, externalReference },
+        });
+        expect(rows).toHaveLength(1);
+        const outbox = await prisma.outboxEvent.findMany({
+          where: { eventId: `evt_rev_${firstEvent.id}` },
+        });
+        expect(outbox).toHaveLength(1);
+
+        await app.close();
+      } finally {
+        // Delete the outbox row(s) tied to this run's revenue rows before the
+        // rows themselves, so reruns don't accumulate orphan outbox events.
+        const leftover = await prisma.lifecycleRevenueEvent.findMany({
+          where: { organizationId: orgId, externalReference },
+          select: { id: true },
+        });
+        for (const r of leftover) {
+          await prisma.outboxEvent.deleteMany({ where: { eventId: `evt_rev_${r.id}` } });
+        }
+        await prisma.lifecycleRevenueEvent.deleteMany({
+          where: { organizationId: orgId, externalReference },
+        });
+        await prisma.$disconnect();
+      }
+    });
   },
 );

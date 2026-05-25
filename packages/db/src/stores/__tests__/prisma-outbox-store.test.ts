@@ -5,6 +5,7 @@ function makePrisma() {
   return {
     outboxEvent: {
       create: vi.fn(),
+      createMany: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
     },
@@ -23,46 +24,64 @@ describe("PrismaOutboxStore", () => {
   describe("write — tx threading", () => {
     it("uses tx client instead of this.prisma when tx is provided", async () => {
       const txClient = {
-        outboxEvent: {
-          create: vi.fn().mockResolvedValue({ id: "ob_tx", eventId: "evt_tx", status: "pending" }),
-        },
+        outboxEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
       };
       const payload = { type: "purchased", contactId: "ct_1" };
-      const result = await store.write("evt_tx", "purchased", payload, txClient as never);
-      expect(txClient.outboxEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ eventId: "evt_tx", type: "purchased", status: "pending" }),
+      await store.write("evt_tx", "purchased", payload, txClient as never);
+      expect(txClient.outboxEvent.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ eventId: "evt_tx", type: "purchased", status: "pending" }),
+        ],
+        skipDuplicates: true,
       });
-      expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
-      expect(result.status).toBe("pending");
+      expect(prisma.outboxEvent.createMany).not.toHaveBeenCalled();
     });
 
     it("falls back to this.prisma when no tx is provided", async () => {
       const payload = { type: "purchased", contactId: "ct_1" };
-      (prisma.outboxEvent.create as ReturnType<typeof vi.fn>).mockResolvedValue({
-        id: "ob_1",
-        eventId: "evt_1",
-        status: "pending",
-      });
+      (prisma.outboxEvent.createMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
       await store.write("evt_1", "purchased", payload);
-      expect(prisma.outboxEvent.create).toHaveBeenCalledTimes(1);
+      expect(prisma.outboxEvent.createMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("write — idempotency (ignore-on-conflict, #697)", () => {
+    it("inserts via createMany with skipDuplicates so a duplicate eventId is a no-op", async () => {
+      (prisma.outboxEvent.createMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+      const payload = { type: "purchased", contactId: "ct_1", organizationId: "org_1", value: 100 };
+
+      await store.write("evt_rev_dup", "purchased", payload);
+
+      // Idempotent insert: ON CONFLICT DO NOTHING at the SQL level (skipDuplicates),
+      // NOT a bare create() that throws on the @unique eventId constraint.
+      expect(prisma.outboxEvent.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ eventId: "evt_rev_dup", type: "purchased", status: "pending" }),
+        ],
+        skipDuplicates: true,
+      });
+      expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
+    });
+
+    it("does not throw when the eventId already exists (skipDuplicates returns count 0)", async () => {
+      // Models a re-record of the same external payment: the row already exists,
+      // so the unique-constrained insert is skipped instead of throwing P2002.
+      (prisma.outboxEvent.createMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+
+      await expect(
+        store.write("evt_rev_existing", "purchased", { value: 1 }),
+      ).resolves.not.toThrow();
     });
   });
 
   it("writes a pending outbox event", async () => {
     const payload = { type: "booked", contactId: "ct_1", organizationId: "org_1", value: 100 };
-    (prisma.outboxEvent.create as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "ob_1",
-      eventId: "evt_1",
-      type: "booked",
-      payload,
-      status: "pending",
-      attempts: 0,
-    });
+    (prisma.outboxEvent.createMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
 
-    const result = await store.write("evt_1", "booked", payload);
-    expect(result.status).toBe("pending");
-    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ eventId: "evt_1", type: "booked", status: "pending" }),
+    await store.write("evt_1", "booked", payload);
+    expect(prisma.outboxEvent.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ eventId: "evt_1", type: "booked", status: "pending" })],
+      skipDuplicates: true,
     });
   });
 
