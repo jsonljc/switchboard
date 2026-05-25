@@ -1,13 +1,17 @@
 // @route-class: operator-direct
-// route-governance: operator-direct-contract-deferred — records revenue directly via PrismaRevenueStore + outbox, bypassing PlatformIngress (no WorkTrace/idempotency); needs an ingress migration, out of scope for migration-free PR-4; tracked in #654
 // ---------------------------------------------------------------------------
 // Revenue routes — record and query revenue events
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import { PrismaRevenueStore, PrismaOutboxStore } from "@switchboard/db";
+import { PrismaRevenueStore } from "@switchboard/db";
 import { z } from "zod";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { requireIdempotencyKey } from "../utils/idempotency-key.js";
+import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
+import { buildDevAuthFallback } from "../utils/auth-fallback.js";
+import { requireOrgForMutation } from "../decorators/org.js";
+import { RECORD_REVENUE_INTENT } from "../bootstrap/operator-intents.js";
 
 // ── Input Validation Schemas ──
 
@@ -24,16 +28,19 @@ const RecordRevenueInputSchema = z.object({
 });
 
 export const revenueRoutes: FastifyPluginAsync = async (app) => {
+  // Dev/test mode (authDisabled): populate organizationIdFromAuth + principalIdFromAuth
+  // from x-org-id / x-principal-id headers (or fall back to "default"). In production
+  // this hook is a no-op; the real auth middleware has already populated the fields.
+  app.addHook("preHandler", buildDevAuthFallback(app));
+
   // POST /:orgId/revenue — record a revenue event
-  app.post("/:orgId/revenue", async (request, reply) => {
-    if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+  app.post("/:orgId/revenue", { preHandler: requireOrgForMutation }, async (request, reply) => {
+    if (!app.platformIngress) {
+      return reply.code(503).send({ error: "Platform ingress not available", statusCode: 503 });
     }
 
-    const orgId = requireOrganizationScope(request, reply);
-    if (!orgId) return;
-
-    const { orgId: _paramOrgId } = request.params as { orgId: string };
+    const idempotencyKey = requireIdempotencyKey(request, reply);
+    if (!idempotencyKey) return;
 
     const parsed = RecordRevenueInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -42,50 +49,29 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
-    const {
-      contactId,
-      opportunityId,
-      amount,
-      currency,
-      type,
-      recordedBy,
-      externalReference,
-      sourceCampaignId,
-      sourceAdId,
-    } = parsed.data;
-
-    const resolvedOpportunityId = opportunityId ?? `rev-${contactId}-${Date.now()}`;
-
-    const store = new PrismaRevenueStore(app.prisma);
-    const event = await store.record({
-      organizationId: orgId,
-      contactId,
-      opportunityId: resolvedOpportunityId,
-      amount,
-      currency,
-      type,
-      recordedBy,
-      externalReference: externalReference ?? null,
-      sourceCampaignId: sourceCampaignId ?? null,
-      sourceAdId: sourceAdId ?? null,
+    const response = await app.platformIngress.submit({
+      intent: RECORD_REVENUE_INTENT,
+      parameters: parsed.data,
+      actor: { id: request.actorId, type: "user" },
+      organizationId: request.orgId, // auth is authoritative; :orgId path param is informational only
+      trigger: "api",
+      surface: { surface: "api" },
+      idempotencyKey,
     });
 
-    // Write conversion event to outbox for durable processing
-    if (app.prisma) {
-      const outboxStore = new PrismaOutboxStore(app.prisma);
-      await outboxStore.write(`evt_rev_${event.id}`, "purchased", {
-        type: "purchased",
-        contactId,
-        organizationId: orgId,
-        value: amount,
-        sourceAdId: sourceAdId ?? null,
-        sourceCampaignId: sourceCampaignId ?? null,
-        occurredAt: new Date().toISOString(),
-        source: "revenue-api",
-        metadata: { opportunityId: resolvedOpportunityId, currency, revenueType: type },
-      });
+    if (!response.ok) {
+      return ingressErrorToReply(response.error, reply);
     }
-
+    if (response.result.outcome === "failed") {
+      // Revenue recording has no domain-failure path; any failed outcome is an
+      // unexpected execution error. Throw so the global error handler returns a
+      // scrubbed 500 (don't echo internal error codes/messages to the client).
+      throw new Error(response.result.error?.message ?? "Revenue recording failed");
+    }
+    const event = response.result.outputs?.event;
+    if (!event) {
+      throw new Error("Revenue recording succeeded but returned no event");
+    }
     return reply.code(201).send({ event });
   });
 
