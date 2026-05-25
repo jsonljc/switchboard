@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Distance (px) past which an axis-locked drag commits / primes. */
 const COMMIT_THRESHOLD = 100;
@@ -10,6 +10,7 @@ const AXIS_LOCK_DEADZONE = 6;
 const EXIT_MS = 280;
 /** Rubber-band ceiling for a blocked swipe-right. */
 const RUBBER_MAX = 110;
+/** px beyond which right-swipe resistance (damping) begins. */
 const RUBBER_RESIST_FROM = 60;
 
 type Exiting = "left" | "right" | null;
@@ -48,8 +49,6 @@ export interface UseCardSwipeResult {
   exiting: Exiting;
   /** True after a blocked swipe-right primes the Approve button. */
   armed: boolean;
-  /** Expose the setter so the card can clear armed on re-render if needed. */
-  setArmed: (value: boolean) => void;
   /** Imperatively commit an approve (used by tap-Approve and ConfirmSheet). */
   commitApprove: () => void;
   /** Imperatively commit a skip (used by tap-Skip). */
@@ -89,24 +88,35 @@ export function useCardSwipe({
 
   const drag = useRef<DragState>({ startX: 0, startY: 0, axis: null, rawDx: 0 });
 
+  // Keep refs to the latest callbacks so setTimeout closures always call the
+  // most-recent versions, avoiding stale-prop captures across re-renders.
+  const onApproveRef = useRef(onApprove);
+  const onSkipRef = useRef(onSkip);
+  const onPrimeBlockedRef = useRef(onPrimeBlocked);
+  useEffect(() => {
+    onApproveRef.current = onApprove;
+    onSkipRef.current = onSkip;
+    onPrimeBlockedRef.current = onPrimeBlocked;
+  });
+
   // ---- commit helpers (single source of truth for the callbacks) ----
   const commitApprove = () => {
     setExiting("right");
     setDx(600);
-    setTimeout(onApprove, EXIT_MS);
+    setTimeout(() => onApproveRef.current(), EXIT_MS);
   };
 
   const commitSkip = () => {
     setExiting("left");
     setDx(-600);
-    setTimeout(onSkip, EXIT_MS);
+    setTimeout(() => onSkipRef.current(), EXIT_MS);
   };
 
   /** A blocked swipe-right resets dx and arms the button; the card calls onOpenDetail. */
   const primeBlocked = () => {
     setDx(0);
     setArmed(true);
-    onPrimeBlocked();
+    onPrimeBlockedRef.current();
   };
 
   // ---- pointer / touch drag ----
@@ -184,7 +194,6 @@ export function useCardSwipe({
     dragging,
     exiting,
     armed,
-    setArmed,
     commitApprove,
     commitSkip,
     onDown,

@@ -266,22 +266,6 @@ describe("useCardSwipe", () => {
       });
       expect(result.current.armed).toBe(false);
     });
-
-    it("setArmed can be called externally to clear the armed state", () => {
-      const { onApprove, onSkip, onPrimeBlocked } = makeHandlers();
-      const { result } = renderHook(() =>
-        useCardSwipe({ swipeApproves: false, onApprove, onSkip, onPrimeBlocked }),
-      );
-
-      simulateDrag(result, 220);
-      vi.runAllTimers();
-      expect(result.current.armed).toBe(true);
-
-      act(() => {
-        result.current.setArmed(false);
-      });
-      expect(result.current.armed).toBe(false);
-    });
   });
 
   // ---- exiting state ----
