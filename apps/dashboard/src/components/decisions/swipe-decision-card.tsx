@@ -167,6 +167,13 @@ export function SwipeDecisionCard({
   );
 }
 
+export interface FinancialDetails {
+  current: { label: string; value: string };
+  proposed: { label: string; value: string };
+  impact: { label: string; value: string };
+  guardrail: { label: string; value: string };
+}
+
 export interface ConfirmSheetProps {
   open: boolean;
   agentName: string;
@@ -174,6 +181,8 @@ export interface ConfirmSheetProps {
   affirmativeLabel: string;
   onCancel: () => void;
   onConfirm: () => void;
+  /** Optional financial breakdown rendered above action buttons. When absent the generic confirm line is shown. */
+  financialDetails?: FinancialDetails;
 }
 
 /**
@@ -188,6 +197,7 @@ export function ConfirmSheet({
   affirmativeLabel,
   onCancel,
   onConfirm,
+  financialDetails,
 }: ConfirmSheetProps) {
   if (!open) return null;
   return (
@@ -203,9 +213,32 @@ export function ConfirmSheet({
         <span className={styles.confirmHandle} aria-hidden="true" />
         <span className={styles.confirmEyebrow}>Confirm — {agentName}</span>
         <h3 className={styles.confirmTitle}>{summary}</h3>
-        <p className={styles.confirmSummary}>
-          This action needs an explicit confirmation before it goes ahead.
-        </p>
+        {financialDetails ? (
+          <div className={styles.confirmRows}>
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmRowLabel}>{financialDetails.current.label}</span>
+              <span className={styles.confirmRowValue}>{financialDetails.current.value}</span>
+            </div>
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmRowLabel}>{financialDetails.proposed.label}</span>
+              <span className={styles.confirmRowValue}>{financialDetails.proposed.value}</span>
+            </div>
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmRowLabel}>{financialDetails.impact.label}</span>
+              <span className={styles.confirmRowValue}>{financialDetails.impact.value}</span>
+            </div>
+            <div className={`${styles.confirmRow} ${styles.confirmRowFull}`}>
+              <span className={styles.confirmRowLabel}>{financialDetails.guardrail.label}</span>
+              <span className={`${styles.confirmRowValue} ${styles.confirmRowValueSmall}`}>
+                {financialDetails.guardrail.value}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className={styles.confirmSummary}>
+            This action needs an explicit confirmation before it goes ahead.
+          </p>
+        )}
         <div className={styles.confirmActions}>
           <button
             type="button"

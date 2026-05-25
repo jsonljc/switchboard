@@ -413,6 +413,46 @@
   line-height: 1.5;
   color: var(--ink-2);
 }
+/* Financial breakdown rows — shown instead of the generic confirm line. */
+.confirmRows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--hair-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.confirmRow {
+  background: var(--canvas-2);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.confirmRowFull {
+  grid-column: 1 / -1;
+}
+.confirmRowLabel {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.confirmRowValue {
+  font-family: var(--serif);
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  color: var(--ink-1);
+  font-feature-settings: "tnum";
+}
+.confirmRowValueSmall {
+  font-family: var(--font-home-sans);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
 .confirmActions {
   display: flex;
   gap: 10px;
