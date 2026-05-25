@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Inter, DM_Sans, Space_Mono, Source_Serif_4, JetBrains_Mono } from "next/font/google";
+import {
+  Inter,
+  DM_Sans,
+  Space_Mono,
+  Source_Serif_4,
+  JetBrains_Mono,
+  Hanken_Grotesk,
+  Newsreader,
+} from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 import Script from "next/script";
@@ -41,6 +49,27 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+// Home "warm operational editorial" register (P1-A) — Hanken Grotesk UI sans +
+// Newsreader editorial serif (with optical-size axis). Scoped to Home via the
+// --font-home-* stacks in globals.css; other surfaces keep Inter/Source Serif 4.
+const hanken = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-hanken",
+  display: "swap",
+});
+
+// Newsreader is loaded as a variable font so the optical-size (opsz) axis is
+// available to the Home serif. next/font/google forbids a fixed `weight` array
+// alongside `axes` — the variable weight axis covers 400–600 used by home.module.css.
+const newsreader = Newsreader({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  axes: ["opsz"],
+  variable: "--font-newsreader",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Switchboard",
   description: "Your AI team runs the business. Stay in control, without the clutter.",
@@ -54,7 +83,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${hanken.variable} ${newsreader.variable}`}
       suppressHydrationWarning
     >
       <body className={inter.className}>
