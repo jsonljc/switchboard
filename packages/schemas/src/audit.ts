@@ -60,6 +60,7 @@ export const AuditEventTypeSchema = z.enum([
   "work_trace.persisted",
   "work_trace.updated",
   "work_trace.integrity_override",
+  "infrastructure.job.retry_exhausted",
 ]);
 export type AuditEventType = z.infer<typeof AuditEventTypeSchema>;
 
@@ -143,6 +144,7 @@ export const OPERATIONAL_AUDIT_EVENT_TYPES: readonly AuditEventType[] = [
   "overlay.activated",
   "overlay.deactivated",
   "work_trace.integrity_override",
+  "infrastructure.job.retry_exhausted",
 ] as const;
 
 /**
