@@ -18,7 +18,19 @@ interface DbKeyCache {
   expiresAt: number;
 }
 
-const DB_KEY_TTL_MS = 60_000; // 60s cache TTL
+// Default cache TTL for DB-validated keys. Kept short so a revoked/rotated
+// dashboard key stops authenticating promptly (AU-3). Override via
+// DB_KEY_CACHE_TTL_MS — set to 0 to bypass the cache and re-validate every
+// request. Operators can also force-clear the whole cache via SIGHUP.
+const DEFAULT_DB_KEY_TTL_MS = 5_000;
+
+function resolveDbKeyCacheTtlMs(): number {
+  const raw = process.env["DB_KEY_CACHE_TTL_MS"];
+  if (raw === undefined || raw.trim() === "") return DEFAULT_DB_KEY_TTL_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_DB_KEY_TTL_MS;
+  return parsed;
+}
 
 function hashKey(key: string): Buffer {
   return crypto.createHash("sha256").update(key).digest();
@@ -44,6 +56,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
   // In-memory cache for DB-validated keys (keyed by hex hash)
   const dbKeyCache = new Map<string, DbKeyCache>();
+  const dbKeyTtlMs = resolveDbKeyCacheTtlMs();
 
   // If no keys configured and no DB, skip auth entirely (development mode)
   const hasDb = !!app.prisma;
@@ -197,7 +210,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
             principalId: user.principalId,
           };
           // Cache the result
-          dbKeyCache.set(hashHex, { metadata, expiresAt: Date.now() + DB_KEY_TTL_MS });
+          dbKeyCache.set(hashHex, { metadata, expiresAt: Date.now() + dbKeyTtlMs });
           request.organizationIdFromAuth = metadata.organizationId;
           request.principalIdFromAuth = metadata.principalId;
           return;
