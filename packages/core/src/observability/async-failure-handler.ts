@@ -1,6 +1,7 @@
 import type { AsyncFailureEnvelope, RiskCategory } from "@switchboard/schemas";
 import type { AuditLedger } from "../audit/ledger.js";
-import type { OperatorAlerter } from "./operator-alerter.js";
+import { safeAlert, type OperatorAlerter } from "./operator-alerter.js";
+import { extractErrorMessage } from "./infrastructure-failure.js";
 
 const DEFAULT_FAILURE_CODE = "ASYNC_JOB_FAILED";
 
@@ -15,12 +16,6 @@ export interface BuildAsyncFailureInput {
   runId?: string;
   organizationId?: string;
   deploymentId?: string;
-}
-
-function messageOf(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  return String(error);
 }
 
 function codeOf(error: unknown): string {
@@ -40,7 +35,7 @@ function codeOf(error: unknown): string {
 export function buildAsyncFailureEnvelope(input: BuildAsyncFailureInput): AsyncFailureEnvelope {
   return {
     code: codeOf(input.error),
-    message: messageOf(input.error),
+    message: extractErrorMessage(input.error),
     ...(input.stage !== undefined ? { stage: input.stage } : {}),
     functionId: input.functionId,
     eventName: input.eventName,
@@ -134,24 +129,21 @@ export function makeOnFailureHandler(params: OnFailureParams, ctx: AsyncFailureC
       }
     }
 
-    // (c) alert classes only (spec §2c).
+    // (c) alert classes only (spec §2c). safeAlert wraps delivery so a failed
+    // alert never escapes the handler (house idiom, mirrors the ingress path).
     if (params.alert) {
-      try {
-        await ctx.operatorAlerter.alert({
-          errorType: "async_job_retry_exhausted",
-          severity: params.severity ?? "critical",
-          errorMessage: `${params.functionId}: ${envelope.message}`,
-          retryable: envelope.retryable,
-          occurredAt,
-          source: "inngest_function",
-          ...(envelope.organizationId !== undefined
-            ? { organizationId: envelope.organizationId }
-            : {}),
-          ...(envelope.deploymentId !== undefined ? { deploymentId: envelope.deploymentId } : {}),
-        });
-      } catch (err) {
-        console.error(`[async-failure] operator alert failed for ${params.functionId}`, err);
-      }
+      await safeAlert(ctx.operatorAlerter, {
+        errorType: "async_job_retry_exhausted",
+        severity: params.severity ?? "critical",
+        errorMessage: `${params.functionId}: ${envelope.message}`,
+        retryable: envelope.retryable,
+        occurredAt,
+        source: "inngest_function",
+        ...(envelope.organizationId !== undefined
+          ? { organizationId: envelope.organizationId }
+          : {}),
+        ...(envelope.deploymentId !== undefined ? { deploymentId: envelope.deploymentId } : {}),
+      });
     }
   };
 }
