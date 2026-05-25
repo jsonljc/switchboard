@@ -317,8 +317,19 @@ export async function registerInngest(
     },
   );
 
+  // ---------------------------------------------------------------------------
+  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
+  // wiring for Class-A and Class-B Inngest functions (Phase 3B failure contract).
+  // ---------------------------------------------------------------------------
+  const asyncFailure: AsyncFailureContext = {
+    auditLedger: app.auditLedger,
+    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
+    inngest: { send: (e) => inngestClient.send(e) },
+  };
+
   // Meta token refresh cron dependencies
   const metaTokenRefreshDeps: MetaTokenRefreshDeps = {
+    failure: asyncFailure,
     listMetaConnections: async () => {
       const allConnections = await app.prisma!.deploymentConnection.findMany({
         where: { type: "meta-ads" },
@@ -363,6 +374,7 @@ export async function registerInngest(
 
   // Reconciliation cron dependencies
   const reconciliationDeps: ReconciliationCronDeps = {
+    failure: asyncFailure,
     listActiveOrganizations: async () => {
       const orgs = await app.prisma!.organizationConfig.findMany({
         where: { provisioningStatus: "active" },
@@ -381,16 +393,6 @@ export async function registerInngest(
         dateRangeTo: dateRange.to,
       };
     },
-  };
-
-  // ---------------------------------------------------------------------------
-  // Shared AsyncFailureContext — constructed once here; consumed by onFailure
-  // wiring for Class-A Inngest functions (Phase 3B failure contract).
-  // ---------------------------------------------------------------------------
-  const asyncFailure: AsyncFailureContext = {
-    auditLedger: app.auditLedger,
-    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
-    inngest: { send: (e) => inngestClient.send(e) },
   };
 
   // Stripe reconciliation cron dependencies
@@ -691,28 +693,74 @@ export async function registerInngest(
           asyncFailure,
         ) as (arg: unknown) => Promise<void>,
       ),
-      createCreativeJobRunner(jobStore, { apiKey }, openaiApiKey ? { openaiApiKey } : undefined),
-      createUgcJobRunner({
+      createCreativeJobRunner(
         jobStore,
-        creatorStore,
-        deploymentStore: {
-          findById: async (id: string) => {
-            const deployment = await deploymentStore.findById(id);
-            if (!deployment) return null;
-            const listing = await listingStore.findById(deployment.listingId);
-            return {
-              listing: listing ? { trustScore: listing.trustScore } : undefined,
-              type: "standard",
-            };
+        { apiKey },
+        openaiApiKey ? { openaiApiKey } : undefined,
+        makeOnFailureHandler(
+          {
+            functionId: "creative-job-runner",
+            eventDomain: "creative.polished",
+            riskCategory: "medium",
+            alert: false,
           },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
+      createUgcJobRunner(
+        {
+          jobStore,
+          creatorStore,
+          deploymentStore: {
+            findById: async (id: string) => {
+              const deployment = await deploymentStore.findById(id);
+              if (!deployment) return null;
+              const listing = await listingStore.findById(deployment.listingId);
+              return {
+                listing: listing ? { trustScore: listing.trustScore } : undefined,
+                type: "standard",
+              };
+            },
+          },
+          llmConfig: { apiKey },
+          klingClient,
+          assetStore,
         },
-        llmConfig: { apiKey },
-        klingClient,
-        assetStore,
-      }),
-      createWeeklyAuditCron(adOptimizerDeps),
+        makeOnFailureHandler(
+          {
+            functionId: "ugc-job-runner",
+            riskCategory: "medium",
+            alert: false,
+            emitEvent: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
+      createWeeklyAuditCron(
+        adOptimizerDeps,
+        makeOnFailureHandler(
+          {
+            functionId: "ad-optimizer-weekly-audit",
+            eventDomain: "ad-optimizer.weekly-audit",
+            riskCategory: "medium",
+            alert: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
       createDailyCheckCron(adOptimizerDeps),
-      createDailySignalHealthCron(signalHealthDeps),
+      createDailySignalHealthCron(
+        signalHealthDeps,
+        makeOnFailureHandler(
+          {
+            functionId: "ad-optimizer-daily-signal-health",
+            eventDomain: "ad-optimizer.signal-health",
+            riskCategory: "medium",
+            alert: false,
+          },
+          asyncFailure,
+        ) as (arg: unknown) => Promise<void>,
+      ),
       dailyPatternDecayCron,
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createReconciliationCron(reconciliationDeps),

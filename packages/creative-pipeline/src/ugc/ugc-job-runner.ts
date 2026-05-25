@@ -347,13 +347,17 @@ export async function executeUgcPipeline(
 
 // ── Inngest function definition ──
 
-export function createUgcJobRunner(deps: UgcPipelineDeps) {
+export function createUgcJobRunner(
+  deps: UgcPipelineDeps,
+  onFailure?: (arg: unknown) => Promise<void>,
+) {
   return inngestClient.createFunction(
     {
       id: "ugc-job-runner",
       name: "UGC Pipeline Job Runner",
       retries: 3,
       triggers: [{ event: "creative-pipeline/ugc.submitted" }],
+      ...(onFailure ? { onFailure } : {}),
     },
     async ({ event, step }: { event: { data: UgcJobEventData }; step: UgcStepTools }) => {
       await executeUgcPipeline(event.data, step, deps);

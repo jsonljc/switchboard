@@ -15,6 +15,7 @@ interface OrgRecord {
 }
 
 export interface ReconciliationCronDeps {
+  failure: AsyncFailureContext;
   listActiveOrganizations: () => Promise<OrgRecord[]>;
   runReconciliation: (
     orgId: string,
@@ -175,6 +176,15 @@ export function createReconciliationCron(deps: ReconciliationCronDeps) {
       name: "Daily Reconciliation",
       retries: 2,
       triggers: [{ cron: "0 2 * * *" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "reconciliation-daily",
+          eventDomain: "reconciliation",
+          riskCategory: "medium",
+          alert: false,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
     },
     async ({ step }) => {
       return executeReconciliation(step as unknown as StepTools, deps);

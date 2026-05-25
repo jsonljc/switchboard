@@ -6,12 +6,25 @@ import {
   executeDailySignalHealthCheck,
   createWeeklyAuditDispatcher,
   createDailyCheckDispatcher,
+  createWeeklyAuditCron,
+  createDailySignalHealthCron,
   executeRileyOutcomeAttributionDispatch,
   type CronDependencies,
   type SignalHealthCronDependencies,
   type RileyOutcomeAttributionDispatchDeps,
 } from "../inngest-functions.js";
 import type { SignalHealthReport } from "../signal-health-checker.js";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock("inngest", () => ({
+  Inngest: vi.fn().mockImplementation(() => ({
+    createFunction: createFunctionSpy,
+  })),
+}));
 
 function makeMockStep() {
   return {
@@ -485,5 +498,68 @@ describe("executeRileyOutcomeAttributionDispatch", () => {
 
     expect(sendEvent).not.toHaveBeenCalled();
     expect(result).toEqual({ dispatched: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createWeeklyAuditCron + createDailySignalHealthCron (Class B)
+// ---------------------------------------------------------------------------
+
+function makeMinimalCronDeps(): CronDependencies {
+  return {
+    listActiveDeployments: vi.fn().mockResolvedValue([]),
+    getDeploymentCredentials: vi.fn().mockResolvedValue(null),
+    createAdsClient: vi.fn(),
+    createCrmProvider: vi.fn(),
+    createInsightsProvider: vi.fn(),
+    saveAuditReport: vi.fn(),
+  };
+}
+
+function makeMinimalSignalHealthDeps(): SignalHealthCronDependencies {
+  return {
+    listActiveDeployments: vi.fn().mockResolvedValue([]),
+    getDeploymentCredentials: vi.fn().mockResolvedValue(null),
+    getDeploymentPixelId: vi.fn().mockResolvedValue(null),
+    createSignalHealthChecker: vi.fn(),
+    saveSignalHealthReport: vi.fn(),
+  };
+}
+
+describe("createWeeklyAuditCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config when provided", () => {
+    createFunctionSpy.mockClear();
+    const onFailure = async (_arg: unknown) => {};
+    createWeeklyAuditCron(makeMinimalCronDeps(), onFailure);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("does not set onFailure key when no callback provided", () => {
+    createFunctionSpy.mockClear();
+    createWeeklyAuditCron(makeMinimalCronDeps());
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["onFailure"]).toBeUndefined();
+  });
+});
+
+describe("createDailySignalHealthCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config when provided", () => {
+    createFunctionSpy.mockClear();
+    const onFailure = async (_arg: unknown) => {};
+    createDailySignalHealthCron(makeMinimalSignalHealthDeps(), onFailure);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("does not set onFailure key when no callback provided", () => {
+    createFunctionSpy.mockClear();
+    createDailySignalHealthCron(makeMinimalSignalHealthDeps());
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["onFailure"]).toBeUndefined();
   });
 });

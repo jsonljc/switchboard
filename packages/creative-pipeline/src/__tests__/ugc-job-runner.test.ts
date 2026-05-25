@@ -1,5 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeUgcPipeline } from "../ugc/ugc-job-runner.js";
+import { executeUgcPipeline, createUgcJobRunner } from "../ugc/ugc-job-runner.js";
+
+// Hoist the spy so it's available when vi.mock factory runs.
+const { createFunctionSpy } = vi.hoisted(() => ({
+  createFunctionSpy: vi.fn().mockReturnValue({}),
+}));
+
+// ugc-job-runner imports inngestClient from "../inngest-client.js" (relative to src/ugc/).
+// From this test file (src/__tests__/), that resolves to src/inngest-client.ts.
+vi.mock("../inngest-client.js", () => ({
+  inngestClient: {
+    createFunction: createFunctionSpy,
+    schemas: new Map(),
+  },
+}));
 
 function createMockStep() {
   return {
@@ -155,5 +169,36 @@ describe("executeUgcPipeline", () => {
     });
     // The `if` clause should filter by phase
     expect(((firstWait as unknown[])[1] as Record<string, unknown>).if).toContain("planning");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createUgcJobRunner (Class B, emitEvent:false)
+// ---------------------------------------------------------------------------
+
+describe("createUgcJobRunner — onFailure wiring", () => {
+  function makeMinimalDeps() {
+    return {
+      jobStore: { findById: vi.fn(), updateUgcPhase: vi.fn(), stopUgc: vi.fn(), failUgc: vi.fn() },
+      creatorStore: { findByDeployment: vi.fn().mockResolvedValue([]) },
+      deploymentStore: { findById: vi.fn().mockResolvedValue(null) },
+    };
+  }
+
+  it("passes onFailure into createFunction config when provided", () => {
+    createFunctionSpy.mockClear();
+    const onFailure = async (_arg: unknown) => {};
+    createUgcJobRunner(makeMinimalDeps() as never, onFailure);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+
+  it("does not set onFailure key when no callback provided", () => {
+    createFunctionSpy.mockClear();
+    createUgcJobRunner(makeMinimalDeps() as never);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["onFailure"]).toBeUndefined();
   });
 });

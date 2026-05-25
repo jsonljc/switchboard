@@ -3,6 +3,7 @@ import {
   executeReconciliation,
   executeStripeReconciliation,
   createStripeReconciliationCron,
+  createReconciliationCron,
 } from "../reconciliation.js";
 import type {
   ReconciliationCronDeps,
@@ -28,8 +29,21 @@ function makeStep(): StepTools {
   };
 }
 
+function makeFailureContext(): AsyncFailureContext {
+  return {
+    auditLedger: {
+      record: vi.fn().mockResolvedValue({}),
+    } as unknown as AsyncFailureContext["auditLedger"],
+    operatorAlerter: {
+      alert: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AsyncFailureContext["operatorAlerter"],
+    inngest: { send: vi.fn().mockResolvedValue(undefined) },
+  };
+}
+
 function makeDeps(overrides: Partial<ReconciliationCronDeps> = {}): ReconciliationCronDeps {
   return {
+    failure: makeFailureContext(),
     listActiveOrganizations: vi.fn().mockResolvedValue([]),
     runReconciliation: vi.fn().mockResolvedValue({
       organizationId: "org_1",
@@ -115,18 +129,6 @@ describe("executeReconciliation", () => {
 // ---------------------------------------------------------------------------
 // Stripe Reconciliation
 // ---------------------------------------------------------------------------
-
-function makeFailureContext(): AsyncFailureContext {
-  return {
-    auditLedger: {
-      record: vi.fn().mockResolvedValue({}),
-    } as unknown as AsyncFailureContext["auditLedger"],
-    operatorAlerter: {
-      alert: vi.fn().mockResolvedValue(undefined),
-    } as unknown as AsyncFailureContext["operatorAlerter"],
-    inngest: { send: vi.fn().mockResolvedValue(undefined) },
-  };
-}
 
 function makeStripeDeps(
   overrides: Partial<StripeReconciliationDeps> = {},
@@ -238,6 +240,20 @@ describe("createStripeReconciliationCron — onFailure wiring", () => {
     createFunctionSpy.mockClear();
     const failure = makeFailureContext();
     createStripeReconciliationCron({ ...makeStripeDeps(), failure });
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof config?.["onFailure"]).toBe("function");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// onFailure wiring — createReconciliationCron (Class B)
+// ---------------------------------------------------------------------------
+
+describe("createReconciliationCron — onFailure wiring", () => {
+  it("passes onFailure into createFunction config", () => {
+    createFunctionSpy.mockClear();
+    createReconciliationCron(makeDeps());
 
     const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(typeof config?.["onFailure"]).toBe("function");
