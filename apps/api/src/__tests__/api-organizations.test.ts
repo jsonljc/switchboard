@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+import { ALEX_SKILL_PACK_SCOPES } from "@switchboard/db";
 import { organizationsRoutes } from "../routes/organizations.js";
 
 describe("Organizations API — Config", () => {
@@ -183,6 +184,10 @@ describe("Organizations API — Config", () => {
           }),
         }),
       );
+      // Skill-pack fold-in: the seed must actually run on the happy path (the route's
+      // best-effort try/catch would otherwise hide a silent failure). Use the seed's
+      // own scope-count constant so this won't rot if the pack grows.
+      expect(mockPrisma.knowledgeEntry.upsert).toHaveBeenCalledTimes(ALEX_SKILL_PACK_SCOPES.length);
     });
 
     it("repeated config access does not duplicate the listing+deployment (idempotent upsert)", async () => {
