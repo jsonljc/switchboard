@@ -140,6 +140,7 @@ export {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,
   ALEX_SKILL_PACK_SCOPES,
+  type KnowledgeEntryReader,
 } from "./seed/seed-alex-skill-pack.js";
 export {
   PrismaWhatsAppTestSendStore,

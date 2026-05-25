@@ -78,6 +78,20 @@ function defaultRefsDir(): string {
 }
 
 /**
+ * Minimal structural reader satisfied by PrismaClient (and test mocks). Lets
+ * assertAlexSkillPackSeeded run against any object exposing the single query it
+ * needs — e.g. the API readiness module's narrow PrismaLike — without importing
+ * the full PrismaClient shape into a layer-5 caller.
+ */
+export interface KnowledgeEntryReader {
+  knowledgeEntry: {
+    findFirst(args: {
+      where: { organizationId: string; kind: KnowledgeKind; scope: string; active: boolean };
+    }): Promise<{ content: string | null } | null>;
+  };
+}
+
+/**
  * Preflight assertion for medspa provisioning and eval pipelines.
  *
  * For every entry in ALEX_SKILL_PACK_SCOPES, queries the active KnowledgeEntry
@@ -87,11 +101,11 @@ function defaultRefsDir(): string {
  * This is intentionally strict: the medspa skill-pack is required for Alex to
  * operate; a missing slot is a provisioning failure, not a soft warning.
  *
- * @param prisma A PrismaClient (or compatible mock).
+ * @param prisma A KnowledgeEntryReader (PrismaClient and mocks satisfy it structurally).
  * @param orgId  The organization to check.
  */
 export async function assertAlexSkillPackSeeded(
-  prisma: PrismaClient,
+  prisma: KnowledgeEntryReader,
   orgId: string,
 ): Promise<void> {
   for (const entry of ALEX_SKILL_PACK_SCOPES) {

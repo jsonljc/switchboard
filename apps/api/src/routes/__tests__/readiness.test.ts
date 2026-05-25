@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { checkReadiness, type ReadinessContext } from "../readiness.js";
+import {
+  checkReadiness,
+  buildReadinessContext,
+  type PrismaLike,
+  type ReadinessContext,
+} from "../readiness.js";
 
 /**
  * Returns a fully-passing ReadinessContext. Override individual fields to test
@@ -57,6 +62,8 @@ function makeContext(overrides: Partial<ReadinessContext> = {}): ReadinessContex
       hasGoogleCalendarId: false,
       businessHours: { mon: [{ start: "09:00", end: "17:00" }] },
     },
+    alexSkillPackSeeded: true,
+    alexSkillPackDiagnostic: null,
     ...overrides,
   };
 }
@@ -66,7 +73,7 @@ describe("checkReadiness", () => {
     const report = checkReadiness(makeContext());
     expect(report.ready).toBe(true);
     expect(report.checks.every((c) => c.status === "pass")).toBe(true);
-    expect(report.checks).toHaveLength(11);
+    expect(report.checks).toHaveLength(12);
   });
 
   // ── email-verified ──────────────────────────────────────────────────────
@@ -77,6 +84,35 @@ describe("checkReadiness", () => {
     expect(check.status).toBe("fail");
     expect(check.blocking).toBe(true);
     expect(report.ready).toBe(false);
+  });
+
+  // ── alex-skill-pack-seeded ──────────────────────────────────────────────
+  it("alex-skill-pack-seeded fails (blocking) when the pack is not seeded", () => {
+    const report = checkReadiness(
+      makeContext({
+        alexSkillPackSeeded: false,
+        alexSkillPackDiagnostic:
+          'missing active KnowledgeEntry for kind="playbook" scope="objection-handling"',
+      }),
+    );
+    const check = report.checks.find((c) => c.id === "alex-skill-pack-seeded")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(true);
+    expect(report.ready).toBe(false);
+  });
+
+  it("alex-skill-pack-seeded passes when the pack is seeded", () => {
+    const report = checkReadiness(makeContext());
+    const check = report.checks.find((c) => c.id === "alex-skill-pack-seeded")!;
+    expect(check.status).toBe("pass");
+  });
+
+  it("alex-skill-pack-seeded message never leaks the diagnostic", () => {
+    const report = checkReadiness(
+      makeContext({ alexSkillPackSeeded: false, alexSkillPackDiagnostic: "objection-handling" }),
+    );
+    const check = report.checks.find((c) => c.id === "alex-skill-pack-seeded")!;
+    expect(check.message).not.toContain("objection-handling");
   });
 
   // ── channel-connected ───────────────────────────────────────────────────
@@ -308,6 +344,7 @@ describe("checkReadiness", () => {
       "approval-mode-reviewed",
       "meta-ads-token",
       "calendar",
+      "alex-skill-pack-seeded",
     ]);
   });
 
@@ -363,7 +400,7 @@ describe("checkReadiness", () => {
     expect(check.message).toBe("Meta Ads token is valid");
   });
 
-  // ── calendar (advisory) ─────────────────────────────────────────────────
+  // ── calendar (advisory) ───────────────────────────────────────────────────────
 
   it("calendar passes (google) when both Google env vars are present in context", () => {
     const report = checkReadiness(
@@ -417,5 +454,44 @@ describe("checkReadiness", () => {
     );
     // Calendar fail is non-blocking — ready stays true (regression pin).
     expect(report.ready).toBe(true);
+  });
+});
+
+function makePrismaMock(opts: { knowledgeRow?: { content: string } | null } = {}): PrismaLike {
+  const row = opts.knowledgeRow === undefined ? { content: "x".repeat(80) } : opts.knowledgeRow;
+  return {
+    managedChannel: { findMany: async () => [] },
+    connection: { findMany: async () => [] },
+    agentDeployment: { findFirst: async () => null },
+    organizationConfig: { findUnique: async () => null },
+    deploymentConnection: { findMany: async () => [] },
+    dashboardUser: { findFirst: async () => null },
+    knowledgeEntry: { findFirst: async () => row },
+  } as unknown as PrismaLike;
+}
+
+describe("buildReadinessContext — alex skill pack", () => {
+  it("sets alexSkillPackSeeded=true when the pack rows exist", async () => {
+    const ctx = await buildReadinessContext(makePrismaMock(), "org_demo");
+    expect(ctx.alexSkillPackSeeded).toBe(true);
+    expect(ctx.alexSkillPackDiagnostic).toBeNull();
+  });
+
+  it("full chain: a missing pack blocks go-live", async () => {
+    const ctx = await buildReadinessContext(makePrismaMock({ knowledgeRow: null }), "org_demo");
+    // context builder
+    expect(ctx.alexSkillPackSeeded).toBe(false);
+    expect(ctx.alexSkillPackDiagnostic).not.toBeNull();
+    // → pure check → gate. The minimal mock also fails other blocking checks
+    // (e.g. no deployment), so report.ready===false is over-determined here;
+    // causal isolation (skill pack alone flips ready) is the pure-check test
+    // above. This IO test's job is that the builder DERIVES the fail+diagnostic
+    // from a null DB row and surfaces a blocking alex-skill-pack-seeded check.
+    const report = checkReadiness(ctx);
+    expect(report.ready).toBe(false);
+    const check = report.checks.find((c) => c.id === "alex-skill-pack-seeded")!;
+    expect(check.id).toBe("alex-skill-pack-seeded");
+    expect(check.blocking).toBe(true);
+    expect(check.status).toBe("fail");
   });
 });

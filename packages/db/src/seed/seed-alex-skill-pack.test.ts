@@ -5,6 +5,7 @@ import {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,
   ALEX_SKILL_PACK_SCOPES,
+  type KnowledgeEntryReader,
 } from "./seed-alex-skill-pack.js";
 import type { PrismaClient } from "@prisma/client";
 
@@ -469,5 +470,16 @@ describe("assertAlexSkillPackSeeded", () => {
     await expect(assertAlexSkillPackSeeded(prisma, "org_other")).rejects.toThrow(
       /missing active KnowledgeEntry.*org_other/,
     );
+  });
+
+  it("accepts a minimal structural reader (only knowledgeEntry.findFirst)", async () => {
+    // Proves the param was narrowed from PrismaClient to KnowledgeEntryReader:
+    // a bare object exposing just the one query compiles and runs.
+    const reader: KnowledgeEntryReader = {
+      knowledgeEntry: {
+        findFirst: async () => ({ content: "x".repeat(60) }),
+      },
+    };
+    await expect(assertAlexSkillPackSeeded(reader, "org_demo")).resolves.toBeUndefined();
   });
 });
