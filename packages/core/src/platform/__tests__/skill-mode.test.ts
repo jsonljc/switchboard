@@ -354,11 +354,22 @@ describe("SkillMode context resolution (Critical 1)", () => {
         metadata: [],
       }),
     };
-    const skill = makeSkill({ context: alexLikeContext });
+    const skill = makeSkill({ slug: "alex", context: alexLikeContext });
     const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
     const mode = new SkillMode({ executor, skillsBySlug, contextResolver });
 
-    await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+    await mode.execute(
+      makeWorkUnit({
+        deployment: {
+          deploymentId: "dep-1",
+          skillSlug: "alex",
+          trustLevel: "guided",
+          trustScore: 42,
+        },
+      }),
+      defaultConstraints,
+      defaultContext,
+    );
 
     expect(executor.lastParams?.parameters).toMatchObject({
       PLAYBOOK_CONTEXT: "OBJECTION PLAYBOOK",
@@ -377,11 +388,22 @@ describe("SkillMode context resolution (Critical 1)", () => {
     const contextResolver = {
       resolve: vi.fn().mockRejectedValue(new Error("knowledge store down")),
     };
-    const skill = makeSkill({ context: alexLikeContext });
+    const skill = makeSkill({ slug: "alex", context: alexLikeContext });
     const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
     const mode = new SkillMode({ executor, skillsBySlug, contextResolver });
 
-    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+    const result = await mode.execute(
+      makeWorkUnit({
+        deployment: {
+          deploymentId: "dep-1",
+          skillSlug: "alex",
+          trustLevel: "guided",
+          trustScore: 42,
+        },
+      }),
+      defaultConstraints,
+      defaultContext,
+    );
 
     expect(result.outcome).toBe("completed");
     expect(executor.lastParams?.parameters.PLAYBOOK_CONTEXT).toBeUndefined();
@@ -395,6 +417,7 @@ describe("SkillMode context resolution (Critical 1)", () => {
       }),
     };
     const skill = makeSkill({
+      slug: "alex",
       context: [
         {
           kind: "playbook",
@@ -406,7 +429,15 @@ describe("SkillMode context resolution (Critical 1)", () => {
     });
     const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
     const mode = new SkillMode({ executor, skillsBySlug, contextResolver });
-    const workUnit = makeWorkUnit({ parameters: { PLAYBOOK_CONTEXT: "raw-should-be-overridden" } });
+    const workUnit = makeWorkUnit({
+      deployment: {
+        deploymentId: "dep-1",
+        skillSlug: "alex",
+        trustLevel: "guided",
+        trustScore: 42,
+      },
+      parameters: { PLAYBOOK_CONTEXT: "raw-should-be-overridden" },
+    });
 
     await mode.execute(workUnit, defaultConstraints, defaultContext);
 
@@ -415,6 +446,7 @@ describe("SkillMode context resolution (Critical 1)", () => {
 
   it("is a no-op when no resolver is wired even if the skill declares context", async () => {
     const skill = makeSkill({
+      slug: "alex",
       context: [
         {
           kind: "playbook",
@@ -427,7 +459,18 @@ describe("SkillMode context resolution (Critical 1)", () => {
     const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
     const mode = new SkillMode({ executor, skillsBySlug }); // no contextResolver
 
-    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+    const result = await mode.execute(
+      makeWorkUnit({
+        deployment: {
+          deploymentId: "dep-1",
+          skillSlug: "alex",
+          trustLevel: "guided",
+          trustScore: 42,
+        },
+      }),
+      defaultConstraints,
+      defaultContext,
+    );
 
     expect(result.outcome).toBe("completed");
     expect(executor.lastParams?.parameters.PLAYBOOK_CONTEXT).toBeUndefined();

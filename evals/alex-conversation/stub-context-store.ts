@@ -45,8 +45,11 @@ function stripFrontmatter(raw: string): string {
 }
 
 /**
- * The three skill-pack scopes Alex seeds from real medspa markdown. Mirrors
- * `ALEX_SKILL_PACK_SCOPES` in seed-alex-skill-pack.ts (kind + scope + file).
+ * KEEP IN SYNC with ALEX_SKILL_PACK_SCOPES in @switchboard/db (packages/db/src/seed/
+ * seed-alex-skill-pack.ts). Deliberately duplicated (not imported) to keep this eval
+ * DB-free; if you add/rename a scope there, mirror it here or the preflight won't cover it.
+ *
+ * The three skill-pack scopes Alex seeds from real medspa markdown.
  * `injectAs` mapping (per skills/alex/SKILL.md):
  *   playbook/objection-handling     -> PLAYBOOK_CONTEXT
  *   playbook/qualification-framework -> QUALIFICATION_CONTEXT
