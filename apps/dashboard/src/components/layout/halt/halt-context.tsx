@@ -98,69 +98,41 @@ export function HaltProvider({ children }: { children: ReactNode }) {
   const isPendingRef = useRef(isPending);
   isPendingRef.current = isPending;
 
-  const value = useMemo<HaltContextValue>(
-    () => ({
+  const value = useMemo<HaltContextValue>(() => {
+    // Single optimistic-mutate path for both setHalted and toggleHalt. Kept as
+    // ONE helper so a fix to this safety-critical handler can never drift
+    // between two copies (e.g. the rapid-double-fire guard below).
+    const fire = (next: boolean) => {
+      // Guard: don't stack a second mutation while one is already in flight.
+      // Two rapid calls capturing the same `halted` closure would otherwise
+      // fire opposing mutations (e.g. halt then resume) back-to-back.
+      if (isPendingRef.current) return;
+      const prev = halted;
+      // Optimistic update
+      setHaltedState(next);
+      writeLocal(next);
+      const rollback = () => {
+        // Roll back on failure
+        setHaltedState(prev);
+        writeLocal(prev);
+      };
+      if (next) {
+        setLastAction("halt");
+        emergencyHalt.mutate("Operator pause", { onError: rollback });
+      } else {
+        setLastAction("resume");
+        resume.mutate(undefined, { onError: rollback });
+      }
+    };
+
+    return {
       halted,
       isPending,
       error,
-      setHalted: (next: boolean) => {
-        // Guard: don't stack a second mutation while one is already in flight.
-        // Two rapid calls capturing the same `halted` closure would otherwise
-        // fire opposing mutations (e.g. halt then resume) back-to-back.
-        if (isPendingRef.current) return;
-        const prev = halted;
-        // Optimistic update
-        setHaltedState(next);
-        writeLocal(next);
-        if (next) {
-          setLastAction("halt");
-          emergencyHalt.mutate("Operator pause", {
-            onError: () => {
-              // Roll back on failure
-              setHaltedState(prev);
-              writeLocal(prev);
-            },
-          });
-        } else {
-          setLastAction("resume");
-          resume.mutate(undefined, {
-            onError: () => {
-              // Roll back on failure
-              setHaltedState(prev);
-              writeLocal(prev);
-            },
-          });
-        }
-      },
-      toggleHalt: () => {
-        // Guard: don't stack a second mutation while one is already in flight.
-        if (isPendingRef.current) return;
-        const next = !halted;
-        const prev = halted;
-        // Optimistic update
-        setHaltedState(next);
-        writeLocal(next);
-        if (next) {
-          setLastAction("halt");
-          emergencyHalt.mutate("Operator pause", {
-            onError: () => {
-              setHaltedState(prev);
-              writeLocal(prev);
-            },
-          });
-        } else {
-          setLastAction("resume");
-          resume.mutate(undefined, {
-            onError: () => {
-              setHaltedState(prev);
-              writeLocal(prev);
-            },
-          });
-        }
-      },
-    }),
-    [halted, isPending, error],
-  );
+      setHalted: (next: boolean) => fire(next),
+      toggleHalt: () => fire(!halted),
+    };
+  }, [halted, isPending, error]);
 
   return <HaltContext.Provider value={value}>{children}</HaltContext.Provider>;
 }
