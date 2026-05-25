@@ -100,4 +100,56 @@ describe("GET /api/dashboard/agents/:key/decisions", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("serializes riskContract fields onto the wire response (financialEffect)", async () => {
+    // HF3(e): wire-level guard — serializeDecision spreads meta which includes riskContract.
+    // Emit a recommendation with financialEffect: true and assert it reaches the response body.
+    await emitRecommendation(ctx.app.recommendationStore!, {
+      orgId: "org-2",
+      agentKey: "alex",
+      intent: "recommendation.lead_reply",
+      action: "approve",
+      humanSummary: "Approve high-value reply",
+      confidence: 0.85,
+      dollarsAtRisk: 800,
+      riskLevel: "high",
+      financialEffect: true,
+      externalEffect: true,
+      clientFacing: true,
+      requiresConfirmation: true,
+      parameters: {},
+      presentation: {
+        primaryLabel: "Approve",
+        secondaryLabel: "Edit",
+        dismissLabel: "Dismiss",
+        dataLines: [],
+      },
+    });
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/alex/decisions",
+      headers: { "x-org-id": "org-2" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      decisions: Array<{
+        meta: {
+          riskContract?: {
+            financialEffect: boolean;
+            externalEffect: boolean;
+            clientFacing: boolean;
+            requiresConfirmation: boolean;
+            riskLevel: string;
+          };
+        };
+      }>;
+    };
+    expect(body.decisions).toHaveLength(1);
+    expect(body.decisions[0]!.meta.riskContract).toBeDefined();
+    expect(body.decisions[0]!.meta.riskContract!.financialEffect).toBe(true);
+    expect(body.decisions[0]!.meta.riskContract!.externalEffect).toBe(true);
+    expect(body.decisions[0]!.meta.riskContract!.clientFacing).toBe(true);
+    expect(body.decisions[0]!.meta.riskContract!.requiresConfirmation).toBe(true);
+    expect(body.decisions[0]!.meta.riskContract!.riskLevel).toBe("high");
+  });
 });

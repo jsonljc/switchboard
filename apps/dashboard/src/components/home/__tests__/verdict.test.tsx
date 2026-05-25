@@ -99,6 +99,16 @@ describe("Verdict component", () => {
       expect(emEl).not.toHaveStyle({ color: "hsl(var(--agent-mira))" });
     });
 
+    it("calm em has no inline style attribute (class default provides neutral ink, not agent coral)", () => {
+      // HF2(b): .accent class default was changed from hsl(var(--agent-alex)) to var(--ink).
+      // CALM verdict passes accentAgent: undefined → no inline style is applied → falls through to class.
+      // Verify no inline color leaks onto the em span.
+      render(<Verdict model={calmModel} />);
+      const emEl = screen.getByText("All caught up.");
+      // No inline style attribute should be present at all (Verdict only sets style when accentAgent is defined)
+      expect(emEl.style.color).toBe("");
+    });
+
     it("marks shape with data-shape='calm'", () => {
       render(<Verdict model={calmModel} />);
       const section = screen.getByRole("region");

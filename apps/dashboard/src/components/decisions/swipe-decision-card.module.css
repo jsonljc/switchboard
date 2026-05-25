@@ -237,7 +237,7 @@
   white-space: nowrap;
   cursor: pointer;
   border: 1px solid transparent;
-  font-family: var(--font-sans);
+  font-family: var(--font-home-sans);
   transition:
     transform 160ms var(--ease-home),
     background 160ms ease,
