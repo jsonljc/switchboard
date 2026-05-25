@@ -216,10 +216,14 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
 // ---------------------------------------------------------------------------
 
 /**
- * A fake transaction runner that only "commits" staged writes when the
- * callback resolves. If the callback throws, staged writes are discarded
- * (the write fn is replaced with a noop). This approximates real $transaction
- * rollback semantics without a live Postgres connection.
+ * A fake transaction runner that only promotes staged writes to the committed
+ * arrays when the callback resolves. If the callback throws, the staged buffer
+ * is discarded and nothing reaches the committed arrays. This approximates real
+ * $transaction rollback semantics without a live Postgres connection.
+ *
+ * To make the "both-or-neither" assertion load-bearing, callers MUST wire
+ * their store mocks to push markers into `tx._staged`. Without that wiring
+ * the committed arrays would always be empty and the assertion would be vacuous.
  */
 function makeFakeTransactionRunner(): {
   runner: RunInTransaction;
@@ -234,16 +238,17 @@ function makeFakeTransactionRunner(): {
   ): Promise<T> => {
     const staged: { type: "revenue" | "outbox"; data: unknown }[] = [];
 
-    // tx object that captures writes without committing them
+    // tx carries a staging buffer; store mocks push into _staged so the runner
+    // can observe which writes occurred before deciding to commit or discard.
     const tx = {
       __fakeTransaction: true,
       _staged: staged,
     };
 
-    // If fn throws, the exception propagates here and staged writes are never committed.
+    // If fn throws, the exception propagates and staged writes are never promoted.
     const result = await fn(tx as unknown as StoreTransactionContext);
 
-    // Commit: move staged writes to committed arrays
+    // Resolved: promote staged writes to the committed arrays.
     for (const entry of staged) {
       if (entry.type === "revenue") committedRevenue.push(entry.data);
       else committedOutbox.push(entry.data);
@@ -259,10 +264,26 @@ describe("PR-2 atomicity — tx rollback contract (#677)", () => {
     const revenueEvent = makeEvent({ id: "rev_tx_1" });
     const { runner, committedRevenue, committedOutbox } = makeFakeTransactionRunner();
 
-    // revenueStore.record succeeds; outboxWriter.write fails
-    const revenueStore = makeRevenueStore(async () => revenueEvent);
+    // Wire record to push a staging marker into tx._staged BEFORE returning.
+    // This is what makes the "both-or-neither" assertion non-vacuous: the staged
+    // buffer is populated before the outbox throws, so a runner that committed
+    // before checking would produce committedRevenue.length === 1 and FAIL the
+    // assertion below.
+    type FakeTx = StoreTransactionContext & {
+      _staged: { type: "revenue" | "outbox"; data: unknown }[];
+    };
+    const revenueStore = makeRevenueStore(async (_input, tx) => {
+      (tx as FakeTx)._staged.push({ type: "revenue", data: "revenue" });
+      return revenueEvent;
+    });
+
+    // Wire outboxWriter.write to push a staging marker THEN throw.
+    // Both stores have touched _staged by the time the callback rejects.
     const outboxWriter = {
-      write: vi.fn().mockRejectedValue(new Error("Outbox DB blip")),
+      write: vi.fn(async (_id: string, _type: string, _payload: unknown, tx: unknown) => {
+        (tx as FakeTx)._staged.push({ type: "outbox", data: "outbox" });
+        throw new Error("Outbox DB blip");
+      }),
     };
 
     const { app } = await buildTestServer({
@@ -292,7 +313,9 @@ describe("PR-2 atomicity — tx rollback contract (#677)", () => {
     expect(app.lastIngressTrace!.outcome).toBe("failed");
     expect(app.lastIngressTrace!.error?.code).toBe("EXECUTION_EXCEPTION");
 
-    // Both writes discarded (fake runner saw the throw, skipped commit)
+    // Both writes discarded: the staged buffer had ["revenue","outbox"] entries
+    // when the callback threw, but the runner discarded them instead of promoting.
+    // A regression where the runner committed-before-throw would make these non-empty.
     expect(committedRevenue).toHaveLength(0);
     expect(committedOutbox).toHaveLength(0);
 
