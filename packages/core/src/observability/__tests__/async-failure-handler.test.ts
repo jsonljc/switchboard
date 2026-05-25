@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { buildAsyncFailureEnvelope } from "../async-failure-handler.js";
+import { buildAsyncFailureEnvelope, makeOnFailureHandler } from "../async-failure-handler.js";
+import type { AuditLedger } from "../../audit/ledger.js";
+import type { OperatorAlerter } from "../operator-alerter.js";
 
 describe("buildAsyncFailureEnvelope", () => {
   it("maps an Error + metadata into the envelope shape", () => {
@@ -75,5 +77,112 @@ describe("buildAsyncFailureEnvelope", () => {
     });
     expect("organizationId" in env).toBe(false);
     expect("stage" in env).toBe(false);
+  });
+});
+
+function makeCtx() {
+  const recorded: unknown[] = [];
+  const sent: unknown[] = [];
+  const alerted: unknown[] = [];
+  const ctx = {
+    auditLedger: {
+      record: async (p: unknown) => {
+        recorded.push(p);
+        return {} as never;
+      },
+    } as unknown as AuditLedger,
+    operatorAlerter: {
+      alert: async (p: unknown) => {
+        alerted.push(p);
+      },
+    } as OperatorAlerter,
+    inngest: {
+      send: async (e: unknown) => {
+        sent.push(e);
+      },
+    },
+  };
+  return { ctx, recorded, sent, alerted };
+}
+
+// onFailure arg shape per verified Inngest v4.2.4 (FailureEventArgs):
+const failureArg = {
+  error: new Error("boom"),
+  event: {
+    name: "inngest/function.failed",
+    data: {
+      function_id: "stripe-reconciliation-hourly",
+      run_id: "run_1",
+      error: {},
+      event: { name: "0 * * * *" },
+    },
+  },
+};
+
+describe("makeOnFailureHandler", () => {
+  it("Class A: records audit + sends domain event + alerts", async () => {
+    const { ctx, recorded, sent, alerted } = makeCtx();
+    const onFailure = makeOnFailureHandler(
+      {
+        functionId: "stripe-reconciliation-hourly",
+        eventDomain: "stripe-reconciliation",
+        riskCategory: "high",
+        alert: true,
+      },
+      ctx,
+    );
+    await onFailure(failureArg as never);
+    expect(recorded).toHaveLength(1);
+    expect((recorded[0] as { eventType: string }).eventType).toBe(
+      "infrastructure.job.retry_exhausted",
+    );
+    expect((recorded[0] as { actorId: string }).actorId).toBe("stripe-reconciliation-hourly");
+    expect((sent[0] as { name: string }).name).toBe("stripe-reconciliation.failed");
+    expect(alerted).toHaveLength(1);
+    expect((alerted[0] as { source: string }).source).toBe("inngest_function");
+  });
+
+  it("Class E: records audit only (no event, no alert) when emitEvent is false", async () => {
+    const { ctx, recorded, sent, alerted } = makeCtx();
+    const onFailure = makeOnFailureHandler(
+      {
+        functionId: "memory-daily-pattern-decay",
+        riskCategory: "low",
+        alert: false,
+        emitEvent: false,
+      },
+      ctx,
+    );
+    await onFailure(failureArg as never);
+    expect(recorded).toHaveLength(1);
+    expect(sent).toHaveLength(0);
+    expect(alerted).toHaveLength(0);
+  });
+
+  it("derives run_id and entityId from the failure event", async () => {
+    const { ctx, recorded } = makeCtx();
+    const onFailure = makeOnFailureHandler(
+      { functionId: "x", eventDomain: "x", riskCategory: "low", alert: false },
+      ctx,
+    );
+    await onFailure(failureArg as never);
+    expect((recorded[0] as { entityId: string }).entityId).toBe("run_1");
+  });
+
+  it("never throws out of onFailure even if audit recording fails", async () => {
+    const ctx = {
+      auditLedger: {
+        record: async () => {
+          throw new Error("audit down");
+        },
+      } as unknown as AuditLedger,
+      operatorAlerter: { alert: async () => {} } as OperatorAlerter,
+      inngest: { send: async () => {} },
+    };
+    const onFailure = makeOnFailureHandler(
+      { functionId: "x", eventDomain: "x", riskCategory: "low", alert: false },
+      ctx,
+    );
+    await expect(onFailure(failureArg as never)).resolves.toBeUndefined();
   });
 });
