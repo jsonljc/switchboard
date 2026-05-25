@@ -38,6 +38,9 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
     get: vi.fn(),
     slugs: vi.fn(() => []),
   })),
+  ContextResolverImpl: vi.fn().mockImplementation(() => ({
+    resolve: vi.fn(async () => ({ variables: {}, metadata: [] })),
+  })),
   createCrmQueryTool: vi.fn(() => ({ operations: { get: { effectCategory: "read" } } })),
   createCrmWriteToolFactory: vi.fn(() => () => ({
     operations: { upsert: { effectCategory: "write" } },
@@ -136,6 +139,9 @@ vi.mock("@switchboard/db", () => ({
   })),
   createPrismaContactConsentReader: vi.fn(() => ({
     read: vi.fn(async () => null),
+  })),
+  PrismaKnowledgeEntryStore: vi.fn().mockImplementation(() => ({
+    findActive: vi.fn(async () => []),
   })),
 }));
 

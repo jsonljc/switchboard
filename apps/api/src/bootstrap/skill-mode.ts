@@ -67,6 +67,7 @@ export async function bootstrapSkillMode(
     WhatsAppWindowGateHook,
     AnthropicToolAdapter,
     BuilderRegistry,
+    ContextResolverImpl,
     createCrmQueryTool,
     createCrmWriteToolFactory,
     createCalendarBookToolFactory,
@@ -95,6 +96,7 @@ export async function bootstrapSkillMode(
     PrismaBusinessFactsStore,
     PrismaDeploymentStore,
     PrismaGovernanceVerdictStore,
+    PrismaKnowledgeEntryStore,
     createPrismaApprovedComplianceClaimStore,
     createPrismaConsentStore,
     createPrismaContactConsentReader,
@@ -119,6 +121,10 @@ export async function bootstrapSkillMode(
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
   const businessFactsStore = new PrismaBusinessFactsStore(prismaClient);
+  // Live curated-knowledge resolver for SkillMode. Knowledge-entry only — the
+  // alexBuilder owns BUSINESS_FACTS, so NO BusinessFactsStore is passed here.
+  const knowledgeEntryStore = new PrismaKnowledgeEntryStore(prismaClient);
+  const contextResolver = new ContextResolverImpl(knowledgeEntryStore);
   const calendarProviderFactory = createCalendarProviderFactory({ prismaClient, logger });
 
   const handoffStore = new PrismaHandoffStore(prismaClient);
@@ -557,6 +563,7 @@ export async function bootstrapSkillMode(
       executor: skillExecutor,
       skillsBySlug,
       builderRegistry,
+      contextResolver,
       stores: {
         opportunityStore: {
           findActiveByContact: async (orgId: string, contactId: string) =>
@@ -611,6 +618,8 @@ export async function bootstrapSkillMode(
   if (!consentPostureCache) missingGateDeps.push("consentPostureCache");
   // 1d whatsapp-window-gate deps
   if (!whatsAppWindowPostureCache) missingGateDeps.push("whatsAppWindowPostureCache");
+  // context-resolver construction guard (catches catastrophic construction failure)
+  if (!contextResolver) missingGateDeps.push("contextResolver");
   if (missingGateDeps.length > 0) {
     throw new Error(`SkillMode: gate deps incomplete — missing: ${missingGateDeps.join(", ")}`);
   }
