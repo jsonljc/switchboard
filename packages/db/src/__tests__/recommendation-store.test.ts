@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { PrismaRecommendationStore } from "../recommendation-store.js";
+import { PrismaRecommendationStore, rowToRecommendation } from "../recommendation-store.js";
 import type { PersistRecommendationInput } from "@switchboard/core";
-import { RecommendationStaleStatusError } from "@switchboard/core";
+import { RecommendationStaleStatusError, adaptRecommendation } from "@switchboard/core";
 import type { PrismaClient } from "@prisma/client";
 
 function mockPrisma() {
@@ -85,6 +85,108 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Round-trip integrity: risk-contract booleans survive the JSONB stash cycle.
+// These tests prove the E1/E2 fix — emit.ts stashes the booleans under
+// parameters.__recommendation.riskContract, and rowToRecommendation reads them
+// back so adaptRecommendation's `?? false` fallback never silently wins.
+// ---------------------------------------------------------------------------
+describe("rowToRecommendation — risk-contract round-trip", () => {
+  it("reads financialEffect and clientFacing back from parameters.__recommendation.riskContract", () => {
+    const row = makeDbRow({
+      parameters: {
+        __recommendation: {
+          action: "pause",
+          presentation: {
+            primaryLabel: "Pause",
+            secondaryLabel: "Reduce 50%",
+            dismissLabel: "Dismiss",
+            dataLines: [],
+          },
+          riskContract: {
+            riskLevel: "high",
+            externalEffect: false,
+            financialEffect: true,
+            clientFacing: true,
+            requiresConfirmation: false,
+          },
+        },
+      },
+    });
+
+    const rec = rowToRecommendation(row);
+
+    // The booleans must survive as emitted — NOT be forced to false.
+    expect(rec.financialEffect).toBe(true);
+    expect(rec.clientFacing).toBe(true);
+    expect(rec.externalEffect).toBe(false);
+    expect(rec.requiresConfirmation).toBe(false);
+  });
+
+  it("returns undefined booleans for legacy rows that predate the riskContract stash", () => {
+    const row = makeDbRow({
+      parameters: {
+        __recommendation: {
+          action: "pause",
+          presentation: {
+            primaryLabel: "Pause",
+            secondaryLabel: "Reduce 50%",
+            dismissLabel: "Dismiss",
+            dataLines: [],
+          },
+          // no riskContract key — legacy row
+        },
+      },
+    });
+
+    const rec = rowToRecommendation(row);
+
+    // Legacy rows yield undefined; adaptRecommendation's `?? false` handles them.
+    expect(rec.financialEffect).toBeUndefined();
+    expect(rec.clientFacing).toBeUndefined();
+    expect(rec.externalEffect).toBeUndefined();
+    expect(rec.requiresConfirmation).toBeUndefined();
+  });
+
+  it("financialEffect:true on a row is not silently coerced to false by adaptRecommendation", () => {
+    // This is the critical safety assertion: a producer-marked financialEffect:true
+    // recommendation must stay true through the full rowToRecommendation → adaptRecommendation
+    // pipeline, or the E4/E5 swipe-gate becomes unsafe.
+    const row = makeDbRow({
+      parameters: {
+        __recommendation: {
+          action: "reduce_budget",
+          presentation: {
+            primaryLabel: "Reduce",
+            secondaryLabel: "Skip",
+            dismissLabel: "Dismiss",
+            dataLines: [],
+          },
+          riskContract: {
+            riskLevel: "high",
+            externalEffect: false,
+            financialEffect: true,
+            clientFacing: true,
+            requiresConfirmation: true,
+          },
+        },
+      },
+    });
+
+    const rec = rowToRecommendation(row);
+    const decision = adaptRecommendation(rec, {
+      routeTemplates: {
+        contactDetail: (id) => `/contacts/${id}`,
+        contactConversations: (id) => `/contacts/${id}/conversations`,
+        contactConversationDetail: (id, threadId) => `/contacts/${id}/conversations/${threadId}`,
+      },
+    });
+
+    expect(decision.meta.riskContract?.financialEffect).toBe(true);
+    expect(decision.meta.riskContract?.clientFacing).toBe(true);
+  });
+});
 
 describe("PrismaRecommendationStore", () => {
   let prisma: ReturnType<typeof mockPrisma>;

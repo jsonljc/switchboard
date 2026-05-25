@@ -69,12 +69,6 @@ export const RecommendationInputSchema = z.object({
  */
 export type RecommendationInput = z.input<typeof RecommendationInputSchema>;
 
-/**
- * Post-parse shape with all defaults applied. Use this when reading back
- * a validated recommendation or when all fields are guaranteed to be present.
- */
-export type RecommendationInputParsed = z.infer<typeof RecommendationInputSchema>;
-
 export const ActOnRecommendationInputSchema = z.object({
   recommendationId: z.string().min(1),
   orgId: z.string().min(1),

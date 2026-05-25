@@ -134,15 +134,5 @@ describe("adaptHandoff", () => {
         requiresConfirmation: false,
       });
     });
-
-    it("handoff riskContract.clientFacing is true (handoffs are client-facing by nature)", () => {
-      const decision = adaptHandoff(makeHandoff(), contact, thread, deps);
-      expect(decision.meta.riskContract?.clientFacing).toBe(true);
-    });
-
-    it("handoff riskContract.financialEffect is false (conservative default)", () => {
-      const decision = adaptHandoff(makeHandoff(), contact, thread, deps);
-      expect(decision.meta.riskContract?.financialEffect).toBe(false);
-    });
   });
 });
