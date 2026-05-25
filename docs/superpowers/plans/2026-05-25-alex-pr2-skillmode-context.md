@@ -223,6 +223,11 @@ In `execute`, after the `resolveParameters` call, resolve + merge and pass the m
 ```ts
 const { parameters, injectedPatternIds } = await this.resolveParameters(workUnit, skill);
 const contextVariables = await this.resolveContextVariables(workUnit.organizationId, skill);
+// Merge precedence is INTENTIONAL: resolved context wins over builder params on
+// key collision, so a declared context slot always reflects its KnowledgeEntry
+// rows. BUSINESS_FACTS is excluded from resolution (the builder owns it), so there
+// is no collision today; this precedence guards future skills that reuse an
+// inject_as name a builder also sets.
 const mergedParameters = { ...parameters, ...contextVariables };
 
 const result = await this.config.executor.execute({
@@ -323,11 +328,13 @@ modeRegistry.register(
 
 - [ ] **Step 4: Extend the startup gate-deps assertion**
 
-In the `missingGateDeps` block (lines ~596-616), add (so a wiring/package-boundary mistake fails fast at boot rather than silently degrading every conversation to empty context):
+In the `missingGateDeps` block (lines ~596-616), add the construction check:
 
 ```ts
 if (!contextResolver) missingGateDeps.push("contextResolver");
 ```
+
+Scope of this guard (do not oversell it in comments): it asserts the resolver was **constructed** before SkillMode is registered — it catches a catastrophic construction failure, NOT that the resolver actually reached the SkillMode config (it is constructed a few lines above, so it will rarely fire). A true "reached SkillMode" check would need a bootstrap smoke/unit test inspecting the registered SkillMode's config, which is not worth adding here. Describe it as a construction guard.
 
 - [ ] **Step 5: Typecheck + run the bootstrap smoke**
 
@@ -345,13 +352,13 @@ git commit -m "feat(api): construct ContextResolverImpl and wire into SkillMode"
 
 ---
 
-## Task 4: End-to-end interpolation test (real resolver → populated prompt)
+## Task 4: Resolver-to-template interpolation regression
 
 **Files:**
 
 - Create: `packages/core/src/skill-runtime/__tests__/alex-context-injection-e2e.test.ts`
 
-Proves the live path renders resolved content into a slot (the inverse of the existing `alex-claim-boundaries-slot.test.ts`, which characterized the empty case). Uses the real `ContextResolverImpl` + a stub knowledge store + the real Alex `skill.context`.
+Proves resolved KnowledgeEntry content renders into a template slot through the real `ContextResolverImpl` (the inverse of the existing `alex-claim-boundaries-slot.test.ts`, which characterized the empty case). Uses the real resolver + a stub knowledge store + the real Alex `skill.context`. **Scope:** this covers the resolver→interpolation seam only; it does NOT run through `SkillMode.execute` (Task 2 already covers that seam). The filename/`describe` say "e2e" — that's fine to keep, but do not overstate what it proves: it is a resolver-to-template regression, not a full live-SkillMode test.
 
 - [ ] **Step 1: Write the test**
 
@@ -477,7 +484,7 @@ git commit -m "fix(eval): run Alex on its live model (Sonnet-4.6); keep classifi
 - Modify: `evals/alex-conversation/run-eval.ts` (call it)
 - Test: `evals/alex-conversation/__tests__/eval-preflight.test.ts`
 
-The eval is DB-free (context comes from `createStubContextStore`), so the prisma `assertAlexSkillPackSeeded` cannot be used. Implement its intent with a stub-aware non-empty check, reusing the eval's own `SKILL_PACK_SCOPES` (keeps the eval free of a Prisma-heavy `@switchboard/db` dependency; the cross-package scope-list drift is already partly guarded by the eval's `skillContentHash`).
+The eval is DB-free (context comes from `createStubContextStore`), so the prisma `assertAlexSkillPackSeeded` cannot be used. Implement its intent with a stub-aware non-empty check. **Intentional deviation from spec §4.2:** the spec suggested reusing `ALEX_SKILL_PACK_SCOPES` from `@switchboard/db`; this plan instead reuses the eval's own `SKILL_PACK_SCOPES` to keep the DB-free eval free of a Prisma-heavy `@switchboard/db` dependency (consistent with spec §8's "lower-import-coupling" guidance). The cross-package scope-list drift is already partly guarded by the eval's `skillContentHash`.
 
 - [ ] **Step 1: Export the scope list**
 
@@ -595,12 +602,19 @@ git commit -m "feat(eval): stub-aware skill-pack content preflight for alex-conv
 
 - [ ] **Step 1: Add the assertion**
 
+Add the import at the top of the test file (apps/api already depends on `@switchboard/db`, so this is clean):
+
+```ts
+import { ALEX_SKILL_PACK_SCOPES } from "@switchboard/db";
+```
+
 In the Decision-10 test (`it("seeds the Alex listing+deployment on first config access (Decision 10)", ...)`, line ~135), after the existing `agentDeployment.upsert` assertions (~line 156), add:
 
 ```ts
 // Skill-pack fold-in: the seed must actually run on the happy path (the route's
-// best-effort try/catch would otherwise hide a silent failure). 3 = ALEX_SKILL_PACK_SCOPES.
-expect(mockPrisma.knowledgeEntry.upsert).toHaveBeenCalledTimes(3);
+// best-effort try/catch would otherwise hide a silent failure). Use the seed's
+// own scope-count constant so this won't rot if the pack grows.
+expect(mockPrisma.knowledgeEntry.upsert).toHaveBeenCalledTimes(ALEX_SKILL_PACK_SCOPES.length);
 ```
 
 - [ ] **Step 2: Run it — verify it passes**

@@ -186,9 +186,22 @@ In `anthropic-tool-adapter.ts`, add a helper above the class (it needs `LLMMessa
  */
 function encodeOutgoingContent(content: LLMMessage["content"]): Anthropic.MessageParam["content"] {
   if (typeof content === "string") return content;
-  return (content as Array<LLMContentBlock | LLMToolResultBlock>).map((block) =>
-    block.type === "tool_use" ? { ...block, name: encodeToolName(block.name) } : block,
-  ) as Anthropic.MessageParam["content"];
+  // Exhaustive block handling: encode tool_use names; pass text/tool_result
+  // through; THROW on any unknown block so a future shape can't silently bypass
+  // encoding (mirrors the response-side LLMAdapterShapeMismatchError discipline).
+  // The array narrowing is only to make `.map` callable over the union-of-arrays;
+  // the real guard is the exhaustive switch below.
+  return (content as Array<LLMContentBlock | LLMToolResultBlock>).map((block) => {
+    if (block.type === "tool_use") {
+      return { ...block, name: encodeToolName(block.name) };
+    }
+    if (block.type === "text" || block.type === "tool_result") {
+      return block;
+    }
+    throw new Error(
+      `[AnthropicToolAdapter] unsupported outgoing content block: ${JSON.stringify(block)}`,
+    );
+  }) as Anthropic.MessageParam["content"];
 }
 ```
 
