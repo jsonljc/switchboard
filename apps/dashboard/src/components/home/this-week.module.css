@@ -37,7 +37,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: hsl(var(--agent-alex));
+  background: var(--week-author-color, hsl(var(--agent-alex)));
   color: #fff;
   font-family: var(--font-home-serif);
   font-style: italic;
@@ -102,7 +102,7 @@
   float: left;
   line-height: 0.85;
   padding: 0.06em 0.14em 0 0;
-  color: hsl(var(--agent-alex));
+  color: var(--week-author-color, hsl(var(--agent-alex)));
 }
 /* Sign-off mark at the end — monogram + name. */
 .weeknoteSignoff {
@@ -132,7 +132,7 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: hsl(var(--agent-alex));
+  background: var(--week-author-color, hsl(var(--agent-alex)));
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -161,12 +161,8 @@
   margin-top: 2px;
   letter-spacing: -0.005em;
 }
-.weeknoteFoot svg {
-  width: 14px;
-  height: 9px;
-  transition: transform 200ms var(--ease-home);
-}
-.weeknote:hover .weeknoteFoot svg {
-  transform: translateX(3px);
+.weeknoteFoot:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
 }
 .weeknote:hover { transform: translateY(-2px); border-color: var(--hair); }

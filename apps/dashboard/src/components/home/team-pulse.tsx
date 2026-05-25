@@ -16,7 +16,7 @@ interface TeamPulseProps {
  */
 export function TeamPulse({ agents }: TeamPulseProps) {
   return (
-    <div className={styles.pulseRibbon} role="list">
+    <div className={styles.pulseRibbon} role="list" aria-label="Team Pulse">
       {agents.map((agent) => {
         const { key, name, status, setUp } = agent;
         const isOn = status === "working" && setUp;

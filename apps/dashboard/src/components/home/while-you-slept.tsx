@@ -48,7 +48,7 @@ export function WhileYouSlept({ rows }: { rows: WhileYouSleptRow[] }) {
         ))}
       </ul>
       {hasMore && (
-        <Link href="/activity" className={styles.hMeta} style={{ alignSelf: "flex-end" }}>
+        <Link href="/activity" className={styles.moduleMore} style={{ alignSelf: "flex-end" }}>
           View all <span aria-hidden="true">→</span>
         </Link>
       )}

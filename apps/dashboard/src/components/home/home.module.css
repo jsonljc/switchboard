@@ -170,6 +170,22 @@
   font-size: 19px;
   font-weight: 500;
 }
+/* Standalone "view all / see more" quiet link — used outside .moduleH context. */
+.moduleMore {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.moduleMore:hover {
+  color: var(--ink-1);
+}
 
 /* ─── card primitive ─── */
 .card {
@@ -390,9 +406,12 @@
 .permslineLink:hover {
   color: var(--ink);
 }
-.permslineLink svg {
-  width: 12px;
-  height: 8px;
+
+/* ─── Focus-visible rings for Home interactive links ─── */
+.moduleMore:focus-visible,
+.permslineLink:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
 }
 
 /* =========================================================

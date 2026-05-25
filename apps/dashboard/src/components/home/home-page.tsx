@@ -27,6 +27,7 @@ import type {
   WhileYouSleptRow,
   WorkInProgressItem,
 } from "./types";
+import { HomeModuleBoundary } from "./home-module-boundary";
 import styles from "./home.module.css";
 
 // Working statuses, per lib/agent-status.ts. An agent is only "working" with
@@ -56,7 +57,7 @@ export function HomePage() {
   const roster = useAgentRoster();
   const agentState = useAgentState();
   const alexMetrics = useAgentMetrics("alex");
-  const alexActivity = useAgentActivityCockpit("alex");
+  const alexActivity = useAgentActivityCockpit("alex", { limit: 4 });
   const alexMission = useAgentMission("alex");
   const governance = useGovernanceStatus();
 
@@ -186,19 +187,44 @@ export function HomePage() {
   // NeedsYou renders null (empty decisions = nothing shown).
   const isCalm = decisionFeedAvailable && decisionCount === 0;
 
-  const verdictNode = <Verdict key="verdict" model={verdict} />;
-  const needsYouNode = (
-    <NeedsYou
-      key="needs-you"
-      decisions={decisions}
-      renderItem={(decision, index) => <NeedsYouCard decision={decision} index={index} />}
-    />
+  const verdictNode = (
+    <HomeModuleBoundary key="verdict">
+      <Verdict model={verdict} />
+    </HomeModuleBoundary>
   );
-  const teamPulseNode = <TeamPulse key="team-pulse" agents={teamPulseAgents} />;
-  const thisWeekNode = <ThisWeek key="this-week" model={thisWeek} />;
-  const whileYouSleptNode = <WhileYouSlept key="while-you-slept" rows={whileYouSleptRows} />;
-  const workInProgressNode = <WorkInProgress key="work-in-progress" items={workInProgressItems} />;
-  const permissionsNode = <Permissions key="permissions" model={permissions} />;
+  const needsYouNode = (
+    <HomeModuleBoundary key="needs-you">
+      <NeedsYou
+        decisions={decisions}
+        renderItem={(decision, index) => <NeedsYouCard decision={decision} index={index} />}
+      />
+    </HomeModuleBoundary>
+  );
+  const teamPulseNode = (
+    <HomeModuleBoundary key="team-pulse">
+      <TeamPulse agents={teamPulseAgents} />
+    </HomeModuleBoundary>
+  );
+  const thisWeekNode = (
+    <HomeModuleBoundary key="this-week">
+      <ThisWeek model={thisWeek} />
+    </HomeModuleBoundary>
+  );
+  const whileYouSleptNode = (
+    <HomeModuleBoundary key="while-you-slept">
+      <WhileYouSlept rows={whileYouSleptRows} />
+    </HomeModuleBoundary>
+  );
+  const workInProgressNode = (
+    <HomeModuleBoundary key="work-in-progress">
+      <WorkInProgress items={workInProgressItems} />
+    </HomeModuleBoundary>
+  );
+  const permissionsNode = (
+    <HomeModuleBoundary key="permissions">
+      <Permissions model={permissions} />
+    </HomeModuleBoundary>
+  );
 
   // ACTIVE: Verdict → NeedsYou → TeamPulse → ThisWeek → WhileYouSlept → WIP → Permissions
   // CALM:   Verdict → ThisWeek (promoted) → TeamPulse → WhileYouSlept → WIP → Permissions

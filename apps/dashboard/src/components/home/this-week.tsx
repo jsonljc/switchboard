@@ -39,9 +39,12 @@ export function ThisWeek({ model }: ThisWeekProps) {
     const avatarStyle: CSSProperties = {
       background: `hsl(var(--agent-${skeletonKey}))`,
     };
+    const articleStyle = {
+      "--week-author-color": `hsl(var(--agent-${skeletonKey}))`,
+    } as CSSProperties;
 
     return (
-      <article className={styles.weeknote} aria-label="This week note">
+      <article className={styles.weeknote} aria-label="This week note" style={articleStyle}>
         <header className={styles.weeknoteHead}>
           <span className={styles.weeknoteFrom}>
             <span className={styles.weeknoteFromAv} style={avatarStyle} aria-hidden="true">
@@ -79,6 +82,9 @@ export function ThisWeek({ model }: ThisWeekProps) {
   const avatarStyle: CSSProperties = {
     background: `hsl(var(--agent-${authorKey}))`,
   };
+  const articleStyle = {
+    "--week-author-color": `hsl(var(--agent-${authorKey}))`,
+  } as CSSProperties;
 
   // Build the prose clauses from only the fields that are actually present.
   // Each clause is a React node so numbers can be wrapped in a styled span.
@@ -126,7 +132,7 @@ export function ThisWeek({ model }: ThisWeekProps) {
   });
 
   return (
-    <article className={styles.weeknote} aria-label="This week note">
+    <article className={styles.weeknote} aria-label="This week note" style={articleStyle}>
       <header className={styles.weeknoteHead}>
         <span className={styles.weeknoteFrom}>
           <span className={styles.weeknoteFromAv} style={avatarStyle} aria-hidden="true">
