@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
+import { assertAlexSkillPackSeeded, type KnowledgeEntryReader } from "@switchboard/db";
 import { describeCalendarReadiness } from "../lib/calendar-readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
@@ -64,6 +65,10 @@ export interface ReadinessContext {
     hasGoogleCalendarId: boolean;
     businessHours: unknown;
   };
+  alexSkillPackSeeded: boolean;
+  // Internal-only: the guard's precise missing-(kind,scope) text, for the console.warn
+  // (+ the no-leak test / a deferred audit write). Read by no check; never serialized.
+  alexSkillPackDiagnostic: string | null;
 }
 
 // ── PrismaLike — narrow type for readiness queries ─────────────────────────
@@ -142,6 +147,7 @@ export interface PrismaLike {
       where: { organizationId: string; emailVerified: { not: null } };
     }): Promise<{ id: string } | null>;
   };
+  knowledgeEntry: KnowledgeEntryReader["knowledgeEntry"];
 }
 
 // ── Shared helper — assembles ReadinessContext from Prisma ──────────────────
@@ -224,6 +230,20 @@ export async function buildReadinessContext(
     expiresAt: typeof metaAdsExpiresAtRaw === "string" ? new Date(metaAdsExpiresAtRaw) : null,
   };
 
+  // Reuse the db guard against live DB state. The live SkillMode path stays
+  // fail-open for leads; this readiness/activation surface is where we fail loud.
+  let alexSkillPackSeeded = true;
+  let alexSkillPackDiagnostic: string | null = null;
+  try {
+    await assertAlexSkillPackSeeded(prisma, orgId);
+  } catch (err) {
+    alexSkillPackSeeded = false;
+    alexSkillPackDiagnostic = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[readiness] alex-skill-pack-seeded failed org=${orgId}: ${alexSkillPackDiagnostic}`,
+    );
+  }
+
   return {
     managedChannels,
     connections: mappedConnections,
@@ -238,6 +258,8 @@ export async function buildReadinessContext(
       hasGoogleCalendarId,
       businessHours: calendarBusinessHours,
     },
+    alexSkillPackSeeded,
+    alexSkillPackDiagnostic,
   };
 }
 
@@ -278,6 +300,9 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
 
   // 10. calendar (advisory)
   checks.push(checkCalendar(ctx));
+
+  // 11. alex-skill-pack-seeded (blocking)
+  checks.push(checkAlexSkillPackSeeded(ctx));
 
   const ready = checks.filter((c) => c.blocking).every((c) => c.status === "pass");
 
@@ -523,6 +548,24 @@ function checkMetaAdsToken(ctx: ReadinessContext): ReadinessCheck {
 
 function checkCalendar(ctx: ReadinessContext): ReadinessCheck {
   return describeCalendarReadiness(ctx.calendar).check;
+}
+
+function checkAlexSkillPackSeeded(ctx: ReadinessContext): ReadinessCheck {
+  const id = "alex-skill-pack-seeded";
+  const label = "Alex knowledge pack ready";
+  const blocking = true;
+
+  // Public message uses ONLY these friendly strings — never alexSkillPackDiagnostic
+  // (the pack is system-owned; precise scopes go to the console.warn above).
+  return {
+    id,
+    label,
+    blocking,
+    status: ctx.alexSkillPackSeeded ? "pass" : "fail",
+    message: ctx.alexSkillPackSeeded
+      ? "Alex's medspa knowledge pack is seeded"
+      : "Alex's knowledge pack is still finalizing. Please try again shortly or contact support if this persists.",
+  };
 }
 
 // ── Fastify route ───────────────────────────────────────────────────────────
