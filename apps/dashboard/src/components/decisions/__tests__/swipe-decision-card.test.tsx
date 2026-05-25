@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
-import { SwipeDecisionCard } from "../swipe-decision-card";
+import { SwipeDecisionCard, ConfirmSheet } from "../swipe-decision-card";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
+import type { ConfirmSheetProps } from "../swipe-decision-card";
 
 /**
  * SAFETY PROOF for P1-B E5a.
@@ -314,5 +315,88 @@ describe("SwipeDecisionCard — gating (the safety proof)", () => {
       renderCard(lowContract);
       expect(screen.getByText("Alex")).toBeInTheDocument();
     });
+  });
+});
+
+// =========================================================
+// ConfirmSheet — financial breakdown rows (Task 2)
+// =========================================================
+
+const sampleFinancialDetails: NonNullable<ConfirmSheetProps["financialDetails"]> = {
+  current: { label: "Current budget", value: "$280/wk" },
+  proposed: { label: "Proposed budget", value: "$680/wk" },
+  impact: { label: "Expected impact", value: "+12 leads/wk" },
+  guardrail: { label: "Auto-pause if", value: "CPL rises above $38 for 3 consecutive days" },
+};
+
+const baseConfirmProps: Omit<ConfirmSheetProps, "financialDetails"> = {
+  open: true,
+  agentName: "Riley",
+  summary: "Raise weekly ad budget from $280 to $680",
+  affirmativeLabel: "Raise budget",
+  onCancel: vi.fn(),
+  onConfirm: vi.fn(),
+};
+
+describe("ConfirmSheet — financial breakdown rows", () => {
+  it("without financialDetails shows the generic confirm line", () => {
+    render(<ConfirmSheet {...baseConfirmProps} />);
+    expect(
+      screen.getByText("This action needs an explicit confirmation before it goes ahead."),
+    ).toBeInTheDocument();
+    // No financial row labels present
+    expect(screen.queryByText("Current budget")).not.toBeInTheDocument();
+    expect(screen.queryByText("Proposed budget")).not.toBeInTheDocument();
+    expect(screen.queryByText("Expected impact")).not.toBeInTheDocument();
+    expect(screen.queryByText("Auto-pause if")).not.toBeInTheDocument();
+  });
+
+  it("with financialDetails renders current / proposed / impact / guardrail rows", () => {
+    render(<ConfirmSheet {...baseConfirmProps} financialDetails={sampleFinancialDetails} />);
+    // Labels
+    expect(screen.getByText("Current budget")).toBeInTheDocument();
+    expect(screen.getByText("Proposed budget")).toBeInTheDocument();
+    expect(screen.getByText("Expected impact")).toBeInTheDocument();
+    expect(screen.getByText("Auto-pause if")).toBeInTheDocument();
+    // Values
+    expect(screen.getByText("$280/wk")).toBeInTheDocument();
+    expect(screen.getByText("$680/wk")).toBeInTheDocument();
+    expect(screen.getByText("+12 leads/wk")).toBeInTheDocument();
+    expect(screen.getByText("CPL rises above $38 for 3 consecutive days")).toBeInTheDocument();
+  });
+
+  it("with financialDetails omits the generic confirm line", () => {
+    render(<ConfirmSheet {...baseConfirmProps} financialDetails={sampleFinancialDetails} />);
+    expect(
+      screen.queryByText("This action needs an explicit confirmation before it goes ahead."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("with financialDetails still commits onConfirm when affirmative button is clicked", () => {
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmSheet
+        {...baseConfirmProps}
+        financialDetails={sampleFinancialDetails}
+        onConfirm={onConfirm}
+      />,
+    );
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /yes/i }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("with financialDetails still calls onCancel when Not now is clicked", () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmSheet
+        {...baseConfirmProps}
+        financialDetails={sampleFinancialDetails}
+        onCancel={onCancel}
+      />,
+    );
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /not now/i }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { Decision } from "@/lib/decisions/types";
 import { canSwipeApprove, needsConfirm } from "@/lib/decisions/swipe-policy";
+import { useCardSwipe } from "./use-card-swipe";
 import styles from "./swipe-decision-card.module.css";
 
 export interface SwipeDecisionCardProps {
@@ -18,26 +19,6 @@ export interface SwipeDecisionCardProps {
   onOpenDetail?: () => void;
   /** Label for the skip control + left zone. Defaults to "Skip" (function-clear). */
   skipLabel?: string;
-}
-
-/** Distance (px) past which an axis-locked drag commits / primes. */
-const COMMIT_THRESHOLD = 100;
-/** Dead-zone before we lock to an axis (mirrors the prototype). */
-const AXIS_LOCK_DEADZONE = 6;
-/** Exit animation duration before the commit callback fires. */
-const EXIT_MS = 280;
-/** Rubber-band ceiling for a blocked swipe-right. */
-const RUBBER_MAX = 110;
-const RUBBER_RESIST_FROM = 60;
-
-type Exiting = "left" | "right" | null;
-
-interface DragState {
-  startX: number;
-  startY: number;
-  axis: "x" | "y" | null;
-  /** Undamped horizontal delta — drives the commit/prime decision (intent). */
-  rawDx: number;
 }
 
 /**
@@ -70,25 +51,17 @@ export function SwipeDecisionCard({
   const mustConfirm = needsConfirm(contract);
   const agent = decision.agentKey;
 
-  const [dx, setDx] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [exiting, setExiting] = useState<Exiting>(null);
-  const [armed, setArmed] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const drag = useRef<DragState>({ startX: 0, startY: 0, axis: null, rawDx: 0 });
-
-  // ---- commit helpers (single source of truth for the callbacks) ----
-  const commitApprove = () => {
-    setExiting("right");
-    setDx(600);
-    setTimeout(onApprove, EXIT_MS);
-  };
-  const commitSkip = () => {
-    setExiting("left");
-    setDx(-600);
-    setTimeout(onSkip, EXIT_MS);
-  };
+  const { dx, dragging, exiting, armed, commitApprove, commitSkip, onDown, onMove, onUp } =
+    useCardSwipe({
+      swipeApproves,
+      onApprove,
+      onSkip,
+      onPrimeBlocked: () => {
+        onOpenDetail?.();
+      },
+    });
 
   /** Tap Approve: confirm-gated. Direct commit only when the predicate allows it. */
   const handleApproveTap = () => {
@@ -98,83 +71,6 @@ export function SwipeDecisionCard({
       return;
     }
     commitApprove();
-  };
-
-  /** A blocked swipe-right primes the button + opens detail, but never commits. */
-  const primeBlocked = () => {
-    setDx(0);
-    setArmed(true);
-    onOpenDetail?.();
-  };
-
-  // ---- pointer / touch drag ----
-  const point = (e: React.MouseEvent | React.TouchEvent) => {
-    if ("touches" in e) {
-      const t = e.touches[0] ?? e.changedTouches[0];
-      return { x: t.clientX, y: t.clientY };
-    }
-    return { x: e.clientX, y: e.clientY };
-  };
-
-  const onDown = (e: React.MouseEvent | React.TouchEvent) => {
-    if (exiting) return;
-    const { x, y } = point(e);
-    drag.current = { startX: x, startY: y, axis: null, rawDx: 0 };
-    setArmed(false);
-    setDragging(true);
-  };
-
-  const onMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!dragging || exiting) return;
-    const { x, y } = point(e);
-    const rawDx = x - drag.current.startX;
-    const rawDy = y - drag.current.startY;
-
-    // Lock to an axis once intent is clear; ignore vertical drags (let the list scroll).
-    if (drag.current.axis === null) {
-      if (Math.abs(rawDx) < AXIS_LOCK_DEADZONE && Math.abs(rawDy) < AXIS_LOCK_DEADZONE) return;
-      drag.current.axis = Math.abs(rawDx) > Math.abs(rawDy) ? "x" : "y";
-    }
-    if (drag.current.axis !== "x") return;
-    if (e.cancelable) e.preventDefault();
-
-    // Track the undamped delta so the commit/prime decision reflects intent — the
-    // visual transform is rubber-banded for a blocked right-swipe, but the rubber-band
-    // ceiling must never gate the prime.
-    drag.current.rawDx = rawDx;
-
-    let next = rawDx;
-    if (rawDx > 0 && !swipeApproves) {
-      next =
-        rawDx <= RUBBER_RESIST_FROM
-          ? rawDx
-          : RUBBER_RESIST_FROM + (rawDx - RUBBER_RESIST_FROM) ** 0.65;
-      next = Math.min(next, RUBBER_MAX);
-    }
-    setDx(next);
-  };
-
-  const onUp = () => {
-    if (!dragging || exiting) return;
-    setDragging(false);
-    const intent = drag.current.rawDx;
-
-    // Swipe-LEFT → Skip is ALWAYS allowed.
-    if (intent < -COMMIT_THRESHOLD) {
-      commitSkip();
-      return;
-    }
-    // Swipe-RIGHT → commit Approve ONLY when the predicate allows it; otherwise prime.
-    if (intent > COMMIT_THRESHOLD) {
-      if (swipeApproves) {
-        commitApprove();
-      } else {
-        primeBlocked();
-      }
-      return;
-    }
-    // Otherwise snap back.
-    setDx(0);
   };
 
   const riskLevel = contract?.riskLevel;
@@ -271,6 +167,13 @@ export function SwipeDecisionCard({
   );
 }
 
+export interface FinancialDetails {
+  current: { label: string; value: string };
+  proposed: { label: string; value: string };
+  impact: { label: string; value: string };
+  guardrail: { label: string; value: string };
+}
+
 export interface ConfirmSheetProps {
   open: boolean;
   agentName: string;
@@ -278,6 +181,8 @@ export interface ConfirmSheetProps {
   affirmativeLabel: string;
   onCancel: () => void;
   onConfirm: () => void;
+  /** Optional financial breakdown rendered above action buttons. When absent the generic confirm line is shown. */
+  financialDetails?: FinancialDetails;
 }
 
 /**
@@ -292,6 +197,7 @@ export function ConfirmSheet({
   affirmativeLabel,
   onCancel,
   onConfirm,
+  financialDetails,
 }: ConfirmSheetProps) {
   if (!open) return null;
   return (
@@ -307,9 +213,32 @@ export function ConfirmSheet({
         <span className={styles.confirmHandle} aria-hidden="true" />
         <span className={styles.confirmEyebrow}>Confirm — {agentName}</span>
         <h3 className={styles.confirmTitle}>{summary}</h3>
-        <p className={styles.confirmSummary}>
-          This action needs an explicit confirmation before it goes ahead.
-        </p>
+        {financialDetails ? (
+          <div className={styles.confirmRows}>
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmRowLabel}>{financialDetails.current.label}</span>
+              <span className={styles.confirmRowValue}>{financialDetails.current.value}</span>
+            </div>
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmRowLabel}>{financialDetails.proposed.label}</span>
+              <span className={styles.confirmRowValue}>{financialDetails.proposed.value}</span>
+            </div>
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmRowLabel}>{financialDetails.impact.label}</span>
+              <span className={styles.confirmRowValue}>{financialDetails.impact.value}</span>
+            </div>
+            <div className={`${styles.confirmRow} ${styles.confirmRowFull}`}>
+              <span className={styles.confirmRowLabel}>{financialDetails.guardrail.label}</span>
+              <span className={`${styles.confirmRowValue} ${styles.confirmRowValueSmall}`}>
+                {financialDetails.guardrail.value}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className={styles.confirmSummary}>
+            This action needs an explicit confirmation before it goes ahead.
+          </p>
+        )}
         <div className={styles.confirmActions}>
           <button
             type="button"
