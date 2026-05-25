@@ -45,6 +45,42 @@ function makeRevenueStore(recordImpl?: RevenueStore["record"]): RevenueStore {
   };
 }
 
+/**
+ * In-memory RevenueStore that ACTUALLY scopes rows by organizationId — so reads
+ * for a different org cannot see another org's recordings. Used by the
+ * cross-tenant test to prove row-level org isolation, not just that record() was
+ * called with the auth org (an org-blind mock can't distinguish the two).
+ */
+class OrgScopedRevenueStore implements RevenueStore {
+  private rows: LifecycleRevenueEvent[] = [];
+  private seq = 0;
+
+  record: RevenueStore["record"] = vi.fn(async (input) => {
+    const event = makeEvent({
+      id: `rev_${++this.seq}`,
+      organizationId: input.organizationId,
+      contactId: input.contactId,
+      opportunityId: input.opportunityId,
+      amount: input.amount,
+    });
+    this.rows.push(event);
+    return event;
+  });
+
+  findByOpportunity: RevenueStore["findByOpportunity"] = async (orgId, opportunityId) =>
+    this.rows.filter((r) => r.organizationId === orgId && r.opportunityId === opportunityId);
+
+  findByContact: RevenueStore["findByContact"] = async (orgId, contactId) =>
+    this.rows.filter((r) => r.organizationId === orgId && r.contactId === contactId);
+
+  sumByOrg: RevenueStore["sumByOrg"] = async (orgId) => {
+    const scoped = this.rows.filter((r) => r.organizationId === orgId);
+    return { totalAmount: scoped.reduce((sum, r) => sum + r.amount, 0), count: scoped.length };
+  };
+
+  sumByCampaign: RevenueStore["sumByCampaign"] = async () => [];
+}
+
 describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () => {
   it("201 + WorkTrace + persistence + outbox: happy path records revenue and writes outbox", async () => {
     const revenueStore = makeRevenueStore();
@@ -106,7 +142,12 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
     await app.close();
   });
 
-  it("idempotency replay: second call with same key returns cached result; record called only once", async () => {
+  it("HTTP idempotency cache: second identical call is short-circuited by the middleware before the route runs", async () => {
+    // NOTE: This proves the GLOBAL HTTP idempotency middleware (fingerprint =
+    // method:route:org:actor:sha256(body)), NOT the ingress dedup. The middleware
+    // returns the cached response before the route/ingress ever runs, so this
+    // alone would still pass if PlatformIngress's step-0 dedup were deleted. The
+    // ingress path is covered by the dedicated test below.
     const revenueStore = makeRevenueStore();
     const outboxWriter = { write: vi.fn(async () => {}) };
     const { app } = await buildTestServer({ revenueStore, outboxWriter });
@@ -147,8 +188,58 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
 
     // Cached replay returns the exact same payload
     expect(secondBody.event.id).toBe(firstBody.event.id);
-    // revenueStore.record was called ONLY ONCE — dedup is enforced
+    // record ran once — but the HTTP middleware caused this, not the ingress
+    // dedup (see NOTE above). The ingress path is proven by the next test.
     expect(revenueStore.record).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it("ingress dedup: with the HTTP cache disabled, a same-key replay still dedups via the trace store (record once, one WorkTrace)", async () => {
+    // `disableHttpIdempotency` removes the global HTTP cache, so the ONLY thing
+    // that can dedup the second call is PlatformIngress step-0
+    // (traceStore.getByIdempotencyKey, keyed on the bare key). If that ingress
+    // dedup were deleted, the handler would run twice: record would be called
+    // twice AND a second WorkTrace would be persisted. Both assertions below are
+    // therefore load-bearing for the ingress path — unlike the HTTP-cache test
+    // above, this fails if the ingress dedup is removed.
+    const revenueStore = makeRevenueStore();
+    const outboxWriter = { write: vi.fn(async () => {}) };
+    const { app } = await buildTestServer({
+      revenueStore,
+      outboxWriter,
+      disableHttpIdempotency: true,
+    });
+    const prevCount = app.ingressTraceCount ?? 0;
+
+    const headers = {
+      "content-type": "application/json",
+      "idempotency-key": "rev-ingress-dedup-1",
+      "x-org-id": "org_a",
+      "x-principal-id": "u1",
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/org_a/revenue",
+      headers,
+      payload: { contactId: "c1", amount: 100 },
+    });
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/org_a/revenue",
+      headers,
+      payload: { contactId: "c1", amount: 100 },
+    });
+    expect(second.statusCode).toBe(201);
+
+    // The ingress short-circuited the second submit at step-0: the handler ran
+    // exactly once and exactly one WorkTrace was persisted (the replay returns
+    // the prior trace's outputs without re-executing or re-persisting).
+    expect(revenueStore.record).toHaveBeenCalledTimes(1);
+    expect(app.ingressTraceCount).toBe(prevCount + 1);
 
     await app.close();
   });
@@ -176,8 +267,12 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
     await app.close();
   });
 
-  it("cross-tenant isolation: auth org wins over path param; record uses auth org", async () => {
-    const revenueStore = makeRevenueStore();
+  it("cross-tenant isolation: auth org wins over path param AND the row is scoped so org_b cannot read it", async () => {
+    // Org-honoring store (not the org-blind mock) so reads are genuinely scoped:
+    // this proves the recording lands under the auth org's rows and a different
+    // org's queries cannot see it — row-level isolation, not just "record was
+    // called with org_a".
+    const revenueStore = new OrgScopedRevenueStore();
     const outboxWriter = { write: vi.fn(async () => {}) };
     const { app } = await buildTestServer({ revenueStore, outboxWriter });
     const prevCount = app.ingressTraceCount ?? 0;
@@ -206,6 +301,13 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
     // WorkTrace also attributed to auth org
     expect(app.ingressTraceCount).toBe(prevCount + 1);
     expect(app.lastIngressTrace?.organizationId).toBe("org_a");
+
+    // Row-level scoping: the recording is visible to org_a but NOT to the
+    // path-param org (org_b). An org-blind mock could not distinguish these.
+    expect(await revenueStore.sumByOrg("org_a")).toEqual({ totalAmount: 100, count: 1 });
+    expect(await revenueStore.sumByOrg("org_b")).toEqual({ totalAmount: 0, count: 0 });
+    expect(await revenueStore.findByContact("org_a", "c1")).toHaveLength(1);
+    expect(await revenueStore.findByContact("org_b", "c1")).toHaveLength(0);
 
     await app.close();
   });

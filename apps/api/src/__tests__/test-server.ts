@@ -143,6 +143,15 @@ export interface BuildTestServerOptions {
    * supply a real `prisma.$transaction` runner.
    */
   runInTransaction?: import("../bootstrap/operator-intents/revenue.js").RunInTransaction;
+  /**
+   * Skip registering the global HTTP idempotency middleware (#678). The HTTP
+   * layer caches POST responses on `method:route:org:actor:sha256(body)` and
+   * short-circuits replays before any route runs — which masks the *ingress*
+   * dedup (`PlatformIngress.submit` step-0 `traceStore.getByIdempotencyKey`,
+   * keyed on the bare key). Tests that need to exercise the ingress dedup path
+   * directly set this `true` so the second call actually reaches the ingress.
+   */
+  disableHttpIdempotency?: boolean;
 }
 
 export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
@@ -472,7 +481,9 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   });
   app.decorate("platformLifecycle", platformLifecycle);
 
-  await app.register(idempotencyMiddleware);
+  if (!options.disableHttpIdempotency) {
+    await app.register(idempotencyMiddleware);
+  }
 
   app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
 
