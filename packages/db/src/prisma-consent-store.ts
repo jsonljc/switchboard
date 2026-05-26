@@ -6,22 +6,39 @@ interface Deps {
   prisma: PrismaClient;
 }
 
+const CONSENT_SELECT = {
+  pdpaJurisdiction: true,
+  consentGrantedAt: true,
+  consentRevokedAt: true,
+  consentSource: true,
+  aiDisclosureVersionShown: true,
+  aiDisclosureShownAt: true,
+  consentUpdatedBy: true,
+  consentNotes: true,
+} as const;
+
 export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
   const { prisma } = deps;
+
+  // Single-row consent mutations target `contact` by its primary key, so the
+  // org filter alone is not a unique input — every write goes through
+  // updateMany with `{ id, organizationId }` in the WHERE. A cross-tenant target
+  // matches zero rows; callers that expect the contact to exist treat count===0
+  // as not-found.
+  function assertScoped(count: number, contactId: string, organizationId: string): void {
+    if (count === 0) {
+      throw new Error(`Contact not found for organization ${organizationId}: ${contactId}`);
+    }
+  }
+
   return {
-    async readOrNull(contactId: string): Promise<ContactConsentState | null> {
-      const row = await prisma.contact.findUnique({
-        where: { id: contactId },
-        select: {
-          pdpaJurisdiction: true,
-          consentGrantedAt: true,
-          consentRevokedAt: true,
-          consentSource: true,
-          aiDisclosureVersionShown: true,
-          aiDisclosureShownAt: true,
-          consentUpdatedBy: true,
-          consentNotes: true,
-        },
+    async readOrNull(
+      contactId: string,
+      organizationId?: string,
+    ): Promise<ContactConsentState | null> {
+      const row = await prisma.contact.findFirst({
+        where: { id: contactId, ...(organizationId ? { organizationId } : {}) },
+        select: CONSENT_SELECT,
       });
       if (!row) return null;
       return {
@@ -36,9 +53,15 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
       };
     },
 
-    async setJurisdictionIfNull(contactId: string, jurisdiction: PdpaJurisdiction) {
+    async setJurisdictionIfNull(
+      contactId: string,
+      jurisdiction: PdpaJurisdiction,
+      organizationId: string,
+    ) {
+      // "Set if null" semantics: a zero count means already-stamped OR not in
+      // this org — both are correct no-ops here (the caller pre-reads).
       await prisma.contact.updateMany({
-        where: { id: contactId, pdpaJurisdiction: null },
+        where: { id: contactId, organizationId, pdpaJurisdiction: null },
         data: { pdpaJurisdiction: jurisdiction },
       });
     },
@@ -48,20 +71,23 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
       version,
       shownAt,
       actor,
+      organizationId,
     }: {
       contactId: string;
       version: string;
       shownAt: Date;
       actor: string;
+      organizationId: string;
     }) {
-      await prisma.contact.update({
-        where: { id: contactId },
+      const result = await prisma.contact.updateMany({
+        where: { id: contactId, organizationId },
         data: {
           aiDisclosureVersionShown: version,
           aiDisclosureShownAt: shownAt,
           consentUpdatedBy: actor,
         },
       });
+      assertScoped(result.count, contactId, organizationId);
     },
 
     async setGrant({
@@ -70,15 +96,17 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
       source,
       actor,
       notes,
+      organizationId,
     }: {
       contactId: string;
       grantedAt: Date;
       source: ConsentSource;
       actor: string;
       notes?: string;
+      organizationId: string;
     }) {
-      await prisma.contact.update({
-        where: { id: contactId },
+      const result = await prisma.contact.updateMany({
+        where: { id: contactId, organizationId },
         data: {
           consentGrantedAt: grantedAt,
           consentSource: source,
@@ -86,6 +114,7 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
           consentNotes: notes ?? null,
         },
       });
+      assertScoped(result.count, contactId, organizationId);
     },
 
     async setRevocationIfNotRevoked({
@@ -94,15 +123,17 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
       source,
       actor,
       notes,
+      organizationId,
     }: {
       contactId: string;
       revokedAt: Date;
       source: ConsentSource;
       actor: string;
       notes?: string;
+      organizationId: string;
     }) {
       const result = await prisma.contact.updateMany({
-        where: { id: contactId, consentRevokedAt: null },
+        where: { id: contactId, organizationId, consentRevokedAt: null },
         data: {
           consentRevokedAt: revokedAt,
           consentSource: source,
@@ -113,9 +144,10 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
       if (result.count === 1) {
         return { wasNewlyRevoked: true, existingRevokedAt: null };
       }
-      // Row exists but was already revoked — fetch existing timestamp.
-      const existing = await prisma.contact.findUnique({
-        where: { id: contactId },
+      // Zero rows: already revoked, or not in this org. Re-read within the org
+      // to report the existing timestamp (null if the contact isn't ours).
+      const existing = await prisma.contact.findFirst({
+        where: { id: contactId, organizationId },
         select: { consentRevokedAt: true },
       });
       return {
@@ -128,17 +160,19 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
       contactId,
       actor,
       notes,
+      organizationId,
     }: {
       contactId: string;
       actor: string;
       notes: string;
+      organizationId: string;
     }) {
-      const previous = await prisma.contact.findUnique({
-        where: { id: contactId },
+      const previous = await prisma.contact.findFirst({
+        where: { id: contactId, organizationId },
         select: { consentGrantedAt: true, consentRevokedAt: true },
       });
-      await prisma.contact.update({
-        where: { id: contactId },
+      const result = await prisma.contact.updateMany({
+        where: { id: contactId, organizationId },
         data: {
           consentGrantedAt: null,
           consentRevokedAt: null,
@@ -147,6 +181,7 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
           consentNotes: notes,
         },
       });
+      assertScoped(result.count, contactId, organizationId);
       return {
         previousGrantedAt: previous?.consentGrantedAt ?? null,
         previousRevokedAt: previous?.consentRevokedAt ?? null,

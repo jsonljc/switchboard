@@ -5,14 +5,27 @@ import type { ContactConsentState, PdpaJurisdiction, ConsentSource } from "@swit
  * No business logic lives here — the service composes this store with the
  * verdict store + conversation status setter + handoff store to enforce
  * invariants and emit audit rows.
+ *
+ * Tenant scoping (A3): every mutation REQUIRES `organizationId` and scopes its
+ * WHERE by it, so an operator in org A cannot grant/revoke/clear consent on
+ * org B's contact. `readOrNull` takes `organizationId` optionally — callers
+ * acting on behalf of a specific operator/org (ConsentService) pass it to scope
+ * the read; infrastructure callers that already operate within a single
+ * deployment's own flow (the send-time enforcement gate) may omit it.
  */
 export interface ConsentStateStore {
-  /** Read current state without throwing on missing — returns null. */
-  readOrNull(contactId: string): Promise<ContactConsentState | null>;
+  /** Read current state without throwing on missing — returns null. When
+   *  `organizationId` is provided the read is scoped to that org (returns null
+   *  for a contact in another org). */
+  readOrNull(contactId: string, organizationId?: string): Promise<ContactConsentState | null>;
 
   /** Set pdpaJurisdiction only if currently null. No-op if already stamped to
    *  the same value. Throws if stamped to a different value (caller wraps). */
-  setJurisdictionIfNull(contactId: string, jurisdiction: PdpaJurisdiction): Promise<void>;
+  setJurisdictionIfNull(
+    contactId: string,
+    jurisdiction: PdpaJurisdiction,
+    organizationId: string,
+  ): Promise<void>;
 
   /** Atomic disclosure-fields update. Does not touch consent timestamps. */
   setDisclosure(input: {
@@ -20,6 +33,7 @@ export interface ConsentStateStore {
     version: string;
     shownAt: Date;
     actor: string;
+    organizationId: string;
   }): Promise<void>;
 
   /** Atomic grant update. Caller has already verified revokedAt is null. */
@@ -29,6 +43,7 @@ export interface ConsentStateStore {
     source: ConsentSource;
     actor: string;
     notes?: string;
+    organizationId: string;
   }): Promise<void>;
 
   /** Atomic revocation update. Idempotent at the SQL level: only sets
@@ -39,6 +54,7 @@ export interface ConsentStateStore {
     source: ConsentSource;
     actor: string;
     notes?: string;
+    organizationId: string;
   }): Promise<{ wasNewlyRevoked: boolean; existingRevokedAt: Date | null }>;
 
   /** Clear both consent timestamps. Preserves jurisdiction + disclosure fields. */
@@ -46,5 +62,6 @@ export interface ConsentStateStore {
     contactId: string;
     actor: string;
     notes: string;
+    organizationId: string;
   }): Promise<{ previousGrantedAt: Date | null; previousRevokedAt: Date | null }>;
 }

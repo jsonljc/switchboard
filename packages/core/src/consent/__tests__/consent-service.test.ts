@@ -141,7 +141,7 @@ describe("ConsentService.attachToGovernedInteraction", () => {
   it("stamps jurisdiction when currently null", async () => {
     const { service, store } = ctx();
     await service.attachToGovernedInteraction("c1", "SG");
-    expect(store.setJurisdictionIfNull).toHaveBeenCalledWith("c1", "SG");
+    expect(store.setJurisdictionIfNull).toHaveBeenCalledWith("c1", "SG", "org1");
   });
 
   it("throws ConsentJurisdictionMismatch when a different jurisdiction is stamped", async () => {
@@ -232,6 +232,24 @@ describe("ConsentService.recordGrant", () => {
     expect((verdictStore.save as any).mock.calls[0][0].reasonCode).toBe("allowed");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((verdictStore.save as any).mock.calls[0][0].details.event).toBe("consent_granted");
+  });
+
+  it("threads the effective organization to the scoped read AND write (A3: closes cross-tenant write)", async () => {
+    // Previously recordGrant discarded the organizationId it received and called
+    // the store by contactId only — letting org A mutate org B's contact consent.
+    const { service, store } = ctx();
+    await service.recordGrant({
+      contactId: "c1",
+      jurisdiction: "MY",
+      source: "operator_recorded",
+      grantedAt: new Date("2026-05-11T10:00:00Z"),
+      actor: "user_42",
+      organizationId: "org-operator",
+    });
+    expect(store.readOrNull).toHaveBeenCalledWith("c1", "org-operator");
+    expect(store.setGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-operator" }),
+    );
   });
 
   it("throws ConsentRevokedCannotRegrant when revokedAt is set", async () => {
