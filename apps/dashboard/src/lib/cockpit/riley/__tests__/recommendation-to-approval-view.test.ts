@@ -18,6 +18,7 @@ import {
   addCreativeFixture,
   reviewBudgetFixture,
 } from "../__fixtures__/riley-recommendation-fixtures";
+import { needsConfirm } from "@/lib/decisions/swipe-policy";
 
 // Helper to read presentation fields via cast (they live in __recommendation)
 function pres(row: RecommendationApiRow) {
@@ -29,6 +30,34 @@ function pres(row: RecommendationApiRow) {
 function rileyParams(row: RecommendationApiRow) {
   return row.parameters.__recommendation as Record<string, unknown>;
 }
+
+// ---------------------------------------------------------------------------
+// Cockpit confirm-gate invariant (safety regression guard)
+// ---------------------------------------------------------------------------
+
+// RileyApprovalRow's accept gate reads `view.riskContract` and treats absence
+// as unsafe (`needsConfirm` ⇒ true), forcing an explicit confirm before any
+// money / ad-platform commit. This adapter must therefore never thread a
+// contract that would re-open the one-tap path. Driving the gate from the REAL
+// adapter output (not a hand-built view) locks the property against a future
+// change that threads a low-risk contract.
+describe("recommendationToApprovalView — cockpit confirm-gate invariant", () => {
+  it("never threads a risk contract that would bypass the cockpit confirm gate", () => {
+    const internalMoneyFixtures = [
+      pauseFixture,
+      scaleFixture,
+      restructureFixture,
+      shiftBudgetFixture,
+      switchEventFixture,
+    ];
+    for (const fixture of internalMoneyFixtures) {
+      const view = recommendationToApprovalView(fixture);
+      expect(view).not.toBeNull();
+      expect(view!.riskContract).toBeUndefined();
+      expect(needsConfirm(view!.riskContract)).toBe(true);
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Per-fixture single-row assertions

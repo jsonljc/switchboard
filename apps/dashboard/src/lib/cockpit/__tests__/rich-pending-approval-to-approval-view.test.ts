@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { richPendingApprovalToApprovalView } from "../rich-pending-approval-to-approval-view";
 import type { PendingApproval } from "@/lib/api-client-types";
+import { needsConfirm } from "@/lib/decisions/swipe-policy";
 
 const NOW = new Date("2026-05-16T12:00:00.000Z");
 
@@ -18,6 +19,29 @@ function base(overrides: Partial<PendingApproval> = {}): PendingApproval {
     ...overrides,
   };
 }
+
+// Cockpit confirm-gate invariant (safety regression guard): AlexApprovalRow's
+// accept gate reads `view.riskContract` and treats absence as unsafe
+// (`needsConfirm` ⇒ true), forcing an explicit confirm before any commit. This
+// adapter must never thread a contract that would re-open the one-tap path.
+// Drives the gate from the REAL adapter output, not a hand-built view.
+describe("richPendingApprovalToApprovalView — cockpit confirm-gate invariant", () => {
+  it("never threads a risk contract that would bypass the cockpit confirm gate", () => {
+    const kinds = [
+      "pricing",
+      "refund",
+      "qualification",
+      "regulatory",
+      "safety-gate",
+      "escalation",
+    ] as const;
+    for (const kind of kinds) {
+      const view = richPendingApprovalToApprovalView(base({ kind }), NOW);
+      expect(view.riskContract).toBeUndefined();
+      expect(needsConfirm(view.riskContract)).toBe(true);
+    }
+  });
+});
 
 describe("richPendingApprovalToApprovalView — per-kind classification", () => {
   it("classifies kind='regulatory' as immediate with 'Edit reply' CTA", () => {
