@@ -318,6 +318,15 @@ jobs:
       - name: Route governance enforcement (Route Governance Contract v1)
         run: pnpm exec tsx .agent/tools/check-routes.ts --mode=error
 
+      # The route/store/cross-app validators above enforce governance invariants
+      # (single-ingress, tenant-isolation, idempotency), but the root vitest
+      # config excludes .agent/** — so their own unit tests never ran in CI and a
+      # regression that silently turned a validator into a no-op would merge
+      # green. Run the validators' self-tests here, where the setup job already
+      # cached .agent/tools/node_modules.
+      - name: Validator self-tests (.agent/tools)
+        run: cd .agent/tools && pnpm test
+
   docker:
     runs-on: ubuntu-latest
 
