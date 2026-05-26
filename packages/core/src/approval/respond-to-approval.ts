@@ -68,6 +68,13 @@ export interface RespondToApprovalDeps {
   /** Optional session-resume hook. Best-effort: failures surface as resumeWarning. */
   sessionManager: SessionManagerLike | null;
   logger: RespondToApprovalLogger;
+  /**
+   * When false/undefined (the default, and the production default — wired from
+   * ALLOW_SELF_APPROVAL), an action's own originator may not approve or patch
+   * it on the lifecycle path. Mirrors PlatformLifecycle's selfApprovalAllowed
+   * so both response paths share the same four-eyes posture.
+   */
+  selfApprovalAllowed?: boolean;
 }
 
 export interface RespondToApprovalParams {
@@ -93,9 +100,10 @@ export interface RespondToApprovalResult {
 }
 
 /**
- * Execute an approval response. Caller is responsible for surface-specific authorization
+ * Execute an approval response. Caller is responsible for surface-specific authentication
  * (API: `authenticatedPrincipal === respondedBy`; chat: `OperatorChannelBinding` lookup +
- * role check). This function performs the deterministic mutation only.
+ * role check). Self-approval prevention on the lifecycle path is enforced here so both
+ * surfaces share it (the legacy path enforces it inside PlatformLifecycle).
  */
 export async function respondToApproval(
   deps: RespondToApprovalDeps,
@@ -113,6 +121,11 @@ export async function respondToApproval(
   };
 
   if (lifecycle && deps.lifecycleService) {
+    // Four-eyes guard (A2): the action's own originator may not approve/patch it
+    // on the lifecycle path unless selfApprovalAllowed. Runs BEFORE
+    // respondViaLifecycle so a rejected self-approval mutates no state.
+    await assertNotSelfApproval(deps, params, approval);
+
     response = await respondViaLifecycle({
       lifecycleService: deps.lifecycleService,
       lifecycle,
@@ -300,6 +313,31 @@ async function respondViaLifecycle(args: {
     approvalState: newState,
     executionResult: { executableWorkUnitId: executableWorkUnit.id },
   };
+}
+
+/**
+ * Four-eyes / human-override guard (DOCTRINE §8). Prevent an action's own
+ * originator from approving or patching it on the lifecycle path. The legacy
+ * PlatformLifecycle path enforces the same via preventSelfApprovalFromTrace;
+ * this is its lifecycle-path counterpart, so both surfaces share the posture.
+ * Default is prevent; `selfApprovalAllowed` (wired from ALLOW_SELF_APPROVAL) is
+ * the escape hatch. Reject/expire are exempt — only approve/patch advance the
+ * action toward execution. The originator is read from the canonical WorkTrace
+ * (actor.id); when it can't be determined (no trace) the guard does not fire,
+ * matching the legacy behavior.
+ */
+async function assertNotSelfApproval(
+  deps: RespondToApprovalDeps,
+  params: RespondToApprovalParams,
+  approval: ApprovalRecordForResponse,
+): Promise<void> {
+  if (deps.selfApprovalAllowed) return;
+  if (params.action !== "approve" && params.action !== "patch") return;
+  const trace = await getWorkTrace(deps.workTraceStore, approval.envelopeId);
+  const originator = trace?.actor?.id;
+  if (originator && originator === params.respondedBy) {
+    throw new Error("Self-approval is not permitted");
+  }
 }
 
 async function getWorkTrace(
