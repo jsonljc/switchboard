@@ -39,3 +39,13 @@ export function dueIn(iso: string | undefined, nowMs: number): DueInResult | nul
     state: h <= 1 ? "soon" : h >= 4 ? "comfort" : "normal",
   };
 }
+
+/** "undoable for Xm/Xh" while the undo window is live; null when absent or elapsed. */
+export function undoableFor(iso: string | undefined, nowMs: number): string | null {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime() - nowMs;
+  if (ms <= 0) return null;
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `undoable for ${min}m`;
+  return `undoable for ${Math.round(min / 60)}h`;
+}
