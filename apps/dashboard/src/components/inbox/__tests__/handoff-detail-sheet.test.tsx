@@ -64,6 +64,11 @@ function richPayload() {
     },
     conversationHistory: [
       { role: "user", text: "Why is yours $300 more?", timestamp: "2026-05-25T09:30:00Z" },
+      {
+        role: "assistant",
+        text: "Our combo includes the brow lift.",
+        timestamp: "2026-05-25T09:32:00Z",
+      },
       { role: "owner", text: "Let me explain the difference.", timestamp: "2026-05-25T09:35:00Z" },
     ],
   };
@@ -141,7 +146,7 @@ describe("HandoffDetailSheet — data render", () => {
     expect(screen.getByText(/Lip filler combo/)).toBeInTheDocument();
   });
 
-  it("maps turn roles: user → lead first name, owner → agent name; uses text not content", () => {
+  it("maps turn roles: user → lead first name, assistant → agent name, owner → operator (You); uses text not content", () => {
     render(
       <HandoffDetailSheet
         decision={makeDecision()}
@@ -153,8 +158,10 @@ describe("HandoffDetailSheet — data render", () => {
     );
     const thread = screen.getByTestId("handoff-thread");
     expect(within(thread).getByText("Why is yours $300 more?")).toBeInTheDocument();
-    expect(within(thread).getByText("Maya")).toBeInTheDocument();
-    expect(within(thread).getByText("Alex")).toBeInTheDocument();
+    expect(within(thread).getByText("Maya")).toBeInTheDocument(); // user → lead first name
+    expect(within(thread).getByText("Alex")).toBeInTheDocument(); // assistant → agent name
+    expect(within(thread).getByText("You")).toBeInTheDocument(); // owner → operator
+    expect(within(thread).getByText("Our combo includes the brow lift.")).toBeInTheDocument();
   });
 
   it("renders where-it-stands topics / objections / suggested opening when present", () => {

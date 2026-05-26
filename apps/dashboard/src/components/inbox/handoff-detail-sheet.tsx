@@ -160,14 +160,19 @@ export function HandoffDetailSheet({
     : turns.slice(Math.max(0, turns.length - VISIBLE_RECENT));
   const hiddenCount = turns.length - visibleThread.length;
 
+  // Conversation roles come straight from the stored thread:
+  //   "user" = the lead · "assistant" = the AI agent · "owner" = the human operator.
+  // Tolerate any unknown role rather than crash.
   const whoFor = (role?: string) =>
     role === "user"
       ? lead.name
         ? leadFirstName
         : "Lead"
-      : role === "owner"
+      : role === "assistant"
         ? agentName
-        : role || "—";
+        : role === "owner"
+          ? "You"
+          : role || "—";
 
   const useSuggested = () => {
     if (conv.suggestedOpening) {
