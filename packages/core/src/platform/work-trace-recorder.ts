@@ -37,7 +37,16 @@ export interface WorkTraceStore {
   update(
     workUnitId: string,
     fields: Partial<WorkTrace>,
-    options?: { caller?: string },
+    options?: {
+      caller?: string;
+      /**
+       * Opt-in tenant tripwire (#643). When provided, the store asserts the
+       * fetched row's organizationId matches before mutating, throwing a
+       * not-found error otherwise. Omit to preserve back-compat (no guard).
+       * Other WorkTraceStore implementations may ignore this field.
+       */
+      organizationId?: string;
+    },
   ): Promise<WorkTraceUpdateResult>;
   getByIdempotencyKey(key: string): Promise<WorkTraceReadResult | null>;
 }

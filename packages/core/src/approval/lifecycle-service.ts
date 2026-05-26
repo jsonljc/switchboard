@@ -182,13 +182,17 @@ export class ApprovalLifecycleService {
     // 4. Update the WorkTrace. Surface lock-violation failures so the caller knows
     //    the lifecycle and WorkTrace have diverged — silent failure would leave
     //    canonical persistence inconsistent with lifecycle state.
-    const updateResult = await params.traceStore.update(lifecycle.actionEnvelopeId, {
-      outcome: "failed",
-      completedAt: new Date().toISOString(),
-      approvalOutcome: "rejected",
-      approvalRespondedBy: params.respondedBy,
-      approvalRespondedAt: new Date().toISOString(),
-    });
+    const updateResult = await params.traceStore.update(
+      lifecycle.actionEnvelopeId,
+      {
+        outcome: "failed",
+        completedAt: new Date().toISOString(),
+        approvalOutcome: "rejected",
+        approvalRespondedBy: params.respondedBy,
+        approvalRespondedAt: new Date().toISOString(),
+      },
+      { organizationId: lifecycle.organizationId ?? undefined },
+    );
     if (!updateResult.ok) {
       throw new Error(
         `WorkTrace update failed during rejectLifecycle (${params.lifecycleId}): ${updateResult.reason}`,
