@@ -44,7 +44,8 @@ export class PrismaManagedChannelStore {
     if (!existing || existing.organizationId !== organizationId) {
       throw new Error("Channel not found");
     }
-    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
-    await this.prisma.managedChannel.delete({ where: { id } });
+    // #643: scope the delete WHERE by organizationId (the findUnique + org check above
+    // already validated tenancy; this is the store-layer defense-in-depth guard).
+    await this.prisma.managedChannel.deleteMany({ where: { id, organizationId } });
   }
 }
