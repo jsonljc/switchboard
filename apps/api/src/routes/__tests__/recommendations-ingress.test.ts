@@ -110,15 +110,15 @@ describe("POST /api/recommendations/:id/act — PlatformIngress migration (Phase
     const rec = await seedQueueRec();
     const idempotencyKey = `test-idempotency-key-rec-${rec.id}`;
 
-    // The idempotency middleware fingerprint uses organizationIdFromAuth and
-    // principalIdFromAuth, which are set by the route's preHandler AFTER the
-    // global idempotency preHandler fires. Supplying x-organization-id and
-    // x-principal-id ensures the fingerprint is stable across both calls (the
-    // middleware falls back to these headers when the auth fields are not yet set).
+    // Since #575, buildDevAuthFallback runs as a global preHandler before the
+    // idempotency middleware, so organizationIdFromAuth / principalIdFromAuth are
+    // resolved (from x-org-id / x-principal-id) at both the check-time preHandler and
+    // the store-time onSend. The fingerprint is stable across both legs without the
+    // old x-organization-id band-aid.
     const commonHeaders = {
       "content-type": "application/json",
       "idempotency-key": idempotencyKey,
-      "x-organization-id": "default",
+      "x-org-id": "default",
       "x-principal-id": "default",
     };
 

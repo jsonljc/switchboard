@@ -35,6 +35,31 @@ describe("buildDevAuthFallback (factory)", () => {
     await app.close();
   });
 
+  it("with applyDefault: false, resolves headers but leaves org/principal unset when headers absent", async () => {
+    // Header-only mode (#575): used for the GLOBAL pre-idempotency hook so it mirrors
+    // production auth (which resolves the authenticated org, never defaults to "default")
+    // and does not scope otherwise-global routes (e.g. /api/policies treats undefined org
+    // as unscoped). The "default" affordance stays in the per-route hooks.
+    const app = Fastify();
+    app.decorate("authDisabled", true);
+    app.addHook("preHandler", buildDevAuthFallback(app, { applyDefault: false }));
+    app.get("/probe", (request) => ({
+      org: request.organizationIdFromAuth ?? null,
+      principal: request.principalIdFromAuth ?? null,
+    }));
+
+    const withHeader = await app.inject({
+      method: "GET",
+      url: "/probe",
+      headers: { "x-org-id": "org_demo", "x-principal-id": "alice" },
+    });
+    expect(withHeader.json()).toEqual({ org: "org_demo", principal: "alice" });
+
+    const withoutHeader = await app.inject({ method: "GET", url: "/probe" });
+    expect(withoutHeader.json()).toEqual({ org: null, principal: null });
+    await app.close();
+  });
+
   it("does not overwrite existing organizationIdFromAuth set by auth middleware", async () => {
     const app = Fastify();
     app.decorate("authDisabled", true);

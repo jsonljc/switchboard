@@ -252,7 +252,6 @@ describe("POST /api/admin/consent/grant — PlatformIngress migration (Phase 1b.
       "content-type": "application/json",
       "idempotency-key": "test-key-grant-1",
       "x-org-id": "org-1",
-      "x-organization-id": "org-1",
       "x-principal-id": "default",
     };
 
@@ -372,7 +371,6 @@ describe("POST /api/admin/consent/revoke — PlatformIngress migration (Phase 1b
       "content-type": "application/json",
       "idempotency-key": "test-key-revoke-1",
       "x-org-id": "org-1",
-      "x-organization-id": "org-1",
       "x-principal-id": "default",
     };
 
@@ -494,7 +492,6 @@ describe("POST /api/admin/consent/clear — PlatformIngress migration (Phase 1b.
       "content-type": "application/json",
       "idempotency-key": "test-key-clear-1",
       "x-org-id": "org-1",
-      "x-organization-id": "org-1",
       "x-principal-id": "default",
     };
 

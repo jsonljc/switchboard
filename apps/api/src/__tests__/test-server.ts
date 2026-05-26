@@ -16,6 +16,7 @@ import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 import { greetingRoutes } from "../routes/greeting.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
+import { buildDevAuthFallback } from "../utils/auth-fallback.js";
 import {
   createInMemoryStorage,
   seedDefaultStorage,
@@ -480,6 +481,14 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     approvalRateLimit: null,
   });
   app.decorate("platformLifecycle", platformLifecycle);
+
+  // Resolve dev/test org/actor identity BEFORE idempotency so the request
+  // fingerprint is symmetric at check-time and store-time (#575), mirroring the
+  // production ordering in app.ts (authMiddleware → idempotency). authDisabled is
+  // true here, so this fallback is active. applyDefault:false → resolve only the
+  // request-supplied identity (x-org-id); the per-route hooks apply the "default"
+  // affordance, so routes that treat an absent org as unscoped are not scoped here.
+  app.addHook("preHandler", buildDevAuthFallback(app, { applyDefault: false }));
 
   if (!options.disableHttpIdempotency) {
     await app.register(idempotencyMiddleware);

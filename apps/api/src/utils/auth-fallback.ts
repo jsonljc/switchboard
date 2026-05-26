@@ -22,22 +22,34 @@ import type { FastifyInstance, preHandlerAsyncHookHandler } from "fastify";
  *
  * Idempotent: does not overwrite a field already populated by an earlier
  * preHandler (e.g., the production auth middleware).
+ *
+ * `applyDefault` (default `true`) controls whether absent headers fall back to
+ * the "default" org/principal. The per-route hooks keep `true` (the dev
+ * affordance those routes rely on). The GLOBAL pre-idempotency hook (#575) passes
+ * `false` so it resolves the request-supplied identity ahead of the idempotency
+ * fingerprint — mirroring production auth, which sets the authenticated org and
+ * never defaults — WITHOUT scoping routes that treat an absent org as unscoped
+ * (e.g. `/api/policies`). The per-route hooks still apply the "default" afterwards.
  */
-export function buildDevAuthFallback(app: FastifyInstance): preHandlerAsyncHookHandler {
+export function buildDevAuthFallback(
+  app: FastifyInstance,
+  options: { applyDefault?: boolean } = {},
+): preHandlerAsyncHookHandler {
+  const applyDefault = options.applyDefault ?? true;
   return async function devAuthFallback(request) {
     if (app.authDisabled !== true) return;
 
     const orgHeader = request.headers["x-org-id"];
     if (typeof orgHeader === "string" && orgHeader.trim()) {
       request.organizationIdFromAuth = orgHeader.trim();
-    } else if (!request.organizationIdFromAuth) {
+    } else if (applyDefault && !request.organizationIdFromAuth) {
       request.organizationIdFromAuth = "default";
     }
 
     const principalHeader = request.headers["x-principal-id"];
     if (typeof principalHeader === "string" && principalHeader.trim()) {
       request.principalIdFromAuth = principalHeader.trim();
-    } else if (!request.principalIdFromAuth) {
+    } else if (applyDefault && !request.principalIdFromAuth) {
       request.principalIdFromAuth = "default";
     }
   };
