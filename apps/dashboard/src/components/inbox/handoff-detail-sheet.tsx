@@ -112,6 +112,7 @@ export function HandoffDetailSheet({
   const [resolveNote, setResolveNote] = useState("");
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [undelivered, setUndelivered] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Reset composer/resolve state when the open decision changes.
@@ -123,6 +124,7 @@ export function HandoffDetailSheet({
     setResolveNote("");
     setSending(false);
     setResolving(false);
+    setUndelivered(false);
   }, [decision.id]);
 
   if (isLoading) return <HandoffSkeleton agentKey={decision.agentKey} onClose={onClose} />;
@@ -172,12 +174,17 @@ export function HandoffDetailSheet({
     }
   };
 
-  // Next task replaces the bodies below with the 200/502 branch + close-on-success.
   const send = async () => {
     if (!draft.trim() || sending) return;
     setSending(true);
+    setUndelivered(false);
     try {
-      await onReply(draft.trim());
+      const { delivered } = await onReply(draft.trim());
+      if (delivered) {
+        onClose();
+      } else {
+        setUndelivered(true); // 502 — reply saved, channel delivery failed
+      }
     } finally {
       setSending(false);
     }
@@ -187,6 +194,7 @@ export function HandoffDetailSheet({
     setResolving(true);
     try {
       await onResolve(resolveNote.trim() || undefined);
+      onClose();
     } finally {
       setResolving(false);
     }
@@ -388,39 +396,14 @@ export function HandoffDetailSheet({
                 {draft.length}
               </span>
             </div>
+            {undelivered && (
+              <div className="ds-banner" data-state="undelivered" role="status">
+                Saved — but we couldn&apos;t deliver it to {leadFirstName} right now. Try again, or
+                reach out directly.
+              </div>
+            )}
           </div>
         </section>
-
-        {/* Resolve note (collapsed by default) */}
-        {resolveOpen && (
-          <section className="ds-section ds-resolve-section">
-            <div className="ds-eyebrow">Mark resolved</div>
-            <textarea
-              className="ds-resolve-note"
-              rows={2}
-              placeholder="Optional — note what you did (audit log only)"
-              value={resolveNote}
-              onChange={(e) => setResolveNote(e.target.value)}
-            />
-            <div className="ds-resolve-actions">
-              <button
-                type="button"
-                className="ds-action ds-action-secondary"
-                onClick={() => setResolveOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="ds-action ds-action-secondary ds-action-resolve"
-                onClick={() => void doResolve()}
-                disabled={resolving}
-              >
-                Mark resolved
-              </button>
-            </div>
-          </section>
-        )}
       </div>
 
       {/* Docked actions */}
@@ -442,6 +425,37 @@ export function HandoffDetailSheet({
           Send &amp; hand back to {agentName}
         </button>
       </footer>
+
+      {/* Resolve note (collapsed by default) — rendered after footer so it is last in DOM */}
+      {resolveOpen && (
+        <section className="ds-section ds-resolve-section">
+          <div className="ds-eyebrow">Mark resolved</div>
+          <textarea
+            className="ds-resolve-note"
+            rows={2}
+            placeholder="Optional — note what you did (audit log only)"
+            value={resolveNote}
+            onChange={(e) => setResolveNote(e.target.value)}
+          />
+          <div className="ds-resolve-actions">
+            <button
+              type="button"
+              className="ds-action ds-action-secondary"
+              onClick={() => setResolveOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ds-action ds-action-secondary ds-action-resolve"
+              onClick={() => void doResolve()}
+              disabled={resolving}
+            >
+              Mark resolved
+            </button>
+          </div>
+        </section>
+      )}
     </SheetShell>
   );
 }

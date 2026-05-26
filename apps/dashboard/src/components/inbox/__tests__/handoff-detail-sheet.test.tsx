@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import type { Decision } from "@/lib/decisions/types";
 
 const refetchMock = vi.fn();
@@ -232,5 +232,85 @@ describe("HandoffDetailSheet — data render", () => {
       />,
     );
     expect(screen.getByText("session reset")).toBeInTheDocument();
+  });
+});
+
+describe("HandoffDetailSheet — reply & resolve", () => {
+  beforeEach(() => {
+    detailState = { data: richPayload(), isLoading: false, isError: false, refetch: refetchMock };
+  });
+
+  it("loads the suggested opening into the composer", () => {
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={noop}
+        onResolve={noopResolve}
+        onClose={() => {}}
+        nowMs={NOW}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /start with this/i }));
+    expect(screen.getByPlaceholderText(/Write to Maya/)).toHaveValue("Hi Maya — Dana here.");
+  });
+
+  it("sends the reply and closes when delivered", async () => {
+    const onReply = vi.fn(() => Promise.resolve({ delivered: true }));
+    const onClose = vi.fn();
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={onReply}
+        onResolve={noopResolve}
+        onClose={onClose}
+        nowMs={NOW}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText(/Write to Maya/), {
+      target: { value: "On a call now." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /hand back to Alex/i }));
+    await waitFor(() => expect(onReply).toHaveBeenCalledWith("On a call now."));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("keeps the sheet open and shows the saved-but-undelivered banner on 502", async () => {
+    const onReply = vi.fn(() => Promise.resolve({ delivered: false }));
+    const onClose = vi.fn();
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={onReply}
+        onResolve={noopResolve}
+        onClose={onClose}
+        nowMs={NOW}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText(/Write to Maya/), { target: { value: "Hi." } });
+    fireEvent.click(screen.getByRole("button", { name: /hand back to Alex/i }));
+    await waitFor(() => expect(screen.getByText(/couldn't deliver/i)).toBeInTheDocument());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("opens the resolve note, resolves, and closes", async () => {
+    const onResolve = vi.fn(() => Promise.resolve());
+    const onClose = vi.fn();
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={noop}
+        onResolve={onResolve}
+        onClose={onClose}
+        nowMs={NOW}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: /^mark resolved$/i })[0]);
+    fireEvent.change(screen.getByPlaceholderText(/note what you did/i), {
+      target: { value: "Closed by phone." },
+    });
+    const resolveButtons = screen.getAllByRole("button", { name: /^mark resolved$/i });
+    fireEvent.click(resolveButtons[resolveButtons.length - 1]);
+    await waitFor(() => expect(onResolve).toHaveBeenCalledWith("Closed by phone."));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });
