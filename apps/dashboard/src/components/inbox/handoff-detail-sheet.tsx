@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
+import type { HandoffReason } from "@switchboard/schemas";
 import { relativeTime, dueIn } from "@/lib/decisions/time";
 import { useEscalationDetail } from "@/hooks/use-escalation-detail";
 import { InboxAgentAvatar } from "./inbox-agent-avatar";
@@ -9,7 +10,9 @@ import type { Decision } from "@/lib/decisions/types";
 import type { ConversationTurn } from "@/hooks/use-escalation-detail";
 
 // Reason enum → plain-English chip (no red/yellow/green; identity-color system).
-const REASON_LABELS: Record<string, string> = {
+// Typed against HandoffReason so a new enum value fails typecheck instead of
+// silently falling through to the raw enum string.
+const REASON_LABELS: Record<HandoffReason, string> = {
   human_requested: "They asked for you",
   max_turns_exceeded: "Conversation stalled",
   complex_objection: "Tricky objection",
@@ -143,8 +146,12 @@ export function HandoffDetailSheet({
 
   const { escalation, conversationHistory } = data;
 
+  // reason is `string | undefined` on the defensive wire type; cast for the
+  // lookup and let the `|| escalation.reason` fallthrough handle any unknown value.
   const reasonLabel =
-    (escalation.reason && REASON_LABELS[escalation.reason]) || escalation.reason || "Handed to you";
+    (escalation.reason && REASON_LABELS[escalation.reason as HandoffReason]) ||
+    escalation.reason ||
+    "Handed to you";
   const due = dueIn(escalation.slaDeadlineAt, nowMs);
 
   const lead = escalation.leadSnapshot ?? {};
