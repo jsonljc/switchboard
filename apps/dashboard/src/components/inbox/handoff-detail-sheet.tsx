@@ -113,6 +113,8 @@ export function HandoffDetailSheet({
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [undelivered, setUndelivered] = useState(false);
+  const [sendFailed, setSendFailed] = useState(false);
+  const [resolveFailed, setResolveFailed] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Reset composer/resolve state when the open decision changes.
@@ -125,6 +127,8 @@ export function HandoffDetailSheet({
     setSending(false);
     setResolving(false);
     setUndelivered(false);
+    setSendFailed(false);
+    setResolveFailed(false);
   }, [decision.id]);
 
   if (isLoading) return <HandoffSkeleton agentKey={decision.agentKey} onClose={onClose} />;
@@ -178,6 +182,7 @@ export function HandoffDetailSheet({
     if (!draft.trim() || sending) return;
     setSending(true);
     setUndelivered(false);
+    setSendFailed(false);
     try {
       const { delivered } = await onReply(draft.trim());
       if (delivered) {
@@ -185,16 +190,21 @@ export function HandoffDetailSheet({
       } else {
         setUndelivered(true); // 502 — reply saved, channel delivery failed
       }
+    } catch {
+      setSendFailed(true); // true error — the reply was NOT saved; keep the draft so they can retry
     } finally {
       setSending(false);
     }
   };
   const doResolve = async () => {
     if (resolving) return;
+    setResolveFailed(false);
     setResolving(true);
     try {
       await onResolve(resolveNote.trim() || undefined);
       onClose();
+    } catch {
+      setResolveFailed(true); // keep the section open so they can retry
     } finally {
       setResolving(false);
     }
@@ -402,6 +412,12 @@ export function HandoffDetailSheet({
                 reach out directly.
               </div>
             )}
+            {sendFailed && (
+              <div className="ds-banner" data-state="error" role="alert">
+                We couldn&apos;t send that just now — nothing was saved. Check your connection and
+                try again.
+              </div>
+            )}
           </div>
         </section>
 
@@ -416,6 +432,11 @@ export function HandoffDetailSheet({
               value={resolveNote}
               onChange={(e) => setResolveNote(e.target.value)}
             />
+            {resolveFailed && (
+              <div className="ds-banner" data-state="error" role="alert">
+                Couldn&apos;t mark this resolved — try again.
+              </div>
+            )}
             <div className="ds-resolve-actions">
               <button
                 type="button"

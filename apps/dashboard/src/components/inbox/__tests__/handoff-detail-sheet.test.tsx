@@ -315,4 +315,45 @@ describe("HandoffDetailSheet — reply & resolve", () => {
     await waitFor(() => expect(onResolve).toHaveBeenCalledWith("Closed by phone."));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
+
+  it("shows an honest 'not saved' error and stays open when reply rejects", async () => {
+    const onReply = vi.fn(() => Promise.reject(new Error("network down")));
+    const onClose = vi.fn();
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={onReply}
+        onResolve={noopResolve}
+        onClose={onClose}
+        nowMs={NOW}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText(/Write to Maya/), { target: { value: "Hi." } });
+    fireEvent.click(screen.getByRole("button", { name: /hand back to Alex/i }));
+    await waitFor(() => expect(screen.getByText(/nothing was saved/i)).toBeInTheDocument());
+    expect(onClose).not.toHaveBeenCalled();
+    // draft retained for retry
+    expect(screen.getByPlaceholderText(/Write to Maya/)).toHaveValue("Hi.");
+  });
+
+  it("shows a resolve error and stays open when resolve rejects", async () => {
+    const onResolve = vi.fn(() => Promise.reject(new Error("boom")));
+    const onClose = vi.fn();
+    const { container } = render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={noop}
+        onResolve={onResolve}
+        onClose={onClose}
+        nowMs={NOW}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^mark resolved$/i }));
+    const resolveSection = container.querySelector(".ds-resolve-section") as HTMLElement;
+    fireEvent.click(within(resolveSection).getByRole("button", { name: /^mark resolved$/i }));
+    await waitFor(() =>
+      expect(within(resolveSection).getByText(/couldn't mark this resolved/i)).toBeInTheDocument(),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
