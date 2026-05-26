@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { relativeTime, dueIn } from "../time";
+import { relativeTime, dueIn, undoableFor } from "../time";
 
 const NOW = new Date("2026-05-26T12:00:00.000Z").getTime();
 
@@ -59,5 +59,17 @@ describe("dueIn", () => {
 
   it("is normal between one and four hours out", () => {
     expect(dueIn(ahead(60 * 2), NOW)).toEqual({ label: "Due in 2h", state: "normal" });
+  });
+});
+
+describe("undoableFor", () => {
+  const now = Date.UTC(2026, 4, 26, 9, 0, 0);
+  it("returns null for absent or past windows", () => {
+    expect(undoableFor(undefined, now)).toBeNull();
+    expect(undoableFor(new Date(now - 60_000).toISOString(), now)).toBeNull();
+  });
+  it("formats minutes and hours", () => {
+    expect(undoableFor(new Date(now + 5 * 60_000).toISOString(), now)).toBe("undoable for 5m");
+    expect(undoableFor(new Date(now + 2 * 3_600_000).toISOString(), now)).toBe("undoable for 2h");
   });
 });
