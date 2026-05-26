@@ -151,6 +151,55 @@
   margin-top: 0.125rem;
 }
 
+/* ─── What's working ─── */
+
+/* Outer wrapper */
+.whatsWorking {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Funnel narrative — warm serif prose */
+.whatsWorkingNarrative {
+  font-family: var(--font-home-serif);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* Riley byline: quieter italic attribution */
+.whatsWorkingByline {
+  display: block;
+  font-style: italic;
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  margin-top: 0.375rem;
+}
+
+/* Campaign insight line — same warm serif register */
+.whatsWorkingCampaign {
+  font-family: var(--font-home-serif);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* Campaign name emphasis: amber hairline underline, no red/green */
+.whatsWorkingEmphasis {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--action));
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
 /* ─── Verdict line ─── */
 
 /* Serif prose container (Newsreader via --font-home-serif, a complete stack value) */
