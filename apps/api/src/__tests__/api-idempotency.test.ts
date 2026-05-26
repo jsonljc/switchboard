@@ -24,14 +24,46 @@ describe("Idempotency Middleware", () => {
   };
 
   // The idempotency fingerprint derives org/actor from request.organizationIdFromAuth /
-  // principalIdFromAuth, with x-organization-id / x-principal-id header fallbacks. On the
-  // replay leg the per-route org binding (buildDevAuthFallback) has not yet run when the
-  // global idempotency preHandler reads the request (it is registered before the route
-  // plugins), so the auth fields are unset and the fingerprint uses the header fallbacks.
-  // On the first leg's onSend the fallback HAS run, so the fingerprint uses the bound
-  // "default" values. We pin both headers to "default" to match the bound values and keep
-  // the fingerprint stable across both legs.
-  const ORG_HEADER = { "x-organization-id": "default", "x-principal-id": "default" };
+  // principalIdFromAuth. Since #575, buildDevAuthFallback runs as a global preHandler
+  // BEFORE the idempotency middleware (mirroring production auth ordering), so those
+  // fields are resolved (from x-org-id / x-principal-id, default "default") at both the
+  // check-time preHandler and the store-time onSend. The fingerprint is therefore stable
+  // across legs without the old x-organization-id band-aid; tests just send x-org-id.
+  const ORG_HEADER = { "x-org-id": "default", "x-principal-id": "default" };
+
+  // Regression for #575: in dev/test the identity is resolved by the global
+  // buildDevAuthFallback (registered before the idempotency middleware, mirroring
+  // production auth ordering) reading x-org-id / x-principal-id. The replay must
+  // return the cached response WITHOUT the x-organization-id fingerprint band-aid.
+  // Before the fix the route-scoped fallback ran after the idempotency check, so the
+  // identity was unset at check-time but resolved at store-time → fingerprint
+  // mismatch → 409. The dev convention sends both identity headers (as production
+  // auth populates both org and actor before idempotency).
+  it("dedupes replay when identity resolves via x-org-id/x-principal-id (no x-organization-id band-aid)", async () => {
+    const headers = {
+      "idempotency-key": "ordering-fix-key",
+      "x-org-id": "default",
+      "x-principal-id": "default",
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers,
+      payload: proposePayload,
+    });
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers,
+      payload: proposePayload,
+    });
+
+    expect(second.statusCode).toBe(201);
+    expect(second.json()).toEqual(first.json());
+  });
 
   it("returns cached response for duplicate POST with same Idempotency-Key", async () => {
     const first = await app.inject({
@@ -211,16 +243,17 @@ describe("Idempotency Middleware", () => {
   });
 
   it("returns 409 when the same key is used by a different org", async () => {
-    // The fingerprint reads request.organizationIdFromAuth, falling back to the
-    // x-organization-id header. In dev/test the per-route buildDevAuthFallback only
-    // populates organizationIdFromAuth from x-org-id (absent here), so the fingerprint
-    // uses the x-organization-id header on both legs — distinct orgs → 409.
+    // The fingerprint reads request.organizationIdFromAuth, resolved by the global
+    // buildDevAuthFallback from x-org-id (#575). Two requests with the same key but a
+    // different x-org-id resolve to distinct orgs → distinct fingerprints → 409. This
+    // proves cross-tenant safety through the real identity path (the cache key itself is
+    // only the bare idempotency-key, so org in the fingerprint is the cross-tenant guard).
     const first = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
       headers: {
         "idempotency-key": "cross-org-key",
-        "x-organization-id": "org_alpha",
+        "x-org-id": "org_alpha",
       },
       payload: proposePayload,
     });
@@ -233,7 +266,7 @@ describe("Idempotency Middleware", () => {
       url: "/api/actions/propose",
       headers: {
         "idempotency-key": "cross-org-key",
-        "x-organization-id": "org_beta",
+        "x-org-id": "org_beta",
       },
       payload: proposePayload,
     });

@@ -33,6 +33,7 @@ import { authMiddleware } from "./middleware/auth.js";
 import { authRateLimit } from "./middleware/rate-limit.js";
 import apiVersionPlugin from "./versioning.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
+import { buildDevAuthFallback } from "./utils/auth-fallback.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
 import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
 import { registerRoutes } from "./bootstrap/routes.js";
@@ -770,6 +771,16 @@ export async function buildServer() {
   await app.register(authMiddleware);
   await app.register(authRateLimit);
   await app.register(apiVersionPlugin);
+  // Dev/test identity resolution must run BEFORE the idempotency middleware so the
+  // request fingerprint sees the resolved org/actor at check-time AND store-time
+  // (#575). In production this is a no-op (authMiddleware already populated the auth
+  // fields and authDisabled === false); in dev/test it mirrors that ordering instead
+  // of leaving org resolution to route-scoped preHandlers that run after the global
+  // idempotency check. applyDefault:false → resolve only request-supplied identity
+  // (like prod auth, which never defaults to "default"); the per-route hooks still
+  // apply the "default" affordance afterwards, so routes that treat an absent org as
+  // unscoped (e.g. /api/policies) are not silently scoped to "default".
+  app.addHook("preHandler", buildDevAuthFallback(app, { applyDefault: false }));
   await app.register(idempotencyMiddleware);
 
   // Billing entitlement gate — blocks unpaid/canceled/past_due/incomplete orgs from

@@ -153,18 +153,15 @@ describe("POST /api/:orgId/revenue — PlatformIngress migration (#654-B)", () =
     const { app } = await buildTestServer({ revenueStore, outboxWriter });
 
     const idempotencyKey = "rev-idempotency-1";
-    // The idempotency middleware fingerprint uses organizationIdFromAuth and
-    // principalIdFromAuth, which are set by the route's preHandler AFTER the
-    // global idempotency preHandler fires. Supplying x-organization-id and
-    // x-principal-id ensures the fingerprint is stable across both calls (the
-    // middleware falls back to these headers when the auth fields are not yet
-    // set). x-org-id is also sent so buildDevAuthFallback populates
-    // organizationIdFromAuth for the route itself.
+    // Since #575, buildDevAuthFallback runs as a global preHandler before the
+    // idempotency middleware, so organizationIdFromAuth / principalIdFromAuth are
+    // resolved from x-org-id / x-principal-id at both the check-time preHandler and
+    // the store-time onSend. The fingerprint is stable across both legs (no
+    // x-organization-id band-aid needed).
     const commonHeaders = {
       "content-type": "application/json",
       "idempotency-key": idempotencyKey,
       "x-org-id": "org_a",
-      "x-organization-id": "org_a",
       "x-principal-id": "u1",
     };
 
