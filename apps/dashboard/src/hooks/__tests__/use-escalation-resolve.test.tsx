@@ -55,9 +55,11 @@ describe("useEscalationResolve", () => {
     await act(async () => {
       await result.current.resolve();
     });
+    // `JSON.stringify({ resolutionNote: undefined })` drops the key → "{}".
+    // Assert the literal wire body so the test isn't misleading about what's sent.
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/dashboard/escalations/e1/resolve",
-      expect.objectContaining({ body: JSON.stringify({ resolutionNote: undefined }) }),
+      expect.objectContaining({ method: "POST", body: "{}" }),
     );
   });
 

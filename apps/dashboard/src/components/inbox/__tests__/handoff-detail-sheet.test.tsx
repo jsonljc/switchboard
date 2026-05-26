@@ -74,7 +74,7 @@ function richPayload() {
   };
 }
 
-const noop = () => Promise.resolve({ delivered: true });
+const noop = (_message: string) => Promise.resolve({ delivered: true });
 const noopResolve = () => Promise.resolve();
 
 beforeEach(() => {
