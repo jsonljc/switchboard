@@ -22,6 +22,12 @@ const APPROVAL_HTTP_RATE_LIMIT_WINDOW_MS = parseInt(
 );
 
 export const approvalsRoutes: FastifyPluginAsync = async (app) => {
+  // Self-approval is prevented on the lifecycle approval path unless explicitly
+  // allowed (e.g. solo-operator deployments) via ALLOW_SELF_APPROVAL — the same
+  // env that gates PlatformLifecycle.selfApprovalAllowed in app.ts, so both
+  // response paths share one four-eyes posture.
+  const selfApprovalAllowed = !!process.env["ALLOW_SELF_APPROVAL"];
+
   // POST /api/approvals/:id/respond - Respond to an approval request
   app.post(
     "/:id/respond",
@@ -85,6 +91,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
             platformLifecycle: app.platformLifecycle,
             sessionManager: app.sessionManager,
             logger: app.log,
+            selfApprovalAllowed,
           },
           {
             approvalId: id,
