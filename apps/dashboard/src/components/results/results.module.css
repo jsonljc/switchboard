@@ -1225,3 +1225,107 @@
     opacity: 0.45;
   }
 }
+
+/* ─── Screen column container ─── */
+.column {
+  width: 100%;
+  padding: 4px 18px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+@media (min-width: 768px) {
+  .column {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 32px 40px;
+    gap: 28px;
+  }
+}
+
+/* ─── Results header ─── */
+.resultsHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resultsTitle {
+  font-family: var(--serif);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* Period segmented control */
+.windowControl {
+  display: flex;
+  gap: 2px;
+  background: var(--canvas-2, #f5f4f2);
+  border-radius: 8px;
+  padding: 2px;
+  width: fit-content;
+}
+
+.windowBtn,
+.windowBtnActive {
+  font-family: var(--sans, sans-serif);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink-3);
+  transition: background 120ms, color 120ms;
+}
+
+.windowBtnActive {
+  background: var(--canvas, #fff);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Header meta row: date folio + recompute */
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dateFolio {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+}
+
+.recomputeBtn {
+  font-family: var(--sans, sans-serif);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: color 120ms, text-decoration-color 120ms;
+}
+
+.recomputeBtn:hover:not(:disabled) {
+  color: var(--ink-3);
+  text-decoration-color: var(--ink-3);
+}
+
+.recomputeBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
