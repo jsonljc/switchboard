@@ -17,6 +17,7 @@ function createMockPrisma() {
       update: vi.fn(),
       updateMany: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
   };
 }
@@ -131,10 +132,30 @@ describe("PrismaConnectionStore", () => {
     );
   });
 
-  it("deletes a connection", async () => {
-    prisma.connection.delete.mockResolvedValue({});
+  // #643: delete must scope WHERE by organizationId (mirrors updateStatus defense-in-depth).
+  it("scopes delete WHERE by organizationId (TI defense-in-depth)", async () => {
+    prisma.connection.deleteMany.mockResolvedValue({ count: 1 });
 
-    await store.delete("conn_1");
-    expect(prisma.connection.delete).toHaveBeenCalledWith({ where: { id: "conn_1" } });
+    await store.delete("conn_1", "org_1");
+
+    const callArgs = prisma.connection.deleteMany.mock.calls[0]![0];
+    expect(callArgs.where).toEqual({ id: "conn_1", organizationId: "org_1" });
+    expect(prisma.connection.delete).not.toHaveBeenCalled();
+  });
+
+  it("scopes delete WHERE by organizationId=null for global connections", async () => {
+    prisma.connection.deleteMany.mockResolvedValue({ count: 1 });
+
+    await store.delete("conn_1", null);
+
+    const callArgs = prisma.connection.deleteMany.mock.calls[0]![0];
+    expect(callArgs.where).toEqual({ id: "conn_1", organizationId: null });
+    expect(prisma.connection.delete).not.toHaveBeenCalled();
+  });
+
+  it("throws when delete count=0 (tenant mismatch or missing row)", async () => {
+    prisma.connection.deleteMany.mockResolvedValue({ count: 0 });
+
+    await expect(store.delete("conn_1", "org_X")).rejects.toThrow(/not found or tenant mismatch/);
   });
 });

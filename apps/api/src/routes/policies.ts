@@ -180,7 +180,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
-      const deleted = await app.storageContext.policies.delete(id);
+      const deleted = await app.storageContext.policies.delete(id, existing.organizationId);
       if (!deleted) {
         return reply.code(404).send({ error: "Policy not found", statusCode: 404 });
       }

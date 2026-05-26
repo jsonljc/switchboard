@@ -114,7 +114,11 @@ export class InMemoryPolicyStore implements PolicyStore {
     this.store.set(id, { ...existing, ...data, updatedAt: new Date() });
   }
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, organizationId: string | null): Promise<boolean> {
+    const existing = this.store.get(id);
+    // Defense-in-depth: mirror Prisma impl — only delete if org matches.
+    // Policy.organizationId may be null (global). Mirrors update()'s strict org check.
+    if (!existing || existing.organizationId !== organizationId) return false;
     return this.store.delete(id);
   }
 

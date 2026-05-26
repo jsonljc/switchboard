@@ -32,7 +32,7 @@ export interface PolicyStore {
   save(policy: Policy): Promise<void>;
   getById(id: string): Promise<Policy | null>;
   update(id: string, data: Partial<Policy>, organizationId: string | null): Promise<void>;
-  delete(id: string): Promise<boolean>;
+  delete(id: string, organizationId: string | null): Promise<boolean>;
   listActive(filter?: { cartridgeId?: string; organizationId?: string | null }): Promise<Policy[]>;
 }
 
