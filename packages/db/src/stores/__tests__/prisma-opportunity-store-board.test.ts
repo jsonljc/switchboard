@@ -33,6 +33,7 @@ function mkTxClient(opts: { existing?: Record<string, unknown> | null }) {
           },
         }),
       ),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   };
 }
@@ -146,7 +147,14 @@ describe("PrismaOpportunityStore.transitionStage", () => {
     });
 
     expect((prisma as unknown as { $transaction: unknown }).$transaction).toHaveBeenCalledTimes(1);
-    expect(tx.opportunity.update).toHaveBeenCalledTimes(1);
+    // #643: must use updateMany with organizationId in WHERE, not unscoped update
+    expect(tx.opportunity.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.opportunity.update).not.toHaveBeenCalled();
+    expect(tx.opportunity.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "opp_1", organizationId: "org_acme" },
+      }),
+    );
     expect(result.opportunity.stage).toBe("booked");
   });
 
@@ -160,7 +168,7 @@ describe("PrismaOpportunityStore.transitionStage", () => {
       stage: "won",
       actor: { id: "u", type: "user" },
     });
-    const updateCall = tx.opportunity.update.mock.calls[0]![0];
+    const updateCall = tx.opportunity.updateMany.mock.calls[0]![0];
     expect(updateCall.data.closedAt).toBeInstanceOf(Date);
   });
 
@@ -174,7 +182,7 @@ describe("PrismaOpportunityStore.transitionStage", () => {
       stage: "quoted",
       actor: { id: "u", type: "user" },
     });
-    const updateCall = tx.opportunity.update.mock.calls[0]![0];
+    const updateCall = tx.opportunity.updateMany.mock.calls[0]![0];
     expect(updateCall.data.closedAt).toBeNull();
   });
 
@@ -228,6 +236,8 @@ describe("PrismaOpportunityStore.transitionStage", () => {
     });
     // No workTrace.create call in the transaction (the tx mock has no
     // workTrace field — would crash if the store reached for one).
-    expect(tx.opportunity.update).toHaveBeenCalledTimes(1);
+    // #643: unscoped .update must not be called; .updateMany with org scope must be.
+    expect(tx.opportunity.update).not.toHaveBeenCalled();
+    expect(tx.opportunity.updateMany).toHaveBeenCalledTimes(1);
   });
 });

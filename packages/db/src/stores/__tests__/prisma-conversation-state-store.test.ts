@@ -51,16 +51,15 @@ function makeStore() {
 describe("PrismaConversationStateStore.setOverride", () => {
   it("flips status to human_override and records an operator-mutation trace", async () => {
     const harness = makeStore();
+    // #643: setOverride now uses updateMany; findFirst supplies the returned row fields.
     harness.txConvFindFirst.mockResolvedValueOnce({
       id: "conv_1",
       status: "active",
       threadId: "t1",
+      organizationId: "org_1",
+      lastActivityAt: new Date("2026-04-01T00:00:00Z"),
     });
-    harness.txConvUpdate.mockResolvedValueOnce({
-      id: "conv_1",
-      status: "human_override",
-      threadId: "t1",
-    });
+    // txConvUpdateMany already defaults to {count:1} in makeStore(); no extra mock needed.
 
     const result = await harness.store.setOverride({
       organizationId: "org_1",
@@ -69,8 +68,10 @@ describe("PrismaConversationStateStore.setOverride", () => {
       operator,
     });
 
-    expect(harness.txConvUpdate).toHaveBeenCalledWith({
-      where: { id: "conv_1" },
+    // #643: must use updateMany with organizationId in WHERE, not unscoped update
+    expect(harness.txConvUpdate).not.toHaveBeenCalled();
+    expect(harness.txConvUpdateMany).toHaveBeenCalledWith({
+      where: { id: "conv_1", organizationId: "org_1" },
       data: expect.objectContaining({ status: "human_override" }),
     });
     expect(harness.recordOperatorMutation).toHaveBeenCalledTimes(1);
@@ -117,12 +118,10 @@ describe("PrismaConversationStateStore.setOverride", () => {
       id: "conv_1",
       status: "human_override",
       threadId: "t1",
+      organizationId: "org_1",
+      lastActivityAt: new Date("2026-04-01T00:00:00Z"),
     });
-    harness.txConvUpdate.mockResolvedValueOnce({
-      id: "conv_1",
-      status: "active",
-      threadId: "t1",
-    });
+    // No txConvUpdate mock needed — setOverride derives result from existing merged with data
     const result = await harness.store.setOverride({
       organizationId: "org_1",
       threadId: "t1",
@@ -144,6 +143,7 @@ describe("PrismaConversationStateStore.setOverride", () => {
       }),
     ).rejects.toBeInstanceOf(ConversationStateNotFoundError);
     expect(harness.txConvUpdate).not.toHaveBeenCalled();
+    expect(harness.txConvUpdateMany).not.toHaveBeenCalled();
     expect(harness.recordOperatorMutation).not.toHaveBeenCalled();
   });
 });

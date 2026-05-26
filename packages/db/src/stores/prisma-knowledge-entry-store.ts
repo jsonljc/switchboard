@@ -68,10 +68,10 @@ export class PrismaKnowledgeEntryStore {
       throw new Error(`KnowledgeEntry ${id} not found for org ${orgId}`);
     }
 
-    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // #643: scope the mutating WHERE by organizationId (the pre-fetch above already validated tenancy; store-layer defense-in-depth).
     const [, newEntry] = await this.prisma.$transaction([
-      this.prisma.knowledgeEntry.update({
-        where: { id },
+      this.prisma.knowledgeEntry.updateMany({
+        where: { id, organizationId: orgId },
         data: { active: false },
       }),
       this.prisma.knowledgeEntry.create({

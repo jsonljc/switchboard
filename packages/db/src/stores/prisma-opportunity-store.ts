@@ -241,16 +241,26 @@ export class PrismaOpportunityStore implements OpportunityStore {
 
       const isTerminal = stage === "won" || stage === "lost";
       const requestedAt = new Date();
-      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
-      return tx.opportunity.update({
-        where: { id },
+      // #643: scope the mutating WHERE by organizationId (the pre-fetch above already validated tenancy; store-layer defense-in-depth).
+      const result = await tx.opportunity.updateMany({
+        where: { id, organizationId: orgId },
         data: {
           stage,
           closedAt: isTerminal ? (existing.closedAt ?? requestedAt) : null,
           updatedAt: requestedAt,
         },
-        include: { contact: { select: { id: true, name: true, primaryChannel: true } } },
       });
+      if (result.count === 0) {
+        throw new OpportunityNotFoundError(`Opportunity not found: ${id} (org: ${orgId})`);
+      }
+
+      const updated = {
+        ...existing,
+        stage,
+        closedAt: isTerminal ? (existing.closedAt ?? requestedAt) : null,
+        updatedAt: requestedAt,
+      };
+      return updated;
     });
 
     return {
