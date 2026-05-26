@@ -214,15 +214,43 @@ Needs an intent + entitlement decision → spec.
 
 ---
 
-## Action log (Phase 3)
+## Action log (Phase 3 — shipped 2026-05-26)
 
-| Finding                       | Action           | PR       | Status      |
-| ----------------------------- | ---------------- | -------- | ----------- |
-| A1 deployment-memory IDOR     | Fix (TDD)        | —        | pending     |
-| A2 self-approval              | Fix (TDD)        | —        | pending     |
-| A3 store-scan scope + consent | Fix (TDD)        | —        | pending     |
-| A4 validator tests in CI      | Fix              | —        | pending     |
-| A5 directive ref              | Reassess         | —        | conditional |
-| D1–D5                         | Write-up (above) | this doc | done        |
+Four focused, TDD'd, two-stage-reviewed PRs, squash-merged to main. Three close **live** escapes;
+one closes the self-enforcement gap that protects the rest.
+
+| Finding                                               | Outcome                                                                                    | PR   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---- |
+| **A1** deployment-memory cross-tenant IDOR            | Shipped — plugin-level `assertOrgAccess` guard on all 6 endpoints                          | #719 |
+| **A2** self-approval on the production lifecycle path | Shipped — `assertNotSelfApproval` in `respondToApproval`, honoring `ALLOW_SELF_APPROVAL`   | #720 |
+| **A3** → consent cross-tenant **write**               | Shipped — org threaded through the 5 `ConsentStateStore` mutations; scanner-scope deferred | #721 |
+| **A4** validator self-tests absent from CI            | Shipped — `Validator self-tests (.agent/tools)` step in the architecture job               | #722 |
+
+**A3 reframing (important):** investigating the L8-F4 validator blind spot surfaced a _more
+severe, live_ finding than the blind spot itself — `ConsentService` was **discarding** the
+`organizationId` it received (`recordGrant`/`clearConsent` destructured it as `_organizationId`),
+so an operator in org A could grant/revoke/clear consent on org B's contact (PDPA-sensitive
+cross-tenant write). That live write was fixed (#721); the two-stage review additionally caught a
+latent regression where the gate paths scoped by the placeholder `orgId:"system"` — fixed by
+threading the real `ctx.orgId`. The original L8-F4 _scanner-scope_ broadening is deferred (below).
+
+## Deferred — self-enforcement backlog (written up, not rushed)
+
+Marginal value dropped below the bar for a rushed fix; these need a deliberate pass:
+
+- **L8-F4 — broaden `store-mutation-check` scan scope.** `STORE_SRC_RX` + error-mode globs cover
+  only `packages/db/src/{stores,storage}/`; top-level `packages/db/src/*.ts` stores escape.
+  Broadening forces triaging every newly-flagged mutation (consent now scoped via #721;
+  **`recommendation-store.applyAct`** remains — `tx.pendingActionRecord.update({where:{id,status}})`
+  with no org in `applyAct`'s args, a candidate cross-tenant write on the recommendation-act path
+  needing reachability analysis + a caller cascade).
+- **A5 — require `#NNN` ref on `store-mutation-{global,deferred}` directives.** Unlike the allowlist
+  - route-class deferrals (which require `#\d+`), `hasSuppressDirectiveAbove` matches a bare token.
+    Tighten `-deferred` (a TODO → needs a tracking issue); `-global` (permanent rationale) can stay
+    ref-less. Low-risk but needs a sweep of existing directive sites before flipping.
+- **D1–D5** above (trace↔side-effect atomicity; cross-org READ validator; `system_auto_approved`
+  registration guard; concurrent webhook double-apply; creative-pipeline entitlement).
 
 Success is measured by _real ways an action could escape control, now closed_ — not PR count.
+Phase 3 closed three live cross-tenant / human-override escapes (A1/A2/A3) and made the validator
+layer self-testing (A4).
