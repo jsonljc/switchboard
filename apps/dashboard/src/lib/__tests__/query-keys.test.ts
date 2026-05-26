@@ -109,3 +109,18 @@ describe("scopedKeys().opportunities", () => {
     expect(keys.opportunities.board()).toEqual(["org_test", "opportunities", "board"]);
   });
 });
+
+describe("scopedKeys escalations", () => {
+  it("scopes escalations.all by org", () => {
+    expect(scopedKeys("org_1").escalations.all()).toEqual(["org_1", "escalations"]);
+  });
+
+  it("scopes escalations.detail by org + id", () => {
+    expect(scopedKeys("org_1").escalations.detail("esc_9")).toEqual([
+      "org_1",
+      "escalations",
+      "detail",
+      "esc_9",
+    ]);
+  });
+});

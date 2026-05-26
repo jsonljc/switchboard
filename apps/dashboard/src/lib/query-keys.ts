@@ -85,6 +85,7 @@ export const scopedKeys = (orgId: string) => ({
   },
   escalations: {
     all: () => [orgId, "escalations"] as const,
+    detail: (id: string) => [orgId, "escalations", "detail", id] as const,
   },
   governance: {
     all: () => [orgId, "governance"] as const,
