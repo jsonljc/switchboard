@@ -112,7 +112,6 @@ export function HandoffDetailSheet({
   const [resolveNote, setResolveNote] = useState("");
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
-  // Next task adds: const [undelivered, setUndelivered] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Reset composer/resolve state when the open decision changes.
@@ -136,34 +135,7 @@ export function HandoffDetailSheet({
       />
     );
 
-  const { escalation, conversationHistory } = data as {
-    escalation: {
-      id: string;
-      reason?: string;
-      status?: string;
-      slaDeadlineAt?: string;
-      leadSnapshot?: {
-        name?: string;
-        channel?: string;
-        serviceInterest?: string;
-        phone?: string;
-        email?: string;
-        source?: string;
-      };
-      qualificationSnapshot?: {
-        qualificationStage?: string;
-        leadScore?: number;
-      };
-      conversationSummary?: {
-        turnCount?: number;
-        keyTopics?: string[];
-        objectionHistory?: string[];
-        sentiment?: string;
-        suggestedOpening?: string;
-      };
-    };
-    conversationHistory: ConversationTurn[];
-  };
+  const { escalation, conversationHistory } = data;
 
   const reasonLabel =
     (escalation.reason && REASON_LABELS[escalation.reason]) || escalation.reason || "Handed to you";
@@ -195,6 +167,7 @@ export function HandoffDetailSheet({
     if (conv.suggestedOpening) {
       setDraft(conv.suggestedOpening);
       setSeeded(true);
+      // yield a tick so the textarea value commits before we focus it
       setTimeout(() => taRef.current?.focus(), 30);
     }
   };
