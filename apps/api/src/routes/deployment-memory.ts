@@ -20,8 +20,8 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
   // FAQ-draft knowledge chunks just by changing the path orgId. Reject any
   // request whose authenticated org does not match the path orgId BEFORE the
   // handler (and therefore the data layer) runs. Mirrors the per-handler
-  // assertOrgAccess discipline in organizations.ts / governance.ts, hoisted to
-  // a plugin hook so no endpoint can be added without the check.
+  // assertOrgAccess discipline used across the API (approvals.ts, identity.ts,
+  // dlq.ts), hoisted to a plugin hook so no endpoint can be added without it.
   app.addHook("preHandler", async (request, reply) => {
     const { orgId } = request.params as { orgId?: string };
     if (!assertOrgAccess(request, orgId, reply)) return reply;

@@ -104,4 +104,37 @@ describe("deployment-memory routes — cross-tenant authorization (A1)", () => {
     const body = JSON.parse(res.body) as { data: unknown[] };
     expect(body.data).toHaveLength(1);
   });
+
+  it("rejects a cross-org memory delete with 403 before touching the data layer", async () => {
+    const app = await buildApp({ prisma, organizationId: "org_a" });
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/marketplace/org_b/deployments/dep-1/memory/mem-1",
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.deploymentMemory.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a cross-org FAQ reject (destructive) with 403 before touching the data layer", async () => {
+    const app = await buildApp({ prisma, organizationId: "org_a" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/marketplace/org_b/deployments/dep-1/faq-drafts/faq-1/reject",
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.knowledgeChunk.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("fails closed (403) when auth is enabled but the request has no org binding", async () => {
+    // authDisabled is false and no organizationIdFromAuth is set (e.g. an
+    // unscoped static API key). assertOrgAccess must deny, never treat it as
+    // dev mode. Even a same-looking path must not reach the data layer.
+    const app = await buildApp({ prisma }); // organizationId omitted
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/marketplace/org_a/deployments/dep-1/faq-drafts",
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.knowledgeChunk.findMany).not.toHaveBeenCalled();
+  });
 });
