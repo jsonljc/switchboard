@@ -77,6 +77,15 @@ const idempotencyPlugin: FastifyPluginAsync = async (app) => {
   const sharedRedis = (app as unknown as Record<string, unknown>)["redis"] as Redis | undefined;
   const backend = createBackend(sharedRedis);
 
+  // The fingerprint is computed in the preHandler (CHECK leg) and stashed here so the
+  // onSend (STORE leg) reuses the exact same value rather than recomputing it. This
+  // makes the two legs symmetric by construction even when a LATER route-scoped
+  // preHandler mutates a fingerprint input — e.g. dev-mode `buildDevAuthFallback`
+  // defaulting org/actor to "default" after the global idempotency check. Recomputing
+  // at store would capture those late-defaulted values and 409 a legitimate replay
+  // whose check leg saw the still-unset values (#575).
+  const checkTimeFingerprints = new WeakMap<FastifyRequest, string>();
+
   app.addHook("preHandler", async (request, reply) => {
     if (request.method !== "POST") return;
 
@@ -87,11 +96,16 @@ const idempotencyPlugin: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Idempotency-Key exceeds maximum length of 256" });
     }
 
+    // Compute + stash now (before route-scoped preHandlers run) so the store leg can
+    // reuse this exact fingerprint. Header-supplied identity is already resolved here
+    // by the global buildDevAuthFallback, preserving the cross-tenant guard.
+    const currentFingerprint = computeFingerprint(request);
+    checkTimeFingerprints.set(request, currentFingerprint);
+
     const cached = await backend.get(idempotencyKey);
     if (!cached) return;
 
     const entry = JSON.parse(cached) as CacheEntry;
-    const currentFingerprint = computeFingerprint(request);
 
     if (entry.fingerprint !== currentFingerprint) {
       return reply.code(409).send({
@@ -112,10 +126,13 @@ const idempotencyPlugin: FastifyPluginAsync = async (app) => {
       const existing = await backend.get(idempotencyKey);
       if (existing) return payload;
 
+      // Reuse the CHECK-time fingerprint (stashed in preHandler); fall back to a fresh
+      // computation only if the preHandler never ran for this request (defensive).
+      const fingerprint = checkTimeFingerprints.get(request) ?? computeFingerprint(request);
       const entry: CacheEntry = {
         statusCode: reply.statusCode,
         body: payload,
-        fingerprint: computeFingerprint(request),
+        fingerprint,
       };
       await backend.set(idempotencyKey, JSON.stringify(entry), WINDOW_MS);
     }
