@@ -325,6 +325,154 @@
   margin: 0;
 }
 
+/* ─── Details disclosure ─── */
+
+/* Outer wrapper — vertical stack */
+.disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Hairline rule above the toggle — --canvas-3 */
+.disclosureRule {
+  border: none;
+  border-top: 1px solid var(--canvas-3);
+  margin: 0;
+}
+
+/* Toggle button — full-width, label + caret */
+.disclosureToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.disclosureToggle:hover {
+  color: var(--ink-2);
+}
+
+/* Caret — small, non-interactive */
+.disclosureCaret {
+  font-size: 0.625rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+/* Revealed content wrapper */
+.disclosureContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-top: 1rem;
+}
+
+/* ─── Funnel section ─── */
+
+/* Section wrapper */
+.funnelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Row list — no list markers */
+.funnelRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Individual row: stage · bar · number · delta · label */
+.funnelRow {
+  display: grid;
+  grid-template-columns: 9rem 1fr auto auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Stage label — straight from wire, quiet ink */
+.funnelStage {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bar track — full remaining width, muted bg */
+.funnelBarTrack {
+  height: 6px;
+  background: var(--canvas-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* Bar fill — amber (--action raw HSL triple) */
+.funnelBar {
+  height: 100%;
+  background: hsl(var(--action));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+/* Empty bar gets a lighter placeholder so it's still visible */
+.funnelBar[data-empty="true"] {
+  background: var(--canvas-3);
+}
+
+/* Count number — mono tabular */
+.funnelN {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Wire label (formatted string like "342k") — mono, quieter */
+.funnelLabel {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Narrative footer — editorial byline */
+.funnelNarrative {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ink-3);
+  font-style: italic;
+  margin: 0;
+}
+
+/* Narrative marker — agent + date, slightly emphasized */
+.funnelNarrativeMarker {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
 /* ─── Agent contribution ─── */
 
 /* Section wrapper */
