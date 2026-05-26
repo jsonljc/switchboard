@@ -101,23 +101,51 @@ describe("PrismaKnowledgeEntryStore", () => {
       };
       prisma.knowledgeEntry.findFirst.mockResolvedValue(existing);
       const newEntry = { ...existing, id: "ke_2", version: 2, title: "V2 Title" };
-      // #643: first element is now updateMany({count}) not update row; destructure
-      // discards the first element so the mock value is [{count:1}, newEntry].
-      prisma.$transaction.mockResolvedValue([{ count: 1 }, newEntry]);
+      // Interactive $transaction (#643 follow-up): runs the callback against a tx client.
+      prisma.$transaction.mockImplementation(async (cb: (tx: typeof prisma) => unknown) =>
+        cb(prisma),
+      );
+      prisma.knowledgeEntry.updateMany.mockResolvedValue({ count: 1 });
+      prisma.knowledgeEntry.create.mockResolvedValue(newEntry);
 
       const result = await store.update("ke_1", "org_test", { title: "V2 Title" });
 
       expect(result.version).toBe(2);
       expect(result.title).toBe("V2 Title");
       expect(result.content).toBe("V1 Content");
-      // $transaction is called with an array of promises; verify it was called once
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       // #643: the deactivating mutation carries organizationId in the WHERE (tenant-isolation).
       expect(prisma.knowledgeEntry.updateMany).toHaveBeenCalledWith({
         where: { id: "ke_1", organizationId: "org_test" },
         data: { active: false },
       });
+      expect(prisma.knowledgeEntry.create).toHaveBeenCalledTimes(1);
       expect(prisma.knowledgeEntry.update).not.toHaveBeenCalled();
+    });
+
+    it("throws and does NOT create a new version when the deactivation matches zero rows", async () => {
+      // TOCTOU guard (#643 follow-up): the row could be deleted/cross-org between the
+      // pre-fetch and the transaction. updateMany count===0 must abort BEFORE create,
+      // else two active versions result.
+      const existing = {
+        id: "ke_1",
+        organizationId: "org_test",
+        kind: "playbook",
+        scope: "update-test",
+        title: "V1",
+        content: "V1",
+        priority: 0,
+        version: 1,
+        active: true,
+      };
+      prisma.knowledgeEntry.findFirst.mockResolvedValue(existing);
+      prisma.$transaction.mockImplementation(async (cb: (tx: typeof prisma) => unknown) =>
+        cb(prisma),
+      );
+      prisma.knowledgeEntry.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.update("ke_1", "org_test", { title: "V2" })).rejects.toThrow(/not found/);
+      expect(prisma.knowledgeEntry.create).not.toHaveBeenCalled();
     });
 
     it("throws when entry not found", async () => {

@@ -68,13 +68,21 @@ export class PrismaKnowledgeEntryStore {
       throw new Error(`KnowledgeEntry ${id} not found for org ${orgId}`);
     }
 
-    // #643: scope the mutating WHERE by organizationId (the pre-fetch above already validated tenancy; store-layer defense-in-depth).
-    const [, newEntry] = await this.prisma.$transaction([
-      this.prisma.knowledgeEntry.updateMany({
+    // #643: scope the deactivation by organizationId (the pre-fetch above already
+    // validated tenancy; store-layer defense-in-depth). Interactive transaction so a
+    // zero-match deactivation (concurrent delete / cross-org TOCTOU between the
+    // pre-fetch and the tx) ABORTS before the create — otherwise we'd leave two active
+    // versions. (updateMany returns {count} and does not throw on no-match, unlike the
+    // unique-keyed update it replaced, so the count check restores the abort.)
+    const newEntry = await this.prisma.$transaction(async (tx) => {
+      const deactivated = await tx.knowledgeEntry.updateMany({
         where: { id, organizationId: orgId },
         data: { active: false },
-      }),
-      this.prisma.knowledgeEntry.create({
+      });
+      if (deactivated.count === 0) {
+        throw new Error(`KnowledgeEntry ${id} not found for org ${orgId}`);
+      }
+      return tx.knowledgeEntry.create({
         data: {
           organizationId: existing.organizationId,
           kind: existing.kind,
@@ -85,8 +93,8 @@ export class PrismaKnowledgeEntryStore {
           version: existing.version + 1,
           active: true,
         },
-      }),
-    ]);
+      });
+    });
 
     return newEntry;
   }

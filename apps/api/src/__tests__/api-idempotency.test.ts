@@ -65,6 +65,34 @@ describe("Idempotency Middleware", () => {
     expect(second.json()).toEqual(first.json());
   });
 
+  // Regression for #575 (follow-up): a dev/test replay with NO identity headers must
+  // still dedupe. The route-scoped buildDevAuthFallback defaults org/actor to "default"
+  // AFTER the idempotency check; the middleware now stashes the CHECK-time fingerprint
+  // and reuses it at store, so check and store are symmetric by construction even when
+  // identity is defaulted late. Before the stash fix the store leg recomputed the
+  // fingerprint with the late-defaulted "default" values → mismatch → spurious 409.
+  it("dedupes replay with no identity headers (late-defaulted org/actor stay symmetric)", async () => {
+    const headers = { "idempotency-key": "headerless-replay-key" };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers,
+      payload: proposePayload,
+    });
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers,
+      payload: proposePayload,
+    });
+
+    expect(second.statusCode).toBe(201);
+    expect(second.json()).toEqual(first.json());
+  });
+
   it("returns cached response for duplicate POST with same Idempotency-Key", async () => {
     const first = await app.inject({
       method: "POST",
