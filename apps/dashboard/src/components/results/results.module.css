@@ -35,6 +35,122 @@
   font-weight: 600;
 }
 
+/* ─── Hero outcomes ─── */
+
+/* Outer wrapper: vertical rhythm, borderless */
+.heroOutcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Revenue block: number + delta stacked, label beneath */
+.heroRevenue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* Primary revenue number — large mono, full ink */
+.heroRevenueNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2.5rem; /* 40px — large but not full editorial hero-num */
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+@media (min-width: 768px) {
+  .heroRevenueNum {
+    font-size: 3.5rem; /* 56px */
+  }
+}
+
+/* Revenue label — small caps mono, quiet */
+.heroRevenueLabel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 0.125rem;
+}
+
+/* Co-hero row: consults + ad spend side by side */
+.heroCoRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+/* Shared stat cell */
+.heroStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Consults number — co-hero, mono */
+.heroStatNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem; /* 28px */
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+@media (min-width: 768px) {
+  .heroStatNum {
+    font-size: 2.25rem; /* 36px */
+  }
+}
+
+/* Consults label */
+.heroStatLabel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 0.125rem;
+}
+
+/* Ad spend block — visually subordinate */
+.heroAdSpend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Ad spend number — smaller, muted */
+.heroAdSpendNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.125rem; /* 18px */
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink-3);
+}
+
+/* Ad spend label */
+.heroAdSpendLabel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 0.125rem;
+}
+
 /* ─── Verdict line ─── */
 
 /* Serif prose container (Newsreader via --font-home-serif, a complete stack value) */
