@@ -47,5 +47,9 @@ export interface Decision {
      * predating this field — UI treats absence as unsafe (requires confirmation).
      */
     riskContract?: RiskContract;
+    /** Enrichment (P1-C.2) — rendered if present, absent on current backend. */
+    replyPreview?: string;
+    /** Enrichment (P1-C.2) — rendered if present, absent on current backend. */
+    channel?: string;
   };
 }
