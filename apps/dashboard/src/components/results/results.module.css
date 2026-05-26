@@ -473,6 +473,309 @@
   color: var(--ink-2);
 }
 
+/* ─── Campaigns section ─── */
+
+/* Empty state line */
+.campaignEmpty {
+  font-size: 0.875rem;
+  color: var(--ink-4);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Desktop table ── */
+
+/* Scroll wrapper — horizontal scroll on narrow desktop */
+.campaignTableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.campaignTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+
+/* Header cells */
+.campaignTh,
+.campaignThSticky,
+.campaignThRoas {
+  padding: 0.375rem 0.5rem;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--canvas-3);
+  vertical-align: bottom;
+}
+
+.campaignThSticky {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--canvas-2);
+  z-index: 1;
+}
+
+.campaignThRoas {
+  min-width: 120px;
+}
+
+/* Sort buttons inside headers */
+.campaignSortBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0;
+  white-space: nowrap;
+  transition: color 0.12s ease;
+}
+
+.campaignSortBtn:hover {
+  color: var(--ink-2);
+}
+
+/* Body rows */
+.campaignRow:nth-child(even) {
+  background: var(--canvas-2);
+}
+
+.campaignRow:hover {
+  background: hsl(var(--action) / 0.06);
+}
+
+/* Sticky first column in body/footer */
+.campaignTdSticky {
+  position: sticky;
+  left: 0;
+  background: inherit;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  padding: 0.5rem 0.5rem;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+/* Numeric cells — right-aligned mono */
+.campaignTdNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  text-align: right;
+  padding: 0.5rem 0.5rem;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+/* ROAS cell — contains the bar */
+.campaignTdRoas {
+  padding: 0.5rem 0.5rem;
+  min-width: 120px;
+}
+
+/* Footer total row */
+.campaignFooterRow {
+  border-top: 1px solid var(--canvas-3);
+}
+
+.campaignFooterRow .campaignTdSticky {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.campaignFooterRow .campaignTdNum {
+  font-weight: 600;
+}
+
+/* ── ROAS bar (amber-only, never red/green) ── */
+
+.roasBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/* Bar track */
+.roasBar::before {
+  display: none; /* track via fill parent */
+}
+
+/* The whole roasBar element acts as the track */
+.roasBar {
+  position: relative;
+  height: 20px;
+  background: var(--canvas-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* Amber fill — width set inline */
+.roasBarFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: hsl(var(--action) / 0.55);
+  border-radius: 3px 0 0 3px;
+  transition: width 0.25s ease;
+}
+
+/* Label over the bar */
+.roasBarLabel {
+  position: relative;
+  z-index: 1;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 0 0.375rem;
+  white-space: nowrap;
+  line-height: 20px;
+}
+
+/* ── Mobile card list ── */
+
+/* Wrapper */
+.campaignCards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Sort chips row */
+.campaignMobileSortRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+/* Inactive sort chip */
+.campaignMobileSortChip {
+  background: none;
+  border: 1px solid var(--canvas-3);
+  border-radius: 99px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0.25rem 0.625rem;
+  white-space: nowrap;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.campaignMobileSortChip:hover {
+  color: var(--ink-2);
+  border-color: var(--ink-4);
+}
+
+/* Active sort chip */
+.campaignMobileSortActive {
+  background: hsl(var(--action) / 0.1);
+  border: 1px solid hsl(var(--action) / 0.35);
+  border-radius: 99px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--action));
+  padding: 0.25rem 0.625rem;
+  white-space: nowrap;
+}
+
+/* Card list — no bullets */
+.campaignCardList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Individual card */
+.campaignCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+}
+
+/* Card header: rank + name */
+.campaignCardHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* Rank number — quiet mono */
+.campaignCardRank {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-4);
+  flex-shrink: 0;
+}
+
+/* Campaign name */
+.campaignCardName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Stats grid: 3 columns */
+.campaignCardStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+}
+
+/* Stat cell */
+.campaignCardStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+/* Stat label */
+.campaignCardStatLabel {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Stat value */
+.campaignCardStatVal {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
 /* ─── Agent contribution ─── */
 
 /* Section wrapper */
