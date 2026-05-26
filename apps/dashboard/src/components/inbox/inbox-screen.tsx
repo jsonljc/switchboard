@@ -89,7 +89,7 @@ export function InboxScreen() {
   const all = useDecisionFeed(null);
 
   // Per-agent counts derived from the UNFILTERED feed's decisions
-  const unfiltered = (all.data?.decisions ?? []) as Decision[];
+  const unfiltered = all.data?.decisions ?? [];
   const counts = { total: unfiltered.length } as { total: number } & Partial<
     Record<AgentKey, number>
   >;
@@ -106,7 +106,7 @@ export function InboxScreen() {
     return <div className="inbox-loading">Loading…</div>;
   }
 
-  const decisions = (filtered.data?.decisions ?? []) as Decision[];
+  const decisions = filtered.data?.decisions ?? [];
 
   return (
     <>
