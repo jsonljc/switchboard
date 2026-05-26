@@ -28,4 +28,17 @@ describe("WhatsWorking", () => {
     expect(quiet.worstCampaign!.roas).toBeGreaterThanOrEqual(1);
     expect(container.textContent?.toLowerCase()).not.toContain("underwater");
   });
+  it("does not name the same campaign as both strongest and underwater (single spending campaign)", () => {
+    // One spending campaign with roas < 1 → best === worst; the laggard clause must be suppressed.
+    const single = buildResultsModel({
+      ...goodFixture,
+      campaigns: [
+        { ...goodFixture.campaigns[0], name: "Solo-Campaign", spend: 100, revenue: 50, roas: 0.5 },
+      ],
+    });
+    expect(single.bestCampaign).toBe(single.worstCampaign); // same reference
+    const { container } = render(<WhatsWorking model={single} />);
+    expect(container.textContent).toContain("Solo-Campaign"); // still named as strongest
+    expect(container.textContent?.toLowerCase()).not.toContain("underwater");
+  });
 });
