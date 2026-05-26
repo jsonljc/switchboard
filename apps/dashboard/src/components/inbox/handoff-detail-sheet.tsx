@@ -404,6 +404,37 @@ export function HandoffDetailSheet({
             )}
           </div>
         </section>
+
+        {/* 6. RESOLVE NOTE (collapsed by default) */}
+        {resolveOpen && (
+          <section className="ds-section ds-resolve-section">
+            <div className="ds-eyebrow">Mark resolved</div>
+            <textarea
+              className="ds-resolve-note"
+              rows={2}
+              placeholder="Optional — note what you did (audit log only)"
+              value={resolveNote}
+              onChange={(e) => setResolveNote(e.target.value)}
+            />
+            <div className="ds-resolve-actions">
+              <button
+                type="button"
+                className="ds-action ds-action-secondary"
+                onClick={() => setResolveOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ds-action ds-action-secondary ds-action-resolve"
+                onClick={() => void doResolve()}
+                disabled={resolving}
+              >
+                Mark resolved
+              </button>
+            </div>
+          </section>
+        )}
       </div>
 
       {/* Docked actions */}
@@ -425,37 +456,6 @@ export function HandoffDetailSheet({
           Send &amp; hand back to {agentName}
         </button>
       </footer>
-
-      {/* Resolve note (collapsed by default) — rendered after footer so it is last in DOM */}
-      {resolveOpen && (
-        <section className="ds-section ds-resolve-section">
-          <div className="ds-eyebrow">Mark resolved</div>
-          <textarea
-            className="ds-resolve-note"
-            rows={2}
-            placeholder="Optional — note what you did (audit log only)"
-            value={resolveNote}
-            onChange={(e) => setResolveNote(e.target.value)}
-          />
-          <div className="ds-resolve-actions">
-            <button
-              type="button"
-              className="ds-action ds-action-secondary"
-              onClick={() => setResolveOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="ds-action ds-action-secondary ds-action-resolve"
-              onClick={() => void doResolve()}
-              disabled={resolving}
-            >
-              Mark resolved
-            </button>
-          </div>
-        </section>
-      )}
     </SheetShell>
   );
 }

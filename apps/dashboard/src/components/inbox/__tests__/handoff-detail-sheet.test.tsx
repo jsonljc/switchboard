@@ -295,7 +295,7 @@ describe("HandoffDetailSheet — reply & resolve", () => {
   it("opens the resolve note, resolves, and closes", async () => {
     const onResolve = vi.fn(() => Promise.resolve());
     const onClose = vi.fn();
-    render(
+    const { container } = render(
       <HandoffDetailSheet
         decision={makeDecision()}
         onReply={noop}
@@ -304,12 +304,14 @@ describe("HandoffDetailSheet — reply & resolve", () => {
         nowMs={NOW}
       />,
     );
-    fireEvent.click(screen.getAllByRole("button", { name: /^mark resolved$/i })[0]);
+    // Footer toggle opens the resolve-note section.
+    fireEvent.click(screen.getByRole("button", { name: /^mark resolved$/i }));
     fireEvent.change(screen.getByPlaceholderText(/note what you did/i), {
       target: { value: "Closed by phone." },
     });
-    const resolveButtons = screen.getAllByRole("button", { name: /^mark resolved$/i });
-    fireEvent.click(resolveButtons[resolveButtons.length - 1]);
+    // Confirm button is the one INSIDE the resolve section (not the footer toggle).
+    const resolveSection = container.querySelector(".ds-resolve-section") as HTMLElement;
+    fireEvent.click(within(resolveSection).getByRole("button", { name: /^mark resolved$/i }));
     await waitFor(() => expect(onResolve).toHaveBeenCalledWith("Closed by phone."));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
