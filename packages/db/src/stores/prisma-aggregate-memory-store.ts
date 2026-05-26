@@ -123,7 +123,7 @@ export class PrismaAggregateMemoryStore implements AggregateScopedMemoryAccess {
     floor: number;
     startOfDay: Date;
   }): Promise<number> {
-    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // route-governance: store-mutation-global — daily cron-triggered cross-tenant pattern decay (inngest 0 7 * * *); no tenant context, intentionally system-wide.
     const result = await this.prisma.deploymentMemory.updateMany({
       where: {
         lastSeenAt: { lt: input.cutoffDate },

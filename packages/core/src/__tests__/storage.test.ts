@@ -158,17 +158,46 @@ describe("InMemoryPolicyStore", () => {
     expect(retrieved?.name).toBe("Updated Policy");
   });
 
-  it("should delete a policy", async () => {
-    const policy = makePolicy({ id: "pol_3" });
+  // #643: in-memory delete must scope by organizationId to match Prisma impl defense-in-depth.
+  it("should delete a policy when org matches", async () => {
+    const policy = makePolicy({ id: "pol_3", organizationId: "org_1" });
     await store.save(policy);
-    const deleted = await store.delete("pol_3");
+    const deleted = await store.delete("pol_3", "org_1");
     expect(deleted).toBe(true);
     const retrieved = await store.getById("pol_3");
     expect(retrieved).toBeNull();
   });
 
+  it("should delete a global policy when null org passed", async () => {
+    const policy = makePolicy({ id: "pol_global", organizationId: null });
+    await store.save(policy);
+    const deleted = await store.delete("pol_global", null);
+    expect(deleted).toBe(true);
+    const retrieved = await store.getById("pol_global");
+    expect(retrieved).toBeNull();
+  });
+
+  it("should return false when org mismatches (defense-in-depth)", async () => {
+    const policy = makePolicy({ id: "pol_mismatch", organizationId: "org_A" });
+    await store.save(policy);
+    const deleted = await store.delete("pol_mismatch", "org_B");
+    expect(deleted).toBe(false);
+    // Policy should still exist
+    const retrieved = await store.getById("pol_mismatch");
+    expect(retrieved).not.toBeNull();
+  });
+
+  it("should return false when caller passes null but policy has org (defense-in-depth)", async () => {
+    const policy = makePolicy({ id: "pol_null_mismatch", organizationId: "org_A" });
+    await store.save(policy);
+    const deleted = await store.delete("pol_null_mismatch", null);
+    expect(deleted).toBe(false);
+    const retrieved = await store.getById("pol_null_mismatch");
+    expect(retrieved).not.toBeNull();
+  });
+
   it("should return false when deleting non-existent policy", async () => {
-    const deleted = await store.delete("nonexistent");
+    const deleted = await store.delete("nonexistent", null);
     expect(deleted).toBe(false);
   });
 

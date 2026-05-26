@@ -9,6 +9,7 @@ function createMockPrisma() {
       update: vi.fn(),
       updateMany: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
       findMany: vi.fn(),
     },
   };
@@ -173,18 +174,40 @@ describe("PrismaPolicyStore", () => {
   });
 
   describe("delete", () => {
-    it("returns true on successful delete", async () => {
-      prisma.policy.delete.mockResolvedValue({});
+    // #643: delete must scope WHERE by organizationId (mirrors update defense-in-depth).
+    it("scopes delete WHERE by organizationId (TI defense-in-depth)", async () => {
+      prisma.policy.deleteMany.mockResolvedValue({ count: 1 });
 
-      const result = await store.delete("pol_1");
+      const result = await store.delete("pol_1", "org_1");
+
       expect(result).toBe(true);
-      expect(prisma.policy.delete).toHaveBeenCalledWith({ where: { id: "pol_1" } });
+      const callArgs = prisma.policy.deleteMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({ id: "pol_1", organizationId: "org_1" });
+      expect(prisma.policy.delete).not.toHaveBeenCalled();
     });
 
-    it("returns false when delete throws (record not found)", async () => {
-      prisma.policy.delete.mockRejectedValue(new Error("Record not found"));
+    it("scopes delete WHERE by organizationId=null for global policies", async () => {
+      prisma.policy.deleteMany.mockResolvedValue({ count: 1 });
 
-      const result = await store.delete("missing");
+      const result = await store.delete("pol_1", null);
+
+      expect(result).toBe(true);
+      const callArgs = prisma.policy.deleteMany.mock.calls[0]![0];
+      expect(callArgs.where).toEqual({ id: "pol_1", organizationId: null });
+      expect(prisma.policy.delete).not.toHaveBeenCalled();
+    });
+
+    it("returns false when count=0 (tenant mismatch or missing row)", async () => {
+      prisma.policy.deleteMany.mockResolvedValue({ count: 0 });
+
+      const result = await store.delete("pol_1", "org_X");
+      expect(result).toBe(false);
+    });
+
+    it("returns false when deleteMany throws", async () => {
+      prisma.policy.deleteMany.mockRejectedValue(new Error("DB error"));
+
+      const result = await store.delete("missing", "org_1");
       expect(result).toBe(false);
     });
   });

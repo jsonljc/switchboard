@@ -108,9 +108,12 @@ export class PrismaConnectionStore {
     }
   }
 
-  async delete(id: string): Promise<void> {
-    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
-    await this.prisma.connection.delete({ where: { id } });
+  async delete(id: string, organizationId: string | null): Promise<void> {
+    // #643: scope the delete WHERE by organizationId (mirrors updateStatus; the route pre-fetch validated tenancy). organizationId is nullable (null = global connection).
+    const result = await this.prisma.connection.deleteMany({ where: { id, organizationId } });
+    if (result.count === 0) {
+      throw new Error(`Connection not found or tenant mismatch: ${id}`);
+    }
   }
 }
 

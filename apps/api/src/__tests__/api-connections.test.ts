@@ -297,7 +297,8 @@ describe("Connections API", () => {
       expect(body.id).toBe("conn_1");
       expect(body.deleted).toBe(true);
 
-      expect(mockStore.delete).toHaveBeenCalledWith("conn_1");
+      // #643: the route now threads the validated org into the store delete (tenant-scoped deleteMany).
+      expect(mockStore.delete).toHaveBeenCalledWith("conn_1", "org_test");
     });
 
     it("returns 404 if connection not found", async () => {

@@ -240,7 +240,7 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
       }
 
-      await store.delete(id);
+      await store.delete(id, organizationId);
       return reply.code(200).send({ id, deleted: true });
     },
   );
