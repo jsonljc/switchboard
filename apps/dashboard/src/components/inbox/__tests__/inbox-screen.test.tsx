@@ -32,6 +32,49 @@ vi.mock("@/hooks/use-recommendation-action", () => ({
 
 vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
+const invalidateQueriesMock = vi.fn();
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }),
+  };
+});
+
+vi.mock("@/hooks/use-query-keys", () => ({
+  useScopedQueryKeys: () => ({
+    decisions: { all: () => ["org1", "decisions"] },
+    escalations: { all: () => ["org1", "escalations"] },
+  }),
+}));
+
+const escalationDetailState = {
+  data: {
+    escalation: {
+      id: "esc_9",
+      reason: "human_requested",
+      status: "pending",
+      conversationSummary: {},
+      leadSnapshot: { channel: "WhatsApp" },
+    },
+    conversationHistory: [],
+  },
+  isLoading: false,
+  isError: false,
+  refetch: vi.fn(),
+};
+vi.mock("@/hooks/use-escalation-detail", () => ({
+  useEscalationDetail: () => escalationDetailState,
+}));
+const sendMock = vi.fn(() => Promise.resolve({ ok: true, escalation: { id: "esc_9" } }));
+const resolveMock = vi.fn(() => Promise.resolve());
+vi.mock("@/hooks/use-escalation-reply", () => ({
+  useEscalationReply: () => ({ send: sendMock, isPending: false }),
+}));
+vi.mock("@/hooks/use-escalation-resolve", () => ({
+  useEscalationResolve: () => ({ resolve: resolveMock, isPending: false }),
+}));
+
 // Mock heavy deps to avoid sprite/canvas noise
 vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   InboxAgentAvatar: ({ agentKey }: { agentKey: string }) => (
@@ -133,6 +176,14 @@ function makeHandoff(overrides: Partial<Decision> = {}): Decision {
     ...overrides,
   };
 }
+
+const handoffDecision = makeHandoff({
+  id: "dec_h1",
+  agentKey: "riley",
+  humanSummary: "Maya is price-shopping the combo.",
+  sourceRef: { kind: "handoff", sourceId: "esc_9" },
+  meta: { slaDeadlineAt: "2026-05-25T09:53:00Z" },
+});
 
 // Shared test decisions
 const alexDecision = makeDecision({ id: "dec-alex-1", agentKey: "alex" });
@@ -319,33 +370,28 @@ describe("<InboxScreen>", () => {
     });
   });
 
-  // Test 7: handoff detail → GUARD
-  describe("(7) handoff detail renders guard, no dialog, no crash", () => {
-    it("renders the guard placeholder when a handoff card's primary is clicked", () => {
-      feedByKey = (_agentKey) => successFeed([rileyHandoff]);
+  // Test 7: handoff detail sheet (replaces guard)
+  describe("(7) handoff detail sheet opens when a handoff card is tapped", () => {
+    it("opens the handoff detail sheet when a handoff card is tapped (no guard placeholder)", () => {
+      feedByKey = () => ({
+        data: { decisions: [handoffDecision] },
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
 
       render(<InboxScreen />);
 
-      // The primary button on the handoff card is "Take this one"
-      const takeOverBtn = screen.getByRole("button", { name: "Take this one" });
+      // Open the detail the same way the approval-open test does: click the primary button
+      const takeOverBtn = screen.getByRole("button", { name: /take this one/i });
       fireEvent.click(takeOverBtn);
 
-      // Guard text renders
-      expect(screen.getByText("Handoff detail coming next.")).toBeInTheDocument();
-      // No dialog
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-
-    it("does not crash when a handoff's Why button is clicked", () => {
-      feedByKey = (_agentKey) => successFeed([rileyHandoff]);
-
-      render(<InboxScreen />);
-
-      const whyBtn = screen.getByRole("button", { name: /why/i });
-      fireEvent.click(whyBtn);
-
-      expect(screen.getByText("Handoff detail coming next.")).toBeInTheDocument();
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByText(/handoff detail coming next/i)).not.toBeInTheDocument();
+      // HandoffDetailSheet renders role="dialog"; the card also renders "is handing this to you"
+      // so assert via the dialog role to avoid getByText ambiguity
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute("data-kind", "handoff");
     });
   });
 
