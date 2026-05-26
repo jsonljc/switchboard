@@ -397,9 +397,9 @@ export class PlatformLifecycle {
 
     const completedAt = new Date().toISOString();
 
+    const orgId = (envelope?.proposals[0]?.parameters["_organizationId"] as string) ?? null;
     if (envelope) {
       const newStatus = executionResult.outcome === "completed" ? "executed" : "failed";
-      const orgId = (envelope.proposals[0]?.parameters["_organizationId"] as string) ?? null;
       await envelopeStore.update(workUnitId, { status: newStatus }, orgId);
     }
 
@@ -415,7 +415,7 @@ export class PlatformLifecycle {
         completedAt,
         injectedPatternIds: executionResult.injectedPatternIds ?? [],
       },
-      { caller: "platform_lifecycle.executeAfterApproval" },
+      { caller: "platform_lifecycle.executeAfterApproval", organizationId: orgId ?? undefined },
     );
     if (!updateResult.ok) {
       // The action has already executed (mode dispatch ran above). We cannot

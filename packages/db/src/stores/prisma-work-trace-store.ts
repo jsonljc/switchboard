@@ -411,7 +411,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
   async update(
     workUnitId: string,
     fields: Partial<WorkTrace>,
-    options?: { caller?: string },
+    options?: { caller?: string; organizationId?: string },
   ): Promise<WorkTraceUpdateResult> {
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.workTrace.findUnique({ where: { workUnitId } });
@@ -419,6 +419,16 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
         throw new Error(`WorkTrace not found: ${workUnitId}`);
       }
       const current = this.mapRowToTrace(row);
+      // Opt-in tenant tripwire (#643): when a caller supplies an expected org,
+      // a row owned by a different tenant is treated as not-found. The throw
+      // rolls back the transaction before any mutation. Omitting organizationId
+      // preserves the unscoped workUnitId path (PK-like unique key).
+      if (
+        options?.organizationId !== undefined &&
+        current.organizationId !== options.organizationId
+      ) {
+        throw new Error(`WorkTrace not found: ${workUnitId}`);
+      }
       const validation = validateUpdate({
         current,
         update: fields,
@@ -477,7 +487,9 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
           return { ok: true as const, trace: this.mapRowToTrace(row) };
         }
         // lockedAt-only: persist the lock, skip version bump + anchor.
-        // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+        // Keyed by the unique workUnitId (PK-like); tenant scoping is enforced
+        // by the opt-in organizationId tripwire above, not the WHERE clause.
+        // route-governance: store-mutation-global
         const updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
         return { ok: true as const, trace: this.mapRowToTrace(updatedRow) };
       }
@@ -493,7 +505,9 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       data.contentHash = nextHash;
       data.traceVersion = nextVersion;
 
-      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+      // Keyed by the unique workUnitId (PK-like); tenant scoping is enforced
+      // by the opt-in organizationId tripwire above, not the WHERE clause.
+      // route-governance: store-mutation-global
       const updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
 
       await this.auditLedger.record(

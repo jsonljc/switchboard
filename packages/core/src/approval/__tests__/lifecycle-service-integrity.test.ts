@@ -131,6 +131,7 @@ describe("ApprovalLifecycleService.rejectLifecycle — admission gate", () => {
           approvalOutcome: "rejected",
           approvalRespondedBy: "approver-1",
         }),
+        expect.objectContaining({ organizationId: "org-1" }),
       );
     });
   });

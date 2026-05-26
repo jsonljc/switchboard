@@ -608,6 +608,7 @@ describe("ApprovalLifecycleService", () => {
           approvalOutcome: "rejected",
           approvalRespondedBy: "approver-1",
         }),
+        expect.objectContaining({ organizationId: "org-1" }),
       );
     });
   });

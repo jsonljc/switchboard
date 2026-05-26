@@ -122,7 +122,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
         completedAt: completedAt.toISOString(),
         durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
       },
-      { caller: "ConversationStateStore.setOverride" },
+      { caller: "ConversationStateStore.setOverride", organizationId: input.organizationId },
     );
     if (!finalizeResult.ok) {
       console.warn(
