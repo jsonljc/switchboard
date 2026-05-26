@@ -16,7 +16,6 @@ export function ResultsHeader({
   cacheAgeMinutes,
   onRecompute,
   isRecomputing,
-  isLive: _isLive,
 }: {
   window: ReportWindow;
   onWindow: (w: ReportWindow) => void;
@@ -24,7 +23,6 @@ export function ResultsHeader({
   cacheAgeMinutes: number | null;
   onRecompute: () => void;
   isRecomputing: boolean;
-  isLive: boolean;
 }) {
   function recomputeLabel(): string {
     if (isRecomputing) return "Recomputing…";

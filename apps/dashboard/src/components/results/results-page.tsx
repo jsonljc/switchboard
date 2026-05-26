@@ -47,7 +47,9 @@ export function ResultsPage() {
 
   // ── Meta connection gate ───────────────────────────────────────────────────
   const { data: connections } = useConnections();
-  // TODO(verify serviceId): API resolver queries "meta"; confirm canonical id
+  // "meta-ads" is the canonical Connection serviceId (per cartridge-sdk service-registry).
+  // NOTE: the API report resolver (apps/api/src/routes/dashboard-reports.ts) queries "meta" — a
+  // separate API-side bug to fix before live mode; the dashboard is correct here.
   const metaConn = connections?.connections.find((c) => c.serviceId === "meta-ads");
   const showNoMeta = liveMode && (!metaConn || metaConn.status !== "connected");
 
@@ -68,7 +70,9 @@ export function ResultsPage() {
   // ── Body rendering (avoid inline IIFE — local fn for readability) ─────────
   function renderBody() {
     if (isLoading) return <ResultsSkeleton />;
-    if (!data) return <FirstRunNote />;
+    // On an initial fetch error there is no data; the ErrorBanner above explains it.
+    // Don't fall through to FirstRunNote — that would imply "no data yet" rather than "fetch failed".
+    if (!data) return error ? null : <FirstRunNote />;
 
     const model = buildResultsModel(data);
     const firstRun = model.attribution.total === 0 && model.bookings === 0;
@@ -105,7 +109,6 @@ export function ResultsPage() {
         cacheAgeMinutes={cacheAgeMinutes}
         onRecompute={() => void refresh()}
         isRecomputing={isRecomputing}
-        isLive={liveMode}
       />
       {error && (
         <ErrorBanner cacheAgeMinutes={cacheAgeMinutes ?? 0} onRetry={() => void refresh()} />
