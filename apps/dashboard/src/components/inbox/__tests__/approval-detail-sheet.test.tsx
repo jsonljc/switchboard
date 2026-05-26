@@ -280,6 +280,30 @@ describe("<ApprovalDetailSheet>", () => {
       expect(screen.getByRole("button", { name: /yes, send it…/i })).toBeInTheDocument();
     });
 
+    it("HIGH-RISK gate: riskLevel=high with requiresConfirmation:false requires confirm (canonical needsConfirm)", () => {
+      const highRiskNoConfirmFlag: RiskContract = {
+        riskLevel: "high",
+        externalEffect: false,
+        financialEffect: false,
+        clientFacing: false,
+        requiresConfirmation: false,
+      };
+      const { onCommit } = renderSheet(
+        makeDecision({ meta: { riskContract: highRiskNoConfirmFlag } }),
+      );
+      // Primary button label should have "…" suffix because mustConfirm is true
+      const primaryBtn = screen.getByRole("button", { name: /yes, send it…/i });
+      expect(primaryBtn).toBeInTheDocument();
+      // Clicking primary does NOT call onCommit — it opens ConfirmInline
+      fireEvent.click(primaryBtn);
+      expect(onCommit).not.toHaveBeenCalled();
+      // ConfirmInline step appears ("One last check" copy)
+      expect(screen.getByText(/one last check/i)).toBeInTheDocument();
+      // Clicking the affirmative ("Yes, …") in ConfirmInline calls onCommit
+      fireEvent.click(screen.getByRole("button", { name: /yes, yes, send it/i }));
+      expect(onCommit).toHaveBeenCalledTimes(1);
+    });
+
     it("resets confirming state when decision changes", () => {
       const dec1 = makeDecision({ id: "dec-1", meta: { riskContract: confirmContract } });
       const dec2 = makeDecision({ id: "dec-2", meta: { riskContract: confirmContract } });

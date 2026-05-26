@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import { relativeTime, undoableFor } from "@/lib/decisions/time";
 import { riskChips } from "@/lib/decisions/risk-chips";
+import { needsConfirm } from "@/lib/decisions/swipe-policy";
 import { InboxAgentAvatar } from "./inbox-agent-avatar";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
 
@@ -109,7 +110,7 @@ export function ApprovalDetailSheet({
   onDismiss,
 }: ApprovalDetailSheetProps) {
   const contract = decision.meta.riskContract;
-  const needsConfirm = !contract || contract.requiresConfirmation;
+  const mustConfirm = needsConfirm(contract);
   const chips = riskChips(contract);
   const undoableLabel = undoableFor(decision.meta.undoableUntil, nowMs);
 
@@ -125,7 +126,7 @@ export function ApprovalDetailSheet({
 
   const handlePrimary = () => {
     if (alreadyHandled) return;
-    if (needsConfirm && !confirming) {
+    if (mustConfirm && !confirming) {
       setConfirming(true);
       return;
     }
@@ -307,7 +308,7 @@ export function ApprovalDetailSheet({
               disabled={!!alreadyHandled}
               data-armed={alreadyHandled ? undefined : "ready"}
             >
-              {needsConfirm
+              {mustConfirm
                 ? `${decision.presentation.primaryLabel}…`
                 : decision.presentation.primaryLabel}
             </button>
