@@ -34,3 +34,34 @@
   font-size: 0.9375rem;
   font-weight: 600;
 }
+
+/* ─── Verdict line ─── */
+
+/* Serif prose container (Newsreader via --font-home-serif, a complete stack value) */
+.verdictLine {
+  font-family: var(--font-home-serif);
+  font-size: 1.25rem;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+/* Emphasized number spans: weight + amber hairline underline.
+   --action is a raw HSL triple, so wrap with hsl(). */
+.verdictEmphasis {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--action));
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Riley byline: quieter, italic attribution */
+.verdictByline {
+  display: block;
+  font-style: italic;
+  font-size: 0.875rem;
+  color: var(--ink-3);
+  margin-top: 0.5rem;
+}
