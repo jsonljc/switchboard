@@ -3,6 +3,8 @@
 
 import { useState } from "react";
 import { ApprovalCard } from "@/components/cockpit/approval-card";
+import { ConfirmSheet } from "@/components/decisions/swipe-decision-card";
+import { needsConfirm } from "@/lib/decisions/swipe-policy";
 import { useRespondToApproval } from "@/lib/cockpit/approvals/use-approvals";
 import { useToast } from "@/components/ui/use-toast";
 import { ALEX_VARIANTS, DEFAULT_ALEX_VARIANT } from "@/lib/cockpit/alex-config";
@@ -32,27 +34,18 @@ export function AlexApprovalRow({ approval, idx, total }: AlexApprovalRowProps) 
   const respond = useRespondToApproval();
   const { toast } = useToast();
   const [dismissed, setDismissed] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (dismissed) return null;
 
-  function handleResolve(verdict: "accept" | "decline") {
-    // The legacy adapter (`legacy-pending-approval-to-approval-view.ts:45`)
-    // currently emits only `primaryAction.kind === "respond"` for Alex; the
-    // `"internal"` branch is reserved for future kinds (e.g., escalation
-    // handoffs) and lands explicitly in A.7c when the rich adapter ships.
-    if (approval.primaryAction.kind !== "respond") {
-      // Defensive guard: when the rich adapter eventually emits
-      // `kind === "internal"` primary actions for Alex, the dispatch must go
-      // through `useAlexActionDispatcher` instead of `useRespondToApproval`.
-      // The legacy adapter currently never produces this branch on production
-      // data, so this path stays unreachable until the rich adapter is wired.
-      // eslint-disable-next-line no-console
-      console.warn(
-        `AlexApprovalRow: unsupported primaryAction.kind=${approval.primaryAction.kind}`,
-      );
-      return;
-    }
-
+  // Commit a resolved verdict via the respond mutation. Accept includes the
+  // bindingHash; decline omits it (`use-approvals.ts:113` forwards bindingHash
+  // only when action !== "reject"). Optimistically hides the card, reverting on
+  // error. Per spec criterion 6 (toast voice): emit the view's acceptToast /
+  // declineToast copy when populated, else the generic "Approved"/"Declined" —
+  // the single-owner-toast doctrine: the row owns this, not the shared card.
+  function dispatch(verdict: "accept" | "decline") {
+    if (approval.primaryAction.kind !== "respond") return; // narrowed; guarded in handleResolve
     setDismissed(true); // optimistic
     const input =
       verdict === "accept"
@@ -66,11 +59,6 @@ export function AlexApprovalRow({ approval, idx, total }: AlexApprovalRowProps) 
             action: "reject" as const,
           };
 
-    // Per spec criterion 6 (toast voice): emit the view's `acceptToast` /
-    // `declineToast` copy when the adapter has populated it; otherwise fall
-    // back to the generic "Approved" / "Declined" voice. This is the
-    // single-owner-toast doctrine — the row owns this translation, not the
-    // shared ApprovalCard or the cockpit page.
     const successTitle =
       verdict === "accept"
         ? (approval.acceptToast ?? "Approved")
@@ -94,15 +82,58 @@ export function AlexApprovalRow({ approval, idx, total }: AlexApprovalRowProps) 
     });
   }
 
+  function handleResolve(verdict: "accept" | "decline") {
+    // The legacy adapter (`legacy-pending-approval-to-approval-view.ts:45`)
+    // currently emits only `primaryAction.kind === "respond"` for Alex; the
+    // `"internal"` branch is reserved for future kinds (e.g., escalation
+    // handoffs) and lands explicitly in A.7c when the rich adapter ships.
+    if (approval.primaryAction.kind !== "respond") {
+      // Defensive guard: when the rich adapter eventually emits
+      // `kind === "internal"` primary actions for Alex, the dispatch must go
+      // through `useAlexActionDispatcher` instead of `useRespondToApproval`.
+      // The legacy adapter currently never produces this branch on production
+      // data, so this path stays unreachable until the rich adapter is wired.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `AlexApprovalRow: unsupported primaryAction.kind=${approval.primaryAction.kind}`,
+      );
+      return;
+    }
+    if (verdict === "accept") {
+      // Safety gate (mirrors the #696 InboxDrawer fix): the cockpit view-model
+      // carries no risk contract, so this is the missing-contract ⇒ unsafe path
+      // — require an explicit confirm before committing. No approval commits in
+      // a single tap on the legacy cockpit. Decline is always allowed.
+      if (needsConfirm(approval.riskContract)) {
+        setConfirmOpen(true);
+        return;
+      }
+    }
+    dispatch(verdict);
+  }
+
   return (
-    <ApprovalCard
-      data={approval}
-      idx={idx}
-      total={total}
-      onResolve={(verdict) => handleResolve(verdict)}
-      senderLabel="Alex needs you"
-      bundle={ALEX_VARIANTS}
-      variant={DEFAULT_ALEX_VARIANT}
-    />
+    <>
+      <ApprovalCard
+        data={approval}
+        idx={idx}
+        total={total}
+        onResolve={(verdict) => handleResolve(verdict)}
+        senderLabel="Alex needs you"
+        bundle={ALEX_VARIANTS}
+        variant={DEFAULT_ALEX_VARIANT}
+      />
+      <ConfirmSheet
+        open={confirmOpen}
+        agentName="Alex"
+        summary={approval.title}
+        affirmativeLabel={approval.primary}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          dispatch("accept");
+        }}
+      />
+    </>
   );
 }

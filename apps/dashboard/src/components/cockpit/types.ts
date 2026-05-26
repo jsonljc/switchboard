@@ -1,3 +1,5 @@
+import type { RiskContract } from "@/lib/decisions/types";
+
 export type CockpitStatus =
   | "IDLE"
   | "WORKING"
@@ -51,6 +53,12 @@ interface ApprovalViewBase {
   tertiaryLabel?: string;
   acceptToast?: string;
   declineToast?: string;
+  /**
+   * Five-field risk contract, when known. Absent on cockpit view-models today
+   * (the recommendation→view adapters don't thread it), so the approval rows
+   * treat absence as unsafe → require an explicit confirm before committing.
+   */
+  riskContract?: RiskContract;
 }
 
 export type AlexApprovalView = ApprovalViewBase & {

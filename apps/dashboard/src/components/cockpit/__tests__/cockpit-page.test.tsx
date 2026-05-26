@@ -163,7 +163,7 @@ describe("CockpitPage", () => {
     expect(screen.getByText("Second decision")).toBeInTheDocument();
   });
 
-  it("clicking Accept on an approval row dispatches useRespondToApproval.mutate", () => {
+  it("clicking Accept on an approval row requires confirmation, then dispatches useRespondToApproval.mutate", () => {
     respondMutateMock.mockClear();
     const now = new Date().toISOString();
     pendingApprovalsData = [
@@ -180,6 +180,9 @@ describe("CockpitPage", () => {
     ];
     render(<CockpitPage />);
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    // Safety gate: a single Accept tap opens a confirm step — nothing commits yet.
+    expect(respondMutateMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /^yes,/i }));
     expect(respondMutateMock).toHaveBeenCalledTimes(1);
     expect(respondMutateMock.mock.calls[0]?.[0]).toEqual({
       id: "appr-1",

@@ -59,15 +59,33 @@ describe("AlexApprovalRow", () => {
     toastMock.mockReset();
   });
 
-  it("dispatches mutate({ action: 'approve', bindingHash }) on Accept", () => {
+  it("requires confirmation before Accept dispatches mutate({ action: 'approve', bindingHash })", () => {
     render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    // Safety gate: the first tap opens a confirm step — nothing commits yet.
+    expect(mockMutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /yes, accept/i }));
     expect(mockMutate).toHaveBeenCalledTimes(1);
     expect(mockMutate.mock.calls[0]?.[0]).toEqual({
       id: "appr_1",
       action: "approve",
       bindingHash: "h1",
     });
+  });
+
+  it("does NOT commit on a single Accept tap — opens a confirm step instead", () => {
+    render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: /confirm — alex/i })).toBeInTheDocument();
+  });
+
+  it("cancelling the confirm step aborts Accept without committing", () => {
+    render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(screen.getByRole("button", { name: /not now/i }));
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: /confirm — alex/i })).not.toBeInTheDocument();
   });
 
   it("dispatches mutate({ action: 'reject' }) on Decline without bindingHash", () => {
@@ -90,6 +108,7 @@ describe("AlexApprovalRow", () => {
     render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
     expect(screen.getByText("Refund request")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, accept/i }));
     await waitFor(() => {
       expect(screen.queryByText("Refund request")).not.toBeInTheDocument();
     });
@@ -104,6 +123,7 @@ describe("AlexApprovalRow", () => {
     });
     render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, accept/i }));
     // Card stays visible — the optimistic dismiss is reverted on error.
     await waitFor(() => {
       expect(screen.getByText("Refund request")).toBeInTheDocument();
@@ -125,6 +145,7 @@ describe("AlexApprovalRow", () => {
     const approval: AlexApprovalView = { ...baseApproval, acceptToast: "Refund processed" };
     render(wrap(<AlexApprovalRow approval={approval} idx={0} total={1} />));
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, accept/i }));
     expect(toastMock).toHaveBeenCalledTimes(1);
     const toastArg = toastMock.mock.calls[0]?.[0] as { title: string };
     expect(toastArg.title).toBe("Refund processed");
@@ -148,6 +169,7 @@ describe("AlexApprovalRow", () => {
     });
     render(wrap(<AlexApprovalRow approval={baseApproval} idx={0} total={1} />));
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, accept/i }));
     const toastArg = toastMock.mock.calls[0]?.[0] as { title: string };
     expect(toastArg.title).toBe("Approved");
   });

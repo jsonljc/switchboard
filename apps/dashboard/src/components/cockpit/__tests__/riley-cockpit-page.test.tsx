@@ -261,12 +261,30 @@ describe("RileyCockpitPage — B.3 voice + accent", () => {
     expect(acceptButton).not.toHaveStyle({ background: "#3F8C86" }); // RILEY_ACCENT.base (teal)
   });
 
-  it("clicking accept on the first card calls primary() bound to rec-1 and fires its acceptToast", async () => {
+  it("requires confirmation before accept commits, then calls primary() bound to rec-1 and fires its acceptToast", async () => {
     render(<RileyCockpitPage />);
     fireEvent.click(screen.getByText("Pause"));
+    // Safety gate: the first tap opens an explicit confirm step — nothing commits yet.
+    expect(actionCalls).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: /yes, pause/i }));
     await Promise.resolve();
     expect(actionCalls).toEqual([{ id: "rec-1", verb: "primary" }]);
     expect(toast).toHaveBeenCalledWith({ title: "Paused Cold Interests. Standing by." });
+  });
+
+  it("does NOT commit a money action on a single accept tap — opens a confirm step instead", () => {
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Pause"));
+    expect(actionCalls).toEqual([]);
+    expect(screen.getByRole("dialog", { name: /confirm — riley/i })).toBeInTheDocument();
+  });
+
+  it("cancelling the confirm step aborts without committing", () => {
+    render(<RileyCockpitPage />);
+    fireEvent.click(screen.getByText("Pause"));
+    fireEvent.click(screen.getByRole("button", { name: /not now/i }));
+    expect(actionCalls).toEqual([]);
+    expect(screen.queryByRole("dialog", { name: /confirm — riley/i })).not.toBeInTheDocument();
   });
 
   it("clicking decline on the first card calls dismiss() bound to rec-1 and fires its declineToast", async () => {
@@ -277,9 +295,10 @@ describe("RileyCockpitPage — B.3 voice + accent", () => {
     expect(toast).toHaveBeenCalledWith({ title: "Leaving Cold Interests running." });
   });
 
-  it("clicking accept on the second card calls primary() bound to rec-2 (per-row hook binding)", async () => {
+  it("confirming accept on the second card calls primary() bound to rec-2 (per-row hook binding)", async () => {
     render(<RileyCockpitPage />);
     fireEvent.click(screen.getByText("Scale 20%"));
+    fireEvent.click(screen.getByRole("button", { name: /yes, scale 20%/i }));
     await Promise.resolve();
     expect(actionCalls).toEqual([{ id: "rec-2", verb: "primary" }]);
   });
@@ -287,6 +306,7 @@ describe("RileyCockpitPage — B.3 voice + accent", () => {
   it("falls back to per-kind rileyToast copy when engine omitted acceptToast / declineToast", async () => {
     render(<RileyCockpitPage />);
     fireEvent.click(screen.getByText("Scale 20%"));
+    fireEvent.click(screen.getByRole("button", { name: /yes, scale 20%/i }));
     await Promise.resolve();
     expect(toast).toHaveBeenCalledWith({ title: "Scaling — back to scanning." });
   });
@@ -322,6 +342,7 @@ describe("RileyCockpitPage — B.3 voice + accent", () => {
     mockConfig.rejectPrimary = true;
     render(<RileyCockpitPage />);
     fireEvent.click(screen.getByText("Pause"));
+    fireEvent.click(screen.getByRole("button", { name: /yes, pause/i }));
     await Promise.resolve();
     await Promise.resolve();
     expect(actionCalls).toEqual([{ id: "rec-1", verb: "primary" }]);

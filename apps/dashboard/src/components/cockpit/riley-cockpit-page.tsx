@@ -31,6 +31,8 @@ import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
 import { useToast } from "@/components/ui/use-toast";
+import { ConfirmSheet } from "@/components/decisions/swipe-decision-card";
+import { needsConfirm } from "@/lib/decisions/swipe-policy";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { metricsViewModelToRileyKpiData } from "@/lib/cockpit/riley/metrics-to-kpi-data";
 import type { CockpitKpiData, RileyApprovalView } from "./types";
@@ -60,34 +62,70 @@ function RileyApprovalRow({
 }) {
   const action = useRecommendationAction(approval.id);
   const { toast } = useToast();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Commit the accept. Success-only toast — the error state surfaces via
+  // TanStack Query (`useRecommendationAction.error`); swallow here so the toast
+  // never fires on rejection.
+  const commit = () => {
+    void action
+      .primary()
+      .then(() => {
+        toast(rileyToast({ verdict: "accept", approval }));
+      })
+      .catch(() => {});
+  };
 
   const onResolve = (verdict: "accept" | "decline", _idx: number) => {
     if (verdict === "accept" && approval.primaryAction.kind === "external") {
       window.open(approval.primaryAction.url, "_blank", "noopener,noreferrer");
       return;
     }
-    const promise = verdict === "accept" ? action.primary() : action.dismiss();
-    void promise
+    if (verdict === "accept") {
+      // Safety gate (mirrors the #696 InboxDrawer fix): the cockpit view-model
+      // carries no risk contract, so this is the missing-contract ⇒ unsafe path
+      // — require an explicit confirm before committing. No money / ad-platform
+      // action can commit in a single tap on the legacy cockpit.
+      if (needsConfirm(approval.riskContract)) {
+        setConfirmOpen(true);
+        return;
+      }
+      commit();
+      return;
+    }
+    void action
+      .dismiss()
       .then(() => {
         toast(rileyToast({ verdict, approval }));
       })
-      // Error state surfaces via TanStack Query (`useRecommendationAction.error`);
-      // swallow here so success-only toast never fires on rejection.
       .catch(() => {});
   };
 
   return (
-    <ApprovalCard
-      data={approval}
-      idx={idx}
-      total={total}
-      onResolve={onResolve}
-      accent={RILEY_APPROVAL_ACCENT}
-      senderLabel="Riley needs you"
-      bundle={RILEY_VARIANTS}
-      variant={DEFAULT_RILEY_VARIANT}
-      avatarLetter="R"
-    />
+    <>
+      <ApprovalCard
+        data={approval}
+        idx={idx}
+        total={total}
+        onResolve={onResolve}
+        accent={RILEY_APPROVAL_ACCENT}
+        senderLabel="Riley needs you"
+        bundle={RILEY_VARIANTS}
+        variant={DEFAULT_RILEY_VARIANT}
+        avatarLetter="R"
+      />
+      <ConfirmSheet
+        open={confirmOpen}
+        agentName="Riley"
+        summary={approval.quote ?? approval.title}
+        affirmativeLabel={approval.primary}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          commit();
+        }}
+      />
+    </>
   );
 }
 
