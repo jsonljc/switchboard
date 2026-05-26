@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -216,12 +216,15 @@ describe("<InboxScreen>", () => {
       const alexChip = screen.getByRole("button", { name: /Alex/ });
       const rileyChip = screen.getByRole("button", { name: /Riley/ });
 
-      expect(alexChip).toBeInTheDocument();
-      expect(rileyChip).toBeInTheDocument();
+      // Assert the actual count VALUES, not just chip presence — an all-zeros
+      // regression in the counts derivation must fail this test (day-one chips
+      // render even at count 0, so presence alone would not catch it).
+      expect(within(alexChip).getByText("1")).toBeInTheDocument();
+      expect(within(rileyChip).getByText("2")).toBeInTheDocument();
 
       // The "All" chip shows total = 3
       const allChip = screen.getByRole("button", { name: /All/ });
-      expect(allChip).toBeInTheDocument();
+      expect(within(allChip).getByText("3")).toBeInTheDocument();
     });
   });
 
