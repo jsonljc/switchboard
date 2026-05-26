@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["**/*.test.ts"],
+    // `.agent/**` runs under its own config/deps (not a workspace member) via the
+    // CI "Validator self-tests" step in the `architecture` job — NOT untested.
+    // `apps/dashboard` + `evals` likewise have their own runners.
     exclude: ["**/node_modules/**", "apps/dashboard/**", ".agent/**", "evals/**"],
     passWithNoTests: true,
     pool: "forks",
