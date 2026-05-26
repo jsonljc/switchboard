@@ -6,6 +6,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaDeploymentMemoryStore, PrismaOwnerMemoryStore } from "@switchboard/db";
 import { z } from "zod";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 const CorrectMemoryInput = z.object({
   content: z.string().min(1),
@@ -13,6 +14,19 @@ const CorrectMemoryInput = z.object({
 });
 
 export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
+  // Tenant-isolation guard (A1). Every route in this plugin is scoped to a path
+  // :orgId and passes it straight to the store. Without this guard a principal
+  // authenticated for org A could read or mutate org B's learned memory and
+  // FAQ-draft knowledge chunks just by changing the path orgId. Reject any
+  // request whose authenticated org does not match the path orgId BEFORE the
+  // handler (and therefore the data layer) runs. Mirrors the per-handler
+  // assertOrgAccess discipline in organizations.ts / governance.ts, hoisted to
+  // a plugin hook so no endpoint can be added without the check.
+  app.addHook("preHandler", async (request, reply) => {
+    const { orgId } = request.params as { orgId?: string };
+    if (!assertOrgAccess(request, orgId, reply)) return reply;
+  });
+
   // List all learned memories for a deployment
   app.get<{
     Params: { orgId: string; deploymentId: string };
