@@ -31,7 +31,6 @@ function FilterChip({ label, count, pressed, onClick, agentKey }: FilterChipProp
       type="button"
       className="inbox-filter-chip"
       data-agent={agentKey ?? "all"}
-      role="tab"
       aria-pressed={pressed}
       onClick={onClick}
     >
@@ -54,7 +53,7 @@ function FilterChip({ label, count, pressed, onClick, agentKey }: FilterChipProp
  */
 export function InboxFilterRow({ counts, selected, onSelect }: InboxFilterRowProps) {
   return (
-    <div className="inbox-filter" role="tablist" aria-label="Filter by teammate">
+    <div className="inbox-filter" role="group" aria-label="Filter by teammate">
       <FilterChip
         label="All"
         count={counts.total}

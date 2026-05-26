@@ -11,9 +11,9 @@ describe("<InboxFilterRow>", () => {
         onSelect={() => {}}
       />,
     );
-    expect(screen.getByRole("tab", { name: /All/ })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /Alex/ })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /Riley/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /All/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Alex/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Riley/ })).toBeInTheDocument();
   });
 
   it("does NOT render the Mira chip when her count is 0", () => {
@@ -24,7 +24,7 @@ describe("<InboxFilterRow>", () => {
         onSelect={() => {}}
       />,
     );
-    expect(screen.queryByRole("tab", { name: /Mira/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Mira/ })).toBeNull();
   });
 
   it("renders the Mira chip when her count is > 0", () => {
@@ -35,7 +35,7 @@ describe("<InboxFilterRow>", () => {
         onSelect={() => {}}
       />,
     );
-    expect(screen.getByRole("tab", { name: /Mira/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mira/ })).toBeInTheDocument();
   });
 
   it("calls onSelect(null) when the All chip is clicked", () => {
@@ -47,7 +47,7 @@ describe("<InboxFilterRow>", () => {
         onSelect={onSelect}
       />,
     );
-    fireEvent.click(screen.getByRole("tab", { name: /All/ }));
+    fireEvent.click(screen.getByRole("button", { name: /All/ }));
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
@@ -60,7 +60,7 @@ describe("<InboxFilterRow>", () => {
         onSelect={onSelect}
       />,
     );
-    fireEvent.click(screen.getByRole("tab", { name: /Alex/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Alex/ }));
     expect(onSelect).toHaveBeenCalledWith("alex");
   });
 
@@ -72,8 +72,8 @@ describe("<InboxFilterRow>", () => {
         onSelect={() => {}}
       />,
     );
-    expect(screen.getByRole("tab", { name: /All/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("tab", { name: /Alex/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /All/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Alex/ })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("marks the selected agent chip aria-pressed", () => {
@@ -84,7 +84,7 @@ describe("<InboxFilterRow>", () => {
         onSelect={() => {}}
       />,
     );
-    expect(screen.getByRole("tab", { name: /Riley/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("tab", { name: /All/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /Riley/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /All/ })).toHaveAttribute("aria-pressed", "false");
   });
 });
