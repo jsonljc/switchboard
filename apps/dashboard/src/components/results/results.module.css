@@ -1,0 +1,1337 @@
+/* Results screen styles.
+   Tokens consumed from globals.css :root.
+   NO :root block here — globals.css is shared across worktrees.
+   NO red/green. Warm operational editorial: amber is the ONE positive signal. */
+
+/* ─── Delta badge ─── */
+.delta {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Positive: amber depth (--action is a raw HSL triple, wrap with hsl()) */
+.deltaPos {
+  color: hsl(var(--action));
+}
+
+/* Negative: muted ink (--ink-3 is already a complete hsl() value, use bare) */
+.deltaNeg {
+  color: var(--ink-3);
+}
+
+/* Flat: quieter muted ink (--ink-4 is already a complete hsl() value, use bare) */
+.deltaFlat {
+  color: var(--ink-4);
+}
+
+/* Large variant — used on hero/primary metric displays */
+.deltaLg {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* ─── Hero outcomes ─── */
+
+/* Outer wrapper: vertical rhythm, borderless */
+.heroOutcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Revenue block: number + delta stacked, label beneath */
+.heroRevenue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* Primary revenue number — large mono, full ink */
+.heroRevenueNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2.5rem; /* 40px — large but not full editorial hero-num */
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+@media (min-width: 768px) {
+  .heroRevenueNum {
+    font-size: 3.5rem; /* 56px */
+  }
+}
+
+/* Revenue label — small caps mono, quiet */
+.heroRevenueLabel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 0.125rem;
+}
+
+/* Co-hero row: consults + ad spend side by side */
+.heroCoRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+/* Shared stat cell */
+.heroStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Consults number — co-hero, mono */
+.heroStatNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem; /* 28px */
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+@media (min-width: 768px) {
+  .heroStatNum {
+    font-size: 2.25rem; /* 36px */
+  }
+}
+
+/* Consults label */
+.heroStatLabel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 0.125rem;
+}
+
+/* Ad spend block — visually subordinate */
+.heroAdSpend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Ad spend number — smaller, muted */
+.heroAdSpendNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.125rem; /* 18px */
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink-3);
+}
+
+/* Ad spend label */
+.heroAdSpendLabel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 0.125rem;
+}
+
+/* ─── What's working ─── */
+
+/* Outer wrapper */
+.whatsWorking {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Funnel narrative — warm serif prose */
+.whatsWorkingNarrative {
+  font-family: var(--font-home-serif);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* Riley byline: quieter italic attribution */
+.whatsWorkingByline {
+  display: block;
+  font-style: italic;
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  margin-top: 0.375rem;
+}
+
+/* Campaign insight line — same warm serif register */
+.whatsWorkingCampaign {
+  font-family: var(--font-home-serif);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* Campaign name emphasis: amber hairline underline, no red/green */
+.whatsWorkingEmphasis {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--action));
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* ─── Verdict line ─── */
+
+/* Serif prose container (Newsreader via --font-home-serif, a complete stack value) */
+.verdictLine {
+  font-family: var(--font-home-serif);
+  font-size: 1.25rem;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+/* Emphasized number spans: weight + amber hairline underline.
+   --action is a raw HSL triple, so wrap with hsl(). */
+.verdictEmphasis {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--action));
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Riley byline: quieter, italic attribution */
+.verdictByline {
+  display: block;
+  font-style: italic;
+  font-size: 0.875rem;
+  color: var(--ink-3);
+  margin-top: 0.5rem;
+}
+
+/* ─── Worth it (cost vs value) ─── */
+
+/* Section wrapper */
+.worthIt {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Eyebrow label — small caps mono */
+.worthItEyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Three cells in a row; stack on narrow */
+.worthItCells {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 560px) {
+  .worthItCells {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+}
+
+/* Individual cost cell */
+.worthItCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Cost number — mono tabular, co-weighted ("You pay" and "You saved" share this scale) */
+.worthItNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+@media (min-width: 768px) {
+  .worthItNum {
+    font-size: 2.25rem;
+  }
+}
+
+/* Amber emphasis on "You saved" — colour only, NOT size bump (co-weight rule) */
+.worthItNumAmber {
+  color: hsl(var(--action));
+}
+
+/* Cell label — small caps mono, quiet */
+.worthItLabel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 0.125rem;
+}
+
+/* Explicit "market-rate estimate" qualifier — italic, quieter */
+.worthItEstimate {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--ink-3);
+  margin-top: 0.0625rem;
+}
+
+/* Narrative — warm serif italic prose */
+.worthItNarrative {
+  font-family: var(--font-home-serif);
+  font-size: 1.0625rem;
+  font-style: italic;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* ─── Details disclosure ─── */
+
+/* Outer wrapper — vertical stack */
+.disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Hairline rule above the toggle — --canvas-3 */
+.disclosureRule {
+  border: none;
+  border-top: 1px solid var(--canvas-3);
+  margin: 0;
+}
+
+/* Toggle button — full-width, label + caret */
+.disclosureToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.disclosureToggle:hover {
+  color: var(--ink-2);
+}
+
+/* Caret — small, non-interactive */
+.disclosureCaret {
+  font-size: 0.625rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+/* Revealed content wrapper */
+.disclosureContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-top: 1rem;
+}
+
+/* ─── Funnel section ─── */
+
+/* Section wrapper */
+.funnelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Row list — no list markers */
+.funnelRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Individual row: stage · bar · number · delta · label */
+.funnelRow {
+  display: grid;
+  grid-template-columns: 9rem 1fr auto auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Stage label — straight from wire, quiet ink */
+.funnelStage {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bar track — full remaining width, muted bg */
+.funnelBarTrack {
+  height: 6px;
+  background: var(--canvas-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* Bar fill — amber (--action raw HSL triple) */
+.funnelBar {
+  height: 100%;
+  background: hsl(var(--action));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+/* Empty bar gets a lighter placeholder so it's still visible */
+.funnelBar[data-empty="true"] {
+  background: var(--canvas-3);
+}
+
+/* Count number — mono tabular */
+.funnelN {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Wire label (formatted string like "342k") — mono, quieter */
+.funnelLabel {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Narrative footer — editorial byline */
+.funnelNarrative {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ink-3);
+  font-style: italic;
+  margin: 0;
+}
+
+/* Narrative marker — agent + date, slightly emphasized */
+.funnelNarrativeMarker {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* ─── Campaigns section ─── */
+
+/* Empty state line */
+.campaignEmpty {
+  font-size: 0.875rem;
+  color: var(--ink-4);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Desktop table ── */
+
+/* Scroll wrapper — horizontal scroll on narrow desktop */
+.campaignTableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.campaignTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+
+/* Header cells */
+.campaignTh,
+.campaignThSticky,
+.campaignThRoas {
+  padding: 0.375rem 0.5rem;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--canvas-3);
+  vertical-align: bottom;
+}
+
+.campaignThSticky {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--canvas-2);
+  z-index: 1;
+}
+
+.campaignThRoas {
+  min-width: 120px;
+}
+
+/* Sort buttons inside headers */
+.campaignSortBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0;
+  white-space: nowrap;
+  transition: color 0.12s ease;
+}
+
+.campaignSortBtn:hover {
+  color: var(--ink-2);
+}
+
+/* Body rows */
+.campaignRow:nth-child(even) {
+  background: var(--canvas-2);
+}
+
+.campaignRow:hover {
+  background: hsl(var(--action) / 0.06);
+}
+
+/* Sticky first column in body/footer */
+.campaignTdSticky {
+  position: sticky;
+  left: 0;
+  background: inherit;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  padding: 0.5rem 0.5rem;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+/* Numeric cells — right-aligned mono */
+.campaignTdNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  text-align: right;
+  padding: 0.5rem 0.5rem;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+/* ROAS cell — contains the bar */
+.campaignTdRoas {
+  padding: 0.5rem 0.5rem;
+  min-width: 120px;
+}
+
+/* Footer total row */
+.campaignFooterRow {
+  border-top: 1px solid var(--canvas-3);
+}
+
+.campaignFooterRow .campaignTdSticky {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.campaignFooterRow .campaignTdNum {
+  font-weight: 600;
+}
+
+/* ── ROAS bar (amber-only, never red/green) ── */
+
+.roasBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/* Bar track */
+.roasBar::before {
+  display: none; /* track via fill parent */
+}
+
+/* The whole roasBar element acts as the track */
+.roasBar {
+  position: relative;
+  height: 20px;
+  background: var(--canvas-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* Amber fill — width set inline */
+.roasBarFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: hsl(var(--action) / 0.55);
+  border-radius: 3px 0 0 3px;
+  transition: width 0.25s ease;
+}
+
+/* Label over the bar */
+.roasBarLabel {
+  position: relative;
+  z-index: 1;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 0 0.375rem;
+  white-space: nowrap;
+  line-height: 20px;
+}
+
+/* ── Mobile card list ── */
+
+/* Wrapper */
+.campaignCards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Sort chips row */
+.campaignMobileSortRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+/* Inactive sort chip */
+.campaignMobileSortChip {
+  background: none;
+  border: 1px solid var(--canvas-3);
+  border-radius: 99px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0.25rem 0.625rem;
+  white-space: nowrap;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.campaignMobileSortChip:hover {
+  color: var(--ink-2);
+  border-color: var(--ink-4);
+}
+
+/* Active sort chip */
+.campaignMobileSortActive {
+  background: hsl(var(--action) / 0.1);
+  border: 1px solid hsl(var(--action) / 0.35);
+  border-radius: 99px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--action));
+  padding: 0.25rem 0.625rem;
+  white-space: nowrap;
+}
+
+/* Card list — no bullets */
+.campaignCardList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Individual card */
+.campaignCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: transparent;
+}
+
+/* Card header: rank + name */
+.campaignCardHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* Rank number — quiet mono */
+.campaignCardRank {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--ink-4);
+  flex-shrink: 0;
+}
+
+/* Campaign name */
+.campaignCardName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Stats grid: 3 columns */
+.campaignCardStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+}
+
+/* Stat cell */
+.campaignCardStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+/* Stat label */
+.campaignCardStatLabel {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Stat value */
+.campaignCardStatVal {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* ─── Managed comparison ─── */
+
+/* Section wrapper */
+.mcSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Section header: eyebrow + source caption */
+.mcHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+@media (min-width: 560px) {
+  .mcHead {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+}
+
+/* Eyebrow label — small caps mono */
+.mcEyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Source caption — italic qualifier */
+.mcCaption {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Content wrapper */
+.mcWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Two-column grid (ads | conversations); collapses to 1fr inline */
+.mcGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 559px) {
+  .mcGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Individual pair column */
+.mcCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Column title — small caps, slightly more prominent than eyebrow */
+.mcColEyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--canvas-3);
+  padding-bottom: 0.375rem;
+}
+
+/* Metric row — label above, then managed/unmanaged sides */
+.mcMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Metric label */
+.mcLabel {
+  font-size: 0.75rem;
+  color: var(--ink-4);
+  letter-spacing: 0.01em;
+}
+
+/* Managed or unmanaged side row: who + value + optional delta */
+.mcSide {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* "Managed" / "Unmanaged" identifier */
+.mcWho {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  min-width: 5.5rem;
+  flex-shrink: 0;
+}
+
+/* Metric value — mono tabular */
+.mcVal {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+/* Delta — amber mono, only on last visible metric */
+.mcDelta {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: hsl(var(--action));
+  white-space: nowrap;
+}
+
+/* Empty state message */
+.mcEmpty {
+  font-family: var(--font-home-serif);
+  font-size: 1rem;
+  font-style: italic;
+  line-height: 1.55;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* ─── Agent contribution ─── */
+
+/* Section wrapper */
+.agentContribution {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Eyebrow label — small caps mono */
+.agentContributionEyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Cards row — horizontal on wider, stacked on narrow */
+.agentCards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 560px) {
+  .agentCards {
+    flex-direction: row;
+    align-items: stretch;
+  }
+}
+
+/* Individual agent card */
+.agentCard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: transparent;
+}
+
+/* Card header: dot + name */
+.agentCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Identity dot — orientation color only, NOT a button or filled bg */
+.agentDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agentDotAlex {
+  background-color: hsl(var(--agent-alex));
+}
+
+.agentDotRiley {
+  background-color: hsl(var(--agent-riley));
+}
+
+.agentDotMira {
+  background-color: hsl(var(--agent-mira));
+}
+
+/* Agent name */
+.agentName {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+
+/* Agent value — large mono */
+.agentValue {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+/* Mira "not set up" placeholder — muted, no number */
+.agentValueMuted {
+  font-family: var(--font-home-serif);
+  font-size: 0.9375rem;
+  font-style: italic;
+  color: var(--ink-4);
+  line-height: 1.3;
+}
+
+/* Agent caption — small muted prose */
+.agentCaption {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+
+/* ─── Colophon footer ─── */
+
+/* Outer wrapper — top hairline, quiet spacing */
+.colophon {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--canvas-3);
+}
+
+/* Top row: period label + live/sample badge */
+.colophonTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Period + lowercase label */
+.colophonPeriod {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Live / Sample badge */
+.colophonBadge {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  border: 1px solid var(--canvas-3);
+  border-radius: 99px;
+  padding: 0.1875rem 0.5rem;
+}
+
+.colophonBadge[data-live="true"] {
+  color: hsl(var(--action));
+  border-color: hsl(var(--action) / 0.35);
+  background: hsl(var(--action) / 0.07);
+}
+
+/* Generated timestamp */
+.colophonTimestamp {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  color: var(--ink-4);
+  margin: 0;
+}
+
+/* Attribution caveat — fineprint in --ink-4 */
+.colophonCaveat {
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--ink-4);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ─── State banners (MetaConnect + Error) ─── */
+
+/* Shared banner wrapper — calm, left-border accent */
+.stateBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--canvas-3);
+  border-left: 3px solid hsl(var(--action) / 0.5);
+  border-radius: 6px;
+  background: hsl(var(--action) / 0.04);
+}
+
+/* Banner heading */
+.stateBannerTitle {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin: 0;
+}
+
+/* Banner body — prose */
+.stateBannerBody {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* CTA — amber link or button, no red/green */
+.stateBannerCta {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--action));
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: opacity 0.12s ease;
+}
+
+.stateBannerCta:hover {
+  opacity: 0.75;
+}
+
+/* ─── First-run note ─── */
+
+/* Warm wrapper — no border, soft indent */
+.stateFirstRun {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.5rem 0;
+}
+
+/* Title — warm serif italic */
+.stateFirstRunTitle {
+  font-family: var(--font-home-serif);
+  font-size: 1.125rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* Supporting body — quieter */
+.stateFirstRunBody {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* ─── Results skeleton ─── */
+
+/* Outer status wrapper */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 0.5rem 0;
+}
+
+/* Hero block container */
+.skeletonHero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Generic block placeholder — animated shimmer via opacity pulse */
+.skeletonBlock {
+  background: var(--canvas-3);
+  border-radius: 4px;
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+}
+
+/* Card row */
+.skeletonCardRow {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* Individual card placeholder */
+.skeletonCard {
+  flex: 1;
+  height: 6rem;
+  background: var(--canvas-3);
+  border-radius: 6px;
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ─── Screen column container ─── */
+.column {
+  width: 100%;
+  padding: 4px 18px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+@media (min-width: 768px) {
+  .column {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 32px 40px;
+    gap: 28px;
+  }
+}
+
+/* ─── Results header ─── */
+.resultsHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resultsTitle {
+  font-family: var(--serif);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* Period segmented control */
+.windowControl {
+  display: flex;
+  gap: 2px;
+  background: var(--canvas-2, #f5f4f2);
+  border-radius: 8px;
+  padding: 2px;
+  width: fit-content;
+}
+
+.windowBtn,
+.windowBtnActive {
+  font-family: var(--font-home-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink-3);
+  transition:
+    background 120ms,
+    color 120ms;
+}
+
+.windowBtnActive {
+  background: hsl(var(--surface));
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Header meta row: date folio + recompute */
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dateFolio {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+}
+
+.recomputeBtn {
+  font-family: var(--font-home-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition:
+    color 120ms,
+    text-decoration-color 120ms;
+}
+
+.recomputeBtn:hover:not(:disabled) {
+  color: var(--ink-3);
+  text-decoration-color: var(--ink-3);
+}
+
+.recomputeBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
