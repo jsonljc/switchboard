@@ -85,11 +85,17 @@ export function ResultsPage() {
         <WhatsWorking model={model} />
         <AgentContribution attribution={model.attribution} />
         <WorthIt cost={model.cost} narrative={model.costNarrative} />
-        <DetailsDisclosure>
-          {!showNoMeta && <FunnelSection funnel={model.funnel} narrative={model.funnelNarrative} />}
-          <CampaignsSection campaigns={model.campaigns} layout={layout} />
-          {model.managedComparison && <ManagedComparison data={model.managedComparison} />}
-        </DetailsDisclosure>
+        {/* No-Meta hides BOTH funnel and campaigns (spec §State-coverage); hide the
+            whole disclosure when there's nothing left to reveal. */}
+        {(!showNoMeta || model.managedComparison) && (
+          <DetailsDisclosure>
+            {!showNoMeta && (
+              <FunnelSection funnel={model.funnel} narrative={model.funnelNarrative} />
+            )}
+            {!showNoMeta && <CampaignsSection campaigns={model.campaigns} layout={layout} />}
+            {model.managedComparison && <ManagedComparison data={model.managedComparison} />}
+          </DetailsDisclosure>
+        )}
         <Colophon
           period={model.period}
           label={model.window}

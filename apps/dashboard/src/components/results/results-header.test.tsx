@@ -24,7 +24,6 @@ describe("ResultsHeader", () => {
   it("marks the active window as selected", () => {
     render(<ResultsHeader {...DEFAULT_PROPS} window="THIS MONTH" />);
     const activeBtn = screen.getByText("This month").closest("button");
-    expect(activeBtn).toHaveAttribute("aria-selected", "true");
     expect(activeBtn).toHaveAttribute("aria-current", "true");
   });
 
@@ -32,8 +31,8 @@ describe("ResultsHeader", () => {
     render(<ResultsHeader {...DEFAULT_PROPS} window="THIS MONTH" />);
     const weekBtn = screen.getByText("This week").closest("button");
     const quarterBtn = screen.getByText("This quarter").closest("button");
-    expect(weekBtn).toHaveAttribute("aria-selected", "false");
-    expect(quarterBtn).toHaveAttribute("aria-selected", "false");
+    expect(weekBtn).not.toHaveAttribute("aria-current");
+    expect(quarterBtn).not.toHaveAttribute("aria-current");
   });
 
   it("calls onWindow with correct value when clicking a period", async () => {

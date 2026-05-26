@@ -44,7 +44,6 @@ export function ResultsHeader({
               key={w}
               type="button"
               className={isActive ? styles.windowBtnActive : styles.windowBtn}
-              aria-selected={isActive}
               aria-current={isActive ? true : undefined}
               onClick={() => onWindow(w)}
             >

@@ -5,7 +5,12 @@ import styles from "./results.module.css";
 export function WhatsWorking({ model }: { model: ResultsModel }) {
   const { funnelNarrative, bestCampaign, worstCampaign } = model;
 
-  const underwaterWorst = worstCampaign && worstCampaign.roas < 1 ? worstCampaign : null;
+  // Only call out a laggard when it's a DIFFERENT campaign from the strongest —
+  // with a single spending campaign, best === worst, and naming it twice reads oddly.
+  const underwaterWorst =
+    worstCampaign && worstCampaign !== bestCampaign && worstCampaign.roas < 1
+      ? worstCampaign
+      : null;
 
   return (
     <div className={styles.whatsWorking}>
