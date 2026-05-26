@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { ConsentStateStore } from "@switchboard/core";
+import { ContactNotFound } from "@switchboard/core";
 import type { ContactConsentState, ConsentSource, PdpaJurisdiction } from "@switchboard/schemas";
 
 interface Deps {
@@ -24,10 +25,13 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
   // org filter alone is not a unique input — every write goes through
   // updateMany with `{ id, organizationId }` in the WHERE. A cross-tenant target
   // matches zero rows; callers that expect the contact to exist treat count===0
-  // as not-found.
-  function assertScoped(count: number, contactId: string, organizationId: string): void {
+  // as not-found. Throws the typed ContactNotFound (the same the service raises
+  // on its pre-read) so a TOCTOU miss maps to a clean 404, not a 500 — in
+  // normal flow the service's org-scoped readOrNull throws first, so this is
+  // defense-in-depth for a contact deleted between read and write.
+  function assertScoped(count: number, contactId: string): void {
     if (count === 0) {
-      throw new Error(`Contact not found for organization ${organizationId}: ${contactId}`);
+      throw new ContactNotFound({ contactId });
     }
   }
 
@@ -87,7 +91,7 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
           consentUpdatedBy: actor,
         },
       });
-      assertScoped(result.count, contactId, organizationId);
+      assertScoped(result.count, contactId);
     },
 
     async setGrant({
@@ -114,7 +118,7 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
           consentNotes: notes ?? null,
         },
       });
-      assertScoped(result.count, contactId, organizationId);
+      assertScoped(result.count, contactId);
     },
 
     async setRevocationIfNotRevoked({
@@ -181,7 +185,7 @@ export function createPrismaConsentStore(deps: Deps): ConsentStateStore {
           consentNotes: notes,
         },
       });
-      assertScoped(result.count, contactId, organizationId);
+      assertScoped(result.count, contactId);
       return {
         previousGrantedAt: previous?.consentGrantedAt ?? null,
         previousRevokedAt: previous?.consentRevokedAt ?? null,

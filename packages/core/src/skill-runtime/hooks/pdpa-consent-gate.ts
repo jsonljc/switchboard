@@ -89,6 +89,7 @@ export class PdpaConsentGateHook implements SkillHook {
       await consentService.attachToGovernedInteraction(
         contactId,
         config.jurisdiction as PdpaJurisdiction,
+        ctx.orgId,
       );
     } catch (err) {
       if (
@@ -167,13 +168,21 @@ export class PdpaConsentGateHook implements SkillHook {
 
     if (consent.aiDisclosureShownAt === null) {
       if (includesDisclosure) {
-        await this.deps.consentService.recordDisclosureShown({
-          contactId,
-          jurisdiction: config.jurisdiction as PdpaJurisdiction,
-          version: expected.version,
-          shownAt: this.deps.clock(),
-          actor: "system:skill_runtime",
-        });
+        try {
+          await this.deps.consentService.recordDisclosureShown({
+            contactId,
+            jurisdiction: config.jurisdiction as PdpaJurisdiction,
+            version: expected.version,
+            shownAt: this.deps.clock(),
+            actor: "system:skill_runtime",
+            organizationId: ctx.orgId,
+          });
+        } catch (err) {
+          // Observe-only disclosure recording must not break the response if a
+          // contact is transiently missing for the org (e.g. re-tenanted between
+          // the read above and this write).
+          console.error("[pdpa-consent-gate] disclosure recording failed", err);
+        }
       } else if (consentConfig.mode === "enforce") {
         await this.saveVerdict({
           reasonCode: "disclosure_not_shown",
@@ -189,13 +198,21 @@ export class PdpaConsentGateHook implements SkillHook {
       }
     } else if (consent.aiDisclosureVersionShown !== expected.version) {
       if (includesDisclosure) {
-        await this.deps.consentService.recordDisclosureShown({
-          contactId,
-          jurisdiction: config.jurisdiction as PdpaJurisdiction,
-          version: expected.version,
-          shownAt: this.deps.clock(),
-          actor: "system:skill_runtime",
-        });
+        try {
+          await this.deps.consentService.recordDisclosureShown({
+            contactId,
+            jurisdiction: config.jurisdiction as PdpaJurisdiction,
+            version: expected.version,
+            shownAt: this.deps.clock(),
+            actor: "system:skill_runtime",
+            organizationId: ctx.orgId,
+          });
+        } catch (err) {
+          // Observe-only disclosure recording must not break the response if a
+          // contact is transiently missing for the org (e.g. re-tenanted between
+          // the read above and this write).
+          console.error("[pdpa-consent-gate] disclosure recording failed", err);
+        }
       } else if (consentConfig.mode === "enforce") {
         await this.saveVerdict({
           reasonCode: "disclosure_version_outdated",

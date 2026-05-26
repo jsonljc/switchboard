@@ -140,13 +140,13 @@ const ctx = (overrides: Partial<{ store: ConsentStateStore }> = {}) => {
 describe("ConsentService.attachToGovernedInteraction", () => {
   it("stamps jurisdiction when currently null", async () => {
     const { service, store } = ctx();
-    await service.attachToGovernedInteraction("c1", "SG");
+    await service.attachToGovernedInteraction("c1", "SG", "org1");
     expect(store.setJurisdictionIfNull).toHaveBeenCalledWith("c1", "SG", "org1");
   });
 
   it("throws ConsentJurisdictionMismatch when a different jurisdiction is stamped", async () => {
     const { service } = ctx({ store: buildStore({ pdpaJurisdiction: "SG" }) });
-    await expect(service.attachToGovernedInteraction("c1", "MY")).rejects.toBeInstanceOf(
+    await expect(service.attachToGovernedInteraction("c1", "MY", "org1")).rejects.toBeInstanceOf(
       ConsentJurisdictionMismatch,
     );
   });
@@ -154,7 +154,7 @@ describe("ConsentService.attachToGovernedInteraction", () => {
   it("no-op when same jurisdiction is already stamped", async () => {
     const store = buildStore({ pdpaJurisdiction: "MY" });
     const { service, verdictStore } = ctx({ store });
-    await service.attachToGovernedInteraction("c1", "MY");
+    await service.attachToGovernedInteraction("c1", "MY", "org1");
     // No verdict on no-op stamps.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((verdictStore.save as any).mock.calls.length).toBe(0);
@@ -170,6 +170,7 @@ describe("ConsentService.recordDisclosureShown", () => {
       version: "sg-disclosure@1.0.0",
       shownAt: new Date("2026-05-11T09:59:00Z"),
       actor: "system:skill_runtime",
+      organizationId: "org1",
     });
     expect(store.setDisclosure).toHaveBeenCalled();
     expect(store.setGrant).not.toHaveBeenCalled();
@@ -189,6 +190,7 @@ describe("ConsentService.recordDisclosureShown", () => {
       version: "sg-disclosure@1.0.0",
       shownAt: new Date(),
       actor: "system:skill_runtime",
+      organizationId: "org1",
     });
     expect(store.setDisclosure).not.toHaveBeenCalled();
   });
@@ -206,6 +208,7 @@ describe("ConsentService.recordDisclosureShown", () => {
       version: "sg-disclosure@1.0.0",
       shownAt: new Date(),
       actor: "system:skill_runtime",
+      organizationId: "org1",
     });
     expect(store.setDisclosure).toHaveBeenCalled();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -382,6 +385,7 @@ describe("ConsentService — disclosure ↔ consent orthogonality", () => {
       version: "sg-disclosure@1.0.0",
       shownAt: new Date(),
       actor: "system:skill_runtime",
+      organizationId: "org1",
     });
     expect(store.setGrant).not.toHaveBeenCalled();
     expect(store.setRevocationIfNotRevoked).not.toHaveBeenCalled();
@@ -436,6 +440,7 @@ describe("ConsentService — ContactNotFound paths", () => {
         version: "sg-disclosure@1.0.0",
         shownAt: new Date(),
         actor: "system:skill_runtime",
+        organizationId: "org1",
       }),
     ).rejects.toBeInstanceOf(ContactNotFound);
   });

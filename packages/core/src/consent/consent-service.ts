@@ -21,7 +21,11 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface ConsentService {
-  attachToGovernedInteraction(contactId: string, jurisdiction: PdpaJurisdiction): Promise<void>;
+  attachToGovernedInteraction(
+    contactId: string,
+    jurisdiction: PdpaJurisdiction,
+    organizationId: string,
+  ): Promise<void>;
 
   recordDisclosureShown(input: {
     contactId: string;
@@ -29,6 +33,7 @@ export interface ConsentService {
     version: string;
     shownAt: Date;
     actor: string;
+    organizationId: string;
   }): Promise<void>;
 
   recordGrant(input: {
@@ -149,8 +154,8 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
   }
 
   return {
-    async attachToGovernedInteraction(contactId, jurisdiction) {
-      const result = await ensureJurisdictionStamped(contactId, jurisdiction, orgId);
+    async attachToGovernedInteraction(contactId, jurisdiction, organizationId) {
+      const result = await ensureJurisdictionStamped(contactId, jurisdiction, organizationId);
       if (result.wasNewlyStamped) {
         await persistVerdict({
           reasonCode: "allowed",
@@ -163,8 +168,15 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       }
     },
 
-    async recordDisclosureShown({ contactId, jurisdiction, version, shownAt, actor }) {
-      const current = await store.readOrNull(contactId, orgId);
+    async recordDisclosureShown({
+      contactId,
+      jurisdiction,
+      version,
+      shownAt,
+      actor,
+      organizationId,
+    }) {
+      const current = await store.readOrNull(contactId, organizationId);
       if (!current) throw new ContactNotFound({ contactId });
       if (current.pdpaJurisdiction && current.pdpaJurisdiction !== jurisdiction) {
         throw new ConsentJurisdictionMismatch({
@@ -177,7 +189,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       if (current.aiDisclosureVersionShown === version) return;
 
       const previousVersion = current.aiDisclosureVersionShown;
-      await store.setDisclosure({ contactId, version, shownAt, actor, organizationId: orgId });
+      await store.setDisclosure({ contactId, version, shownAt, actor, organizationId });
 
       await persistVerdict({
         reasonCode: "allowed",
