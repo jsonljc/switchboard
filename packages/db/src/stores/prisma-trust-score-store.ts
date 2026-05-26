@@ -24,7 +24,10 @@ export class PrismaTrustScoreStore {
       >
     >,
   ): Promise<TrustScoreRecord> {
-    // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
+    // TrustScoreRecord is keyed by (listingId, taskCategory) on the cross-tenant
+    // AgentListing marketplace catalog, which has no organizationId binding by
+    // design; reputation is per-listing and global, with no tenant to scope by.
+    // route-governance: store-mutation-global
     return this.prisma.trustScoreRecord.update({
       where: { id },
       data: data as never,
