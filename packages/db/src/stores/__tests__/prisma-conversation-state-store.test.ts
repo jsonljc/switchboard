@@ -13,10 +13,15 @@ const operator = { type: "user" as const, id: "user_op_1" };
 
 function makeStore() {
   const txConvUpdate = vi.fn();
+  const txConvUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
   const txConvFindFirst = vi.fn();
   const txTraceCreate = vi.fn().mockResolvedValue(undefined);
   const tx = {
-    conversationState: { findFirst: txConvFindFirst, update: txConvUpdate },
+    conversationState: {
+      findFirst: txConvFindFirst,
+      update: txConvUpdate,
+      updateMany: txConvUpdateMany,
+    },
     workTrace: { create: txTraceCreate },
   };
   const prisma = {
@@ -37,6 +42,7 @@ function makeStore() {
     tx,
     txConvFindFirst,
     txConvUpdate,
+    txConvUpdateMany,
     recordOperatorMutation,
     workTraceStoreUpdate,
   };
@@ -153,19 +159,17 @@ describe("PrismaConversationStateStore.sendOperatorMessage", () => {
       channel: "telegram",
       principalId: "p_customer",
     });
-    harness.txConvUpdate.mockResolvedValueOnce({
-      id: "conv_1",
-      threadId: "t1",
-      status: "human_override",
-      channel: "telegram",
-      principalId: "p_customer",
-    });
-
     const result = await harness.store.sendOperatorMessage({
       organizationId: "org_1",
       threadId: "t1",
       operator,
       message: { text: "Hello there, how can I help?" },
+    });
+
+    // #643: the mutating WHERE carries organizationId (tenant-isolation), not id alone.
+    expect(harness.txConvUpdateMany).toHaveBeenCalledWith({
+      where: { id: "conv_1", organizationId: "org_1" },
+      data: expect.any(Object),
     });
 
     const trace = harness.recordOperatorMutation.mock.calls[0]![0] as WorkTrace;
@@ -213,7 +217,7 @@ describe("PrismaConversationStateStore.sendOperatorMessage", () => {
         message: { text: "x" },
       }),
     ).rejects.toBeInstanceOf(ConversationStateInvalidTransitionError);
-    expect(harness.txConvUpdate).not.toHaveBeenCalled();
+    expect(harness.txConvUpdateMany).not.toHaveBeenCalled();
   });
 
   it("404s when conversation is missing", async () => {
@@ -241,14 +245,6 @@ describe("PrismaConversationStateStore.releaseEscalationToAi", () => {
       channel: "whatsapp",
       principalId: "p_customer",
     });
-    harness.txConvUpdate.mockResolvedValueOnce({
-      id: "conv_1",
-      threadId: "t1",
-      status: "active",
-      channel: "whatsapp",
-      principalId: "p_customer",
-    });
-
     const result = await harness.store.releaseEscalationToAi({
       organizationId: "org_1",
       handoffId: "h_1",
@@ -257,8 +253,9 @@ describe("PrismaConversationStateStore.releaseEscalationToAi", () => {
       reply: { text: "Thanks, taking it from here." },
     });
 
-    expect(harness.txConvUpdate).toHaveBeenCalledWith({
-      where: { id: "conv_1" },
+    // #643: the mutating WHERE carries organizationId (tenant-isolation), not id alone.
+    expect(harness.txConvUpdateMany).toHaveBeenCalledWith({
+      where: { id: "conv_1", organizationId: "org_1" },
       data: expect.objectContaining({ status: "active" }),
     });
     const trace = harness.recordOperatorMutation.mock.calls[0]![0] as WorkTrace;

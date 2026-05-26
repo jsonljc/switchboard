@@ -8,6 +8,7 @@ function createMockPrisma() {
       create: vi.fn(),
       findUnique: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
   };
 }
@@ -93,15 +94,16 @@ describe("PrismaManagedChannelStore", () => {
     it("deletes when orgId matches", async () => {
       const existing = { id: "ch_1", organizationId: "org_1" };
       prisma.managedChannel.findUnique.mockResolvedValue(existing);
-      prisma.managedChannel.delete.mockResolvedValue(existing);
+      prisma.managedChannel.deleteMany.mockResolvedValue({ count: 1 });
 
       await store.delete("ch_1", "org_1");
 
       expect(prisma.managedChannel.findUnique).toHaveBeenCalledWith({
         where: { id: "ch_1" },
       });
-      expect(prisma.managedChannel.delete).toHaveBeenCalledWith({
-        where: { id: "ch_1" },
+      // #643: deleteMany carries organizationId in the WHERE (tenant-isolation defense-in-depth).
+      expect(prisma.managedChannel.deleteMany).toHaveBeenCalledWith({
+        where: { id: "ch_1", organizationId: "org_1" },
       });
     });
 

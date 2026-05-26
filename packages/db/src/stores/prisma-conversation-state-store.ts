@@ -156,9 +156,10 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       };
       const nextMessages = [...safeMessages(existing.messages), ownerMessage];
 
-      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
-      await tx.conversationState.update({
-        where: { id: existing.id },
+      // #643: scope the mutating WHERE by organizationId (the pre-fetch above already
+      // validated tenancy via findFirst; this is the store-layer defense-in-depth guard).
+      await tx.conversationState.updateMany({
+        where: { id: existing.id, organizationId: input.organizationId },
         data: {
           messages: nextMessages as unknown as Prisma.InputJsonValue,
           lastActivityAt: requestedAt,
@@ -233,9 +234,10 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       const after = { status: "active" };
       const nextMessages = [...safeMessages(existing.messages), ownerReply];
 
-      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
-      await tx.conversationState.update({
-        where: { id: existing.id },
+      // #643: scope the mutating WHERE by organizationId (the pre-fetch above already
+      // validated tenancy via findFirst; this is the store-layer defense-in-depth guard).
+      await tx.conversationState.updateMany({
+        where: { id: existing.id, organizationId: input.organizationId },
         data: {
           status: "active",
           messages: nextMessages as unknown as Prisma.InputJsonValue,
