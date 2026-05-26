@@ -65,11 +65,13 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       const nextStatus = input.override ? "human_override" : "active";
       const after = { status: nextStatus };
 
-      // route-governance: store-mutation-deferred — unscoped Prisma mutation surfaced by AST advisory; outside issue #601 scope, tracked for Round-3 tenant-isolation sweep in #643.
-      const updated = await tx.conversationState.update({
-        where: { id: existing.id },
+      // #643: scope the mutating WHERE by organizationId (the pre-fetch above already validated tenancy; store-layer defense-in-depth).
+      const result = await tx.conversationState.updateMany({
+        where: { id: existing.id, organizationId: input.organizationId },
         data: { status: nextStatus, lastActivityAt: requestedAt },
       });
+      if (result.count === 0) throw new ConversationStateNotFoundError(input.threadId);
+      const updated = { ...existing, status: nextStatus, lastActivityAt: requestedAt };
 
       const workUnitId = randomUUID();
       const trace: WorkTrace = {

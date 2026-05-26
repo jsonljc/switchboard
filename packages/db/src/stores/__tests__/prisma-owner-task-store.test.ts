@@ -185,16 +185,17 @@ describe("PrismaOwnerTaskStore", () => {
     it("updates task status without completedAt", async () => {
       const existing = makeTask();
       prisma.ownerTask.findFirst.mockResolvedValue(existing);
-      const updated = makeTask({ status: "in_progress" });
-      prisma.ownerTask.update.mockResolvedValue(updated);
+      // #643: updateMany with org-scoped WHERE; result built from existing + data
+      prisma.ownerTask.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await store.updateStatus("org-1", "task-1", "in_progress");
 
       expect(prisma.ownerTask.findFirst).toHaveBeenCalledWith({
         where: { id: "task-1", organizationId: "org-1" },
       });
-      expect(prisma.ownerTask.update).toHaveBeenCalledWith({
-        where: { id: "task-1" },
+      expect(prisma.ownerTask.update).not.toHaveBeenCalled();
+      expect(prisma.ownerTask.updateMany).toHaveBeenCalledWith({
+        where: { id: "task-1", organizationId: "org-1" },
         data: {
           status: "in_progress",
           completedAt: undefined,
@@ -207,19 +208,17 @@ describe("PrismaOwnerTaskStore", () => {
       const existing = makeTask();
       prisma.ownerTask.findFirst.mockResolvedValue(existing);
       const completedDate = new Date("2026-03-25T15:00:00Z");
-      const updated = makeTask({
-        status: "completed",
-        completedAt: completedDate,
-      });
-      prisma.ownerTask.update.mockResolvedValue(updated);
+      // #643: updateMany with org-scoped WHERE; result built from existing + data
+      prisma.ownerTask.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await store.updateStatus("org-1", "task-1", "completed", completedDate);
 
       expect(prisma.ownerTask.findFirst).toHaveBeenCalledWith({
         where: { id: "task-1", organizationId: "org-1" },
       });
-      expect(prisma.ownerTask.update).toHaveBeenCalledWith({
-        where: { id: "task-1" },
+      expect(prisma.ownerTask.update).not.toHaveBeenCalled();
+      expect(prisma.ownerTask.updateMany).toHaveBeenCalledWith({
+        where: { id: "task-1", organizationId: "org-1" },
         data: {
           status: "completed",
           completedAt: completedDate,
@@ -232,8 +231,7 @@ describe("PrismaOwnerTaskStore", () => {
     it("updates task to dismissed status", async () => {
       const existing = makeTask();
       prisma.ownerTask.findFirst.mockResolvedValue(existing);
-      const updated = makeTask({ status: "dismissed" });
-      prisma.ownerTask.update.mockResolvedValue(updated);
+      prisma.ownerTask.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await store.updateStatus("org-1", "task-1", "dismissed");
 

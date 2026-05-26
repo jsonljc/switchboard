@@ -101,13 +101,23 @@ describe("PrismaKnowledgeEntryStore", () => {
       };
       prisma.knowledgeEntry.findFirst.mockResolvedValue(existing);
       const newEntry = { ...existing, id: "ke_2", version: 2, title: "V2 Title" };
-      prisma.$transaction.mockResolvedValue([{ ...existing, active: false }, newEntry]);
+      // #643: first element is now updateMany({count}) not update row; destructure
+      // discards the first element so the mock value is [{count:1}, newEntry].
+      prisma.$transaction.mockResolvedValue([{ count: 1 }, newEntry]);
 
       const result = await store.update("ke_1", "org_test", { title: "V2 Title" });
 
       expect(result.version).toBe(2);
       expect(result.title).toBe("V2 Title");
       expect(result.content).toBe("V1 Content");
+      // $transaction is called with an array of promises; verify it was called once
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      // #643: the deactivating mutation carries organizationId in the WHERE (tenant-isolation).
+      expect(prisma.knowledgeEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: "ke_1", organizationId: "org_test" },
+        data: { active: false },
+      });
+      expect(prisma.knowledgeEntry.update).not.toHaveBeenCalled();
     });
 
     it("throws when entry not found", async () => {
