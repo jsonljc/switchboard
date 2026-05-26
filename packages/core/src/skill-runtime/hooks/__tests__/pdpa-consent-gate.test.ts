@@ -142,7 +142,8 @@ describe("PdpaConsentGateHook", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = { response: "x", toolCalls: [], tokenUsage: {}, trace: [] } as any;
     await hook.afterSkill(ctx, result);
-    expect(consentService.attachToGovernedInteraction).toHaveBeenCalledWith("c1", "SG");
+    // Threads the real tenant (ctx.orgId), not the constructor-bound placeholder.
+    expect(consentService.attachToGovernedInteraction).toHaveBeenCalledWith("c1", "SG", "org1");
   });
 
   it("emits jurisdiction_mismatch critical verdict but does NOT block", async () => {

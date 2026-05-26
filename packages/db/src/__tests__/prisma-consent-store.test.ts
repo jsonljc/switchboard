@@ -4,6 +4,7 @@ import { createPrismaConsentStore } from "../prisma-consent-store.js";
 const buildPrisma = (
   overrides: Partial<{
     findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     updateMany: ReturnType<typeof vi.fn>;
   }> = {},
@@ -11,6 +12,7 @@ const buildPrisma = (
   ({
     contact: {
       findUnique: overrides.findUnique ?? vi.fn(),
+      findFirst: overrides.findFirst ?? vi.fn(),
       update: overrides.update ?? vi.fn(),
       updateMany: overrides.updateMany ?? vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -25,9 +27,9 @@ describe("createPrismaConsentStore", () => {
       update,
     });
     const store = createPrismaConsentStore({ prisma });
-    await store.setJurisdictionIfNull("c1", "SG");
+    await store.setJurisdictionIfNull("c1", "SG", "org1");
     expect(prisma.contact.updateMany).toHaveBeenCalledWith({
-      where: { id: "c1", pdpaJurisdiction: null },
+      where: { id: "c1", organizationId: "org1", pdpaJurisdiction: null },
       data: { pdpaJurisdiction: "SG" },
     });
   });
@@ -46,15 +48,16 @@ describe("createPrismaConsentStore", () => {
       revokedAt: new Date("2026-05-10"),
       source: "inbound_keyword_revocation",
       actor: "system:inbound_keyword_revocation",
+      organizationId: "org1",
     });
     expect(result.wasNewlyRevoked).toBe(true);
   });
 
   it("setRevocationIfNotRevoked reports wasNewlyRevoked=false when row already revoked", async () => {
     const existing = new Date("2026-05-09");
-    const findUnique = vi.fn().mockResolvedValue({ consentRevokedAt: existing });
+    const findFirst = vi.fn().mockResolvedValue({ consentRevokedAt: existing });
     const updateMany = vi.fn().mockResolvedValue({ count: 0 });
-    const prisma = buildPrisma({ findUnique, updateMany });
+    const prisma = buildPrisma({ findFirst, updateMany });
     const store = createPrismaConsentStore({ prisma });
 
     const result = await store.setRevocationIfNotRevoked({
@@ -62,6 +65,7 @@ describe("createPrismaConsentStore", () => {
       revokedAt: new Date("2026-05-10"),
       source: "inbound_keyword_revocation",
       actor: "system:inbound_keyword_revocation",
+      organizationId: "org1",
     });
     expect(result.wasNewlyRevoked).toBe(false);
     expect(result.existingRevokedAt).toEqual(existing);

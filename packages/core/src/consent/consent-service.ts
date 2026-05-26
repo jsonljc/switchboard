@@ -21,7 +21,11 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface ConsentService {
-  attachToGovernedInteraction(contactId: string, jurisdiction: PdpaJurisdiction): Promise<void>;
+  attachToGovernedInteraction(
+    contactId: string,
+    jurisdiction: PdpaJurisdiction,
+    organizationId: string,
+  ): Promise<void>;
 
   recordDisclosureShown(input: {
     contactId: string;
@@ -29,6 +33,7 @@ export interface ConsentService {
     version: string;
     shownAt: Date;
     actor: string;
+    organizationId: string;
   }): Promise<void>;
 
   recordGrant(input: {
@@ -103,8 +108,9 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
   async function ensureJurisdictionStamped(
     contactId: string,
     jurisdiction: PdpaJurisdiction,
+    organizationId: string,
   ): Promise<{ wasNewlyStamped: boolean }> {
-    const current = await store.readOrNull(contactId);
+    const current = await store.readOrNull(contactId, organizationId);
     if (current?.pdpaJurisdiction === jurisdiction) return { wasNewlyStamped: false };
     if (current?.pdpaJurisdiction != null) {
       throw new ConsentJurisdictionMismatch({
@@ -113,7 +119,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
         provided: jurisdiction,
       });
     }
-    await store.setJurisdictionIfNull(contactId, jurisdiction);
+    await store.setJurisdictionIfNull(contactId, jurisdiction, organizationId);
     return { wasNewlyStamped: true };
   }
 
@@ -148,8 +154,8 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
   }
 
   return {
-    async attachToGovernedInteraction(contactId, jurisdiction) {
-      const result = await ensureJurisdictionStamped(contactId, jurisdiction);
+    async attachToGovernedInteraction(contactId, jurisdiction, organizationId) {
+      const result = await ensureJurisdictionStamped(contactId, jurisdiction, organizationId);
       if (result.wasNewlyStamped) {
         await persistVerdict({
           reasonCode: "allowed",
@@ -162,8 +168,15 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       }
     },
 
-    async recordDisclosureShown({ contactId, jurisdiction, version, shownAt, actor }) {
-      const current = await store.readOrNull(contactId);
+    async recordDisclosureShown({
+      contactId,
+      jurisdiction,
+      version,
+      shownAt,
+      actor,
+      organizationId,
+    }) {
+      const current = await store.readOrNull(contactId, organizationId);
       if (!current) throw new ContactNotFound({ contactId });
       if (current.pdpaJurisdiction && current.pdpaJurisdiction !== jurisdiction) {
         throw new ConsentJurisdictionMismatch({
@@ -176,7 +189,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       if (current.aiDisclosureVersionShown === version) return;
 
       const previousVersion = current.aiDisclosureVersionShown;
-      await store.setDisclosure({ contactId, version, shownAt, actor });
+      await store.setDisclosure({ contactId, version, shownAt, actor, organizationId });
 
       await persistVerdict({
         reasonCode: "allowed",
@@ -197,10 +210,11 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       grantedAt,
       actor,
       notes,
-      organizationId: _organizationId,
+      organizationId: organizationIdOverride,
       deploymentId: deploymentIdOverride,
     }) {
-      const current = await store.readOrNull(contactId);
+      const effectiveOrgId = organizationIdOverride ?? orgId;
+      const current = await store.readOrNull(contactId, effectiveOrgId);
       if (!current) throw new ContactNotFound({ contactId });
       if (current.consentRevokedAt) {
         throw new ConsentRevokedCannotRegrant({
@@ -208,8 +222,15 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
           revokedAt: new Date(current.consentRevokedAt),
         });
       }
-      await ensureJurisdictionStamped(contactId, jurisdiction);
-      await store.setGrant({ contactId, grantedAt, source, actor, notes });
+      await ensureJurisdictionStamped(contactId, jurisdiction, effectiveOrgId);
+      await store.setGrant({
+        contactId,
+        grantedAt,
+        source,
+        actor,
+        notes,
+        organizationId: effectiveOrgId,
+      });
       await persistVerdict({
         reasonCode: "allowed",
         auditLevel: "info",
@@ -234,7 +255,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       const effectiveOrgId = organizationIdOverride ?? orgId;
       const effectiveDeploymentId = deploymentIdOverride ?? deploymentId;
 
-      const current = await store.readOrNull(contactId);
+      const current = await store.readOrNull(contactId, effectiveOrgId);
       if (!current) throw new ContactNotFound({ contactId });
 
       // Infer jurisdiction: prefer stamped; fall back to "SG" for verdict shape only
@@ -247,6 +268,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
         source,
         actor,
         notes,
+        organizationId: effectiveOrgId,
       });
 
       if (!wasNewlyRevoked) return; // idempotent
@@ -288,7 +310,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       contactId,
       actor,
       notes,
-      organizationId: _organizationId,
+      organizationId: organizationIdOverride,
       deploymentId: deploymentIdOverride,
     }) {
       if (!notes || notes.trim().length === 0) {
@@ -297,13 +319,15 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
       if (actor.startsWith("system:")) {
         throw new ConsentSystemActorRejected({ actor });
       }
-      const current = await store.readOrNull(contactId);
+      const effectiveOrgId = organizationIdOverride ?? orgId;
+      const current = await store.readOrNull(contactId, effectiveOrgId);
       if (!current) throw new ContactNotFound({ contactId });
 
       const { previousGrantedAt, previousRevokedAt } = await store.clearConsentTimestamps({
         contactId,
         actor,
         notes,
+        organizationId: effectiveOrgId,
       });
 
       const jurisdiction = (current.pdpaJurisdiction ?? "SG") as PdpaJurisdiction;
