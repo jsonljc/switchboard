@@ -1,0 +1,36 @@
+/* Results screen styles.
+   Tokens consumed from globals.css :root.
+   NO :root block here — globals.css is shared across worktrees.
+   NO red/green. Warm operational editorial: amber is the ONE positive signal. */
+
+/* ─── Delta badge ─── */
+.delta {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Positive: amber depth (--action is a raw HSL triple, wrap with hsl()) */
+.deltaPos {
+  color: hsl(var(--action));
+}
+
+/* Negative: muted ink (--ink-3 is already a complete hsl() value, use bare) */
+.deltaNeg {
+  color: var(--ink-3);
+}
+
+/* Flat: quieter muted ink (--ink-4 is already a complete hsl() value, use bare) */
+.deltaFlat {
+  color: var(--ink-4);
+}
+
+/* Large variant — used on hero/primary metric displays */
+.deltaLg {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
