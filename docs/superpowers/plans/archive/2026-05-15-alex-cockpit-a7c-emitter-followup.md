@@ -122,13 +122,13 @@ Each chain that can produce `decision === "pending_approval"` must propagate `pa
 
 For each hook that returns `decision: "pending_approval"`, populate `payload.kind` (and optionally `body`/`quote`/`quoteFrom`):
 
-| Hook file | Emits kind | Body source |
-|---|---|---|
-| `packages/core/src/skill-runtime/hooks/deterministic-safety-gate.ts` | `"safety-gate"` | The rule that triggered the gate (rule id + short description) |
-| `packages/core/src/skill-runtime/hooks/claim-classifier.ts` | `"regulatory"` | The flagged claim text (from the LLM's classifier output) |
-| `packages/core/src/conversation-lifecycle/qualification/disqualification-resolver.ts` (or wherever qualification approvals originate) | `"qualification"` | The disqualification reason copy |
-| Refund-detection emitter (located at implementation time via `rg "refund.*pendingApproval\|pendingApproval.*refund" packages/core/src/`) | `"refund"` | The refund context (amount, reason if available) |
-| Escalation emitter (located at implementation time via `rg "escalat.*pendingApproval\|pendingApproval.*escalat" packages/core/src/`) | `"escalation"` | The escalation trigger copy |
+| Hook file                                                                                                                                | Emits kind        | Body source                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------- |
+| `packages/core/src/skill-runtime/hooks/deterministic-safety-gate.ts`                                                                     | `"safety-gate"`   | The rule that triggered the gate (rule id + short description) |
+| `packages/core/src/skill-runtime/hooks/claim-classifier.ts`                                                                              | `"regulatory"`    | The flagged claim text (from the LLM's classifier output)      |
+| `packages/core/src/conversation-lifecycle/qualification/disqualification-resolver.ts` (or wherever qualification approvals originate)    | `"qualification"` | The disqualification reason copy                               |
+| Refund-detection emitter (located at implementation time via `rg "refund.*pendingApproval\|pendingApproval.*refund" packages/core/src/`) | `"refund"`        | The refund context (amount, reason if available)               |
+| Escalation emitter (located at implementation time via `rg "escalat.*pendingApproval\|pendingApproval.*escalat" packages/core/src/`)     | `"escalation"`    | The escalation trigger copy                                    |
 
 For each: read the hook + its colocated test, write a failing test asserting the emitted `HookResult.payload.kind`, run, see FAIL, populate `payload` in the hook's return, run, see green, commit.
 
@@ -333,6 +333,7 @@ The slice fits inside one focused PR. Tasks below are TDD-ordered.
 ### Task 1: Extend `HookResult` (TDD)
 
 **Files:**
+
 - Modify: `packages/core/src/skill-runtime/types.ts`
 - Modify: `packages/core/src/skill-runtime/__tests__/types.test.ts` (if it exists; otherwise the HookResult shape is tested transitively via hook tests)
 
@@ -399,6 +400,7 @@ will have those forwarded by skill-executor.ts in the next commit."
 ### Task 2: Forward payload in `skill-executor.ts` (TDD)
 
 **Files:**
+
 - Modify: `packages/core/src/skill-runtime/skill-executor.ts:376`
 - Modify: `packages/core/src/skill-runtime/__tests__/skill-executor.test.ts`
 
@@ -477,6 +479,7 @@ return {
 ### Task 4: Verify `createApprovalRequest()` forwards payload (TDD)
 
 **Files:**
+
 - Modify: `packages/core/src/orchestrator/propose-pipeline.ts` (if it doesn't currently forward `payload`)
 - Modify: `packages/core/src/orchestrator/__tests__/propose-pipeline.test.ts` (or equivalent)
 

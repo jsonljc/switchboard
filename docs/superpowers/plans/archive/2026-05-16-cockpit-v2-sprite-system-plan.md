@@ -66,39 +66,39 @@ If any gate fails, fix or patch the plan inline before continuing.
 
 **New files (all under `apps/dashboard/src/components/cockpit/sprite/`):**
 
-| File | Responsibility |
-|------|----------------|
-| `types.ts` | `SpriteVariantKey`, `SpriteState`, `Frame`, `Palette`, `VariantBundle`, `VariantDef` type definitions |
-| `build-sprite.ts` | `buildSprite(commands)` + `mergeSprite(base, commands)` — frame composition helpers (test-only / future-author-only) |
-| `pixel-sprite.tsx` | `<PixelSprite rows palette size />` — SVG renderer of one frame |
-| `use-frame-cycle.ts` | `useFrameCycle(frames, { playing })` — frame swap hook with empty/single/multi/paused semantics |
-| `animated-sprite.tsx` | `<AnimatedSprite frames palette size />` — combines cycle + renderer |
-| `sprite-frame.tsx` | `<SpriteFrame bundle variant state size accentSoft fallbackLetter />` — consumer-facing rounded frame with fallback |
-| `sprite-chip.tsx` | `<SpriteChip bundle variant state ... />` — 22px inline chip variant |
-| `alex-variants.ts` | `ALEX_VARIANTS: VariantBundle` exporting `classic | operator | cozy | agent` |
-| `riley-variants.ts` | `RILEY_VARIANTS: VariantBundle` exporting `analyst | trader | bot` |
-| `__tests__/build-sprite.test.ts` | covers builders + variant snapshot per bundle key |
-| `__tests__/pixel-sprite.test.tsx` | rect-count + fill-color from palette |
-| `__tests__/use-frame-cycle.test.ts` | empty/single/multi/paused cases with fake timers |
-| `__tests__/sprite-frame.test.tsx` | sprite render + both fallback paths |
-| `__tests__/sprite-chip.test.tsx` | sprite render + both fallback paths |
+| File                                | Responsibility                                                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------- | ---- | ------ |
+| `types.ts`                          | `SpriteVariantKey`, `SpriteState`, `Frame`, `Palette`, `VariantBundle`, `VariantDef` type definitions                |
+| `build-sprite.ts`                   | `buildSprite(commands)` + `mergeSprite(base, commands)` — frame composition helpers (test-only / future-author-only) |
+| `pixel-sprite.tsx`                  | `<PixelSprite rows palette size />` — SVG renderer of one frame                                                      |
+| `use-frame-cycle.ts`                | `useFrameCycle(frames, { playing })` — frame swap hook with empty/single/multi/paused semantics                      |
+| `animated-sprite.tsx`               | `<AnimatedSprite frames palette size />` — combines cycle + renderer                                                 |
+| `sprite-frame.tsx`                  | `<SpriteFrame bundle variant state size accentSoft fallbackLetter />` — consumer-facing rounded frame with fallback  |
+| `sprite-chip.tsx`                   | `<SpriteChip bundle variant state ... />` — 22px inline chip variant                                                 |
+| `alex-variants.ts`                  | `ALEX_VARIANTS: VariantBundle` exporting `classic                                                                    | operator | cozy | agent` |
+| `riley-variants.ts`                 | `RILEY_VARIANTS: VariantBundle` exporting `analyst                                                                   | trader   | bot` |
+| `__tests__/build-sprite.test.ts`    | covers builders + variant snapshot per bundle key                                                                    |
+| `__tests__/pixel-sprite.test.tsx`   | rect-count + fill-color from palette                                                                                 |
+| `__tests__/use-frame-cycle.test.ts` | empty/single/multi/paused cases with fake timers                                                                     |
+| `__tests__/sprite-frame.test.tsx`   | sprite render + both fallback paths                                                                                  |
+| `__tests__/sprite-chip.test.tsx`    | sprite render + both fallback paths                                                                                  |
 
 **Modified files:**
 
-| File | Change |
-|------|--------|
-| `apps/dashboard/src/lib/cockpit/alex-config.ts` | Add `DEFAULT_ALEX_VARIANT` constant; ensure `animState` is exported (already is) |
-| `apps/dashboard/src/lib/cockpit/riley/riley-config.ts` | Add `DEFAULT_RILEY_VARIANT` constant; add `animState` function (currently missing) |
-| `apps/dashboard/src/components/cockpit/identity.tsx` | Replace `AvatarFrame` with `<SpriteFrame>`; add `bundle` + `variant` props + `state` prop; remove `AvatarFrame` local component |
-| `apps/dashboard/src/components/cockpit/empty-state.tsx` | Replace 48px literal "A" span (~line 70-89) with `<SpriteFrame bundle={ALEX_VARIANTS} variant={DEFAULT_ALEX_VARIANT} state="idle" ... />` |
-| `apps/dashboard/src/components/cockpit/approval-card.tsx` | Replace 22px letter chip (~line 54-71) with `<SpriteChip>`; add `tertiaryLabel`/`onTertiary`/`campaign` props and rendering |
-| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Pass `today={formatToday(new Date())}` to `<ActivityStream>` (currently omitted) |
-| `apps/dashboard/src/components/cockpit/cockpit-page.tsx` | Pass `bundle={ALEX_VARIANTS}` + `variant={DEFAULT_ALEX_VARIANT}` to `<Identity>` and `<EmptyState>` and per-approval `<ApprovalCard>` (or via `AlexApprovalRow`) |
-| `apps/dashboard/src/lib/cockpit/alex/alex-approval-row.tsx` | Pass `bundle` / `variant` through to `<ApprovalCard>` (Riley row similarly) |
-| `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx` | Add sprite-render case + fallback case |
-| `apps/dashboard/src/components/cockpit/__tests__/empty-state.test.tsx` | Add sprite-render case |
-| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Add sprite-chip case + `tertiaryLabel`/`campaign` cases |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add `today` prop assertion |
+| File                                                                          | Change                                                                                                                                                           |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/lib/cockpit/alex-config.ts`                               | Add `DEFAULT_ALEX_VARIANT` constant; ensure `animState` is exported (already is)                                                                                 |
+| `apps/dashboard/src/lib/cockpit/riley/riley-config.ts`                        | Add `DEFAULT_RILEY_VARIANT` constant; add `animState` function (currently missing)                                                                               |
+| `apps/dashboard/src/components/cockpit/identity.tsx`                          | Replace `AvatarFrame` with `<SpriteFrame>`; add `bundle` + `variant` props + `state` prop; remove `AvatarFrame` local component                                  |
+| `apps/dashboard/src/components/cockpit/empty-state.tsx`                       | Replace 48px literal "A" span (~line 70-89) with `<SpriteFrame bundle={ALEX_VARIANTS} variant={DEFAULT_ALEX_VARIANT} state="idle" ... />`                        |
+| `apps/dashboard/src/components/cockpit/approval-card.tsx`                     | Replace 22px letter chip (~line 54-71) with `<SpriteChip>`; add `tertiaryLabel`/`onTertiary`/`campaign` props and rendering                                      |
+| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`                | Pass `today={formatToday(new Date())}` to `<ActivityStream>` (currently omitted)                                                                                 |
+| `apps/dashboard/src/components/cockpit/cockpit-page.tsx`                      | Pass `bundle={ALEX_VARIANTS}` + `variant={DEFAULT_ALEX_VARIANT}` to `<Identity>` and `<EmptyState>` and per-approval `<ApprovalCard>` (or via `AlexApprovalRow`) |
+| `apps/dashboard/src/lib/cockpit/alex/alex-approval-row.tsx`                   | Pass `bundle` / `variant` through to `<ApprovalCard>` (Riley row similarly)                                                                                      |
+| `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx`           | Add sprite-render case + fallback case                                                                                                                           |
+| `apps/dashboard/src/components/cockpit/__tests__/empty-state.test.tsx`        | Add sprite-render case                                                                                                                                           |
+| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx`      | Add sprite-chip case + `tertiaryLabel`/`campaign` cases                                                                                                          |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add `today` prop assertion                                                                                                                                       |
 
 ---
 
@@ -640,6 +640,7 @@ Expected: PASS.
 - Create: `apps/dashboard/src/components/cockpit/sprite/alex-variants.ts`
 
 This is the bulk of the LOC. The frames are byte-identical to the design's `sprites.jsx` — the port just:
+
 - Removes the `R(s)` dev sanity helper (or imports it locally)
 - Replaces `buildSprite(...)` / `mergeSprite(...)` calls with the typed imports
 - Removes the `Object.assign(window, { ALEX_VARIANTS })` line and replaces with `export const ALEX_VARIANTS`
@@ -718,9 +719,15 @@ export const ALEX_VARIANTS: VariantBundle = {
       ],
     },
   },
-  operator: { /* B_* */ },
-  cozy:     { /* C_* */ },
-  agent:    { /* D_* */ },
+  operator: {
+    /* B_* */
+  },
+  cozy: {
+    /* C_* */
+  },
+  agent: {
+    /* D_* */
+  },
 };
 ```
 
@@ -769,14 +776,39 @@ function R(s: string): string {
 }
 
 // Variant RA — RILEY ANALYST (lavender blouse, ponytail, big round glasses)
-const RA_PAL: Palette = { /* from riley-sprites.jsx */ };
-const RA_BASE: Frame = [ /* from riley-sprites.jsx */ ];
+const RA_PAL: Palette = {
+  /* from riley-sprites.jsx */
+};
+const RA_BASE: Frame = [
+  /* from riley-sprites.jsx */
+];
 // ...RA_BLINK, RA_DRAFT_*, RA_SLEEP*, RA_WON*, RC_*, RD_*
 
 export const RILEY_VARIANTS: VariantBundle = {
-  analyst: { name: "Riley Analyst", blurb: "...", palette: RA_PAL, states: { /* ... */ } },
-  trader:  { name: "Riley Pixel Trader", blurb: "...", palette: RC_PAL, states: { /* ... */ } },
-  bot:     { name: "Riley Bot", blurb: "...", palette: RD_PAL, states: { /* ... */ } },
+  analyst: {
+    name: "Riley Analyst",
+    blurb: "...",
+    palette: RA_PAL,
+    states: {
+      /* ... */
+    },
+  },
+  trader: {
+    name: "Riley Pixel Trader",
+    blurb: "...",
+    palette: RC_PAL,
+    states: {
+      /* ... */
+    },
+  },
+  bot: {
+    name: "Riley Bot",
+    blurb: "...",
+    palette: RD_PAL,
+    states: {
+      /* ... */
+    },
+  },
 };
 ```
 
@@ -830,7 +862,10 @@ function validateBundle(bundle: VariantBundle, expectedKeys: readonly string[]):
         for (const row of frame.rows) {
           for (const ch of row) {
             if (ch === "." || ch === " ") continue;
-            expect(variant.palette[ch], `${key}.${state}: unknown palette key '${ch}'`).toBeDefined();
+            expect(
+              variant.palette[ch],
+              `${key}.${state}: unknown palette key '${ch}'`,
+            ).toBeDefined();
           }
         }
       }
@@ -1284,10 +1319,7 @@ export { RILEY_VARIANTS };
  *  Mirrors alex-config.ts animState; WATCHING/REVIEWING get "draft" because
  *  Riley is actively working; IDLE/WAITING/HALTED other cases handled by the
  *  fallback. (won state is dormant per spec §5.4 — never returned.) */
-export function animState(
-  key: CockpitStatus,
-  halted: boolean,
-): "sleep" | "draft" | "idle" {
+export function animState(key: CockpitStatus, halted: boolean): "sleep" | "draft" | "idle" {
   if (halted) return "sleep";
   if (key === "WATCHING" || key === "REVIEWING" || key === "WAITING") return "draft";
   return "idle";
@@ -1619,8 +1651,8 @@ type Props = {
 In `cockpit-page.tsx`, locate the `<EmptyState ... />` render. Add:
 
 ```jsx
-bundle={ALEX_VARIANTS}
-variant={DEFAULT_ALEX_VARIANT}
+bundle = { ALEX_VARIANTS };
+variant = { DEFAULT_ALEX_VARIANT };
 ```
 
 (Imports were already added in Task 10 Step 10.7.)
@@ -1856,8 +1888,8 @@ Expected: PASS — existing tests still pass + 3 new tests pass.
 Read `apps/dashboard/src/lib/cockpit/alex/alex-approval-row.tsx`. Locate the `<ApprovalCard ... />` JSX site and add:
 
 ```jsx
-bundle={ALEX_VARIANTS}
-variant={DEFAULT_ALEX_VARIANT}
+bundle = { ALEX_VARIANTS };
+variant = { DEFAULT_ALEX_VARIANT };
 ```
 
 Add the import at the top:
@@ -1873,9 +1905,9 @@ import { ALEX_VARIANTS, DEFAULT_ALEX_VARIANT } from "@/lib/cockpit/alex-config";
 In `riley-cockpit-page.tsx`, locate `RileyApprovalRow`'s `<ApprovalCard ... />` (around line 72). Add:
 
 ```jsx
-bundle={RILEY_VARIANTS}
-variant={DEFAULT_RILEY_VARIANT}
-avatarLetter="R"
+bundle = { RILEY_VARIANTS };
+variant = { DEFAULT_RILEY_VARIANT };
+avatarLetter = "R";
 ```
 
 (Imports `RILEY_VARIANTS, DEFAULT_RILEY_VARIANT` were added in Task 10 Step 10.8.)
@@ -2051,6 +2083,7 @@ pnpm dev
 ```
 
 Verify on `/alex`:
+
 - Identity row shows an animated sprite (Alex classic) — pixel-art SVG, idle blink cycle every ~3s.
 - Trigger `Halt` — sprite swaps to `sleep` state (Z particles).
 - Trigger `Resume` — sprite returns to `idle`.
@@ -2058,6 +2091,7 @@ Verify on `/alex`:
 - If on day-1 cold state (no connections wired): EmptyState narrator block shows 48px sprite (Alex classic, idle).
 
 Verify on `/riley`:
+
 - Identity row shows an animated sprite (Riley analyst).
 - Activity feed eyebrow reads "Today · {date}" not "Activity".
 - If approvals present: chip shows Riley analyst sprite. If a Riley approval includes a `campaign` field: a mono-font campaign-name line renders under the title.

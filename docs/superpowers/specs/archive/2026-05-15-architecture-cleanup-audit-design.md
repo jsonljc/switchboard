@@ -242,7 +242,7 @@ Wave 1 lanes still **report** findings inside these paths (so we know what's the
 3. **Re-verify evidence against HEAD with severity-prioritized depth:**
    - **CRITICAL and HIGH:** fully re-verify every finding's `Where:` and `Evidence:` against current HEAD. File moved? Line shifted? Pattern still present? Stale items are flagged but not silently dropped — flag them as `STALE — re-snapshot before action` and keep in the backlog.
    - **MED and LOW:** spot-check only at synthesis time. Full re-verification is deferred until the item is selected for Wave 2 execution (re-snapshot at the moment of fix-PR creation, not at synthesis).
-   This keeps synthesis tractable when 18 lanes return hundreds of findings — full re-verification of every MED/LOW would dominate the synthesis budget for low marginal value.
+     This keeps synthesis tractable when 18 lanes return hundreds of findings — full re-verification of every MED/LOW would dominate the synthesis budget for low marginal value.
 4. Produce `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit.md` (the **synthesis doc**, not this design doc) containing:
    - Top 10 by impact (CRITICAL/HIGH first).
    - Full ranked backlog.

@@ -62,6 +62,7 @@
 ## Task 1 — Copy allowlist module
 
 **Files:**
+
 - Create: `packages/schemas/src/recommendation-outcome-copy.ts`
 - Create: `packages/schemas/src/__tests__/recommendation-outcome-copy.test.ts`
 - Modify: `packages/schemas/src/index.ts`
@@ -170,10 +171,7 @@ export interface OutcomeCopyValues {
   windowDays: number;
 }
 
-export function renderOutcomeCopy(
-  template: string,
-  values: OutcomeCopyValues,
-): string | null {
+export function renderOutcomeCopy(template: string, values: OutcomeCopyValues): string | null {
   if (!(template in ALLOWLISTED_TEMPLATES)) return null;
   const fmt = ALLOWLISTED_TEMPLATES[template as OutcomeCopyTemplate];
   return fmt
@@ -218,6 +216,7 @@ git commit -m "feat(riley-pr3): allowlisted directional copy templates"
 ## Task 2 — Add `"observed"` ActivityKind
 
 **Files:**
+
 - Modify: `packages/schemas/src/cockpit-activity.ts`
 - Modify: `packages/schemas/src/__tests__/cockpit-activity.test.ts`
 
@@ -289,6 +288,7 @@ git commit -m "feat(riley-pr3): add 'observed' ActivityKind for outcome rows"
 ## Task 3 — Outcome attribution config
 
 **Files:**
+
 - Create: `packages/core/src/recommendations/outcome-attribution-config.ts`
 - Create: `packages/core/src/recommendations/__tests__/outcome-attribution-config.test.ts`
 - Modify: `packages/core/src/recommendations/index.ts`
@@ -437,6 +437,7 @@ git commit -m "feat(riley-pr3): per-kind attribution config + settlement lag"
 ## Task 4 — Interface definitions (DI surfaces)
 
 **Files:**
+
 - Create: `packages/core/src/recommendations/outcome-attribution-types.ts`
 - Modify: `packages/core/src/recommendations/index.ts`
 
@@ -608,6 +609,7 @@ git commit -m "feat(riley-pr3): attribution DI interfaces (provider, stores, row
 ## Task 5 — Pure attribution logic
 
 **Files:**
+
 - Create: `packages/core/src/recommendations/outcome-attribution.ts`
 - Create: `packages/core/src/recommendations/__tests__/outcome-attribution.test.ts`
 - Modify: `packages/core/src/recommendations/index.ts`
@@ -620,10 +622,7 @@ Create `packages/core/src/recommendations/__tests__/outcome-attribution.test.ts`
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
-import {
-  attributeOneRecommendation,
-  runRileyOutcomeAttribution,
-} from "../outcome-attribution.js";
+import { attributeOneRecommendation, runRileyOutcomeAttribution } from "../outcome-attribution.js";
 import type {
   AttributableRecommendation,
   AttributableRecommendationStore,
@@ -841,9 +840,7 @@ describe("runRileyOutcomeAttribution — orchestration", () => {
     };
     const insightsProvider: MetaInsightsProvider = {
       getWindowMetrics: vi.fn().mockImplementation(async ({ startInclusive }) => {
-        return startInclusive.getTime() < REC.resolvedAt.getTime()
-          ? w(10000, 0.02)
-          : w(800, 0.02);
+        return startInclusive.getTime() < REC.resolvedAt.getTime() ? w(10000, 0.02) : w(800, 0.02);
       }),
     };
     const outcomeStore: RecommendationOutcomeStore = {
@@ -879,7 +876,9 @@ describe("runRileyOutcomeAttribution — orchestration", () => {
 
   it("short-circuits when outcome already exists (skippedExisting++)", async () => {
     const deps = buildDeps();
-    (deps.outcomeStore.existsByRecommendationId as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (deps.outcomeStore.existsByRecommendationId as ReturnType<typeof vi.fn>).mockResolvedValue(
+      true,
+    );
     const summary = await runRileyOutcomeAttribution({
       ...deps,
       orgId: "org-1",
@@ -893,9 +892,9 @@ describe("runRileyOutcomeAttribution — orchestration", () => {
 
   it("writes hidden audit row + increments hiddenByFlag on contamination", async () => {
     const deps = buildDeps();
-    (deps.recommendationStore.findOverlapsForCampaign as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "rec-2", actionKind: "refresh_creative" },
-    ]);
+    (
+      deps.recommendationStore.findOverlapsForCampaign as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([{ id: "rec-2", actionKind: "refresh_creative" }]);
     const summary = await runRileyOutcomeAttribution({
       ...deps,
       orgId: "org-1",
@@ -1236,6 +1235,7 @@ git commit -m "feat(riley-pr3): pure directional attribution logic + orchestrato
 ## Task 6 — Prisma schema + migration
 
 **Files:**
+
 - Modify: `packages/db/prisma/schema.prisma`
 - Create: `packages/db/prisma/migrations/<ts>_riley_recommendation_outcome/migration.sql`
 
@@ -1367,6 +1367,7 @@ git commit -m "feat(riley-pr3): add RecommendationOutcome table + migration"
 ## Task 7 — `PrismaRecommendationOutcomeStore`
 
 **Files:**
+
 - Create: `packages/db/src/recommendation-outcome-store.ts`
 - Create: `packages/db/src/__tests__/recommendation-outcome-store.test.ts`
 - Modify: `packages/db/src/index.ts`
@@ -1473,7 +1474,9 @@ describe("PrismaRecommendationOutcomeStore.existsByRecommendationId", () => {
 
   it("returns false when no row exists", async () => {
     const prisma = buildPrismaMock();
-    (prisma.recommendationOutcome.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    (prisma.recommendationOutcome.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      null,
+    );
     const store = new PrismaRecommendationOutcomeStore(prisma as never);
     expect(await store.existsByRecommendationId("rec-1")).toBe(false);
   });
@@ -1572,9 +1575,7 @@ describe("extractCampaignIdentity", () => {
   });
 
   it("returns null when no campaign identity is findable", () => {
-    expect(
-      extractCampaignIdentity({ targetEntities: {}, parameters: {} }),
-    ).toBeNull();
+    expect(extractCampaignIdentity({ targetEntities: {}, parameters: {} })).toBeNull();
   });
 
   it("returns null on malformed entities (no campaign element)", () => {
@@ -1752,9 +1753,7 @@ export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeSt
           // Prisma nullable JSON column: must use Prisma.JsonNull, not raw null.
           copyTemplate: row.copyTemplate,
           copyValues:
-            row.copyValues === null
-              ? Prisma.JsonNull
-              : (row.copyValues as Prisma.InputJsonValue),
+            row.copyValues === null ? Prisma.JsonNull : (row.copyValues as Prisma.InputJsonValue),
           visibilityFlags: row.visibilityFlags as Prisma.InputJsonValue,
         },
       });
@@ -1821,9 +1820,7 @@ function projectReadModel(row: {
   recommendation: { targetEntities: Prisma.JsonValue; parameters: Prisma.JsonValue } | null;
 }): RecommendationOutcomeReadModel {
   const cv = row.copyValues as { deltaPct?: number; windowDays?: number } | null;
-  const campaign = row.recommendation
-    ? extractCampaignIdentity(row.recommendation)
-    : null;
+  const campaign = row.recommendation ? extractCampaignIdentity(row.recommendation) : null;
   return {
     id: row.id,
     recommendationId: row.recommendationId,
@@ -1854,9 +1851,7 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
     // in projectCandidate() since each kind has its own windowDays.
     const maxWindowDays = Math.max(...Object.values(KIND_CONFIG).map((c) => c.windowDays));
     const cutoff = new Date(
-      args.now.getTime() -
-        SETTLEMENT_LAG_HOURS * MS_PER_HOUR -
-        maxWindowDays * MS_PER_DAY,
+      args.now.getTime() - SETTLEMENT_LAG_HOURS * MS_PER_HOUR - maxWindowDays * MS_PER_DAY,
     );
 
     const rows = await this.prisma.pendingActionRecord.findMany({
@@ -1975,6 +1970,7 @@ git commit -m "feat(riley-pr3): Prisma RecommendationOutcome + AttributableRecom
 ## Task 8 — API route `/api/cockpit/riley/outcomes`
 
 **Files:**
+
 - Create: `apps/api/src/routes/cockpit/riley/outcomes.ts`
 - Create: `apps/api/src/__tests__/api-cockpit-riley-outcomes.test.ts`
 - Modify: `apps/api/src/app.ts` (register the route)
@@ -2087,9 +2083,7 @@ describe("GET /api/cockpit/riley/outcomes", () => {
       url: "/api/cockpit/riley/outcomes?orgId=org-1",
     });
     expect(listRenderable).toHaveBeenCalledTimes(1);
-    expect(listRenderable).toHaveBeenCalledWith(
-      expect.objectContaining({ orgId: "org-1" }),
-    );
+    expect(listRenderable).toHaveBeenCalledWith(expect.objectContaining({ orgId: "org-1" }));
   });
 });
 ```
@@ -2200,6 +2194,7 @@ git commit -m "feat(riley-pr3): API route /api/cockpit/riley/outcomes → Activi
 ## Task 9 — Dispatch cron in `ad-optimizer`
 
 **Files:**
+
 - Modify: `packages/ad-optimizer/src/inngest-functions.ts`
 - Modify: `packages/ad-optimizer/src/__tests__/inngest-functions.test.ts` (if it exists; otherwise create alongside)
 
@@ -2233,8 +2228,14 @@ describe("createRileyOutcomeAttributionDispatch", () => {
     await factory.handler({ event: { data: {} }, step: makeStubStep() });
     expect(listRileyOrgs).toHaveBeenCalled();
     expect(sendEvent).toHaveBeenCalledTimes(2);
-    expect(sendEvent).toHaveBeenNthCalledWith(1, { name: "riley.outcome.attribute", data: { orgId: "org-1" } });
-    expect(sendEvent).toHaveBeenNthCalledWith(2, { name: "riley.outcome.attribute", data: { orgId: "org-2" } });
+    expect(sendEvent).toHaveBeenNthCalledWith(1, {
+      name: "riley.outcome.attribute",
+      data: { orgId: "org-1" },
+    });
+    expect(sendEvent).toHaveBeenNthCalledWith(2, {
+      name: "riley.outcome.attribute",
+      data: { orgId: "org-2" },
+    });
   });
 });
 
@@ -2307,6 +2308,7 @@ git commit -m "feat(riley-pr3): riley-outcome-attribution-dispatch cron factory"
 ## Task 10 — Per-org worker + bootstrap wiring + kill-switch
 
 **Files:**
+
 - Create: `apps/api/src/services/cron/riley-outcome-attribution.ts`
 - Create: `apps/api/src/__tests__/api-cockpit-riley-outcome-cron.test.ts`
 - Modify: `apps/api/src/bootstrap/inngest.ts`
@@ -2349,7 +2351,10 @@ describe("createRileyOutcomeAttributionWorker", () => {
     const deps = buildDeps();
     const fn = createRileyOutcomeAttributionWorker(deps);
     const out = await fn.handler({ event: EVENT, step: STEP_STUB });
-    expect(deps.runRileyOutcomeAttribution).toHaveBeenCalledWith({ orgId: "org-1", now: expect.any(Date) });
+    expect(deps.runRileyOutcomeAttribution).toHaveBeenCalledWith({
+      orgId: "org-1",
+      now: expect.any(Date),
+    });
     expect(out).toMatchObject({ orgId: "org-1" });
     expect(deps.logger.info).toHaveBeenCalled();
   });
@@ -2389,9 +2394,16 @@ import {
 } from "@switchboard/core";
 
 export interface RileyOutcomeAttributionWorkerDeps {
-  runRileyOutcomeAttribution: (args: { orgId: string; now: Date }) => Promise<RileyOutcomeRunSummary>;
+  runRileyOutcomeAttribution: (args: {
+    orgId: string;
+    now: Date;
+  }) => Promise<RileyOutcomeRunSummary>;
   readEnabledFlag: () => boolean;
-  logger: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void };
+  logger: {
+    info: (...args: unknown[]) => void;
+    warn: (...args: unknown[]) => void;
+    error: (...args: unknown[]) => void;
+  };
 }
 
 export function createRileyOutcomeAttributionWorker(deps: RileyOutcomeAttributionWorkerDeps) {
@@ -2424,8 +2436,7 @@ export function bindRileyOutcomeOrchestrator(deps: {
   insightsProvider: MetaInsightsProvider;
   outcomeStore: RecommendationOutcomeStore;
 }) {
-  return (args: { orgId: string; now: Date }) =>
-    runRileyOutcomeAttribution({ ...deps, ...args });
+  return (args: { orgId: string; now: Date }) => runRileyOutcomeAttribution({ ...deps, ...args });
 }
 ```
 
@@ -2483,11 +2494,7 @@ In `apps/api/src/bootstrap/inngest.ts`:
    ```ts
    await app.register(inngestFastify, {
      client: inngestClient,
-     functions: [
-       /* existing */,
-       rileyOutcomeDispatch,
-       rileyOutcomeWorker,
-     ],
+     functions: [, /* existing */ rileyOutcomeDispatch, rileyOutcomeWorker],
    });
    ```
 
@@ -2548,6 +2555,7 @@ git commit -m "feat(riley-pr3): wire dispatch+worker into bootstrap; add kill-sw
 The /riley page already calls `riley-activity-translator` for activity rows. To surface outcomes, the page (or API aggregator) must also call the new outcomes route and merge the rows.
 
 **Files:**
+
 - Modify: existing `/riley` activity-feed loader (path TBD by inspection)
 
 - [ ] **Step 11.1: Locate the existing activity-feed call site**
@@ -2603,7 +2611,13 @@ const activity: ActivityRow[] = [
   { id: "a-1", time: "11:42", timestampIso: "2026-05-01T11:42:00Z", kind: "paused", head: "..." },
 ];
 const outcomes: ActivityRow[] = [
-  { id: "outcome:o-1", time: "07:00", timestampIso: "2026-05-08T07:00:00Z", kind: "observed", head: "Spend fell 92.0% in 7d after pause." },
+  {
+    id: "outcome:o-1",
+    time: "07:00",
+    timestampIso: "2026-05-08T07:00:00Z",
+    kind: "observed",
+    head: "Spend fell 92.0% in 7d after pause.",
+  },
 ];
 
 describe("mergeRileyActivityAndOutcomes", () => {
@@ -2613,8 +2627,20 @@ describe("mergeRileyActivityAndOutcomes", () => {
   });
 
   it("preserves order when timestamps are equal (stable sort)", () => {
-    const a: ActivityRow = { id: "a-eq", time: "07:00", timestampIso: "2026-05-08T07:00:00Z", kind: "paused", head: "..." };
-    const o: ActivityRow = { id: "outcome:o-eq", time: "07:00", timestampIso: "2026-05-08T07:00:00Z", kind: "observed", head: "..." };
+    const a: ActivityRow = {
+      id: "a-eq",
+      time: "07:00",
+      timestampIso: "2026-05-08T07:00:00Z",
+      kind: "paused",
+      head: "...",
+    };
+    const o: ActivityRow = {
+      id: "outcome:o-eq",
+      time: "07:00",
+      timestampIso: "2026-05-08T07:00:00Z",
+      kind: "observed",
+      head: "...",
+    };
     const merged = mergeRileyActivityAndOutcomes([a], [o]);
     expect(merged.map((r) => r.id)).toEqual(["a-eq", "outcome:o-eq"]);
   });
@@ -2644,6 +2670,7 @@ git commit -m "feat(riley-pr3): merge outcomes into /riley activity feed"
 ## Task 12 — B.2 spec amendment
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-05-13-riley-cockpit-home-design.md`
 
 - [ ] **Step 12.1: Locate the B.2 honest-impact guardrail section**

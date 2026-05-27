@@ -18,36 +18,36 @@
 
 ### Create
 
-| Path | Responsibility |
-|---|---|
-| `apps/api/src/utils/validation-error.ts` | Shared `replyValidationError(reply, zodError)` helper — the §4.3 normalized envelope. |
-| `apps/api/src/utils/__tests__/validation-error.test.ts` | Vitest suite for `replyValidationError`. |
-| `apps/api/src/utils/auth-fallback.ts` | `buildDevAuthFallback(app)` factory returning a preHandler — consolidates the `if (app.authDisabled) populate from x-org-id` block currently duplicated in 4 routes. Factory shape avoids Fastify `this`-binding fragility across plugin scopes. |
-| `apps/api/src/utils/__tests__/auth-fallback.test.ts` | Vitest suite for `buildDevAuthFallback`. |
-| `apps/api/src/decorators/require-org.ts` | `requireOrg` + `requireOrgForMutation` typed preHandlers + module augmentation adding narrowed `request.orgId: string` and `request.actorId: string`. |
-| `apps/api/src/decorators/__tests__/require-org.test.ts` | Vitest suite for both decorators. |
-| `.agent/tools/route-class-validator.ts` | Per-class matrix validation rules + `validateRouteClass(sourceFile, repoPath): Warning[]` API. Pure data — no I/O. |
-| `.agent/tools/__tests__/route-class-validator.test.ts` | Vitest suite for the validator. |
+| Path                                                    | Responsibility                                                                                                                                                                                                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/api/src/utils/validation-error.ts`                | Shared `replyValidationError(reply, zodError)` helper — the §4.3 normalized envelope.                                                                                                                                                            |
+| `apps/api/src/utils/__tests__/validation-error.test.ts` | Vitest suite for `replyValidationError`.                                                                                                                                                                                                         |
+| `apps/api/src/utils/auth-fallback.ts`                   | `buildDevAuthFallback(app)` factory returning a preHandler — consolidates the `if (app.authDisabled) populate from x-org-id` block currently duplicated in 4 routes. Factory shape avoids Fastify `this`-binding fragility across plugin scopes. |
+| `apps/api/src/utils/__tests__/auth-fallback.test.ts`    | Vitest suite for `buildDevAuthFallback`.                                                                                                                                                                                                         |
+| `apps/api/src/decorators/require-org.ts`                | `requireOrg` + `requireOrgForMutation` typed preHandlers + module augmentation adding narrowed `request.orgId: string` and `request.actorId: string`.                                                                                            |
+| `apps/api/src/decorators/__tests__/require-org.test.ts` | Vitest suite for both decorators.                                                                                                                                                                                                                |
+| `.agent/tools/route-class-validator.ts`                 | Per-class matrix validation rules + `validateRouteClass(sourceFile, repoPath): Warning[]` API. Pure data — no I/O.                                                                                                                               |
+| `.agent/tools/__tests__/route-class-validator.test.ts`  | Vitest suite for the validator.                                                                                                                                                                                                                  |
 
 ### Modify
 
-| Path | Change |
-|---|---|
-| `apps/api/src/utils/idempotency-key.ts` | Add `requireIdempotencyKey(request, reply): string \| null` mandatory variant (existing `getIdempotencyKey` unchanged). |
-| `apps/api/src/utils/__tests__/idempotency-key.test.ts` | Extend with require-variant tests (the file may not exist yet — if not, create it). |
-| `apps/api/src/app.ts` | Only the `FastifyRequest` module augmentation at line 43 extends with the new narrowed `orgId` + `actorId` properties. **No `app.decorate("requireOrg", ...)` registration** — PR-1 uses direct imports per Task 4 / Task 10. |
-| `apps/api/src/__tests__/test-server.ts` | No change required (decorators are direct imports). If any test imports `requireOrg` directly, that's the only adjustment. |
-| `apps/api/src/bootstrap/operator-intents/recommendation.ts` | Cohort B → A migration: handler fetches the recommendation row inside the try block, returns `failed-RECOMMENDATION_NOT_FOUND` for both missing-row and tenant-mismatch. Replace the comment that says "made unreachable by the pre-flight checks in the route." |
-| `apps/api/src/routes/recommendations.ts` | Remove the pre-flight `getById` + `row.orgId !== orgId` block (lines 178-184 today). Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)` (no `app.decorate`). Drop the duplicated `app.addHook("preHandler", ...)` block. Add `// @route-class: operator-direct` header. |
-| `apps/api/src/routes/dashboard-opportunities.ts` | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
-| `apps/api/src/routes/lifecycle-disqualifications.ts` | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
-| `apps/api/src/routes/admin-consent.ts` | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header. |
-| `apps/api/src/routes/__tests__/dashboard-opportunities-ingress.test.ts` | Add: 400 when Idempotency-Key absent; decorator-narrowed `request.orgId` reaches handler; existing happy/failure cases continue to pass. |
-| `apps/api/src/routes/__tests__/recommendations-ingress.test.ts` | Add: 400 when Idempotency-Key absent; **WorkTrace persisted for tenant-reject path** (cross-tenant `getById` no longer pre-flight-rejected); existing tests continue to pass. |
-| `apps/api/src/routes/__tests__/lifecycle-disqualifications-ingress.test.ts` | Add: 400 when Idempotency-Key absent; decorator-narrowed contract; existing tests continue to pass. |
-| `apps/api/src/routes/__tests__/admin-consent.test.ts` (or `admin-consent-ingress.test.ts`) | Add: 400 when Idempotency-Key absent; decorator-narrowed contract; existing tests continue to pass. |
-| `.agent/tools/check-routes.ts` | Add `--mode=warn-touched` CLI flag. When set: detect touched files via `git diff --name-only origin/main HEAD` filtered to route paths, parse each touched route's `@route-class` header, invoke `validateRouteClass`, print warnings to stderr, exit 0. When unset: existing behavior. |
-| `.github/workflows/ci.yml` | Add new step in `architecture` job: `Route class advisory` running `bash .agent/tools/check-routes --mode=warn-touched` with `continue-on-error: true`. |
+| Path                                                                                       | Change                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api/src/utils/idempotency-key.ts`                                                    | Add `requireIdempotencyKey(request, reply): string \| null` mandatory variant (existing `getIdempotencyKey` unchanged).                                                                                                                                                                                                      |
+| `apps/api/src/utils/__tests__/idempotency-key.test.ts`                                     | Extend with require-variant tests (the file may not exist yet — if not, create it).                                                                                                                                                                                                                                          |
+| `apps/api/src/app.ts`                                                                      | Only the `FastifyRequest` module augmentation at line 43 extends with the new narrowed `orgId` + `actorId` properties. **No `app.decorate("requireOrg", ...)` registration** — PR-1 uses direct imports per Task 4 / Task 10.                                                                                                |
+| `apps/api/src/__tests__/test-server.ts`                                                    | No change required (decorators are direct imports). If any test imports `requireOrg` directly, that's the only adjustment.                                                                                                                                                                                                   |
+| `apps/api/src/bootstrap/operator-intents/recommendation.ts`                                | Cohort B → A migration: handler fetches the recommendation row inside the try block, returns `failed-RECOMMENDATION_NOT_FOUND` for both missing-row and tenant-mismatch. Replace the comment that says "made unreachable by the pre-flight checks in the route."                                                             |
+| `apps/api/src/routes/recommendations.ts`                                                   | Remove the pre-flight `getById` + `row.orgId !== orgId` block (lines 178-184 today). Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)` (no `app.decorate`). Drop the duplicated `app.addHook("preHandler", ...)` block. Add `// @route-class: operator-direct` header. |
+| `apps/api/src/routes/dashboard-opportunities.ts`                                           | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header.                                                                                                                                          |
+| `apps/api/src/routes/lifecycle-disqualifications.ts`                                       | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header.                                                                                                                                          |
+| `apps/api/src/routes/admin-consent.ts`                                                     | Adopt direct-imported `requireOrgForMutation`, `requireIdempotencyKey`, and `buildDevAuthFallback(app)`. Drop duplicated preHandler. Add `// @route-class: operator-direct` header.                                                                                                                                          |
+| `apps/api/src/routes/__tests__/dashboard-opportunities-ingress.test.ts`                    | Add: 400 when Idempotency-Key absent; decorator-narrowed `request.orgId` reaches handler; existing happy/failure cases continue to pass.                                                                                                                                                                                     |
+| `apps/api/src/routes/__tests__/recommendations-ingress.test.ts`                            | Add: 400 when Idempotency-Key absent; **WorkTrace persisted for tenant-reject path** (cross-tenant `getById` no longer pre-flight-rejected); existing tests continue to pass.                                                                                                                                                |
+| `apps/api/src/routes/__tests__/lifecycle-disqualifications-ingress.test.ts`                | Add: 400 when Idempotency-Key absent; decorator-narrowed contract; existing tests continue to pass.                                                                                                                                                                                                                          |
+| `apps/api/src/routes/__tests__/admin-consent.test.ts` (or `admin-consent-ingress.test.ts`) | Add: 400 when Idempotency-Key absent; decorator-narrowed contract; existing tests continue to pass.                                                                                                                                                                                                                          |
+| `.agent/tools/check-routes.ts`                                                             | Add `--mode=warn-touched` CLI flag. When set: detect touched files via `git diff --name-only origin/main HEAD` filtered to route paths, parse each touched route's `@route-class` header, invoke `validateRouteClass`, print warnings to stderr, exit 0. When unset: existing behavior.                                      |
+| `.github/workflows/ci.yml`                                                                 | Add new step in `architecture` job: `Route class advisory` running `bash .agent/tools/check-routes --mode=warn-touched` with `continue-on-error: true`.                                                                                                                                                                      |
 
 ### Untouched but worth noting
 
@@ -97,6 +97,7 @@ rg -n 'recommendations/[^/]+/act|dashboard/opportunities/[^/]+/stage|lifecycle/d
 **Pass 3 — route-constant inspection (manual):**
 
 Read these files top-to-bottom (existence varies by codebase) and identify any route helper functions or constants:
+
 - `apps/dashboard/src/lib/api-client.ts`
 - `apps/dashboard/src/lib/routes.ts` (if exists)
 - `apps/dashboard/src/lib/hooks/use-*.ts` for the 4 endpoint families
@@ -107,6 +108,7 @@ Capture results into a scratch note: which files call these endpoints (directly 
 - [ ] **Step 3: Audit each caller for the header.**
 
 For each non-test caller, open the file and check the `fetch` / `apiClient.post` / equivalent call. Verify either:
+
 - The call passes `headers: { "Idempotency-Key": <some_key> }`, OR
 - The shared `apiClient` / `fetch` wrapper auto-injects it on POST/PATCH/DELETE.
 
@@ -144,6 +146,7 @@ async function mutationFetch(url: string, body: unknown) {
 ```
 
 Add a unit test for `createIdempotencyKey`:
+
 - When `globalThis.crypto.randomUUID` is defined → returns the UUID.
 - When `globalThis.crypto` is undefined → returns the `idemp_*` fallback.
 - Returned value is always a non-empty string.
@@ -184,6 +187,7 @@ If the audit found zero callers needing fixes, document that result in the PR de
 ### Task 1: Add `requireIdempotencyKey()` mandatory helper
 
 **Files:**
+
 - Modify: `apps/api/src/utils/idempotency-key.ts`
 - Modify or create: `apps/api/src/utils/__tests__/idempotency-key.test.ts`
 
@@ -298,10 +302,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
  * Other route classes use `getIdempotencyKey` (optional) or omit the contract
  * entirely.
  */
-export function requireIdempotencyKey(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): string | null {
+export function requireIdempotencyKey(request: FastifyRequest, reply: FastifyReply): string | null {
   const key = getIdempotencyKey(request);
   if (!key) {
     reply.code(400).send({
@@ -338,13 +339,14 @@ EOF
 )"
 ```
 
-*Note: the worktree path for the IMPL PR will be set up by the executing agent via `superpowers:using-git-worktrees`; the path in this plan's git commands assumes `audit-phase3a-impl-pr1` per convention. Adjust if the actual worktree path differs.*
+_Note: the worktree path for the IMPL PR will be set up by the executing agent via `superpowers:using-git-worktrees`; the path in this plan's git commands assumes `audit-phase3a-impl-pr1` per convention. Adjust if the actual worktree path differs._
 
 ---
 
 ### Task 2: Create `validation-error.ts` helper
 
 **Files:**
+
 - Create: `apps/api/src/utils/validation-error.ts`
 - Create: `apps/api/src/utils/__tests__/validation-error.test.ts`
 
@@ -460,6 +462,7 @@ EOF
 ### Task 3: Create `auth-fallback.ts` — shared dev-mode preHandler
 
 **Files:**
+
 - Create: `apps/api/src/utils/auth-fallback.ts`
 - Create: `apps/api/src/utils/__tests__/auth-fallback.test.ts`
 
@@ -657,6 +660,7 @@ EOF
 ### Task 4: Create `decorators/require-org.ts` — typed Fastify decorators
 
 **Files:**
+
 - Create: `apps/api/src/decorators/require-org.ts`
 - Create: `apps/api/src/decorators/__tests__/require-org.test.ts`
 
@@ -674,11 +678,10 @@ describe("requireOrg preHandler (read-side)", () => {
   it("narrows request.orgId + request.actorId when organizationIdFromAuth is set", async () => {
     const app = Fastify();
     app.decorate("authDisabled", true);
-    app.get(
-      "/probe",
-      { preHandler: [buildDevAuthFallback(app), requireOrg] },
-      (request) => ({ orgId: request.orgId, actorId: request.actorId }),
-    );
+    app.get("/probe", { preHandler: [buildDevAuthFallback(app), requireOrg] }, (request) => ({
+      orgId: request.orgId,
+      actorId: request.actorId,
+    }));
 
     const res = await app.inject({
       method: "GET",
@@ -697,11 +700,10 @@ describe("requireOrg preHandler (read-side)", () => {
       request.organizationIdFromAuth = "org_b";
       // principalIdFromAuth intentionally NOT set
     });
-    app.get(
-      "/probe",
-      { preHandler: requireOrg },
-      (request) => ({ orgId: request.orgId, actorId: request.actorId }),
-    );
+    app.get("/probe", { preHandler: requireOrg }, (request) => ({
+      orgId: request.orgId,
+      actorId: request.actorId,
+    }));
 
     const res = await app.inject({ method: "GET", url: "/probe" });
     expect(res.statusCode).toBe(200);
@@ -885,6 +887,7 @@ EOF
 ### Task 5: Cohort B → A handler migration — `recommendation.ts`
 
 **Files:**
+
 - Modify: `apps/api/src/bootstrap/operator-intents/recommendation.ts`
 - Modify: an existing test file or create `apps/api/src/bootstrap/operator-intents/__tests__/recommendation-handler.test.ts`
 
@@ -943,7 +946,7 @@ describe("buildActOnRecommendationHandler (Cohort A semantics)", () => {
   it("returns failed-RECOMMENDATION_NOT_FOUND when row.orgId mismatches workUnit.organizationId", async () => {
     const applyAct = vi.fn();
     const store = makeStore({
-      getById: async () => ({ id: "rec_1", orgId: "org_other" } as never),
+      getById: async () => ({ id: "rec_1", orgId: "org_other" }) as never,
       applyAct: applyAct as never,
     });
     const handler = buildActOnRecommendationHandler(store);
@@ -959,7 +962,7 @@ describe("buildActOnRecommendationHandler (Cohort A semantics)", () => {
 
   it("returns completed when row exists in the right org and act succeeds", async () => {
     const store = makeStore({
-      getById: async () => ({ id: "rec_1", orgId: "org_a" } as never),
+      getById: async () => ({ id: "rec_1", orgId: "org_a" }) as never,
       applyAct: async () => ({ status: "ok" as const, row: { id: "rec_1" } as never }),
     });
     const handler = buildActOnRecommendationHandler(store);
@@ -971,7 +974,7 @@ describe("buildActOnRecommendationHandler (Cohort A semantics)", () => {
 
   it("returns failed-RECOMMENDATION_INVALID_ACTION when applyAct rejects with surface mismatch", async () => {
     const store = makeStore({
-      getById: async () => ({ id: "rec_1", orgId: "org_a" } as never),
+      getById: async () => ({ id: "rec_1", orgId: "org_a" }) as never,
       applyAct: async () => {
         throw new Error("surface accepts only undo");
       },
@@ -1096,6 +1099,7 @@ EOF
 ### Task 6: Refactor `recommendations.ts` route — adopt decorators + remove pre-flight
 
 **Files:**
+
 - Modify: `apps/api/src/routes/recommendations.ts`
 - Modify: `apps/api/src/routes/__tests__/recommendations-ingress.test.ts` (file may need to be located first)
 
@@ -1199,7 +1203,7 @@ Expected: 2-3 FAILs (missing-key check + tenant-reject WorkTrace assertion; exis
 
 - [ ] **Step 4: Refactor `recommendations.ts` route.**
 
-**Apply a minimal diff against the current file on `main`** — do not blindly replace the file contents from this plan's reference snippet. Line numbers and surrounding code (rate limit config, response shapes, schema metadata, route paths) may have drifted since plan-writing. The reference snippet below shows the *target shape*; the implementing agent reads the current file first, identifies the 9 specific deltas listed afterward, and applies them surgically. Re-run `git diff` after each delta to verify nothing unrelated changed.
+**Apply a minimal diff against the current file on `main`** — do not blindly replace the file contents from this plan's reference snippet. Line numbers and surrounding code (rate limit config, response shapes, schema metadata, route paths) may have drifted since plan-writing. The reference snippet below shows the _target shape_; the implementing agent reads the current file first, identifies the 9 specific deltas listed afterward, and applies them surgically. Re-run `git diff` after each delta to verify nothing unrelated changed.
 
 Target shape (for reference — apply as a delta, not a replacement):
 
@@ -1348,7 +1352,10 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
         headers: {
           type: "object",
           properties: {
-            "Idempotency-Key": { type: "string", description: "Required per Route Governance Contract v1" },
+            "Idempotency-Key": {
+              type: "string",
+              description: "Required per Route Governance Contract v1",
+            },
           },
         },
         body: {
@@ -1444,6 +1451,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 ```
 
 Key diffs from current:
+
 1. `// @route-class: operator-direct` header at top.
 2. Imports: drop `getIdempotencyKey`, add `requireIdempotencyKey`, `buildDevAuthFallback`, `requireOrg`, `requireOrgForMutation`, `replyValidationError`, `z`. **Do not** import `requireOrganizationScope` (the legacy helper) — the decorators replace it.
 3. Drop the `app.addHook("preHandler", ...)` block (the duplicated dev fallback) — replaced by `app.addHook("preHandler", buildDevAuthFallback(app))`.
@@ -1486,6 +1494,7 @@ EOF
 ### Task 7: Refactor `dashboard-opportunities.ts` route
 
 **Files:**
+
 - Modify: `apps/api/src/routes/dashboard-opportunities.ts`
 - Modify: `apps/api/src/routes/__tests__/dashboard-opportunities-ingress.test.ts`
 
@@ -1564,19 +1573,15 @@ const StageTransitionRequestSchema = z.object({
 export const dashboardOpportunitiesRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", buildDevAuthFallback(app));
 
-  app.get(
-    "/api/dashboard/opportunities",
-    { preHandler: requireOrg },
-    async (request, reply) => {
-      if (!app.opportunityStore) {
-        return reply.code(503).send({ error: "Opportunity store not available" });
-      }
-      return await listOpportunitiesForBoard(
-        { orgId: request.orgId },
-        { opportunityStore: app.opportunityStore },
-      );
-    },
-  );
+  app.get("/api/dashboard/opportunities", { preHandler: requireOrg }, async (request, reply) => {
+    if (!app.opportunityStore) {
+      return reply.code(503).send({ error: "Opportunity store not available" });
+    }
+    return await listOpportunitiesForBoard(
+      { orgId: request.orgId },
+      { opportunityStore: app.opportunityStore },
+    );
+  });
 
   app.patch(
     "/api/dashboard/opportunities/:id/stage",
@@ -1619,7 +1624,8 @@ export const dashboardOpportunitiesRoutes: FastifyPluginAsync = async (app) => {
         throw new Error(result.error?.message ?? "Operator mutation execution failed");
       }
 
-      const opportunity = (result.outputs as { opportunity?: PipelineBoardOpportunity }).opportunity;
+      const opportunity = (result.outputs as { opportunity?: PipelineBoardOpportunity })
+        .opportunity;
       if (!opportunity) {
         throw new Error("Operator mutation handler returned no opportunity output");
       }
@@ -1656,6 +1662,7 @@ EOF
 ### Task 8: Refactor `lifecycle-disqualifications.ts` route + add tenant-reject regression test
 
 **Files:**
+
 - Modify: `apps/api/src/routes/lifecycle-disqualifications.ts`
 - Modify: `apps/api/src/routes/__tests__/lifecycle-disqualifications-ingress.test.ts`
 
@@ -1760,6 +1767,7 @@ EOF
 ### Task 9: Refactor `admin-consent.ts` route
 
 **Files:**
+
 - Modify: `apps/api/src/routes/admin-consent.ts`
 - Modify: `apps/api/src/routes/__tests__/admin-consent.test.ts` (or `admin-consent-ingress.test.ts`)
 
@@ -1772,8 +1780,23 @@ Append to existing admin-consent test file:
 ```ts
 describe("admin consent — Route Governance Contract v1 PR-1", () => {
   it.each([
-    ["/api/admin/consent/grant", { contactId: "c1", jurisdiction: "sg", source: "operator_recorded", grantedAt: new Date().toISOString() }],
-    ["/api/admin/consent/revoke", { contactId: "c1", source: "operator_recorded_revocation", revokedAt: new Date().toISOString() }],
+    [
+      "/api/admin/consent/grant",
+      {
+        contactId: "c1",
+        jurisdiction: "sg",
+        source: "operator_recorded",
+        grantedAt: new Date().toISOString(),
+      },
+    ],
+    [
+      "/api/admin/consent/revoke",
+      {
+        contactId: "c1",
+        source: "operator_recorded_revocation",
+        revokedAt: new Date().toISOString(),
+      },
+    ],
     ["/api/admin/consent/clear", { contactId: "c1", notes: "test" }],
   ])("returns 400 missing_idempotency_key on %s when header absent", async (url, payload) => {
     // Reuse the mock service + reader builders already in this file's existing
@@ -1881,6 +1904,7 @@ grep -rIn 'Forbidden: organization-scoped\|Forbidden: organization mismatch\|For
 ```
 
 Expected: 0-3 hits. Each hit is either:
+
 - A test asserting on the English string (update to assert on `error: "forbidden"` + `reason`).
 - A dashboard error-handling branch that surfaces the English message in a toast/notification (update to surface a translated message based on `reason`).
 - An API call wrapper that parses the string for redirect logic (update to switch on `reason`).
@@ -1939,6 +1963,7 @@ If no consumers existed, log that the grep returned zero results and skip the co
 ### Task 12: Create `route-class-validator.ts` — per-class matrix rules
 
 **Files:**
+
 - Create: `.agent/tools/route-class-validator.ts`
 - Create: `.agent/tools/__tests__/route-class-validator.test.ts`
 
@@ -2029,7 +2054,9 @@ describe("validateRouteClass — operator-direct", () => {
       };
     `);
     const warnings = validateRouteClass(sf, "test.ts");
-    expect(warnings.map((w) => w.message).join("\n")).toMatch(/imports requireIdempotencyKey but never calls/);
+    expect(warnings.map((w) => w.message).join("\n")).toMatch(
+      /imports requireIdempotencyKey but never calls/,
+    );
   });
 
   it("warns when requireOrgForMutation is imported but not registered as preHandler", () => {
@@ -2044,7 +2071,9 @@ describe("validateRouteClass — operator-direct", () => {
       };
     `);
     const warnings = validateRouteClass(sf, "test.ts");
-    expect(warnings.map((w) => w.message).join("\n")).toMatch(/imports requireOrgForMutation but does not register/);
+    expect(warnings.map((w) => w.message).join("\n")).toMatch(
+      /imports requireOrgForMutation but does not register/,
+    );
   });
 
   it("warns when there are more mutating handlers than requireIdempotencyKey calls", () => {
@@ -2061,7 +2090,9 @@ describe("validateRouteClass — operator-direct", () => {
       };
     `);
     const warnings = validateRouteClass(sf, "test.ts");
-    expect(warnings.map((w) => w.message).join("\n")).toMatch(/registers 2 mutating handler\(s\) but only calls requireIdempotencyKey 1 time/);
+    expect(warnings.map((w) => w.message).join("\n")).toMatch(
+      /registers 2 mutating handler\(s\) but only calls requireIdempotencyKey 1 time/,
+    );
   });
 
   it("does NOT warn for GET handlers in operator-direct file (admin-consent mixed-class compromise)", () => {
@@ -2218,9 +2249,7 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
   const imports = sf.getImportDeclarations().map((d) => d.getModuleSpecifierValue());
 
   const importsNamed = (name: string) =>
-    sf.getImportDeclarations().some((d) =>
-      d.getNamedImports().some((n) => n.getName() === name),
-    );
+    sf.getImportDeclarations().some((d) => d.getNamedImports().some((n) => n.getName() === name));
 
   // Count CallExpression nodes whose callee identifier matches `name`.
   // ts-morph: SyntaxKind.CallExpression → getExpression() → text comparison.
@@ -2230,7 +2259,9 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
     let count = 0;
     sf.forEachDescendant((node) => {
       if (node.getKindName() === "CallExpression") {
-        const expr = (node as { getExpression?: () => { getText: () => string } }).getExpression?.();
+        const expr = (
+          node as { getExpression?: () => { getText: () => string } }
+        ).getExpression?.();
         if (expr && expr.getText().endsWith(name)) count += 1;
       }
     });
@@ -2286,8 +2317,7 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
     if (!importsNamed("requireOrgForMutation")) {
       warnings.push({
         path: repoPath,
-        message:
-          "operator-direct route should import requireOrgForMutation (spec §6 + §3 matrix)",
+        message: "operator-direct route should import requireOrgForMutation (spec §6 + §3 matrix)",
       });
     } else if (!referencesName("requireOrgForMutation")) {
       // Imported but only the import-decl references it — no preHandler usage.
@@ -2296,7 +2326,8 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
       const identifierCount = (() => {
         let c = 0;
         sf.forEachDescendant((node) => {
-          if (node.getKindName() === "Identifier" && node.getText() === "requireOrgForMutation") c += 1;
+          if (node.getKindName() === "Identifier" && node.getText() === "requireOrgForMutation")
+            c += 1;
         });
         return c;
       })();
@@ -2354,6 +2385,7 @@ EOF
 ### Task 13: Extend `check-routes.ts` with `--mode=warn-touched` flag
 
 **Files:**
+
 - Modify: `.agent/tools/check-routes.ts`
 - Modify or create: `.agent/tools/__tests__/check-routes-warn-mode.test.ts`
 
@@ -2522,6 +2554,7 @@ EOF
 ### Task 14: Wire advisory into CI
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Add a step to the `architecture` job.**
@@ -2529,9 +2562,9 @@ EOF
 In `.github/workflows/ci.yml`, find the `architecture:` job (around line 268). After the existing "Dependency boundary validation" step (~line 302), add:
 
 ```yaml
-      - name: Route class advisory (Route Governance Contract v1)
-        run: bash .agent/tools/check-routes --mode=warn-touched
-        continue-on-error: true
+- name: Route class advisory (Route Governance Contract v1)
+  run: bash .agent/tools/check-routes --mode=warn-touched
+  continue-on-error: true
 ```
 
 - [ ] **Step 2: Confirm YAML is valid.**
@@ -2649,30 +2682,30 @@ EOF
 
 This plan implements PR-1 scope from spec §12 in full. Spec coverage:
 
-| Spec section | Task |
-|---|---|
-| §4.3 validation envelope | Task 2 (`replyValidationError`) + Tasks 6-9 (route refactors) |
-| §4.5 auth-failure envelope | Task 4 (decorator emits it) + Task 11 (consumer audit) |
-| §5.1 Cohort B → A | Task 5 (handler, with `applyAct` not-called hardening) + Task 6 (route) |
-| §6.1-§6.3 typed decorators | Tasks 3 (factory) + 4 (decorators) + 10 (pattern verification) |
-| §7.1 mandatory Idempotency-Key | Task 1 + Tasks 6-9 + Task 0 client compat preflight |
-| §11 crosswalk (PR-1 column) | Tasks 0, 1, 2, 5, 6, 7, 8, 9 collectively |
-| §12 PR-1 scope | All tasks |
-| §12 PR-1 check-routes warning mode | Tasks 12 (AST-usage validator) + 13 + 14 |
-| §14 risk: clients reading auth message string | Task 11 |
-| §14 risk: dashboard clients not sending Idempotency-Key | **Task 0** (hard preflight blocker, not deferred) |
+| Spec section                                            | Task                                                                    |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| §4.3 validation envelope                                | Task 2 (`replyValidationError`) + Tasks 6-9 (route refactors)           |
+| §4.5 auth-failure envelope                              | Task 4 (decorator emits it) + Task 11 (consumer audit)                  |
+| §5.1 Cohort B → A                                       | Task 5 (handler, with `applyAct` not-called hardening) + Task 6 (route) |
+| §6.1-§6.3 typed decorators                              | Tasks 3 (factory) + 4 (decorators) + 10 (pattern verification)          |
+| §7.1 mandatory Idempotency-Key                          | Task 1 + Tasks 6-9 + Task 0 client compat preflight                     |
+| §11 crosswalk (PR-1 column)                             | Tasks 0, 1, 2, 5, 6, 7, 8, 9 collectively                               |
+| §12 PR-1 scope                                          | All tasks                                                               |
+| §12 PR-1 check-routes warning mode                      | Tasks 12 (AST-usage validator) + 13 + 14                                |
+| §14 risk: clients reading auth message string           | Task 11                                                                 |
+| §14 risk: dashboard clients not sending Idempotency-Key | **Task 0** (hard preflight blocker, not deferred)                       |
 
 No `TBD` / `TODO` / "fill in" sections. Most code blocks are runnable as-is; a few rely on inspect-current-code substitutions that the executing agent fills in from local state. Those are intentional — the alternative would freeze line numbers and seed fixtures that drift between plan-writing and execution.
 
 **Known judgment-required substitutions** (catalog so the executing agent knows where to look up rather than copy-paste):
 
-| Location | Substitution | How to resolve |
-|---|---|---|
-| Task 7 happy-path test (`opp_seeded_above`) | Replace with the actual opportunity ID from whichever seed helper the existing `dashboard-opportunities-ingress.test.ts` already uses. | Open the existing test file; reuse its seed pattern (e.g., `seedOpportunity(app)` or `app.opportunityStore!.create({...})`). |
-| Task 9 admin-consent `makeMockConsentService()` / `makeMockConsentReader()` | Replace with the mock builders already present in the file's first describe block. | Locate the helpers above the new describe; if absent, write minimal mocks matching `ConsentService` / `ContactConsentReader` signatures. |
-| Task 6 step 6 / Task 11 step 5 `<touched dashboard client files>` | Replace with the file paths produced by Task 11 step 2's grep. | The Task 11 grep produces the list directly. |
-| Task 0 step 6 `<file paths from Task 0 step 2 results>` | Same as above. | Grep output. |
-| Task 8 step 3 "specific delta list" referencing `dashboard-opportunities.ts` Task 7 template | The 7-item delta list at Task 7 step 4 is the source. | Cross-reference Task 7's code block. |
+| Location                                                                                     | Substitution                                                                                                                           | How to resolve                                                                                                                           |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Task 7 happy-path test (`opp_seeded_above`)                                                  | Replace with the actual opportunity ID from whichever seed helper the existing `dashboard-opportunities-ingress.test.ts` already uses. | Open the existing test file; reuse its seed pattern (e.g., `seedOpportunity(app)` or `app.opportunityStore!.create({...})`).             |
+| Task 9 admin-consent `makeMockConsentService()` / `makeMockConsentReader()`                  | Replace with the mock builders already present in the file's first describe block.                                                     | Locate the helpers above the new describe; if absent, write minimal mocks matching `ConsentService` / `ContactConsentReader` signatures. |
+| Task 6 step 6 / Task 11 step 5 `<touched dashboard client files>`                            | Replace with the file paths produced by Task 11 step 2's grep.                                                                         | The Task 11 grep produces the list directly.                                                                                             |
+| Task 0 step 6 `<file paths from Task 0 step 2 results>`                                      | Same as above.                                                                                                                         | Grep output.                                                                                                                             |
+| Task 8 step 3 "specific delta list" referencing `dashboard-opportunities.ts` Task 7 template | The 7-item delta list at Task 7 step 4 is the source.                                                                                  | Cross-reference Task 7's code block.                                                                                                     |
 
 Type consistency: `requireOrg` / `requireOrgForMutation` are referenced consistently across Tasks 3, 4, 6, 7, 8, 9, 12. `requireIdempotencyKey` consistent across Tasks 1, 6, 7, 8, 9, 12. `replyValidationError` consistent across Tasks 2, 6, 7. `buildDevAuthFallback` (factory pattern) consistent across Tasks 3, 6, 7, 8, 9 — no occurrences of the older free-function `devAuthFallback` form (which relied on Fastify `this`-binding) remain.
 
@@ -2687,6 +2720,7 @@ Type consistency: `requireOrg` / `requireOrgForMutation` are referenced consiste
 ### Scope decision: single PR vs split into PR-1A + PR-1B
 
 The plan keeps PR-1 as a single PR (runtime contract + governance checker together). If the PR grows too large during review (>50 files touched, or >20 commits), split at this seam:
+
 - **PR-1A:** Tasks 0-11 (helpers + decorators + 4 routes + Cohort B → A + dashboard audit). Runtime contract.
 - **PR-1B:** Tasks 12-14 (validator + check-routes mode + CI advisory). Governance checker.
 

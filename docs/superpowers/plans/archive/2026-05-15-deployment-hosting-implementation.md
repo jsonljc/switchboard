@@ -99,11 +99,11 @@ git commit -m "feat(db): add migrate:deploy and migrate:status scripts for Rende
 Edit `apps/chat/src/__tests__/sentry-bootstrap.test.ts`. Change the env-var deletion inside the "is not initialized when …" test from `SENTRY_DSN` to `SENTRY_DSN_SERVER`:
 
 ```typescript
-  it("is not initialized when SENTRY_DSN_SERVER is not set", async () => {
-    delete process.env["SENTRY_DSN_SERVER"];
-    const sentry = await import("../bootstrap/sentry.js");
-    expect(sentry.isSentryInitialized()).toBe(false);
-  });
+it("is not initialized when SENTRY_DSN_SERVER is not set", async () => {
+  delete process.env["SENTRY_DSN_SERVER"];
+  const sentry = await import("../bootstrap/sentry.js");
+  expect(sentry.isSentryInitialized()).toBe(false);
+});
 ```
 
 - [ ] **Step 2.2: Run the test — it should fail**
@@ -113,16 +113,16 @@ Run: `pnpm --filter @switchboard/chat test sentry-bootstrap`
 Expected: `is not initialized when SENTRY_DSN_SERVER is not set` may still pass coincidentally (because nothing sets `SENTRY_DSN_SERVER` yet), but the underlying behavior is still gated on `SENTRY_DSN`. To force a meaningful failure, also add this guard test above it:
 
 ```typescript
-  it("reads SENTRY_DSN_SERVER, not SENTRY_DSN", async () => {
-    delete process.env["SENTRY_DSN"];
-    process.env["SENTRY_DSN_SERVER"] = "https://example@sentry.example.com/1";
-    // Reset module cache so initChatSentry picks up the new env
-    vi.resetModules();
-    const sentry = await import("../bootstrap/sentry.js");
-    await sentry.initChatSentry();
-    expect(sentry.isSentryInitialized()).toBe(true);
-    delete process.env["SENTRY_DSN_SERVER"];
-  });
+it("reads SENTRY_DSN_SERVER, not SENTRY_DSN", async () => {
+  delete process.env["SENTRY_DSN"];
+  process.env["SENTRY_DSN_SERVER"] = "https://example@sentry.example.com/1";
+  // Reset module cache so initChatSentry picks up the new env
+  vi.resetModules();
+  const sentry = await import("../bootstrap/sentry.js");
+  await sentry.initChatSentry();
+  expect(sentry.isSentryInitialized()).toBe(true);
+  delete process.env["SENTRY_DSN_SERVER"];
+});
 ```
 
 Re-run: `pnpm --filter @switchboard/chat test sentry-bootstrap`
@@ -134,13 +134,13 @@ Expected: the new `reads SENTRY_DSN_SERVER, not SENTRY_DSN` test FAILS — becau
 Edit `apps/chat/src/bootstrap/sentry.ts`. Change:
 
 ```typescript
-  const dsn = process.env["SENTRY_DSN"];
+const dsn = process.env["SENTRY_DSN"];
 ```
 
 to:
 
 ```typescript
-  const dsn = process.env["SENTRY_DSN_SERVER"];
+const dsn = process.env["SENTRY_DSN_SERVER"];
 ```
 
 - [ ] **Step 2.4: Re-run the chat sentry tests — they should now pass**
@@ -154,13 +154,13 @@ Expected: all tests pass, including the new `reads SENTRY_DSN_SERVER, not SENTRY
 Edit `apps/api/src/bootstrap/sentry.ts`. Change:
 
 ```typescript
-  const dsn = process.env["SENTRY_DSN"];
+const dsn = process.env["SENTRY_DSN"];
 ```
 
 to:
 
 ```typescript
-  const dsn = process.env["SENTRY_DSN_SERVER"];
+const dsn = process.env["SENTRY_DSN_SERVER"];
 ```
 
 (There is no existing api sentry test to update; the chat tests cover the rename pattern.)
@@ -541,15 +541,15 @@ import { chatHealthRoutes } from "./routes/health.js";
 Immediately above the existing `app.get("/health", async ...)` block, add:
 
 ```typescript
-  // Deep readiness — distinct from the shallow /health above; used by external uptime
-  // probes and Render's readiness gating per docs/superpowers/specs/2026-05-15-deployment-hosting-design.md
-  await app.register(chatHealthRoutes, {
-    prefix: "/api/health",
-    prisma: healthPrisma ?? null,
-    redis: healthRedis ?? null,
-    apiBaseUrl: process.env["SWITCHBOARD_API_URL"] ?? null,
-    internalApiSecret: process.env["INTERNAL_API_SECRET"] ?? null,
-  });
+// Deep readiness — distinct from the shallow /health above; used by external uptime
+// probes and Render's readiness gating per docs/superpowers/specs/2026-05-15-deployment-hosting-design.md
+await app.register(chatHealthRoutes, {
+  prefix: "/api/health",
+  prisma: healthPrisma ?? null,
+  redis: healthRedis ?? null,
+  apiBaseUrl: process.env["SWITCHBOARD_API_URL"] ?? null,
+  internalApiSecret: process.env["INTERNAL_API_SECRET"] ?? null,
+});
 ```
 
 (The `healthPrisma` and `healthRedis` references come from the existing inline `/health` handler — they are already in scope at that point in `main.ts`.)
@@ -629,14 +629,14 @@ services:
     name: switchboard-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerfileTarget: api          # If Step 5.0 verification finds a different field name, replace here.
+    dockerfileTarget: api # If Step 5.0 verification finds a different field name, replace here.
     dockerContext: .
     plan: starter
     region: <RENDER_REGION>
     numInstances: 1
     branch: main
     autoDeploy: true
-    healthCheckPath: /health        # Shallow liveness — Render uses this to gate container promotion.
+    healthCheckPath: /health # Shallow liveness — Render uses this to gate container promotion.
     preDeployCommand: pnpm --filter @switchboard/db run migrate:deploy
     buildFilter:
       paths:
@@ -692,14 +692,14 @@ services:
     name: switchboard-chat
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerfileTarget: chat         # Same caveat as `api` above.
+    dockerfileTarget: chat # Same caveat as `api` above.
     dockerContext: .
     plan: starter
     region: <RENDER_REGION>
     numInstances: 1
     branch: main
     autoDeploy: true
-    healthCheckPath: /health        # Shallow liveness — does NOT depend on api reachability.
+    healthCheckPath: /health # Shallow liveness — does NOT depend on api reachability.
     buildFilter:
       paths:
         - apps/chat/**
@@ -728,7 +728,7 @@ services:
       - key: INTERNAL_API_SECRET
         sync: false
       - key: SWITCHBOARD_API_URL
-        value: http://switchboard-api:3000   # Render private network: http://<service-name>:<PORT>. PORT for api is 3000 (set above).
+        value: http://switchboard-api:3000 # Render private network: http://<service-name>:<PORT>. PORT for api is 3000 (set above).
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
@@ -759,7 +759,7 @@ services:
     plan: starter
     region: <RENDER_REGION>
     maxmemoryPolicy: allkeys-lru
-    ipAllowList: []                # Empty list = private-network only, no public access.
+    ipAllowList: [] # Empty list = private-network only, no public access.
 
 databases:
   - name: switchboard-postgres
@@ -822,20 +822,20 @@ git commit -m "feat(deploy): add render.yaml declaring api+chat+Postgres+Redis t
 
 Create `docs/runbooks/production-urls.md`:
 
-````markdown
+```markdown
 # Production URLs and Hosting Map
 
 > **Status:** Template. Operator fills in at provisioning time per `docs/superpowers/specs/2026-05-15-deployment-hosting-design.md` §10 step 10.
 
 ## Service URLs
 
-| Service | URL | Host | Plan | Notes |
-|---|---|---|---|---|
-| Dashboard | `https://<TBD>` | Vercel | <Hobby/Pro> | Next.js + NextAuth. PR previews on. |
-| API | `https://<TBD>` | Render Web Service (public) | Starter | Fastify REST. `SWITCHBOARD_API_URL` on chat + dashboard points here. |
-| Chat | `https://<TBD>` | Render Web Service (public) | Starter | Fastify webhook server. Custom domain (`chat.<your-domain>`) recommended for Meta. |
-| Postgres | (internal) | Render Postgres | Starter | Snapshots: daily, <RETENTION_DAYS> retention. Validated at provisioning. |
-| Redis | (internal) | Render Redis | Starter | Cache + rate-limit. Lose-able. |
+| Service   | URL             | Host                        | Plan        | Notes                                                                              |
+| --------- | --------------- | --------------------------- | ----------- | ---------------------------------------------------------------------------------- |
+| Dashboard | `https://<TBD>` | Vercel                      | <Hobby/Pro> | Next.js + NextAuth. PR previews on.                                                |
+| API       | `https://<TBD>` | Render Web Service (public) | Starter     | Fastify REST. `SWITCHBOARD_API_URL` on chat + dashboard points here.               |
+| Chat      | `https://<TBD>` | Render Web Service (public) | Starter     | Fastify webhook server. Custom domain (`chat.<your-domain>`) recommended for Meta. |
+| Postgres  | (internal)      | Render Postgres             | Starter     | Snapshots: daily, <RETENTION_DAYS> retention. Validated at provisioning.           |
+| Redis     | (internal)      | Render Redis                | Starter     | Cache + rate-limit. Lose-able.                                                     |
 
 ## Render region
 
@@ -844,58 +844,58 @@ Create `docs/runbooks/production-urls.md`:
 
 ## Webhook callback URLs (registered with providers)
 
-| Provider | Endpoint | Registered at | Verify token / signing secret reference |
-|---|---|---|---|
-| WhatsApp (Meta) | `https://<chat-domain>/webhook/managed/<webhookId>` | Meta Business Manager | `WHATSAPP_VERIFY_TOKEN` + `WHATSAPP_APP_SECRET` |
-| Instagram (Meta) | `https://<chat-domain>/webhook/managed/<webhookId>` | Meta Business Manager | Same as WhatsApp app |
-| Telegram | `https://<chat-domain>/webhook/telegram` | `pnpm cli:register-webhook` | `TELEGRAM_WEBHOOK_SECRET` |
-| Slack | `https://<chat-domain>/webhook/managed/<webhookId>` | Slack app config (Event Subscriptions) | `SLACK_SIGNING_SECRET` |
+| Provider         | Endpoint                                            | Registered at                          | Verify token / signing secret reference         |
+| ---------------- | --------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
+| WhatsApp (Meta)  | `https://<chat-domain>/webhook/managed/<webhookId>` | Meta Business Manager                  | `WHATSAPP_VERIFY_TOKEN` + `WHATSAPP_APP_SECRET` |
+| Instagram (Meta) | `https://<chat-domain>/webhook/managed/<webhookId>` | Meta Business Manager                  | Same as WhatsApp app                            |
+| Telegram         | `https://<chat-domain>/webhook/telegram`            | `pnpm cli:register-webhook`            | `TELEGRAM_WEBHOOK_SECRET`                       |
+| Slack            | `https://<chat-domain>/webhook/managed/<webhookId>` | Slack app config (Event Subscriptions) | `SLACK_SIGNING_SECRET`                          |
 
 ## Monitoring dashboards
 
-| Surface | URL |
-|---|---|
-| Sentry (server) | `<TBD>` |
-| Sentry (client) | `<TBD>` |
-| UptimeRobot (api `/api/health/deep`) | `<TBD>` |
+| Surface                               | URL     |
+| ------------------------------------- | ------- |
+| Sentry (server)                       | `<TBD>` |
+| Sentry (client)                       | `<TBD>` |
+| UptimeRobot (api `/api/health/deep`)  | `<TBD>` |
 | UptimeRobot (chat `/api/health/deep`) | `<TBD>` |
-| Render dashboard | `<TBD>` |
-| Vercel dashboard | `<TBD>` |
-| Inngest Cloud | `<TBD>` |
+| Render dashboard                      | `<TBD>` |
+| Vercel dashboard                      | `<TBD>` |
+| Inngest Cloud                         | `<TBD>` |
 
 ## Vault entries map
 
 > The master copy of every secret lives in the password manager. The host-UI value is a copy. This table records the path/title in the vault for each Render env-var key, so rotations have a single source of truth to update first.
 
-| Render env-var key | Vault item path/title |
-|---|---|
-| `CREDENTIALS_ENCRYPTION_KEY` | `<TBD>` |
-| `INTERNAL_API_SECRET` | `<TBD>` |
-| `ANTHROPIC_API_KEY` | `<TBD>` |
-| `VOYAGE_API_KEY` | `<TBD>` |
-| `META_ADS_ACCESS_TOKEN` | `<TBD>` |
-| `META_PIXEL_ID` | `<TBD>` |
-| `WHATSAPP_TOKEN` | `<TBD>` |
-| `WHATSAPP_APP_SECRET` | `<TBD>` |
-| `WHATSAPP_VERIFY_TOKEN` | `<TBD>` |
-| `TELEGRAM_BOT_TOKEN` | `<TBD>` |
-| `TELEGRAM_WEBHOOK_SECRET` | `<TBD>` |
-| `SLACK_BOT_TOKEN` | `<TBD>` |
-| `SLACK_SIGNING_SECRET` | `<TBD>` |
-| `STRIPE_SECRET_KEY` | `<TBD>` |
-| `STRIPE_WEBHOOK_SECRET` | `<TBD>` |
-| `INNGEST_EVENT_KEY` | `<TBD>` |
-| `INNGEST_SIGNING_KEY` | `<TBD>` |
-| `SENTRY_DSN_SERVER` | `<TBD>` |
-| `NEXT_PUBLIC_SENTRY_DSN` (on Vercel) | `<TBD>` |
-| `NEXTAUTH_SECRET` (on Vercel) | `<TBD>` |
+| Render env-var key                   | Vault item path/title |
+| ------------------------------------ | --------------------- |
+| `CREDENTIALS_ENCRYPTION_KEY`         | `<TBD>`               |
+| `INTERNAL_API_SECRET`                | `<TBD>`               |
+| `ANTHROPIC_API_KEY`                  | `<TBD>`               |
+| `VOYAGE_API_KEY`                     | `<TBD>`               |
+| `META_ADS_ACCESS_TOKEN`              | `<TBD>`               |
+| `META_PIXEL_ID`                      | `<TBD>`               |
+| `WHATSAPP_TOKEN`                     | `<TBD>`               |
+| `WHATSAPP_APP_SECRET`                | `<TBD>`               |
+| `WHATSAPP_VERIFY_TOKEN`              | `<TBD>`               |
+| `TELEGRAM_BOT_TOKEN`                 | `<TBD>`               |
+| `TELEGRAM_WEBHOOK_SECRET`            | `<TBD>`               |
+| `SLACK_BOT_TOKEN`                    | `<TBD>`               |
+| `SLACK_SIGNING_SECRET`               | `<TBD>`               |
+| `STRIPE_SECRET_KEY`                  | `<TBD>`               |
+| `STRIPE_WEBHOOK_SECRET`              | `<TBD>`               |
+| `INNGEST_EVENT_KEY`                  | `<TBD>`               |
+| `INNGEST_SIGNING_KEY`                | `<TBD>`               |
+| `SENTRY_DSN_SERVER`                  | `<TBD>`               |
+| `NEXT_PUBLIC_SENTRY_DSN` (on Vercel) | `<TBD>`               |
+| `NEXTAUTH_SECRET` (on Vercel)        | `<TBD>`               |
 
 ## Rollback URLs
 
-| Target | URL |
-|---|---|
-| Render rollback (api) | `<TBD>` |
-| Render rollback (chat) | `<TBD>` |
+| Target                      | URL     |
+| --------------------------- | ------- |
+| Render rollback (api)       | `<TBD>` |
+| Render rollback (chat)      | `<TBD>` |
 | Vercel rollback (dashboard) | `<TBD>` |
 
 ## Postgres backup management
@@ -904,7 +904,7 @@ Create `docs/runbooks/production-urls.md`:
 - **Restore drill cadence:** quarterly, before public launch, after major schema migration (per spec §8)
 - **Last drill:** `<TBD>`
 - **Next drill due:** `<TBD>`
-````
+```
 
 - [ ] **Step 6.2: Commit**
 
@@ -929,7 +929,7 @@ git commit -m "docs(runbooks): production URLs and hosting map template"
 
 Create `docs/runbooks/secret-rotation.md`:
 
-````markdown
+```markdown
 # Secret Rotation Runbook
 
 > **Discipline:** Master record in the password manager. Rotation **updates the vault first**, then propagates the new value to Render (and Vercel, if applicable). See `docs/superpowers/specs/2026-05-15-deployment-hosting-design.md` §4 rule 3.
@@ -1015,7 +1015,7 @@ For each provider below, the entry covers: where to rotate, what to do, and whic
 > **DO NOT ROTATE WITHOUT A MIGRATION PLAN.** Stored credentials in Postgres are encrypted with this key. Rotating it without re-encrypting renders existing credentials unreadable. See [[feedback_dev_stack]] — seed-vs-runtime encryption mismatch is a known footgun.
 
 - If rotation is genuinely needed (compromise), the procedure is: re-encrypt all rows with the new key while both keys are temporarily available, then cut over. This requires a custom migration script and operator approval.
-````
+```
 
 - [ ] **Step 7.2: Commit**
 

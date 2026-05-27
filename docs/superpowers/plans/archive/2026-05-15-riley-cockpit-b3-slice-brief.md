@@ -4,6 +4,7 @@
 **Parent spec:** [Riley Cockpit — Wave A Slicing Design](../specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md) (§Slice B.3)
 **Target spec:** [Riley Cockpit Home — Design Spec](../specs/2026-05-13-riley-cockpit-home-design.md) (§Riley voice, §Composer, §Command palette)
 **Predecessor slices:**
+
 - Riley B.1 — `feat(riley-cockpit): B.1 — core operator loop at /riley` (#488, squash `5ef3910a`)
 - Riley B.2a — `docs(riley-cockpit): B.2a slice brief + implementation plan` (#494, OPEN) — mission popover wiring; not a blocker for B.3
 - Alex A.2 — `feat(cockpit): A.2 mission popover + Day-1 narrator` (#485, squash `67eb0618`)
@@ -29,7 +30,7 @@ B.3 ships the four sub-deliverables that **do not** depend on A.5's shell infras
 - **`RILEY_COMMANDS` + `RILEY_COMPOSER_PLACEHOLDER` typed catalog** exported from `riley-config.ts` so Alex A.5 can consume them without re-deriving the spec.
 - **Riley copy on the inert composer placeholder** — sender label `→ RILEY`, Riley-voice placeholder text, Riley accent on the chrome. The placeholder remains non-interactive (no submit handler, no NL parser, no ⌘K binding) until A.5.
 
-Items 2–3's *interactive behavior* moves to a B.3-followup slice opened after Alex A.5 lands. That follow-up consumes the `RILEY_COMMANDS` catalog this slice ships and wires the composer's `Allowed-in-B.3` semantics. **Riley's surfaced personality moment (accent + accept/decline voice) ships now**; the palette/composer interactive layer ships when the shell exists.
+Items 2–3's _interactive behavior_ moves to a B.3-followup slice opened after Alex A.5 lands. That follow-up consumes the `RILEY_COMMANDS` catalog this slice ships and wires the composer's `Allowed-in-B.3` semantics. **Riley's surfaced personality moment (accent + accept/decline voice) ships now**; the palette/composer interactive layer ships when the shell exists.
 
 This split is consistent with the slicing spec's load-bearing rule (adapter boundary) — B.3 introduces no new substrate, no new mutation paths, and no new view-model fields. The `ApprovalView` interface already exposes optional `acceptToast` / `declineToast` (declared in B.1's `types.ts` but never consumed); B.3 reads them.
 
@@ -37,7 +38,7 @@ This split is consistent with the slicing spec's load-bearing rule (adapter boun
 
 ## Slice goal
 
-Make Riley sound and look like Riley everywhere the operator already sees Riley today: the `/riley` status pill, the approval-card eyebrow and palette, the composer placeholder copy, and the toast that fires when the operator accepts or declines a Riley recommendation. The slicing spec's "honest impact language" guardrail from B.2 carries over: nothing in this slice claims Riley *improved* a metric — accept/decline toasts narrate what Riley **did with the operator's instruction**, not causal impact.
+Make Riley sound and look like Riley everywhere the operator already sees Riley today: the `/riley` status pill, the approval-card eyebrow and palette, the composer placeholder copy, and the toast that fires when the operator accepts or declines a Riley recommendation. The slicing spec's "honest impact language" guardrail from B.2 carries over: nothing in this slice claims Riley _improved_ a metric — accept/decline toasts narrate what Riley **did with the operator's instruction**, not causal impact.
 
 B.1 stubbed approval resolution with a no-op (`// B.1 stops at view assembly; resolution wires up at a future slice.` — `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx:43-45`). B.3 is that future slice for the resolution-wiring concern.
 
@@ -47,19 +48,19 @@ B.1 stubbed approval resolution with a no-op (`// B.1 stops at view assembly; re
 
 ### Schema (`packages/schemas/src/recommendations.ts`)
 
-| Change | Responsibility |
-|---|---|
+| Change                                                                                                                                                            | Responsibility                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extend `RecommendationPresentationSchema` with two optional fields: `acceptToast: z.string().min(1).optional()` and `declineToast: z.string().min(1).optional()`. | Persisted toast copy authored by the engine when context exists. Both optional — the existing 4 required fields stay required; older recommendation rows continue to parse. |
-| Extend `packages/schemas/src/__tests__/recommendations.test.ts` `describe("RecommendationPresentationSchema", …)` block. | Three new cases: (a) presentation parses when both toasts present, (b) presentation parses when toasts absent, (c) empty-string toasts are rejected. |
+| Extend `packages/schemas/src/__tests__/recommendations.test.ts` `describe("RecommendationPresentationSchema", …)` block.                                          | Three new cases: (a) presentation parses when both toasts present, (b) presentation parses when toasts absent, (c) empty-string toasts are rejected.                        |
 
 No Prisma migration is required. `presentation` is embedded inside the `PendingActionRecord.parameters` JSON column (verified at `packages/db/prisma/schema.prisma:1459-1494` — there is no typed `presentation` Prisma column; `extractPresentation(row.parameters)` at `packages/core/src/decisions/adapters/recommendation-adapter.ts:19` reads it as freeform JSON). Adding optional fields to the embedded Zod shape is a non-breaking schema-layer change.
 
 ### Engine (`packages/ad-optimizer/src/recommendation-sink.ts`)
 
-| Change | Responsibility |
-|---|---|
+| Change                                                                                                                                                                                                   | Responsibility                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extend `buildPresentation(rec)` at `packages/ad-optimizer/src/recommendation-sink.ts:126-155` to populate `acceptToast` + `declineToast` for each of the 14 Riley action variants in the `labels` table. | Engine-side authorship — the lines per action are short, first-person, action-specific. Values lock into the toast-copy table in the implementation plan. |
-| Extend `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`. | One new case asserting `acceptToast` + `declineToast` are present and well-formed on the emitted recommendation for each action variant. |
+| Extend `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`.                                                                                                                                | One new case asserting `acceptToast` + `declineToast` are present and well-formed on the emitted recommendation for each action variant.                  |
 
 The router (`packages/core/src/recommendations/router.ts`) and the existing `extractPresentation` adapter pass `parameters` through untouched, so the engine-emitted toast copy reaches the cockpit hooks without any router/adapter change.
 
@@ -67,11 +68,11 @@ The router (`packages/core/src/recommendations/router.ts`) and the existing `ext
 
 Three shell components today hardcode Alex tokens. Each gains two new optional props with Alex defaults, so Alex's cockpit-page need not change.
 
-| File | Today | After B.3 |
-|---|---|---|
-| `apps/dashboard/src/components/cockpit/approval-card.tsx:24-30` | Eyebrow renders the literal `"Alex needs you"` in `T.amberDeep`. | Accepts `accent?: { base; deep; soft; paper }` (default = Alex amber tokens) and `senderLabel?: string` (default = `"Alex needs you"`). Eyebrow, card background, and border use `accent` tokens. |
-| `apps/dashboard/src/components/cockpit/composer-placeholder.tsx:38-43` | `→ ALEX` sender label hardcoded; placeholder string `"Tell Alex what to do — coming soon"` hardcoded. | Accepts `senderLabel?: string` (default `"ALEX"`), `placeholderCopy?: string` (default `"Tell Alex what to do — coming soon"`), and `accentColor?: string` (default `T.ink4` — the existing Alex-muted color used by the sender label). |
-| `apps/dashboard/src/components/cockpit/status-pill.tsx:3-13` | Hard-imports `statusColor` and `statusPulse` from `@/lib/cockpit/alex-config`. | Accepts optional `colorFor?: (s: CockpitStatus, halted: boolean) => string` and `pulseFor?: (s: CockpitStatus, halted: boolean) => boolean`; defaults remain Alex's exports. Riley page passes the Riley exports already defined at `apps/dashboard/src/lib/cockpit/riley/riley-config.ts:24-49`. |
+| File                                                                   | Today                                                                                                 | After B.3                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/components/cockpit/approval-card.tsx:24-30`        | Eyebrow renders the literal `"Alex needs you"` in `T.amberDeep`.                                      | Accepts `accent?: { base; deep; soft; paper }` (default = Alex amber tokens) and `senderLabel?: string` (default = `"Alex needs you"`). Eyebrow, card background, and border use `accent` tokens.                                                                                                 |
+| `apps/dashboard/src/components/cockpit/composer-placeholder.tsx:38-43` | `→ ALEX` sender label hardcoded; placeholder string `"Tell Alex what to do — coming soon"` hardcoded. | Accepts `senderLabel?: string` (default `"ALEX"`), `placeholderCopy?: string` (default `"Tell Alex what to do — coming soon"`), and `accentColor?: string` (default `T.ink4` — the existing Alex-muted color used by the sender label).                                                           |
+| `apps/dashboard/src/components/cockpit/status-pill.tsx:3-13`           | Hard-imports `statusColor` and `statusPulse` from `@/lib/cockpit/alex-config`.                        | Accepts optional `colorFor?: (s: CockpitStatus, halted: boolean) => string` and `pulseFor?: (s: CockpitStatus, halted: boolean) => boolean`; defaults remain Alex's exports. Riley page passes the Riley exports already defined at `apps/dashboard/src/lib/cockpit/riley/riley-config.ts:24-49`. |
 
 The activity stream uses per-kind colors via `kind-meta` (`apps/dashboard/src/components/cockpit/kind-meta.ts` and the Riley extension at `kind-meta-riley.ts`); the Riley sender-label color on activity rows is satisfied by the existing Riley kind-meta colors and **does not need B.3 changes**. This is verified in the implementation plan's pre-merge grep check.
 
@@ -111,13 +112,13 @@ export interface RileyCommand {
 }
 
 export const RILEY_COMMANDS: readonly RileyCommand[] = [
-  { id: "open-meta",     label: "Open Meta",          group: "nav" },
-  { id: "open-rules",    label: "Open standing rules", group: "rules" },
-  { id: "open-targets",  label: "Open targets",        group: "rules" },
-  { id: "pause-1h",      label: "Pause Riley for 1h",  group: "control" },
-  { id: "resume",        label: "Resume Riley",        group: "control" },
-  { id: "brief-eod",     label: "Brief me at EOD",     group: "thread" },
-  { id: "cpl-30",        label: "Show CPL — last 30d", group: "thread" },
+  { id: "open-meta", label: "Open Meta", group: "nav" },
+  { id: "open-rules", label: "Open standing rules", group: "rules" },
+  { id: "open-targets", label: "Open targets", group: "rules" },
+  { id: "pause-1h", label: "Pause Riley for 1h", group: "control" },
+  { id: "resume", label: "Resume Riley", group: "control" },
+  { id: "brief-eod", label: "Brief me at EOD", group: "thread" },
+  { id: "cpl-30", label: "Show CPL — last 30d", group: "thread" },
   // … full catalog locked in the implementation plan.
 ];
 ```
@@ -134,13 +135,13 @@ The wrapper enforces three behaviors:
 2. **External primary actions open the Meta URL and stop.** When `approval.primaryAction.kind === "external"`, the accept click opens `approval.primaryAction.url` in a new tab via `window.open(url, "_blank", "noopener,noreferrer")`. No `useRecommendationAction.primary()` call. No toast. The new tab opening is the visible confirmation. This covers `review_budget`, `fix_signal_health`, `harden_capi_attribution`.
 3. **Decline always dispatches.** The decline path is identical for internal and external action kinds: call `action.dismiss()` and fire `rileyToast({ verdict: "decline", approval })`.
 
-| Change | Today (`apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`) | After B.3 |
-|---|---|---|
-| `onResolve` callback | No-op stub at lines 43-45. | Per-row wrapper. Internal accept → `action.primary().then(toast)`. External accept → `window.open(primaryAction.url, …)` only. Decline (always) → `action.dismiss().then(toast)`. The wrapper keys each hook to the row's `approval.id`, so the multi-card invariant holds. |
-| `<ApprovalCard>` accent | Renders Alex amber + "Alex needs you" eyebrow. | Wrapper passes `accent={RILEY_APPROVAL_ACCENT}` and `senderLabel="Riley needs you"`. |
-| `<ApprovalBlock>` use on `/riley` | B.1 wraps approvals via `<ApprovalBlock>`. | Riley page maps approvals directly to `<RileyApprovalRow>` (which renders `<ApprovalCard>` internally). `<ApprovalBlock>` stays in the codebase for Alex unchanged. The `<ApprovalBlock>` API is **not** extended — pass-through props can be added later if Alex needs theming, but B.3 does not need them. |
-| `<ComposerPlaceholder>` props | `halted={haltCtx.halted}` only. | Adds `senderLabel="RILEY"`, `placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}`, `accentColor={RILEY_ACCENT.deep}`. |
-| `<StatusPill>` props | Today the pill is rendered inside `<Identity>` which already wraps `StatusPill`; B.3 plumbs the per-agent color/pulse functions through `<Identity>` to `<StatusPill>`. | Riley page passes Riley `statusColor` + `statusPulse` via Identity's new optional props. Alex page omits → defaults apply. |
+| Change                            | Today (`apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`)                                                                                                  | After B.3                                                                                                                                                                                                                                                                                                    |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `onResolve` callback              | No-op stub at lines 43-45.                                                                                                                                              | Per-row wrapper. Internal accept → `action.primary().then(toast)`. External accept → `window.open(primaryAction.url, …)` only. Decline (always) → `action.dismiss().then(toast)`. The wrapper keys each hook to the row's `approval.id`, so the multi-card invariant holds.                                  |
+| `<ApprovalCard>` accent           | Renders Alex amber + "Alex needs you" eyebrow.                                                                                                                          | Wrapper passes `accent={RILEY_APPROVAL_ACCENT}` and `senderLabel="Riley needs you"`.                                                                                                                                                                                                                         |
+| `<ApprovalBlock>` use on `/riley` | B.1 wraps approvals via `<ApprovalBlock>`.                                                                                                                              | Riley page maps approvals directly to `<RileyApprovalRow>` (which renders `<ApprovalCard>` internally). `<ApprovalBlock>` stays in the codebase for Alex unchanged. The `<ApprovalBlock>` API is **not** extended — pass-through props can be added later if Alex needs theming, but B.3 does not need them. |
+| `<ComposerPlaceholder>` props     | `halted={haltCtx.halted}` only.                                                                                                                                         | Adds `senderLabel="RILEY"`, `placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}`, `accentColor={RILEY_ACCENT.deep}`.                                                                                                                                                                                               |
+| `<StatusPill>` props              | Today the pill is rendered inside `<Identity>` which already wraps `StatusPill`; B.3 plumbs the per-agent color/pulse functions through `<Identity>` to `<StatusPill>`. | Riley page passes Riley `statusColor` + `statusPulse` via Identity's new optional props. Alex page omits → defaults apply.                                                                                                                                                                                   |
 
 The B.1 cockpit-status integration test (`apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`) gains a `describe("RileyCockpitPage — B.3 voice + accent", …)` block (8 new cases):
 
@@ -155,16 +156,16 @@ The B.1 cockpit-status integration test (`apps/dashboard/src/components/cockpit/
 
 ### Tests added (summary)
 
-| File | New cases |
-|---|---|
-| `packages/schemas/src/__tests__/recommendations.test.ts` | 3 cases on `RecommendationPresentationSchema` (toasts present / absent / empty-string rejected). 2 cases on `RecommendationInputSchema` carrying toasts end-to-end. |
-| `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts` | 1 case per action variant in the `labels` table (14 cases) asserting `acceptToast` + `declineToast` are emitted, non-empty, action-specific. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-toast.test.ts` | New file. Cases: accept reads `acceptToast`; decline reads `declineToast`; missing toast → kind-based fallback; empty-string toast → fallback; one case per RileyApprovalKind fallback (11 kinds × 2 verdicts = 22 fallback assertions). |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts` | Extended. `RILEY_COMMANDS` exports the locked catalog; `RILEY_COMPOSER_PLACEHOLDER` is the locked string. |
-| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Default-accent + custom-accent rendering; default-senderLabel + custom-senderLabel rendering. Existing Alex cases stay green (defaults). |
-| `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx` | Default-sender + Riley-sender rendering; placeholder copy override; halt copy unchanged. |
-| `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx` | Custom `colorFor`/`pulseFor` overrides; default behavior unchanged. |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | 8 cases — internal accept/decline with engine toasts; per-row binding (rec-2 primary calls rec-2's hook); engine-empty fallback; "Riley needs you" eyebrow on every card; external primary opens URL with no mutation and no toast; external decline still dismisses + toasts; success-only suppression (rejected mutation produces no toast). |
+| File                                                                            | New cases                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/schemas/src/__tests__/recommendations.test.ts`                        | 3 cases on `RecommendationPresentationSchema` (toasts present / absent / empty-string rejected). 2 cases on `RecommendationInputSchema` carrying toasts end-to-end.                                                                                                                                                                            |
+| `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`               | 1 case per action variant in the `labels` table (14 cases) asserting `acceptToast` + `declineToast` are emitted, non-empty, action-specific.                                                                                                                                                                                                   |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-toast.test.ts`            | New file. Cases: accept reads `acceptToast`; decline reads `declineToast`; missing toast → kind-based fallback; empty-string toast → fallback; one case per RileyApprovalKind fallback (11 kinds × 2 verdicts = 22 fallback assertions).                                                                                                       |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts`           | Extended. `RILEY_COMMANDS` exports the locked catalog; `RILEY_COMPOSER_PLACEHOLDER` is the locked string.                                                                                                                                                                                                                                      |
+| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx`        | Default-accent + custom-accent rendering; default-senderLabel + custom-senderLabel rendering. Existing Alex cases stay green (defaults).                                                                                                                                                                                                       |
+| `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx` | Default-sender + Riley-sender rendering; placeholder copy override; halt copy unchanged.                                                                                                                                                                                                                                                       |
+| `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx`          | Custom `colorFor`/`pulseFor` overrides; default behavior unchanged.                                                                                                                                                                                                                                                                            |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`   | 8 cases — internal accept/decline with engine toasts; per-row binding (rec-2 primary calls rec-2's hook); engine-empty fallback; "Riley needs you" eyebrow on every card; external primary opens URL with no mutation and no toast; external decline still dismisses + toasts; success-only suppression (rejected mutation produces no toast). |
 
 ### No changes to
 
@@ -240,7 +241,7 @@ Expected: no new matches vs `main` baseline.
 
 1. **B.1 no-op `onResolve` is the gating risk.** B.1 shipped approval cards without resolution wiring — clicking primary or dismiss on a Riley approval card today does nothing. B.3 takes on that wiring as a side-effect of toast wiring (you cannot fire a toast without invoking the action). The resolution path uses a **per-row `<RileyApprovalRow>` wrapper** rather than a page-level hook call, because `useRecommendationAction(id)` is keyed by recommendation id and B.1's multi-card stacking would otherwise resolve the wrong row. **Mitigation:** the implementation plan ships the per-row pattern from the start (not as a "fix later" caveat) and the page test asserts the multi-card binding explicitly.
 
-2. **Default-vs-override drift between Alex and Riley.** Three shell components gain `?: defaults` props. If a future Alex change forgets to pass an override and silently inherits Alex defaults, no test catches the mistake. **Mitigation:** approval-card / composer-placeholder / status-pill tests assert *both* the default-render path (Alex) and the explicit-override path (Riley) — two test cases per component. Snapshot tests are not added (they over-couple to inline CSS); explicit-style assertions on the eyebrow text and accent token suffice.
+2. **Default-vs-override drift between Alex and Riley.** Three shell components gain `?: defaults` props. If a future Alex change forgets to pass an override and silently inherits Alex defaults, no test catches the mistake. **Mitigation:** approval-card / composer-placeholder / status-pill tests assert _both_ the default-render path (Alex) and the explicit-override path (Riley) — two test cases per component. Snapshot tests are not added (they over-couple to inline CSS); explicit-style assertions on the eyebrow text and accent token suffice.
 
 3. **`acceptToast` / `declineToast` round-trip through Json column.** The recommendation flows: engine → `emit()` → `PendingActionRecord.parameters` JSON → `extractPresentation()` → `Recommendation` row in API → wire JSON to dashboard → `RileyApprovalView`. Any layer that drops unrecognized JSON keys would silently lose the toast copy. **Mitigation:** the engine test asserts both fields are present at emission; the adapter test asserts both reach `RileyApprovalView.acceptToast` / `.declineToast`; the page test asserts both reach the toast call. End-to-end coverage of the JSON pass-through path.
 

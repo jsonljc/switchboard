@@ -45,6 +45,7 @@ pnpm --filter @switchboard/chat test
 ```
 
 Expected:
+
 - `pnpm typecheck` — 18/18 packages succeed
 - `@switchboard/core` test — 3143+ tests passed
 - `@switchboard/chat` test — 280 tests passed
@@ -58,6 +59,7 @@ If anything fails on the baseline, STOP and investigate — these regressions ar
 This is the foundation. Adding the field first means subsequent tasks (lifecycle tracker, compounding-service evidence row) can consume it through proper types.
 
 **Files:**
+
 - Modify: `packages/core/src/memory/booking-attribution.ts`
 - Test: `packages/core/src/memory/__tests__/booking-attribution.test.ts` (existing — add assertion)
 
@@ -66,19 +68,19 @@ This is the foundation. Adding the field first means subsequent tasks (lifecycle
 Open `packages/core/src/memory/__tests__/booking-attribution.test.ts` and update the first `it(...)` block to assert the new `workTraceId` field on the strong-tier return:
 
 ```typescript
-  it("returns strong attribution when a Booking shares a workTraceId with the conversation", async () => {
-    const store: BookingAttributionStore = {
-      findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-1", workTraceId: "wt-B" }]),
-      findInWindow: vi.fn(),
-    };
+it("returns strong attribution when a Booking shares a workTraceId with the conversation", async () => {
+  const store: BookingAttributionStore = {
+    findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-1", workTraceId: "wt-B" }]),
+    findInWindow: vi.fn(),
+  };
 
-    const result = await resolveBookingAttribution(store, event());
+  const result = await resolveBookingAttribution(store, event());
 
-    expect(result.tier).toBe("strong");
-    expect(result.bookingId).toBe("bk-1");
-    expect(result.workTraceId).toBe("wt-B");
-    expect(store.findInWindow).not.toHaveBeenCalled();
-  });
+  expect(result.tier).toBe("strong");
+  expect(result.bookingId).toBe("bk-1");
+  expect(result.workTraceId).toBe("wt-B");
+  expect(store.findInWindow).not.toHaveBeenCalled();
+});
 ```
 
 (The change is the new `expect(result.workTraceId).toBe("wt-B");` line.)
@@ -108,20 +110,20 @@ export interface BookingAttribution {
 In the same file, update the strong-tier branch in `resolveBookingAttribution` (currently around lines 46-53):
 
 ```typescript
-  // Tier 1: strong — match Booking.workTraceId against the conversation's
-  // executed-tool work-trace ids.
-  if (event.workTraceIds && event.workTraceIds.length > 0) {
-    const strong = await store.findByWorkTraceIds(event.organizationId, event.workTraceIds);
-    if (strong.length > 0) {
-      // Deterministic pick: first row. Multiple tool-trace bookings in one
-      // conversation are vanishingly rare; if it happens, the first wins.
-      return {
-        tier: "strong",
-        bookingId: strong[0]!.id,
-        workTraceId: strong[0]!.workTraceId ?? undefined,
-      };
-    }
+// Tier 1: strong — match Booking.workTraceId against the conversation's
+// executed-tool work-trace ids.
+if (event.workTraceIds && event.workTraceIds.length > 0) {
+  const strong = await store.findByWorkTraceIds(event.organizationId, event.workTraceIds);
+  if (strong.length > 0) {
+    // Deterministic pick: first row. Multiple tool-trace bookings in one
+    // conversation are vanishingly rare; if it happens, the first wins.
+    return {
+      tier: "strong",
+      bookingId: strong[0]!.id,
+      workTraceId: strong[0]!.workTraceId ?? undefined,
+    };
   }
+}
 ```
 
 The `?? undefined` defends against a store returning `workTraceId: null` — `null` would type-check (`workTraceId: string | null` on the row interface) but we want strict `string | undefined` on the attribution shape.
@@ -168,6 +170,7 @@ EOF
 With `BookingAttribution.workTraceId` available, replace the explicit `null` literal in the evidence-row write site. The Prisma column is already nullable (PR-3.2a anticipated this PR).
 
 **Files:**
+
 - Modify: `packages/core/src/memory/compounding-service.ts`
 - Test: `packages/core/src/memory/__tests__/compounding-service-canonical-keys.test.ts`
 
@@ -176,14 +179,14 @@ With `BookingAttribution.workTraceId` available, replace the explicit `null` lit
 Open `packages/core/src/memory/__tests__/compounding-service-canonical-keys.test.ts`. Find the first `expect(evidenceStore.recordEvidence).toHaveBeenCalledWith(...)` block (around line 55) and add the `workTraceId` field to the `objectContaining`:
 
 ```typescript
-    expect(evidenceStore.recordEvidence).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deploymentMemoryId: "mem-1",
-        bookingId: "bk-1",
-        workTraceId: "wt-A",
-        attributionTier: "strong",
-      }),
-    );
+expect(evidenceStore.recordEvidence).toHaveBeenCalledWith(
+  expect.objectContaining({
+    deploymentMemoryId: "mem-1",
+    bookingId: "bk-1",
+    workTraceId: "wt-A",
+    attributionTier: "strong",
+  }),
+);
 ```
 
 (The single new line is `workTraceId: "wt-A",`. The mock at line 27 already returns `{ id: "bk-1", workTraceId: "wt-A" }` for `findByWorkTraceIds`, so the matched trace ID flows through end-to-end once the production code is fixed.)
@@ -201,16 +204,16 @@ Expected: the assertion fails because `recordEvidence` was called with `workTrac
 Open `packages/core/src/memory/compounding-service.ts` and find the `recordEvidence` call (around lines 280-292). Replace the carry-debt comment block AND the `workTraceId: null` line with:
 
 ```typescript
-        if (this.evidenceStore && attribution.bookingId) {
-          await this.evidenceStore.recordEvidence({
-            deploymentMemoryId: memoryId,
-            organizationId: event.organizationId,
-            bookingId: attribution.bookingId,
-            conversionRecordId: null,
-            workTraceId: attribution.workTraceId ?? null,
-            attributionTier: attribution.tier,
-          });
-        }
+if (this.evidenceStore && attribution.bookingId) {
+  await this.evidenceStore.recordEvidence({
+    deploymentMemoryId: memoryId,
+    organizationId: event.organizationId,
+    bookingId: attribution.bookingId,
+    conversionRecordId: null,
+    workTraceId: attribution.workTraceId ?? null,
+    attributionTier: attribution.tier,
+  });
+}
 ```
 
 (The carry-debt comment is intentionally deleted — the debt is being closed by this PR. The `?? null` accepts both the strong-tier path where `attribution.workTraceId` is set, and the fallback path where the attribution has no workTraceId.)
@@ -259,6 +262,7 @@ EOF
 The four tests in this task pin the behavioral contract: accumulate in order, no dedupe, emit `undefined` when empty, skip turns that omit a trace.
 
 **Files:**
+
 - Modify: `packages/core/src/channel-gateway/conversation-lifecycle.ts`
 - Test: `packages/core/src/__tests__/conversation-lifecycle.test.ts`
 
@@ -267,94 +271,54 @@ The four tests in this task pin the behavioral contract: accumulate in order, no
 Open `packages/core/src/__tests__/conversation-lifecycle.test.ts` and append these four `it(...)` blocks to the existing `describe("ConversationLifecycleTracker", () => { ... })` (insert before the closing `});` at line 150):
 
 ```typescript
-  it("accumulates workTraceIds across assistant turns and surfaces them in the end event", async () => {
-    tracker.recordMessage({
-      sessionKey: "dep-1:telegram:session-1",
-      deploymentId: "dep-1",
-      organizationId: "org-1",
-      channelType: "telegram",
-      sessionId: "session-1",
-      role: "user",
-      content: "Hello",
-    });
-    tracker.recordMessage({
-      sessionKey: "dep-1:telegram:session-1",
-      deploymentId: "dep-1",
-      organizationId: "org-1",
-      channelType: "telegram",
-      sessionId: "session-1",
-      role: "assistant",
-      content: "Hi",
-      workTraceId: "wt-A",
-    });
-    tracker.recordMessage({
-      sessionKey: "dep-1:telegram:session-1",
-      deploymentId: "dep-1",
-      organizationId: "org-1",
-      channelType: "telegram",
-      sessionId: "session-1",
-      role: "user",
-      content: "Tell me more",
-    });
-    tracker.recordMessage({
-      sessionKey: "dep-1:telegram:session-1",
-      deploymentId: "dep-1",
-      organizationId: "org-1",
-      channelType: "telegram",
-      sessionId: "session-1",
-      role: "assistant",
-      content: "Sure",
-      workTraceId: "wt-B",
-    });
-
-    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
-
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({ workTraceIds: ["wt-A", "wt-B"] }),
-    );
+it("accumulates workTraceIds across assistant turns and surfaces them in the end event", async () => {
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "user",
+    content: "Hello",
+  });
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "assistant",
+    content: "Hi",
+    workTraceId: "wt-A",
+  });
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "user",
+    content: "Tell me more",
+  });
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "assistant",
+    content: "Sure",
+    workTraceId: "wt-B",
   });
 
-  it("preserves insertion order across multiple distinct traces (no dedupe)", async () => {
-    const traces = ["wt-X", "wt-Y", "wt-Z"];
-    for (const wt of traces) {
-      tracker.recordMessage({
-        sessionKey: "dep-1:telegram:session-1",
-        deploymentId: "dep-1",
-        organizationId: "org-1",
-        channelType: "telegram",
-        sessionId: "session-1",
-        role: "assistant",
-        content: `turn ${wt}`,
-        workTraceId: wt,
-      });
-    }
+  await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
 
-    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+  expect(handler).toHaveBeenCalledWith(expect.objectContaining({ workTraceIds: ["wt-A", "wt-B"] }));
+});
 
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({ workTraceIds: ["wt-X", "wt-Y", "wt-Z"] }),
-    );
-  });
-
-  it("emits workTraceIds: undefined (not []) when no traces are recorded", async () => {
-    tracker.recordMessage({
-      sessionKey: "dep-1:telegram:session-1",
-      deploymentId: "dep-1",
-      organizationId: "org-1",
-      channelType: "telegram",
-      sessionId: "session-1",
-      role: "user",
-      content: "Hello",
-    });
-
-    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
-
-    const call = (handler as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    const event = call[0] as { workTraceIds?: string[] };
-    expect(event.workTraceIds).toBeUndefined();
-  });
-
-  it("skips turns where workTraceId is omitted (forward compat while call sites migrate)", async () => {
+it("preserves insertion order across multiple distinct traces (no dedupe)", async () => {
+  const traces = ["wt-X", "wt-Y", "wt-Z"];
+  for (const wt of traces) {
     tracker.recordMessage({
       sessionKey: "dep-1:telegram:session-1",
       deploymentId: "dep-1",
@@ -362,35 +326,71 @@ Open `packages/core/src/__tests__/conversation-lifecycle.test.ts` and append the
       channelType: "telegram",
       sessionId: "session-1",
       role: "assistant",
-      content: "first",
-      workTraceId: "wt-1",
+      content: `turn ${wt}`,
+      workTraceId: wt,
     });
-    tracker.recordMessage({
-      sessionKey: "dep-1:telegram:session-1",
-      deploymentId: "dep-1",
-      organizationId: "org-1",
-      channelType: "telegram",
-      sessionId: "session-1",
-      role: "assistant",
-      content: "middle (no workTraceId — older call site)",
-    });
-    tracker.recordMessage({
-      sessionKey: "dep-1:telegram:session-1",
-      deploymentId: "dep-1",
-      organizationId: "org-1",
-      channelType: "telegram",
-      sessionId: "session-1",
-      role: "assistant",
-      content: "third",
-      workTraceId: "wt-3",
-    });
+  }
 
-    await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+  await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
 
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({ workTraceIds: ["wt-1", "wt-3"] }),
-    );
+  expect(handler).toHaveBeenCalledWith(
+    expect.objectContaining({ workTraceIds: ["wt-X", "wt-Y", "wt-Z"] }),
+  );
+});
+
+it("emits workTraceIds: undefined (not []) when no traces are recorded", async () => {
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "user",
+    content: "Hello",
   });
+
+  await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+
+  const call = (handler as ReturnType<typeof vi.fn>).mock.calls[0]!;
+  const event = call[0] as { workTraceIds?: string[] };
+  expect(event.workTraceIds).toBeUndefined();
+});
+
+it("skips turns where workTraceId is omitted (forward compat while call sites migrate)", async () => {
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "assistant",
+    content: "first",
+    workTraceId: "wt-1",
+  });
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "assistant",
+    content: "middle (no workTraceId — older call site)",
+  });
+  tracker.recordMessage({
+    sessionKey: "dep-1:telegram:session-1",
+    deploymentId: "dep-1",
+    organizationId: "org-1",
+    channelType: "telegram",
+    sessionId: "session-1",
+    role: "assistant",
+    content: "third",
+    workTraceId: "wt-3",
+  });
+
+  await tracker.closeConversation("dep-1:telegram:session-1", "explicit_close");
+
+  expect(handler).toHaveBeenCalledWith(expect.objectContaining({ workTraceIds: ["wt-1", "wt-3"] }));
+});
 ```
 
 - [ ] **Step 3.2: Run tests — expect 4 failures**
@@ -400,6 +400,7 @@ pnpm --filter @switchboard/core test conversation-lifecycle
 ```
 
 Expected: 4 of the 4 new tests fail. Possible failure modes:
+
 - TypeScript error on `workTraceId` field not existing on `RecordMessageInput` — addressed in Step 3.3
 - Runtime assertion failure because `event.workTraceIds` is `undefined` — addressed in Steps 3.4, 3.5
 
@@ -549,6 +550,7 @@ EOF
 The assistant-turn site has `response.result.traceId` in scope; pass it through. The user-turn site stays unchanged (user turns have no trace). This task includes a unit test directly against `ChannelGateway` so the negative invariant ("user-turn `onMessageRecorded` never carries `workTraceId`") is pinned at the layer where the emission decision is actually made — not just downstream at the bridge.
 
 **Files:**
+
 - Modify: `packages/core/src/channel-gateway/types.ts`
 - Modify: `packages/core/src/channel-gateway/channel-gateway.ts`
 - Test: `packages/core/src/channel-gateway/__tests__/channel-gateway.test.ts` (existing — `createMockConfig` harness exists; cost of extension is low)
@@ -576,18 +578,18 @@ Open `packages/core/src/channel-gateway/types.ts` and update the `onMessageRecor
 Open `packages/core/src/channel-gateway/channel-gateway.ts`. Find the assistant `onMessageRecorded` call (around lines 67-75) and add `workTraceId`:
 
 ```typescript
-    await conversationStore.addMessage(conversationId, "assistant", text);
-    onMessageRecorded?.({
-      deploymentId: resolved.deploymentId,
-      listingId: resolved.listingId,
-      organizationId: resolved.organizationId,
-      channel: message.channel,
-      sessionId: message.sessionId,
-      role: "assistant",
-      content: text,
-      workTraceId: response.result.traceId,
-    });
-    await replySink.send(text);
+await conversationStore.addMessage(conversationId, "assistant", text);
+onMessageRecorded?.({
+  deploymentId: resolved.deploymentId,
+  listingId: resolved.listingId,
+  organizationId: resolved.organizationId,
+  channel: message.channel,
+  sessionId: message.sessionId,
+  role: "assistant",
+  content: text,
+  workTraceId: response.result.traceId,
+});
+await replySink.send(text);
 ```
 
 `ExecutionResult.traceId` is a required `string` per `packages/core/src/platform/execution-result.ts:10`, so no `?? undefined` defense is needed.
@@ -597,15 +599,15 @@ Open `packages/core/src/channel-gateway/channel-gateway.ts`. Find the assistant 
 In the same file, the user-turn `onMessageRecorded` call (around lines 140-148) should NOT pass `workTraceId`. Re-read to confirm:
 
 ```typescript
-    this.config.onMessageRecorded?.({
-      deploymentId: resolved.deploymentId,
-      listingId: resolved.listingId,
-      organizationId: resolved.organizationId,
-      channel: message.channel,
-      sessionId: message.sessionId,
-      role: "user",
-      content: message.text,
-    });
+this.config.onMessageRecorded?.({
+  deploymentId: resolved.deploymentId,
+  listingId: resolved.listingId,
+  organizationId: resolved.organizationId,
+  channel: message.channel,
+  sessionId: message.sessionId,
+  role: "user",
+  content: message.text,
+});
 ```
 
 If `workTraceId` accidentally appears here, remove it. Step 4.4 below adds the unit test that catches it.
@@ -634,51 +636,51 @@ Open `packages/core/src/channel-gateway/__tests__/channel-gateway.test.ts`. Two 
 **Change B: append two new `it(...)` blocks inside the existing `describe("ChannelGateway", () => { ... })`** (insert before line ~310's closing `});`):
 
 ```typescript
-  it("emits workTraceId on the assistant-turn onMessageRecorded callback", async () => {
-    const onMessageRecordedSpy = vi.fn();
-    const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
-    const gateway = new ChannelGateway(config);
-    const message: IncomingChannelMessage = {
-      channel: "web_widget",
-      token: "sw_valid123",
-      sessionId: "sess-1",
-      text: "Hello",
-    };
-    const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
+it("emits workTraceId on the assistant-turn onMessageRecorded callback", async () => {
+  const onMessageRecordedSpy = vi.fn();
+  const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
+  const gateway = new ChannelGateway(config);
+  const message: IncomingChannelMessage = {
+    channel: "web_widget",
+    token: "sw_valid123",
+    sessionId: "sess-1",
+    text: "Hello",
+  };
+  const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
 
-    await gateway.handleIncoming(message, replySink);
+  await gateway.handleIncoming(message, replySink);
 
-    // Two calls: one for the user turn, one for the assistant turn.
-    // The assistant call carries result.traceId.
-    expect(onMessageRecordedSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "assistant",
-        workTraceId: "trace-1",
-      }),
-    );
-  });
+  // Two calls: one for the user turn, one for the assistant turn.
+  // The assistant call carries result.traceId.
+  expect(onMessageRecordedSpy).toHaveBeenCalledWith(
+    expect.objectContaining({
+      role: "assistant",
+      workTraceId: "trace-1",
+    }),
+  );
+});
 
-  it("does NOT emit workTraceId on the user-turn onMessageRecorded callback (invariant: user turns are text events)", async () => {
-    const onMessageRecordedSpy = vi.fn();
-    const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
-    const gateway = new ChannelGateway(config);
-    const message: IncomingChannelMessage = {
-      channel: "web_widget",
-      token: "sw_valid123",
-      sessionId: "sess-1",
-      text: "Hello",
-    };
-    const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
+it("does NOT emit workTraceId on the user-turn onMessageRecorded callback (invariant: user turns are text events)", async () => {
+  const onMessageRecordedSpy = vi.fn();
+  const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
+  const gateway = new ChannelGateway(config);
+  const message: IncomingChannelMessage = {
+    channel: "web_widget",
+    token: "sw_valid123",
+    sessionId: "sess-1",
+    text: "Hello",
+  };
+  const replySink: ReplySink = { send: vi.fn().mockResolvedValue(undefined) };
 
-    await gateway.handleIncoming(message, replySink);
+  await gateway.handleIncoming(message, replySink);
 
-    // First call (user turn) must not carry workTraceId.
-    const userCallArg = onMessageRecordedSpy.mock.calls.find(
-      (c) => (c[0] as { role: string }).role === "user",
-    )?.[0] as { workTraceId?: string } | undefined;
-    expect(userCallArg).toBeDefined();
-    expect(userCallArg!.workTraceId).toBeUndefined();
-  });
+  // First call (user turn) must not carry workTraceId.
+  const userCallArg = onMessageRecordedSpy.mock.calls.find(
+    (c) => (c[0] as { role: string }).role === "user",
+  )?.[0] as { workTraceId?: string } | undefined;
+  expect(userCallArg).toBeDefined();
+  expect(userCallArg!.workTraceId).toBeUndefined();
+});
 ```
 
 - [ ] **Step 4.5: Run tests — expect 2 new tests pass**
@@ -732,6 +734,7 @@ EOF
 The bridge's `onMessageRecorded` callback receives `info` from the gateway and forwards a subset to `lifecycleTracker.recordMessage`. This task forwards the new field and adds the two integration tests (positive + negative invariant) the spec calls for.
 
 **Files:**
+
 - Modify: `apps/chat/src/gateway/gateway-bridge.ts`
 - Test: `apps/chat/src/gateway/__tests__/gateway-bridge-attribution.test.ts`
 
@@ -768,10 +771,12 @@ vi.mock("@switchboard/core", async () => {
           recordMessage: lifecycleRecordMessageSpy,
         };
       }),
-    ChannelGateway: vi.fn().mockImplementation((config: { onMessageRecorded?: typeof capturedOnMessageRecorded }) => {
-      capturedOnMessageRecorded = config.onMessageRecorded ?? null;
-      return { config };
-    }),
+    ChannelGateway: vi
+      .fn()
+      .mockImplementation((config: { onMessageRecorded?: typeof capturedOnMessageRecorded }) => {
+        capturedOnMessageRecorded = config.onMessageRecorded ?? null;
+        return { config };
+      }),
   };
 });
 ```
@@ -781,71 +786,71 @@ vi.mock("@switchboard/core", async () => {
 **Change B: reset the new spies in `beforeEach`** by extending it:
 
 ```typescript
-  beforeEach(() => {
-    compoundingCtorArgs.length = 0;
-    processConversationEndMock.mockReset();
-    capturedLifecycleHandler = null;
-    capturedOnMessageRecorded = null;
-    lifecycleRecordMessageSpy.mockReset();
-  });
+beforeEach(() => {
+  compoundingCtorArgs.length = 0;
+  processConversationEndMock.mockReset();
+  capturedLifecycleHandler = null;
+  capturedOnMessageRecorded = null;
+  lifecycleRecordMessageSpy.mockReset();
+});
 ```
 
 **Change C: append the two new `it(...)` blocks** to the existing `describe(...)`:
 
 ```typescript
-  it("forwards workTraceId from assistant-turn onMessageRecorded to lifecycleTracker.recordMessage", async () => {
-    const { createGatewayBridge } = await import("../gateway-bridge.js");
-    const fakePrisma = {} as never;
-    const fakeIngress = { submit: vi.fn() };
+it("forwards workTraceId from assistant-turn onMessageRecorded to lifecycleTracker.recordMessage", async () => {
+  const { createGatewayBridge } = await import("../gateway-bridge.js");
+  const fakePrisma = {} as never;
+  const fakeIngress = { submit: vi.fn() };
 
-    createGatewayBridge(fakePrisma, { platformIngress: fakeIngress });
+  createGatewayBridge(fakePrisma, { platformIngress: fakeIngress });
 
-    expect(capturedOnMessageRecorded).not.toBeNull();
+  expect(capturedOnMessageRecorded).not.toBeNull();
 
-    capturedOnMessageRecorded!({
-      deploymentId: "dep_1",
-      listingId: "list_1",
-      organizationId: "org_1",
-      channel: "telegram",
-      sessionId: "ses_1",
+  capturedOnMessageRecorded!({
+    deploymentId: "dep_1",
+    listingId: "list_1",
+    organizationId: "org_1",
+    channel: "telegram",
+    sessionId: "ses_1",
+    role: "assistant",
+    content: "Hi there",
+    workTraceId: "wt-X",
+  });
+
+  expect(lifecycleRecordMessageSpy).toHaveBeenCalledWith(
+    expect.objectContaining({
       role: "assistant",
       content: "Hi there",
       workTraceId: "wt-X",
-    });
+    }),
+  );
+});
 
-    expect(lifecycleRecordMessageSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "assistant",
-        content: "Hi there",
-        workTraceId: "wt-X",
-      }),
-    );
+it("does not add workTraceId when forwarding a user-turn message to lifecycleTracker.recordMessage", async () => {
+  const { createGatewayBridge } = await import("../gateway-bridge.js");
+  const fakePrisma = {} as never;
+  const fakeIngress = { submit: vi.fn() };
+
+  createGatewayBridge(fakePrisma, { platformIngress: fakeIngress });
+
+  expect(capturedOnMessageRecorded).not.toBeNull();
+
+  capturedOnMessageRecorded!({
+    deploymentId: "dep_1",
+    listingId: "list_1",
+    organizationId: "org_1",
+    channel: "telegram",
+    sessionId: "ses_1",
+    role: "user",
+    content: "Hello",
+    // NOTE: no workTraceId field — pins that user turns stay text events.
   });
 
-  it("does not add workTraceId when forwarding a user-turn message to lifecycleTracker.recordMessage", async () => {
-    const { createGatewayBridge } = await import("../gateway-bridge.js");
-    const fakePrisma = {} as never;
-    const fakeIngress = { submit: vi.fn() };
-
-    createGatewayBridge(fakePrisma, { platformIngress: fakeIngress });
-
-    expect(capturedOnMessageRecorded).not.toBeNull();
-
-    capturedOnMessageRecorded!({
-      deploymentId: "dep_1",
-      listingId: "list_1",
-      organizationId: "org_1",
-      channel: "telegram",
-      sessionId: "ses_1",
-      role: "user",
-      content: "Hello",
-      // NOTE: no workTraceId field — pins that user turns stay text events.
-    });
-
-    const call = lifecycleRecordMessageSpy.mock.calls[0]!;
-    const recordArg = call[0] as { workTraceId?: string };
-    expect(recordArg.workTraceId).toBeUndefined();
-  });
+  const call = lifecycleRecordMessageSpy.mock.calls[0]!;
+  const recordArg = call[0] as { workTraceId?: string };
+  expect(recordArg.workTraceId).toBeUndefined();
+});
 ```
 
 - [ ] **Step 5.2: Run tests — expect fail**
@@ -934,6 +939,7 @@ pnpm --filter @switchboard/dashboard build
 ```
 
 Expected — all green:
+
 - `pnpm typecheck` — 18/18 succeed
 - `@switchboard/schemas` — 581 tests passed (unchanged, sanity check)
 - `@switchboard/core` — 3147+ tests passed (3143 baseline + 4 new conversation-lifecycle + assertion updates count as same tests with stricter expectations)
@@ -951,6 +957,7 @@ git log --oneline origin/main..HEAD
 ```
 
 Expected:
+
 - Branch: `feat/worktrace-ids-gateway-plumbing`
 - 5 commits ahead of main (Task 1, 2, 3, 4, 5; Task 6 has no code commit, just verification + PR).
 

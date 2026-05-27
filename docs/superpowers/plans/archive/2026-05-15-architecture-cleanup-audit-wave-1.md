@@ -72,8 +72,8 @@ Severity ladder (also in spec):
 - CRITICAL — architectural invariant violation, security issue, data loss risk
 - HIGH — correctness bug, launch-blocker debt, broken contract
 - MED — significant debt with concrete bite (perf, maintainability, drift)
-- LOW — polish, minor consistency, documentation`
-})
+- LOW — polish, minor consistency, documentation`,
+});
 ```
 
 For other lanes, change `description`, the `Name:` line, `Charter:`, `Method hints:`, `Existing-audit deltas:`, and the heading `# <slug>` in the schema. Everything else is identical.
@@ -84,26 +84,26 @@ For other lanes, change `description`, the `Name:` line, `Charter:`, `Method hin
 
 These are the exact values to substitute for each lane. Full charters in `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit-design.md` §"Wave 1 Lanes."
 
-| # | Slug | Existing-audit delta? | Notes |
-|---|------|----------------------|-------|
-| 1 | `doctrine-compliance` | none | uses `.agent/skills/architecture-audit` |
-| 2 | `layer-hygiene` | `docs/superpowers/specs/2026-05-13-circular-import-cleanup-design.md` + plan | report only NEW/REGRESSED circular deps |
-| 3 | `route-chain-integrity` | none | uses `.agent/skills/route-chain-audit` + `.agent/tools/check-routes` |
-| 4 | `surface-agnostic-backend` | none | core/schemas/db/ad-optimizer free of UI surface refs |
-| 5 | `cartridge-sdk-removal-readiness` | none | wind-down inventory for `packages/cartridge-sdk` |
-| 6 | `file-size-splits` | none | `.ts` >400/>600, plus `.tsx` and `.css` |
-| 7 | `type-safety` | none | `any` / `as` / `@ts-ignore` across `.ts` + `.tsx`; measure fresh |
-| 8 | `dead-code` | `.audit/08-launch-blocker-sequence.md` "Orphaned Stores" | sub-audits (a) Store call-sites, (b) general orphans |
-| 9 | `lint-debt` | none | `.js` rule per-direction; prettier; console.log; etc. |
-| 10 | `coverage-vs-threshold` | none | global 55/50/52/55, core 65/65/70/65 |
-| 11 | `missing-co-located-tests` | none | new modules lacking sibling `*.test.ts` |
-| 12 | `test-stability-inventory` | none | `.skip`/`.todo` + known flakes from memory |
-| 13 | `prisma-hygiene` | `.audit/12-pre-launch-security-audit.md` TI-9 | index-name length + nullable orgId re-verify |
-| 14 | `api-consistency` | none | cross-app type duplication shadowing `@switchboard/schemas` |
-| 15 | `fixture-schema-alignment` | none | seed file rot + canonical agent names |
-| 16 | `security-sweep-delta` | `.audit/12-pre-launch-security-audit.md` | FIXED/STILL-OPEN/REGRESSED/NEW classification |
-| 17 | `deploy-infra-parity` | `.audit/08-launch-blocker-sequence.md` #18 | Inngest function bodies across 5 packages |
-| 18 | `doctrine-architecture-drift` | none | `docs/DOCTRINE.md` + `docs/ARCHITECTURE.md` vs code |
+| #   | Slug                              | Existing-audit delta?                                                        | Notes                                                                |
+| --- | --------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 1   | `doctrine-compliance`             | none                                                                         | uses `.agent/skills/architecture-audit`                              |
+| 2   | `layer-hygiene`                   | `docs/superpowers/specs/2026-05-13-circular-import-cleanup-design.md` + plan | report only NEW/REGRESSED circular deps                              |
+| 3   | `route-chain-integrity`           | none                                                                         | uses `.agent/skills/route-chain-audit` + `.agent/tools/check-routes` |
+| 4   | `surface-agnostic-backend`        | none                                                                         | core/schemas/db/ad-optimizer free of UI surface refs                 |
+| 5   | `cartridge-sdk-removal-readiness` | none                                                                         | wind-down inventory for `packages/cartridge-sdk`                     |
+| 6   | `file-size-splits`                | none                                                                         | `.ts` >400/>600, plus `.tsx` and `.css`                              |
+| 7   | `type-safety`                     | none                                                                         | `any` / `as` / `@ts-ignore` across `.ts` + `.tsx`; measure fresh     |
+| 8   | `dead-code`                       | `.audit/08-launch-blocker-sequence.md` "Orphaned Stores"                     | sub-audits (a) Store call-sites, (b) general orphans                 |
+| 9   | `lint-debt`                       | none                                                                         | `.js` rule per-direction; prettier; console.log; etc.                |
+| 10  | `coverage-vs-threshold`           | none                                                                         | global 55/50/52/55, core 65/65/70/65                                 |
+| 11  | `missing-co-located-tests`        | none                                                                         | new modules lacking sibling `*.test.ts`                              |
+| 12  | `test-stability-inventory`        | none                                                                         | `.skip`/`.todo` + known flakes from memory                           |
+| 13  | `prisma-hygiene`                  | `.audit/12-pre-launch-security-audit.md` TI-9                                | index-name length + nullable orgId re-verify                         |
+| 14  | `api-consistency`                 | none                                                                         | cross-app type duplication shadowing `@switchboard/schemas`          |
+| 15  | `fixture-schema-alignment`        | none                                                                         | seed file rot + canonical agent names                                |
+| 16  | `security-sweep-delta`            | `.audit/12-pre-launch-security-audit.md`                                     | FIXED/STILL-OPEN/REGRESSED/NEW classification                        |
+| 17  | `deploy-infra-parity`             | `.audit/08-launch-blocker-sequence.md` #18                                   | Inngest function bodies across 5 packages                            |
+| 18  | `doctrine-architecture-drift`     | none                                                                         | `docs/DOCTRINE.md` + `docs/ARCHITECTURE.md` vs code                  |
 
 **Charter text** for each lane: copy verbatim from the spec's numbered lane entry. The spec text IS the charter — do not paraphrase.
 
@@ -112,6 +112,7 @@ These are the exact values to substitute for each lane. Full charters in `docs/s
 ## Task 1: Set up execution worktree
 
 **Files:**
+
 - Create: a new git worktree at `.claude/worktrees/audit-wave-1-execution` on a new branch `audit/wave-1-execution-2026-05-15` branched from `main`
 
 - [ ] **Step 1: Confirm main has the spec + plan merged**
@@ -168,6 +169,7 @@ Expected: branch is `audit/wave-1-execution-2026-05-15`; status is clean.
 ## Task 2: Pre-Dispatch Verification
 
 **Files:**
+
 - Create: `docs/audits/2026-05-15-cleanup/_pre-dispatch.md` (orchestrator-written; no subagent involved)
 
 - [ ] **Step 1: Create the audit output directory**
@@ -309,6 +311,7 @@ Expected: one commit with one file added.
 ## Task 3: Dispatch Batch A (5 lanes)
 
 **Files:**
+
 - Create: `docs/audits/2026-05-15-cleanup/doctrine-compliance.md`
 - Create: `docs/audits/2026-05-15-cleanup/route-chain-integrity.md`
 - Create: `docs/audits/2026-05-15-cleanup/layer-hygiene.md`
@@ -330,24 +333,28 @@ Use the prompt skeleton from this plan's "Reference: Fully-Worked Agent Dispatch
 For **lane 1 (`doctrine-compliance`)**: use the example as-is.
 
 For **lane 3 (`route-chain-integrity`)**:
+
 - Name: `route-chain-integrity`
 - Charter: copy from spec §"Wave 1 Lanes" → lane 3
 - Method hints: "Read `.agent/skills/route-chain-audit/SKILL.md`. Run `.agent/tools/check-routes` (or equivalent: `bash .agent/tools/check-routes`). Trace button → API route → store reachability. Flag broken chains, unimplemented handlers, no-op routes, missing audit-trail."
 - Existing-audit deltas: none.
 
 For **lane 2 (`layer-hygiene`)**:
+
 - Name: `layer-hygiene`
 - Charter: copy from spec lane 2
 - Method hints: "Verify import boundaries between schemas → sdk → core → db → apps. Flag wrong-layer imports and barrel files with >40 exports."
 - Existing-audit deltas: `docs/superpowers/specs/2026-05-13-circular-import-cleanup-design.md` and its plan are authoritative for circular deps — report only NEW or REGRESSED ones.
 
 For **lane 14 (`api-consistency`)**:
+
 - Name: `api-consistency`
 - Charter: copy from spec lane 14
 - Method hints: "Grep `apps/api`, `apps/dashboard`, `apps/chat` for local declarations of `ConversationState`, `ApprovalRecord`, `Handoff`, and any approval/lifecycle DTO that should live in `@switchboard/schemas`. Audit mutating routes for auth guards + idempotency + audit-trail coverage."
 - Existing-audit deltas: none.
 
 For **lane 16 (`security-sweep-delta`)**:
+
 - Name: `security-sweep-delta`
 - Charter: copy from spec lane 16
 - Method hints: "Read `.audit/12-pre-launch-security-audit.md` headings. For each finding, classify FIXED / STILL-OPEN / REGRESSED / NEW with file:line evidence. Run `pnpm audit` for CVE delta. Out of scope: re-running OWASP from scratch."
@@ -415,6 +422,7 @@ Then proceed to Task 4 immediately. Only stop if the operator explicitly interru
 ## Task 4: Dispatch Batch B (5 lanes)
 
 **Files:**
+
 - Create: `docs/audits/2026-05-15-cleanup/dead-code.md`
 - Create: `docs/audits/2026-05-15-cleanup/cartridge-sdk-removal-readiness.md`
 - Create: `docs/audits/2026-05-15-cleanup/file-size-splits.md`
@@ -430,26 +438,31 @@ Use the `Read` tool on `docs/superpowers/specs/2026-05-15-architecture-cleanup-a
 Use the same template. Per-lane substitutions:
 
 For **lane 8 (`dead-code`)**:
+
 - Charter: copy from spec lane 8 (includes sub-audits a + b)
 - Method hints: "(a) For each of the 15 Store classes in `packages/db/src/storage/`, grep external callers — zero-caller stores are HIGH. (b) Sweep `packages/` for orphan exports — surface only HIGH or above unless count is small. Use `pnpm depcheck` or `ts-prune` if available."
 - Existing-audit deltas: `.audit/08-launch-blocker-sequence.md` "Orphaned Stores in db layer" entry — verify whether each entry there is still orphaned or has been resolved.
 
 For **lane 5 (`cartridge-sdk-removal-readiness`)**:
+
 - Charter: copy from spec lane 5
 - Method hints: "Run `rg -l '@switchboard/cartridge-sdk' --type ts packages apps | head -50` to enumerate consumers. Classify each: HARD-BLOCKER (core uses, prod code path), SOFT (test-only, fixture), TRIVIAL (dead export). Propose removal order."
 - Existing-audit deltas: none.
 
 For **lane 6 (`file-size-splits`)**:
+
 - Charter: copy from spec lane 6
 - Method hints: "Use the pre-dispatch baseline at `docs/audits/2026-05-15-cleanup/_pre-dispatch.md` as your starting list. Verify each file's current LOC. Propose split lines for files >600 (error threshold). `.tsx` and `.css` are in scope (arch-check ignores them — per `feedback_arch_check_ts_only`)."
 - Existing-audit deltas: none.
 
 For **lane 7 (`type-safety`)**:
+
 - Charter: copy from spec lane 7
 - Method hints: "Measure fresh — do not trust prior estimates. Scan `apps/**/src/**/*.{ts,tsx}` (not `.next/`). Categorize: `: any`, `as any`, `@ts-ignore`, `@ts-expect-error`. Cross-reference `apps/api` and `auth.ts` exceptions from CLAUDE.md."
 - Existing-audit deltas: none.
 
 For **lane 9 (`lint-debt`)**:
+
 - Charter: copy from spec lane 9
 - Method hints: "Run `pnpm format:check` and capture violations. Grep for `console.log` (not `console.warn`/`console.error`). Verify `.js` extension rule per-direction: dashboard imports must OMIT `.js`; other packages must INCLUDE `.js` (per `feedback_dashboard_no_js_on_any_import`)."
 - Existing-audit deltas: none.
@@ -508,6 +521,7 @@ Then proceed to Task 5 immediately. Only stop if the operator explicitly interru
 ## Task 5: Dispatch Batch C (8 lanes)
 
 **Files:**
+
 - Create: `docs/audits/2026-05-15-cleanup/prisma-hygiene.md`
 - Create: `docs/audits/2026-05-15-cleanup/fixture-schema-alignment.md`
 - Create: `docs/audits/2026-05-15-cleanup/deploy-infra-parity.md`
@@ -524,41 +538,49 @@ Then proceed to Task 5 immediately. Only stop if the operator explicitly interru
 Use the same template. Per-lane substitutions:
 
 For **lane 13 (`prisma-hygiene`)**:
+
 - Charter: copy from spec lane 13 (includes index-name + TI-9 sub-audits)
 - Method hints: "List every `@@index` / `@@unique` in `packages/db/prisma/schema.prisma`; flag pre-truncation names >63 chars and propose the Prisma-truncated canonical (per `feedback_prisma_index_name_63_char_limit`). For each nullable `organizationId String?` field, re-verify against TI-9 in `.audit/12-pre-launch-security-audit.md` and classify orphan-row risk vs intentional null. Run `pnpm db:check-drift` if Postgres is reachable."
 - Existing-audit deltas: `.audit/12-pre-launch-security-audit.md` TI-9 for nullable orgId.
 
 For **lane 15 (`fixture-schema-alignment`)**:
+
 - Charter: copy from spec lane 15
 - Method hints: "**Static verification only by default — do NOT run mutating seed commands** (`pnpm db:seed` and friends mutate local/dev DB state and are out of scope for read-only Wave 1). Statically verify: (a) every model/field referenced by `packages/db/prisma/seed-marketplace.ts` and `packages/db/prisma/seed.ts` still exists in `packages/db/prisma/schema.prisma` (no removed columns, no stale enums); (b) demo agent slugs/names align with canonical Alex/Riley/Mira — flag any lingering `nova`/`jordan`/legacy strings; (c) seed-referenced relations resolve. If actual seed execution is genuinely required to surface a finding, only run against an explicitly disposable local DB and record that condition in the report's Method section."
 - Existing-audit deltas: none.
 
 For **lane 17 (`deploy-infra-parity`)**:
+
 - Charter: copy from spec lane 17 (includes Inngest sub-audit)
 - Method hints: "Use the Inngest function inventory from `_pre-dispatch.md`. For each `createFunction` call found, verify presence of `onFailure` handler and a DLQ path. **Delta against** `.audit/08-launch-blocker-sequence.md` launch-blocker #18 (creative-pipeline `retries: 3` with no DLQ) — confirm whether resolved. Also: diff `.env.example` against deployed Vercel/Render env (best-effort via `infra/` config); check Sentry coverage."
 - Existing-audit deltas: `.audit/08-launch-blocker-sequence.md` #18 for DLQ.
 
 For **lane 10 (`coverage-vs-threshold`)**:
+
 - Charter: copy from spec lane 10
 - Method hints: "Read each `vitest.config.ts` in `packages/*` and `apps/*`. Compare configured thresholds against actual coverage. Global: 55/50/52/55. Core: 65/65/70/65. Flag packages below threshold (regression) AND packages whose threshold has crept up without explicit update."
 - Existing-audit deltas: none.
 
 For **lane 11 (`missing-co-located-tests`)**:
+
 - Charter: copy from spec lane 11
 - Method hints: "For each `.ts` file in `packages/**/src/` (excluding `index.ts`, `*.types.ts`, type-only files), verify a sibling `*.test.ts` exists. Recent modules without tests are higher priority than legacy gaps."
 - Existing-audit deltas: none.
 
 For **lane 12 (`test-stability-inventory`)**:
+
 - Charter: copy from spec lane 12
 - Method hints: "Run `rg '(\\.skip|\\.skipIf|\\.todo|it\\.skip|describe\\.skip|test\\.skip)' --type ts --line-number` across the repo. For each hit, capture file:line + the surrounding test name. Cross-reference auto-memory's known-flake list (`prisma-work-trace-store-integrity`, `prisma-greeting-signal-store`, `prisma-ledger-storage`). Triage each: quarantine OK / needs fix / delete."
 - Existing-audit deltas: none.
 
 For **lane 4 (`surface-agnostic-backend`)**:
+
 - Charter: copy from spec lane 4
 - Method hints: "Grep `packages/core`, `packages/schemas`, `packages/db`, `packages/ad-optimizer` for references to dashboard surfaces, UI route names, or Mercury/editorial register identifiers. Per `feedback_surface_agnostic_backend`, backend must be surface-free."
 - Existing-audit deltas: none.
 
 For **lane 18 (`doctrine-architecture-drift`)**:
+
 - Charter: copy from spec lane 18
 - Method hints: "Read `docs/DOCTRINE.md` and `docs/ARCHITECTURE.md`. For each claim in each doc, verify against current code state. Flag claims that no longer hold."
 - Existing-audit deltas: none.
@@ -609,6 +631,7 @@ EOF
 ## Task 6: Synthesis — produce the ranked backlog
 
 **Files:**
+
 - Create: `docs/superpowers/specs/2026-05-15-architecture-cleanup-audit.md` (the synthesis doc — NOT the design doc, which is `-design.md`)
 
 - [ ] **Step 1: Read all 18 lane reports**
@@ -627,6 +650,7 @@ Maintain an in-memory list of `(severity, where, evidence-hash)` tuples. For eac
 - [ ] **Step 3: Re-verify evidence against HEAD with severity-prioritized depth**
 
 For every CRITICAL and HIGH finding: open the cited file, confirm the line still matches the cited evidence (file moved? line shifted? pattern still present?). For each:
+
 - If still matches: keep as-is.
 - If file/line shifted but pattern still present: update the `Where:` reference.
 - If pattern no longer present: tag the finding `STALE — re-snapshot before action` and keep in the backlog (do not silently drop).
@@ -636,6 +660,7 @@ For MED and LOW: do NOT re-verify at this stage. They will be re-verified at Wav
 - [ ] **Step 4: Identify mechanical-sweep candidates**
 
 Tag findings that meet ALL of these criteria as "mechanical-sweep eligible":
+
 - Severity MED or LOW
 - Fix one-liner is mechanical (prettier, import cleanup, console.log → console.warn, `.js` extension fix)
 - Not collision-tagged
@@ -662,15 +687,19 @@ Use the `Write` tool to create `docs/superpowers/specs/2026-05-15-architecture-c
 ## Full ranked backlog
 
 ### CRITICAL
+
 <list, with lane sources>
 
 ### HIGH
+
 <list>
 
 ### MED
+
 <list, possibly truncated to file:line if >150>
 
 ### LOW
+
 <list, possibly truncated to file:line if >150>
 
 ## Mechanical-only sweep candidates (Track A pre-bundle)
@@ -696,6 +725,7 @@ All raw findings live under `docs/audits/2026-05-15-cleanup/`:
 ## Next step
 
 User triages. For each approved item, follow Wave 2 procedure in the design doc:
+
 - Track A (mechanical sweep) — single PR, optional pre-authorization.
 - Track B (structural fix) — worktree per item at `.claude/worktrees/<slug>`, brainstorm → spec → plan if effort = L.
 ```
@@ -723,6 +753,7 @@ EOF
 ## Task 7: Push and open PR for the audit artifact
 
 **Files:**
+
 - None new — PR over Tasks 2/3/4/5/6 commits.
 
 - [ ] **Step 1: Push the branch**

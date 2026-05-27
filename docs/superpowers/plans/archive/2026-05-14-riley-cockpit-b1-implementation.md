@@ -9,6 +9,7 @@
 **Tech Stack:** Next.js 14 App Router, React 18, TypeScript (ESM, `.js` extensions in relative imports per `CLAUDE.md`), Vitest + `@testing-library/react`, Tailwind for layout primitives only. The cockpit shell already exists on main (`apps/dashboard/src/components/cockpit/types.ts` shipped via Alex A.1's type-only landing); the rest of the shell components land when Alex A.1 merges.
 
 **Parent specs:**
+
 - [`docs/superpowers/specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md`](../specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md) — Wave A slicing (B.1 / B.2 / B.3 scope + adapter contract). **Authoritative.**
 - [`docs/superpowers/specs/2026-05-13-riley-cockpit-home-design.md`](../specs/2026-05-13-riley-cockpit-home-design.md) — Riley cockpit target spec (data shapes, copy, 11 action variants, translator rules, accent).
 - [`docs/superpowers/specs/2026-05-14-riley-agent-infra-parity-design.md`](../specs/2026-05-14-riley-agent-infra-parity-design.md) — Wave B doctrine sibling spec (out of scope for B.1; informs what's deferred).
@@ -85,22 +86,22 @@ If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 t
 
 ## Codebase audit (10 claims verified against current `main` before plan was written)
 
-| # | Claim | Verdict | Notes for the implementer |
-|---|---|---|---|
-| 1 | Alex A.1 shell components | ⚠ Partial pre-merge | `types.ts` is already on main (verified — contains `RileyApprovalView`, `RileyApprovalKind` with 11 variants, `ActivityKind` with all 9 Riley kinds). Other shell components ship at A.1 merge. **Riley B.1 reuses types.ts, does not modify it.** |
-| 2 | `useRecommendations()` | ✅ | `apps/dashboard/src/hooks/use-recommendations.ts:13`. Returns `UseQueryResult<{ recommendations: RecommendationApiRow[] }>`. |
-| 2 | `useRecommendationAction(recommendationId)` | ✅ | `apps/dashboard/src/hooks/use-recommendation-action.ts:8`. **Per-recommendation hook.** Returns `{ primary, secondary, dismiss, confirm, undo, isPending, error }`. Each method: `(note?: string) => Promise<unknown>`. |
-| 2 | `useAgentActivity()` | ✅ | `apps/dashboard/src/hooks/use-agent-activity.ts:71`. Returns `UseQueryResult<{ roster, states, actions: TranslatedAction[] }>`. |
-| 2 | `useHalt()` | ✅ | `apps/dashboard/src/components/layout/halt/halt-context.tsx:58`. Returns `{ halted, setHalted, toggleHalt }`. |
-| 2 | `useAgentGreeting()` | ✅ | `apps/dashboard/src/hooks/use-agent-greeting.ts:22`. Returns `{ data: GreetingViewModel, isLoading, isError, error }`. |
-| 3 | `Recommendation` schema fields | ⚠ Nested | `id`, `intent`, `status`, `humanSummary`, `presentation` (with `primaryLabel`/`secondaryLabel`/`dismissLabel`), `dollarsAtRisk`, `targetEntities`, `createdAt`, `confidence` are top-level. **`campaignId`, `learningPhaseImpact`, `reversible` live in `parameters.__recommendation`** — adapter must extract via nested access. |
-| 4 | `Connection` table / Meta Ads check | ✅ | `packages/db/prisma/schema.prisma:196-215`. Filter by `serviceId === "meta-ads"`. `useConnections()` hook at `apps/dashboard/src/hooks/use-connections.ts:21` returns `{ connections: Connection[] }`. |
-| 5 | `relativeAge` utility | ✅ | `packages/core/src/agent-home/relative-age.ts` — `formatRelativeAge(occurredAt: Date, now: Date, timezone: string): string`. Already imported by dashboard (`apps/dashboard/src/app/(auth)/(mercury)/contacts/components/format.ts`). Re-importable client-side. |
-| 6 | Three-vocabulary intent drift | ✅ | Engine primitives (`recommendation-engine.ts`): `"pause"`, `"scale"`, etc. Schema enum (`packages/schemas/src/ad-optimizer.ts:16-31`): 13 actions. Pipeline-prefix intents (`recommendation.pause_adset`, `recommendation.ad_set_pause`) appear in fixtures / pipeline code. **Translator must accept all three.** |
-| 7 | External-action dismissal | ⚠ Two-tap today | `actOnRecommendation` (`packages/core/src/recommendations/act.ts:48-108`) does NOT auto-dismiss when an external URL is clicked. Operator must separately call dismiss. **B.1 preserves this two-tap flow** — does not introduce auto-dismiss. Slicing spec §4 acceptance criterion 8 explicitly accommodates this. |
-| 8 | `actOnRecommendation` undo | ✅ | `undoableUntil` field set by `emit.ts:7,44`. **24-hour window** (`ONE_DAY_MS`) for `surface === "shadow_action"`, `null` for `queue`. `useRecommendationAction(id).undo(note?)` invokes; status responses include `"undo_window_closed"` / `"already_terminal"` / `"expired"` / `"ok"`. **Toast is caller responsibility** — cockpit B.1 surfaces existing toast wiring without redesign. |
-| 9 | Page branching | ✅ (post-#468 + post-A.1) | PR #468 deleted `[agentKey]/page.tsx` and introduced explicit `/alex/page.tsx`, `/riley/page.tsx`, `/mira/page.tsx`. A.1 (after rebase) modified `/alex/page.tsx` to render `<CockpitPage />` directly. **B.1 modifies `/riley/page.tsx` to render `<RileyCockpitPage />` directly** (a new Riley composition created in B.1). `<AgentHomeShell agentKey="riley" />` rendering is removed from `/riley/page.tsx`; the shell stays in the codebase for `/mira/` only. |
-| 10 | ESLint config | ✅ | Root `.eslintrc.json`. Uses `"overrides"` key with file globs + `no-restricted-imports`. Existing pattern at `.eslintrc.json:48-62` shows the rule shape. B.1 adds a new override block. |
+| #   | Claim                                       | Verdict                   | Notes for the implementer                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --- | ------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Alex A.1 shell components                   | ⚠ Partial pre-merge       | `types.ts` is already on main (verified — contains `RileyApprovalView`, `RileyApprovalKind` with 11 variants, `ActivityKind` with all 9 Riley kinds). Other shell components ship at A.1 merge. **Riley B.1 reuses types.ts, does not modify it.**                                                                                                                                                                                                                   |
+| 2   | `useRecommendations()`                      | ✅                        | `apps/dashboard/src/hooks/use-recommendations.ts:13`. Returns `UseQueryResult<{ recommendations: RecommendationApiRow[] }>`.                                                                                                                                                                                                                                                                                                                                         |
+| 2   | `useRecommendationAction(recommendationId)` | ✅                        | `apps/dashboard/src/hooks/use-recommendation-action.ts:8`. **Per-recommendation hook.** Returns `{ primary, secondary, dismiss, confirm, undo, isPending, error }`. Each method: `(note?: string) => Promise<unknown>`.                                                                                                                                                                                                                                              |
+| 2   | `useAgentActivity()`                        | ✅                        | `apps/dashboard/src/hooks/use-agent-activity.ts:71`. Returns `UseQueryResult<{ roster, states, actions: TranslatedAction[] }>`.                                                                                                                                                                                                                                                                                                                                      |
+| 2   | `useHalt()`                                 | ✅                        | `apps/dashboard/src/components/layout/halt/halt-context.tsx:58`. Returns `{ halted, setHalted, toggleHalt }`.                                                                                                                                                                                                                                                                                                                                                        |
+| 2   | `useAgentGreeting()`                        | ✅                        | `apps/dashboard/src/hooks/use-agent-greeting.ts:22`. Returns `{ data: GreetingViewModel, isLoading, isError, error }`.                                                                                                                                                                                                                                                                                                                                               |
+| 3   | `Recommendation` schema fields              | ⚠ Nested                  | `id`, `intent`, `status`, `humanSummary`, `presentation` (with `primaryLabel`/`secondaryLabel`/`dismissLabel`), `dollarsAtRisk`, `targetEntities`, `createdAt`, `confidence` are top-level. **`campaignId`, `learningPhaseImpact`, `reversible` live in `parameters.__recommendation`** — adapter must extract via nested access.                                                                                                                                    |
+| 4   | `Connection` table / Meta Ads check         | ✅                        | `packages/db/prisma/schema.prisma:196-215`. Filter by `serviceId === "meta-ads"`. `useConnections()` hook at `apps/dashboard/src/hooks/use-connections.ts:21` returns `{ connections: Connection[] }`.                                                                                                                                                                                                                                                               |
+| 5   | `relativeAge` utility                       | ✅                        | `packages/core/src/agent-home/relative-age.ts` — `formatRelativeAge(occurredAt: Date, now: Date, timezone: string): string`. Already imported by dashboard (`apps/dashboard/src/app/(auth)/(mercury)/contacts/components/format.ts`). Re-importable client-side.                                                                                                                                                                                                     |
+| 6   | Three-vocabulary intent drift               | ✅                        | Engine primitives (`recommendation-engine.ts`): `"pause"`, `"scale"`, etc. Schema enum (`packages/schemas/src/ad-optimizer.ts:16-31`): 13 actions. Pipeline-prefix intents (`recommendation.pause_adset`, `recommendation.ad_set_pause`) appear in fixtures / pipeline code. **Translator must accept all three.**                                                                                                                                                   |
+| 7   | External-action dismissal                   | ⚠ Two-tap today           | `actOnRecommendation` (`packages/core/src/recommendations/act.ts:48-108`) does NOT auto-dismiss when an external URL is clicked. Operator must separately call dismiss. **B.1 preserves this two-tap flow** — does not introduce auto-dismiss. Slicing spec §4 acceptance criterion 8 explicitly accommodates this.                                                                                                                                                  |
+| 8   | `actOnRecommendation` undo                  | ✅                        | `undoableUntil` field set by `emit.ts:7,44`. **24-hour window** (`ONE_DAY_MS`) for `surface === "shadow_action"`, `null` for `queue`. `useRecommendationAction(id).undo(note?)` invokes; status responses include `"undo_window_closed"` / `"already_terminal"` / `"expired"` / `"ok"`. **Toast is caller responsibility** — cockpit B.1 surfaces existing toast wiring without redesign.                                                                            |
+| 9   | Page branching                              | ✅ (post-#468 + post-A.1) | PR #468 deleted `[agentKey]/page.tsx` and introduced explicit `/alex/page.tsx`, `/riley/page.tsx`, `/mira/page.tsx`. A.1 (after rebase) modified `/alex/page.tsx` to render `<CockpitPage />` directly. **B.1 modifies `/riley/page.tsx` to render `<RileyCockpitPage />` directly** (a new Riley composition created in B.1). `<AgentHomeShell agentKey="riley" />` rendering is removed from `/riley/page.tsx`; the shell stays in the codebase for `/mira/` only. |
+| 10  | ESLint config                               | ✅                        | Root `.eslintrc.json`. Uses `"overrides"` key with file globs + `no-restricted-imports`. Existing pattern at `.eslintrc.json:48-62` shows the rule shape. B.1 adds a new override block.                                                                                                                                                                                                                                                                             |
 
 **Three adjustments propagated into this plan:**
 
@@ -114,52 +115,52 @@ If any of the above are missing, Alex A.1 has not merged. **Stop. Wait for A.1 t
 
 ### Created files
 
-| Path | Responsibility |
-|---|---|
-| `apps/dashboard/src/lib/cockpit/riley/riley-config.ts` | `RILEY_ACCENT`, `RILEY_TABS`, `statusPulse(statusKey)`, `statusColor(statusKey)`, static `RILEY_MISSION_SUBTITLE`. Mission popover rows + commands + composerPlaceholder + toastVoice are **NOT** here (B.2 / B.3). |
-| `apps/dashboard/src/lib/cockpit/riley/kind-meta-riley.ts` | `RILEY_KIND_META` table — 9 Riley activity kinds (`watching`, `reviewing`, `paused`, `scaled`, `rotated`, `shifted`, `restructured`, `started`, `alert`). Each entry: `{ label, color, pulse }`. Merged into shell's `KIND_META` at composition time. |
-| `apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-recommendation-fixtures.ts` | One `RecommendationApiRow`-shaped fixture per action variant (11 variants × 1 fixture = 11 fixtures) plus a multi-row signal-health scenario (3 rows for one pixel). All adapter tests pull from these. |
-| `apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-activity-fixtures.ts` | One `TranslatedAction`-shaped fixture per Riley activity kind (9 fixtures). Plus cold-state (no connection) scenario fixture. |
-| `apps/dashboard/src/lib/cockpit/riley/recommendation-to-approval-view.ts` | Pure orchestrator: `mapRecommendationsToApprovalViews(rows: RecommendationApiRow[]): RileyApprovalView[]`. Partitions signal-health rows, calls grouper, maps singles per-action, concatenates, sorts by urgency + `dollarsAtRisk` desc. Extracts nested fields from `parameters.__recommendation`. |
-| `apps/dashboard/src/lib/cockpit/riley/signal-health-grouper.ts` | Pure function: `groupSignalHealthByPixel(rows: RecommendationApiRow[]): RileyApprovalView[]`. Collapses rows where `parameters.__recommendation.campaignId.startsWith("signal:")` by pixel into one `campaign: { kind: "account" }` view-model. **No "Dismiss all" button in B.1** — primary action is external (Open Events Manager). |
-| `apps/dashboard/src/lib/cockpit/riley/riley-activity-translator.ts` | Pure function: `translateRileyActivity(actions: TranslatedAction[]): ActivityRow[]`. Maps intent + status → `ActivityKind` per Riley target spec's translator table. Absorbs three-vocabulary drift (`recommendation.pause` / `recommendation.pause_adset` / `recommendation.ad_set_pause`). |
-| `apps/dashboard/src/lib/cockpit/riley/cold-state-activity-rows.ts` | Pure function: `coldStateActivityRows(): ActivityRow[]`. Three synthetic onboarding rows when no Meta Ads `Connection` exists. No DB write. |
-| `apps/dashboard/src/lib/cockpit/riley/riley-status-deriver.ts` | Pure function: `deriveRileyStatus(input): CockpitStatus`. Order: `HALTED` → `IDLE` (no connection / no active campaign) → `WAITING` (pending recs, connection present) → `WATCHING` (steady). **Connection precedence:** absence of Meta Ads connection takes precedence over pending recommendation rows. `REVIEWING` deferred — derivation absent. |
-| `apps/dashboard/src/hooks/use-riley-approvals.ts` | Hook: `useRileyApprovals(): { approvals: RileyApprovalView[]; isLoading; isError }`. Wraps `useRecommendations()`, filters to Riley intents (`agentKey === "riley"` or `intent.startsWith("recommendation.")`), passes through adapter. Returns view-models only. |
-| `apps/dashboard/src/hooks/use-riley-status.ts` | Hook: `useRileyStatus(): CockpitStatus`. Composes `useHalt()` + `useConnections()` + `useRecommendations()` + recent-activity poll, passes through deriver. **Uses `useNow(60_000)` from `@/app/(auth)/(mercury)/approvals/hooks/use-now.js`** (existing pre-A.1 hook on main) for 1-minute ticking on the WATCHING/IDLE 15-minute boundary; `now` is included in the `useMemo` dependency array so the status flips when the window expires without a parent re-render. |
-| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Riley composition of the shell — parallel to Alex's `cockpit-page.tsx`, not a modification of it. Imports the shell primitives (`Topbar`, `Identity`, `ApprovalBlock`, `ActivityStream`, `ComposerPlaceholder`, `T`) + Riley config + Riley hooks. Renders `<RileyCockpitPage />` with no props. A.1's `cockpit-page.tsx` is unchanged. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts` | Verifies accent, tabs, status helpers. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/kind-meta-riley.test.ts` | Verifies all 9 kinds have `{ label, color, pulse }` entries. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/recommendation-to-approval-view.test.ts` | Describe.each over 11 action variants; verifies title/urgency/quote/primary CTA/risk extraction. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/signal-health-grouper.test.ts` | Verifies 3-row signal-health collapse to 1 view-model; `campaign.kind === "account"`; bulleted breach list in quote; external primary action only. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-activity-translator.test.ts` | Describe.each over 9 Riley activity kinds; three-vocabulary intent drift accepted; unknown intent falls back gracefully. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/cold-state-activity-rows.test.ts` | Verifies exactly 3 synthetic rows with expected heads/bodies. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-status-deriver.test.ts` | All 4 wired states (HALTED, IDLE, WAITING, WATCHING). Connection precedence rule. 15-minute WATCHING boundary. |
-| `apps/dashboard/src/hooks/__tests__/use-riley-approvals.test.tsx` | Hook returns view-models, hides raw `Recommendation` rows, handles loading + error. |
-| `apps/dashboard/src/hooks/__tests__/use-riley-status.test.tsx` | Hook composition: halt + connection + approvals + activity → `CockpitStatus`. |
-| `apps/dashboard/src/app/(auth)/riley/__tests__/page.test.tsx` | **Modified** (this file already exists from #468 — testing `AgentHomeShell` rendering). B.1 replaces its body with cockpit assertions: mocks `RileyCockpitPage` and asserts the page renders it when Riley is enabled. The route-gate test (`notFound()` when Riley not enabled) is preserved. |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | New component-level integration test for `RileyCockpitPage`: cold state (no connection) + steady state (≥1 pending rec) + halted. Mocks Riley hooks. |
+| Path                                                                                     | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/dashboard/src/lib/cockpit/riley/riley-config.ts`                                   | `RILEY_ACCENT`, `RILEY_TABS`, `statusPulse(statusKey)`, `statusColor(statusKey)`, static `RILEY_MISSION_SUBTITLE`. Mission popover rows + commands + composerPlaceholder + toastVoice are **NOT** here (B.2 / B.3).                                                                                                                                                                                                                                                      |
+| `apps/dashboard/src/lib/cockpit/riley/kind-meta-riley.ts`                                | `RILEY_KIND_META` table — 9 Riley activity kinds (`watching`, `reviewing`, `paused`, `scaled`, `rotated`, `shifted`, `restructured`, `started`, `alert`). Each entry: `{ label, color, pulse }`. Merged into shell's `KIND_META` at composition time.                                                                                                                                                                                                                    |
+| `apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-recommendation-fixtures.ts`     | One `RecommendationApiRow`-shaped fixture per action variant (11 variants × 1 fixture = 11 fixtures) plus a multi-row signal-health scenario (3 rows for one pixel). All adapter tests pull from these.                                                                                                                                                                                                                                                                  |
+| `apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-activity-fixtures.ts`           | One `TranslatedAction`-shaped fixture per Riley activity kind (9 fixtures). Plus cold-state (no connection) scenario fixture.                                                                                                                                                                                                                                                                                                                                            |
+| `apps/dashboard/src/lib/cockpit/riley/recommendation-to-approval-view.ts`                | Pure orchestrator: `mapRecommendationsToApprovalViews(rows: RecommendationApiRow[]): RileyApprovalView[]`. Partitions signal-health rows, calls grouper, maps singles per-action, concatenates, sorts by urgency + `dollarsAtRisk` desc. Extracts nested fields from `parameters.__recommendation`.                                                                                                                                                                      |
+| `apps/dashboard/src/lib/cockpit/riley/signal-health-grouper.ts`                          | Pure function: `groupSignalHealthByPixel(rows: RecommendationApiRow[]): RileyApprovalView[]`. Collapses rows where `parameters.__recommendation.campaignId.startsWith("signal:")` by pixel into one `campaign: { kind: "account" }` view-model. **No "Dismiss all" button in B.1** — primary action is external (Open Events Manager).                                                                                                                                   |
+| `apps/dashboard/src/lib/cockpit/riley/riley-activity-translator.ts`                      | Pure function: `translateRileyActivity(actions: TranslatedAction[]): ActivityRow[]`. Maps intent + status → `ActivityKind` per Riley target spec's translator table. Absorbs three-vocabulary drift (`recommendation.pause` / `recommendation.pause_adset` / `recommendation.ad_set_pause`).                                                                                                                                                                             |
+| `apps/dashboard/src/lib/cockpit/riley/cold-state-activity-rows.ts`                       | Pure function: `coldStateActivityRows(): ActivityRow[]`. Three synthetic onboarding rows when no Meta Ads `Connection` exists. No DB write.                                                                                                                                                                                                                                                                                                                              |
+| `apps/dashboard/src/lib/cockpit/riley/riley-status-deriver.ts`                           | Pure function: `deriveRileyStatus(input): CockpitStatus`. Order: `HALTED` → `IDLE` (no connection / no active campaign) → `WAITING` (pending recs, connection present) → `WATCHING` (steady). **Connection precedence:** absence of Meta Ads connection takes precedence over pending recommendation rows. `REVIEWING` deferred — derivation absent.                                                                                                                     |
+| `apps/dashboard/src/hooks/use-riley-approvals.ts`                                        | Hook: `useRileyApprovals(): { approvals: RileyApprovalView[]; isLoading; isError }`. Wraps `useRecommendations()`, filters to Riley intents (`agentKey === "riley"` or `intent.startsWith("recommendation.")`), passes through adapter. Returns view-models only.                                                                                                                                                                                                        |
+| `apps/dashboard/src/hooks/use-riley-status.ts`                                           | Hook: `useRileyStatus(): CockpitStatus`. Composes `useHalt()` + `useConnections()` + `useRecommendations()` + recent-activity poll, passes through deriver. **Uses `useNow(60_000)` from `@/app/(auth)/(mercury)/approvals/hooks/use-now.js`** (existing pre-A.1 hook on main) for 1-minute ticking on the WATCHING/IDLE 15-minute boundary; `now` is included in the `useMemo` dependency array so the status flips when the window expires without a parent re-render. |
+| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`                           | Riley composition of the shell — parallel to Alex's `cockpit-page.tsx`, not a modification of it. Imports the shell primitives (`Topbar`, `Identity`, `ApprovalBlock`, `ActivityStream`, `ComposerPlaceholder`, `T`) + Riley config + Riley hooks. Renders `<RileyCockpitPage />` with no props. A.1's `cockpit-page.tsx` is unchanged.                                                                                                                                  |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts`                    | Verifies accent, tabs, status helpers.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/kind-meta-riley.test.ts`                 | Verifies all 9 kinds have `{ label, color, pulse }` entries.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/recommendation-to-approval-view.test.ts` | Describe.each over 11 action variants; verifies title/urgency/quote/primary CTA/risk extraction.                                                                                                                                                                                                                                                                                                                                                                         |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/signal-health-grouper.test.ts`           | Verifies 3-row signal-health collapse to 1 view-model; `campaign.kind === "account"`; bulleted breach list in quote; external primary action only.                                                                                                                                                                                                                                                                                                                       |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-activity-translator.test.ts`       | Describe.each over 9 Riley activity kinds; three-vocabulary intent drift accepted; unknown intent falls back gracefully.                                                                                                                                                                                                                                                                                                                                                 |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/cold-state-activity-rows.test.ts`        | Verifies exactly 3 synthetic rows with expected heads/bodies.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-status-deriver.test.ts`            | All 4 wired states (HALTED, IDLE, WAITING, WATCHING). Connection precedence rule. 15-minute WATCHING boundary.                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/dashboard/src/hooks/__tests__/use-riley-approvals.test.tsx`                        | Hook returns view-models, hides raw `Recommendation` rows, handles loading + error.                                                                                                                                                                                                                                                                                                                                                                                      |
+| `apps/dashboard/src/hooks/__tests__/use-riley-status.test.tsx`                           | Hook composition: halt + connection + approvals + activity → `CockpitStatus`.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `apps/dashboard/src/app/(auth)/riley/__tests__/page.test.tsx`                            | **Modified** (this file already exists from #468 — testing `AgentHomeShell` rendering). B.1 replaces its body with cockpit assertions: mocks `RileyCockpitPage` and asserts the page renders it when Riley is enabled. The route-gate test (`notFound()` when Riley not enabled) is preserved.                                                                                                                                                                           |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`            | New component-level integration test for `RileyCockpitPage`: cold state (no connection) + steady state (≥1 pending rec) + halted. Mocks Riley hooks.                                                                                                                                                                                                                                                                                                                     |
 
 ### Modified files
 
-| Path | Change |
-|---|---|
-| `apps/dashboard/src/hooks/use-agent-activity.ts` | **Add a new named export `useRileyActivity()` at the bottom of the file. Do NOT modify the existing `useAgentActivity()` return shape — Alex and any other consumers continue to use it unchanged.** The new export composes `useAgentActivity()` + `useConnections()` + the Riley translator + cold-state synthetic rows, and returns Riley-shaped `ActivityRow[]`. |
-| `apps/dashboard/src/app/(auth)/riley/page.tsx` | Replace `<AgentHomeShell agentKey="riley" />` with `<RileyCockpitPage />`. Replace the `AgentHomeShell` import with `RileyCockpitPage`. The route gate (`notFound()` if Riley not enabled) is preserved. |
-| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Extend Alex A.1's fixture-based render test with all 11 Riley action variants + the grouped account-level `signal_health_group` card. |
-| `.eslintrc.json` | Add new `overrides` block: `no-restricted-imports` rule scoped to `apps/dashboard/src/components/cockpit/**`, `apps/dashboard/src/hooks/use-riley-*.ts`, `apps/dashboard/src/app/(auth)/alex/**`, and `apps/dashboard/src/app/(auth)/riley/**`. Adapter files under `apps/dashboard/src/lib/cockpit/riley/**` are NOT in the scope (i.e., not restricted). |
+| Path                                                                     | Change                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/hooks/use-agent-activity.ts`                         | **Add a new named export `useRileyActivity()` at the bottom of the file. Do NOT modify the existing `useAgentActivity()` return shape — Alex and any other consumers continue to use it unchanged.** The new export composes `useAgentActivity()` + `useConnections()` + the Riley translator + cold-state synthetic rows, and returns Riley-shaped `ActivityRow[]`. |
+| `apps/dashboard/src/app/(auth)/riley/page.tsx`                           | Replace `<AgentHomeShell agentKey="riley" />` with `<RileyCockpitPage />`. Replace the `AgentHomeShell` import with `RileyCockpitPage`. The route gate (`notFound()` if Riley not enabled) is preserved.                                                                                                                                                             |
+| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Extend Alex A.1's fixture-based render test with all 11 Riley action variants + the grouped account-level `signal_health_group` card.                                                                                                                                                                                                                                |
+| `.eslintrc.json`                                                         | Add new `overrides` block: `no-restricted-imports` rule scoped to `apps/dashboard/src/components/cockpit/**`, `apps/dashboard/src/hooks/use-riley-*.ts`, `apps/dashboard/src/app/(auth)/alex/**`, and `apps/dashboard/src/app/(auth)/riley/**`. Adapter files under `apps/dashboard/src/lib/cockpit/riley/**` are NOT in the scope (i.e., not restricted).           |
 
 ### Files NOT touched (architectural boundary verification)
 
-| Path | Reason |
-|---|---|
-| `apps/dashboard/src/components/cockpit/*.tsx` | Shell components shipped by Alex A.1 — Riley B.1 consumes them unchanged. |
-| `apps/dashboard/src/components/cockpit/types.ts` | Already on main with full Riley types. Reused, not modified. |
-| `apps/dashboard/src/lib/cockpit/alex-config.ts` | Alex's config — Riley has its own under `lib/cockpit/riley/`. |
-| `packages/schemas/src/recommendations.ts` | `acceptToast` / `declineToast` schema additions are B.3, not B.1. |
-| `packages/db/prisma/schema.prisma` | Zero backend changes in B.1. |
-| `apps/api/**` | Zero backend changes in B.1. |
-| `packages/ad-optimizer/**` | Riley engine unchanged. B.1 reads from the existing recommendation pipeline. |
+| Path                                             | Reason                                                                       |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `apps/dashboard/src/components/cockpit/*.tsx`    | Shell components shipped by Alex A.1 — Riley B.1 consumes them unchanged.    |
+| `apps/dashboard/src/components/cockpit/types.ts` | Already on main with full Riley types. Reused, not modified.                 |
+| `apps/dashboard/src/lib/cockpit/alex-config.ts`  | Alex's config — Riley has its own under `lib/cockpit/riley/`.                |
+| `packages/schemas/src/recommendations.ts`        | `acceptToast` / `declineToast` schema additions are B.3, not B.1.            |
+| `packages/db/prisma/schema.prisma`               | Zero backend changes in B.1.                                                 |
+| `apps/api/**`                                    | Zero backend changes in B.1.                                                 |
+| `packages/ad-optimizer/**`                       | Riley engine unchanged. B.1 reads from the existing recommendation pipeline. |
 
 ---
 
@@ -204,7 +205,7 @@ Verified against `apps/dashboard/src/hooks/use-recommendations.ts` and `apps/das
 ```ts
 type RecommendationApiRow = {
   id: string;
-  intent: string;                      // e.g., "recommendation.pause"
+  intent: string; // e.g., "recommendation.pause"
   agentKey: "alex" | "riley";
   humanSummary: string;
   dollarsAtRisk: number;
@@ -224,17 +225,17 @@ type RecommendationApiRow = {
   };
   parameters: {
     __recommendation?: {
-      campaignId: string;              // "signal:<pixelId>" for signal-health rows
+      campaignId: string; // "signal:<pixelId>" for signal-health rows
       learningPhaseImpact: "no impact" | "will reset learning";
       reversible: boolean;
-      action: string;                  // engine primitive: "pause", "scale", etc.
+      action: string; // engine primitive: "pause", "scale", etc.
       urgency: "immediate" | "this_week" | "next_cycle";
       // ... other Riley-specific fields
     };
     [other: string]: unknown;
   };
-  createdAt: string;                   // ISO date
-  undoableUntil: string | null;        // ISO date; set by emit.ts ONE_DAY_MS for shadow_action surface
+  createdAt: string; // ISO date
+  undoableUntil: string | null; // ISO date; set by emit.ts ONE_DAY_MS for shadow_action surface
 };
 ```
 
@@ -259,6 +260,7 @@ Each boundary is one squash-merge commit. Tasks within a boundary stage independ
 ### Task 1: `riley-config.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/riley-config.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts`
 
@@ -267,7 +269,13 @@ Each boundary is one squash-merge commit. Tasks within a boundary stage independ
 ```ts
 // apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts
 import { describe, it, expect } from "vitest";
-import { RILEY_ACCENT, RILEY_TABS, RILEY_MISSION_SUBTITLE, statusColor, statusPulse } from "../riley-config.js";
+import {
+  RILEY_ACCENT,
+  RILEY_TABS,
+  RILEY_MISSION_SUBTITLE,
+  statusColor,
+  statusPulse,
+} from "../riley-config.js";
 
 describe("riley-config", () => {
   it("RILEY_ACCENT carries the four warm-clay tokens from the Riley target spec", () => {
@@ -342,11 +350,16 @@ export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";
 
 export function statusColor(statusKey: CockpitStatus): string {
   switch (statusKey) {
-    case "WATCHING":  return "#3F7A36"; // green
-    case "REVIEWING": return "#B8782E"; // amber (REVIEWING is type-only in B.1)
-    case "WAITING":   return "#B8782E"; // amber
-    case "HALTED":    return "#A03A2E"; // red
-    default:          return "#A39786"; // grey (ink4) — IDLE/WORKING and any future states fall through
+    case "WATCHING":
+      return "#3F7A36"; // green
+    case "REVIEWING":
+      return "#B8782E"; // amber (REVIEWING is type-only in B.1)
+    case "WAITING":
+      return "#B8782E"; // amber
+    case "HALTED":
+      return "#A03A2E"; // red
+    default:
+      return "#A39786"; // grey (ink4) — IDLE/WORKING and any future states fall through
   }
 }
 
@@ -379,6 +392,7 @@ git add apps/dashboard/src/lib/cockpit/riley/riley-config.ts apps/dashboard/src/
 ### Task 2: `kind-meta-riley.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/kind-meta-riley.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/kind-meta-riley.test.ts`
 
@@ -459,7 +473,15 @@ import type { ActivityKind } from "@/components/cockpit/types.js";
 
 type RileyActivityKind = Extract<
   ActivityKind,
-  "watching" | "reviewing" | "paused" | "scaled" | "rotated" | "shifted" | "restructured" | "started" | "alert"
+  | "watching"
+  | "reviewing"
+  | "paused"
+  | "scaled"
+  | "rotated"
+  | "shifted"
+  | "restructured"
+  | "started"
+  | "alert"
 >;
 
 interface KindMetaEntry {
@@ -469,15 +491,15 @@ interface KindMetaEntry {
 }
 
 export const RILEY_KIND_META: Record<RileyActivityKind, KindMetaEntry> = {
-  watching:     { label: "WATCHING",     color: "#3F7A36", pulse: false }, // green
-  reviewing:    { label: "REVIEWING",    color: "#7C4F1C", pulse: true  }, // amberDeep
-  paused:       { label: "PAUSED",       color: "#6B6052", pulse: false }, // ink3
-  scaled:       { label: "SCALED",       color: "#3F7A36", pulse: false }, // green
-  rotated:      { label: "ROTATED",      color: "#3A5A80", pulse: false }, // blue
-  shifted:      { label: "SHIFTED",      color: "#3A5A80", pulse: false }, // blue
+  watching: { label: "WATCHING", color: "#3F7A36", pulse: false }, // green
+  reviewing: { label: "REVIEWING", color: "#7C4F1C", pulse: true }, // amberDeep
+  paused: { label: "PAUSED", color: "#6B6052", pulse: false }, // ink3
+  scaled: { label: "SCALED", color: "#3F7A36", pulse: false }, // green
+  rotated: { label: "ROTATED", color: "#3A5A80", pulse: false }, // blue
+  shifted: { label: "SHIFTED", color: "#3A5A80", pulse: false }, // blue
   restructured: { label: "RESTRUCTURED", color: "#3A5A80", pulse: false }, // blue
-  started:      { label: "STARTED",      color: "#6B6052", pulse: false }, // ink3
-  alert:        { label: "ALERT",        color: "#A03A2E", pulse: false }, // red
+  started: { label: "STARTED", color: "#6B6052", pulse: false }, // ink3
+  alert: { label: "ALERT", color: "#A03A2E", pulse: false }, // red
 };
 ```
 
@@ -500,6 +522,7 @@ git add apps/dashboard/src/lib/cockpit/riley/kind-meta-riley.ts apps/dashboard/s
 ### Task 3: `riley-recommendation-fixtures.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-recommendation-fixtures.ts`
 
 Fixtures are test data — no separate test file. Tasks 5+ verify adapters against this data.
@@ -570,7 +593,11 @@ export const scaleFixture = baseRow({
   humanSummary: "ROAS 3.2× sustained for 7 days; running under your daily cap. Suggest +$40/day.",
   dollarsAtRisk: 0,
   confidence: 0.7,
-  presentation: { primaryLabel: "Scale +$40/day", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Scale +$40/day",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Lookalike 1%" },
   parameters: {
     __recommendation: {
@@ -589,7 +616,11 @@ export const refreshCreativeFixture = baseRow({
   humanSummary: "CTR down 38% over 5 days; same creative live 14 days. Three fresh variants ready.",
   dollarsAtRisk: 220,
   confidence: 0.85,
-  presentation: { primaryLabel: "Refresh creative", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Refresh creative",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Retargeting — Hot" },
   parameters: {
     __recommendation: {
@@ -608,7 +639,11 @@ export const restructureFixture = baseRow({
   humanSummary: "Audience is saturated — expanding targeting will find new reach.",
   dollarsAtRisk: 150,
   confidence: 0.65,
-  presentation: { primaryLabel: "Create expanded ad set", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Create expanded ad set",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Lookalike 1%" },
   parameters: {
     __recommendation: {
@@ -627,7 +662,11 @@ export const shiftBudgetFixture = baseRow({
   humanSummary: "Google trueROAS is 2.4× Meta — consider shifting budget.",
   dollarsAtRisk: 0,
   confidence: 0.6,
-  presentation: { primaryLabel: "Shift to Google", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Shift to Google",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Multi-source · Hot" },
   parameters: {
     __recommendation: {
@@ -646,7 +685,11 @@ export const switchEventFixture = baseRow({
   humanSummary: "Optimizing on chat starts is attracting low-intent clickers — switch to Schedule.",
   dollarsAtRisk: 90,
   confidence: 0.75,
-  presentation: { primaryLabel: "Switch to Schedule", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Switch to Schedule",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "CTWA · Cold" },
   parameters: {
     __recommendation: {
@@ -662,10 +705,15 @@ export const switchEventFixture = baseRow({
 export const hardenCapiFixture = baseRow({
   id: "rec_capi_01",
   intent: "recommendation.harden_capi_attribution",
-  humanSummary: "No CAPI Schedule events received in 7+ days — Meta cannot optimize without signal.",
+  humanSummary:
+    "No CAPI Schedule events received in 7+ days — Meta cannot optimize without signal.",
   dollarsAtRisk: 0,
   confidence: 0.7,
-  presentation: { primaryLabel: "Open CAPI settings", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Open CAPI settings",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Account-wide" },
   parameters: {
     __recommendation: {
@@ -685,7 +733,11 @@ export const holdFixture = baseRow({
   humanSummary: "Landing page issues are driving up costs — fix before increasing spend.",
   dollarsAtRisk: 110,
   confidence: 0.75,
-  presentation: { primaryLabel: "Hold budget changes", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Hold budget changes",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Spring Sale — Awareness" },
   parameters: {
     __recommendation: {
@@ -704,7 +756,11 @@ export const addCreativeFixture = baseRow({
   humanSummary: "CPA significantly above target — add fresh creatives and reduce budget.",
   dollarsAtRisk: 480,
   confidence: 0.8,
-  presentation: { primaryLabel: "Approve plan", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Approve plan",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Retargeting — Cold" },
   parameters: {
     __recommendation: {
@@ -723,7 +779,11 @@ export const reviewBudgetFixture = baseRow({
   humanSummary: "Campaign appears above target CPA (1.8×). Review in Ads Manager.",
   dollarsAtRisk: 0,
   confidence: 0.65,
-  presentation: { primaryLabel: "Open in Ads Manager", secondaryLabel: "Decline", dismissLabel: "Decline" },
+  presentation: {
+    primaryLabel: "Open in Ads Manager",
+    secondaryLabel: "Decline",
+    dismissLabel: "Decline",
+  },
   targetEntities: { campaignName: "Spring Sale — Awareness" },
   parameters: {
     __recommendation: {
@@ -743,7 +803,11 @@ export const signalHealthFixtures: RecommendationApiRow[] = [
     id: "rec_sh_pixel_dead",
     intent: "recommendation.fix_signal_health",
     humanSummary: "Pixel is dead — check website installation.",
-    presentation: { primaryLabel: "Open Events Manager", secondaryLabel: "", dismissLabel: "Decline" },
+    presentation: {
+      primaryLabel: "Open Events Manager",
+      secondaryLabel: "",
+      dismissLabel: "Decline",
+    },
     targetEntities: { pixelId: "1234567890" },
     parameters: {
       __recommendation: {
@@ -761,7 +825,11 @@ export const signalHealthFixtures: RecommendationApiRow[] = [
     id: "rec_sh_s2b_low",
     intent: "recommendation.fix_signal_health",
     humanSummary: "Server-to-browser ratio is below target — missing CAPI signal.",
-    presentation: { primaryLabel: "Open Events Manager", secondaryLabel: "", dismissLabel: "Decline" },
+    presentation: {
+      primaryLabel: "Open Events Manager",
+      secondaryLabel: "",
+      dismissLabel: "Decline",
+    },
     targetEntities: { pixelId: "1234567890" },
     parameters: {
       __recommendation: {
@@ -778,7 +846,11 @@ export const signalHealthFixtures: RecommendationApiRow[] = [
     id: "rec_sh_freshness",
     intent: "recommendation.fix_signal_health",
     humanSummary: "CAPI server events are stale — Meta's optimizer cannot react.",
-    presentation: { primaryLabel: "Open Events Manager", secondaryLabel: "", dismissLabel: "Decline" },
+    presentation: {
+      primaryLabel: "Open Events Manager",
+      secondaryLabel: "",
+      dismissLabel: "Decline",
+    },
     targetEntities: { pixelId: "1234567890" },
     parameters: {
       __recommendation: {
@@ -827,6 +899,7 @@ git add apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-recommendation-f
 ### Task 4: `riley-activity-fixtures.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/__fixtures__/riley-activity-fixtures.ts`
 
 - [ ] **Step 1: Implement**
@@ -928,9 +1001,24 @@ export const alertFixture = base({
 
 // Three-vocabulary drift coverage — same semantic event, different intents
 export const vocabularyDriftFixtures: TranslatedAction[] = [
-  base({ id: "act_vocab_1", intent: "recommendation.pause",      summary: "v1: pause", status: "acted" }),
-  base({ id: "act_vocab_2", intent: "recommendation.pause_adset", summary: "v2: pause_adset", status: "acted" }),
-  base({ id: "act_vocab_3", intent: "recommendation.ad_set_pause", summary: "v3: ad_set_pause", status: "acted" }),
+  base({
+    id: "act_vocab_1",
+    intent: "recommendation.pause",
+    summary: "v1: pause",
+    status: "acted",
+  }),
+  base({
+    id: "act_vocab_2",
+    intent: "recommendation.pause_adset",
+    summary: "v2: pause_adset",
+    status: "acted",
+  }),
+  base({
+    id: "act_vocab_3",
+    intent: "recommendation.ad_set_pause",
+    summary: "v3: ad_set_pause",
+    status: "acted",
+  }),
 ];
 
 export const ALL_RILEY_ACTIVITY_FIXTURES = [
@@ -986,6 +1074,7 @@ EOF
 ### Task 5: `recommendation-to-approval-view.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/recommendation-to-approval-view.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/recommendation-to-approval-view.test.ts`
 
@@ -1011,17 +1100,31 @@ import {
 } from "../__fixtures__/riley-recommendation-fixtures.js";
 import type { RecommendationApiRow } from "@/lib/api-client-types.js";
 
-const SINGLE_ROW_FIXTURES: Array<[string, RecommendationApiRow, { kind: string; urgency: string }]> = [
-  ["pause",                       pauseFixture,           { kind: "pause",                       urgency: "immediate" }],
-  ["scale",                       scaleFixture,           { kind: "scale",                       urgency: "this_week" }],
-  ["refresh_creative",            refreshCreativeFixture, { kind: "refresh_creative",            urgency: "this_week" }],
-  ["restructure",                 restructureFixture,     { kind: "restructure",                 urgency: "next_cycle" }],
-  ["shift_budget_to_source",      shiftBudgetFixture,     { kind: "shift_budget_to_source",      urgency: "this_week" }],
-  ["switch_optimization_event",   switchEventFixture,     { kind: "switch_optimization_event",   urgency: "this_week" }],
-  ["harden_capi_attribution",     hardenCapiFixture,      { kind: "harden_capi_attribution",     urgency: "this_week" }],
-  ["hold",                        holdFixture,            { kind: "hold",                        urgency: "this_week" }],
-  ["add_creative",                addCreativeFixture,     { kind: "add_creative",                urgency: "this_week" }],
-  ["review_budget",               reviewBudgetFixture,    { kind: "review_budget",               urgency: "this_week" }],
+const SINGLE_ROW_FIXTURES: Array<
+  [string, RecommendationApiRow, { kind: string; urgency: string }]
+> = [
+  ["pause", pauseFixture, { kind: "pause", urgency: "immediate" }],
+  ["scale", scaleFixture, { kind: "scale", urgency: "this_week" }],
+  ["refresh_creative", refreshCreativeFixture, { kind: "refresh_creative", urgency: "this_week" }],
+  ["restructure", restructureFixture, { kind: "restructure", urgency: "next_cycle" }],
+  [
+    "shift_budget_to_source",
+    shiftBudgetFixture,
+    { kind: "shift_budget_to_source", urgency: "this_week" },
+  ],
+  [
+    "switch_optimization_event",
+    switchEventFixture,
+    { kind: "switch_optimization_event", urgency: "this_week" },
+  ],
+  [
+    "harden_capi_attribution",
+    hardenCapiFixture,
+    { kind: "harden_capi_attribution", urgency: "this_week" },
+  ],
+  ["hold", holdFixture, { kind: "hold", urgency: "this_week" }],
+  ["add_creative", addCreativeFixture, { kind: "add_creative", urgency: "this_week" }],
+  ["review_budget", reviewBudgetFixture, { kind: "review_budget", urgency: "this_week" }],
 ];
 
 describe("recommendationToApprovalView", () => {
@@ -1052,7 +1155,9 @@ describe("recommendationToApprovalView", () => {
 
     it("preserves confidence and learningPhaseImpact from __recommendation", () => {
       expect(view!.confidence).toBe(fixture.confidence);
-      expect(view!.learningPhaseImpact).toBe(fixture.parameters.__recommendation!.learningPhaseImpact);
+      expect(view!.learningPhaseImpact).toBe(
+        fixture.parameters.__recommendation!.learningPhaseImpact,
+      );
     });
 
     it("reversible flag flows from __recommendation", () => {
@@ -1097,15 +1202,21 @@ describe("recommendationToApprovalView", () => {
   });
 
   it("orchestrator mapRecommendationsToApprovalViews sorts immediate before this_week before next_cycle", async () => {
-    const { mapRecommendationsToApprovalViews } = await import("../recommendation-to-approval-view.js");
+    const { mapRecommendationsToApprovalViews } =
+      await import("../recommendation-to-approval-view.js");
     const mixed = [restructureFixture, scaleFixture, pauseFixture];
     const sorted = mapRecommendationsToApprovalViews(mixed);
     expect(sorted.map((v) => v.urgency)).toEqual(["immediate", "this_week", "next_cycle"]);
   });
 
   it("within urgency band, sorts by dollarsAtRisk descending", async () => {
-    const { mapRecommendationsToApprovalViews } = await import("../recommendation-to-approval-view.js");
-    const sorted = mapRecommendationsToApprovalViews([refreshCreativeFixture, holdFixture, addCreativeFixture]);
+    const { mapRecommendationsToApprovalViews } =
+      await import("../recommendation-to-approval-view.js");
+    const sorted = mapRecommendationsToApprovalViews([
+      refreshCreativeFixture,
+      holdFixture,
+      addCreativeFixture,
+    ]);
     // All three are this_week; addCreative ($480) > refresh ($220) > hold ($110)
     expect(sorted.map((v) => v.id)).toEqual(["rec_addc_01", "rec_refresh_01", "rec_hold_01"]);
   });
@@ -1125,7 +1236,11 @@ Expected: module not found.
 ```ts
 // apps/dashboard/src/lib/cockpit/riley/recommendation-to-approval-view.ts
 import type { RecommendationApiRow } from "@/lib/api-client-types.js";
-import type { RileyApprovalView, RileyApprovalKind, ApprovalUrgency } from "@/components/cockpit/types.js";
+import type {
+  RileyApprovalView,
+  RileyApprovalKind,
+  ApprovalUrgency,
+} from "@/components/cockpit/types.js";
 import { formatRelativeAge } from "@switchboard/core/agent-home/relative-age.js";
 import { groupSignalHealthByPixel } from "./signal-health-grouper.js";
 
@@ -1162,17 +1277,28 @@ const EXTERNAL_ACTIONS = new Set(["review_budget", "harden_capi_attribution"]);
 
 function titleForAction(action: string): string {
   switch (action) {
-    case "pause":                     return "Pause adset";
-    case "scale":                     return "Scale budget";
-    case "refresh_creative":          return "Refresh creative";
-    case "restructure":               return "Expand targeting";
-    case "shift_budget_to_source":    return "Shift budget";
-    case "switch_optimization_event": return "Switch event";
-    case "harden_capi_attribution":   return "Fix CAPI";
-    case "hold":                      return "Hold spend";
-    case "add_creative":              return "Add creative + reduce";
-    case "review_budget":             return "Review budget";
-    default:                          return action;
+    case "pause":
+      return "Pause adset";
+    case "scale":
+      return "Scale budget";
+    case "refresh_creative":
+      return "Refresh creative";
+    case "restructure":
+      return "Expand targeting";
+    case "shift_budget_to_source":
+      return "Shift budget";
+    case "switch_optimization_event":
+      return "Switch event";
+    case "harden_capi_attribution":
+      return "Fix CAPI";
+    case "hold":
+      return "Hold spend";
+    case "add_creative":
+      return "Add creative + reduce";
+    case "review_budget":
+      return "Review budget";
+    default:
+      return action;
   }
 }
 
@@ -1196,16 +1322,16 @@ export function recommendationToApprovalView(row: RecommendationApiRow): RileyAp
 
   const isExternal = EXTERNAL_ACTIONS.has(params.action);
   const primaryAction = isExternal
-    ? ({
+    ? {
         kind: "external" as const,
         url: params.externalUrl ?? "https://business.facebook.com/",
         service: "meta" as const,
-      })
-    : ({
+      }
+    : {
         kind: "internal" as const,
         intent: row.intent,
         parameters: row.parameters,
-      });
+      };
 
   const campaignName = row.targetEntities?.campaignName ?? "Unknown campaign";
 
@@ -1237,7 +1363,9 @@ const URGENCY_ORDER: Record<ApprovalUrgency, number> = {
   next_cycle: 2,
 };
 
-export function mapRecommendationsToApprovalViews(rows: RecommendationApiRow[]): RileyApprovalView[] {
+export function mapRecommendationsToApprovalViews(
+  rows: RecommendationApiRow[],
+): RileyApprovalView[] {
   const signalHealthRows = rows.filter((r) => {
     const p = extractRileyParams(r);
     return p?.campaignId.startsWith("signal:") ?? false;
@@ -1283,6 +1411,7 @@ git add apps/dashboard/src/lib/cockpit/riley/recommendation-to-approval-view.ts 
 ### Task 6: `signal-health-grouper.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/signal-health-grouper.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/signal-health-grouper.test.ts`
 
@@ -1414,7 +1543,9 @@ export function groupSignalHealthByPixel(rows: RecommendationApiRow[]): RileyApp
   const views: RileyApprovalView[] = [];
   for (const [pixelId, group] of byPixel) {
     // Most-urgent breach in the group dictates the card urgency
-    const urgencies = group.map((r) => (r.parameters?.__recommendation as RileyRecParams)?.urgency).filter(Boolean);
+    const urgencies = group
+      .map((r) => (r.parameters?.__recommendation as RileyRecParams)?.urgency)
+      .filter(Boolean);
     const urgency = urgencies.sort((a, b) => URGENCY_ORDER[a] - URGENCY_ORDER[b])[0] ?? "this_week";
 
     const earliestCreated = group
@@ -1424,9 +1555,9 @@ export function groupSignalHealthByPixel(rows: RecommendationApiRow[]): RileyApp
     const quoteLines = group.map((r) => `• ${r.humanSummary}`).join("\n");
 
     // Find an external URL on any of the group's rows; fallback to Events Manager root
-    const externalUrl =
-      group.find((r) => (r.parameters?.__recommendation as RileyRecParams)?.externalUrl)
-        ?.parameters?.__recommendation as RileyRecParams | undefined;
+    const externalUrl = group.find(
+      (r) => (r.parameters?.__recommendation as RileyRecParams)?.externalUrl,
+    )?.parameters?.__recommendation as RileyRecParams | undefined;
     const url = externalUrl?.externalUrl ?? `${META_EVENTS_MANAGER_FALLBACK}${pixelId}`;
 
     views.push({
@@ -1479,6 +1610,7 @@ git add apps/dashboard/src/lib/cockpit/riley/signal-health-grouper.ts apps/dashb
 ### Task 7: `riley-activity-translator.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/riley-activity-translator.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-activity-translator.test.ts`
 
@@ -1619,17 +1751,28 @@ function deriveKind(intent: string, status: string | undefined): ActivityKind {
     return "watching";
   }
   switch (action) {
-    case "pause":                     return "paused";
-    case "reduce_budget":             return "scaled";
-    case "scale":                     return "scaled";
-    case "refresh_creative":          return "rotated";
-    case "add_creative":              return "rotated";
-    case "restructure":               return "restructured";
-    case "switch_optimization_event": return "restructured";
-    case "shift_budget_to_source":    return "shifted";
-    case "hold":                      return "paused";
-    case "fix_signal_health":         return "alert";
-    default:                          return "watching";
+    case "pause":
+      return "paused";
+    case "reduce_budget":
+      return "scaled";
+    case "scale":
+      return "scaled";
+    case "refresh_creative":
+      return "rotated";
+    case "add_creative":
+      return "rotated";
+    case "restructure":
+      return "restructured";
+    case "switch_optimization_event":
+      return "restructured";
+    case "shift_budget_to_source":
+      return "shifted";
+    case "hold":
+      return "paused";
+    case "fix_signal_health":
+      return "alert";
+    default:
+      return "watching";
   }
 }
 
@@ -1660,6 +1803,7 @@ git add apps/dashboard/src/lib/cockpit/riley/riley-activity-translator.ts apps/d
 ### Task 8: `cold-state-activity-rows.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/cold-state-activity-rows.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/cold-state-activity-rows.test.ts`
 
@@ -1750,6 +1894,7 @@ git add apps/dashboard/src/lib/cockpit/riley/cold-state-activity-rows.ts apps/da
 ### Task 9: `riley-status-deriver.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/riley-status-deriver.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-status-deriver.test.ts`
 
@@ -1974,6 +2119,7 @@ EOF
 ### Task 10: `use-riley-approvals.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/hooks/use-riley-approvals.ts`
 - Test: `apps/dashboard/src/hooks/__tests__/use-riley-approvals.test.tsx`
 
@@ -2094,6 +2240,7 @@ git add apps/dashboard/src/hooks/use-riley-approvals.ts apps/dashboard/src/hooks
 ### Task 11: `use-riley-status.ts`
 
 **Files:**
+
 - Create: `apps/dashboard/src/hooks/use-riley-status.ts`
 - Test: `apps/dashboard/src/hooks/__tests__/use-riley-status.test.tsx`
 
@@ -2236,13 +2383,7 @@ export function useRileyStatus(): CockpitStatus {
       recentActivityAt: mostRecent > 0 ? new Date(mostRecent) : null,
       now,
     });
-  }, [
-    halted,
-    connectionsQuery.data,
-    recsQuery.data,
-    activityQuery.data,
-    now,
-  ]);
+  }, [halted, connectionsQuery.data, recsQuery.data, activityQuery.data, now]);
 }
 ```
 
@@ -2263,6 +2404,7 @@ git add apps/dashboard/src/hooks/use-riley-status.ts apps/dashboard/src/hooks/__
 ### Task 12: Add `useRileyActivity` named export to `use-agent-activity.ts`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/hooks/use-agent-activity.ts` — **append a new named export. The existing `useAgentActivity()` function is NOT changed (signature, return shape, internals all preserved).** Alex and legacy consumers continue to use it unchanged.
 - Test: add `apps/dashboard/src/hooks/__tests__/use-riley-activity.test.tsx` (new file).
 
@@ -2321,7 +2463,10 @@ import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { useRileyActivity } from "../use-agent-activity.js";
-import { pausedFixture, watchingFixture } from "@/lib/cockpit/riley/__fixtures__/riley-activity-fixtures.js";
+import {
+  pausedFixture,
+  watchingFixture,
+} from "@/lib/cockpit/riley/__fixtures__/riley-activity-fixtures.js";
 
 const connState = { rows: [{ serviceId: "meta-ads", status: "connected" }] as unknown[] };
 vi.mock("../use-connections.js", () => ({
@@ -2422,6 +2567,7 @@ EOF
 ### Task 13: ESLint `no-restricted-imports` patch
 
 **Files:**
+
 - Modify: `.eslintrc.json` (root)
 
 - [ ] **Step 1: Read the current root `.eslintrc.json`**
@@ -2447,12 +2593,7 @@ Append to the `"overrides"` array in `.eslintrc.json`:
     "apps/dashboard/src/app/(auth)/riley/**/*.ts",
     "apps/dashboard/src/app/(auth)/riley/**/*.tsx"
   ],
-  "excludedFiles": [
-    "**/__tests__/**",
-    "**/__fixtures__/**",
-    "**/*.test.ts",
-    "**/*.test.tsx"
-  ],
+  "excludedFiles": ["**/__tests__/**", "**/__fixtures__/**", "**/*.test.ts", "**/*.test.tsx"],
   "rules": {
     "no-restricted-imports": [
       "error",
@@ -2513,6 +2654,7 @@ git add .eslintrc.json
 ### Task 14: Cross-agent contract test extension
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx`
 
 Alex A.1 ships a fixture-based render test that asserts the shared `<ApprovalCard>` component renders correctly for Alex shapes. Per Alex A.1's slice brief §Risks (mitigation 1): "Build a fixture-based render test in `approval-card.test.tsx` that round-trips a Riley-shaped `ApprovalView` so the shell is exercised by both shapes at A.1 merge time."
@@ -2551,23 +2693,25 @@ import {
 import type { RileyApprovalView } from "../types.js";
 
 const RILEY_SINGLES = [
-  { name: "pause",                     fixture: pauseFixture },
-  { name: "scale",                     fixture: scaleFixture },
-  { name: "refresh_creative",          fixture: refreshCreativeFixture },
-  { name: "restructure",               fixture: restructureFixture },
-  { name: "shift_budget_to_source",    fixture: shiftBudgetFixture },
+  { name: "pause", fixture: pauseFixture },
+  { name: "scale", fixture: scaleFixture },
+  { name: "refresh_creative", fixture: refreshCreativeFixture },
+  { name: "restructure", fixture: restructureFixture },
+  { name: "shift_budget_to_source", fixture: shiftBudgetFixture },
   { name: "switch_optimization_event", fixture: switchEventFixture },
-  { name: "harden_capi_attribution",   fixture: hardenCapiFixture },
-  { name: "hold",                      fixture: holdFixture },
-  { name: "add_creative",              fixture: addCreativeFixture },
-  { name: "review_budget",             fixture: reviewBudgetFixture },
+  { name: "harden_capi_attribution", fixture: hardenCapiFixture },
+  { name: "hold", fixture: holdFixture },
+  { name: "add_creative", fixture: addCreativeFixture },
+  { name: "review_budget", fixture: reviewBudgetFixture },
 ];
 
 describe("ApprovalCard — Riley shape (B.1 cross-agent contract)", () => {
   it.each(RILEY_SINGLES)("renders Riley variant: $name", ({ fixture }) => {
     const [view] = mapRecommendationsToApprovalViews([fixture]);
     const onResolve = vi.fn();
-    render(<ApprovalCard data={view as RileyApprovalView} idx={0} total={1} onResolve={onResolve} />);
+    render(
+      <ApprovalCard data={view as RileyApprovalView} idx={0} total={1} onResolve={onResolve} />,
+    );
     expect(screen.getByText(view.primary)).toBeInTheDocument();
     expect(screen.getByText(view.quote)).toBeInTheDocument();
   });
@@ -2576,7 +2720,9 @@ describe("ApprovalCard — Riley shape (B.1 cross-agent contract)", () => {
     const views = mapRecommendationsToApprovalViews(signalHealthFixtures);
     expect(views).toHaveLength(1);
     const onResolve = vi.fn();
-    render(<ApprovalCard data={views[0] as RileyApprovalView} idx={0} total={1} onResolve={onResolve} />);
+    render(
+      <ApprovalCard data={views[0] as RileyApprovalView} idx={0} total={1} onResolve={onResolve} />,
+    );
     expect(screen.getByText("Open Events Manager")).toBeInTheDocument();
     // No "Dismiss all" button in B.1
     expect(screen.queryByText(/dismiss all/i)).not.toBeInTheDocument();
@@ -2622,9 +2768,9 @@ rg "Recommendation|AuditEntry|@switchboard/db|@prisma" \
 
 **Expected output:**
 
-- **Zero matches in `apps/dashboard/src/components/cockpit/**`** (any `.ts` or `.tsx` file). Test files under `__tests__/` may match if they reference Riley fixture *imports* by path — review case-by-case. Test files referencing `RecommendationApiRow` only as a *type* via the fixture file are acceptable, but no direct imports of `@switchboard/db` / `@prisma` / `@switchboard/schemas/recommendations` are permitted.
+- **Zero matches in `apps/dashboard/src/components/cockpit/**`** (any `.ts`or`.tsx`file). Test files under`**tests**/`may match if they reference Riley fixture *imports* by path — review case-by-case. Test files referencing`RecommendationApiRow`only as a *type* via the fixture file are acceptable, but no direct imports of`@switchboard/db`/`@prisma`/`@switchboard/schemas/recommendations` are permitted.
 - **No direct db/schema/Prisma imports in `apps/dashboard/src/hooks/use-riley-*.ts`**. Matches in those files containing the word "Recommendation" only in JSDoc comments or type annotations referencing adapter outputs are acceptable.
-- **Adapter imports are verified separately by reviewing `apps/dashboard/src/lib/cockpit/riley/**`.** All `Recommendation` / `AuditEntry` / Prisma imports must live there (and only there).
+- **Adapter imports are verified separately by reviewing `apps/dashboard/src/lib/cockpit/riley/**`.** All `Recommendation`/`AuditEntry` / Prisma imports must live there (and only there).
 
 - [ ] **Step 2: If any unexpected match is found, fix before commit**
 
@@ -2675,6 +2821,7 @@ Alex A.1 shipped `cockpit-page.tsx` as a **hardcoded Alex composition** (imports
 Option B is chosen because: (a) it preserves A.1's shipped composition untouched, (b) it aligns with the adapter discipline (Riley's composition uses Riley's hooks), (c) the file count grows by one `.tsx` (under the 400-line warn / 600-line error budget per memory), and (d) future Mira composition would follow the same symmetric pattern.
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`
 - Modify: `apps/dashboard/src/app/(auth)/riley/page.tsx`
 
@@ -2975,6 +3122,7 @@ git add apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx \
 Task 16's `RileyCockpitPage` component test (Step 2's `riley-cockpit-page.test.tsx`) covers IDLE / HALTED + Riley tab. Task 17 adds the **steady-state + cold-state + signal-health-grouped** end-to-end coverage at the component level. The route-level page test (`/riley/__tests__/page.test.tsx`) stays minimal — it only verifies the route gate and that the right composition is invoked. The component-level test in this task verifies the cockpit's behavior under real data shapes.
 
 **Files:**
+
 - Extend: `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` (the file created by Task 16)
 
 - [ ] **Step 1: Add steady-state + cold-state + signal-health assertions to the existing test**
@@ -3098,24 +3246,28 @@ Run all of these in order from the worktree root. Each must pass before pushing.
 # 1. Type-check
 pnpm typecheck
 ```
+
 Expected: clean. No new errors.
 
 ```bash
 # 2. Lint
 pnpm lint
 ```
+
 Expected: clean. No new errors. Verifies the new `no-restricted-imports` rule does not catch any of our own code.
 
 ```bash
 # 3. Dashboard tests
 pnpm --filter @switchboard/dashboard test
 ```
+
 Expected: all suites green, including the new Riley adapter / hook / page tests, and the existing Alex tests (which must not regress).
 
 ```bash
 # 4. Dashboard build (not in CI — per memory feedback)
 pnpm --filter @switchboard/dashboard build
 ```
+
 Expected: clean. Catches .js-extension regressions that lint/typecheck miss.
 
 ```bash
@@ -3126,9 +3278,10 @@ rg "Recommendation|AuditEntry|@switchboard/db|@prisma" \
 ```
 
 **Expected output:**
-- **Zero matches in `apps/dashboard/src/components/cockpit/**`.**
+
+- **Zero matches in `apps/dashboard/src/components/cockpit/**`.\*\*
 - **No direct db/schema/Prisma imports in `apps/dashboard/src/hooks/use-riley-*.ts`.**
-- **Adapter imports are verified separately by reviewing `apps/dashboard/src/lib/cockpit/riley/**`.**
+- **Adapter imports are verified separately by reviewing `apps/dashboard/src/lib/cockpit/riley/**`.\*\*
 
 If the grep returns matches outside those allowed locations, **the adapter boundary has leaked.** Fix before merge. This is the canonical Wave A invariant — if it holds, the Wave B substrate swap is a layer-3 change. If it doesn't, the cockpit is locked to the current `Recommendation + AuditEntry` substrate and Wave B becomes a rewrite.
 
@@ -3139,6 +3292,7 @@ pnpm dev
 ```
 
 Verify by hand:
+
 - `/riley` route renders.
 - With no Meta Ads `Connection` in the seed data: status pill `IDLE`, 3 synthetic activity rows visible, no approval block, composer placeholder visible.
 - With a Meta Ads `Connection` + a seeded pending `Recommendation` for Riley: status pill `WAITING`, approval card renders with the rec's `humanSummary` as quote and `presentation.primaryLabel` as primary CTA.

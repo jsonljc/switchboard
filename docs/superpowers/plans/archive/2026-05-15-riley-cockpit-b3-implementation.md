@@ -9,6 +9,7 @@
 **Tech Stack:** Zod (`packages/schemas`), Vitest (all layers), TypeScript (ESM, `.js` extensions in relative imports per `CLAUDE.md`; dashboard imports omit `.js` per `feedback_dashboard_no_js_on_any_import`), Next.js 14 App Router + React 18 + `@tanstack/react-query` (dashboard), shadcn `useToast` (`apps/dashboard/src/components/ui/use-toast.ts`).
 
 **Parent docs:**
+
 - [`docs/superpowers/plans/2026-05-15-riley-cockpit-b3-slice-brief.md`](./2026-05-15-riley-cockpit-b3-slice-brief.md) — scope, what-ships-vs-defers, risks.
 - [`docs/superpowers/specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md`](../specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md) — §Slice B.3 (authoritative contract; B.3 ships the A.5-independent subset).
 - [`docs/superpowers/specs/2026-05-13-riley-cockpit-home-design.md`](../specs/2026-05-13-riley-cockpit-home-design.md) — Riley target spec (voice catalog, command catalog, accent palette).
@@ -81,31 +82,31 @@ Expected: all green. If any fail on `main`, fix or escalate before adding new co
 
 ### Files created
 
-| Path | Responsibility |
-|---|---|
-| `apps/dashboard/src/lib/cockpit/riley/riley-toast.ts` | Pure `rileyToast({ verdict, approval })` function. Reads `approval.acceptToast` / `approval.declineToast` when non-empty; otherwise returns a per-kind fallback string. Returns `{ title: string; description?: string }` shaped for the shadcn `toast()` call. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-toast.test.ts` | Unit tests. Covers the engine-emits-toast path, the fallback path for every `RileyApprovalKind`, and the empty-string-is-fallback edge. |
+| Path                                                                 | Responsibility                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/lib/cockpit/riley/riley-toast.ts`                | Pure `rileyToast({ verdict, approval })` function. Reads `approval.acceptToast` / `approval.declineToast` when non-empty; otherwise returns a per-kind fallback string. Returns `{ title: string; description?: string }` shaped for the shadcn `toast()` call. |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-toast.test.ts` | Unit tests. Covers the engine-emits-toast path, the fallback path for every `RileyApprovalKind`, and the empty-string-is-fallback edge.                                                                                                                         |
 
 ### Files modified
 
-| Path | Change | Why touched |
-|---|---|---|
-| `packages/schemas/src/recommendations.ts` | Extend `RecommendationPresentationSchema` with optional `acceptToast` + `declineToast` (`z.string().min(1).optional()`). | Persistable toast copy authored by emitters. |
-| `packages/schemas/src/__tests__/recommendations.test.ts` | Add 3 cases to `describe("RecommendationPresentationSchema", ...)` + 2 cases to the `RecommendationInputSchema` block carrying toasts end-to-end. | Coverage. |
-| `packages/ad-optimizer/src/recommendation-sink.ts` | Extend `buildPresentation(rec)` at lines 126–155 to include `acceptToast` + `declineToast` in the per-action label table. | Engine-side authorship. |
-| `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts` | Add a test that asserts every action variant emits both toasts non-empty. | Coverage. |
-| `apps/dashboard/src/lib/cockpit/riley/riley-config.ts` | Add `RILEY_COMPOSER_PLACEHOLDER` string + `RILEY_COMMANDS` typed array + `RileyCommand` interface. | Catalog for B.3-followup post-A.5 wiring. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts` | Add cases locking `RILEY_COMPOSER_PLACEHOLDER` and `RILEY_COMMANDS`. | Coverage. |
-| `apps/dashboard/src/components/cockpit/approval-card.tsx` | Add optional `accent?: { base; deep; soft; paper }` (default = Alex amber tokens from `T`) and `senderLabel?: string` (default `"Alex needs you"`). Use accent for eyebrow color, card background, border. | Riley accent. |
-| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx` | Add 4 cases: default-accent renders Alex amber; custom accent renders Riley clay; default sender renders "Alex needs you"; custom sender renders "Riley needs you". | Coverage. |
-| `apps/dashboard/src/components/cockpit/composer-placeholder.tsx` | Add optional `senderLabel?: string` (default `"ALEX"`), `placeholderCopy?: string` (default current "Tell Alex what to do — coming soon"), `accentColor?: string` (default `T.ink4`). Use accent for sender label color. | Riley composer chrome. |
-| `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx` | Add 3 cases: default-sender + default-copy, override-sender + override-copy, halted-with-override-copy stays halted-copy. | Coverage. |
-| `apps/dashboard/src/components/cockpit/status-pill.tsx` | Add optional `colorFor?: (s: CockpitStatus, halted: boolean) => string` + `pulseFor?: (s: CockpitStatus, halted: boolean) => boolean`. Defaults to the existing `alex-config` imports. | Riley status colors. |
-| `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx` | Add 2 cases: default behavior unchanged; custom `colorFor` + `pulseFor` overrides reach the rendered `<Dot>`. | Coverage. |
-| `apps/dashboard/src/components/cockpit/identity.tsx` | Forward optional `colorFor` + `pulseFor` props through to `<StatusPill>`. Pass-through only. | Plumbing. |
-| `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx` | Add 1 case asserting `colorFor` / `pulseFor` reach `StatusPill`. | Coverage. |
-| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Introduce a per-row `<RileyApprovalRow>` wrapper that owns `useRecommendationAction(approval.id)` + `useToast()`. The wrapper's `onResolve` (a) opens `primaryAction.url` in a new tab on external accept (no mutation, no toast), (b) calls `action.primary()` then `toast(rileyToast(...))` on internal accept, (c) calls `action.dismiss()` then `toast(rileyToast(...))` on decline regardless of action kind. Toast uses `.then()` not `.finally()` (success-only). The page bypasses `<ApprovalBlock>` and maps approvals directly to a list of `<RileyApprovalRow>` inside a flex container inlining `<ApprovalBlock>`'s gap + margin. The wrapper passes `accent={RILEY_APPROVAL_ACCENT}` + `senderLabel="Riley needs you"` to `<ApprovalCard>`. Page also passes `senderLabel="RILEY"`, `placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}`, `accentColor={RILEY_ACCENT.deep}` to `<ComposerPlaceholder>` and `colorFor={statusColor}` + `pulseFor={statusPulse}` through `<Identity>` to `<StatusPill>`. | The page is the only Riley-specific consumer of accent + voice. |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add 8 cases — internal accept/decline → action hook + engine toasts; per-row binding (rec-2 primary → rec-2's hook, not rec-1's); engine-empty → per-kind fallback; "Riley needs you" eyebrow on every card; external primary opens URL with no `primary()` call and no toast; external decline still calls `dismiss()` + decline toast; rejected mutation suppresses the toast (success-only). | Page-level integration. |
+| Path                                                                            | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Why touched                                                     |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `packages/schemas/src/recommendations.ts`                                       | Extend `RecommendationPresentationSchema` with optional `acceptToast` + `declineToast` (`z.string().min(1).optional()`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Persistable toast copy authored by emitters.                    |
+| `packages/schemas/src/__tests__/recommendations.test.ts`                        | Add 3 cases to `describe("RecommendationPresentationSchema", ...)` + 2 cases to the `RecommendationInputSchema` block carrying toasts end-to-end.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Coverage.                                                       |
+| `packages/ad-optimizer/src/recommendation-sink.ts`                              | Extend `buildPresentation(rec)` at lines 126–155 to include `acceptToast` + `declineToast` in the per-action label table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Engine-side authorship.                                         |
+| `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`               | Add a test that asserts every action variant emits both toasts non-empty.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Coverage.                                                       |
+| `apps/dashboard/src/lib/cockpit/riley/riley-config.ts`                          | Add `RILEY_COMPOSER_PLACEHOLDER` string + `RILEY_COMMANDS` typed array + `RileyCommand` interface.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Catalog for B.3-followup post-A.5 wiring.                       |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts`           | Add cases locking `RILEY_COMPOSER_PLACEHOLDER` and `RILEY_COMMANDS`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Coverage.                                                       |
+| `apps/dashboard/src/components/cockpit/approval-card.tsx`                       | Add optional `accent?: { base; deep; soft; paper }` (default = Alex amber tokens from `T`) and `senderLabel?: string` (default `"Alex needs you"`). Use accent for eyebrow color, card background, border.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Riley accent.                                                   |
+| `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx`        | Add 4 cases: default-accent renders Alex amber; custom accent renders Riley clay; default sender renders "Alex needs you"; custom sender renders "Riley needs you".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Coverage.                                                       |
+| `apps/dashboard/src/components/cockpit/composer-placeholder.tsx`                | Add optional `senderLabel?: string` (default `"ALEX"`), `placeholderCopy?: string` (default current "Tell Alex what to do — coming soon"), `accentColor?: string` (default `T.ink4`). Use accent for sender label color.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Riley composer chrome.                                          |
+| `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx` | Add 3 cases: default-sender + default-copy, override-sender + override-copy, halted-with-override-copy stays halted-copy.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Coverage.                                                       |
+| `apps/dashboard/src/components/cockpit/status-pill.tsx`                         | Add optional `colorFor?: (s: CockpitStatus, halted: boolean) => string` + `pulseFor?: (s: CockpitStatus, halted: boolean) => boolean`. Defaults to the existing `alex-config` imports.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Riley status colors.                                            |
+| `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx`          | Add 2 cases: default behavior unchanged; custom `colorFor` + `pulseFor` overrides reach the rendered `<Dot>`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Coverage.                                                       |
+| `apps/dashboard/src/components/cockpit/identity.tsx`                            | Forward optional `colorFor` + `pulseFor` props through to `<StatusPill>`. Pass-through only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Plumbing.                                                       |
+| `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx`             | Add 1 case asserting `colorFor` / `pulseFor` reach `StatusPill`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Coverage.                                                       |
+| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`                  | Introduce a per-row `<RileyApprovalRow>` wrapper that owns `useRecommendationAction(approval.id)` + `useToast()`. The wrapper's `onResolve` (a) opens `primaryAction.url` in a new tab on external accept (no mutation, no toast), (b) calls `action.primary()` then `toast(rileyToast(...))` on internal accept, (c) calls `action.dismiss()` then `toast(rileyToast(...))` on decline regardless of action kind. Toast uses `.then()` not `.finally()` (success-only). The page bypasses `<ApprovalBlock>` and maps approvals directly to a list of `<RileyApprovalRow>` inside a flex container inlining `<ApprovalBlock>`'s gap + margin. The wrapper passes `accent={RILEY_APPROVAL_ACCENT}` + `senderLabel="Riley needs you"` to `<ApprovalCard>`. Page also passes `senderLabel="RILEY"`, `placeholderCopy={RILEY_COMPOSER_PLACEHOLDER}`, `accentColor={RILEY_ACCENT.deep}` to `<ComposerPlaceholder>` and `colorFor={statusColor}` + `pulseFor={statusPulse}` through `<Identity>` to `<StatusPill>`. | The page is the only Riley-specific consumer of accent + voice. |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`   | Add 8 cases — internal accept/decline → action hook + engine toasts; per-row binding (rec-2 primary → rec-2's hook, not rec-1's); engine-empty → per-kind fallback; "Riley needs you" eyebrow on every card; external primary opens URL with no `primary()` call and no toast; external decline still calls `dismiss()` + decline toast; rejected mutation suppresses the toast (success-only).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Page-level integration.                                         |
 
 ### Files explicitly NOT modified
 
@@ -144,38 +145,38 @@ This is the canonical engine-side authorship + cockpit fallback table. The imple
 
 ### Engine-side `buildPresentation` (per action — populates both fields, requires campaign name interpolation)
 
-| Engine action | `acceptToast` | `declineToast` |
-|---|---|---|
-| `scale` | `Scaling ${name} 20%.` | `Holding ${name} where it is.` |
-| `pause` | `Paused ${name}. Standing by.` | `Leaving ${name} running.` |
-| `refresh_creative` | `Queued a creative refresh for ${name}.` | `Holding the current creative on ${name}.` |
-| `restructure` | `Restructure plan opened for ${name}.` | `Holding the structure on ${name}.` |
-| `hold` | `Holding ${name}. Watching.` | `Acknowledged — back to scanning.` |
-| `test` | `Test variant queued for ${name}.` | `Skipping the test on ${name}.` |
-| `review_budget` | `Opening Meta to review ${name}'s budget.` | `Holding ${name}'s budget where it is.` |
-| `add_creative` | `Routed an add-creative ask for ${name}.` | `Holding off on adding creatives to ${name}.` |
-| `expand_targeting` | `Targeting expansion queued for ${name}.` | `Keeping targeting where it is on ${name}.` |
-| `consolidate` | `Consolidation plan opened for ${name}.` | `Leaving ${name} as-is.` |
-| `shift_budget_to_source` | `Shifting budget on ${name}.` | `Holding the current budget split on ${name}.` |
-| `switch_optimization_event` | `Switched optimization event on ${name}.` | `Holding the current optimization event on ${name}.` |
-| `harden_capi_attribution` | `Opening Meta to harden CAPI attribution.` | `Holding the current CAPI configuration.` |
-| `fix_signal_health` | `Opening Events Manager for the pixel.` | `Acknowledged — back to scanning the pixel.` |
+| Engine action               | `acceptToast`                              | `declineToast`                                       |
+| --------------------------- | ------------------------------------------ | ---------------------------------------------------- |
+| `scale`                     | `Scaling ${name} 20%.`                     | `Holding ${name} where it is.`                       |
+| `pause`                     | `Paused ${name}. Standing by.`             | `Leaving ${name} running.`                           |
+| `refresh_creative`          | `Queued a creative refresh for ${name}.`   | `Holding the current creative on ${name}.`           |
+| `restructure`               | `Restructure plan opened for ${name}.`     | `Holding the structure on ${name}.`                  |
+| `hold`                      | `Holding ${name}. Watching.`               | `Acknowledged — back to scanning.`                   |
+| `test`                      | `Test variant queued for ${name}.`         | `Skipping the test on ${name}.`                      |
+| `review_budget`             | `Opening Meta to review ${name}'s budget.` | `Holding ${name}'s budget where it is.`              |
+| `add_creative`              | `Routed an add-creative ask for ${name}.`  | `Holding off on adding creatives to ${name}.`        |
+| `expand_targeting`          | `Targeting expansion queued for ${name}.`  | `Keeping targeting where it is on ${name}.`          |
+| `consolidate`               | `Consolidation plan opened for ${name}.`   | `Leaving ${name} as-is.`                             |
+| `shift_budget_to_source`    | `Shifting budget on ${name}.`              | `Holding the current budget split on ${name}.`       |
+| `switch_optimization_event` | `Switched optimization event on ${name}.`  | `Holding the current optimization event on ${name}.` |
+| `harden_capi_attribution`   | `Opening Meta to harden CAPI attribution.` | `Holding the current CAPI configuration.`            |
+| `fix_signal_health`         | `Opening Events Manager for the pixel.`    | `Acknowledged — back to scanning the pixel.`         |
 
 ### Cockpit fallback `rileyToast()` (per `RileyApprovalKind` — no campaign name available; generic voice)
 
-| Kind | accept fallback | decline fallback |
-|---|---|---|
-| `pause` | `Paused — standing by.` | `Holding — back to scanning.` |
-| `scale` | `Scaling — back to scanning.` | `Holding — back to scanning.` |
-| `refresh_creative` | `Creative refresh queued — back to scanning.` | `Holding the current creative.` |
-| `restructure` | `Restructure plan opened.` | `Holding the current structure.` |
-| `shift_budget_to_source` | `Shifting budget — back to scanning.` | `Holding the current split.` |
-| `switch_optimization_event` | `Switched optimization event.` | `Holding the current event.` |
-| `harden_capi_attribution` | `Opening Meta to harden attribution.` | `Holding the current CAPI configuration.` |
-| `hold` | `Holding — watching.` | `Acknowledged — back to scanning.` |
-| `add_creative` | `Add-creative ask routed.` | `Holding off on adding creatives.` |
-| `review_budget` | `Opening Meta to review budget.` | `Holding the current budget.` |
-| `signal_health_group` | `Opening Events Manager.` | `Acknowledged — back to scanning the pixel.` |
+| Kind                        | accept fallback                               | decline fallback                             |
+| --------------------------- | --------------------------------------------- | -------------------------------------------- |
+| `pause`                     | `Paused — standing by.`                       | `Holding — back to scanning.`                |
+| `scale`                     | `Scaling — back to scanning.`                 | `Holding — back to scanning.`                |
+| `refresh_creative`          | `Creative refresh queued — back to scanning.` | `Holding the current creative.`              |
+| `restructure`               | `Restructure plan opened.`                    | `Holding the current structure.`             |
+| `shift_budget_to_source`    | `Shifting budget — back to scanning.`         | `Holding the current split.`                 |
+| `switch_optimization_event` | `Switched optimization event.`                | `Holding the current event.`                 |
+| `harden_capi_attribution`   | `Opening Meta to harden attribution.`         | `Holding the current CAPI configuration.`    |
+| `hold`                      | `Holding — watching.`                         | `Acknowledged — back to scanning.`           |
+| `add_creative`              | `Add-creative ask routed.`                    | `Holding off on adding creatives.`           |
+| `review_budget`             | `Opening Meta to review budget.`              | `Holding the current budget.`                |
+| `signal_health_group`       | `Opening Events Manager.`                     | `Acknowledged — back to scanning the pixel.` |
 
 The fallback table covers 11 kinds × 2 verdicts = 22 strings. Empty-string `acceptToast` / `declineToast` from the engine are treated as missing and fall back to this table.
 
@@ -186,6 +187,7 @@ The fallback table covers 11 kinds × 2 verdicts = 22 strings. Empty-string `acc
 ### Task 1: Extend `RecommendationPresentationSchema` with optional toast fields
 
 **Files:**
+
 - Modify: `packages/schemas/src/recommendations.ts:28-34`
 - Test: `packages/schemas/src/__tests__/recommendations.test.ts:53-68`
 
@@ -194,99 +196,99 @@ The fallback table covers 11 kinds × 2 verdicts = 22 strings. Empty-string `acc
 Append to the existing `describe("RecommendationPresentationSchema", ...)` block in `packages/schemas/src/__tests__/recommendations.test.ts`:
 
 ```ts
-  it("accepts optional acceptToast and declineToast strings", () => {
-    const ok = RecommendationPresentationSchema.parse({
+it("accepts optional acceptToast and declineToast strings", () => {
+  const ok = RecommendationPresentationSchema.parse({
+    primaryLabel: "Pause",
+    secondaryLabel: "Reduce 50%",
+    dismissLabel: "Dismiss",
+    dataLines: [],
+    acceptToast: "Paused Whitening Set B. Standing by.",
+    declineToast: "Leaving Whitening Set B running.",
+  });
+  expect(ok.acceptToast).toBe("Paused Whitening Set B. Standing by.");
+  expect(ok.declineToast).toBe("Leaving Whitening Set B running.");
+});
+
+it("parses when acceptToast and declineToast are absent (backwards-compatible)", () => {
+  const ok = RecommendationPresentationSchema.parse({
+    primaryLabel: "Pause",
+    secondaryLabel: "Reduce 50%",
+    dismissLabel: "Dismiss",
+    dataLines: [],
+  });
+  expect(ok.acceptToast).toBeUndefined();
+  expect(ok.declineToast).toBeUndefined();
+});
+
+it("rejects empty-string acceptToast / declineToast (min-1 guards blank toasts)", () => {
+  expect(() =>
+    RecommendationPresentationSchema.parse({
+      primaryLabel: "Pause",
+      secondaryLabel: "Reduce 50%",
+      dismissLabel: "Dismiss",
+      dataLines: [],
+      acceptToast: "",
+    }),
+  ).toThrow();
+  expect(() =>
+    RecommendationPresentationSchema.parse({
+      primaryLabel: "Pause",
+      secondaryLabel: "Reduce 50%",
+      dismissLabel: "Dismiss",
+      dataLines: [],
+      declineToast: "",
+    }),
+  ).toThrow();
+});
+```
+
+Append to the existing `describe("RecommendationInputSchema", ...)` block (after the minimal-valid-input test):
+
+```ts
+it("propagates acceptToast and declineToast through presentation when present", () => {
+  const ok = RecommendationInputSchema.parse({
+    orgId: "org-1",
+    agentKey: "riley",
+    intent: "recommendation.pause",
+    action: "pause",
+    humanSummary: "Pause Whitening Set B — saves $40/day",
+    confidence: 0.9,
+    dollarsAtRisk: 25,
+    riskLevel: "low",
+    parameters: {},
+    presentation: {
       primaryLabel: "Pause",
       secondaryLabel: "Reduce 50%",
       dismissLabel: "Dismiss",
       dataLines: [],
       acceptToast: "Paused Whitening Set B. Standing by.",
       declineToast: "Leaving Whitening Set B running.",
-    });
-    expect(ok.acceptToast).toBe("Paused Whitening Set B. Standing by.");
-    expect(ok.declineToast).toBe("Leaving Whitening Set B running.");
+    },
   });
+  expect(ok.presentation.acceptToast).toBe("Paused Whitening Set B. Standing by.");
+  expect(ok.presentation.declineToast).toBe("Leaving Whitening Set B running.");
+});
 
-  it("parses when acceptToast and declineToast are absent (backwards-compatible)", () => {
-    const ok = RecommendationPresentationSchema.parse({
+it("accepts a RecommendationInput without acceptToast / declineToast (backwards-compatible)", () => {
+  const ok = RecommendationInputSchema.parse({
+    orgId: "org-1",
+    agentKey: "riley",
+    intent: "recommendation.pause",
+    action: "pause",
+    humanSummary: "Pause Whitening Set B — saves $40/day",
+    confidence: 0.9,
+    dollarsAtRisk: 25,
+    riskLevel: "low",
+    parameters: {},
+    presentation: {
       primaryLabel: "Pause",
       secondaryLabel: "Reduce 50%",
       dismissLabel: "Dismiss",
       dataLines: [],
-    });
-    expect(ok.acceptToast).toBeUndefined();
-    expect(ok.declineToast).toBeUndefined();
+    },
   });
-
-  it("rejects empty-string acceptToast / declineToast (min-1 guards blank toasts)", () => {
-    expect(() =>
-      RecommendationPresentationSchema.parse({
-        primaryLabel: "Pause",
-        secondaryLabel: "Reduce 50%",
-        dismissLabel: "Dismiss",
-        dataLines: [],
-        acceptToast: "",
-      }),
-    ).toThrow();
-    expect(() =>
-      RecommendationPresentationSchema.parse({
-        primaryLabel: "Pause",
-        secondaryLabel: "Reduce 50%",
-        dismissLabel: "Dismiss",
-        dataLines: [],
-        declineToast: "",
-      }),
-    ).toThrow();
-  });
-```
-
-Append to the existing `describe("RecommendationInputSchema", ...)` block (after the minimal-valid-input test):
-
-```ts
-  it("propagates acceptToast and declineToast through presentation when present", () => {
-    const ok = RecommendationInputSchema.parse({
-      orgId: "org-1",
-      agentKey: "riley",
-      intent: "recommendation.pause",
-      action: "pause",
-      humanSummary: "Pause Whitening Set B — saves $40/day",
-      confidence: 0.9,
-      dollarsAtRisk: 25,
-      riskLevel: "low",
-      parameters: {},
-      presentation: {
-        primaryLabel: "Pause",
-        secondaryLabel: "Reduce 50%",
-        dismissLabel: "Dismiss",
-        dataLines: [],
-        acceptToast: "Paused Whitening Set B. Standing by.",
-        declineToast: "Leaving Whitening Set B running.",
-      },
-    });
-    expect(ok.presentation.acceptToast).toBe("Paused Whitening Set B. Standing by.");
-    expect(ok.presentation.declineToast).toBe("Leaving Whitening Set B running.");
-  });
-
-  it("accepts a RecommendationInput without acceptToast / declineToast (backwards-compatible)", () => {
-    const ok = RecommendationInputSchema.parse({
-      orgId: "org-1",
-      agentKey: "riley",
-      intent: "recommendation.pause",
-      action: "pause",
-      humanSummary: "Pause Whitening Set B — saves $40/day",
-      confidence: 0.9,
-      dollarsAtRisk: 25,
-      riskLevel: "low",
-      parameters: {},
-      presentation: {
-        primaryLabel: "Pause",
-        secondaryLabel: "Reduce 50%",
-        dismissLabel: "Dismiss",
-        dataLines: [],
-      },
-    });
-    expect(ok.presentation.acceptToast).toBeUndefined();
-  });
+  expect(ok.presentation.acceptToast).toBeUndefined();
+});
 ```
 
 - [ ] **Step 2: Run the tests and verify they fail.**
@@ -334,6 +336,7 @@ git commit -m "feat(schemas): RecommendationPresentation acceptToast + declineTo
 ### Task 2: Engine — populate `acceptToast` + `declineToast` in `buildPresentation`
 
 **Files:**
+
 - Modify: `packages/ad-optimizer/src/recommendation-sink.ts:126-155`
 - Test: `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`
 
@@ -342,63 +345,63 @@ git commit -m "feat(schemas): RecommendationPresentation acceptToast + declineTo
 Append to `describe("runRecommendationSink", ...)` in `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`:
 
 ```ts
-  it("buildPresentation emits action-specific acceptToast and declineToast for every action", async () => {
-    const presentations: Array<{
-      action: RecommendationOutput["action"];
-      acceptToast: string | undefined;
-      declineToast: string | undefined;
-    }> = [];
-    const emit: RecommendationEmitter = vi.fn(async (input) => {
-      presentations.push({
-        action: input.action as RecommendationOutput["action"],
-        acceptToast: input.presentation.acceptToast,
-        declineToast: input.presentation.declineToast,
-      });
-      return mockRoute(input);
+it("buildPresentation emits action-specific acceptToast and declineToast for every action", async () => {
+  const presentations: Array<{
+    action: RecommendationOutput["action"];
+    acceptToast: string | undefined;
+    declineToast: string | undefined;
+  }> = [];
+  const emit: RecommendationEmitter = vi.fn(async (input) => {
+    presentations.push({
+      action: input.action as RecommendationOutput["action"],
+      acceptToast: input.presentation.acceptToast,
+      declineToast: input.presentation.declineToast,
     });
-    const actions: RecommendationOutput["action"][] = [
-      "scale",
-      "pause",
-      "refresh_creative",
-      "restructure",
-      "hold",
-      "test",
-      "review_budget",
-      "add_creative",
-      "expand_targeting",
-      "consolidate",
-      "shift_budget_to_source",
-      "switch_optimization_event",
-      "harden_capi_attribution",
-      "fix_signal_health",
-    ];
-    await runRecommendationSink({
-      orgId: "org-1",
-      auditRunId: "audit-toasts",
-      recommendations: actions.map((a, i) =>
-        baseRec({ action: a, campaignId: `c-${i}`, confidence: 0.9 }),
-      ),
-      emit,
-    });
-    expect(presentations).toHaveLength(actions.length);
-    for (const p of presentations) {
-      expect(p.acceptToast, `${p.action} acceptToast must be non-empty`).toBeTruthy();
-      expect(p.declineToast, `${p.action} declineToast must be non-empty`).toBeTruthy();
-      // Sanity: mention the campaign name in the engine voice (we humanized
-      // by interpolating campaignName, not by dumping the raw action label).
-      expect(p.acceptToast ?? "").toContain("Whitening Set B");
-    }
-    // Spot-check a few action-to-line mappings to lock the toast table.
-    const pause = presentations.find((p) => p.action === "pause")!;
-    expect(pause.acceptToast).toBe("Paused Whitening Set B. Standing by.");
-    expect(pause.declineToast).toBe("Leaving Whitening Set B running.");
-    const scale = presentations.find((p) => p.action === "scale")!;
-    expect(scale.acceptToast).toBe("Scaling Whitening Set B 20%.");
-    expect(scale.declineToast).toBe("Holding Whitening Set B where it is.");
-    const fix = presentations.find((p) => p.action === "fix_signal_health")!;
-    expect(fix.acceptToast).toBe("Opening Events Manager for the pixel.");
-    expect(fix.declineToast).toBe("Acknowledged — back to scanning the pixel.");
+    return mockRoute(input);
   });
+  const actions: RecommendationOutput["action"][] = [
+    "scale",
+    "pause",
+    "refresh_creative",
+    "restructure",
+    "hold",
+    "test",
+    "review_budget",
+    "add_creative",
+    "expand_targeting",
+    "consolidate",
+    "shift_budget_to_source",
+    "switch_optimization_event",
+    "harden_capi_attribution",
+    "fix_signal_health",
+  ];
+  await runRecommendationSink({
+    orgId: "org-1",
+    auditRunId: "audit-toasts",
+    recommendations: actions.map((a, i) =>
+      baseRec({ action: a, campaignId: `c-${i}`, confidence: 0.9 }),
+    ),
+    emit,
+  });
+  expect(presentations).toHaveLength(actions.length);
+  for (const p of presentations) {
+    expect(p.acceptToast, `${p.action} acceptToast must be non-empty`).toBeTruthy();
+    expect(p.declineToast, `${p.action} declineToast must be non-empty`).toBeTruthy();
+    // Sanity: mention the campaign name in the engine voice (we humanized
+    // by interpolating campaignName, not by dumping the raw action label).
+    expect(p.acceptToast ?? "").toContain("Whitening Set B");
+  }
+  // Spot-check a few action-to-line mappings to lock the toast table.
+  const pause = presentations.find((p) => p.action === "pause")!;
+  expect(pause.acceptToast).toBe("Paused Whitening Set B. Standing by.");
+  expect(pause.declineToast).toBe("Leaving Whitening Set B running.");
+  const scale = presentations.find((p) => p.action === "scale")!;
+  expect(scale.acceptToast).toBe("Scaling Whitening Set B 20%.");
+  expect(scale.declineToast).toBe("Holding Whitening Set B where it is.");
+  const fix = presentations.find((p) => p.action === "fix_signal_health")!;
+  expect(fix.acceptToast).toBe("Opening Events Manager for the pixel.");
+  expect(fix.declineToast).toBe("Acknowledged — back to scanning the pixel.");
+});
 ```
 
 - [ ] **Step 2: Run the test and verify it fails.**
@@ -556,6 +559,7 @@ git commit -m "feat(ad-optimizer): engine populates acceptToast + declineToast p
 ### Task 3: Parameterize `<StatusPill>` with optional `colorFor` / `pulseFor` props
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/status-pill.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx`
 
@@ -675,6 +679,7 @@ git commit -m "feat(cockpit): StatusPill colorFor + pulseFor props (B.3 prep)"
 ### Task 4: Forward `colorFor` / `pulseFor` through `<Identity>` to `<StatusPill>`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/identity.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx`
 
@@ -692,23 +697,23 @@ Expected: locate the `<StatusPill statusKey=… halted=…>` usage inside `<Iden
 Append to `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx`:
 
 ```tsx
-  it("forwards colorFor / pulseFor through to StatusPill", () => {
-    const colorFor = vi.fn((_s: CockpitStatus, _halted: boolean) => "rgb(184, 108, 80)");
-    const pulseFor = vi.fn((_s: CockpitStatus, _halted: boolean) => false);
-    render(
-      <Identity
-        statusKey="WAITING"
-        halted={false}
-        subtitle="Optimizing Meta Ads"
-        line={null}
-        onHaltToggle={() => {}}
-        colorFor={colorFor}
-        pulseFor={pulseFor}
-      />,
-    );
-    expect(colorFor).toHaveBeenCalledWith("WAITING", false);
-    expect(pulseFor).toHaveBeenCalledWith("WAITING", false);
-  });
+it("forwards colorFor / pulseFor through to StatusPill", () => {
+  const colorFor = vi.fn((_s: CockpitStatus, _halted: boolean) => "rgb(184, 108, 80)");
+  const pulseFor = vi.fn((_s: CockpitStatus, _halted: boolean) => false);
+  render(
+    <Identity
+      statusKey="WAITING"
+      halted={false}
+      subtitle="Optimizing Meta Ads"
+      line={null}
+      onHaltToggle={() => {}}
+      colorFor={colorFor}
+      pulseFor={pulseFor}
+    />,
+  );
+  expect(colorFor).toHaveBeenCalledWith("WAITING", false);
+  expect(pulseFor).toHaveBeenCalledWith("WAITING", false);
+});
 ```
 
 Adjust the existing import block at the top of the file to include `vi` (Vitest) and `CockpitStatus` if not already present.
@@ -733,12 +738,7 @@ export interface IdentityProps {
 }
 
 // inside the function body, at the StatusPill usage:
-<StatusPill
-  statusKey={statusKey}
-  halted={halted}
-  colorFor={colorFor}
-  pulseFor={pulseFor}
-/>
+<StatusPill statusKey={statusKey} halted={halted} colorFor={colorFor} pulseFor={pulseFor} />;
 ```
 
 Add `import type { CockpitStatus } from "./types";` at the top if not already imported.
@@ -764,6 +764,7 @@ git commit -m "feat(cockpit): Identity forwards colorFor + pulseFor to StatusPil
 ### Task 5: Parameterize `<ApprovalCard>` with optional `accent` + `senderLabel` props
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/approval-card.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx`
 
@@ -772,57 +773,57 @@ git commit -m "feat(cockpit): Identity forwards colorFor + pulseFor to StatusPil
 Append to `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx`:
 
 ```tsx
-  it("renders the default sender label and Alex accent when no overrides are passed", () => {
-    const fixture = makeAlexApprovalFixture(); // existing helper
-    const { container } = render(
-      <ApprovalCard data={fixture} idx={0} total={1} onResolve={() => {}} />,
-    );
-    expect(container.textContent).toContain("Alex needs you");
-  });
+it("renders the default sender label and Alex accent when no overrides are passed", () => {
+  const fixture = makeAlexApprovalFixture(); // existing helper
+  const { container } = render(
+    <ApprovalCard data={fixture} idx={0} total={1} onResolve={() => {}} />,
+  );
+  expect(container.textContent).toContain("Alex needs you");
+});
 
-  it("renders custom senderLabel when supplied", () => {
-    const fixture = makeRileyApprovalFixture(); // existing helper
-    const { container } = render(
-      <ApprovalCard
-        data={fixture}
-        idx={0}
-        total={1}
-        onResolve={() => {}}
-        senderLabel="Riley needs you"
-      />,
-    );
-    expect(container.textContent).toContain("Riley needs you");
-    expect(container.textContent).not.toContain("Alex needs you");
-  });
+it("renders custom senderLabel when supplied", () => {
+  const fixture = makeRileyApprovalFixture(); // existing helper
+  const { container } = render(
+    <ApprovalCard
+      data={fixture}
+      idx={0}
+      total={1}
+      onResolve={() => {}}
+      senderLabel="Riley needs you"
+    />,
+  );
+  expect(container.textContent).toContain("Riley needs you");
+  expect(container.textContent).not.toContain("Alex needs you");
+});
 
-  it("renders custom accent on the eyebrow color", () => {
-    const fixture = makeRileyApprovalFixture();
-    const accent = { base: "#B86C50", deep: "#7E4533", soft: "#ECD4C8", paper: "#F6E7DE" };
-    const { container } = render(
-      <ApprovalCard
-        data={fixture}
-        idx={0}
-        total={1}
-        onResolve={() => {}}
-        accent={accent}
-        senderLabel="Riley needs you"
-      />,
-    );
-    const eyebrow = container.querySelector("span") as HTMLElement;
-    // Riley deep clay color on the eyebrow
-    expect(eyebrow.style.color.toLowerCase()).toBe("rgb(126, 69, 51)");
-  });
+it("renders custom accent on the eyebrow color", () => {
+  const fixture = makeRileyApprovalFixture();
+  const accent = { base: "#B86C50", deep: "#7E4533", soft: "#ECD4C8", paper: "#F6E7DE" };
+  const { container } = render(
+    <ApprovalCard
+      data={fixture}
+      idx={0}
+      total={1}
+      onResolve={() => {}}
+      accent={accent}
+      senderLabel="Riley needs you"
+    />,
+  );
+  const eyebrow = container.querySelector("span") as HTMLElement;
+  // Riley deep clay color on the eyebrow
+  expect(eyebrow.style.color.toLowerCase()).toBe("rgb(126, 69, 51)");
+});
 
-  it("renders Alex amber on the eyebrow when accent is not overridden", () => {
-    const fixture = makeAlexApprovalFixture();
-    const { container } = render(
-      <ApprovalCard data={fixture} idx={0} total={1} onResolve={() => {}} />,
-    );
-    const eyebrow = container.querySelector("span") as HTMLElement;
-    // Whatever T.amberDeep resolves to — assert it is NOT the Riley deep.
-    expect(eyebrow.style.color.toLowerCase()).not.toBe("rgb(126, 69, 51)");
-    expect(eyebrow.style.color.length).toBeGreaterThan(0);
-  });
+it("renders Alex amber on the eyebrow when accent is not overridden", () => {
+  const fixture = makeAlexApprovalFixture();
+  const { container } = render(
+    <ApprovalCard data={fixture} idx={0} total={1} onResolve={() => {}} />,
+  );
+  const eyebrow = container.querySelector("span") as HTMLElement;
+  // Whatever T.amberDeep resolves to — assert it is NOT the Riley deep.
+  expect(eyebrow.style.color.toLowerCase()).not.toBe("rgb(126, 69, 51)");
+  expect(eyebrow.style.color.length).toBeGreaterThan(0);
+});
 ```
 
 If `makeAlexApprovalFixture` / `makeRileyApprovalFixture` helpers don't exist in the test file, inline a minimal `ApprovalView` literal (the existing tests pattern) — do not introduce new helpers for this slice.
@@ -933,6 +934,7 @@ git commit -m "feat(cockpit): ApprovalCard accent + senderLabel props (B.3 prep)
 ### Task 6: Parameterize `<ComposerPlaceholder>` with optional sender + copy + accent
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/composer-placeholder.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx`
 
@@ -941,43 +943,43 @@ git commit -m "feat(cockpit): ApprovalCard accent + senderLabel props (B.3 prep)
 Append to `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx`:
 
 ```tsx
-  it("renders Alex sender + Alex copy when overrides are absent", () => {
-    const { container } = render(<ComposerPlaceholder halted={false} />);
-    expect(container.textContent).toContain("→ ALEX");
-    expect(container.textContent).toContain("Tell Alex what to do — coming soon");
-  });
+it("renders Alex sender + Alex copy when overrides are absent", () => {
+  const { container } = render(<ComposerPlaceholder halted={false} />);
+  expect(container.textContent).toContain("→ ALEX");
+  expect(container.textContent).toContain("Tell Alex what to do — coming soon");
+});
 
-  it("renders override sender + override copy when supplied", () => {
-    const { container } = render(
-      <ComposerPlaceholder
-        halted={false}
-        senderLabel="RILEY"
-        placeholderCopy="Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…"
-      />,
-    );
-    expect(container.textContent).toContain("→ RILEY");
-    expect(container.textContent).toContain("Tell Riley what to do");
-    expect(container.textContent).not.toContain("Tell Alex");
-  });
+it("renders override sender + override copy when supplied", () => {
+  const { container } = render(
+    <ComposerPlaceholder
+      halted={false}
+      senderLabel="RILEY"
+      placeholderCopy="Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…"
+    />,
+  );
+  expect(container.textContent).toContain("→ RILEY");
+  expect(container.textContent).toContain("Tell Riley what to do");
+  expect(container.textContent).not.toContain("Tell Alex");
+});
 
-  it("preserves halted copy regardless of placeholderCopy override", () => {
-    const { container } = render(
-      <ComposerPlaceholder halted={true} senderLabel="RILEY" placeholderCopy="anything" />,
-    );
-    expect(container.textContent).toContain("Halted — resume to send instructions");
-    expect(container.textContent).not.toContain("anything");
-  });
+it("preserves halted copy regardless of placeholderCopy override", () => {
+  const { container } = render(
+    <ComposerPlaceholder halted={true} senderLabel="RILEY" placeholderCopy="anything" />,
+  );
+  expect(container.textContent).toContain("Halted — resume to send instructions");
+  expect(container.textContent).not.toContain("anything");
+});
 
-  it("uses accentColor for the sender label when supplied", () => {
-    const { container } = render(
-      <ComposerPlaceholder halted={false} senderLabel="RILEY" accentColor="rgb(126, 69, 51)" />,
-    );
-    const sender = Array.from(container.querySelectorAll("span")).find((s) =>
-      (s.textContent ?? "").includes("→ RILEY"),
-    ) as HTMLElement | undefined;
-    expect(sender).toBeDefined();
-    expect(sender!.style.color.toLowerCase()).toBe("rgb(126, 69, 51)");
-  });
+it("uses accentColor for the sender label when supplied", () => {
+  const { container } = render(
+    <ComposerPlaceholder halted={false} senderLabel="RILEY" accentColor="rgb(126, 69, 51)" />,
+  );
+  const sender = Array.from(container.querySelectorAll("span")).find((s) =>
+    (s.textContent ?? "").includes("→ RILEY"),
+  ) as HTMLElement | undefined;
+  expect(sender).toBeDefined();
+  expect(sender!.style.color.toLowerCase()).toBe("rgb(126, 69, 51)");
+});
 ```
 
 - [ ] **Step 2: Run the tests and verify they fail.**
@@ -1072,6 +1074,7 @@ git commit -m "feat(cockpit): ComposerPlaceholder senderLabel + placeholderCopy 
 ### Task 7: Extend `riley-config.ts` with `RILEY_COMPOSER_PLACEHOLDER` + `RILEY_COMMANDS`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/lib/cockpit/riley/riley-config.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts`
 
@@ -1080,30 +1083,30 @@ git commit -m "feat(cockpit): ComposerPlaceholder senderLabel + placeholderCopy 
 Append to `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-config.test.ts`:
 
 ```ts
-  it("RILEY_COMPOSER_PLACEHOLDER carries the locked Riley voice placeholder", () => {
-    expect(RILEY_COMPOSER_PLACEHOLDER).toBe(
-      "Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…",
-    );
-  });
+it("RILEY_COMPOSER_PLACEHOLDER carries the locked Riley voice placeholder", () => {
+  expect(RILEY_COMPOSER_PLACEHOLDER).toBe(
+    "Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…",
+  );
+});
 
-  it("RILEY_COMMANDS exports the locked Riley command catalog grouped into control / thread / rules / nav", () => {
-    const ids = RILEY_COMMANDS.map((c) => c.id);
-    expect(ids).toEqual([
-      "open-meta",
-      "open-rules",
-      "open-targets",
-      "pause-1h",
-      "resume",
-      "brief-eod",
-      "cpl-30",
-    ]);
-    const groups = new Set(RILEY_COMMANDS.map((c) => c.group));
-    expect([...groups].sort()).toEqual(["control", "nav", "rules", "thread"]);
-    RILEY_COMMANDS.forEach((c) => {
-      expect(c.label.length).toBeGreaterThan(2);
-      expect(["control", "thread", "rules", "nav"]).toContain(c.group);
-    });
+it("RILEY_COMMANDS exports the locked Riley command catalog grouped into control / thread / rules / nav", () => {
+  const ids = RILEY_COMMANDS.map((c) => c.id);
+  expect(ids).toEqual([
+    "open-meta",
+    "open-rules",
+    "open-targets",
+    "pause-1h",
+    "resume",
+    "brief-eod",
+    "cpl-30",
+  ]);
+  const groups = new Set(RILEY_COMMANDS.map((c) => c.group));
+  expect([...groups].sort()).toEqual(["control", "nav", "rules", "thread"]);
+  RILEY_COMMANDS.forEach((c) => {
+    expect(c.label.length).toBeGreaterThan(2);
+    expect(["control", "thread", "rules", "nav"]).toContain(c.group);
   });
+});
 ```
 
 Update the import block at the top of the test file:
@@ -1177,6 +1180,7 @@ git commit -m "feat(cockpit): riley-config RILEY_COMPOSER_PLACEHOLDER + RILEY_CO
 ### Task 8: Create `riley-toast.ts` voice helper
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/riley-toast.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/riley-toast.test.ts`
 
@@ -1272,15 +1276,16 @@ describe("rileyToast", () => {
     },
   };
 
-  it.each(Object.entries(FALLBACK_TABLE) as Array<[RileyApprovalKind, { accept: string; decline: string }]>)(
-    "fallback for kind %s renders the locked lines",
-    (kind, lines) => {
-      const accept = rileyToast({ verdict: "accept", approval: baseView({ kind }) });
-      const decline = rileyToast({ verdict: "decline", approval: baseView({ kind }) });
-      expect(accept.title).toBe(lines.accept);
-      expect(decline.title).toBe(lines.decline);
-    },
-  );
+  it.each(
+    Object.entries(FALLBACK_TABLE) as Array<
+      [RileyApprovalKind, { accept: string; decline: string }]
+    >,
+  )("fallback for kind %s renders the locked lines", (kind, lines) => {
+    const accept = rileyToast({ verdict: "accept", approval: baseView({ kind }) });
+    const decline = rileyToast({ verdict: "decline", approval: baseView({ kind }) });
+    expect(accept.title).toBe(lines.accept);
+    expect(decline.title).toBe(lines.decline);
+  });
 
   it("treats empty-string acceptToast / declineToast as missing", () => {
     const accept = rileyToast({ verdict: "accept", approval: baseView({ acceptToast: "" }) });
@@ -1395,6 +1400,7 @@ git commit -m "feat(cockpit): rileyToast voice helper + per-kind fallback table 
 ### Task 9: Wire `RileyCockpitPage` — accent + senderLabel + per-row resolution + Riley toast
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`
 
@@ -1816,7 +1822,7 @@ rg "Recommendation|AuditEntry|@switchboard/db|@prisma" \
    apps/dashboard/src/hooks
 ```
 
-Expected: identical match set to `main` baseline. The new `riley-toast.ts` lives outside `components/cockpit` (it is under `lib/cockpit/riley/**`); any import of `RileyApprovalView` from `@/components/cockpit/types` is a *type-only* view-model import and is **not** what the rule guards against. If the grep returns new matches under `components/cockpit/**` or `hooks/use-riley-*.ts`, the boundary has leaked — fix before commit.
+Expected: identical match set to `main` baseline. The new `riley-toast.ts` lives outside `components/cockpit` (it is under `lib/cockpit/riley/**`); any import of `RileyApprovalView` from `@/components/cockpit/types` is a _type-only_ view-model import and is **not** what the rule guards against. If the grep returns new matches under `components/cockpit/**` or `hooks/use-riley-*.ts`, the boundary has leaked — fix before commit.
 
 - [ ] **Step 2: Diff against baseline.**
 
@@ -1885,18 +1891,18 @@ This section is the writing-plans skill's required spec-coverage check.
 
 **1. Spec coverage.**
 
-| Slicing spec §B.3 requirement | Plan task |
-|---|---|
-| Riley accent applied uniformly | Tasks 3 (StatusPill), 4 (Identity forward), 5 (ApprovalCard), 6 (ComposerPlaceholder), 9 (page wiring). |
-| Command palette pre-populated with RILEY_COMMANDS | Task 7 ships catalog; **interactive palette deferred** to B.3-followup post-A.5 (documented in slice brief). |
-| Composer constraint enforced | Composer remains inert (placeholder visuals only). Interactive `Allowed-in-B.3` semantics deferred post-A.5. |
-| `RecommendationPresentation.acceptToast` + `declineToast` optional fields | Task 1. |
-| Engine populates them where context exists | Task 2 — every action in the labels table gets both. |
-| Cockpit toasts use them with fallback to `rileyToast()` | Tasks 8 (rileyToast) + 9 (page wires it through `useToast`). |
-| External-action accept opens URL, does not fire toast | Task 9 — dedicated test asserts no `primary()` call and no `toast()` call when `primaryAction.kind === "external"`. |
-| Success-only toast (failure does not show success copy) | Task 9 — `.then()` not `.finally()`, dedicated test asserts toast suppressed on rejection. |
-| Final empty/error copy reviewed for tone consistency with Alex | Embedded in Tasks 6 (placeholder copy) + 8 (fallback table); reviewer checks the locked tables in this plan against Alex A.2's tone. |
-| Type-check, lint, tests, dashboard `next build` clean | Task 12. |
+| Slicing spec §B.3 requirement                                             | Plan task                                                                                                                            |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Riley accent applied uniformly                                            | Tasks 3 (StatusPill), 4 (Identity forward), 5 (ApprovalCard), 6 (ComposerPlaceholder), 9 (page wiring).                              |
+| Command palette pre-populated with RILEY_COMMANDS                         | Task 7 ships catalog; **interactive palette deferred** to B.3-followup post-A.5 (documented in slice brief).                         |
+| Composer constraint enforced                                              | Composer remains inert (placeholder visuals only). Interactive `Allowed-in-B.3` semantics deferred post-A.5.                         |
+| `RecommendationPresentation.acceptToast` + `declineToast` optional fields | Task 1.                                                                                                                              |
+| Engine populates them where context exists                                | Task 2 — every action in the labels table gets both.                                                                                 |
+| Cockpit toasts use them with fallback to `rileyToast()`                   | Tasks 8 (rileyToast) + 9 (page wires it through `useToast`).                                                                         |
+| External-action accept opens URL, does not fire toast                     | Task 9 — dedicated test asserts no `primary()` call and no `toast()` call when `primaryAction.kind === "external"`.                  |
+| Success-only toast (failure does not show success copy)                   | Task 9 — `.then()` not `.finally()`, dedicated test asserts toast suppressed on rejection.                                           |
+| Final empty/error copy reviewed for tone consistency with Alex            | Embedded in Tasks 6 (placeholder copy) + 8 (fallback table); reviewer checks the locked tables in this plan against Alex A.2's tone. |
+| Type-check, lint, tests, dashboard `next build` clean                     | Task 12.                                                                                                                             |
 
 Items deferred to B.3-followup are explicitly documented in the slice brief §What does NOT ship, with the A.5 dependency named.
 

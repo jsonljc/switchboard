@@ -10,6 +10,7 @@
 ## 1. Goals and non-goals
 
 ### Goals
+
 - Land a documented production deployment for `apps/dashboard`, `apps/api`, and `apps/chat` with managed Postgres, Redis, async-job orchestration, and error monitoring.
 - Optimize for **solo operator attention** as the scarce resource, not infrastructure cost.
 - Stable webhook URLs for Meta App Review (WhatsApp), Telegram, and Slack.
@@ -17,13 +18,14 @@
 - Total monthly infra cost target **< $100/mo** for the pilot.
 
 ### Non-goals
+
 - Multi-region deployment.
 - Autoscaling beyond Render's defaults.
 - Self-hosted Kubernetes, mTLS service mesh, or distributed tracing.
 - Preview environments for backend services (`apps/dashboard` PR previews remain via Vercel).
 - Production-grade observability (PagerDuty rotations, SLO dashboards, custom metrics pipelines).
-- **Production deployment of `apps/mcp-server`** — stdio-only transport, no production call path. See §11 *Out of scope*.
-- Designing the architecture for post-pilot scale. See §9 *Exit conditions* for re-evaluation triggers.
+- **Production deployment of `apps/mcp-server`** — stdio-only transport, no production call path. See §11 _Out of scope_.
+- Designing the architecture for post-pilot scale. See §9 _Exit conditions_ for re-evaluation triggers.
 
 ---
 
@@ -73,9 +75,10 @@
 ```
 
 **Why this shape:**
+
 - `apps/dashboard` stays on Vercel — Next.js is Vercel's primary target, edge CDN + PR previews + image optimization are real wins, no reason to move it. The dashboard's own Next.js API routes proxy server-side to Render `api`; the browser does not call `api` directly.
 - `apps/api` and `apps/chat` are public Render Web Services because they must be reachable: `api` is called server-side by the Vercel-hosted dashboard over HTTPS, `chat` receives webhooks from Meta/Telegram/Slack. Both remain auth-gated and do not expose internal tool surfaces.
-- **`apps/mcp-server` is excluded from this topology.** See §11 *Out of scope*. It currently uses stdio-only transport and has no HTTP listener.
+- **`apps/mcp-server` is excluded from this topology.** See §11 _Out of scope_. It currently uses stdio-only transport and has no HTTP listener.
 - Postgres and Redis are managed Render services for zero-ops backups and connection pooling.
 - Inngest Cloud orchestrates async jobs; **execution handlers live in `apps/api`** unless and until a separate worker service is required by scale.
 - Sentry uses two distinct DSNs (`SENTRY_DSN_SERVER` on Render, `NEXT_PUBLIC_SENTRY_DSN` on Vercel) so the client one is public-safe by design and the server one stays Render-only. The current code uses `SENTRY_DSN` on api/chat; renaming to `SENTRY_DSN_SERVER` is an implementation-plan task.
@@ -84,13 +87,13 @@
 
 **All Render plan tiers below are current targets / estimates. Validate Render plan limits and pricing on the Render dashboard before provisioning.** Plan structures change.
 
-| Service | Type | Current target plan | Notes |
-|---|---|---|---|
-| `dashboard` | Vercel | Hobby or Pro (~$0–20/mo) | Next.js, NextAuth, dashboard UI. PR previews remain on. |
-| `api` | Render Web Service (public) | Starter ~$7/mo | Fastify REST. Public so the Vercel dashboard can reach it server-side over HTTPS. Auth-gated. Sole migration runner. |
-| `chat` | Render Web Service (public) | Starter ~$7/mo | Fastify webhook server for Meta/Telegram/Slack. Stable `*.onrender.com` URL bound to a custom domain pre-Meta-review. |
-| Postgres | Render Postgres | Starter ~$7/mo | Single durable store. Auto daily snapshots; **validate retention period before provisioning.** |
-| Redis | Render Redis | Starter ~$10/mo | Cache + rate-limit counters + session store. Lose-able by design. |
+| Service     | Type                        | Current target plan      | Notes                                                                                                                 |
+| ----------- | --------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `dashboard` | Vercel                      | Hobby or Pro (~$0–20/mo) | Next.js, NextAuth, dashboard UI. PR previews remain on.                                                               |
+| `api`       | Render Web Service (public) | Starter ~$7/mo           | Fastify REST. Public so the Vercel dashboard can reach it server-side over HTTPS. Auth-gated. Sole migration runner.  |
+| `chat`      | Render Web Service (public) | Starter ~$7/mo           | Fastify webhook server for Meta/Telegram/Slack. Stable `*.onrender.com` URL bound to a custom domain pre-Meta-review. |
+| Postgres    | Render Postgres             | Starter ~$7/mo           | Single durable store. Auto daily snapshots; **validate retention period before provisioning.**                        |
+| Redis       | Render Redis                | Starter ~$10/mo          | Cache + rate-limit counters + session store. Lose-able by design.                                                     |
 
 **Pilot estimate: ~$31–51/mo backend + $0–20/mo Vercel. Within the <$100/mo ceiling.**
 
@@ -108,21 +111,21 @@ If Render's available regions don't include a sufficiently close option for the 
 
 ### Ownership matrix
 
-| Variable | Vercel | Render | GitHub Actions | Master vault |
-|---|---|---|---|---|
-| `NEXT_PUBLIC_*` flags (CONTACTS_LIVE, REPORTS_LIVE, …) | ✅ per-environment, **default off for Preview unless explicitly enabled** | — | — | ✅ |
-| `NEXTAUTH_SECRET`, `NEXTAUTH_URL` | ✅ | — | — | ✅ |
-| `SWITCHBOARD_API_URL` (→ Render `api` public URL) — **server-side only**; consumed by the dashboard's Next.js API routes which proxy to `api`. The browser never calls `api` directly, so no `NEXT_PUBLIC_*` variant is needed. | ✅ | — | — | ✅ |
-| `NEXT_PUBLIC_SENTRY_DSN` (client-safe) | ✅ | — | — | ✅ |
-| `DATABASE_URL`, `REDIS_URL` | ❌ never | ✅ auto-injected by Render's managed DB | — | — |
-| `CREDENTIALS_ENCRYPTION_KEY` | ❌ | ✅ | — | ✅ |
-| `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY` | ❌ | ✅ | — | ✅ |
-| `TELEGRAM_*`, `WHATSAPP_*`, `META_ADS_*` | ❌ | ✅ | — | ✅ |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | ❌ | ✅ | — | ✅ |
-| `INTERNAL_API_SECRET` (api ↔ chat shared) | ❌ | ✅ same value across both services | — | ✅ |
-| `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | ❌ | ✅ | — | ✅ |
-| `SENTRY_DSN_SERVER` (Render-only) | ❌ | ✅ | — | ✅ |
-| Render / Vercel deploy hook URLs | — | — | ✅ secrets | ✅ |
+| Variable                                                                                                                                                                                                                        | Vercel                                                                    | Render                                  | GitHub Actions | Master vault |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------- | -------------- | ------------ |
+| `NEXT_PUBLIC_*` flags (CONTACTS_LIVE, REPORTS_LIVE, …)                                                                                                                                                                          | ✅ per-environment, **default off for Preview unless explicitly enabled** | —                                       | —              | ✅           |
+| `NEXTAUTH_SECRET`, `NEXTAUTH_URL`                                                                                                                                                                                               | ✅                                                                        | —                                       | —              | ✅           |
+| `SWITCHBOARD_API_URL` (→ Render `api` public URL) — **server-side only**; consumed by the dashboard's Next.js API routes which proxy to `api`. The browser never calls `api` directly, so no `NEXT_PUBLIC_*` variant is needed. | ✅                                                                        | —                                       | —              | ✅           |
+| `NEXT_PUBLIC_SENTRY_DSN` (client-safe)                                                                                                                                                                                          | ✅                                                                        | —                                       | —              | ✅           |
+| `DATABASE_URL`, `REDIS_URL`                                                                                                                                                                                                     | ❌ never                                                                  | ✅ auto-injected by Render's managed DB | —              | —            |
+| `CREDENTIALS_ENCRYPTION_KEY`                                                                                                                                                                                                    | ❌                                                                        | ✅                                      | —              | ✅           |
+| `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`                                                                                                                                                                                           | ❌                                                                        | ✅                                      | —              | ✅           |
+| `TELEGRAM_*`, `WHATSAPP_*`, `META_ADS_*`                                                                                                                                                                                        | ❌                                                                        | ✅                                      | —              | ✅           |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`                                                                                                                                                                                    | ❌                                                                        | ✅                                      | —              | ✅           |
+| `INTERNAL_API_SECRET` (api ↔ chat shared)                                                                                                                                                                                       | ❌                                                                        | ✅ same value across both services      | —              | ✅           |
+| `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`                                                                                                                                                                                      | ❌                                                                        | ✅                                      | —              | ✅           |
+| `SENTRY_DSN_SERVER` (Render-only)                                                                                                                                                                                               | ❌                                                                        | ✅                                      | —              | ✅           |
+| Render / Vercel deploy hook URLs                                                                                                                                                                                                | —                                                                         | —                                       | ✅ secrets     | ✅           |
 
 ### Discipline rules
 
@@ -145,9 +148,9 @@ Vercel has no equivalent committed config in this spec — the Vercel project re
 
 Push to `main` → Vercel and Render auto-deploy in parallel.
 
-| Host | Trigger | Preview environments |
-|---|---|---|
-| Vercel (`dashboard`) | Auto on `main` push; PR previews on by default | ✅ PR previews — `NEXT_PUBLIC_*` flags default off in Preview scope unless explicitly enabled |
+| Host                   | Trigger                                                     | Preview environments                                                                                                                                             |
+| ---------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel (`dashboard`)   | Auto on `main` push; PR previews on by default              | ✅ PR previews — `NEXT_PUBLIC_*` flags default off in Preview scope unless explicitly enabled                                                                    |
 | Render (`api`, `chat`) | Auto-Deploy enabled on connected GitHub repo, branch `main` | ❌ Skipped at pilot — use local `docker-compose.prod.yml` for pre-merge integration testing. Add a `staging` blueprint later only if pilot reveals it is needed. |
 
 ### Build sequence on Render
@@ -173,11 +176,11 @@ Vercel and Render builds aren't coordinated. There's a brief window during deplo
 
 Three rollback shapes by failure mode:
 
-| Failure | Action | Target time |
-|---|---|---|
-| **Bad code** (deployed bug) | Render dashboard → service → "Rollback to previous deploy" (retains ~last 30 deploys). Vercel: Deployments → previous → "Promote to Production". | < 5 min |
-| **Bad env-var flip** (e.g., a feature flag reveals broken UX) | Flip var back on the host. Vercel `NEXT_PUBLIC_*` requires a rebuild (inlined at build); Render vars apply on container restart. | < 5 min Render, < 10 min Vercel |
-| **Bad migration** (schema breakage) | Backwards-compat discipline = "revert code, leave schema." Non-backwards-compat with a tested restore plan only (§5). Render's automatic Postgres snapshots are the last resort, not the first. | < 30 min |
+| Failure                                                       | Action                                                                                                                                                                                          | Target time                     |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| **Bad code** (deployed bug)                                   | Render dashboard → service → "Rollback to previous deploy" (retains ~last 30 deploys). Vercel: Deployments → previous → "Promote to Production".                                                | < 5 min                         |
+| **Bad env-var flip** (e.g., a feature flag reveals broken UX) | Flip var back on the host. Vercel `NEXT_PUBLIC_*` requires a rebuild (inlined at build); Render vars apply on container restart.                                                                | < 5 min Render, < 10 min Vercel |
+| **Bad migration** (schema breakage)                           | Backwards-compat discipline = "revert code, leave schema." Non-backwards-compat with a tested restore plan only (§5). Render's automatic Postgres snapshots are the last resort, not the first. | < 30 min                        |
 
 ### Feature-flag-shaped kill switches
 
@@ -194,10 +197,10 @@ The `/contacts` PR-C3 flip is the canonical UI-flag example. Backend examples in
 
 Use the endpoints the code already exposes; do not rename them just for spec neatness.
 
-| Service | `/health` (shallow liveness) | `/api/health/deep` (deep readiness) |
-|---|---|---|
-| `api` | ✅ exists (`apps/api/src/app.ts:716`) — process is up | ✅ exists (`apps/api/src/routes/health.ts`) — DB + Redis + cartridges + queue depth |
-| `chat` | ✅ exists (`apps/chat/src/main.ts:230`) — process is up; does **not** depend on `api` reachability (avoids cascading failures during `api` blips) | ❌ **needs to be added** — implementation-plan task. Should check Postgres reachable + Redis reachable + (optional) `api` reachability for end-to-end signal. |
+| Service | `/health` (shallow liveness)                                                                                                                      | `/api/health/deep` (deep readiness)                                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api`   | ✅ exists (`apps/api/src/app.ts:716`) — process is up                                                                                             | ✅ exists (`apps/api/src/routes/health.ts`) — DB + Redis + cartridges + queue depth                                                                           |
+| `chat`  | ✅ exists (`apps/chat/src/main.ts:230`) — process is up; does **not** depend on `api` reachability (avoids cascading failures during `api` blips) | ❌ **needs to be added** — implementation-plan task. Should check Postgres reachable + Redis reachable + (optional) `api` reachability for end-to-end signal. |
 
 **Render container liveness gating uses `/health`.** External uptime probes and deeper monitoring use `/api/health/deep`. This separation prevents transient Redis or Postgres blips from causing Render to mark a container dead and trigger a needless redeploy.
 
@@ -205,15 +208,15 @@ Use the endpoints the code already exposes; do not rename them just for spec nea
 
 ### Observability — minimum signal stack
 
-| Layer | Tool | Cost | Scope |
-|---|---|---|---|
-| Server errors | Sentry (`SENTRY_DSN_SERVER`) | Free tier | `api` / `chat` on Render. **Rename pending:** code currently reads `SENTRY_DSN` in `apps/api/src/bootstrap/sentry.ts:14` and `apps/chat/src/bootstrap/sentry.ts:4`; renaming to `SENTRY_DSN_SERVER` is an implementation-plan task. |
-| Client errors | Sentry (`NEXT_PUBLIC_SENTRY_DSN`) | Free tier (shared project, separate DSN) | Dashboard on Vercel — already wired (`apps/dashboard/sentry.client.config.ts` + `sentry.server.config.ts`) |
-| Logs | Render's built-in viewer (validate retention before launch; export to Better Stack later if needed) | Included | All Render services |
-| Metrics | Render's CPU / memory / RPS dashboard | Included | All Render services |
-| Uptime | UptimeRobot (free) or Better Stack | Free–$10/mo | External probe every 5 min of `https://<api-domain>/api/health/deep` and `https://<chat-domain>/health` (probe chat at `/health` until the deep endpoint lands; switch chat to `https://<chat-domain>/api/health/deep` after that endpoint exists) |
-| Deploy notifications | Render + Vercel email/Slack | Included | Deploy failure alerts |
-| Tracing | **Skipped at pilot** | — | Re-evaluate at exit condition |
+| Layer                | Tool                                                                                                | Cost                                     | Scope                                                                                                                                                                                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server errors        | Sentry (`SENTRY_DSN_SERVER`)                                                                        | Free tier                                | `api` / `chat` on Render. **Rename pending:** code currently reads `SENTRY_DSN` in `apps/api/src/bootstrap/sentry.ts:14` and `apps/chat/src/bootstrap/sentry.ts:4`; renaming to `SENTRY_DSN_SERVER` is an implementation-plan task.                |
+| Client errors        | Sentry (`NEXT_PUBLIC_SENTRY_DSN`)                                                                   | Free tier (shared project, separate DSN) | Dashboard on Vercel — already wired (`apps/dashboard/sentry.client.config.ts` + `sentry.server.config.ts`)                                                                                                                                         |
+| Logs                 | Render's built-in viewer (validate retention before launch; export to Better Stack later if needed) | Included                                 | All Render services                                                                                                                                                                                                                                |
+| Metrics              | Render's CPU / memory / RPS dashboard                                                               | Included                                 | All Render services                                                                                                                                                                                                                                |
+| Uptime               | UptimeRobot (free) or Better Stack                                                                  | Free–$10/mo                              | External probe every 5 min of `https://<api-domain>/api/health/deep` and `https://<chat-domain>/health` (probe chat at `/health` until the deep endpoint lands; switch chat to `https://<chat-domain>/api/health/deep` after that endpoint exists) |
+| Deploy notifications | Render + Vercel email/Slack                                                                         | Included                                 | Deploy failure alerts                                                                                                                                                                                                                              |
+| Tracing              | **Skipped at pilot**                                                                                | —                                        | Re-evaluate at exit condition                                                                                                                                                                                                                      |
 
 ### Alert routing
 
@@ -229,7 +232,7 @@ Use the endpoints the code already exposes; do not rename them just for spec nea
   - **Quarterly during pilot.**
   - **Immediately before opening public launch** (transition out of hand-onboard cohort).
   - **After any major schema migration.**
-  A backup that has never been restored is not a backup.
+    A backup that has never been restored is not a backup.
 - **Redis is cache only**, not durable. Any state that must survive a Redis flush belongs in Postgres.
 - **`packages/db/prisma/migrations/`** is the schema source of truth. Restoring a snapshot requires the migration directory on the commit corresponding to the snapshot date.
 
@@ -237,13 +240,13 @@ Use the endpoints the code already exposes; do not rename them just for spec nea
 
 Re-evaluate hosting when **any one** of these fires:
 
-| Trigger | Why it changes the calculus |
-|---|---|
-| Monthly infra cost > **$150** | Fly + Neon + Upstash becomes meaningfully cheaper at this band; the ops-overhead premium is no longer justified. |
+| Trigger                                                     | Why it changes the calculus                                                                                                      |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Monthly infra cost > **$150**                               | Fly + Neon + Upstash becomes meaningfully cheaper at this band; the ops-overhead premium is no longer justified.                 |
 | Webhook latency user-visible (`chat` p95 > 1s consistently) | Render Starter shared-CPU isn't keeping up; choice is upgrade tier (~$25+/mo per service) or migrate to Fly's better price/perf. |
-| Postgres tier upgrade required (Starter → Standard) | Step-function cost jump. The cheapest moment to consider Neon's serverless model. |
-| Active customer count > **50–100** | Pilot framing exhausted; uptime + cost + observability all need a re-look, not an incremental tweak. |
-| Render-specific blocker | Region availability gap, sustained vendor outage pattern, feature gap (e.g., need autoscale that Starter doesn't offer). |
+| Postgres tier upgrade required (Starter → Standard)         | Step-function cost jump. The cheapest moment to consider Neon's serverless model.                                                |
+| Active customer count > **50–100**                          | Pilot framing exhausted; uptime + cost + observability all need a re-look, not an incremental tweak.                             |
+| Render-specific blocker                                     | Region availability gap, sustained vendor outage pattern, feature gap (e.g., need autoscale that Starter doesn't offer).         |
 
 **When triggered, the response is not "migrate immediately."** Re-run the Block 1 option comparison with actual usage data, model the migration as a feature-sized project (1–3 weeks of focused work), and weigh against the next launch initiative. The discipline is: **migrate because cost-per-revenue is wrong, not because absolute cost grew.**
 
@@ -256,7 +259,7 @@ Sequenced checklist from "spec approved" to "first real user signed up."
    - `api` (Web Service, public), `chat` (Web Service, public)
    - Postgres Starter
    - Redis Starter
-   - Region: per §3 *Region*, closest to primary pilot users and webhook traffic
+   - Region: per §3 _Region_, closest to primary pilot users and webhook traffic
    - Validate Starter plan limits against expected pilot traffic before accepting
 
 3. **Vault → Render env**: copy backend secrets from password manager into each service's env settings. `INTERNAL_API_SECRET` identical across `api` and `chat`. `SENTRY_DSN_SERVER` set on both.
@@ -298,6 +301,7 @@ Sequenced checklist from "spec approved" to "first real user signed up."
 `apps/mcp-server` is currently a STDIO-based MCP server intended to be launched by external MCP clients as a subprocess (`apps/mcp-server/src/server.ts:370` constructs `new StdioServerTransport()` and calls `mcpServer.connect(transport)`; there is no HTTP listener). It is not reachable by `api` or `chat` in production, and no Switchboard runtime code path within `apps/api`, `apps/chat`, or `packages/core` calls it. It is **excluded from the pilot hosting topology**.
 
 A future production MCP deployment requires both:
+
 1. **A confirmed production call path** — a real consumer inside Switchboard, or an external integrator we commit to serving.
 2. **Either** an HTTP / SSE transport added to `apps/mcp-server` (substantial code change), **or** a separate distribution model (npm package, OCI image users pull, etc.) appropriate for stdio-only.
 

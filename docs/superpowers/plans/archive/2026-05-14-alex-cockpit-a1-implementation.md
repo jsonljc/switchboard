@@ -21,34 +21,34 @@
 
 ### Created files
 
-| Path | Responsibility |
-|---|---|
-| `apps/dashboard/src/components/cockpit/tokens.ts` | Page-local color tokens (`T = { bg, paper, ink, ink2..ink5, hair, hairSoft, amber*, green, red, blue }`). Not promoted to globals — see spec §Visual tokens. |
-| `apps/dashboard/src/components/cockpit/kind-meta.ts` | `KIND_META` table — Alex activity-kind labels/colors (`booked`/`qualified`/`replied`/`sent`/`started`/`connected`/`waiting`/`escalated`/`passed`). Riley kinds added by Riley's PR. |
-| `apps/dashboard/src/components/cockpit/types.ts` | `CockpitStatus` union, `ApprovalView` (Alex+Riley union types; A.1 only exercises Alex variant), `ActivityRow`, `ThreadMessage`, `MissionViewModel` (typed but populated statically at A.1). |
-| `apps/dashboard/src/components/cockpit/dot.tsx` | `<Dot color pulse size />` primitive. Reused by status pill and (later) channel dots. |
-| `apps/dashboard/src/components/cockpit/status-pill.tsx` | `<StatusPill statusKey halted />` — dot + label, pulse rules per Alex config. |
-| `apps/dashboard/src/components/cockpit/topbar.tsx` | `<Topbar paletteEnabled={false} compact />` — brand mark + wordmark, tabs from `alex-config`, "Tell Alex…" affordance rendered **disabled** (no click handler, no keyboard shortcut) at A.1; flips to enabled at A.5. |
-| `apps/dashboard/src/components/cockpit/identity.tsx` | `<Identity statusKey halted subtitle line onHaltToggle compact />` — avatar frame, name, status pill, plain non-interactive subtitle, optional `line` from greeting hook, Halt button. **No `onEditMission` prop at A.1.** |
-| `apps/dashboard/src/components/cockpit/approval-card.tsx` | `<ApprovalCard data idx total onResolve variant compact />` — eyebrow + title + body + quote + risk + primary/secondary buttons. |
-| `apps/dashboard/src/components/cockpit/approval-block.tsx` | `<ApprovalBlock data onResolve variant compact />` — array-tolerant wrapper that maps to `<ApprovalCard>`. |
-| `apps/dashboard/src/components/cockpit/activity-row.tsx` | `<ActivityRow item open toggle variant compact />` — collapsed-only render at A.1 (expand-to-preview gated false at A.1). |
-| `apps/dashboard/src/components/cockpit/activity-stream.tsx` | `<ActivityStream data filter setFilter openSet toggleOpen variant compact />` — filter buttons (`all` / `booked` / `escalations`) + rows; empty-state placeholder. |
-| `apps/dashboard/src/components/cockpit/composer-placeholder.tsx` | Static inert bar "Tell Alex what to do — coming soon". Replaced by real composer at A.5. |
-| `apps/dashboard/src/components/cockpit/cockpit-page.tsx` | Top-level composition reading existing hooks, passing view-models to shell components. |
-| `apps/dashboard/src/lib/cockpit/alex-config.ts` | `ALEX_ACCENT`, static `ALEX_MISSION_SUBTITLE`, `statusColor`, `statusPulse`, `animState`, `tabs`. Ported from `alex-config.jsx` minus mission rows / commands / composer placeholder / toastVoice (those land later). |
+| Path                                                                         | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/components/cockpit/tokens.ts`                            | Page-local color tokens (`T = { bg, paper, ink, ink2..ink5, hair, hairSoft, amber*, green, red, blue }`). Not promoted to globals — see spec §Visual tokens.                                                                                                                                                                                                                                                                                                                                               |
+| `apps/dashboard/src/components/cockpit/kind-meta.ts`                         | `KIND_META` table — Alex activity-kind labels/colors (`booked`/`qualified`/`replied`/`sent`/`started`/`connected`/`waiting`/`escalated`/`passed`). Riley kinds added by Riley's PR.                                                                                                                                                                                                                                                                                                                        |
+| `apps/dashboard/src/components/cockpit/types.ts`                             | `CockpitStatus` union, `ApprovalView` (Alex+Riley union types; A.1 only exercises Alex variant), `ActivityRow`, `ThreadMessage`, `MissionViewModel` (typed but populated statically at A.1).                                                                                                                                                                                                                                                                                                               |
+| `apps/dashboard/src/components/cockpit/dot.tsx`                              | `<Dot color pulse size />` primitive. Reused by status pill and (later) channel dots.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `apps/dashboard/src/components/cockpit/status-pill.tsx`                      | `<StatusPill statusKey halted />` — dot + label, pulse rules per Alex config.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apps/dashboard/src/components/cockpit/topbar.tsx`                           | `<Topbar paletteEnabled={false} compact />` — brand mark + wordmark, tabs from `alex-config`, "Tell Alex…" affordance rendered **disabled** (no click handler, no keyboard shortcut) at A.1; flips to enabled at A.5.                                                                                                                                                                                                                                                                                      |
+| `apps/dashboard/src/components/cockpit/identity.tsx`                         | `<Identity statusKey halted subtitle line onHaltToggle compact />` — avatar frame, name, status pill, plain non-interactive subtitle, optional `line` from greeting hook, Halt button. **No `onEditMission` prop at A.1.**                                                                                                                                                                                                                                                                                 |
+| `apps/dashboard/src/components/cockpit/approval-card.tsx`                    | `<ApprovalCard data idx total onResolve variant compact />` — eyebrow + title + body + quote + risk + primary/secondary buttons.                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/dashboard/src/components/cockpit/approval-block.tsx`                   | `<ApprovalBlock data onResolve variant compact />` — array-tolerant wrapper that maps to `<ApprovalCard>`.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `apps/dashboard/src/components/cockpit/activity-row.tsx`                     | `<ActivityRow item open toggle variant compact />` — collapsed-only render at A.1 (expand-to-preview gated false at A.1).                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/dashboard/src/components/cockpit/activity-stream.tsx`                  | `<ActivityStream data filter setFilter openSet toggleOpen variant compact />` — filter buttons (`all` / `booked` / `escalations`) + rows; empty-state placeholder.                                                                                                                                                                                                                                                                                                                                         |
+| `apps/dashboard/src/components/cockpit/composer-placeholder.tsx`             | Static inert bar "Tell Alex what to do — coming soon". Replaced by real composer at A.5.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `apps/dashboard/src/components/cockpit/cockpit-page.tsx`                     | Top-level composition reading existing hooks, passing view-models to shell components.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `apps/dashboard/src/lib/cockpit/alex-config.ts`                              | `ALEX_ACCENT`, static `ALEX_MISSION_SUBTITLE`, `statusColor`, `statusPulse`, `animState`, `tabs`. Ported from `alex-config.jsx` minus mission rows / commands / composer placeholder / toastVoice (those land later).                                                                                                                                                                                                                                                                                      |
 | `apps/dashboard/src/lib/cockpit/legacy-pending-approval-to-approval-view.ts` | Pure adapter: `(approval: PendingApproval) => AlexApprovalView`. Maps `riskCategory` → cockpit urgency, projects `summary` to `title`, carries `bindingHash`/`createdAt`. **Limitation:** the existing wire shape doesn't carry `kind` — every approval surfaces as `kind: "pricing"` (the generic approval card). Rich kind classification (refund / regulatory / safety-gate / escalation) waits for `Approval.payload.kind` in A.5. The `legacy` prefix flags this as the pre-schema-extension adapter. |
-| `apps/dashboard/src/lib/cockpit/activity-kind-map.ts` | Pure adapter: `(translatedAction: TranslatedAction) => ActivityRow`. Maps existing `eventType` strings to cockpit `ActivityKind`. |
-| `apps/dashboard/src/lib/cockpit/relative-age.ts` | Client-side relative-age formatter ("4 min ago", "2 h ago", "Fri"). Independent of `packages/core/src/agent-home/relative-age.ts` (server-side). |
-| `apps/dashboard/src/hooks/use-cockpit-status.ts` | `deriveAlexStatusA1(input)` pure derivation + React hook wrapping `useHalt`/`usePendingApprovals`/`useAgentActivity`. |
-| `apps/dashboard/src/app/(auth)/[agentKey]/legacy-agent-home-client.tsx` | Verbatim copy of today's `agent-home-client.tsx` body. Deleted at A.6. |
+| `apps/dashboard/src/lib/cockpit/activity-kind-map.ts`                        | Pure adapter: `(translatedAction: TranslatedAction) => ActivityRow`. Maps existing `eventType` strings to cockpit `ActivityKind`.                                                                                                                                                                                                                                                                                                                                                                          |
+| `apps/dashboard/src/lib/cockpit/relative-age.ts`                             | Client-side relative-age formatter ("4 min ago", "2 h ago", "Fri"). Independent of `packages/core/src/agent-home/relative-age.ts` (server-side).                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/dashboard/src/hooks/use-cockpit-status.ts`                             | `deriveAlexStatusA1(input)` pure derivation + React hook wrapping `useHalt`/`usePendingApprovals`/`useAgentActivity`.                                                                                                                                                                                                                                                                                                                                                                                      |
+| `apps/dashboard/src/app/(auth)/[agentKey]/legacy-agent-home-client.tsx`      | Verbatim copy of today's `agent-home-client.tsx` body. Deleted at A.6.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Modified files
 
-| Path | Change |
-|---|---|
-| `apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx` | Replace body with per-agent branch: `agentKey === "alex" ? <CockpitPage> : <LegacyAgentHomeClient>`. |
-| `apps/dashboard/src/app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx` | Add test asserting branch behavior; existing assertions follow the legacy client. |
+| Path                                                                            | Change                                                                                               |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx`                | Replace body with per-agent branch: `agentKey === "alex" ? <CockpitPage> : <LegacyAgentHomeClient>`. |
+| `apps/dashboard/src/app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx` | Add test asserting branch behavior; existing assertions follow the legacy client.                    |
 
 ### Test files (created with their subjects)
 
@@ -83,13 +83,13 @@ Expected: `.env` copied, dev ports cleared, `pnpm db:migrate` runs (or skips if 
 
 The 20 tasks below are TDD-granular for clarity. **Commit at 5 group boundaries** — not after every task:
 
-| Commit | Covers tasks | Subject |
-|---|---|---|
-| 1 — foundations | 1–5 (tokens, types, kind-meta, alex-config, relative-age) | `feat(cockpit): foundations — tokens, types, kind-meta, config, relative-age (A.1)` |
-| 2 — adapters + status | 6–8 (legacy-pending-approval adapter, activity-kind-map, use-cockpit-status) | `feat(cockpit): adapters + status derivation (A.1)` |
-| 3 — components | 9–17 (dot, status-pill, topbar, identity, approval-card, approval-block, activity-row, activity-stream, composer-placeholder) | `feat(cockpit): shell components — identity, approval, activity, composer placeholder (A.1)` |
-| 4 — page composition | 18 (cockpit-page) | `feat(cockpit): compose CockpitPage reading existing hooks (A.1)` |
-| 5 — page branching | 19 (agent-home-client branch + legacy file) | `feat(cockpit): branch /alex to CockpitPage; preserve legacy for riley/mira (A.1)` |
+| Commit                | Covers tasks                                                                                                                  | Subject                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1 — foundations       | 1–5 (tokens, types, kind-meta, alex-config, relative-age)                                                                     | `feat(cockpit): foundations — tokens, types, kind-meta, config, relative-age (A.1)`          |
+| 2 — adapters + status | 6–8 (legacy-pending-approval adapter, activity-kind-map, use-cockpit-status)                                                  | `feat(cockpit): adapters + status derivation (A.1)`                                          |
+| 3 — components        | 9–17 (dot, status-pill, topbar, identity, approval-card, approval-block, activity-row, activity-stream, composer-placeholder) | `feat(cockpit): shell components — identity, approval, activity, composer placeholder (A.1)` |
+| 4 — page composition  | 18 (cockpit-page)                                                                                                             | `feat(cockpit): compose CockpitPage reading existing hooks (A.1)`                            |
+| 5 — page branching    | 19 (agent-home-client branch + legacy file)                                                                                   | `feat(cockpit): branch /alex to CockpitPage; preserve legacy for riley/mira (A.1)`           |
 
 Within each group, **stage incrementally** (`git add ...`) but **defer `git commit` to the boundary task**. The per-task "Step 5: Commit" entries below show what to stage; the actual `git commit` invocation runs only at Tasks 5, 8, 17, 18, 19.
 
@@ -100,6 +100,7 @@ If a per-task commit-step block below shows `git commit -m ...` and the task is 
 ### Task 1: Tokens
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/tokens.ts`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/tokens.test.ts`
 
@@ -178,6 +179,7 @@ git commit -m "feat(cockpit): add page-local color tokens (A.1)"
 ### Task 2: Types
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/types.ts`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/types.test.ts`
 
@@ -224,7 +226,17 @@ describe("cockpit types", () => {
   });
 
   it("ActivityKind includes Alex kinds", () => {
-    const kinds: ActivityKind[] = ["booked", "qualified", "replied", "sent", "started", "connected", "waiting", "escalated", "passed"];
+    const kinds: ActivityKind[] = [
+      "booked",
+      "qualified",
+      "replied",
+      "sent",
+      "started",
+      "connected",
+      "waiting",
+      "escalated",
+      "passed",
+    ];
     expect(kinds).toHaveLength(9);
   });
 
@@ -390,6 +402,7 @@ git commit -m "feat(cockpit): add shared shell type definitions (A.1)"
 ### Task 3: Kind meta table
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/kind-meta.ts`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/kind-meta.test.ts`
 
@@ -403,14 +416,33 @@ import { KIND_META, lookupKindMeta } from "../kind-meta.js";
 describe("KIND_META", () => {
   it("includes all 9 Alex activity kinds", () => {
     const keys = Object.keys(KIND_META);
-    for (const k of ["booked", "qualified", "replied", "sent", "started", "connected", "waiting", "escalated", "passed"]) {
+    for (const k of [
+      "booked",
+      "qualified",
+      "replied",
+      "sent",
+      "started",
+      "connected",
+      "waiting",
+      "escalated",
+      "passed",
+    ]) {
       expect(keys).toContain(k);
     }
   });
 
   it("does NOT include Riley kinds at A.1 (Riley PR adds them)", () => {
     const keys = Object.keys(KIND_META);
-    for (const k of ["watching", "reviewing", "paused", "scaled", "rotated", "shifted", "restructured", "alert"]) {
+    for (const k of [
+      "watching",
+      "reviewing",
+      "paused",
+      "scaled",
+      "rotated",
+      "shifted",
+      "restructured",
+      "alert",
+    ]) {
       expect(keys).not.toContain(k);
     }
   });
@@ -462,15 +494,15 @@ export interface KindMetaEntry {
 // shell prop-type compatibility but are NOT populated here. Riley's PR adds the
 // entries when it wires Riley's activity stream.
 export const KIND_META: Partial<Record<ActivityKind, KindMetaEntry>> = {
-  booked:    { label: "BOOKED",    color: T.amberDeep, bg: T.amberSoft },
-  qualified: { label: "QUALIFIED", color: T.amber,     bg: T.amberSoft },
-  replied:   { label: "REPLIED",   color: T.ink2,      bg: "rgba(14,12,10,0.05)" },
-  sent:      { label: "SENT",      color: T.ink3,      bg: "rgba(14,12,10,0.04)" },
-  started:   { label: "STARTED",   color: T.ink3,      bg: "rgba(14,12,10,0.04)" },
-  connected: { label: "LEADS IN",  color: T.blue,      bg: "rgba(58,90,128,0.08)" },
-  waiting:   { label: "WAITING",   color: T.amberDeep, bg: T.amberSoft },
-  escalated: { label: "TO YOU",    color: T.red,       bg: "rgba(160,58,46,0.08)" },
-  passed:    { label: "PASSED",    color: T.ink4,      bg: "rgba(14,12,10,0.04)" },
+  booked: { label: "BOOKED", color: T.amberDeep, bg: T.amberSoft },
+  qualified: { label: "QUALIFIED", color: T.amber, bg: T.amberSoft },
+  replied: { label: "REPLIED", color: T.ink2, bg: "rgba(14,12,10,0.05)" },
+  sent: { label: "SENT", color: T.ink3, bg: "rgba(14,12,10,0.04)" },
+  started: { label: "STARTED", color: T.ink3, bg: "rgba(14,12,10,0.04)" },
+  connected: { label: "LEADS IN", color: T.blue, bg: "rgba(58,90,128,0.08)" },
+  waiting: { label: "WAITING", color: T.amberDeep, bg: T.amberSoft },
+  escalated: { label: "TO YOU", color: T.red, bg: "rgba(160,58,46,0.08)" },
+  passed: { label: "PASSED", color: T.ink4, bg: "rgba(14,12,10,0.04)" },
 };
 
 const NEUTRAL_FALLBACK: KindMetaEntry = {
@@ -508,6 +540,7 @@ git commit -m "feat(cockpit): add KIND_META table for activity rows (A.1)"
 ### Task 4: Alex config
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/alex-config.ts`
 - Test: `apps/dashboard/src/lib/cockpit/__tests__/alex-config.test.ts`
 
@@ -580,11 +613,7 @@ export const ALEX_CONFIG = {
     soft: "#F1E2C2",
     paper: "#FBF1D6",
   },
-  tabs: [
-    { name: "Alex", active: true },
-    { name: "Riley" },
-    { name: "Mira", muted: true },
-  ] as const,
+  tabs: [{ name: "Alex", active: true }, { name: "Riley" }, { name: "Mira", muted: true }] as const,
   missionSubtitle: "SDR · Tours pipeline",
   needsYouLabel: "Alex needs you",
 } as const;
@@ -626,6 +655,7 @@ git commit -m "feat(cockpit): add Alex static config + status helpers (A.1)"
 ### Task 5: Relative-age helper
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/relative-age.ts`
 - Test: `apps/dashboard/src/lib/cockpit/__tests__/relative-age.test.ts`
 
@@ -713,6 +743,7 @@ Files in this commit (staged across Tasks 1–5):
 ### Task 6: Legacy pending-approval → ApprovalView adapter
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/legacy-pending-approval-to-approval-view.ts`
 - Test: `apps/dashboard/src/lib/cockpit/__tests__/legacy-pending-approval-to-approval-view.test.ts`
 
@@ -746,7 +777,11 @@ describe("legacyPendingApprovalToApprovalView", () => {
     expect(view.urgency).toBe("this_week");
     expect(view.title).toBe("Send Jordan the founding-member rate?");
     expect(view.askedAt).toBe("4 min ago");
-    expect(view.primaryAction).toEqual({ kind: "respond", bindingHash: "hash_abc", verdict: "accept" });
+    expect(view.primaryAction).toEqual({
+      kind: "respond",
+      bindingHash: "hash_abc",
+      verdict: "accept",
+    });
     expect(view.kind).toBe("pricing");
   });
 
@@ -756,12 +791,18 @@ describe("legacyPendingApprovalToApprovalView", () => {
   });
 
   it("maps a critical-risk approval to immediate urgency", () => {
-    const view = legacyPendingApprovalToApprovalView(makePending({ riskCategory: "critical" }), NOW);
+    const view = legacyPendingApprovalToApprovalView(
+      makePending({ riskCategory: "critical" }),
+      NOW,
+    );
     expect(view.urgency).toBe("immediate");
   });
 
   it("carries the binding hash and id through to the view", () => {
-    const view = legacyPendingApprovalToApprovalView(makePending({ id: "appr_xyz", bindingHash: "hash_xyz" }), NOW);
+    const view = legacyPendingApprovalToApprovalView(
+      makePending({ id: "appr_xyz", bindingHash: "hash_xyz" }),
+      NOW,
+    );
     expect(view.id).toBe("appr_xyz");
     if (view.primaryAction.kind === "respond") {
       expect(view.primaryAction.bindingHash).toBe("hash_xyz");
@@ -853,6 +894,7 @@ git commit -m "feat(cockpit): add PendingApproval → ApprovalView adapter (A.1)
 ### Task 7: Activity kind map
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/activity-kind-map.ts`
 - Test: `apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts`
 
@@ -888,7 +930,10 @@ describe("translatedActionToActivityRow", () => {
   });
 
   it("maps lifecycle qualified events → qualified", () => {
-    const row = translatedActionToActivityRow(makeAction({ eventType: "lifecycle.qualified" }), NOW);
+    const row = translatedActionToActivityRow(
+      makeAction({ eventType: "lifecycle.qualified" }),
+      NOW,
+    );
     expect(row.kind).toBe("qualified");
   });
 
@@ -913,9 +958,15 @@ describe("translatedActionToActivityRow", () => {
   });
 
   it("renders absolute time HH:MM for same-day, weekday for older", () => {
-    const sameDay = translatedActionToActivityRow(makeAction({ timestamp: "2026-05-14T11:42:00Z" }), NOW);
+    const sameDay = translatedActionToActivityRow(
+      makeAction({ timestamp: "2026-05-14T11:42:00Z" }),
+      NOW,
+    );
     expect(sameDay.time).toMatch(/^\d{2}:\d{2}$/);
-    const oldRow = translatedActionToActivityRow(makeAction({ timestamp: "2026-05-09T11:42:00Z" }), NOW);
+    const oldRow = translatedActionToActivityRow(
+      makeAction({ timestamp: "2026-05-09T11:42:00Z" }),
+      NOW,
+    );
     expect(oldRow.time).toBe("Sat");
   });
 });
@@ -936,8 +987,14 @@ import type { ActivityKind, ActivityRow } from "@/components/cockpit/types.js";
 
 const KIND_RULES: Array<{ test: (e: string) => boolean; kind: ActivityKind }> = [
   { test: (e) => e.startsWith("booking."), kind: "booked" },
-  { test: (e) => e === "lifecycle.qualified" || e === "lifecycle.qualified.advanced", kind: "qualified" },
-  { test: (e) => e.startsWith("lifecycle.disqualified") || e === "lifecycle.passed", kind: "passed" },
+  {
+    test: (e) => e === "lifecycle.qualified" || e === "lifecycle.qualified.advanced",
+    kind: "qualified",
+  },
+  {
+    test: (e) => e.startsWith("lifecycle.disqualified") || e === "lifecycle.passed",
+    kind: "passed",
+  },
   { test: (e) => e === "approval.created", kind: "waiting" },
   { test: (e) => e.startsWith("escalation."), kind: "escalated" },
   { test: (e) => e === "message.sent" || e === "message.replied", kind: "replied" },
@@ -999,6 +1056,7 @@ git commit -m "feat(cockpit): add TranslatedAction → ActivityRow adapter (A.1)
 ### Task 8: Status derivation hook
 
 **Files:**
+
 - Create: `apps/dashboard/src/hooks/use-cockpit-status.ts`
 - Test: `apps/dashboard/src/hooks/__tests__/use-cockpit-status.test.ts`
 
@@ -1013,38 +1071,102 @@ const NOW = new Date("2026-05-14T12:00:00Z");
 
 describe("deriveAlexStatusA1", () => {
   it("returns HALTED when halted is true regardless of other inputs", () => {
-    expect(deriveAlexStatusA1({ halted: true, pendingApprovals: 5, recentActivityAt: NOW, inQuietHours: false, now: NOW })).toBe("HALTED");
+    expect(
+      deriveAlexStatusA1({
+        halted: true,
+        pendingApprovals: 5,
+        recentActivityAt: NOW,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("HALTED");
   });
 
   it("returns WAITING when one or more approvals are pending", () => {
-    expect(deriveAlexStatusA1({ halted: false, pendingApprovals: 1, recentActivityAt: null, inQuietHours: false, now: NOW })).toBe("WAITING");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 1,
+        recentActivityAt: null,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("WAITING");
   });
 
   it("returns WORKING when recent activity exists within the 15-minute window", () => {
     const recent = new Date("2026-05-14T11:50:00Z");
-    expect(deriveAlexStatusA1({ halted: false, pendingApprovals: 0, recentActivityAt: recent, inQuietHours: false, now: NOW })).toBe("WORKING");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: recent,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("WORKING");
   });
 
   it("returns IDLE when activity is older than 15 minutes", () => {
     const old = new Date("2026-05-14T11:30:00Z");
-    expect(deriveAlexStatusA1({ halted: false, pendingApprovals: 0, recentActivityAt: old, inQuietHours: false, now: NOW })).toBe("IDLE");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: old,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("IDLE");
   });
 
   it("returns IDLE when there is no recent activity", () => {
-    expect(deriveAlexStatusA1({ halted: false, pendingApprovals: 0, recentActivityAt: null, inQuietHours: false, now: NOW })).toBe("IDLE");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: null,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("IDLE");
   });
 
   it("returns IDLE even when in quiet hours (no WORKING signal)", () => {
-    expect(deriveAlexStatusA1({ halted: false, pendingApprovals: 0, recentActivityAt: null, inQuietHours: true, now: NOW })).toBe("IDLE");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 0,
+        recentActivityAt: null,
+        inQuietHours: true,
+        now: NOW,
+      }),
+    ).toBe("IDLE");
   });
 
   it("prioritizes HALTED over WAITING", () => {
-    expect(deriveAlexStatusA1({ halted: true, pendingApprovals: 3, recentActivityAt: null, inQuietHours: false, now: NOW })).toBe("HALTED");
+    expect(
+      deriveAlexStatusA1({
+        halted: true,
+        pendingApprovals: 3,
+        recentActivityAt: null,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("HALTED");
   });
 
   it("prioritizes WAITING over WORKING", () => {
     const recent = new Date("2026-05-14T11:55:00Z");
-    expect(deriveAlexStatusA1({ halted: false, pendingApprovals: 1, recentActivityAt: recent, inQuietHours: false, now: NOW })).toBe("WAITING");
+    expect(
+      deriveAlexStatusA1({
+        halted: false,
+        pendingApprovals: 1,
+        recentActivityAt: recent,
+        inQuietHours: false,
+        now: NOW,
+      }),
+    ).toBe("WAITING");
   });
 });
 ```
@@ -1132,6 +1254,7 @@ Files in this commit (staged across Tasks 6–8):
 ### Task 9: Dot primitive
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/dot.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/dot.test.tsx`
 
@@ -1184,8 +1307,18 @@ export interface DotProps {
 }
 
 export function Dot({ color, pulse, size = 7 }: DotProps) {
-  const wrapStyle: CSSProperties = { position: "relative", display: "inline-block", width: size, height: size };
-  const layerStyle: CSSProperties = { position: "absolute", inset: 0, borderRadius: "50%", background: color };
+  const wrapStyle: CSSProperties = {
+    position: "relative",
+    display: "inline-block",
+    width: size,
+    height: size,
+  };
+  const layerStyle: CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    borderRadius: "50%",
+    background: color,
+  };
   return (
     <span style={wrapStyle}>
       {pulse && <span style={{ ...layerStyle, animation: "ck-pulse 1.6s ease-out infinite" }} />}
@@ -1213,6 +1346,7 @@ git commit -m "feat(cockpit): add Dot primitive (A.1)"
 ### Task 10: Status pill
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/status-pill.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/status-pill.test.tsx`
 
@@ -1307,6 +1441,7 @@ git commit -m "feat(cockpit): add StatusPill component (A.1)"
 ### Task 11: Topbar
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/topbar.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/topbar.test.tsx`
 
@@ -1376,7 +1511,13 @@ function Mark() {
       <rect x="1.5" y="1.5" width="19" height="19" rx="4" fill={T.ink} />
       <circle cx="7" cy="11" r="1.6" fill="#fff" />
       <circle cx="15" cy="11" r="1.6" fill="#fff" />
-      <path d="M 7 11 Q 11 6.5, 15 11" stroke={T.amber} strokeWidth="1.4" fill="none" strokeLinecap="round" />
+      <path
+        d="M 7 11 Q 11 6.5, 15 11"
+        stroke={T.amber}
+        strokeWidth="1.4"
+        fill="none"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -1416,14 +1557,21 @@ export function Topbar({ paletteEnabled, onOpenPalette, compact = false }: Topba
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Mark />
           {!compact && (
-            <span style={{ fontWeight: 600, fontSize: 14, color: T.ink, letterSpacing: "-0.005em" }}>
+            <span
+              style={{ fontWeight: 600, fontSize: 14, color: T.ink, letterSpacing: "-0.005em" }}
+            >
               Switchboard
             </span>
           )}
         </div>
         <nav style={{ display: "flex", gap: 2 }}>
           {ALEX_CONFIG.tabs.map((t) => (
-            <Tab key={t.name} name={t.name} active={"active" in t ? t.active : false} muted={"muted" in t ? t.muted : false} />
+            <Tab
+              key={t.name}
+              name={t.name}
+              active={"active" in t ? t.active : false}
+              muted={"muted" in t ? t.muted : false}
+            />
           ))}
         </nav>
       </div>
@@ -1499,6 +1647,7 @@ git commit -m "feat(cockpit): add Topbar with brand mark + agent tabs (A.1)"
 ### Task 12: Identity row
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/identity.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/identity.test.tsx`
 
@@ -1512,32 +1661,74 @@ import { Identity } from "../identity.js";
 
 describe("Identity", () => {
   it("renders the agent name 'Alex' and a status pill", () => {
-    render(<Identity statusKey="WORKING" halted={false} subtitle="SDR · Tours pipeline · HotPod" line={null} onHaltToggle={() => {}} />);
+    render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="SDR · Tours pipeline · HotPod"
+        line={null}
+        onHaltToggle={() => {}}
+      />,
+    );
     expect(screen.getByText("Alex")).toBeInTheDocument();
     expect(screen.getByText("WORKING")).toBeInTheDocument();
   });
 
   it("renders an optional greeting line when provided", () => {
-    render(<Identity statusKey="WORKING" halted={false} subtitle="SDR · Tours pipeline · HotPod" line="Three leads in motion." onHaltToggle={() => {}} />);
+    render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="SDR · Tours pipeline · HotPod"
+        line="Three leads in motion."
+        onHaltToggle={() => {}}
+      />,
+    );
     expect(screen.getByText("Three leads in motion.")).toBeInTheDocument();
   });
 
   it("renders Halt button when not halted; Resume when halted", () => {
-    const { rerender } = render(<Identity statusKey="WORKING" halted={false} subtitle="x" line={null} onHaltToggle={() => {}} />);
+    const { rerender } = render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="x"
+        line={null}
+        onHaltToggle={() => {}}
+      />,
+    );
     expect(screen.getByRole("button", { name: /halt/i })).toBeInTheDocument();
-    rerender(<Identity statusKey="WORKING" halted subtitle="x" line={null} onHaltToggle={() => {}} />);
+    rerender(
+      <Identity statusKey="WORKING" halted subtitle="x" line={null} onHaltToggle={() => {}} />,
+    );
     expect(screen.getByRole("button", { name: /resume/i })).toBeInTheDocument();
   });
 
   it("invokes onHaltToggle when the halt button is clicked", () => {
     const handler = vi.fn();
-    render(<Identity statusKey="WORKING" halted={false} subtitle="x" line={null} onHaltToggle={handler} />);
+    render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="x"
+        line={null}
+        onHaltToggle={handler}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /halt/i }));
     expect(handler).toHaveBeenCalledOnce();
   });
 
   it("renders the subtitle as plain non-interactive text at A.1", () => {
-    const { container } = render(<Identity statusKey="WORKING" halted={false} subtitle="SDR · Tours pipeline" line={null} onHaltToggle={() => {}} />);
+    const { container } = render(
+      <Identity
+        statusKey="WORKING"
+        halted={false}
+        subtitle="SDR · Tours pipeline"
+        line={null}
+        onHaltToggle={() => {}}
+      />,
+    );
     expect(screen.getByText("SDR · Tours pipeline")).toBeInTheDocument();
     // No button or anchor wrapping the subtitle — popover lands at A.2.
     expect(container.querySelector("[data-mission-trigger]")).toBeNull();
@@ -1616,7 +1807,14 @@ export function Identity({
       <AvatarFrame size={compact ? 52 : 64} />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontSize: compact ? 18 : 22, fontWeight: 600, color: T.ink, letterSpacing: "-0.015em" }}>
+          <span
+            style={{
+              fontSize: compact ? 18 : 22,
+              fontWeight: 600,
+              color: T.ink,
+              letterSpacing: "-0.015em",
+            }}
+          >
             {ALEX_CONFIG.name}
           </span>
           <StatusPill statusKey={statusKey} halted={halted} />
@@ -1687,6 +1885,7 @@ git commit -m "feat(cockpit): add Identity row with status pill + halt button (A
 ### Task 13: Approval card
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/approval-card.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/approval-card.test.tsx`
 
@@ -1799,7 +1998,14 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
         {total > 1 && (
           <>
             <span style={{ flex: 1 }} />
-            <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: T.amberDeep, fontWeight: 600 }}>
+            <span
+              style={{
+                fontFamily: "JetBrains Mono",
+                fontSize: 11,
+                color: T.amberDeep,
+                fontWeight: 600,
+              }}
+            >
               {idx + 1} of {total}
             </span>
           </>
@@ -1818,7 +2024,15 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
         {data.title}
       </h2>
       {data.body && (
-        <p style={{ margin: "8px 0 0", maxWidth: 640, fontSize: 13.5, lineHeight: 1.5, color: T.ink2 }}>
+        <p
+          style={{
+            margin: "8px 0 0",
+            maxWidth: 640,
+            fontSize: 13.5,
+            lineHeight: 1.5,
+            color: T.ink2,
+          }}
+        >
           {data.body}
         </p>
       )}
@@ -1839,7 +2053,9 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
           {data.quote}
           <span style={{ color: T.amber, fontWeight: 600, marginLeft: 3 }}>"</span>
           {data.quoteFrom && (
-            <div style={{ marginTop: 4, fontFamily: "JetBrains Mono", fontSize: 10.5, color: T.ink4 }}>
+            <div
+              style={{ marginTop: 4, fontFamily: "JetBrains Mono", fontSize: 10.5, color: T.ink4 }}
+            >
               — {data.quoteFrom}
             </div>
           )}
@@ -1858,7 +2074,9 @@ export function ApprovalCard({ data, idx, total, onResolve, compact = false }: A
           ⚠ {data.risk}
         </div>
       )}
-      <div style={{ marginTop: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <div
+        style={{ marginTop: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
+      >
         <button
           onClick={() => onResolve("accept", idx)}
           style={{
@@ -1915,6 +2133,7 @@ git commit -m "feat(cockpit): add ApprovalCard component (A.1)"
 ### Task 14: Approval block
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/approval-block.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/approval-block.test.tsx`
 
@@ -2030,6 +2249,7 @@ git commit -m "feat(cockpit): add ApprovalBlock array-tolerant wrapper (A.1)"
 ### Task 15: Activity row
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/activity-row.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/activity-row.test.tsx`
 
@@ -2044,7 +2264,11 @@ import type { ActivityRow as ActivityRowType } from "../types.js";
 
 describe("ActivityRow", () => {
   it("renders time, kind label, and head", () => {
-    const item: ActivityRowType = { time: "11:42", kind: "booked", head: "Maya R. confirmed Saturday tour" };
+    const item: ActivityRowType = {
+      time: "11:42",
+      kind: "booked",
+      head: "Maya R. confirmed Saturday tour",
+    };
     render(<ActivityRow item={item} open={false} toggle={() => {}} />);
     expect(screen.getByText("11:42")).toBeInTheDocument();
     expect(screen.getByText("BOOKED")).toBeInTheDocument();
@@ -2161,6 +2385,7 @@ git commit -m "feat(cockpit): add ActivityRow (collapsed-only at A.1) (A.1)"
 ### Task 16: Activity stream
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/activity-stream.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/activity-stream.test.tsx`
 
@@ -2339,6 +2564,7 @@ git commit -m "feat(cockpit): add ActivityStream with filter buttons (A.1)"
 ### Task 17: Composer placeholder
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/composer-placeholder.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/composer-placeholder.test.tsx`
 
@@ -2446,6 +2672,7 @@ Files in this commit (staged across Tasks 9–17):
 ### Task 18: Cockpit page composition
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/cockpit-page.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx`
 
@@ -2569,12 +2796,15 @@ export function CockpitPage() {
 
   const now = useMemo(() => new Date(), []);
 
-  const approvals = (approvalsQ.data?.approvals ?? []).map((a) => legacyPendingApprovalToApprovalView(a, now));
+  const approvals = (approvalsQ.data?.approvals ?? []).map((a) =>
+    legacyPendingApprovalToApprovalView(a, now),
+  );
   const activityRows = (activityQ.data?.actions ?? [])
     .filter((a) => a.agentRole === "alex" || a.agentRole === "unknown")
     .map((a) => translatedActionToActivityRow(a, now));
 
-  const recentActivityAt = activityRows.length > 0 ? new Date(activityQ.data!.actions[0]!.timestamp) : null;
+  const recentActivityAt =
+    activityRows.length > 0 ? new Date(activityQ.data!.actions[0]!.timestamp) : null;
 
   const statusKey = useCockpitStatusAlex({
     halted: haltCtx.halted,
@@ -2583,7 +2813,10 @@ export function CockpitPage() {
   });
 
   const line = greetingQ.data?.segments
-    ? greetingQ.data.segments.map((s) => s.text).join(" ").trim() || null
+    ? greetingQ.data.segments
+        .map((s) => s.text)
+        .join(" ")
+        .trim() || null
     : null;
 
   return (
@@ -2645,6 +2878,7 @@ git commit -m "feat(cockpit): compose CockpitPage reading existing hooks (A.1)"
 ### Task 19: Page branching
 
 **Files:**
+
 - Modify: `apps/dashboard/src/app/(auth)/[agentKey]/agent-home-client.tsx`
 - Create: `apps/dashboard/src/app/(auth)/[agentKey]/legacy-agent-home-client.tsx`
 - Modify: `apps/dashboard/src/app/(auth)/[agentKey]/__tests__/agent-home-client.test.tsx`
@@ -2824,6 +3058,7 @@ pnpm dev
 ```
 
 Navigate to:
+
 - `http://localhost:3002/alex` — should render the cockpit with amber accent, Alex tab active, status pill `IDLE` (or `WAITING` if seed data has pending approvals).
 - `http://localhost:3002/riley` — should render the legacy block-based home unchanged.
 

@@ -889,8 +889,8 @@ Expected: PASS (3/3 — STEPS order, command contract, dbRequired flag gating).
 - [ ] Stop Postgres and run again: `pnpm local:setup`
       Expected: runs install/setup-env/build; prints `SKIPPED (no DB)` for db:migrate, db:seed, local:verify:fast; finishes with:
       ``     ✗ DB not reachable. Local setup is incomplete.
-      Start Postgres and re-run `pnpm local:setup`.
-    ``
+    Start Postgres and re-run `pnpm local:setup`.
+  ``
       Exit code: **non-zero (1)**. This is the "no silent green" contract — if setup couldn't complete, the command must fail.
 
 ### Step 7: Commit

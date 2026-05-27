@@ -4,11 +4,12 @@
 
 **Goal:** Land the pilot deployment implementation as three reviewable PRs after cleaning up four orphan remote branches and one stale worktree.
 
-**Architecture:** Operational / sequencing plan. The application-code work itself is specified in `docs/superpowers/plans/2026-05-15-deployment-hosting-implementation.md` (PR #506 — 10 tasks). This plan only governs *how* those 10 tasks are partitioned into PRs and what cleanup happens first. **Tasks 1–2 do cleanup. Task 3 is the merge gate** on the spec PR (#504) and implementation-plan PR (#506). **Tasks 4–6 are the three phased implementation PRs**, each consuming a named subset of the implementation plan.
+**Architecture:** Operational / sequencing plan. The application-code work itself is specified in `docs/superpowers/plans/2026-05-15-deployment-hosting-implementation.md` (PR #506 — 10 tasks). This plan only governs _how_ those 10 tasks are partitioned into PRs and what cleanup happens first. **Tasks 1–2 do cleanup. Task 3 is the merge gate** on the spec PR (#504) and implementation-plan PR (#506). **Tasks 4–6 are the three phased implementation PRs**, each consuming a named subset of the implementation plan.
 
 **Tech Stack:** `git`, `git worktree`, `gh` CLI, `pnpm`. No application code changes — those live in the implementation plan PR #506.
 
 **Related artifacts:**
+
 - Spec: `docs/superpowers/specs/2026-05-15-deployment-hosting-design.md` (PR #504)
 - Implementation plan: `docs/superpowers/plans/2026-05-15-deployment-hosting-implementation.md` (PR #506)
 
@@ -22,12 +23,12 @@
 
 **Branches to delete:**
 
-| Branch | Merged via PR | Merge commit on main |
-|---|---|---|
-| `feat/whatsapp-send-test-backend` | #490 | `f5e03b08` |
-| `feat/whatsapp-send-test-dashboard` | #502 | `a7a9304d` |
-| `docs/whatsapp-send-test-slice-2-plan` | #483 | `0214c022` |
-| `docs/whatsapp-send-test-plan-corrections` | #495 | `9a0b85de` |
+| Branch                                     | Merged via PR | Merge commit on main |
+| ------------------------------------------ | ------------- | -------------------- |
+| `feat/whatsapp-send-test-backend`          | #490          | `f5e03b08`           |
+| `feat/whatsapp-send-test-dashboard`        | #502          | `a7a9304d`           |
+| `docs/whatsapp-send-test-slice-2-plan`     | #483          | `0214c022`           |
+| `docs/whatsapp-send-test-plan-corrections` | #495          | `9a0b85de`           |
 
 ---
 
@@ -153,6 +154,7 @@ git pull --ff-only origin main
 ```
 
 Expected: a fast-forward update including the spec + plan merge commits. The local `main` now contains:
+
 - `docs/superpowers/specs/2026-05-15-deployment-hosting-design.md`
 - `docs/superpowers/plans/2026-05-15-deployment-hosting-implementation.md`
 
@@ -169,6 +171,7 @@ Confirm with `ls docs/superpowers/specs/2026-05-15-* docs/superpowers/plans/2026
 **Branch:** `feat/deploy-render-foundations`
 **Worktree:** `/Users/jasonli/switchboard/.claude/worktrees/feat+deploy-render-foundations`
 **Expected files at PR open:**
+
 - Modified: `packages/db/package.json`
 - New: `render.yaml`, `docs/runbooks/production-urls.md`, `docs/runbooks/secret-rotation.md`, `scripts/smoke-prod.sh`
 - Conditionally new (only if implementation plan Task 5 Step 5.2 ran): `Dockerfile.api`, `Dockerfile.chat`
@@ -286,6 +289,7 @@ Expected: worktree removed, local branch deleted, remote-tracking ref pruned (th
 **Branch:** `feat/chat-deep-readiness`
 **Worktree:** `/Users/jasonli/switchboard/.claude/worktrees/feat+chat-deep-readiness`
 **Expected files at PR open:**
+
 - New: `apps/chat/src/routes/health.ts`, `apps/chat/src/routes/__tests__/health.test.ts`
 - Modified: `apps/chat/src/main.ts`
 
@@ -380,6 +384,7 @@ git fetch --prune origin
 **Branch:** `chore/rename-sentry-dsn-to-server`
 **Worktree:** `/Users/jasonli/switchboard/.claude/worktrees/chore+rename-sentry-dsn-to-server`
 **Expected files at PR open:**
+
 - Modified: `apps/api/src/bootstrap/sentry.ts`, `apps/chat/src/bootstrap/sentry.ts`, `apps/chat/src/__tests__/sentry-bootstrap.test.ts`, `.env.example`
 
 ---

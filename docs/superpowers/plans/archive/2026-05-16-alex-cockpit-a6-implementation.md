@@ -9,6 +9,7 @@
 **Tech Stack:** No new code. `pnpm` for test/lint/build/typecheck/format. `rg` for zero-reference grep. `git rm` for deletions.
 
 **Parent docs:**
+
 - [`docs/superpowers/plans/2026-05-16-alex-cockpit-a6-slice-brief.md`](./2026-05-16-alex-cockpit-a6-slice-brief.md) — scope, what-ships-vs-defers, risks, design decisions, zero-reference investigation results.
 - [`docs/superpowers/specs/2026-05-14-alex-cockpit-home-design.md`](../specs/2026-05-14-alex-cockpit-home-design.md) — §A.6 (lines 83-93), §"Candidate deletion list for A.6 cleanup" (lines 953-971), §Scope §"Retirement of the existing block components" (line 198), §Acceptance criterion §14 (line 1021).
 - [`docs/superpowers/plans/2026-05-15-alex-cockpit-a5-implementation.md`](./2026-05-15-alex-cockpit-a5-implementation.md) — structural template (boundary locks, precondition checks, pre-merge gates pattern).
@@ -139,36 +140,36 @@ Capture the four coverage percentages (statements / branches / functions / lines
 
 ### Files deleted
 
-| Path | Notes |
-|---|---|
-| `apps/dashboard/src/components/agent-home/agent-home-shell.tsx` | Umbrella consumer; zero external consumers. Deleted first. |
-| `apps/dashboard/src/components/agent-home/__tests__/agent-home-shell.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/agent-block-boundary.tsx` | Block-tree primitive; only used by shell. |
-| `apps/dashboard/src/components/agent-home/__tests__/agent-block-boundary.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/greeting-block.tsx` | Only used by shell. |
-| `apps/dashboard/src/components/agent-home/__tests__/greeting-block.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/needs-you-block.tsx` | Only used by shell. |
-| `apps/dashboard/src/components/agent-home/__tests__/needs-you-block.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/wins-block.tsx` | Only used by shell. |
-| `apps/dashboard/src/components/agent-home/__tests__/wins-block.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/metrics-block.tsx` | Only used by shell. |
-| `apps/dashboard/src/components/agent-home/__tests__/metrics-block.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/pipeline-block.tsx` | Only used by shell. |
-| `apps/dashboard/src/components/agent-home/__tests__/pipeline-block.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/prose-segments.tsx` | Only used by greeting/metrics/wins-block. |
-| `apps/dashboard/src/components/agent-home/__tests__/prose-segments.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/sparkline.tsx` | Only used by metrics-block. |
-| `apps/dashboard/src/components/agent-home/__tests__/sparkline.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/fixture-folio-badge.tsx` | Only used by deleted blocks. |
-| `apps/dashboard/src/components/agent-home/__tests__/fixture-folio-badge.test.tsx` | Colocated test. |
-| `apps/dashboard/src/components/agent-home/portrait/alex.tsx` | Only used by greeting-block. |
-| `apps/dashboard/src/components/agent-home/portrait/riley.tsx` | Only used by greeting-block. |
-| `apps/dashboard/src/hooks/use-agent-wins.ts` | Only consumed by shell. |
-| `apps/dashboard/src/hooks/__tests__/use-agent-wins.test.tsx` | Colocated test. |
-| `apps/dashboard/src/hooks/use-agent-pipeline.ts` | Only consumed by shell. |
-| `apps/dashboard/src/hooks/__tests__/use-agent-pipeline.test.tsx` | Colocated test. |
-| `apps/dashboard/src/lib/cockpit/activity-kind-map.ts` | Exports `translatedActionToActivityRow`; only consumer is its own test (verified 2026-05-15). |
-| `apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts` | Colocated test. |
+| Path                                                                               | Notes                                                                                         |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/components/agent-home/agent-home-shell.tsx`                    | Umbrella consumer; zero external consumers. Deleted first.                                    |
+| `apps/dashboard/src/components/agent-home/__tests__/agent-home-shell.test.tsx`     | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/agent-block-boundary.tsx`                | Block-tree primitive; only used by shell.                                                     |
+| `apps/dashboard/src/components/agent-home/__tests__/agent-block-boundary.test.tsx` | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/greeting-block.tsx`                      | Only used by shell.                                                                           |
+| `apps/dashboard/src/components/agent-home/__tests__/greeting-block.test.tsx`       | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/needs-you-block.tsx`                     | Only used by shell.                                                                           |
+| `apps/dashboard/src/components/agent-home/__tests__/needs-you-block.test.tsx`      | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/wins-block.tsx`                          | Only used by shell.                                                                           |
+| `apps/dashboard/src/components/agent-home/__tests__/wins-block.test.tsx`           | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/metrics-block.tsx`                       | Only used by shell.                                                                           |
+| `apps/dashboard/src/components/agent-home/__tests__/metrics-block.test.tsx`        | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/pipeline-block.tsx`                      | Only used by shell.                                                                           |
+| `apps/dashboard/src/components/agent-home/__tests__/pipeline-block.test.tsx`       | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/prose-segments.tsx`                      | Only used by greeting/metrics/wins-block.                                                     |
+| `apps/dashboard/src/components/agent-home/__tests__/prose-segments.test.tsx`       | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/sparkline.tsx`                           | Only used by metrics-block.                                                                   |
+| `apps/dashboard/src/components/agent-home/__tests__/sparkline.test.tsx`            | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/fixture-folio-badge.tsx`                 | Only used by deleted blocks.                                                                  |
+| `apps/dashboard/src/components/agent-home/__tests__/fixture-folio-badge.test.tsx`  | Colocated test.                                                                               |
+| `apps/dashboard/src/components/agent-home/portrait/alex.tsx`                       | Only used by greeting-block.                                                                  |
+| `apps/dashboard/src/components/agent-home/portrait/riley.tsx`                      | Only used by greeting-block.                                                                  |
+| `apps/dashboard/src/hooks/use-agent-wins.ts`                                       | Only consumed by shell.                                                                       |
+| `apps/dashboard/src/hooks/__tests__/use-agent-wins.test.tsx`                       | Colocated test.                                                                               |
+| `apps/dashboard/src/hooks/use-agent-pipeline.ts`                                   | Only consumed by shell.                                                                       |
+| `apps/dashboard/src/hooks/__tests__/use-agent-pipeline.test.tsx`                   | Colocated test.                                                                               |
+| `apps/dashboard/src/lib/cockpit/activity-kind-map.ts`                              | Exports `translatedActionToActivityRow`; only consumer is its own test (verified 2026-05-15). |
+| `apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts`               | Colocated test.                                                                               |
 
 **Total: 28 file deletions in the manifest above. The two empty directories (`apps/dashboard/src/components/agent-home/portrait/` and `apps/dashboard/src/components/agent-home/`) disappear naturally — git does not track empty directories — but the implementation plan confirms with `ls`.**
 
@@ -252,6 +253,7 @@ Tasks are ordered **leaf-first from the consumer side**: the umbrella `agent-hom
 ### Task 1: Capture full zero-reference snapshot
 
 **Files:**
+
 - None modified. Records the grep output for the audit trail.
 
 - [ ] **Step 1: Run the full subgraph grep and save the output.**
@@ -299,6 +301,7 @@ The captured outputs above are the slice's zero-reference audit trail. No commit
 This is the load-bearing delete: removing `agent-home-shell.tsx` orphans every block file in one wave, because every block's only non-self consumer is the shell. After this task, the block files are deletable in any order.
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/agent-home-shell.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/agent-home-shell.test.tsx`
 
@@ -350,6 +353,7 @@ components/agent-home/agent-home-shell across the repo."
 `agent-block-boundary.tsx` is a layout primitive used only by `agent-home-shell.tsx` (deleted in Task 2). After Task 2, its only consumer is gone.
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/agent-block-boundary.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/agent-block-boundary.test.tsx`
 
@@ -397,6 +401,7 @@ prior commit). Zero-reference verified."
 ### Task 4: Delete `greeting-block.tsx` and its test
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/greeting-block.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/greeting-block.test.tsx`
 
@@ -440,6 +445,7 @@ verified."
 ### Task 5: Delete `needs-you-block.tsx` and its test
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/needs-you-block.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/needs-you-block.test.tsx`
 
@@ -484,6 +490,7 @@ directly; no fallout for those. Zero-reference verified."
 ### Task 6: Delete `wins-block.tsx` and its test
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/wins-block.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/wins-block.test.tsx`
 
@@ -522,6 +529,7 @@ verified."
 ### Task 7: Delete `metrics-block.tsx` and its test
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/metrics-block.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/metrics-block.test.tsx`
 
@@ -561,6 +569,7 @@ directly and are unaffected. Zero-reference verified."
 ### Task 8: Delete `pipeline-block.tsx` and its test
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/pipeline-block.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/pipeline-block.test.tsx`
 
@@ -609,6 +618,7 @@ Zero-reference verified."
 These three files were used only by the deleted block files. After Task 8, they are fully orphaned.
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/prose-segments.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/__tests__/prose-segments.test.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/sparkline.tsx`
@@ -666,6 +676,7 @@ Zero-reference verified for all three."
 ### Task 10: Delete portrait sprites + clean up empty directories
 
 **Files:**
+
 - Delete: `apps/dashboard/src/components/agent-home/portrait/alex.tsx`
 - Delete: `apps/dashboard/src/components/agent-home/portrait/riley.tsx`
 
@@ -725,6 +736,7 @@ Zero-reference verified."
 After Task 2 deleted `agent-home-shell.tsx`, both of these hooks are fully orphaned.
 
 **Files:**
+
 - Delete: `apps/dashboard/src/hooks/use-agent-wins.ts`
 - Delete: `apps/dashboard/src/hooks/__tests__/use-agent-wins.test.tsx`
 - Delete: `apps/dashboard/src/hooks/use-agent-pipeline.ts`
@@ -788,6 +800,7 @@ a separate post-A.6 follow-up under the same zero-reference discipline."
 Important boundary: `activity-kind-map.ts` imports `TranslatedAction` from `@/hooks/use-agent-activity` as a type-only import. Deleting `activity-kind-map.ts` does NOT orphan `use-agent-activity.ts` — that hook stays in place because Riley-side hooks and translator still consume it.
 
 **Files:**
+
 - Delete: `apps/dashboard/src/lib/cockpit/activity-kind-map.ts`
 - Delete: `apps/dashboard/src/lib/cockpit/__tests__/activity-kind-map.test.ts`
 
@@ -892,7 +905,7 @@ git fetch origin
 git diff origin/main -- apps/dashboard/src/components/cockpit apps/dashboard/src/hooks | grep "^[+-].*\(Recommendation\|AuditEntry\|@switchboard/db\|@prisma\)" || echo "(no audit-domain import delta)"
 ```
 
-Expected: either no diff lines containing audit-domain identifiers, or only `-` (removed) lines. **Zero `+` (added) lines.** A.6 must never *add* an audit-domain import.
+Expected: either no diff lines containing audit-domain identifiers, or only `-` (removed) lines. **Zero `+` (added) lines.** A.6 must never _add_ an audit-domain import.
 
 - [ ] **Step 3: Surface-agnostic backend grep gate.**
 
@@ -910,6 +923,7 @@ git diff origin/main..HEAD --diff-filter=M
 ```
 
 Expected:
+
 - `--diff-filter=A` (added): empty. A.6 ships no new files. The two docs files at `docs/superpowers/plans/2026-05-16-alex-cockpit-a6-*.md` are on the **docs branch** (`docs/alex-cockpit-a6-plan`), not on the implementation branch — they merge to `main` separately as the planning PR.
 - `--diff-filter=M` (modified): empty. A.6 modifies no files. Every change is a deletion.
 
@@ -937,7 +951,7 @@ pnpm --filter @switchboard/dashboard test -- --coverage 2>&1 | tail -30
 
 Expected: each of statements / branches / functions / lines stays at or above the `CLAUDE.md` thresholds (55 / 50 / 52 / 55). If any threshold dips, halt. Per slice brief §Risks §2 and boundary lock #7: no "lower the floor."
 
-Compare against the baseline captured in §Precondition checks §Step 0h. A delta within ±1pp is normal noise; a larger swing in either direction is worth a sanity check (a sharp *increase* often means a swath of low-coverage tests was deleted, which is fine; a sharp *decrease* means a uncovered file is now a higher share of remaining code, which can dip a threshold).
+Compare against the baseline captured in §Precondition checks §Step 0h. A delta within ±1pp is normal noise; a larger swing in either direction is worth a sanity check (a sharp _increase_ often means a swath of low-coverage tests was deleted, which is fine; a sharp _decrease_ means a uncovered file is now a higher share of remaining code, which can dip a threshold).
 
 - [ ] **Step 7: Prettier format check.**
 
@@ -1023,19 +1037,19 @@ Alex Cockpit Phase A (6/6). The umbrella spec at `docs/superpowers/specs/2026-05
 
 These are the slice brief's risks, with the implementation-side mitigations called out at the relevant tasks:
 
-| # | Risk | Mitigation | Task |
-|---|---|---|---|
-| 1 | Hidden caller has landed since 2026-05-15 | Per-file zero-reference grep before every `rm`; full-subgraph grep at Step 0f as a precondition | 0f, 1, 2–10 |
-| 2 | Coverage dips below thresholds after deletion | Coverage gate compares against baseline (Step 0h); slice halts on dip; no "lower the floor" | 0h, 13.6 |
-| 3 | Test fixture imports from a deleted file | Scoped test run after each deletion; broken-import surfaces fast | 2–10 |
-| 4 | HaltProvider re-root edge case re-emerges | Boundary lock #3; no edit to `halt-context.tsx` or `editorial-auth-shell.tsx` | All |
-| 5 | Backend API routes orphaned but not deleted | Documented in PR description; separate follow-up PR sweeps them | 13.9 |
-| 6 | `lib/agent-home/types.ts` orphan exports | Documented in brief; out of scope for A.6; future opportunistic trim | (none) |
-| 7 | Pre-existing test flakes (`prisma-work-trace-store-integrity` etc.) | Baseline capture at Step 0g identifies them; do not block on them per `[[db-integrity-tests-pg-advisory-lock]]` | 0g, 13.5 |
-| 8 | Auto-merge captures stale HEAD | Manual `gh pr merge --squash` after CI is green; do not use `--auto` | 11 |
-| 9 | Empty directories confuse readers | Step 10.3 confirms directories disappear naturally | 10 |
-| 10 | Subagent dispatch drifts cwd | Branch verification (`git branch --show-current`) before each commit | 2–11 |
-| 11 | Mid-sweep typecheck failure in Task 3–7 from broken block-test imports | Expected; continue per Task 3's "Note on Task 3 typecheck" callout; final gate at Task 13.5 confirms clean typecheck after full sweep | 3–7 |
+| #   | Risk                                                                   | Mitigation                                                                                                                            | Task        |
+| --- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 1   | Hidden caller has landed since 2026-05-15                              | Per-file zero-reference grep before every `rm`; full-subgraph grep at Step 0f as a precondition                                       | 0f, 1, 2–10 |
+| 2   | Coverage dips below thresholds after deletion                          | Coverage gate compares against baseline (Step 0h); slice halts on dip; no "lower the floor"                                           | 0h, 13.6    |
+| 3   | Test fixture imports from a deleted file                               | Scoped test run after each deletion; broken-import surfaces fast                                                                      | 2–10        |
+| 4   | HaltProvider re-root edge case re-emerges                              | Boundary lock #3; no edit to `halt-context.tsx` or `editorial-auth-shell.tsx`                                                         | All         |
+| 5   | Backend API routes orphaned but not deleted                            | Documented in PR description; separate follow-up PR sweeps them                                                                       | 13.9        |
+| 6   | `lib/agent-home/types.ts` orphan exports                               | Documented in brief; out of scope for A.6; future opportunistic trim                                                                  | (none)      |
+| 7   | Pre-existing test flakes (`prisma-work-trace-store-integrity` etc.)    | Baseline capture at Step 0g identifies them; do not block on them per `[[db-integrity-tests-pg-advisory-lock]]`                       | 0g, 13.5    |
+| 8   | Auto-merge captures stale HEAD                                         | Manual `gh pr merge --squash` after CI is green; do not use `--auto`                                                                  | 11          |
+| 9   | Empty directories confuse readers                                      | Step 10.3 confirms directories disappear naturally                                                                                    | 10          |
+| 10  | Subagent dispatch drifts cwd                                           | Branch verification (`git branch --show-current`) before each commit                                                                  | 2–11        |
+| 11  | Mid-sweep typecheck failure in Task 3–7 from broken block-test imports | Expected; continue per Task 3's "Note on Task 3 typecheck" callout; final gate at Task 13.5 confirms clean typecheck after full sweep | 3–7         |
 
 ---
 

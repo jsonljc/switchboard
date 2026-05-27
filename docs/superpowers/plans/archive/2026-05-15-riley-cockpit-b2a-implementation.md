@@ -9,6 +9,7 @@
 **Tech Stack:** Fastify (api), Next.js 14 App Router + React 18 (dashboard), Vitest + @testing-library/react, TypeScript (ESM, `.js` extensions in relative imports per `CLAUDE.md`; dashboard imports omit `.js` per `feedback_dashboard_no_js_on_any_import`). Prisma is mocked in tests per `feedback_api_test_mocked_prisma`.
 
 **Parent docs:**
+
 - [`docs/superpowers/plans/2026-05-15-riley-cockpit-b2a-slice-brief.md`](./2026-05-15-riley-cockpit-b2a-slice-brief.md) — scope and rationale for the B.2 split.
 - [`docs/superpowers/specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md`](../specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md) — §Slice B.2 (authoritative spec; B.2a is the mission-only subset).
 - [`docs/superpowers/specs/2026-05-13-riley-cockpit-home-design.md`](../specs/2026-05-13-riley-cockpit-home-design.md) — Riley target spec (mission row copy, `roasSource` semantics, `RILEY_ROLE`).
@@ -81,14 +82,14 @@ None. B.2a modifies only files that exist on main.
 
 ### Files modified
 
-| Path | Responsibility | Why touched |
-|---|---|---|
-| `apps/api/src/routes/agent-home/mission.ts` | Add `RILEY_ROLE`/`RILEY_PIPELINE`/`RILEY_COMPOSER_PLACEHOLDER` constants; add `buildRileyMissionResponse` builder; refactor route handler to branch on `agentId`; remove Riley 404 short-circuit. | Riley aggregator branch. |
-| `apps/api/src/routes/agent-home/__tests__/mission.test.ts` | Add `describe("buildRileyMissionResponse", ...)` block (8 cases); add `describe("mission route — Riley", ...)` block (3 cases); invert the existing `"404 for non-Alex agents at A.2"` test to assert Riley returns 200 and Mira returns 404. | Test coverage for Riley branch. |
-| `apps/dashboard/src/components/cockpit/mission-popover.tsx` | Add optional `agentLabel` prop (default `"Alex"`); use it in `aria-label`. | Pop-over previously hard-coded `"Alex mission"`; Riley needs `"Riley mission"`. |
-| `apps/dashboard/src/components/cockpit/__tests__/mission-popover.test.tsx` | Add `agentLabel` test cases (default + explicit Riley). | Coverage for the new prop. |
-| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Call `useAgentMission("riley")`; add `missionOpen` state; pass `missionInteractive` + `onOpenMission` to `<Identity>`; mount `<MissionPopover agentLabel="Riley">` conditionally on `mission.data`. | Riley page wires the popover. |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add a `useAgentMission` mock alongside existing hook mocks; add `describe("RileyCockpitPage — B.2a mission popover", ...)` block (3 cases: non-interactive when undefined, popover toggle, popover shows Riley rows). | Coverage for the page wiring. |
+| Path                                                                          | Responsibility                                                                                                                                                                                                                                | Why touched                                                                     |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `apps/api/src/routes/agent-home/mission.ts`                                   | Add `RILEY_ROLE`/`RILEY_PIPELINE`/`RILEY_COMPOSER_PLACEHOLDER` constants; add `buildRileyMissionResponse` builder; refactor route handler to branch on `agentId`; remove Riley 404 short-circuit.                                             | Riley aggregator branch.                                                        |
+| `apps/api/src/routes/agent-home/__tests__/mission.test.ts`                    | Add `describe("buildRileyMissionResponse", ...)` block (8 cases); add `describe("mission route — Riley", ...)` block (3 cases); invert the existing `"404 for non-Alex agents at A.2"` test to assert Riley returns 200 and Mira returns 404. | Test coverage for Riley branch.                                                 |
+| `apps/dashboard/src/components/cockpit/mission-popover.tsx`                   | Add optional `agentLabel` prop (default `"Alex"`); use it in `aria-label`.                                                                                                                                                                    | Pop-over previously hard-coded `"Alex mission"`; Riley needs `"Riley mission"`. |
+| `apps/dashboard/src/components/cockpit/__tests__/mission-popover.test.tsx`    | Add `agentLabel` test cases (default + explicit Riley).                                                                                                                                                                                       | Coverage for the new prop.                                                      |
+| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`                | Call `useAgentMission("riley")`; add `missionOpen` state; pass `missionInteractive` + `onOpenMission` to `<Identity>`; mount `<MissionPopover agentLabel="Riley">` conditionally on `mission.data`.                                           | Riley page wires the popover.                                                   |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add a `useAgentMission` mock alongside existing hook mocks; add `describe("RileyCockpitPage — B.2a mission popover", ...)` block (3 cases: non-interactive when undefined, popover toggle, popover shows Riley rows).                         | Coverage for the page wiring.                                                   |
 
 ### Files explicitly NOT modified
 
@@ -123,6 +124,7 @@ Expected: same set of matches as on `main` before B.2a — no new matches.
 ## Task 1: Add Riley constants to `mission.ts`
 
 **Files:**
+
 - Modify: `apps/api/src/routes/agent-home/mission.ts` (add three new constants near the existing `ALEX_*` constants around line 64)
 
 - [ ] **Step 1: Add Riley constants**
@@ -171,6 +173,7 @@ Used in Task 2 by buildRileyMissionResponse."
 ## Task 2: Write failing test for `buildRileyMissionResponse` (cold state)
 
 **Files:**
+
 - Modify: `apps/api/src/routes/agent-home/__tests__/mission.test.ts` (append new `describe` block after the `buildAlexMissionResponse` block ending around line 142)
 
 - [ ] **Step 1: Add the failing test**
@@ -251,6 +254,7 @@ git commit -m "test(riley-cockpit): failing test for Riley cold-state aggregator
 ## Task 3: Implement `buildRileyMissionResponse` (minimal — make Task 2 pass)
 
 **Files:**
+
 - Modify: `apps/api/src/routes/agent-home/mission.ts` (add new exported function after `buildAlexMissionResponse`, around line 158)
 
 - [ ] **Step 1: Write the minimal implementation**
@@ -333,6 +337,7 @@ mission.rules is always null for Riley."
 ## Task 4: Add Riley aggregator tests — connection statuses
 
 **Files:**
+
 - Modify: `apps/api/src/routes/agent-home/__tests__/mission.test.ts` (append to the `buildRileyMissionResponse` describe block)
 
 - [ ] **Step 1: Write the tests**
@@ -340,43 +345,43 @@ mission.rules is always null for Riley."
 Inside the `describe("buildRileyMissionResponse", ...)` block, add:
 
 ```ts
-  it("marks meta done when a Meta Ads Connection exists; status='ok' when connected", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      connections: [{ serviceId: "meta-ads", status: "connected" }],
-    });
-    expect(out.mission.channels[0]?.status).toBe("ok");
-    expect(out.setup.find((row) => row.key === "meta")?.done).toBe(true);
-    // primary shifts to rules (next un-done row)
-    expect(out.setup.find((row) => row.key === "rules")?.primary).toBe(true);
+it("marks meta done when a Meta Ads Connection exists; status='ok' when connected", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    connections: [{ serviceId: "meta-ads", status: "connected" }],
   });
+  expect(out.mission.channels[0]?.status).toBe("ok");
+  expect(out.setup.find((row) => row.key === "meta")?.done).toBe(true);
+  // primary shifts to rules (next un-done row)
+  expect(out.setup.find((row) => row.key === "rules")?.primary).toBe(true);
+});
 
-  it("marks Meta Ads status='warn' when Connection is degraded", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      connections: [{ serviceId: "meta-ads", status: "degraded" }],
-    });
-    expect(out.mission.channels[0]?.status).toBe("warn");
+it("marks Meta Ads status='warn' when Connection is degraded", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    connections: [{ serviceId: "meta-ads", status: "degraded" }],
   });
+  expect(out.mission.channels[0]?.status).toBe("warn");
+});
 
-  it("sets roasSource='crm' when a crm-data-provider Connection exists", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      connections: [
-        { serviceId: "meta-ads", status: "connected" },
-        { serviceId: "crm-data-provider", status: "connected" },
-      ],
-    });
-    expect(out.targets.roasSource).toBe("crm");
+it("sets roasSource='crm' when a crm-data-provider Connection exists", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    connections: [
+      { serviceId: "meta-ads", status: "connected" },
+      { serviceId: "crm-data-provider", status: "connected" },
+    ],
   });
+  expect(out.targets.roasSource).toBe("crm");
+});
 
-  it("keeps roasSource='deterministic' when no crm-data-provider Connection exists", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      connections: [{ serviceId: "meta-ads", status: "connected" }],
-    });
-    expect(out.targets.roasSource).toBe("deterministic");
+it("keeps roasSource='deterministic' when no crm-data-provider Connection exists", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    connections: [{ serviceId: "meta-ads", status: "connected" }],
   });
+  expect(out.targets.roasSource).toBe("deterministic");
+});
 ```
 
 - [ ] **Step 2: Run tests**
@@ -401,6 +406,7 @@ git commit -m "test(riley-cockpit): Riley aggregator status/source coverage (B.2
 ## Task 5: Add Riley aggregator tests — targets + brand fallback
 
 **Files:**
+
 - Modify: `apps/api/src/routes/agent-home/__tests__/mission.test.ts`
 
 - [ ] **Step 1: Write the tests**
@@ -408,48 +414,48 @@ git commit -m "test(riley-cockpit): Riley aggregator status/source coverage (B.2
 Inside the `describe("buildRileyMissionResponse", ...)` block, add:
 
 ```ts
-  it("reads avgValueCents/targetCpbCents from roster.config", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      roster: {
-        ...baseInputs.roster,
-        config: { avgValueCents: 12000, targetCpbCents: 2500 },
-      },
-    });
-    expect(out.targets.avgValueCents).toBe(12000);
-    expect(out.targets.targetCpbCents).toBe(2500);
-    expect(out.setup.find((row) => row.key === "rules")?.done).toBe(true);
+it("reads avgValueCents/targetCpbCents from roster.config", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    roster: {
+      ...baseInputs.roster,
+      config: { avgValueCents: 12000, targetCpbCents: 2500 },
+    },
   });
+  expect(out.targets.avgValueCents).toBe(12000);
+  expect(out.targets.targetCpbCents).toBe(2500);
+  expect(out.setup.find((row) => row.key === "rules")?.done).toBe(true);
+});
 
-  it("returns null targets and rules-row undone when only one threshold is present", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      roster: {
-        ...baseInputs.roster,
-        config: { avgValueCents: 12000 },
-      },
-    });
-    expect(out.targets.avgValueCents).toBe(12000);
-    expect(out.targets.targetCpbCents).toBeNull();
-    expect(out.setup.find((row) => row.key === "rules")?.done).toBe(false);
+it("returns null targets and rules-row undone when only one threshold is present", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    roster: {
+      ...baseInputs.roster,
+      config: { avgValueCents: 12000 },
+    },
   });
+  expect(out.targets.avgValueCents).toBe(12000);
+  expect(out.targets.targetCpbCents).toBeNull();
+  expect(out.setup.find((row) => row.key === "rules")?.done).toBe(false);
+});
 
-  it("returns null targets when config is a non-object primitive", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      roster: { ...baseInputs.roster, config: "invalid" as unknown },
-    });
-    expect(out.targets.avgValueCents).toBeNull();
-    expect(out.targets.targetCpbCents).toBeNull();
+it("returns null targets when config is a non-object primitive", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    roster: { ...baseInputs.roster, config: "invalid" as unknown },
   });
+  expect(out.targets.avgValueCents).toBeNull();
+  expect(out.targets.targetCpbCents).toBeNull();
+});
 
-  it("falls back to '(unnamed organization)' when org.name missing", () => {
-    const out = buildRileyMissionResponse({
-      ...baseInputs,
-      org: { id: "org-1", name: "" },
-    });
-    expect(out.mission.brand).toBe("(unnamed organization) · —");
+it("falls back to '(unnamed organization)' when org.name missing", () => {
+  const out = buildRileyMissionResponse({
+    ...baseInputs,
+    org: { id: "org-1", name: "" },
   });
+  expect(out.mission.brand).toBe("(unnamed organization) · —");
+});
 ```
 
 - [ ] **Step 2: Run tests**
@@ -474,6 +480,7 @@ git commit -m "test(riley-cockpit): Riley aggregator targets + brand-fallback (B
 ## Task 6: Invert the route's Riley-404 test and wire Riley in the route handler
 
 **Files:**
+
 - Modify: `apps/api/src/routes/agent-home/__tests__/mission.test.ts` (existing route describe block)
 - Modify: `apps/api/src/routes/agent-home/mission.ts` (route handler near line 178)
 
@@ -482,72 +489,72 @@ git commit -m "test(riley-cockpit): Riley aggregator targets + brand-fallback (B
 In `apps/api/src/routes/agent-home/__tests__/mission.test.ts`, find the test:
 
 ```ts
-  it("404 for non-Alex agents at A.2", async () => {
-    const app = await buildApp(buildPrismaStub({}));
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/dashboard/agents/riley/mission",
-      headers: { "x-org-id": "org-1" },
-    });
-    expect(res.statusCode).toBe(404);
+it("404 for non-Alex agents at A.2", async () => {
+  const app = await buildApp(buildPrismaStub({}));
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/dashboard/agents/riley/mission",
+    headers: { "x-org-id": "org-1" },
   });
+  expect(res.statusCode).toBe(404);
+});
 ```
 
 Replace it with two tests:
 
 ```ts
-  it("200 returns Riley aggregator on /agents/riley/mission", async () => {
-    const prisma = buildPrismaStub({
-      roster: {
-        id: "ros-riley-1",
-        organizationId: "org-1",
-        agentRole: "ad-optimizer",
-        displayName: "Riley",
-        description: "",
-        status: "active",
-        tier: "starter",
-        config: { avgValueCents: 12000, targetCpbCents: 2500 },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      org: { id: "org-1", name: "HotPod Yoga" },
-      connections: [
-        { serviceId: "meta-ads", status: "connected" },
-        { serviceId: "crm-data-provider", status: "connected" },
-      ],
-    });
-    const app = await buildApp(prisma);
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/dashboard/agents/riley/mission",
-      headers: { "x-org-id": "org-1" },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json() as {
-      agentKey: string;
-      mission: { role: string; brand: string; channels: Array<{ kind: string }> };
-      targets: { roasSource: string };
-    };
-    expect(body.agentKey).toBe("riley");
-    expect(body.mission.role).toBe(
-      "Ad optimizer · score, recommend, never act without your approval",
-    );
-    expect(body.mission.brand).toBe("HotPod Yoga · —");
-    expect(body.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
-    expect(body.targets.roasSource).toBe("crm");
-    // Riley aggregator does NOT call managedChannel.findMany.
-    expect(prisma.managedChannel.findMany).not.toHaveBeenCalled();
+it("200 returns Riley aggregator on /agents/riley/mission", async () => {
+  const prisma = buildPrismaStub({
+    roster: {
+      id: "ros-riley-1",
+      organizationId: "org-1",
+      agentRole: "ad-optimizer",
+      displayName: "Riley",
+      description: "",
+      status: "active",
+      tier: "starter",
+      config: { avgValueCents: 12000, targetCpbCents: 2500 },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    org: { id: "org-1", name: "HotPod Yoga" },
+    connections: [
+      { serviceId: "meta-ads", status: "connected" },
+      { serviceId: "crm-data-provider", status: "connected" },
+    ],
   });
+  const app = await buildApp(prisma);
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/dashboard/agents/riley/mission",
+    headers: { "x-org-id": "org-1" },
+  });
+  expect(res.statusCode).toBe(200);
+  const body = res.json() as {
+    agentKey: string;
+    mission: { role: string; brand: string; channels: Array<{ kind: string }> };
+    targets: { roasSource: string };
+  };
+  expect(body.agentKey).toBe("riley");
+  expect(body.mission.role).toBe(
+    "Ad optimizer · score, recommend, never act without your approval",
+  );
+  expect(body.mission.brand).toBe("HotPod Yoga · —");
+  expect(body.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
+  expect(body.targets.roasSource).toBe("crm");
+  // Riley aggregator does NOT call managedChannel.findMany.
+  expect(prisma.managedChannel.findMany).not.toHaveBeenCalled();
+});
 
-  it("404 for agents that are not Alex or Riley (e.g. Mira)", async () => {
-    const app = await buildApp(buildPrismaStub({}));
-    const res = await app.inject({
-      method: "GET",
-      url: "/api/dashboard/agents/mira/mission",
-      headers: { "x-org-id": "org-1" },
-    });
-    expect(res.statusCode).toBe(404);
+it("404 for agents that are not Alex or Riley (e.g. Mira)", async () => {
+  const app = await buildApp(buildPrismaStub({}));
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/dashboard/agents/mira/mission",
+    headers: { "x-org-id": "org-1" },
   });
+  expect(res.statusCode).toBe(404);
+});
 ```
 
 - [ ] **Step 2: Run the new route tests (expect failures)**
@@ -565,91 +572,90 @@ Expected: the new `200 returns Riley aggregator` test FAILS with status 404 (rou
 In `apps/api/src/routes/agent-home/mission.ts`, locate the route handler:
 
 ```ts
-    if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
-      return reply.code(404).send({ error: "Agent not available on home" });
-    }
-    if (agentId !== "alex") {
-      // Riley wiring lands in its own slice; A.2 ships Alex only.
-      return reply.code(404).send({ error: "Mission aggregator not available for this agent yet" });
-    }
+if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
+  return reply.code(404).send({ error: "Agent not available on home" });
+}
+if (agentId !== "alex") {
+  // Riley wiring lands in its own slice; A.2 ships Alex only.
+  return reply.code(404).send({ error: "Mission aggregator not available for this agent yet" });
+}
 ```
 
 Remove the second `if (agentId !== "alex")` block entirely. Then locate the `Promise.all` block:
 
 ```ts
-      const [roster, org, connections, managedChannels] = await Promise.all([
-        app.prisma.agentRoster.findFirst({
-          where: { organizationId: orgId, agentRole: "responder" },
-        }),
-        app.prisma.organizationConfig.findUnique({ where: { id: orgId } }),
-        app.prisma.connection.findMany({
-          where: { organizationId: orgId },
-          select: { serviceId: true, status: true },
-        }),
-        app.prisma.managedChannel.findMany({
-          where: { organizationId: orgId },
-          select: { channel: true, status: true },
-        }),
-      ]);
+const [roster, org, connections, managedChannels] = await Promise.all([
+  app.prisma.agentRoster.findFirst({
+    where: { organizationId: orgId, agentRole: "responder" },
+  }),
+  app.prisma.organizationConfig.findUnique({ where: { id: orgId } }),
+  app.prisma.connection.findMany({
+    where: { organizationId: orgId },
+    select: { serviceId: true, status: true },
+  }),
+  app.prisma.managedChannel.findMany({
+    where: { organizationId: orgId },
+    select: { channel: true, status: true },
+  }),
+]);
 
-      if (!roster) {
-        return reply.code(404).send({ error: "Alex roster not provisioned for this org" });
-      }
+if (!roster) {
+  return reply.code(404).send({ error: "Alex roster not provisioned for this org" });
+}
 
-      const response = buildAlexMissionResponse({
-        roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
-        org: { id: orgId, name: org?.name ?? "" },
-        connections,
-        managedChannels,
-      });
-      return reply.code(200).send(response);
+const response = buildAlexMissionResponse({
+  roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
+  org: { id: orgId, name: org?.name ?? "" },
+  connections,
+  managedChannels,
+});
+return reply.code(200).send(response);
 ```
 
 Replace it with an `agentId`-branched version:
 
 ```ts
-      const rosterRole = agentId === "alex" ? "responder" : "ad-optimizer";
-      const [roster, org, connections, managedChannels] = await Promise.all([
-        app.prisma.agentRoster.findFirst({
-          where: { organizationId: orgId, agentRole: rosterRole },
-        }),
-        app.prisma.organizationConfig.findUnique({ where: { id: orgId } }),
-        app.prisma.connection.findMany({
-          where: { organizationId: orgId },
-          select: { serviceId: true, status: true },
-        }),
-        agentId === "alex"
-          ? app.prisma.managedChannel.findMany({
-              where: { organizationId: orgId },
-              select: { channel: true, status: true },
-            })
-          : Promise.resolve([] as Array<{ channel: string; status: string }>),
-      ]);
+const rosterRole = agentId === "alex" ? "responder" : "ad-optimizer";
+const [roster, org, connections, managedChannels] = await Promise.all([
+  app.prisma.agentRoster.findFirst({
+    where: { organizationId: orgId, agentRole: rosterRole },
+  }),
+  app.prisma.organizationConfig.findUnique({ where: { id: orgId } }),
+  app.prisma.connection.findMany({
+    where: { organizationId: orgId },
+    select: { serviceId: true, status: true },
+  }),
+  agentId === "alex"
+    ? app.prisma.managedChannel.findMany({
+        where: { organizationId: orgId },
+        select: { channel: true, status: true },
+      })
+    : Promise.resolve([] as Array<{ channel: string; status: string }>),
+]);
 
-      if (!roster) {
-        const label = agentId === "alex" ? "Alex" : "Riley";
-        return reply
-          .code(404)
-          .send({ error: `${label} roster not provisioned for this org` });
-      }
+if (!roster) {
+  const label = agentId === "alex" ? "Alex" : "Riley";
+  return reply.code(404).send({ error: `${label} roster not provisioned for this org` });
+}
 
-      const response =
-        agentId === "alex"
-          ? buildAlexMissionResponse({
-              roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
-              org: { id: orgId, name: org?.name ?? "" },
-              connections,
-              managedChannels,
-            })
-          : buildRileyMissionResponse({
-              roster: roster as unknown as Parameters<typeof buildRileyMissionResponse>[0]["roster"],
-              org: { id: orgId, name: org?.name ?? "" },
-              connections,
-            });
-      return reply.code(200).send(response);
+const response =
+  agentId === "alex"
+    ? buildAlexMissionResponse({
+        roster: roster as unknown as Parameters<typeof buildAlexMissionResponse>[0]["roster"],
+        org: { id: orgId, name: org?.name ?? "" },
+        connections,
+        managedChannels,
+      })
+    : buildRileyMissionResponse({
+        roster: roster as unknown as Parameters<typeof buildRileyMissionResponse>[0]["roster"],
+        org: { id: orgId, name: org?.name ?? "" },
+        connections,
+      });
+return reply.code(200).send(response);
 ```
 
 Notes:
+
 - `agentRole` for Riley is `"ad-optimizer"` — verify by reading `packages/db/prisma/seed.ts` or the `AgentRoster` seed if it exists. If the actual seed uses a different value, swap the literal and update Task 2's `baseInputs.roster.agentRole` accordingly.
 - The `managedChannel.findMany` short-circuit avoids a useless DB query on Riley. The promise resolves to `[]` so the `Promise.all` tuple shape is preserved.
 
@@ -682,6 +688,7 @@ MissionAggregatorResponse. Mira still 404s (not in ALEX_RILEY_ONLY)."
 ## Task 7: Verify Riley `AgentRoster.agentRole` literal
 
 **Files:**
+
 - Read only: `packages/db/prisma/seed.ts` (or wherever Riley's AgentRoster is created)
 
 - [ ] **Step 1: Find the canonical Riley agentRole**
@@ -720,6 +727,7 @@ git commit -m "fix(riley-cockpit): align AgentRoster.agentRole literal with seed
 ## Task 8: Parameterize `MissionPopover.aria-label`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/mission-popover.tsx`
 - Modify: `apps/dashboard/src/components/cockpit/__tests__/mission-popover.test.tsx`
 
@@ -818,6 +826,7 @@ to screen readers."
 ## Task 9: Wire mission popover into `RileyCockpitPage`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`
 
 - [ ] **Step 1: Update the file**
@@ -902,6 +911,7 @@ export function RileyCockpitPage() {
 ```
 
 What changed from B.1:
+
 1. New imports: `MissionPopover`, `useAgentMission`.
 2. New hook call: `useAgentMission("riley")`.
 3. New `missionOpen` state.
@@ -938,6 +948,7 @@ That failure is expected at this step. Do not commit yet — finish Task 10 firs
 ## Task 10: Update `RileyCockpitPage` tests for mission wiring
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`
 
 - [ ] **Step 1: Add the `useAgentMission` mock**
@@ -1025,8 +1036,9 @@ describe("RileyCockpitPage — B.2a mission popover", () => {
       expect(screen.getByRole("dialog", { name: /Riley mission/i })).toBeInTheDocument(),
     );
     // Each eyebrow appears verbatim.
-    expect(screen.getByText(/Ad optimizer · score, recommend, never act without your approval/i))
-      .toBeInTheDocument();
+    expect(
+      screen.getByText(/Ad optimizer · score, recommend, never act without your approval/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Ad sets · all campaigns/i)).toBeInTheDocument();
     expect(screen.getByText(/HotPod Yoga · —/i)).toBeInTheDocument();
     // No RULES row for Riley (mission.rules is null).
@@ -1079,6 +1091,7 @@ Riley-shaped rows, no-EmptyState invariant."
 ## Task 11: Adapter-boundary grep gate
 
 **Files:**
+
 - Read only
 
 - [ ] **Step 1: Run the grep**
@@ -1092,6 +1105,7 @@ rg "Recommendation|AuditEntry|@switchboard/db|@prisma" \
 ```
 
 Expected output: same matches as on `main` before B.2a, with **no** new matches in `components/cockpit/` or `hooks/use-riley-*`. Allowed matches:
+
 - Type imports of `ApprovalView`/`ActivityRow`/`CockpitStatus` from `./types` (these are view-models, not substrate).
 - Imports referencing recommendation/audit identifiers inside `lib/cockpit/riley/**` (out of scope for this grep).
 
@@ -1115,6 +1129,7 @@ If new substrate imports leak into `components/cockpit/` or `hooks/use-riley-*`,
 ## Task 12: Workspace-wide checks
 
 **Files:**
+
 - Read only
 
 - [ ] **Step 1: Typecheck the full monorepo**

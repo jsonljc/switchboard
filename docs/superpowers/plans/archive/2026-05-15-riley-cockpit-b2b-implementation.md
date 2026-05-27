@@ -9,6 +9,7 @@
 **Tech Stack:** Vitest (all layers), TypeScript (ESM, `.js` extensions in relative imports per `CLAUDE.md`; dashboard imports omit `.js` per `feedback_dashboard_no_js_on_any_import`), Next.js 14 App Router + React 18 + `@tanstack/react-query` (dashboard), Riley clay accent (`RILEY_ACCENT` exported from `apps/dashboard/src/lib/cockpit/riley/riley-config.ts`).
 
 **Parent docs:**
+
 - [`docs/superpowers/plans/2026-05-15-riley-cockpit-b2b-slice-brief.md`](./2026-05-15-riley-cockpit-b2b-slice-brief.md) — scope, what-ships-vs-defers, decision lock, risks.
 - [`docs/superpowers/plans/2026-05-14-alex-cockpit-a3-implementation.md`](./2026-05-14-alex-cockpit-a3-implementation.md) — precedent for shipped shell components, the `getAgentTargets` helper, and the dashboard adapter pattern.
 - [`docs/superpowers/specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md`](../specs/2026-05-14-riley-cockpit-wave-a-slicing-design.md) — §Slice B.2 (authoritative contract; §B.2 "columns over config JSON" is overridden by A.3's decision lock — see slice brief §"Decision lock").
@@ -92,26 +93,26 @@ Expected: green. The `prisma-work-trace-store-integrity` / `prisma-greeting-sign
 
 ### Files created
 
-| Path | Responsibility |
-|---|---|
-| `apps/dashboard/src/lib/cockpit/riley/metrics-to-kpi-data.ts` | Pure `metricsViewModelToRileyKpiData(vm)` → `CockpitKpiData`. Typed pass-through: reads `vm.tiles` and `vm.roi` directly; constructs `range`. Does **not** invoke `legacyTiles` / `legacyRoi`. |
-| `apps/dashboard/src/lib/cockpit/riley/__tests__/metrics-to-kpi-data.test.ts` | Unit tests. Three cases: pass-through tiles + roi; range format; absence of legacy-derivation fallback. |
+| Path                                                                         | Responsibility                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/lib/cockpit/riley/metrics-to-kpi-data.ts`                | Pure `metricsViewModelToRileyKpiData(vm)` → `CockpitKpiData`. Typed pass-through: reads `vm.tiles` and `vm.roi` directly; constructs `range`. Does **not** invoke `legacyTiles` / `legacyRoi`. |
+| `apps/dashboard/src/lib/cockpit/riley/__tests__/metrics-to-kpi-data.test.ts` | Unit tests. Three cases: pass-through tiles + roi; range format; absence of legacy-derivation fallback.                                                                                        |
 
 ### Files modified
 
-| Path | Change | Why touched |
-|---|---|---|
-| `packages/core/src/agent-home/metrics-types.ts` | Add server-side `KpiTile` and `RoiBar` interfaces (structurally mirroring `apps/dashboard/src/components/cockpit/types.ts:115-143`). Add **optional** `tiles?: readonly KpiTile[]` and `roi?: RoiBar` to `MetricsViewModel`. | Wire shape for B.2b. |
-| `packages/core/src/agent-home/metrics-riley.ts` | Populate `tiles` (3 entries: Leads / CTR unavailable / Ad spend) and `roi` (degraded shape with cost-per-lead comparator) in the returned VM. | Riley emission. |
-| `packages/core/src/agent-home/__tests__/metrics-riley.test.ts` | Add `describe("tiles + roi (B.2b)", …)` block with 5 cases pinning the locked Riley tile and ROI shape across the four hint-priority rules. | Coverage. |
-| `apps/dashboard/src/lib/cockpit/metrics-types.ts` | Mirror the optional `tiles?` + `roi?` fields onto `MetricsViewModelWire`. Add structural `KpiTileWire` + `RoiBarWire` types. | Keep dashboard mirror in sync. |
-| `apps/dashboard/src/lib/cockpit/__tests__/metrics-types.test.ts` (if exists) or new `metrics-types.test.ts` | Add 1 case asserting `MetricsViewModelWire` admits optional `tiles` + `roi`. | Type-only coverage. |
-| `apps/dashboard/src/components/cockpit/roi-bar.tsx` | Add optional `accent?: { base: string; deep: string; soft: string; paper: string }` prop. Default → Alex amber tokens. When provided: degraded chip border = `accent.soft`, degraded chip background = `accent.paper`, live "off-target" comparator color = `accent.deep`, live fill gradient = `${accent.soft} → ${accent.base}`. | Riley clay accent. |
-| `apps/dashboard/src/components/cockpit/__tests__/roi-bar.test.tsx` | Add 2 cases: default accent renders Alex amber tokens at the three sites (no current-render diff); Riley accent overrides all three sites. | Coverage. |
-| `apps/dashboard/src/components/cockpit/kpi-strip.tsx` | Add optional `accent?: AccentTokens` prop. Forward to `<ROIBar>` only (KpiTile colors are token-driven via `T.ink*` and stay Alex-default — Riley tile colors match Alex grayscale; the accent affects only ROI comparator). | Accent plumbing. |
-| `apps/dashboard/src/components/cockpit/__tests__/kpi-strip.test.tsx` | Add 1 case asserting `accent` prop reaches `<ROIBar>` (use the ROI comparator data-attribute color assertion from `roi-bar.test.tsx` Riley case). | Coverage. |
-| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx` | Add `useAgentMetrics("riley")` call. Construct `kpis` shape from the adapter when data is present. Mount `<KPIStrip kpis={kpis} collapsed={approvals.length > 0} accent={RILEY_ACCENT} />` between the `<Identity>` element and the approvals stack, gated on `kpis != null`. | The visible mount. |
-| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Add `describe("RileyCockpitPage — B.2b KPI strip", …)` block with 3 cases (rendered when data present; collapsed when approvals.length > 0; not rendered when loading/error). | Page-level integration. |
+| Path                                                                                                        | Change                                                                                                                                                                                                                                                                                                                             | Why touched                    |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `packages/core/src/agent-home/metrics-types.ts`                                                             | Add server-side `KpiTile` and `RoiBar` interfaces (structurally mirroring `apps/dashboard/src/components/cockpit/types.ts:115-143`). Add **optional** `tiles?: readonly KpiTile[]` and `roi?: RoiBar` to `MetricsViewModel`.                                                                                                       | Wire shape for B.2b.           |
+| `packages/core/src/agent-home/metrics-riley.ts`                                                             | Populate `tiles` (3 entries: Leads / CTR unavailable / Ad spend) and `roi` (degraded shape with cost-per-lead comparator) in the returned VM.                                                                                                                                                                                      | Riley emission.                |
+| `packages/core/src/agent-home/__tests__/metrics-riley.test.ts`                                              | Add `describe("tiles + roi (B.2b)", …)` block with 5 cases pinning the locked Riley tile and ROI shape across the four hint-priority rules.                                                                                                                                                                                        | Coverage.                      |
+| `apps/dashboard/src/lib/cockpit/metrics-types.ts`                                                           | Mirror the optional `tiles?` + `roi?` fields onto `MetricsViewModelWire`. Add structural `KpiTileWire` + `RoiBarWire` types.                                                                                                                                                                                                       | Keep dashboard mirror in sync. |
+| `apps/dashboard/src/lib/cockpit/__tests__/metrics-types.test.ts` (if exists) or new `metrics-types.test.ts` | Add 1 case asserting `MetricsViewModelWire` admits optional `tiles` + `roi`.                                                                                                                                                                                                                                                       | Type-only coverage.            |
+| `apps/dashboard/src/components/cockpit/roi-bar.tsx`                                                         | Add optional `accent?: { base: string; deep: string; soft: string; paper: string }` prop. Default → Alex amber tokens. When provided: degraded chip border = `accent.soft`, degraded chip background = `accent.paper`, live "off-target" comparator color = `accent.deep`, live fill gradient = `${accent.soft} → ${accent.base}`. | Riley clay accent.             |
+| `apps/dashboard/src/components/cockpit/__tests__/roi-bar.test.tsx`                                          | Add 2 cases: default accent renders Alex amber tokens at the three sites (no current-render diff); Riley accent overrides all three sites.                                                                                                                                                                                         | Coverage.                      |
+| `apps/dashboard/src/components/cockpit/kpi-strip.tsx`                                                       | Add optional `accent?: AccentTokens` prop. Forward to `<ROIBar>` only (KpiTile colors are token-driven via `T.ink*` and stay Alex-default — Riley tile colors match Alex grayscale; the accent affects only ROI comparator).                                                                                                       | Accent plumbing.               |
+| `apps/dashboard/src/components/cockpit/__tests__/kpi-strip.test.tsx`                                        | Add 1 case asserting `accent` prop reaches `<ROIBar>` (use the ROI comparator data-attribute color assertion from `roi-bar.test.tsx` Riley case).                                                                                                                                                                                  | Coverage.                      |
+| `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`                                              | Add `useAgentMetrics("riley")` call. Construct `kpis` shape from the adapter when data is present. Mount `<KPIStrip kpis={kpis} collapsed={approvals.length > 0} accent={RILEY_ACCENT} />` between the `<Identity>` element and the approvals stack, gated on `kpis != null`.                                                      | The visible mount.             |
+| `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`                               | Add `describe("RileyCockpitPage — B.2b KPI strip", …)` block with 3 cases (rendered when data present; collapsed when approvals.length > 0; not rendered when loading/error).                                                                                                                                                      | Page-level integration.        |
 
 ### Files explicitly NOT modified
 
@@ -151,11 +152,11 @@ These tables are the canonical authorship reference. Task 2 (engine emission) an
 
 ### Riley tiles (always 3 tiles, in order)
 
-| Index | Tile | Source |
-|---|---|---|
-| 0 | `{ label: "leads", value: heroValue, trend: bookedDelta ?? undefined }` | `heroValue = countConversionsByType("lead", weekStart, weekEnd)` (already computed); `bookedDelta = formatNumericDelta(heroValue, heroPrev)` (already computed). |
-| 1 | `{ label: "ctr", value: "—", unavailable: true }` | Static. No `hint` — CTR needs `ad-platform-ctr` source, not Meta connection. |
-| 2 | `spendCents === null ? { label: "ad spend", value: "—", unavailable: true, hint: "Connect Meta Ads" } : { label: "ad spend", value: \`$${Math.round(spendCents / 100)}\` }` | Match A.3 quirk: no `toLocaleString` on `legacyTiles[3]`. |
+| Index | Tile                                                                                                                                                                        | Source                                                                                                                                                           |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | `{ label: "leads", value: heroValue, trend: bookedDelta ?? undefined }`                                                                                                     | `heroValue = countConversionsByType("lead", weekStart, weekEnd)` (already computed); `bookedDelta = formatNumericDelta(heroValue, heroPrev)` (already computed). |
+| 1     | `{ label: "ctr", value: "—", unavailable: true }`                                                                                                                           | Static. No `hint` — CTR needs `ad-platform-ctr` source, not Meta connection.                                                                                     |
+| 2     | `spendCents === null ? { label: "ad spend", value: "—", unavailable: true, hint: "Connect Meta Ads" } : { label: "ad spend", value: \`$${Math.round(spendCents / 100)}\` }` | Match A.3 quirk: no `toLocaleString` on `legacyTiles[3]`.                                                                                                        |
 
 **Three tiles, not four.** No "qualified" tile (Riley does not qualify leads). The `qualifiedPct: 0` flat field is emitted unchanged for backward-compat with `MetricsViewModel`'s flat shape; it is not surfaced via `tiles[]`.
 
@@ -163,14 +164,15 @@ These tables are the canonical authorship reference. Task 2 (engine emission) an
 
 Hint priority (first match wins; mirrors A.3 priority pattern):
 
-| Rule | Condition | Returned `RoiBarDegraded` |
-|---|---|---|
-| 1 | `spendCents === null` | `{ degraded: true, degradedHint: "Connect Meta Ads to see cost per lead", label: "cost per lead", comparator: { value: "—", target: targetLabel } }` |
-| 2 | `spendCents !== null && leads <= 0` | `{ degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: "—", target: targetLabel } }` |
-| 3 | `spendCents !== null && leads > 0 && targetCpbCents === null` | `{ degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: \`$${cpl} per lead\`, target: "—" } }` |
-| 4 | `spendCents !== null && leads > 0 && targetCpbCents !== null` | `{ degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: \`$${cpl} per lead\`, target: \`target $${targetDollars}\` } }` |
+| Rule | Condition                                                     | Returned `RoiBarDegraded`                                                                                                                            |
+| ---- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `spendCents === null`                                         | `{ degraded: true, degradedHint: "Connect Meta Ads to see cost per lead", label: "cost per lead", comparator: { value: "—", target: targetLabel } }` |
+| 2    | `spendCents !== null && leads <= 0`                           | `{ degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: "—", target: targetLabel } }`                                      |
+| 3    | `spendCents !== null && leads > 0 && targetCpbCents === null` | `{ degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: \`$${cpl} per lead\`, target: "—" } }`                             |
+| 4    | `spendCents !== null && leads > 0 && targetCpbCents !== null` | `{ degraded: true, degradedHint: "", label: "cost per lead", comparator: { value: \`$${cpl} per lead\`, target: \`target $${targetDollars}\` } }`    |
 
 Where:
+
 - `cpl = Math.round(spendCents / 100 / leads)` — integer division.
 - **`cplDisplay = cpl === 0 ? "<$1 per lead" : \`$${cpl} per lead\`"`** — avoids the misleading `$0 per lead` chip when very low spend × high leads round to zero. The threshold is sub-dollar; cpl ≥ 1 reads `$N per lead` normally.
 - `targetDollars = Math.round(targetCpbCents / 100)`.
@@ -187,6 +189,7 @@ The `onTarget` flag is omitted on `RoiBarDegraded` (the type permits `onTarget?:
 ### Task 1: Extend `MetricsViewModel` with optional `tiles?` + `roi?` fields
 
 **Files:**
+
 - Modify: `packages/core/src/agent-home/metrics-types.ts`
 
 - [ ] **Step 1: Write the failing test.**
@@ -328,6 +331,7 @@ git commit -m "feat(core): MetricsViewModel.tiles + .roi optional fields (B.2b)"
 ### Task 2: Emit `tiles` + `roi` in `metrics-riley.ts`
 
 **Files:**
+
 - Modify: `packages/core/src/agent-home/metrics-riley.ts`
 - Test: `packages/core/src/agent-home/__tests__/metrics-riley.test.ts`
 
@@ -339,7 +343,15 @@ Append a new `describe` block to `packages/core/src/agent-home/__tests__/metrics
 describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
   const baseTargets = { avgValueCents: null, targetCpbCents: null };
 
-  function tilesOf(vm: { tiles?: readonly { label: string; value: number | string; unavailable?: boolean; trend?: string; hint?: string }[] }) {
+  function tilesOf(vm: {
+    tiles?: readonly {
+      label: string;
+      value: number | string;
+      unavailable?: boolean;
+      trend?: string;
+      hint?: string;
+    }[];
+  }) {
     return vm.tiles ?? [];
   }
 
@@ -347,7 +359,12 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const store = makeStore({ leadsThisWeek: 27, leadsLastWeek: 22 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
-    const vm = await buildRileyMetricsViewModel({ orgId: "org-1", week, store, targets: baseTargets });
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: baseTargets,
+    });
     const tiles = tilesOf(vm);
     expect(tiles).toHaveLength(3);
     expect(tiles[0]).toEqual({ label: "leads", value: 27, trend: "+5" });
@@ -359,7 +376,12 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const store = makeStore({ leadsThisWeek: 27, leadsLastWeek: 22 });
     // store already returns null for spend by default
-    const vm = await buildRileyMetricsViewModel({ orgId: "org-1", week, store, targets: baseTargets });
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: baseTargets,
+    });
     expect(tilesOf(vm)[2]).toEqual({
       label: "ad spend",
       value: "—",
@@ -487,67 +509,66 @@ Expected: 7 new failures — `vm.tiles` and `vm.roi` are undefined.
 Edit `packages/core/src/agent-home/metrics-riley.ts`. Inside `buildRileyMetricsViewModel`, after the `stats` block and before the `return` statement, compute `tiles` and `roi`:
 
 ```ts
-  const spendDollars = spendCents !== null ? Math.round(spendCents / 100) : null;
-  const cpl =
-    spendCents !== null && heroValue > 0 ? Math.round(spendCents / 100 / heroValue) : null;
-  const cplDisplay = cpl === 0 ? "<$1 per lead" : cpl !== null ? `$${cpl} per lead` : "—";
-  // Riley v1 reinterprets `targetCpbCents` as **target cost per lead** for the
-  // ROI comparator. The config key is shared with Alex (target cost per
-  // booking) for storage symmetry — `AgentRoster.config.targetCpbCents` is a
-  // single value; the meaning is agent-side. Do not treat Riley's target as
-  // booking economics until Riley has booking attribution (future slice).
-  const targetDollars =
-    targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
-  const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
+const spendDollars = spendCents !== null ? Math.round(spendCents / 100) : null;
+const cpl = spendCents !== null && heroValue > 0 ? Math.round(spendCents / 100 / heroValue) : null;
+const cplDisplay = cpl === 0 ? "<$1 per lead" : cpl !== null ? `$${cpl} per lead` : "—";
+// Riley v1 reinterprets `targetCpbCents` as **target cost per lead** for the
+// ROI comparator. The config key is shared with Alex (target cost per
+// booking) for storage symmetry — `AgentRoster.config.targetCpbCents` is a
+// single value; the meaning is agent-side. Do not treat Riley's target as
+// booking economics until Riley has booking attribution (future slice).
+const targetDollars =
+  targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
+const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
 
-  const tiles: readonly KpiTile[] = [
-    {
-      label: "leads",
-      value: heroValue,
-      ...(bookedDeltaStr ? { trend: bookedDeltaStr } : {}),
-    },
-    { label: "ctr", value: "—", unavailable: true },
-    spendDollars !== null
-      ? { label: "ad spend", value: `$${spendDollars}` }
-      : { label: "ad spend", value: "—", unavailable: true, hint: "Connect Meta Ads" },
-  ];
+const tiles: readonly KpiTile[] = [
+  {
+    label: "leads",
+    value: heroValue,
+    ...(bookedDeltaStr ? { trend: bookedDeltaStr } : {}),
+  },
+  { label: "ctr", value: "—", unavailable: true },
+  spendDollars !== null
+    ? { label: "ad spend", value: `$${spendDollars}` }
+    : { label: "ad spend", value: "—", unavailable: true, hint: "Connect Meta Ads" },
+];
 
-  const roi: RoiBar = (() => {
-    // Rule 1: spendCents === null
-    if (spendCents === null) {
-      return {
-        degraded: true,
-        degradedHint: "Connect Meta Ads to see cost per lead",
-        label: "cost per lead",
-        comparator: { value: "—", target: targetLabel },
-      };
-    }
-    // Rule 2: spendCents !== null && leads <= 0
-    if (heroValue <= 0) {
-      return {
-        degraded: true,
-        degradedHint: "",
-        label: "cost per lead",
-        comparator: { value: "—", target: targetLabel },
-      };
-    }
-    // Rules 3 + 4: spendCents !== null && leads > 0
+const roi: RoiBar = (() => {
+  // Rule 1: spendCents === null
+  if (spendCents === null) {
+    return {
+      degraded: true,
+      degradedHint: "Connect Meta Ads to see cost per lead",
+      label: "cost per lead",
+      comparator: { value: "—", target: targetLabel },
+    };
+  }
+  // Rule 2: spendCents !== null && leads <= 0
+  if (heroValue <= 0) {
     return {
       degraded: true,
       degradedHint: "",
       label: "cost per lead",
-      comparator: {
-        value: cplDisplay,
-        target: targetLabel,
-      },
+      comparator: { value: "—", target: targetLabel },
     };
-  })();
+  }
+  // Rules 3 + 4: spendCents !== null && leads > 0
+  return {
+    degraded: true,
+    degradedHint: "",
+    label: "cost per lead",
+    comparator: {
+      value: cplDisplay,
+      target: targetLabel,
+    },
+  };
+})();
 ```
 
 The `bookedDeltaStr` referenced above must capture the existing `formatNumericDelta(heroValue, heroPrev)` result; today `metrics-riley.ts` inlines that call inside the `return`. Hoist it into a local variable:
 
 ```ts
-  const bookedDeltaStr = formatNumericDelta(heroValue, heroPrev);
+const bookedDeltaStr = formatNumericDelta(heroValue, heroPrev);
 ```
 
 (Place it alongside the existing `leads` / `qualifiedPct` constants near line 53.)
@@ -555,28 +576,28 @@ The `bookedDeltaStr` referenced above must capture the existing `formatNumericDe
 Then update the existing `return` block:
 
 ```ts
-  return {
-    hero: { kind: "ad-leads", value: heroValue, comparator: { window: "week", value: heroPrev } },
-    heroSubProseSegments: subprose,
-    spark,
-    stats,
-    freshness: {
-      generatedAt: week.now.toISOString(),
-      window: "week",
-      dataSource: "live",
-      unavailableSources,
-    },
-    folioRange: week.folioRange,
-    targets,
-    spendCents,
-    leads,
-    qualifiedPct,
-    bookedDelta: bookedDeltaStr,
-    leadsDelta: bookedDeltaStr,
-    qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),
-    tiles,
-    roi,
-  };
+return {
+  hero: { kind: "ad-leads", value: heroValue, comparator: { window: "week", value: heroPrev } },
+  heroSubProseSegments: subprose,
+  spark,
+  stats,
+  freshness: {
+    generatedAt: week.now.toISOString(),
+    window: "week",
+    dataSource: "live",
+    unavailableSources,
+  },
+  folioRange: week.folioRange,
+  targets,
+  spendCents,
+  leads,
+  qualifiedPct,
+  bookedDelta: bookedDeltaStr,
+  leadsDelta: bookedDeltaStr,
+  qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),
+  tiles,
+  roi,
+};
 ```
 
 Add the imports at the top:
@@ -623,6 +644,7 @@ git commit -m "feat(core): metrics-riley emits tiles + degraded cost-per-lead ro
 ### Task 3: Mirror `tiles?` + `roi?` onto `MetricsViewModelWire`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/lib/cockpit/metrics-types.ts`
 - Test: `apps/dashboard/src/lib/cockpit/__tests__/metrics-types.test.ts` (create or extend)
 
@@ -632,11 +654,7 @@ Create or extend `apps/dashboard/src/lib/cockpit/__tests__/metrics-types.test.ts
 
 ```ts
 import { describe, expect, it } from "vitest";
-import type {
-  MetricsViewModelWire,
-  KpiTileWire,
-  RoiBarWire,
-} from "../metrics-types";
+import type { MetricsViewModelWire, KpiTileWire, RoiBarWire } from "../metrics-types";
 
 describe("MetricsViewModelWire B.2b shape", () => {
   it("admits tiles + roi as optional fields", () => {
@@ -740,6 +758,7 @@ git commit -m "feat(dashboard): mirror tiles + roi onto MetricsViewModelWire (B.
 ### Task 4: Add `accent?` prop to `<ROIBar>`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/roi-bar.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/roi-bar.test.tsx`
 
@@ -885,6 +904,7 @@ git commit -m "feat(cockpit): optional accent prop on <ROIBar> for Riley clay to
 ### Task 5: Plumb `accent?` through `<KPIStrip>`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/kpi-strip.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/kpi-strip.test.tsx`
 
@@ -1017,6 +1037,7 @@ git commit -m "feat(cockpit): forward accent prop from <KPIStrip> to <ROIBar> (B
 ### Task 6: Add `metrics-to-kpi-data.ts` adapter
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/riley/metrics-to-kpi-data.ts`
 - Test: `apps/dashboard/src/lib/cockpit/riley/__tests__/metrics-to-kpi-data.test.ts`
 
@@ -1135,9 +1156,7 @@ import type { CockpitKpiData } from "@/components/cockpit/types";
  * falling back to Alex's `legacyTiles()` derivation (which would leak a
  * `qualified` tile onto /riley).
  */
-export function metricsViewModelToRileyKpiData(
-  vm: MetricsViewModelWire,
-): CockpitKpiData | null {
+export function metricsViewModelToRileyKpiData(vm: MetricsViewModelWire): CockpitKpiData | null {
   if (!vm.tiles || !vm.roi) return null;
   return {
     range: `This week · ${vm.folioRange}`,
@@ -1170,6 +1189,7 @@ git commit -m "feat(dashboard): Riley metrics→kpi-data typed pass-through adap
 ### Task 7: Mount `<KPIStrip>` on `<RileyCockpitPage>`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`
 - Test: `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx`
 
@@ -1431,7 +1451,7 @@ pnpm --filter @switchboard/dashboard test
 
 Expected: green (ignoring the pre-existing `prisma-work-trace-store-integrity` / `prisma-greeting-signal-store` flakes if reproduced on baseline).
 
-- [ ] **Step 4: Build the dashboard.** *(Required — CI doesn't run `next build`; this catches `.js`-extension regressions and other build-time issues per [[feedback_dashboard_build_not_in_ci]] / [[feedback_dashboard_no_js_on_any_import]].)*
+- [ ] **Step 4: Build the dashboard.** _(Required — CI doesn't run `next build`; this catches `.js`-extension regressions and other build-time issues per [[feedback_dashboard_build_not_in_ci]] / [[feedback_dashboard_no_js_on_any_import]].)_
 
 ```bash
 pnpm --filter @switchboard/dashboard build
@@ -1447,6 +1467,7 @@ pnpm dev
 ```
 
 Verify in the browser:
+
 - KPI strip renders between the mission line and the activity stream when no approvals are pending.
 - The three tiles read "leads", "ctr —", "ad spend — / $N".
 - The ROI bar reads "cost per lead" with a comparator chip ("$N per lead · target $M" or "—").

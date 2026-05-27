@@ -61,6 +61,7 @@ After reading `packages/core/src/platform/platform-ingress.ts`, the three mode f
 **Choice:** Create a new bootstrap file `apps/api/src/bootstrap/operator-intents.ts` that registers all operator-direct intents (Phase 1: 5 intents from 3 routes; future: more from Design A). Call from `apps/api/src/app.ts` alongside `bootstrapContainedWorkflows` and `bootstrapSkillMode`.
 
 **Rationale:**
+
 - `bootstrap/contained-workflows.ts` is workflow-orchestration-specific (mode dispatch, child work). Adding operator intents there muddies its scope.
 - `bootstrap/skill-mode.ts` is skill-runtime-specific.
 - A dedicated bootstrap clarifies that operator-direct intents are a distinct category.
@@ -72,6 +73,7 @@ After reading `packages/core/src/platform/platform-ingress.ts`, the three mode f
 **Choice:** Routes read the `Idempotency-Key` HTTP header. If present, pass through to `platformIngress.submit({ idempotencyKey })`. If absent, omit (`undefined`) — PlatformIngress treats absence as "do not dedup."
 
 **Rationale:**
+
 - Aligns with the existing `actions.ts` convention.
 - Doesn't break clients that don't send the header yet (operator UI mostly doesn't, today).
 - The eventual Mutating Route Contract (Design A) will mandate the header on all mutating routes via shared middleware. For Phase 1b, the migration just enables the path; mandate comes later.
@@ -109,10 +111,18 @@ const operatorTransitionOpportunityStageHandler: WorkflowHandler = {
         { orgId: workUnit.organizationId, ...params, actor: workUnit.actor },
         { opportunityStore }, // injected at bootstrap
       );
-      return { outcome: "completed", summary: "Opportunity stage transitioned", outputs: { result } };
+      return {
+        outcome: "completed",
+        summary: "Opportunity stage transitioned",
+        outputs: { result },
+      };
     } catch (err) {
       if (err instanceof OpportunityNotFoundError) {
-        return { outcome: "failed", summary: "Opportunity not found", error: { code: "OPPORTUNITY_NOT_FOUND", message: err.message } };
+        return {
+          outcome: "failed",
+          summary: "Opportunity not found",
+          error: { code: "OPPORTUNITY_NOT_FOUND", message: err.message },
+        };
       }
       throw err;
     }
@@ -250,6 +260,7 @@ approvalMode: "policy" | "system_auto_approved"; // default: "policy"
 **Allowed callers:** `"system_auto_approved"` is reserved for operator-direct ingress bootstrap registrations migrated under this spec. It must not be applied to skill, cartridge, or agent-initiated intents.
 
 **Required test coverage (Phase 1b.1):**
+
 - `approvalMode: "policy"` (or omitted) still denies when no org policy matches.
 - `approvalMode: "system_auto_approved"` skips policy lookup and returns `outcome: "execute"`.
 - `approvalMode: "system_auto_approved"` still produces a persisted WorkTrace (governed execution evidence).
@@ -298,7 +309,7 @@ These two amendments adjust Decisions 1 and 3 only. Decisions 2 (actor shape), 4
 - 1b.1 — `dashboard-opportunities.ts` (1 intent)
 - 1b.2 — `recommendations.ts` (1 intent)
 - 1b.3 — `admin-consent.ts` (3 intents grouped)
-- 1c  — `lifecycle-disqualifications.ts` (gated on PR #444)
+- 1c — `lifecycle-disqualifications.ts` (gated on PR #444)
 
 The actual execution sequence took a different path:
 
@@ -316,10 +327,10 @@ The actual execution sequence took a different path:
 
 The three migrations diverged in how they map handler outcomes to HTTP status codes. Design A (Mutating Route Contract — Phase 3A) MUST unify these. Current state:
 
-| Slice | Domain-rejection mapping | WorkTrace coverage of failure paths |
-|---|---|---|
-| 1b.1 (opportunities) | Handler throws `OpportunityNotFoundError` → handler returns `outcome: "failed"` with typed error code → route maps code → 404 | ✅ WorkTrace persisted with `outcome: "failed"` for 404 cases |
-| 1b.2 (recommendations) | Pre-flight check in route (`getById` + org-match) returns 404/403 BEFORE entering ingress | ❌ No WorkTrace for 404/403 cases (route exits before `platformIngress.submit`) |
+| Slice                              | Domain-rejection mapping                                                                                                            | WorkTrace coverage of failure paths                                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 1b.1 (opportunities)               | Handler throws `OpportunityNotFoundError` → handler returns `outcome: "failed"` with typed error code → route maps code → 404       | ✅ WorkTrace persisted with `outcome: "failed"` for 404 cases                                                            |
+| 1b.2 (recommendations)             | Pre-flight check in route (`getById` + org-match) returns 404/403 BEFORE entering ingress                                           | ❌ No WorkTrace for 404/403 cases (route exits before `platformIngress.submit`)                                          |
 | 1b.3 (lifecycle-disqualifications) | Handler always returns `outcome: "completed"`; route unwraps nested `outputs.result.{not_found,conflict,...}` to decide HTTP status | ✅ WorkTrace persisted (always `completed`) — but failure paths surface as `completed` outcome with nested domain status |
 
 The 1b.2 pre-flight pattern weakens "WorkTrace is canonical persistence" for the failure paths. The 1b.3 always-completed pattern conflates handler-level success with domain-level failure. Neither is wrong in isolation — Design A picks the canonical pattern and codifies it.

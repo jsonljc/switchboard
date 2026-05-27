@@ -9,6 +9,7 @@
 **Tech Stack:** Vitest + React Testing Library (Dashboard tests), TypeScript ESM (extensionless imports in `apps/dashboard/**` per `feedback_dashboard_no_js_on_any_import.md`), Next.js 14 App Router + React 18 (page-scoped ⌘K listener via `useEffect`), shadcn `useToast` + `useRouter` from `next/navigation` (existing patterns at `apps/dashboard/src/components/cockpit/riley-cockpit-page.tsx`).
 
 **Parent docs:**
+
 - [`docs/superpowers/plans/2026-05-15-alex-cockpit-a5-slice-brief.md`](./2026-05-15-alex-cockpit-a5-slice-brief.md) — scope, what-ships-vs-defers, risks, design decisions.
 - [`docs/superpowers/specs/2026-05-14-alex-cockpit-home-design.md`](../specs/2026-05-14-alex-cockpit-home-design.md) — §A.5 (lines 79-81), §Composer (lines 640-718), §Status pill (authoritative).
 - [`docs/superpowers/plans/2026-05-15-alex-cockpit-a4-implementation.md`](./2026-05-15-alex-cockpit-a4-implementation.md) — structural template (A.4 precedent for layered TDD slice).
@@ -99,28 +100,28 @@ Expected: clean. Per `feedback_dashboard_build_not_in_ci.md`: `next build` is no
 
 ### Files created
 
-| Path | Responsibility |
-|---|---|
-| `apps/dashboard/src/lib/cockpit/parse-command.ts` | `parseCommand(raw: string): ParsedAction` — verbatim port of `commands.jsx:7`. Pure function. |
-| `apps/dashboard/src/lib/cockpit/__tests__/parse-command.test.ts` | One case per NL pattern + 3 boundary cases. |
-| `apps/dashboard/src/lib/cockpit/alex-commands.ts` | `ALEX_COMMANDS: readonly Command[]` (14 entries) + `ALEX_COMPOSER_PLACEHOLDER: string`. |
-| `apps/dashboard/src/lib/cockpit/__tests__/alex-commands.test.ts` | Length + group-coverage assertion. |
-| `apps/dashboard/src/lib/cockpit/alex-toast-voice.ts` | `toastVoice(action: ParsedAction): { title: string; description?: string }` — verbatim port of `alex-config.jsx:41`. |
-| `apps/dashboard/src/lib/cockpit/__tests__/alex-toast-voice.test.ts` | One case per `action.kind` (10) — title + description shape. |
-| `apps/dashboard/src/lib/cockpit/alex-action-dispatcher.ts` | `useAlexActionDispatcher()` React hook — wires `useHalt` + `useRouter` + `useToast` + `toastVoice` into a single dispatcher function. |
-| `apps/dashboard/src/lib/cockpit/__tests__/alex-action-dispatcher.test.ts` | Mocked-hooks coverage for each action.kind + per-id overrides. |
-| `apps/dashboard/src/components/cockpit/command-palette.tsx` | Agent-agnostic palette component. |
-| `apps/dashboard/src/components/cockpit/__tests__/command-palette.test.tsx` | Group order, type-to-filter, thread-disable, arrow nav, Enter selects, Escape closes, agent-agnostic. |
-| `apps/dashboard/src/components/cockpit/composer.tsx` | Agent-agnostic composer with staging chip. |
-| `apps/dashboard/src/components/cockpit/__tests__/composer.test.tsx` | Placeholder render, chip preview, Enter dispatches, Escape clears, halted disables. |
+| Path                                                                       | Responsibility                                                                                                                        |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/dashboard/src/lib/cockpit/parse-command.ts`                          | `parseCommand(raw: string): ParsedAction` — verbatim port of `commands.jsx:7`. Pure function.                                         |
+| `apps/dashboard/src/lib/cockpit/__tests__/parse-command.test.ts`           | One case per NL pattern + 3 boundary cases.                                                                                           |
+| `apps/dashboard/src/lib/cockpit/alex-commands.ts`                          | `ALEX_COMMANDS: readonly Command[]` (14 entries) + `ALEX_COMPOSER_PLACEHOLDER: string`.                                               |
+| `apps/dashboard/src/lib/cockpit/__tests__/alex-commands.test.ts`           | Length + group-coverage assertion.                                                                                                    |
+| `apps/dashboard/src/lib/cockpit/alex-toast-voice.ts`                       | `toastVoice(action: ParsedAction): { title: string; description?: string }` — verbatim port of `alex-config.jsx:41`.                  |
+| `apps/dashboard/src/lib/cockpit/__tests__/alex-toast-voice.test.ts`        | One case per `action.kind` (10) — title + description shape.                                                                          |
+| `apps/dashboard/src/lib/cockpit/alex-action-dispatcher.ts`                 | `useAlexActionDispatcher()` React hook — wires `useHalt` + `useRouter` + `useToast` + `toastVoice` into a single dispatcher function. |
+| `apps/dashboard/src/lib/cockpit/__tests__/alex-action-dispatcher.test.ts`  | Mocked-hooks coverage for each action.kind + per-id overrides.                                                                        |
+| `apps/dashboard/src/components/cockpit/command-palette.tsx`                | Agent-agnostic palette component.                                                                                                     |
+| `apps/dashboard/src/components/cockpit/__tests__/command-palette.test.tsx` | Group order, type-to-filter, thread-disable, arrow nav, Enter selects, Escape closes, agent-agnostic.                                 |
+| `apps/dashboard/src/components/cockpit/composer.tsx`                       | Agent-agnostic composer with staging chip.                                                                                            |
+| `apps/dashboard/src/components/cockpit/__tests__/composer.test.tsx`        | Placeholder render, chip preview, Enter dispatches, Escape clears, halted disables.                                                   |
 
 ### Files modified
 
-| Path | Change | Why touched |
-|---|---|---|
-| `apps/dashboard/src/components/cockpit/types.ts` | Add `Command`, `ParsedActionKind`, `ParsedAction`, `ThreadContext` exports. | Shared shapes. |
-| `apps/dashboard/src/components/cockpit/cockpit-page.tsx` | Swap `<ComposerPlaceholder>` for `<Composer>`; flip Topbar `paletteEnabled={true}` + `onOpenPalette`; add `paletteOpen` state; add ⌘K keyboard effect; render `<CommandPalette>`. | Wiring. |
-| `apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx` | Extend with palette + composer + ⌘K cases. | Coverage. |
+| Path                                                                    | Change                                                                                                                                                                            | Why touched    |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `apps/dashboard/src/components/cockpit/types.ts`                        | Add `Command`, `ParsedActionKind`, `ParsedAction`, `ThreadContext` exports.                                                                                                       | Shared shapes. |
+| `apps/dashboard/src/components/cockpit/cockpit-page.tsx`                | Swap `<ComposerPlaceholder>` for `<Composer>`; flip Topbar `paletteEnabled={true}` + `onOpenPalette`; add `paletteOpen` state; add ⌘K keyboard effect; render `<CommandPalette>`. | Wiring.        |
+| `apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx` | Extend with palette + composer + ⌘K cases.                                                                                                                                        | Coverage.      |
 
 ### Files explicitly NOT modified
 
@@ -174,87 +175,87 @@ ALEX_COMPOSER_PLACEHOLDER =
   'Tell Alex what to do — "pause an hour", "follow up with Maya tonight"…';
 
 ALEX_COMMANDS = [
-  { id: "pause-1h",     label: "Pause Alex for 1 hour",            group: "control" },
-  { id: "pause-3pm",    label: "Pause until 3 PM",                 group: "control" },
-  { id: "resume",       label: "Resume Alex",                      group: "control" },
-  { id: "halt",         label: "Halt — stop everything",           group: "control" },
-  { id: "brief-noon",   label: "Brief me at noon",                 group: "control" },
-  { id: "brief-eod",    label: "Brief me at end of day",           group: "control" },
-  { id: "fu-named",     label: "Follow up with {contact} tonight", group: "thread"  },
-  { id: "reply-named",  label: "Reply to {contact} myself",        group: "thread"  },
-  { id: "hold-named",   label: "Hold {contact}, don't send anything", group: "thread" },
-  { id: "stop-founder", label: "Stop offering the founder rate",   group: "rules"   },
-  { id: "raise-rule",   label: "Raise approval threshold to $99",  group: "rules"   },
-  { id: "open-settings",label: "Open settings",                    group: "nav"     },
-  { id: "open-rules",   label: "Open standing rules",              group: "nav"     },
-  { id: "open-meta",    label: "Open Meta Ads campaigns",          group: "nav"     },
+  { id: "pause-1h", label: "Pause Alex for 1 hour", group: "control" },
+  { id: "pause-3pm", label: "Pause until 3 PM", group: "control" },
+  { id: "resume", label: "Resume Alex", group: "control" },
+  { id: "halt", label: "Halt — stop everything", group: "control" },
+  { id: "brief-noon", label: "Brief me at noon", group: "control" },
+  { id: "brief-eod", label: "Brief me at end of day", group: "control" },
+  { id: "fu-named", label: "Follow up with {contact} tonight", group: "thread" },
+  { id: "reply-named", label: "Reply to {contact} myself", group: "thread" },
+  { id: "hold-named", label: "Hold {contact}, don't send anything", group: "thread" },
+  { id: "stop-founder", label: "Stop offering the founder rate", group: "rules" },
+  { id: "raise-rule", label: "Raise approval threshold to $99", group: "rules" },
+  { id: "open-settings", label: "Open settings", group: "nav" },
+  { id: "open-rules", label: "Open standing rules", group: "nav" },
+  { id: "open-meta", label: "Open Meta Ads campaigns", group: "nav" },
 ];
 ```
 
 ### NL parsing rules (umbrella spec §Composer §NL parsing rules, lines 670-685)
 
-| Pattern (case-insensitive on input) | Returns |
-|---|---|
-| `pause (for) N (min\|m\|h\|hour\|hours)` | `{ kind: "pause", icon: "⏸", label: "pause · Nh", detail: "until HH:MM AM" }` |
-| `pause until <when>` | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until <when>" }` |
-| `pause` / `pause alex` | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until you resume" }` |
-| `resume` / `unpause` / `go` | `{ kind: "resume", icon: "▶", label: "resume", detail: "pick up where I left off" }` |
-| `halt` / `stop` | `{ kind: "halt", icon: "⏹", label: "halt", detail: "stop everything now" }` |
-| `(fu\|follow up) (with) <name> [<when>]` | `{ kind: "followup", icon: "↻", label: "follow up · Name", detail: "today" }` |
-| `brief (me) (at) <time>` | `{ kind: "brief", icon: "☼", label: "brief me", detail: "at <time>" }` |
-| `(stop\|don't) (offer(ing)\|sending) <thing>` | `{ kind: "rule", icon: "⊘", label: "rule change", detail: "stop offering <thing>" }` |
-| `(reply to\|i'll reply to\|let me reply to) <name>` | `{ kind: "handoff", icon: "✎", label: "handoff · Name", detail: "you take the thread" }` |
-| `tell alex about <name>` | `{ kind: "context", icon: "ⓘ", label: "context · Name", detail: "add a note to the thread" }` |
-| anything else | `{ kind: "instruction", icon: "→", label: "instruction", detail: "<truncated to 60>" }` |
+| Pattern (case-insensitive on input)                 | Returns                                                                                       |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pause (for) N (min\|m\|h\|hour\|hours)`            | `{ kind: "pause", icon: "⏸", label: "pause · Nh", detail: "until HH:MM AM" }`                 |
+| `pause until <when>`                                | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until <when>" }`                        |
+| `pause` / `pause alex`                              | `{ kind: "pause", icon: "⏸", label: "pause", detail: "until you resume" }`                    |
+| `resume` / `unpause` / `go`                         | `{ kind: "resume", icon: "▶", label: "resume", detail: "pick up where I left off" }`          |
+| `halt` / `stop`                                     | `{ kind: "halt", icon: "⏹", label: "halt", detail: "stop everything now" }`                   |
+| `(fu\|follow up) (with) <name> [<when>]`            | `{ kind: "followup", icon: "↻", label: "follow up · Name", detail: "today" }`                 |
+| `brief (me) (at) <time>`                            | `{ kind: "brief", icon: "☼", label: "brief me", detail: "at <time>" }`                        |
+| `(stop\|don't) (offer(ing)\|sending) <thing>`       | `{ kind: "rule", icon: "⊘", label: "rule change", detail: "stop offering <thing>" }`          |
+| `(reply to\|i'll reply to\|let me reply to) <name>` | `{ kind: "handoff", icon: "✎", label: "handoff · Name", detail: "you take the thread" }`      |
+| `tell alex about <name>`                            | `{ kind: "context", icon: "ⓘ", label: "context · Name", detail: "add a note to the thread" }` |
+| anything else                                       | `{ kind: "instruction", icon: "→", label: "instruction", detail: "<truncated to 60>" }`       |
 
 Every returned `ParsedAction` also carries the original `raw: string` field for downstream toast echo.
 
 ### Action dispatch (umbrella spec §Composer §Action dispatch, lines 691-712)
 
-| `action.kind` | v1 behavior |
-|---|---|
-| `pause` | `HaltProvider.setHalted(true)`; toast `"Paused — …"` |
-| `resume` | `HaltProvider.setHalted(false)`; toast |
-| `halt` | `HaltProvider.setHalted(true)` (no auto-resume); toast |
-| `brief` | Stub: toast only. Cron-side delivery deferred. |
-| `rule` | `router.push("/settings?focus=rules")`; toast |
-| `handoff` | `router.push("/contacts/[id]?takeover=true")` when `threadContext.contactId` set; else toast-only fallback `"Open a thread first."` |
-| `context` | `router.push("/contacts/[id]?note=open")` when `threadContext.contactId` set; else toast-only fallback |
-| `followup` | Stub: toast only. Cron deferred. |
-| `command` | Per-id dispatch (see below). |
-| `instruction` | Toast only: `"Got it. Acting on \"{detail}\"."` No backend. |
+| `action.kind` | v1 behavior                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `pause`       | `HaltProvider.setHalted(true)`; toast `"Paused — …"`                                                                                |
+| `resume`      | `HaltProvider.setHalted(false)`; toast                                                                                              |
+| `halt`        | `HaltProvider.setHalted(true)` (no auto-resume); toast                                                                              |
+| `brief`       | Stub: toast only. Cron-side delivery deferred.                                                                                      |
+| `rule`        | `router.push("/settings?focus=rules")`; toast                                                                                       |
+| `handoff`     | `router.push("/contacts/[id]?takeover=true")` when `threadContext.contactId` set; else toast-only fallback `"Open a thread first."` |
+| `context`     | `router.push("/contacts/[id]?note=open")` when `threadContext.contactId` set; else toast-only fallback                              |
+| `followup`    | Stub: toast only. Cron deferred.                                                                                                    |
+| `command`     | Per-id dispatch (see below).                                                                                                        |
+| `instruction` | Toast only: `"Got it. Acting on \"{detail}\"."` No backend.                                                                         |
 
 Per-id overrides for `command` group:
 
-| `command.id` | Dispatch |
-|---|---|
-| `pause-1h` | `dispatch(parseCommand("pause for 1h"))` |
-| `pause-3pm` | `dispatch(parseCommand("pause until 3pm"))` |
-| `resume` | `dispatch(parseCommand("resume"))` |
-| `halt` | `dispatch(parseCommand("halt"))` |
-| `brief-noon` / `brief-eod` | Stub + toast (matches `brief` action.kind) |
-| `stop-founder` | `router.push("/settings?focus=rules&founderRateEnabled=false")` |
-| `raise-rule` | `router.push("/settings?focus=rules&priceApprovalThreshold=99")` |
-| `open-settings` | `router.push("/settings")` |
-| `open-rules` | `router.push("/settings?focus=rules")` |
-| `open-meta` | `router.push("/settings?focus=channels")` |
-| `fu-named` / `reply-named` | Disabled in palette when `threadContext` is undefined; when defined, dispatches via the matching action.kind (`followup` / `handoff`). At A.5, **always** undefined at the CockpitPage call site, so these never fire. |
-| `hold-named` | Disabled in palette when `threadContext` is undefined. **No corresponding `ParsedActionKind` exists** — `ParsedActionKind` declares no `hold` variant in A.5. Because `threadContext` is always undefined at the A.5 call site, the command is permanently disabled and never reaches the dispatcher. A future thread-context slice owns the choice to add `hold` to `ParsedActionKind` + dispatch table, or remove the command from `ALEX_COMMANDS`. A.5 does neither. The palette test asserts the command renders disabled. |
+| `command.id`               | Dispatch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pause-1h`                 | `dispatch(parseCommand("pause for 1h"))`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `pause-3pm`                | `dispatch(parseCommand("pause until 3pm"))`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `resume`                   | `dispatch(parseCommand("resume"))`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `halt`                     | `dispatch(parseCommand("halt"))`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `brief-noon` / `brief-eod` | Stub + toast (matches `brief` action.kind)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `stop-founder`             | `router.push("/settings?focus=rules&founderRateEnabled=false")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `raise-rule`               | `router.push("/settings?focus=rules&priceApprovalThreshold=99")`                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `open-settings`            | `router.push("/settings")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `open-rules`               | `router.push("/settings?focus=rules")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `open-meta`                | `router.push("/settings?focus=channels")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `fu-named` / `reply-named` | Disabled in palette when `threadContext` is undefined; when defined, dispatches via the matching action.kind (`followup` / `handoff`). At A.5, **always** undefined at the CockpitPage call site, so these never fire.                                                                                                                                                                                                                                                                                                         |
+| `hold-named`               | Disabled in palette when `threadContext` is undefined. **No corresponding `ParsedActionKind` exists** — `ParsedActionKind` declares no `hold` variant in A.5. Because `threadContext` is always undefined at the A.5 call site, the command is permanently disabled and never reaches the dispatcher. A future thread-context slice owns the choice to add `hold` to `ParsedActionKind` + dispatch table, or remove the command from `ALEX_COMMANDS`. A.5 does neither. The palette test asserts the command renders disabled. |
 
 ### Toast voice (umbrella spec §Composer §Toast voice + `alex-config.jsx:41`)
 
-| `action.kind` | Returned `{ title, description? }` |
-|---|---|
-| `pause` | `{ title: "Paused — standing by.", description: action.detail }` |
-| `resume` | `{ title: "Resumed — picking up where I left off." }` |
-| `halt` | `{ title: "Halted — stopped everything." }` |
-| `brief` | `{ title: "Noted — brief stub.", description: "I'll surface this when scheduled briefs ship." }` |
-| `rule` | `{ title: "Opening rules.", description: action.detail }` |
-| `handoff` | `{ title: \`Handing \${action.label.replace("handoff · ", "")} to you.\` }` |
-| `context` | `{ title: \`Got context on \${action.label.replace("context · ", "")}.\` }` |
-| `followup` | `{ title: "Noted — followup stub.", description: "I'll surface this when scheduled followups ship." }` |
-| `instruction` | `{ title: "Got it.", description: \`Acting on "\${action.detail}".\` }` |
-| `command` | `{ title: \`On it — \${action.label}.\` }` (covers any unmatched palette dispatch) |
+| `action.kind` | Returned `{ title, description? }`                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `pause`       | `{ title: "Paused — standing by.", description: action.detail }`                                       |
+| `resume`      | `{ title: "Resumed — picking up where I left off." }`                                                  |
+| `halt`        | `{ title: "Halted — stopped everything." }`                                                            |
+| `brief`       | `{ title: "Noted — brief stub.", description: "I'll surface this when scheduled briefs ship." }`       |
+| `rule`        | `{ title: "Opening rules.", description: action.detail }`                                              |
+| `handoff`     | `{ title: \`Handing \${action.label.replace("handoff · ", "")} to you.\` }`                            |
+| `context`     | `{ title: \`Got context on \${action.label.replace("context · ", "")}.\` }`                            |
+| `followup`    | `{ title: "Noted — followup stub.", description: "I'll surface this when scheduled followups ship." }` |
+| `instruction` | `{ title: "Got it.", description: \`Acting on "\${action.detail}".\` }`                                |
+| `command`     | `{ title: \`On it — \${action.label}.\` }` (covers any unmatched palette dispatch)                     |
 
 All copy is honest-impact-language compliant: describes what Alex did, never causal claims.
 
@@ -265,6 +266,7 @@ All copy is honest-impact-language compliant: describes what Alex did, never cau
 ### Task 1: Add shared types to `cockpit/types.ts`
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/types.ts`
 
 - [ ] **Step 1: Append the new types to `types.ts`.**
@@ -325,6 +327,7 @@ Command from this module in a one-line follow-up.
 ### Task 2: Port `parseCommand` from JavaScript to TypeScript
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/parse-command.ts`
 - Create: `apps/dashboard/src/lib/cockpit/__tests__/parse-command.test.ts`
 
@@ -478,7 +481,8 @@ Create `apps/dashboard/src/lib/cockpit/parse-command.ts`:
 import type { ParsedAction } from "@/components/cockpit/types";
 
 const PAUSE_FOR = /^pause\s+(?:for\s+)?(\d+)\s*(min|m|h|hour|hours)\b/i;
-const PAUSE_WORD = /^pause\s+(?:for\s+)?(half\s+an?|an|one|two|three|four|five|six)\s+(hour|hours|min|minute|minutes)\b/i;
+const PAUSE_WORD =
+  /^pause\s+(?:for\s+)?(half\s+an?|an|one|two|three|four|five|six)\s+(hour|hours|min|minute|minutes)\b/i;
 const PAUSE_UNTIL = /^pause\s+until\s+(.+)$/i;
 const PAUSE_BARE = /^pause(?:\s+alex)?$/i;
 
@@ -493,7 +497,8 @@ const WORD_TO_NUM: Record<string, number> = {
 };
 const RESUME = /^(resume|unpause|go)$/i;
 const HALT = /^(halt|stop)$/i;
-const FOLLOWUP = /^(?:fu|follow\s+up)\s+(?:with\s+)?([\w'.\- ]+?)(?:\s+(tonight|today|tomorrow|now|later))?$/i;
+const FOLLOWUP =
+  /^(?:fu|follow\s+up)\s+(?:with\s+)?([\w'.\- ]+?)(?:\s+(tonight|today|tomorrow|now|later))?$/i;
 const BRIEF = /^brief(?:\s+me)?(?:\s+at\s+(.+))?$/i;
 const RULE = /^(?:stop|don't|do not)\s+(?:offer(?:ing)?|send(?:ing)?)\s+(.+)$/i;
 const HANDOFF = /^(?:reply to|i'?ll\s+reply\s+to|let\s+me\s+reply\s+to)\s+([\w'.\- ]+)$/i;
@@ -692,6 +697,7 @@ voice can echo the operator's exact phrasing.
 ### Task 3: Ship the `ALEX_COMMANDS` catalog
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/alex-commands.ts`
 - Create: `apps/dashboard/src/lib/cockpit/__tests__/alex-commands.test.ts`
 
@@ -786,6 +792,7 @@ substitute when threadContext is present (post-A.5 ramp).
 ### Task 4: Port `toastVoice` from JavaScript
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/alex-toast-voice.ts`
 - Create: `apps/dashboard/src/lib/cockpit/__tests__/alex-toast-voice.test.ts`
 
@@ -928,6 +935,7 @@ in copy so operators see the deferred-cron status.
 ### Task 5: Ship the Alex action dispatcher hook
 
 **Files:**
+
 - Create: `apps/dashboard/src/lib/cockpit/alex-action-dispatcher.ts`
 - Create: `apps/dashboard/src/lib/cockpit/__tests__/alex-action-dispatcher.test.ts`
 
@@ -1219,10 +1227,7 @@ const PER_ID_ROUTE: Record<string, string> = {
   "open-meta": "/settings?focus=channels",
 };
 
-export type AlexActionDispatcher = (
-  action: ParsedAction,
-  threadContext?: ThreadContext,
-) => void;
+export type AlexActionDispatcher = (action: ParsedAction, threadContext?: ThreadContext) => void;
 
 export function useAlexActionDispatcher(): AlexActionDispatcher {
   const { setHalted } = useHalt();
@@ -1337,6 +1342,7 @@ when threadContext is absent. brief/followup/instruction toast-only.
 ### Task 6: Ship `<CommandPalette>`
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/command-palette.tsx`
 - Create: `apps/dashboard/src/components/cockpit/__tests__/command-palette.test.tsx`
 
@@ -1355,35 +1361,27 @@ const noop = () => {};
 
 describe("<CommandPalette>", () => {
   it("renders all groups when open", () => {
-    render(
-      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />);
     expect(screen.getByText("Open settings")).toBeInTheDocument();
     expect(screen.getByText("Pause Alex for 1 hour")).toBeInTheDocument();
     expect(screen.getByText("Stop offering the founder rate")).toBeInTheDocument();
   });
 
   it("does not render when open=false", () => {
-    render(
-      <CommandPalette open={false} onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open={false} onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />);
     expect(screen.queryByText("Open settings")).not.toBeInTheDocument();
   });
 
   it("type-to-filter narrows visible commands", async () => {
     const user = userEvent.setup();
-    render(
-      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />);
     await user.type(screen.getByRole("searchbox"), "pause");
     expect(screen.getByText("Pause Alex for 1 hour")).toBeInTheDocument();
     expect(screen.queryByText("Open settings")).not.toBeInTheDocument();
   });
 
   it("thread-group commands disabled when threadContext is undefined", () => {
-    render(
-      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />);
     const followup = screen.getByText("Follow up with {contact} tonight").closest("button");
     expect(followup).toBeDisabled();
   });
@@ -1394,18 +1392,14 @@ describe("<CommandPalette>", () => {
     // keeps it inert because threadContext is always undefined at the A.5
     // CockpitPage call site. This case locks the catalog/dispatcher
     // asymmetry — see slice brief §"Typed `hold` action kind" non-goal.
-    render(
-      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />);
     const hold = screen.getByText("Hold {contact}, don't send anything").closest("button");
     expect(hold).toBeInTheDocument();
     expect(hold).toBeDisabled();
   });
 
   it("renders groups in operational-first order (control → thread → rules → nav)", () => {
-    render(
-      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={noop} />);
     const labels = screen.getAllByText(/^(Control|Thread|Rules|Navigate)$/);
     expect(labels.map((el) => el.textContent)).toEqual(["Control", "Thread", "Rules", "Navigate"]);
   });
@@ -1427,9 +1421,7 @@ describe("<CommandPalette>", () => {
   it("Enter fires onSelect with the focused command", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    render(
-      <CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={onSelect} />,
-    );
+    render(<CommandPalette open onClose={noop} commands={ALEX_COMMANDS} onSelect={onSelect} />);
     await user.type(screen.getByRole("searchbox"), "pause 1");
     await user.keyboard("{Enter}");
     expect(onSelect).toHaveBeenCalled();
@@ -1440,17 +1432,13 @@ describe("<CommandPalette>", () => {
   it("Escape fires onClose", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    render(
-      <CommandPalette open onClose={onClose} commands={ALEX_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open onClose={onClose} commands={ALEX_COMMANDS} onSelect={noop} />);
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("agent-agnostic: renders Riley fixture without errors", () => {
-    render(
-      <CommandPalette open onClose={noop} commands={RILEY_COMMANDS} onSelect={noop} />,
-    );
+    render(<CommandPalette open onClose={noop} commands={RILEY_COMMANDS} onSelect={noop} />);
     expect(screen.getByText("Open Meta")).toBeInTheDocument();
     expect(screen.getByText("Pause Riley for 1h")).toBeInTheDocument();
   });
@@ -1686,6 +1674,7 @@ behavior, no Alex hard-coding.
 ### Task 7: Ship `<Composer>`
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/cockpit/composer.tsx`
 - Create: `apps/dashboard/src/components/cockpit/__tests__/composer.test.tsx`
 
@@ -1702,17 +1691,13 @@ const noop = () => {};
 
 describe("<Composer>", () => {
   it("renders the placeholder", () => {
-    render(
-      <Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={noop} halted={false} />,
-    );
+    render(<Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={noop} halted={false} />);
     expect(screen.getByPlaceholderText(/Tell Alex what to do/)).toBeInTheDocument();
   });
 
   it("stages a chip preview when typing a recognized pattern", async () => {
     const user = userEvent.setup();
-    render(
-      <Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={noop} halted={false} />,
-    );
+    render(<Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={noop} halted={false} />);
     await user.type(screen.getByRole("textbox"), "pause");
     expect(screen.getByTestId("composer-chip")).toHaveTextContent(/pause/);
   });
@@ -1721,11 +1706,7 @@ describe("<Composer>", () => {
     const user = userEvent.setup();
     const onDispatch = vi.fn();
     render(
-      <Composer
-        placeholder={ALEX_COMPOSER_PLACEHOLDER}
-        onDispatch={onDispatch}
-        halted={false}
-      />,
+      <Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={onDispatch} halted={false} />,
     );
     await user.type(screen.getByRole("textbox"), "pause for 1h{Enter}");
     expect(onDispatch).toHaveBeenCalledOnce();
@@ -1734,13 +1715,7 @@ describe("<Composer>", () => {
 
   it("Enter clears the input after dispatch", async () => {
     const user = userEvent.setup();
-    render(
-      <Composer
-        placeholder={ALEX_COMPOSER_PLACEHOLDER}
-        onDispatch={noop}
-        halted={false}
-      />,
-    );
+    render(<Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={noop} halted={false} />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     await user.type(input, "pause{Enter}");
     expect(input.value).toBe("");
@@ -1750,11 +1725,7 @@ describe("<Composer>", () => {
     const user = userEvent.setup();
     const onDispatch = vi.fn();
     render(
-      <Composer
-        placeholder={ALEX_COMPOSER_PLACEHOLDER}
-        onDispatch={onDispatch}
-        halted={false}
-      />,
+      <Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={onDispatch} halted={false} />,
     );
     const input = screen.getByRole("textbox") as HTMLInputElement;
     await user.type(input, "pause{Escape}");
@@ -1763,9 +1734,7 @@ describe("<Composer>", () => {
   });
 
   it("halted disables input and swaps copy", () => {
-    render(
-      <Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={noop} halted={true} />,
-    );
+    render(<Composer placeholder={ALEX_COMPOSER_PLACEHOLDER} onDispatch={noop} halted={true} />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     expect(input).toBeDisabled();
     expect(input.placeholder).toMatch(/Halted/);
@@ -1915,6 +1884,7 @@ CockpitPage is invisible to operators in cold state.
 ### Task 8: Wire `<CockpitPage>` — palette + composer + ⌘K
 
 **Files:**
+
 - Modify: `apps/dashboard/src/components/cockpit/cockpit-page.tsx`
 - Modify: `apps/dashboard/src/components/cockpit/__tests__/cockpit-page.test.tsx`
 
@@ -1923,6 +1893,7 @@ CockpitPage is invisible to operators in cold state.
 Replace the imports section + the body of `CockpitPage`:
 
 - Add imports:
+
   ```ts
   import { Composer } from "./composer";
   import { CommandPalette } from "./command-palette";
@@ -1931,11 +1902,13 @@ Replace the imports section + the body of `CockpitPage`:
   ```
 
 - Remove import:
+
   ```ts
   import { ComposerPlaceholder } from "./composer-placeholder";
   ```
 
 - Inside `CockpitPage`, add (after the existing hook calls):
+
   ```ts
   const dispatch = useAlexActionDispatcher();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1954,14 +1927,13 @@ Replace the imports section + the body of `CockpitPage`:
   ```
 
 - Swap the Topbar prop pair:
+
   ```tsx
-  <Topbar
-    paletteEnabled
-    onOpenPalette={() => setPaletteOpen(true)}
-  />
+  <Topbar paletteEnabled onOpenPalette={() => setPaletteOpen(true)} />
   ```
 
 - Swap the bottom composer:
+
   ```tsx
   <Composer
     placeholder={ALEX_COMPOSER_PLACEHOLDER}
@@ -2411,18 +2383,18 @@ Per `feedback_ci_prettier_not_in_local_lint.md`: CI catches prettier formatting 
 
 These are the same risks listed in the slice brief, with the implementation-side mitigations called out at the relevant tasks:
 
-| # | Risk | Mitigation | Task |
-|---|---|---|---|
-| 1 | Regex correctness on the NL parser port | One unit case per pattern (table-driven); boundary cases for empty/multiline/case. | 2 |
-| 2 | ⌘K conflict with browser native shortcuts | `event.preventDefault()` + `event.stopPropagation()` in the page-scoped listener; test asserts preventDefault on cockpit-page case. | 8 |
-| 3 | `pause N (min\|h)` has no auto-resume | Documented in slice brief; toast copy says "resume to send" (honest manual-resume signal). Auto-resume is a post-Phase-A `HaltProvider` enhancement. | 5 |
-| 4 | Dispatcher mocks (`useToast`/`useRouter`/`useHalt`) | Test wraps with `<HaltProvider>` and `vi.mock` for the other two. Pattern matches `proposed-disqualifications-panel.test.tsx`. | 5 |
-| 5 | Composer keystroke re-renders | `parseCommand` is synchronous pure; React batching. No debounce. | 7 |
-| 6 | Thread-context wire-through deferred | Palette filters thread commands as disabled when `threadContext` undefined; dispatcher returns a toast fallback. Both tested. | 5, 6 |
-| 7 | `brief` / `followup` stub-only behavior | Toast copy explicitly says "stub"; coverage in `alex-toast-voice.test.ts`. | 4 |
-| 8 | Composer re-render perf | Composer is a leaf; cockpit-page test asserts sibling blocks don't re-render on input change (optional perf case). | 7, 8 |
-| 9 | Palette open while halted | `resume` from palette still flips halt false; dispatcher test ships the case. | 5 |
-| 10 | Toast voice port from JS | One test case per `action.kind` with locked-design fixture strings. | 4 |
+| #   | Risk                                                | Mitigation                                                                                                                                           | Task |
+| --- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| 1   | Regex correctness on the NL parser port             | One unit case per pattern (table-driven); boundary cases for empty/multiline/case.                                                                   | 2    |
+| 2   | ⌘K conflict with browser native shortcuts           | `event.preventDefault()` + `event.stopPropagation()` in the page-scoped listener; test asserts preventDefault on cockpit-page case.                  | 8    |
+| 3   | `pause N (min\|h)` has no auto-resume               | Documented in slice brief; toast copy says "resume to send" (honest manual-resume signal). Auto-resume is a post-Phase-A `HaltProvider` enhancement. | 5    |
+| 4   | Dispatcher mocks (`useToast`/`useRouter`/`useHalt`) | Test wraps with `<HaltProvider>` and `vi.mock` for the other two. Pattern matches `proposed-disqualifications-panel.test.tsx`.                       | 5    |
+| 5   | Composer keystroke re-renders                       | `parseCommand` is synchronous pure; React batching. No debounce.                                                                                     | 7    |
+| 6   | Thread-context wire-through deferred                | Palette filters thread commands as disabled when `threadContext` undefined; dispatcher returns a toast fallback. Both tested.                        | 5, 6 |
+| 7   | `brief` / `followup` stub-only behavior             | Toast copy explicitly says "stub"; coverage in `alex-toast-voice.test.ts`.                                                                           | 4    |
+| 8   | Composer re-render perf                             | Composer is a leaf; cockpit-page test asserts sibling blocks don't re-render on input change (optional perf case).                                   | 7, 8 |
+| 9   | Palette open while halted                           | `resume` from palette still flips halt false; dispatcher test ships the case.                                                                        | 5    |
+| 10  | Toast voice port from JS                            | One test case per `action.kind` with locked-design fixture strings.                                                                                  | 4    |
 
 ---
 

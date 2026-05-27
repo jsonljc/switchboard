@@ -30,12 +30,12 @@ A.2 proved the aggregator shape supports both Alex and Riley without persisting 
 
 ### Backend (Fastify, `apps/api/src/routes/agent-home/mission.ts`)
 
-| Change | Responsibility |
-|---|---|
-| `buildRileyMissionResponse(inputs)` (new exported function) | Mirror of `buildAlexMissionResponse`. Reads `AgentRoster` + `OrganizationConfig` + `Connection` rows (Meta Ads + optional `crm-data-provider`). Does **not** read `ManagedChannel` (those are Alex's inbox surface; Riley's only channel is Meta Ads). Returns the same `MissionAggregatorResponse` shape with `agentKey: "riley"`. |
-| Riley 404 removed | Replace `if (agentId !== "alex") return reply.code(404)…` with a branch: `if (agentId === "alex") build Alex; else if (agentId === "riley") build Riley`. The `ALEX_RILEY_ONLY` whitelist already permits both. |
-| Riley constants | `RILEY_ROLE = "Ad optimizer · score, recommend, never act without your approval"`, `RILEY_PIPELINE = "Ad sets · all campaigns"`, `RILEY_COMPOSER_PLACEHOLDER = "Tell Riley what to do — coming soon"` (the live Riley voice placeholder lands in B.3). |
-| `__tests__/mission.test.ts` extension | Add a Riley `describe` block covering: cold (no connections), Meta-connected (`status: "ok"`), Meta-degraded (`status: "warn"`), CRM provider present (`roasSource: "crm"`), targets set in `roster.config` (`avgValueCents`/`targetCpbCents` non-null), missing `OrganizationConfig.name` fallback, and the precondition that `mission.rules` is `null` for Riley. |
+| Change                                                      | Responsibility                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buildRileyMissionResponse(inputs)` (new exported function) | Mirror of `buildAlexMissionResponse`. Reads `AgentRoster` + `OrganizationConfig` + `Connection` rows (Meta Ads + optional `crm-data-provider`). Does **not** read `ManagedChannel` (those are Alex's inbox surface; Riley's only channel is Meta Ads). Returns the same `MissionAggregatorResponse` shape with `agentKey: "riley"`.                                 |
+| Riley 404 removed                                           | Replace `if (agentId !== "alex") return reply.code(404)…` with a branch: `if (agentId === "alex") build Alex; else if (agentId === "riley") build Riley`. The `ALEX_RILEY_ONLY` whitelist already permits both.                                                                                                                                                     |
+| Riley constants                                             | `RILEY_ROLE = "Ad optimizer · score, recommend, never act without your approval"`, `RILEY_PIPELINE = "Ad sets · all campaigns"`, `RILEY_COMPOSER_PLACEHOLDER = "Tell Riley what to do — coming soon"` (the live Riley voice placeholder lands in B.3).                                                                                                              |
+| `__tests__/mission.test.ts` extension                       | Add a Riley `describe` block covering: cold (no connections), Meta-connected (`status: "ok"`), Meta-degraded (`status: "warn"`), CRM provider present (`roasSource: "crm"`), targets set in `roster.config` (`avgValueCents`/`targetCpbCents` non-null), missing `OrganizationConfig.name` fallback, and the precondition that `mission.rules` is `null` for Riley. |
 
 #### Riley aggregator output (locked at the spec level)
 
@@ -89,10 +89,10 @@ Modified to mirror `cockpit-page.tsx` (Alex) for the mission popover only — **
 
 ### Tests added
 
-| File | New cases |
-|---|---|
-| `apps/api/src/routes/agent-home/__tests__/mission.test.ts` | 7 Riley cases (see backend table above). |
-| `apps/api/src/routes/agent-home/__tests__/mission.test.ts` | Remove or invert the existing "404 for non-Alex agents at A.2" case — Riley now returns 200. Mira still 404s (Mira is not in `ALEX_RILEY_ONLY`). |
+| File                                                                          | New cases                                                                                                                                                                  |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api/src/routes/agent-home/__tests__/mission.test.ts`                    | 7 Riley cases (see backend table above).                                                                                                                                   |
+| `apps/api/src/routes/agent-home/__tests__/mission.test.ts`                    | Remove or invert the existing "404 for non-Alex agents at A.2" case — Riley now returns 200. Mira still 404s (Mira is not in `ALEX_RILEY_ONLY`).                           |
 | `apps/dashboard/src/components/cockpit/__tests__/riley-cockpit-page.test.tsx` | Popover toggles via subtitle click; popover renders Riley-shaped 5 rows from fixture; `mission.data === undefined` keeps subtitle non-interactive (existing B.1 behavior). |
 
 ### No changes to
@@ -156,13 +156,13 @@ Expected: zero new matches outside `lib/cockpit/riley/**`.
 
 ## Backend changes by slice (refresher)
 
-| Change | Slice |
-|---|---|
-| `buildRileyMissionResponse` + remove Riley 404 | **B.2a** (this slice) |
-| `AgentRoster.avgValueCents` + `targetCpbCents` columns Prisma migration | **B.2b** (after A.3) |
-| `/api/dashboard/agents/[agentId]/metrics` extension with `tiles[]` + `roi` + `targets` | **B.2b** |
-| `RecommendationPresentation.acceptToast` + `declineToast` optional fields | **B.3** |
-| WorkTrace mirror, PlatformIngress route, ExecutableWorkUnit, outcome attribution, learning memory | **Wave B** |
+| Change                                                                                            | Slice                 |
+| ------------------------------------------------------------------------------------------------- | --------------------- |
+| `buildRileyMissionResponse` + remove Riley 404                                                    | **B.2a** (this slice) |
+| `AgentRoster.avgValueCents` + `targetCpbCents` columns Prisma migration                           | **B.2b** (after A.3)  |
+| `/api/dashboard/agents/[agentId]/metrics` extension with `tiles[]` + `roi` + `targets`            | **B.2b**              |
+| `RecommendationPresentation.acceptToast` + `declineToast` optional fields                         | **B.3**               |
+| WorkTrace mirror, PlatformIngress route, ExecutableWorkUnit, outcome attribution, learning memory | **Wave B**            |
 
 ---
 
