@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
@@ -53,6 +54,7 @@ function centsPerLeadToDisplay(spendCents: number | null, leads: number): string
 }
 
 export function HomePage() {
+  const router = useRouter();
   const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
 
   const session = useSession();
@@ -264,6 +266,9 @@ export function HomePage() {
           onOpenChange={(o) => {
             if (!o) setPanelAgent(null);
           }}
+          onSeeAll={() => router.push("/results")}
+          // TODO: deep-link to the decision-detail sheet when the Inbox detail workstream lands (open the specific decision via sourceRef).
+          onOpenDecision={() => router.push("/inbox")}
         />
       )}
     </>

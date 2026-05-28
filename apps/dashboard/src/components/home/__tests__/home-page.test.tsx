@@ -106,16 +106,31 @@ vi.mock("next-auth/react", () => ({
 
 // AgentPanel is a self-contained sheet tested independently in agent-panel.test.tsx.
 // Mock it here so the Home wiring test focuses on the open-state toggle, not
-// the deep Radix/sprite render tree.
+// the deep Radix/sprite render tree. Buttons for onSeeAll / onOpenDecision are
+// rendered so tests can verify the route-out callbacks are wired correctly.
 vi.mock("@/components/agent-panel/agent-panel", () => ({
   AgentPanel: ({
     agentKey,
     open,
+    onSeeAll,
+    onOpenDecision,
   }: {
     agentKey: string;
     open: boolean;
     onOpenChange: () => void;
-  }) => (open ? <div role="dialog" data-testid={`mock-agent-panel-${agentKey}`} /> : null),
+    onSeeAll?: () => void;
+    onOpenDecision?: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" data-testid={`mock-agent-panel-${agentKey}`}>
+        <button onClick={onSeeAll} data-testid="mock-see-all">
+          See all
+        </button>
+        <button onClick={onOpenDecision} data-testid="mock-open-decision">
+          Open decision
+        </button>
+      </div>
+    ) : null,
 }));
 
 import { fireEvent } from "@testing-library/react";
@@ -386,5 +401,29 @@ describe("HomePage", () => {
     fireEvent.click(screen.getByTestId("agent-chip-riley"));
     expect(screen.getByTestId("mock-agent-panel-riley")).toBeInTheDocument();
     expect(screen.queryByTestId("mock-agent-panel-alex")).not.toBeInTheDocument();
+  });
+
+  it("onSeeAll callback navigates to /results", () => {
+    render(<HomePage />);
+
+    // Open a panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+
+    // Trigger the See All button wired to onSeeAll.
+    fireEvent.click(screen.getByTestId("mock-see-all"));
+    expect(pushMock).toHaveBeenCalledWith("/results");
+  });
+
+  it("onOpenDecision callback navigates to /inbox", () => {
+    render(<HomePage />);
+
+    // Open a panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+
+    // Trigger the Open Decision button wired to onOpenDecision.
+    fireEvent.click(screen.getByTestId("mock-open-decision"));
+    expect(pushMock).toHaveBeenCalledWith("/inbox");
   });
 });
