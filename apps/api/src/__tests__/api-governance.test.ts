@@ -149,6 +149,56 @@ describe("Governance API", () => {
       // profileToPosture("locked") => "critical"
       expect(body.posture).toBe("critical");
     });
+
+    it("aggregates deploymentStatus org-wide — paused if ANY agent is paused (not just alex)", async () => {
+      mockGovernanceProfileStore.get.mockResolvedValue("locked");
+      mockGovernanceProfileStore.getConfig.mockResolvedValue(null);
+      // alex active, riley paused, mira active. The old alex-only read reported
+      // "active" — a false all-clear for a multi-agent org with one agent halted.
+      const findMany = vi
+        .fn()
+        .mockResolvedValue([{ status: "active" }, { status: "paused" }, { status: "active" }]);
+      app.decorate("prisma", {
+        agentDeployment: { findMany },
+        auditEntry: { findFirst: vi.fn().mockResolvedValue(null) },
+      } as unknown as never);
+
+      const res = await app.inject({ method: "GET", url: "/api/governance/org_123/status" });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().deploymentStatus).toBe("paused");
+      // org-wide query, not skillSlug-scoped
+      expect(findMany).toHaveBeenCalledWith({
+        where: { organizationId: "org_123" },
+        select: { status: true },
+      });
+    });
+
+    it("reports active when every agent is active", async () => {
+      mockGovernanceProfileStore.get.mockResolvedValue("guarded");
+      mockGovernanceProfileStore.getConfig.mockResolvedValue(null);
+      app.decorate("prisma", {
+        agentDeployment: {
+          findMany: vi.fn().mockResolvedValue([{ status: "active" }, { status: "active" }]),
+        },
+        auditEntry: { findFirst: vi.fn() },
+      } as unknown as never);
+
+      const res = await app.inject({ method: "GET", url: "/api/governance/org_123/status" });
+      expect(res.json().deploymentStatus).toBe("active");
+    });
+
+    it("reports not_found when the org has no deployments", async () => {
+      mockGovernanceProfileStore.get.mockResolvedValue("guarded");
+      mockGovernanceProfileStore.getConfig.mockResolvedValue(null);
+      app.decorate("prisma", {
+        agentDeployment: { findMany: vi.fn().mockResolvedValue([]) },
+        auditEntry: { findFirst: vi.fn() },
+      } as unknown as never);
+
+      const res = await app.inject({ method: "GET", url: "/api/governance/org_123/status" });
+      expect(res.json().deploymentStatus).toBe("not_found");
+    });
   });
 
   // ── PUT /api/governance/:orgId/profile ─────────────────────────────
