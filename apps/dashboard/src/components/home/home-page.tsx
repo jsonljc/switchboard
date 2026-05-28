@@ -14,6 +14,7 @@ import { useGovernanceStatus } from "@/hooks/use-governance";
 import type { Decision } from "@/lib/decisions/types";
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
 import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
+import { coreSetupIncomplete } from "@/components/agent-panel/lib/key-result-state";
 import { Verdict } from "./verdict";
 import { composeVerdict } from "./compose-verdict";
 import { NeedsYou } from "./needs-you";
@@ -66,6 +67,7 @@ export function HomePage() {
   const alexMetrics = useAgentMetrics("alex");
   const alexActivity = useAgentActivityCockpit("alex", { limit: 4 });
   const alexMission = useAgentMission("alex");
+  const rileyMission = useAgentMission("riley");
   const governance = useGovernanceStatus();
 
   // ── Halt state (a halted/paused agent is NEVER "working") ──────────────────
@@ -91,9 +93,13 @@ export function HomePage() {
   const oldestWaitMin = oldestHours.length > 0 ? Math.round(Math.max(...oldestHours) * 60) : null;
 
   // ── Team Pulse (canonical alex/riley/mira from the registry) ───────────────
-  // The roster endpoint returns a legacy seed (Ava/Monitor/...) whose roles do
-  // not map to canonical agent keys, so presence is keyed off the registry's
-  // launchTier (day-one = set up; day-thirty = Mira, honestly "not set up").
+  // Presence (`setUp`) reflects REAL per-agent enablement: alex/riley derive it
+  // from mission core-completion (e.g. inbox / Meta connected), so an org that
+  // hasn't connected an agent's core channel sees it honestly "Not set up" —
+  // not the old static launchTier flag. Mira has no mission endpoint (404), so
+  // she stays launchTier (day-thirty → not set up). When a mission hook is
+  // loading or errored, fall back to launchTier rather than flipping to a
+  // transient "Not set up".
   // Working status needs positive evidence we can attribute to a canonical
   // agent; the legacy state rows give none, so chips stay idle (never a
   // fabricated "working") and any halt forces idle.
@@ -107,7 +113,14 @@ export function HomePage() {
   const teamPulseAgents: TeamPulseAgent[] = (Object.keys(AGENT_REGISTRY) as AgentKey[]).map(
     (key) => {
       const entry = AGENT_REGISTRY[key];
-      const setUp = entry.launchTier === "day-one";
+      let setUp: boolean;
+      if (key === "alex" && alexMission.data) {
+        setUp = !coreSetupIncomplete(alexMission.data, "alex");
+      } else if (key === "riley" && rileyMission.data) {
+        setUp = !coreSetupIncomplete(rileyMission.data, "riley");
+      } else {
+        setUp = entry.launchTier === "day-one";
+      }
       return {
         key,
         name: entry.displayName,

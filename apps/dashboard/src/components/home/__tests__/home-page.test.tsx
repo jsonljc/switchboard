@@ -177,6 +177,19 @@ function makeGreeting(inboxCount: number, oldestHours: number | null): GreetingV
   };
 }
 
+/** Minimal mission whose core setup row drives coreSetupIncomplete (setUp). */
+function makeMission(coreDone: boolean): MissionAggregatorResponse {
+  return {
+    agentKey: "alex",
+    displayName: "Alex",
+    mission: { role: "", pipeline: "", brand: "", channels: [], rules: null },
+    composerPlaceholder: "",
+    commands: [],
+    targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    setup: [{ key: "inbox", primary: true, done: coreDone }],
+  };
+}
+
 const METRICS: MetricsViewModelWire = {
   hero: { kind: "tours-booked", value: 7, comparator: { window: "week", value: 5 } },
   heroSubProseSegments: [],
@@ -442,5 +455,37 @@ describe("HomePage", () => {
     // Trigger the Activate button wired to onActivate.
     fireEvent.click(screen.getByTestId("mock-activate"));
     expect(pushMock).toHaveBeenCalledWith("/settings/channels");
+  });
+
+  it("Team Pulse setUp reflects real mission enablement, not static launchTier", () => {
+    // Mission reports the core channel NOT connected → agents are honestly
+    // "Not set up", even though launchTier marks alex/riley day-one. The old
+    // static launchTier read would have shown them set up.
+    missionState = { data: makeMission(false), isError: false };
+
+    render(<HomePage />);
+
+    expect(screen.getByTestId("agent-chip-alex")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("agent-chip-riley")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("Team Pulse shows agents set up when the mission core is complete", () => {
+    missionState = { data: makeMission(true), isError: false };
+
+    render(<HomePage />);
+
+    expect(screen.getByTestId("agent-chip-alex")).toHaveAttribute("data-disabled", "false");
+    expect(screen.getByTestId("agent-chip-riley")).toHaveAttribute("data-disabled", "false");
+  });
+
+  it("falls back to launchTier when mission is unavailable (no fabricated 'Not set up')", () => {
+    // Mission errored → don't flip to a transient "Not set up"; use launchTier.
+    missionState = { data: undefined, isError: true };
+
+    render(<HomePage />);
+
+    // alex/riley day-one → set up via fallback; mira day-thirty → not set up.
+    expect(screen.getByTestId("agent-chip-alex")).toHaveAttribute("data-disabled", "false");
+    expect(screen.getByTestId("agent-chip-mira")).toHaveAttribute("data-disabled", "true");
   });
 });
