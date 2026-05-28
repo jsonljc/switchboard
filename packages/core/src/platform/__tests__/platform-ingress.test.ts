@@ -219,6 +219,24 @@ describe("PlatformIngress", () => {
     expect(trace.intent).toBe("campaign.pause");
   });
 
+  it("scopes the idempotency replay lookup by organizationId (cross-tenant safety)", async () => {
+    const getByIdempotencyKey = vi.fn().mockResolvedValue(null);
+    const traceStore: WorkTraceStore = {
+      persist: vi.fn().mockResolvedValue(undefined),
+      getByWorkUnitId: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({ ok: true, trace: {} as never }),
+      getByIdempotencyKey,
+    };
+    const config = createConfig({ traceStore });
+    const ingress = new PlatformIngress(config);
+
+    await ingress.submit({ ...baseRequest, idempotencyKey: "key-1" });
+
+    // The replay lookup MUST be org-scoped so a key reused across tenants cannot
+    // return another org's cached WorkTrace (cross-tenant disclosure).
+    expect(getByIdempotencyKey).toHaveBeenCalledWith("org-1", "key-1");
+  });
+
   it("persists WorkTrace on governance deny", async () => {
     const traceStore: WorkTraceStore = {
       persist: vi.fn().mockResolvedValue(undefined),

@@ -64,9 +64,14 @@ export class InMemoryWorkTraceStore implements WorkTraceStore {
     return { ok: true, trace: this.traces.get(workUnitId) ?? ({} as never) };
   }
 
-  async getByIdempotencyKey(key: string): Promise<WorkTraceReadResult | null> {
+  async getByIdempotencyKey(
+    organizationId: string,
+    key: string,
+  ): Promise<WorkTraceReadResult | null> {
     for (const trace of this.traces.values()) {
-      if (trace.idempotencyKey === key) return { trace, integrity: { status: "ok" as const } };
+      if (trace.organizationId === organizationId && trace.idempotencyKey === key) {
+        return { trace, integrity: { status: "ok" as const } };
+      }
     }
     return null;
   }
