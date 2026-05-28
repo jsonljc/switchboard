@@ -32,6 +32,20 @@ function isEmergencyHaltCapable(cartridge: unknown): cartridge is EmergencyHaltC
   );
 }
 
+/**
+ * Aggregate per-deployment status into one org-level signal for /status.
+ * "paused" wins so the UI never reports all-clear while any agent is halted
+ * (halt/resume are org-wide); else "active" if any agent is live; else a
+ * representative status, or "not_found" for a zero-deployment org. Replaces a
+ * prior skillSlug:"alex"-only read that lied about multi-agent workspaces.
+ */
+function aggregateDeploymentStatus(deployments: Array<{ status: string }>): string {
+  if (deployments.length === 0) return "not_found";
+  if (deployments.some((d) => d.status === "paused")) return "paused";
+  if (deployments.some((d) => d.status === "active")) return "active";
+  return deployments[0]!.status;
+}
+
 export const governanceRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/governance/:orgId/status
   app.get(
@@ -66,11 +80,11 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       let haltReason: string | null = null;
 
       if (app.prisma) {
-        const deployment = await app.prisma.agentDeployment.findFirst({
-          where: { organizationId: orgId, skillSlug: "alex" },
+        const deployments = await app.prisma.agentDeployment.findMany({
+          where: { organizationId: orgId },
           select: { status: true },
         });
-        deploymentStatus = deployment?.status ?? "not_found";
+        deploymentStatus = aggregateDeploymentStatus(deployments);
 
         if (deploymentStatus === "paused") {
           const haltEntry = await app.prisma.auditEntry.findFirst({
