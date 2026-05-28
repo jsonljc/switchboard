@@ -3,6 +3,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAgentMetrics } from "../use-agent-metrics";
+import { scopedKeys } from "@/lib/query-keys";
 
 vi.mock("../use-query-keys", () => ({
   useScopedQueryKeys: vi.fn(() => ({
@@ -34,7 +35,7 @@ describe("useAgentMetrics (live)", () => {
       ok: true,
       json: async () => ({ vm: { hero: { kind: "tours-booked", value: 1 }, folioRange: "Mon" } }),
     });
-    const { result } = renderHook(() => useAgentMetrics("alex" as never), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("alex"), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.data?.folioRange).toBe("Mon");
     expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/agents/alex/metrics?window=week");
@@ -42,7 +43,7 @@ describe("useAgentMetrics (live)", () => {
 
   it("returns isError on 500", async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
-    const { result } = renderHook(() => useAgentMetrics("alex" as never), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("alex"), { wrapper });
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
 
@@ -63,7 +64,7 @@ describe("useAgentMetrics (live)", () => {
         },
       }),
     });
-    const { result } = renderHook(() => useAgentMetrics("alex" as never), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("alex"), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     const data = result.current.data;
     expect(data?.targets).toEqual({ avgValueCents: 17900, targetCpbCents: 3000 });
@@ -86,7 +87,7 @@ describe("useAgentMetrics (live)", () => {
         },
       }),
     });
-    const { result } = renderHook(() => useAgentMetrics("alex" as never), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("alex"), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     const data = result.current.data;
     expect(data?.folioRange).toBe("May 5 – May 11");
@@ -102,7 +103,7 @@ describe("useAgentMetrics window param", () => {
       ok: true,
       json: async () => ({ vm: { hero: { kind: "ad-leads", value: 5 } } }),
     });
-    const { result } = renderHook(() => useAgentMetrics("riley" as never), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("riley"), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("?window=week"));
   });
@@ -112,7 +113,7 @@ describe("useAgentMetrics window param", () => {
       ok: true,
       json: async () => ({ vm: { hero: { kind: "ad-leads", value: 214 } } }),
     });
-    const { result } = renderHook(() => useAgentMetrics("riley" as never, "all"), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("riley", "all"), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/agents/riley/metrics?window=all");
     expect(result.current.data?.hero?.value).toBe(214);
@@ -120,26 +121,13 @@ describe("useAgentMetrics window param", () => {
 
   it("a 400 response with window=all surfaces as isError:true and data:undefined (caller can fall back to week)", async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 400 });
-    const { result } = renderHook(() => useAgentMetrics("riley" as never, "all"), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("riley", "all"), { wrapper });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.data).toBeUndefined();
   });
 
-  it("'week' and 'all' use distinct query keys (no cache collision)", () => {
-    // The query key factory must include window so each window has its own entry.
-    const keys = {
-      metrics: {
-        feed: (agentKey: string, window: string) => [
-          "org-test",
-          "metrics",
-          "feed",
-          agentKey,
-          window,
-        ],
-      },
-    };
-    const weekKey = keys.metrics.feed("riley", "week");
-    const allKey = keys.metrics.feed("riley", "all");
-    expect(weekKey).not.toEqual(allKey);
+  it("'week' and 'all' produce distinct real query keys", () => {
+    const keys = scopedKeys("test-org");
+    expect(keys.metrics.feed("riley", "week")).not.toEqual(keys.metrics.feed("riley", "all"));
   });
 });

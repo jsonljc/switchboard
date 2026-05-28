@@ -171,16 +171,24 @@ describe("IdentityStatus slot", () => {
     expect(screen.queryByText(/Oldest lead has waited/i)).not.toBeInTheDocument();
   });
 
-  it("missing/empty segments → 'No update yet.' fallback", () => {
+  it("missing/empty segments → 'No update yet' fallback", () => {
     greetingData = makeGreeting({ segments: [] });
     render(<IdentityStatus agentKey="alex" />);
-    expect(screen.getByText("No update yet.")).toBeInTheDocument();
+    expect(screen.getByText("No update yet")).toBeInTheDocument();
   });
 
-  it("greeting not yet loaded → 'No update yet.' fallback (undefined data)", () => {
+  it("greeting not yet loaded → 'No update yet' fallback (undefined data)", () => {
     greetingData = undefined;
     render(<IdentityStatus agentKey="alex" />);
-    expect(screen.getByText("No update yet.")).toBeInTheDocument();
+    expect(screen.getByText("No update yet")).toBeInTheDocument();
+  });
+
+  it("greeting fetch error → graceful fallback, never a fabricated verdict", () => {
+    greetingIsError = true;
+    greetingData = undefined;
+    render(<IdentityStatus agentKey="alex" />);
+    expect(screen.getByText("No update yet")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing old is waiting")).not.toBeInTheDocument();
   });
 
   it("renders the agent avatar", () => {

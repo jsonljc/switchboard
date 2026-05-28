@@ -16,19 +16,19 @@ import { useScopedQueryKeys } from "./use-query-keys";
  * Legacy API responses that omit these fields will surface as undefined;
  * consumers should null-coalesce where needed.
  *
- * @param window - "week" (default) for current-week scope; "all" for lifetime.
+ * @param metricWindow - "week" (default) for current-week scope; "all" for lifetime.
  *   Passing "all" allows callers to fetch the lifetime figure and fall back to
  *   "week" when the server returns 400 (isError: true, data: undefined).
  */
 export function useAgentMetrics(
   agentKey: AgentKey,
-  window: "week" | "all" = "week",
+  metricWindow: "week" | "all" = "week",
 ): AgentBlockQuery<MetricsViewModelWire> {
   const keys = useScopedQueryKeys();
   const query = useQuery({
-    queryKey: keys?.metrics.feed(agentKey, window) ?? ["__disabled_metrics_feed__"],
+    queryKey: keys?.metrics.feed(agentKey, metricWindow) ?? ["__disabled_metrics_feed__"],
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard/agents/${agentKey}/metrics?window=${window}`);
+      const res = await fetch(`/api/dashboard/agents/${agentKey}/metrics?window=${metricWindow}`);
       if (!res.ok) throw new Error(`Metrics fetch failed (HTTP ${res.status})`);
       const json = (await res.json()) as { vm: MetricsViewModelWire };
       return json.vm;

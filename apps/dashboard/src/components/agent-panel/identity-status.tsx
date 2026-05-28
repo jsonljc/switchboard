@@ -44,12 +44,14 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
   // The runtime shape from /api/agents/state has agentRole, even though the TypeScript
   // type (AgentStateEntry from api-client-types) uses agentRosterId for embedded state.
   // We cast to access the runtime field safely.
+  type DerivedStateEntry = AgentStateEntry & { agentRole?: string; lastActionAt?: string | null };
+
   const agentRole =
     agentKey !== "mira" ? AGENT_ROLE_FOR_KEY[agentKey as Exclude<PanelAgentKey, "mira">] : null;
   const stateEntry =
     agentRole != null
-      ? (agentStateQuery.data?.states.find(
-          (s) => (s as AgentStateEntry & { agentRole?: string }).agentRole === agentRole,
+      ? ((agentStateQuery.data?.states as DerivedStateEntry[] | undefined)?.find(
+          (s) => s.agentRole === agentRole,
         ) ?? null)
       : null;
 
@@ -59,12 +61,7 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
   const statusLine = composeStatusLine({
     oldestOpenItemAgeHours: greeting.data?.signal.oldestOpenItemAgeHours ?? null,
     fallingBehindHours,
-    state: stateEntry
-      ? {
-          lastActionAt:
-            (stateEntry as AgentStateEntry & { lastActionAt?: string | null }).lastActionAt ?? null,
-        }
-      : null,
+    state: stateEntry ? { lastActionAt: stateEntry.lastActionAt ?? null } : null,
     nowMs,
   });
 
@@ -114,7 +111,7 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
             )}
           </p>
         ) : (
-          <p className={styles.verdictEmpty}>No update yet.</p>
+          <p className={styles.verdictEmpty}>No update yet</p>
         )}
       </div>
     </div>
