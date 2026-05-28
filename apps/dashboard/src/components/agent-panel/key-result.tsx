@@ -7,7 +7,11 @@ import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
 import { selectKeyResult, coreSetupIncomplete } from "./lib/key-result-state";
 import { labelForHeroKind } from "./lib/agent-display";
 import { formatCents } from "./lib/format";
-import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
+import type {
+  MissionAggregatorResponse,
+  MissionSetupRow,
+  MissionChannel,
+} from "@/lib/cockpit/mission-types";
 import styles from "./agent-panel.module.css";
 
 export interface KeyResultProps {
@@ -84,7 +88,11 @@ export function KeyResult({ agentKey }: KeyResultProps) {
         data-testid="activation-block"
       >
         <p className={styles.heroActivationLine}>
-          <em>Connect {agentKey === "riley" ? "Meta Ads" : "your inbox"} to get started</em>
+          <em>
+            {agentKey === "riley"
+              ? "Connect Meta Ads so Riley can start finding leads."
+              : "Connect your inbox so Alex can respond to leads."}
+          </em>
         </p>
         {/* Channel chips from mission data */}
         {missionData?.mission?.channels && missionData.mission.channels.length > 0 && (
@@ -117,6 +125,7 @@ export function KeyResult({ agentKey }: KeyResultProps) {
   // result.kind === "proof"
   const { hero, scope, spendCents, targets } = result;
   const isZero = hero.value === 0;
+  const missionDataForProof = mission.data as MissionAggregatorResponse | undefined;
 
   // CPL beat for Riley when ad-leads + spend + target all present
   const cplBeat =
@@ -127,6 +136,9 @@ export function KeyResult({ agentKey }: KeyResultProps) {
     targets?.targetCpbCents != null
       ? buildCplBeat(spendCents, hero.value, targets.targetCpbCents)
       : null;
+
+  // Non-core nudge: shown when core is done (proof) but a secondary step/channel is still off
+  const nudge = nonCoreNudge(missionDataForProof, agentKey);
 
   return (
     <div className={`${styles.heroCard}${isZero ? ` ${styles.heroZero}` : ""}`} data-kind="proof">
@@ -145,8 +157,72 @@ export function KeyResult({ agentKey }: KeyResultProps) {
       </div>
       {/* CPL comparator — neutral ink only, never green/red */}
       {cplBeat && <p className={styles.heroComp}>{cplBeat}</p>}
+      {/* Non-core nudge — muted inline hint; never amber, never replaces proof hero */}
+      {nudge && (
+        <p className={styles.nonCoreNudge} data-testid="non-core-nudge">
+          {nudge}
+        </p>
+      )}
     </div>
   );
+}
+
+// Core channel keys per agent — if core is incomplete we are in activation, not proof.
+const CORE_CHANNEL: Record<"alex" | "riley", string> = { alex: "inbox", riley: "meta" };
+
+/**
+ * Find the first non-core incomplete setup step or channel for the agent.
+ * Returns a nudge string when one exists, null when everything non-core is complete.
+ * Called only in the proof branch (core is already done).
+ */
+function nonCoreNudge(
+  missionData: MissionAggregatorResponse | undefined,
+  agentKey: "alex" | "riley",
+): string | null {
+  if (!missionData) return null;
+  const displayName = missionData.displayName || agentDisplay[agentKey].name;
+  const coreKey = CORE_CHANNEL[agentKey];
+
+  // 1. Check setup rows first (non-primary, non-core, incomplete)
+  const incompleteSetup = missionData.setup.find(
+    (s: MissionSetupRow) => s.key !== coreKey && !s.primary && !s.done,
+  );
+  if (incompleteSetup) {
+    return nonCoreSetupNudgeCopy(incompleteSetup.key, displayName);
+  }
+
+  // 2. Check channels — exclude the core channel key
+  const incompleteChannel = missionData.mission.channels.find(
+    (ch: MissionChannel) =>
+      ch.kind !== coreKey && ch.kind !== `${coreKey}-ads` && ch.status === "off",
+  );
+  if (incompleteChannel) {
+    return nonCoreChannelNudgeCopy(incompleteChannel.kind, agentKey, displayName);
+  }
+
+  return null;
+}
+
+function nonCoreSetupNudgeCopy(key: string, displayName: string): string {
+  switch (key) {
+    case "cal":
+      return `Connect your calendar so ${displayName} can book consults.`;
+    case "rules":
+      return `Set your guardrails so ${displayName} knows your limits.`;
+    default:
+      return `Finish setup to get more from ${displayName}.`;
+  }
+}
+
+function nonCoreChannelNudgeCopy(
+  kind: string,
+  agentKey: "alex" | "riley",
+  displayName: string,
+): string {
+  if (agentKey === "riley" && kind === "google-ads") {
+    return `Connect Google Ads to expand ${displayName}'s reach.`;
+  }
+  return `Finish setup to get more from ${displayName}.`;
 }
 
 /**

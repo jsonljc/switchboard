@@ -225,4 +225,169 @@ describe("KeyResult slot — launch-blocker tests", () => {
     // Activation block NOT rendered
     expect(screen.queryByTestId("activation-block")).not.toBeInTheDocument();
   });
+
+  // Gap 2 — value-framed activation copy: Riley
+  it("gap2a. activation for riley uses value-framed copy naming Riley's outcome", () => {
+    allData = undefined;
+    allIsError = true;
+    weekData = undefined;
+    weekIsError = true;
+    missionData = {
+      agentKey: "riley",
+      displayName: "Riley",
+      setup: [{ key: "meta", done: false, primary: true }],
+      mission: {
+        role: "ad-optimizer",
+        pipeline: "ads",
+        brand: "Clinic",
+        channels: [],
+        rules: null,
+      },
+      composerPlaceholder: "",
+      commands: [],
+      targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    };
+    render(<KeyResult agentKey="riley" />);
+
+    expect(screen.getByTestId("activation-block")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Connect Meta Ads so Riley can start finding leads/i),
+    ).toBeInTheDocument();
+    // Old task-framed copy must NOT appear
+    expect(screen.queryByText(/to get started/i)).not.toBeInTheDocument();
+  });
+
+  // Gap 2 — value-framed activation copy: Alex
+  it("gap2b. activation for alex uses value-framed copy naming Alex's outcome", () => {
+    allData = undefined;
+    allIsError = true;
+    weekData = undefined;
+    weekIsError = true;
+    missionData = {
+      agentKey: "alex",
+      displayName: "Alex",
+      setup: [{ key: "inbox", done: false, primary: true }],
+      mission: {
+        role: "assistant",
+        pipeline: "crm",
+        brand: "Clinic",
+        channels: [],
+        rules: null,
+      },
+      composerPlaceholder: "",
+      commands: [],
+      targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    };
+    render(<KeyResult agentKey="alex" />);
+
+    expect(screen.getByTestId("activation-block")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Connect your inbox so Alex can respond to leads/i),
+    ).toBeInTheDocument();
+    // Old task-framed copy must NOT appear
+    expect(screen.queryByText(/to get started/i)).not.toBeInTheDocument();
+  });
+
+  // Gap 1 — non-core nudge present when proof + non-primary setup step incomplete
+  it("gap1a. proof + non-core setup step incomplete → proof hero shows + non-core-nudge present + no activation-block", () => {
+    allData = makeMetricsVM({ kind: "tours-booked", value: 8 });
+    weekData = makeMetricsVM({ kind: "tours-booked", value: 2 });
+    missionData = {
+      agentKey: "alex",
+      displayName: "Alex",
+      setup: [
+        { key: "inbox", done: true, primary: true },
+        { key: "rules", done: false },
+      ],
+      mission: {
+        role: "assistant",
+        pipeline: "crm",
+        brand: "Clinic",
+        channels: [],
+        rules: null,
+      },
+      composerPlaceholder: "",
+      commands: [],
+      targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    };
+    render(<KeyResult agentKey="alex" />);
+
+    // Proof hero shown (lifetime value)
+    expect(screen.getByText("8")).toBeInTheDocument();
+    expect(screen.getByText(/since you hired Alex/i)).toBeInTheDocument();
+    // Non-core nudge present
+    expect(screen.getByTestId("non-core-nudge")).toBeInTheDocument();
+    expect(screen.getByText(/Set your guardrails so Alex knows your limits/i)).toBeInTheDocument();
+    // No activation block
+    expect(screen.queryByTestId("activation-block")).not.toBeInTheDocument();
+  });
+
+  // Gap 1 — non-core nudge present when proof + non-core channel is off
+  it("gap1b. proof + non-core channel off → proof hero shows + non-core-nudge present + no activation-block", () => {
+    allData = makeMetricsVM({ kind: "ad-leads", value: 15 });
+    weekData = makeMetricsVM({ kind: "ad-leads", value: 3 });
+    missionData = {
+      agentKey: "riley",
+      displayName: "Riley",
+      setup: [{ key: "meta", done: true, primary: true }],
+      mission: {
+        role: "ad-optimizer",
+        pipeline: "ads",
+        brand: "Clinic",
+        channels: [
+          { kind: "meta-ads", label: "Meta Ads", status: "ok" },
+          { kind: "google-ads", label: "Google Ads", status: "off" },
+        ],
+        rules: null,
+      },
+      composerPlaceholder: "",
+      commands: [],
+      targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    };
+    render(<KeyResult agentKey="riley" />);
+
+    // Proof hero shown
+    expect(screen.getByText("15")).toBeInTheDocument();
+    // Non-core nudge present
+    expect(screen.getByTestId("non-core-nudge")).toBeInTheDocument();
+    expect(screen.getByText(/Connect Google Ads to expand Riley's reach/i)).toBeInTheDocument();
+    // No activation block
+    expect(screen.queryByTestId("activation-block")).not.toBeInTheDocument();
+  });
+
+  // Gap 1 — all-complete proof renders NO nudge
+  it("gap1c. proof + all setup complete → no non-core-nudge", () => {
+    allData = makeMetricsVM({ kind: "tours-booked", value: 20 });
+    weekData = makeMetricsVM({ kind: "tours-booked", value: 4 });
+    missionData = {
+      agentKey: "alex",
+      displayName: "Alex",
+      setup: [
+        { key: "inbox", done: true, primary: true },
+        { key: "rules", done: true },
+        { key: "cal", done: true },
+      ],
+      mission: {
+        role: "assistant",
+        pipeline: "crm",
+        brand: "Clinic",
+        channels: [
+          { kind: "whatsapp", label: "WhatsApp", status: "ok" },
+          { kind: "telegram", label: "Telegram", status: "ok" },
+        ],
+        rules: null,
+      },
+      composerPlaceholder: "",
+      commands: [],
+      targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    };
+    render(<KeyResult agentKey="alex" />);
+
+    // Proof hero shown
+    expect(screen.getByText("20")).toBeInTheDocument();
+    // No nudge
+    expect(screen.queryByTestId("non-core-nudge")).not.toBeInTheDocument();
+    // No activation block
+    expect(screen.queryByTestId("activation-block")).not.toBeInTheDocument();
+  });
 });

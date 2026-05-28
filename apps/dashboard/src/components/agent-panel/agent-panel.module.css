@@ -496,6 +496,16 @@
   background: hsl(var(--agent-attention));
 }
 
+/* Non-core nudge — muted inline hint below the proof hero */
+.nonCoreNudge {
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  margin: 4px 0 0;
+}
+
 /* Activation CTA — amber fill, anchored to the agent color */
 .heroActivationCta {
   align-self: flex-start;
