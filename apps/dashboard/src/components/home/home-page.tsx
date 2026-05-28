@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
@@ -10,6 +11,8 @@ import { useAgentActivityCockpit } from "@/hooks/use-agent-activity-cockpit";
 import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useGovernanceStatus } from "@/hooks/use-governance";
 import type { Decision } from "@/lib/decisions/types";
+import { AgentPanel } from "@/components/agent-panel/agent-panel";
+import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
 import { Verdict } from "./verdict";
 import { composeVerdict } from "./compose-verdict";
 import { NeedsYou } from "./needs-you";
@@ -50,6 +53,8 @@ function centsPerLeadToDisplay(spendCents: number | null, leads: number): string
 }
 
 export function HomePage() {
+  const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
+
   const session = useSession();
   const decisionFeed = useDecisionFeed(null);
   const alexGreeting = useAgentGreeting("alex");
@@ -202,7 +207,7 @@ export function HomePage() {
   );
   const teamPulseNode = (
     <HomeModuleBoundary key="team-pulse">
-      <TeamPulse agents={teamPulseAgents} />
+      <TeamPulse agents={teamPulseAgents} onOpenAgent={setPanelAgent} />
     </HomeModuleBoundary>
   );
   const thisWeekNode = (
@@ -248,5 +253,18 @@ export function HomePage() {
         permissionsNode,
       ];
 
-  return <div className={styles.column}>{modules}</div>;
+  return (
+    <>
+      <div className={styles.column}>{modules}</div>
+      {panelAgent && (
+        <AgentPanel
+          agentKey={panelAgent}
+          open
+          onOpenChange={(o) => {
+            if (!o) setPanelAgent(null);
+          }}
+        />
+      )}
+    </>
+  );
 }

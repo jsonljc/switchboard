@@ -104,6 +104,21 @@ vi.mock("next-auth/react", () => ({
   useSession: () => sessionState,
 }));
 
+// AgentPanel is a self-contained sheet tested independently in agent-panel.test.tsx.
+// Mock it here so the Home wiring test focuses on the open-state toggle, not
+// the deep Radix/sprite render tree.
+vi.mock("@/components/agent-panel/agent-panel", () => ({
+  AgentPanel: ({
+    agentKey,
+    open,
+  }: {
+    agentKey: string;
+    open: boolean;
+    onOpenChange: () => void;
+  }) => (open ? <div role="dialog" data-testid={`mock-agent-panel-${agentKey}`} /> : null),
+}));
+
+import { fireEvent } from "@testing-library/react";
 import { HomePage } from "../home-page";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -340,5 +355,22 @@ describe("HomePage", () => {
     // Active proof line must be present (open leads) but must NOT contain "working".
     expect(verdictEl.textContent).toMatch(/open leads/i);
     expect(verdictEl.textContent).not.toMatch(/working/i);
+  });
+
+  it("clicking a Team Pulse chip opens the agent panel for that agent", () => {
+    // Panel is absent before interaction.
+    render(<HomePage />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Click the alex chip → panel should appear.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+  });
+
+  it("clicking the mira chip opens the agent panel for mira (honest not-set-up panel)", () => {
+    render(<HomePage />);
+    fireEvent.click(screen.getByTestId("agent-chip-mira"));
+    expect(screen.getByTestId("mock-agent-panel-mira")).toBeInTheDocument();
   });
 });
