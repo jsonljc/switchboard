@@ -824,3 +824,17 @@
 .heroActivationCta:hover {
   opacity: 0.88;
 }
+
+/* ─── Freshness foot (slot ⑤) ─────────────────────────────────────────────
+   Single muted "as of {time}" line. Per spec: provenance over liveness.
+   No slot label — it closes the panel reading, not introduces another section.
+*/
+.freshnessFoot {
+  font-family: var(--font-home-sans);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  text-align: center;
+  padding: 12px 20px 20px;
+  margin: 0;
+}
