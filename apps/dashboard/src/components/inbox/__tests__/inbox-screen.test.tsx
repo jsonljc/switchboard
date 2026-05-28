@@ -39,6 +39,41 @@ vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   ),
 }));
 
+const pushMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock, replace: pushMock, prefetch: vi.fn() }),
+}));
+
+// AgentPanel is tested independently; mock it so InboxScreen wiring tests stay focused.
+vi.mock("@/components/agent-panel/agent-panel", () => ({
+  AgentPanel: ({
+    agentKey,
+    open,
+    onOpenChange,
+    onSeeAll,
+    onOpenDecision,
+  }: {
+    agentKey: string;
+    open: boolean;
+    onOpenChange: (o: boolean) => void;
+    onSeeAll?: () => void;
+    onOpenDecision?: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" data-testid={`mock-agent-panel-${agentKey}`}>
+        <button onClick={() => onOpenChange(false)} data-testid="mock-panel-close">
+          Close
+        </button>
+        <button onClick={onSeeAll} data-testid="mock-see-all">
+          See all
+        </button>
+        <button onClick={onOpenDecision} data-testid="mock-open-decision">
+          Open decision
+        </button>
+      </div>
+    ) : null,
+}));
+
 // Import component after mocks are set up
 import { InboxScreen } from "../inbox-screen";
 
@@ -125,6 +160,7 @@ function successFeed(decisions: Decision[]) {
 describe("<InboxScreen>", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pushMock.mockClear();
     // Default: populated success state for both filtered and unfiltered feeds
     feedByKey = (_agentKey) => successFeed(allDecisions);
   });
@@ -213,8 +249,10 @@ describe("<InboxScreen>", () => {
       // Filter row chips should have counts from the unfiltered decisions
       // Alex chip should show 1, Riley chip should show 2
       // Chips are buttons with aria-pressed and contain label + count
-      const alexChip = screen.getByRole("button", { name: /Alex/ });
-      const rileyChip = screen.getByRole("button", { name: /Riley/ });
+      // Use the filter group to scope — avoids ambiguity with avatar buttons in the list.
+      const filterGroup = screen.getByRole("group", { name: /filter by teammate/i });
+      const alexChip = within(filterGroup).getByRole("button", { name: /Alex/ });
+      const rileyChip = within(filterGroup).getByRole("button", { name: /Riley/ });
 
       // Assert the actual count VALUES, not just chip presence — an all-zeros
       // regression in the counts derivation must fail this test (day-one chips
@@ -223,7 +261,7 @@ describe("<InboxScreen>", () => {
       expect(within(rileyChip).getByText("2")).toBeInTheDocument();
 
       // The "All" chip shows total = 3
-      const allChip = screen.getByRole("button", { name: /All/ });
+      const allChip = within(filterGroup).getByRole("button", { name: /All/ });
       expect(within(allChip).getByText("3")).toBeInTheDocument();
     });
   });
@@ -243,8 +281,9 @@ describe("<InboxScreen>", () => {
       // Initially all decisions visible
       expect(screen.getByText("Should I send Maya the membership comparison?")).toBeInTheDocument();
 
-      // Click the Riley chip
-      const rileyChip = screen.getByRole("button", { name: /Riley/ });
+      // Click the Riley filter chip (scope to filter group to avoid ambiguity with avatar buttons)
+      const filterGroup = screen.getByRole("group", { name: /filter by teammate/i });
+      const rileyChip = within(filterGroup).getByRole("button", { name: /Riley/ });
       fireEvent.click(rileyChip);
 
       // After filter: only riley decisions visible
@@ -302,6 +341,66 @@ describe("<InboxScreen>", () => {
 
       expect(screen.getByText("Handoff detail coming next.")).toBeInTheDocument();
       expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  // Test 8: agent avatar opens agent panel
+  describe("(8) agent avatar button opens the agent panel", () => {
+    it("panel is absent before interaction", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+      render(<InboxScreen />);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("clicking the agent avatar button opens the agent panel for that agent", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+      render(<InboxScreen />);
+
+      // The avatar button is labelled "Open Alex panel"
+      const avatarBtn = screen.getByRole("button", { name: /open alex panel/i });
+      fireEvent.click(avatarBtn);
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+    });
+
+    it("clicking riley's avatar button opens the riley panel", () => {
+      feedByKey = (_agentKey) => successFeed([rileyHandoff]);
+      render(<InboxScreen />);
+
+      const avatarBtn = screen.getByRole("button", { name: /open riley panel/i });
+      fireEvent.click(avatarBtn);
+
+      expect(screen.getByTestId("mock-agent-panel-riley")).toBeInTheDocument();
+    });
+
+    it("closing the panel clears it (dialog gone)", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+      render(<InboxScreen />);
+
+      fireEvent.click(screen.getByRole("button", { name: /open alex panel/i }));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("mock-panel-close"));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("onSeeAll navigates to /results", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+      render(<InboxScreen />);
+
+      fireEvent.click(screen.getByRole("button", { name: /open alex panel/i }));
+      fireEvent.click(screen.getByTestId("mock-see-all"));
+      expect(pushMock).toHaveBeenCalledWith("/results");
+    });
+
+    it("onOpenDecision navigates to /inbox (already on inbox surface)", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+      render(<InboxScreen />);
+
+      fireEvent.click(screen.getByRole("button", { name: /open alex panel/i }));
+      fireEvent.click(screen.getByTestId("mock-open-decision"));
+      expect(pushMock).toHaveBeenCalledWith("/inbox");
     });
   });
 });

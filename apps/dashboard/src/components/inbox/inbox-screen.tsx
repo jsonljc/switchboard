@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import type { AgentKey } from "@switchboard/schemas";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
@@ -12,6 +13,8 @@ import { InboxEmptyState } from "@/components/inbox/inbox-empty-state";
 import { InboxErrorState } from "@/components/inbox/inbox-error-state";
 import { InboxDecisionItem } from "@/components/inbox/inbox-decision-item";
 import { ApprovalDetailSheet } from "@/components/inbox/approval-detail-sheet";
+import { AgentPanel } from "@/components/agent-panel/agent-panel";
+import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
 import type { Decision, DecisionKind } from "@/lib/decisions/types";
 
 // ── ApprovalDetailItem ────────────────────────────────────────────────────────
@@ -80,8 +83,10 @@ function ApprovalDetailItem({ decision, onClose }: ApprovalDetailItemProps) {
 // ── InboxScreen ───────────────────────────────────────────────────────────────
 
 export function InboxScreen() {
+  const router = useRouter();
   const [agentFilter, setAgentFilter] = useState<AgentKey | null>(null);
   const [open, setOpen] = useState<{ decision: Decision; kind: DecisionKind } | null>(null);
+  const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
 
   // Both feeds: filtered drives the list; unfiltered drives per-agent counts.
   // TanStack dedupes by query key so both are safe.
@@ -124,6 +129,7 @@ export function InboxScreen() {
               <InboxDecisionItem
                 decision={d}
                 onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
+                onOpenAgent={setPanelAgent}
               />
             </li>
           ))}
@@ -136,6 +142,22 @@ export function InboxScreen() {
       )}
       {open?.kind === "handoff" && (
         <div className="inbox-handoff-guard">Handoff detail coming next.</div>
+      )}
+
+      {/* Agent panel — decoupled local state, mirrors Home's pattern */}
+      {panelAgent && (
+        <AgentPanel
+          key={panelAgent}
+          agentKey={panelAgent}
+          open
+          onOpenChange={(o) => {
+            if (!o) setPanelAgent(null);
+          }}
+          // From Inbox, "see all results" navigates to /results; decision already in context
+          onSeeAll={() => router.push("/results")}
+          // From Inbox, "open decision" is a no-op navigation (already on inbox surface)
+          onOpenDecision={() => router.push("/inbox")}
+        />
       )}
     </>
   );
