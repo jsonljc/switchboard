@@ -416,5 +416,20 @@ describe("<InboxScreen>", () => {
       fireEvent.click(screen.getByTestId("mock-activate"));
       expect(pushMock).toHaveBeenCalledWith("/settings/channels");
     });
+
+    // (8f) stopPropagation contract: avatar click opens panel, never decision-detail
+    it("clicking the avatar opens the agent panel and does NOT open decision-detail", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+      render(<InboxScreen />);
+
+      const avatarBtn = screen.getByRole("button", { name: /open alex panel/i });
+      fireEvent.click(avatarBtn);
+
+      // Agent panel dialog is present
+      expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+      // Decision-detail (ApprovalDetailSheet) must NOT be open — its sentinel
+      // text "needs your okay" must be absent, proving stopPropagation worked.
+      expect(screen.queryByText(/needs your okay/i)).toBeNull();
+    });
   });
 });

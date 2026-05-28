@@ -188,6 +188,8 @@ export function InboxDecisionCard({
                     e.stopPropagation();
                     onOpenAgent(decision.agentKey);
                   }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                 >
                   <InboxAgentAvatar agentKey={decision.agentKey} size={22} />
                 </button>

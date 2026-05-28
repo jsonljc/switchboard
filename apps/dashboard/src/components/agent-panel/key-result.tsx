@@ -52,7 +52,7 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   const result = selectKeyResult({
     agentKey,
     halted,
-    mission: mission.data as MissionAggregatorResponse | undefined,
+    mission: mission.data,
     all: { data: all.data, isError: all.isError },
     week: { data: week.data, isError: week.isError },
   });
@@ -61,7 +61,7 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   if (result.kind === "paused") {
     const heroValue = result.hero?.value;
     const heroKind = result.hero?.kind;
-    const missionData = mission.data as MissionAggregatorResponse | undefined;
+    const missionData = mission.data;
     const setupIncomplete = coreSetupIncomplete(missionData, agentKey);
 
     return (
@@ -97,7 +97,7 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
 
   // ── Activation ────────────────────────────────────────────────────────────
   if (result.kind === "activation") {
-    const missionData = mission.data as MissionAggregatorResponse | undefined;
+    const missionData = mission.data;
     return (
       <div
         className={`${styles.heroCard} ${styles.heroActivation}`}
@@ -142,7 +142,7 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   // result.kind === "proof"
   const { hero, scope, spendCents, targets } = result;
   const isZero = hero.value === 0;
-  const missionDataForProof = mission.data as MissionAggregatorResponse | undefined;
+  const missionDataForProof = mission.data;
 
   // CPL beat for Riley when ad-leads + spend + target all present
   const cplBeat =
