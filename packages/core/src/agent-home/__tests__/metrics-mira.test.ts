@@ -32,6 +32,23 @@ describe("buildMiraMetricsViewModel", () => {
     expect(vm.freshness.window).toBe("week");
   });
 
+  it("negative week-over-week delta → subprose says 'N fewer drafts completed'", () => {
+    const vm = buildMiraMetricsViewModel({
+      counts: {
+        total: 5,
+        shippedThisWeek: 1,
+        shippedPrevWeek: 4,
+        inFlight: 2,
+        awaitingReview: 1,
+        stopped: 0,
+      },
+      week,
+    });
+    const subprose = vm.heroSubProseSegments;
+    const text = subprose.map((s) => s.text).join("");
+    expect(text).toMatch(/3 fewer drafts completed/);
+  });
+
   it("zero counts → neutral hero and stats", () => {
     const vm = buildMiraMetricsViewModel({
       counts: {

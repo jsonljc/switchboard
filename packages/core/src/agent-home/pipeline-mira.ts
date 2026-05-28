@@ -41,7 +41,11 @@ function buildTile(row: MiraPipelineRow, now: Date): PipelineTileViewModel {
 function classifyStage(status: MiraCreativeStatus): PipelineStage {
   if (status === "awaiting_review") return "hot";
   if (status === "draft_ready") return "warm";
-  return "new"; // in_progress / stopped / failed / shipped
+  // Terminal/edge states (in_progress / stopped / failed / shipped) all map to
+  // "new" — the lowest visual priority — so they don't draw hot/warm attention.
+  // tileCtx() differentiates their display copy (e.g. "Drafting", "Stopped",
+  // "Needs attention") even though the pipeline stage column shows "new".
+  return "new";
 }
 
 function tileCtx(row: MiraPipelineRow, now: Date): string {

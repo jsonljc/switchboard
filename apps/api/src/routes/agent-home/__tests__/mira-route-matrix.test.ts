@@ -12,8 +12,8 @@
 // All six agent-home surfaces are exercised:
 //   greeting, pipeline, metrics, activity, mission, wins.
 //
-// The shared `buildTestServer` harness registers five of them (greeting,
-// pipeline, metrics, mission, wins) and decorates the in-memory enablement
+// The shared `buildTestServer` harness registers four of them (greeting,
+// pipeline, metrics, wins) and decorates the in-memory enablement
 // store + the alex/riley signal stores. We additionally:
 //   - reassign `app.prisma` to a mock so the Mira read-model path (creativeJob
 //     queries) and the alex/riley mission roster lookup resolve (the harness
@@ -210,11 +210,15 @@ describe("Mira agent-home route matrix", () => {
   it("enabled Mira org with NO creative jobs → empty-but-valid pipeline", async () => {
     // Enable Mira for an org that has no creative jobs in the mock (only PILOT does).
     await ctx.app.orgAgentEnablementStore!.enable("emptyorg", "mira");
-    const res = await request("emptyorg", s_pipeline("mira"));
-    expect(res.statusCode).toBe(200);
-    const body = res.json() as { vm: { tiles: unknown[]; totalCount: number } };
-    expect(body.vm.tiles).toEqual([]);
-    expect(body.vm.totalCount).toBe(0);
+    try {
+      const res = await request("emptyorg", s_pipeline("mira"));
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { vm: { tiles: unknown[]; totalCount: number } };
+      expect(body.vm.tiles).toEqual([]);
+      expect(body.vm.totalCount).toBe(0);
+    } finally {
+      await ctx.app.orgAgentEnablementStore!.setStatus("emptyorg", "mira", "disabled");
+    }
   });
 
   // Convenience: the pipeline surface path (index 1).
