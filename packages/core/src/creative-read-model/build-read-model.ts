@@ -16,6 +16,10 @@ export interface BuildMiraReadModelOpts {
 
 const DEFAULT_VISIBLE_LIMIT = 5;
 
+/**
+ * Builds the Mira creative read model from a pre-sorted slice of CreativeJob rows.
+ * Input order == display order; the caller is responsible for ordering before passing.
+ */
 export function buildMiraCreativeReadModel(
   jobs: readonly CreativeJob[],
   opts: BuildMiraReadModelOpts,
@@ -36,17 +40,22 @@ export function buildMiraCreativeReadModel(
     };
   });
 
-  const completedAt = (j: CreativeJob) => new Date(j.updatedAt).getTime();
+  // Returns the job's updatedAt timestamp in ms (used as the best available proxy for
+  // "when this job reached its current state"; not a true completion time).
+  const updatedAtMs = (j: CreativeJob) => new Date(j.updatedAt).getTime();
   const isCompleted = (s: MiraCreativeJobSummary) => s.status === "draft_ready";
 
+  // "shipped" here = reached draft_ready; the `shipped` status is reserved for a later
+  // publish phase and is never emitted in M1.
+  // shippedThisWeek upper bound is intentionally open ("this week so far").
   const shippedThisWeek = jobs.filter(
-    (j, i) => isCompleted(summaries[i]!) && completedAt(j) >= opts.weekStart.getTime(),
+    (j, i) => isCompleted(summaries[i]!) && updatedAtMs(j) >= opts.weekStart.getTime(),
   ).length;
   const shippedPrevWeek = jobs.filter(
     (j, i) =>
       isCompleted(summaries[i]!) &&
-      completedAt(j) >= opts.prevWeekStart.getTime() &&
-      completedAt(j) < opts.weekStart.getTime(),
+      updatedAtMs(j) >= opts.prevWeekStart.getTime() &&
+      updatedAtMs(j) < opts.weekStart.getTime(),
   ).length;
   const awaitingReview = summaries.filter((s) => s.status === "awaiting_review").length;
   const inFlight = summaries.filter(
