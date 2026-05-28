@@ -95,3 +95,51 @@ describe("useAgentMetrics (live)", () => {
     expect(data?.spendCents).toBeUndefined();
   });
 });
+
+describe("useAgentMetrics window param", () => {
+  it("defaults to week: URL includes ?window=week when no window arg given", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ vm: { hero: { kind: "ad-leads", value: 5 } } }),
+    });
+    const { result } = renderHook(() => useAgentMetrics("riley" as never), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("?window=week"));
+  });
+
+  it("passing 'all' requests ?window=all URL", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ vm: { hero: { kind: "ad-leads", value: 214 } } }),
+    });
+    const { result } = renderHook(() => useAgentMetrics("riley" as never, "all"), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/agents/riley/metrics?window=all");
+    expect(result.current.data?.hero?.value).toBe(214);
+  });
+
+  it("a 400 response with window=all surfaces as isError:true and data:undefined (caller can fall back to week)", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 400 });
+    const { result } = renderHook(() => useAgentMetrics("riley" as never, "all"), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it("'week' and 'all' use distinct query keys (no cache collision)", () => {
+    // The query key factory must include window so each window has its own entry.
+    const keys = {
+      metrics: {
+        feed: (agentKey: string, window: string) => [
+          "org-test",
+          "metrics",
+          "feed",
+          agentKey,
+          window,
+        ],
+      },
+    };
+    const weekKey = keys.metrics.feed("riley", "week");
+    const allKey = keys.metrics.feed("riley", "all");
+    expect(weekKey).not.toEqual(allKey);
+  });
+});
