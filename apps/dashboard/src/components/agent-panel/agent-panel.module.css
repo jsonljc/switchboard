@@ -149,7 +149,7 @@
   border: 1px dashed hsl(var(--agent-mira) / 0.4);
 }
 
-.notset h3 {
+.notsetHeading {
   font-family: var(--font-home-serif);
   font-size: 28px;
   font-weight: 500;

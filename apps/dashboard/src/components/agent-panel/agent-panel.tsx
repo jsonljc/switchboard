@@ -1,6 +1,12 @@
 "use client";
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { InboxAgentAvatar } from "@/components/inbox/inbox-agent-avatar";
 import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
 import { MiraPanel } from "./mira-panel";
@@ -37,6 +43,7 @@ export function AgentPanel({ agentKey, open, onOpenChange }: AgentPanelProps) {
             <span className={styles.agentName}>{display.name}</span>
             <span className={styles.role}>{display.role}</span>
           </SheetTitle>
+          <SheetDescription className="sr-only">{display.role}</SheetDescription>
         </SheetHeader>
         <div className={styles.body}>
           {agentKey === "mira" ? <MiraPanel /> : <div data-testid="agent-panel-body" />}

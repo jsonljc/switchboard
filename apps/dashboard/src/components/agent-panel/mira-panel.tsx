@@ -16,7 +16,7 @@ export function MiraPanel() {
       <div className={styles.notsetMark} aria-hidden="true">
         M
       </div>
-      <h3>Mira isn&apos;t set up yet</h3>
+      <h3 className={styles.notsetHeading}>Mira isn&apos;t set up yet</h3>
       <p className={styles.notsetSub}>
         Mira handles creative and content. She becomes available as your workspace grows.
       </p>

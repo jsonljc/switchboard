@@ -12,4 +12,9 @@ describe("AgentPanel shell", () => {
     render(<AgentPanel agentKey="alex" open onOpenChange={() => {}} />);
     expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
   });
+  it("renders the MiraPanel body (not the data-slot scaffold) for agentKey 'mira'", () => {
+    render(<AgentPanel agentKey="mira" open onOpenChange={() => {}} />);
+    expect(screen.getByText("Mira isn't set up yet")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-panel-body")).not.toBeInTheDocument();
+  });
 });

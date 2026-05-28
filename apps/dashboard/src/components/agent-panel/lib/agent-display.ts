@@ -1,6 +1,7 @@
+import type { AgentKey } from "@switchboard/schemas";
 import type { HeroMetric } from "@/lib/agent-home/types";
 
-export type PanelAgentKey = "alex" | "riley" | "mira";
+export type PanelAgentKey = AgentKey;
 
 export const agentDisplay: Record<PanelAgentKey, { name: string; role: string }> = {
   alex: { name: "Alex", role: "Lead response" },
