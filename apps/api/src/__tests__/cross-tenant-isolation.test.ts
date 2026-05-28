@@ -139,7 +139,7 @@ async function buildScopedApp(): Promise<ScopedTestApp> {
       affectedDeploymentIds: [],
       count: 0,
     }),
-    resume: vi.fn().mockResolvedValue({
+    resumeAll: vi.fn().mockResolvedValue({
       workTraceId: "wt",
       affectedDeploymentIds: [],
       count: 0,

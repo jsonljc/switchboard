@@ -17,13 +17,12 @@ export interface HaltAllResult {
   count: number;
 }
 
-export interface ResumeInput {
+export interface ResumeAllInput {
   organizationId: string;
-  skillSlug: string;
   operator: Actor;
 }
 
-export interface ResumeResult {
+export interface ResumeAllResult {
   workTraceId: string;
   affectedDeploymentIds: string[];
   count: number;
@@ -43,6 +42,6 @@ export interface SuspendAllResult {
 
 export interface DeploymentLifecycleStore {
   haltAll(input: HaltAllInput): Promise<HaltAllResult>;
-  resume(input: ResumeInput): Promise<ResumeResult>;
+  resumeAll(input: ResumeAllInput): Promise<ResumeAllResult>;
   suspendAll(input: SuspendAllInput): Promise<SuspendAllResult>;
 }

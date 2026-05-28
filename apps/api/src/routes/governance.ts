@@ -310,11 +310,12 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       const store = app.governanceProfileStore;
       await store.set(orgId, "guarded");
 
-      // Reactivate paused deployment(s) for the alex skill via the lifecycle store.
+      // Reactivate every paused deployment in the org — the exact inverse of
+      // haltAll. (Was scoped to skillSlug:"alex", which left Riley/Mira paused
+      // after a global Pause→Resume while the UI reported all-clear.)
       const operator = resolveOperatorActor(request);
-      const resumeResult = await app.deploymentLifecycleStore.resume({
+      const resumeResult = await app.deploymentLifecycleStore.resumeAll({
         organizationId: orgId,
-        skillSlug: "alex",
         operator,
       });
 
