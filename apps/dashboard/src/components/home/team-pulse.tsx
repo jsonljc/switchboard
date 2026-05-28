@@ -26,31 +26,31 @@ export function TeamPulse({ agents, onOpenAgent }: TeamPulseProps) {
         const isOn = status === "working" && setUp;
 
         return (
-          <button
-            key={key}
-            type="button"
-            className={styles.agentChip}
-            data-agent={key}
-            data-disabled={String(!setUp)}
-            data-testid={`agent-chip-${key}`}
-            role="listitem"
-            onClick={() => onOpenAgent?.(key)}
-          >
-            <span className={styles.agentChipAv} aria-hidden="true">
-              {name[0]}
-            </span>
-            <span className={styles.agentChipName}>{name}</span>
-            {setUp ? (
-              <span
-                className={styles.agentChipStatus}
-                data-on={isOn ? "true" : "false"}
-                data-testid="agent-status-dot"
-                aria-hidden="true"
-              />
-            ) : (
-              <span className={styles.agentChipNotSetUp}>Not set up</span>
-            )}
-          </button>
+          <div key={key} role="listitem">
+            <button
+              type="button"
+              className={styles.agentChip}
+              data-agent={key}
+              data-disabled={String(!setUp)}
+              data-testid={`agent-chip-${key}`}
+              onClick={() => onOpenAgent?.(key)}
+            >
+              <span className={styles.agentChipAv} aria-hidden="true">
+                {name[0]}
+              </span>
+              <span className={styles.agentChipName}>{name}</span>
+              {setUp ? (
+                <span
+                  className={styles.agentChipStatus}
+                  data-on={isOn ? "true" : "false"}
+                  data-testid="agent-status-dot"
+                  aria-hidden="true"
+                />
+              ) : (
+                <span className={styles.agentChipNotSetUp}>Not set up</span>
+              )}
+            </button>
+          </div>
         );
       })}
     </div>

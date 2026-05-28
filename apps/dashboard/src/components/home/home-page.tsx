@@ -258,6 +258,7 @@ export function HomePage() {
       <div className={styles.column}>{modules}</div>
       {panelAgent && (
         <AgentPanel
+          key={panelAgent}
           agentKey={panelAgent}
           open
           onOpenChange={(o) => {

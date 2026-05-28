@@ -373,4 +373,18 @@ describe("HomePage", () => {
     fireEvent.click(screen.getByTestId("agent-chip-mira"));
     expect(screen.getByTestId("mock-agent-panel-mira")).toBeInTheDocument();
   });
+
+  it("swapping agents — clicking riley after alex shows riley panel and removes alex panel", () => {
+    render(<HomePage />);
+
+    // Open alex panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-agent-panel-riley")).not.toBeInTheDocument();
+
+    // Click riley chip → riley panel appears, alex panel is gone.
+    fireEvent.click(screen.getByTestId("agent-chip-riley"));
+    expect(screen.getByTestId("mock-agent-panel-riley")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-agent-panel-alex")).not.toBeInTheDocument();
+  });
 });

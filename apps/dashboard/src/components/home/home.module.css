@@ -231,10 +231,15 @@
   transition:
     transform 200ms var(--ease-home),
     border-color 200ms ease;
+  cursor: pointer;
 }
 .agentChip:hover {
   transform: translateY(-1px);
   border-color: var(--hair);
+}
+.agentChip:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
 }
 .agentChip[data-disabled="true"] {
   opacity: 0.65;
