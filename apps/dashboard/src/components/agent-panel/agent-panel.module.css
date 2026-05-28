@@ -525,6 +525,143 @@
   margin: 4px 0 0;
 }
 
+/* ─── Slot ③: Open decisions ───────────────────────────────────────────────
+   Ported from prototype-ref/agent-panel/panel/panel.css (.ap-section*, .ap-decision*, .ap-empty-line).
+   Token mapping:
+     --r-md     → var(--radius-md)
+     --ink-1    → var(--ink)
+     --ink-4    → var(--ink-4)
+     --serif    → var(--font-home-serif)
+     --surface  → var(--surface)
+*/
+
+.decisionSection {
+  padding: 18px 20px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Section header: "Needs you" title + count */
+.decisionSectionH {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.decisionSectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  font-family: var(--font-home-sans);
+}
+
+.decisionSectionMeta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Decision list */
+.decisionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+/* Each decision row is a native button for a11y */
+.decisionRow {
+  display: grid;
+  grid-template-columns: 1fr 14px;
+  gap: 12px;
+  padding: 13px 16px;
+  align-items: center;
+  border: none;
+  border-bottom: 1px solid var(--hair-soft);
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: background 140ms ease;
+  font-family: inherit;
+}
+
+.decisionRow:last-child {
+  border-bottom: none;
+}
+
+.decisionRow:hover {
+  background: var(--canvas-2);
+}
+
+.decisionRow:active {
+  background: var(--canvas-3);
+}
+
+.decisionRow:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+
+.decisionGist {
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.4;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+}
+
+.decisionArrow {
+  color: var(--ink-4);
+  display: inline-flex;
+  align-items: center;
+}
+
+.decisionArrow svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Empty / error state: italic serif line */
+.decisionEmptyLine {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 18;
+  font-style: italic;
+  font-size: 15.5px;
+  color: var(--ink-3);
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  margin: 0;
+}
+
+/* Error variant: dimmed canvas */
+.decisionEmptyErr {
+  background: var(--canvas-2);
+  color: var(--ink-3);
+}
+
+/* Loading skeleton */
+.decisionSkeleton {
+  height: 60px;
+  border-radius: var(--radius-md);
+  background: var(--canvas-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
 /* Activation CTA — amber fill, anchored to the agent color */
 .heroActivationCta {
   align-self: flex-start;
