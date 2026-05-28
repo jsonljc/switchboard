@@ -53,6 +53,32 @@ describe("GET /api/dashboard/agents", () => {
     expect(alex.role).toBe("lead-to-speed");
     expect(alex.launchTier).toBe("day-one");
   });
+
+  // PR6 pilot opt-in: mira visible for pilot org, hidden (coming_soon) for all others
+  it("mira pilot org — shows status:enabled when explicitly seeded", async () => {
+    await ctx.app.orgAgentEnablementStore!.enable("org-pilot", "mira");
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents",
+      headers: { "x-org-id": "org-pilot" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { agents: Array<{ key: string; status: string }> };
+    const mira = body.agents.find((a) => a.key === "mira")!;
+    expect(mira.status).toBe("enabled");
+  });
+
+  it("mira non-pilot org — shows status:coming_soon without an enablement row", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents",
+      headers: { "x-org-id": "org-non-pilot" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { agents: Array<{ key: string; status: string }> };
+    const mira = body.agents.find((a) => a.key === "mira")!;
+    expect(mira.status).toBe("coming_soon");
+  });
 });
 
 describe("cross-tenant isolation", () => {
