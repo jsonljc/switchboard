@@ -46,7 +46,11 @@ describe("PrismaMiraCreativeReadModelReader", () => {
       timezone: "UTC",
     });
     expect(prisma.creativeJob.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { organizationId: "org1" } }),
+      expect.objectContaining({
+        where: { organizationId: "org1" },
+        take: 200,
+        orderBy: { createdAt: "desc" },
+      }),
     );
     expect(rm.counts.awaitingReview).toBe(1);
     expect(rm.jobs[0]!.status).toBe("awaiting_review");
