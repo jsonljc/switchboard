@@ -106,21 +106,27 @@ interface MiraCreativeReadModelReader {
 
 ### Deterministic status mapping (authored before coding)
 
-Derived purely from a `CreativeJob` row (`currentStage`, `stoppedAt`, `stageOutputs`, `mode`, `ugcFailure`). The legacy runner advances `currentStage` to the **next** stage only _after_ the just-run stage's output is persisted, then blocks on `waitForEvent` — so a non-`complete`, non-`stopped` job is the "awaiting approval" resting state (matches the `/approve` route's own 409 guard: `currentStage === "complete" || stoppedAt` ⇒ not awaiting approval).
+Derived purely from a `CreativeJob` row. The legacy engine has **two lifecycles** the mapper must read mode-specifically:
+
+- **polished** advances `currentStage` (`trends→…→complete`) with outputs in `stageOutputs`. The runner sets `currentStage` to the **next** stage only _after_ the just-run output is persisted, then blocks on `waitForEvent` — so a non-`complete`, non-`stopped` polished job is the "awaiting approval" resting state (matches the `/approve` 409 guard).
+- **ugc** advances `ugcPhase` (`planning→scripting→production→delivery→complete`, from `packages/schemas/src/ugc-job.ts`) with outputs in `ugcPhaseOutputs`; `currentStage` stays at its `"trends"` default for a UGC job's whole life, and `stageOutputs` stays `{}`. **So UGC MUST key off `ugcPhase`/`ugcPhaseOutputs`, not `currentStage`/`stageOutputs`** — otherwise completed UGC jobs misclassify as `in_progress`. Both modes' stop paths set `stoppedAt` (`stop` / `stopUgc`); failure is `production.errors` (polished) vs `ugcFailure` (ugc).
 
 | #   | Condition (checked top-down; first match wins)                                   | `status`          | `reviewAction`                                     |
 | --- | -------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------- |
 | 1   | `mode==="ugc"` && `ugcFailure != null`                                           | `failed`          | `{canContinue:false, canStop:false, label:"none"}` |
 | 2   | polished && `stageOutputs.production.errors?.length > 0` && no `assembledVideos` | `failed`          | `{false,false,"none"}`                             |
-| 3   | `stoppedAt != null`                                                              | `stopped`         | `{false,false,"none"}`                             |
-| 4   | `currentStage === "complete"`                                                    | `draft_ready`     | `{false,false,"review_draft"}`                     |
-| 5   | not complete/stopped/failed && `stageOutputs` has ≥1 key                         | `awaiting_review` | `{true,true,"continue_draft"}`                     |
-| 6   | otherwise (fresh job, no outputs yet)                                            | `in_progress`     | `{false,true,"none"}`                              |
+| 3   | `stoppedAt != null` (both modes)                                                 | `stopped`         | `{false,false,"none"}`                             |
+| 4   | polished && `currentStage === "complete"`                                        | `draft_ready`     | `{false,false,"review_draft"}`                     |
+| 5   | ugc && `ugcPhase === "complete"`                                                 | `draft_ready`     | `{false,false,"review_draft"}`                     |
+| 6   | polished && `stageOutputs` has ≥1 key                                            | `awaiting_review` | `{true,true,"continue_draft"}`                     |
+| 7   | ugc && `ugcPhaseOutputs` has ≥1 key                                              | `awaiting_review` | `{true,true,"continue_draft"}`                     |
+| 8   | otherwise (fresh job, no outputs yet)                                            | `in_progress`     | `{false,true,"none"}`                              |
 
-- **`failed` is populatable** (schema has `CreativeJob.ugcFailure Json?` + `VideoProducerOutput.errors`), so it is included.
+- **`failed` is populatable** (`CreativeJob.ugcFailure Json?` + `VideoProducerOutput.errors`), so it is included.
 - **`shipped` is NOT populatable in M1** (no publish/export marker) → never emitted.
-- `draft_ready` = pipeline `complete` = the final draft is ready for the director. Nothing is published.
-- `title` ← `productDescription` (trimmed; fallback `"Untitled creative"`). `draft` ← first `stageOutputs.production.assembledVideos[0]` (`videoUrl`/`thumbnailUrl`/`durationSec`←`duration`), else first `clips[0].videoUrl`. All extraction is **defensive** (`stageOutputs` is `Json`/`unknown`).
+- `draft_ready` = the final draft is ready for the director. Nothing is published.
+- `title` ← `productDescription` (trimmed; fallback `"Untitled creative"`).
+- `draft` is mode-specific, best-effort, **defensive** (`stageOutputs`/`ugcPhaseOutputs` are untyped `Json`): polished ← `stageOutputs.production.assembledVideos[0]` (`videoUrl`/`thumbnailUrl`/`durationSec`←`duration`), else `clips[0].videoUrl`; ugc ← a `videoUrl` in `ugcPhaseOutputs` (the `delivery` phase output if present, else `production.assets[0].videoUrl`). Returns `undefined` when no video is found.
 
 ---
 
@@ -262,7 +268,7 @@ git commit -m "feat(mira): read-model seam contract types"
 - Create: `packages/core/src/creative-read-model/status-mapper.ts`
 - Test: `packages/core/src/creative-read-model/__tests__/status-mapper.test.ts`
 
-- [ ] **Step 1: Write the failing test** (covers all 6 rows + malformed `stageOutputs`)
+- [ ] **Step 1: Write the failing test** (covers all 8 rows incl. UGC lifecycle: ugc-complete→draft_ready, ugc-in-progress, ugc-mid→awaiting_review, ugc-stopped, ugc-failed; plus malformed `stageOutputs`)
 
 ```ts
 import { describe, expect, it } from "vitest";
