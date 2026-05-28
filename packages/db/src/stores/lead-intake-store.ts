@@ -50,9 +50,17 @@ interface CreateActivityInput {
 export class PrismaLeadIntakeStore implements LeadIntakeStore {
   constructor(private readonly prisma: PrismaDbClient) {}
 
-  async findContactByIdempotency(key: string): Promise<{ id: string } | null> {
-    const row = await this.prisma.contact.findFirst({
-      where: { idempotencyKey: key },
+  async findContactByIdempotency(
+    organizationId: string,
+    key: string,
+  ): Promise<{ id: string } | null> {
+    // Scoped to the (organizationId, idempotencyKey) unique. A global lookup by
+    // key alone could return another tenant's Contact when two orgs share a key
+    // (e.g. a replayed/crafted key), leaking its id and falsely deduping the lead.
+    const row = await this.prisma.contact.findUnique({
+      where: {
+        organizationId_idempotencyKey: { organizationId, idempotencyKey: key },
+      },
       select: { id: true },
     });
     return row ? { id: row.id } : null;

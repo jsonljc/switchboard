@@ -65,6 +65,14 @@ describe("LeadIntakeHandler", () => {
     expect(result.duplicate).toBe(true);
   });
 
+  it("scopes the idempotency lookup by organizationId (cross-tenant safety)", async () => {
+    // The Contact unique is (organizationId, idempotencyKey); the pre-check MUST
+    // be org-scoped so org B's intake never dedupes against — or leaks the id of —
+    // org A's contact when they happen to share an idempotency key.
+    await handler.handle(makeIntake({ organizationId: "o1", idempotencyKey: "k1" }));
+    expect(store.findContactByIdempotency).toHaveBeenCalledWith("o1", "k1");
+  });
+
   it("flags messagingOptIn for CTWA leads on whatsapp (click is consent)", async () => {
     await handler.handle(
       makeIntake({ source: "ctwa", contact: { phone: "+1", channel: "whatsapp" } }),

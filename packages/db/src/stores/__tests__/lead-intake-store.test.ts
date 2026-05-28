@@ -76,12 +76,35 @@ describe.skipIf(!process.env["DATABASE_URL"])("PrismaLeadIntakeStore (integratio
       idempotencyKey: key,
     });
 
-    const found = await store.findContactByIdempotency(key);
+    const found = await store.findContactByIdempotency(ORG_ID, key);
     expect(found).not.toBeNull();
     expect(found?.id).toBe(created.id);
 
-    const missing = await store.findContactByIdempotency(`${TEST_KEY_PREFIX}does-not-exist`);
+    const missing = await store.findContactByIdempotency(
+      ORG_ID,
+      `${TEST_KEY_PREFIX}does-not-exist`,
+    );
     expect(missing).toBeNull();
+  });
+
+  it("findContactByIdempotency is org-scoped — a different org never matches the key", async () => {
+    const key = `${TEST_KEY_PREFIX}xtenant-${Date.now()}`;
+    const created = await store.upsertContact({
+      organizationId: ORG_ID,
+      deploymentId: DEPLOYMENT_ID,
+      phone: "+15550000099",
+      sourceType: "ctwa",
+      attribution: { ctwa_clid: "xt" },
+      idempotencyKey: key,
+    });
+
+    // Same key, different org → must NOT return org A's contact (no cross-tenant leak).
+    const crossTenant = await store.findContactByIdempotency("other-org:lead-intake-store", key);
+    expect(crossTenant).toBeNull();
+
+    // Same org → still finds it.
+    const sameOrg = await store.findContactByIdempotency(ORG_ID, key);
+    expect(sameOrg?.id).toBe(created.id);
   });
 
   it("upsertContact is idempotent on (organizationId, idempotencyKey)", async () => {

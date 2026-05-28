@@ -1,7 +1,7 @@
 import type { LeadIntake } from "@switchboard/schemas";
 
 export interface LeadIntakeStore {
-  findContactByIdempotency(key: string): Promise<{ id: string } | null>;
+  findContactByIdempotency(organizationId: string, key: string): Promise<{ id: string } | null>;
   /**
    * MUST be atomic/upsert on `idempotencyKey` to close the TOCTOU window between
    * `findContactByIdempotency` and this call. Implementations should back this
@@ -45,7 +45,10 @@ export class LeadIntakeHandler {
   constructor(private readonly deps: LeadIntakeHandlerDeps) {}
 
   async handle(intake: LeadIntake): Promise<LeadIntakeResult> {
-    const existing = await this.deps.store.findContactByIdempotency(intake.idempotencyKey);
+    const existing = await this.deps.store.findContactByIdempotency(
+      intake.organizationId,
+      intake.idempotencyKey,
+    );
     if (existing) {
       return { contactId: existing.id, duplicate: true };
     }
