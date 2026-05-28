@@ -996,6 +996,24 @@
   background-color: hsl(var(--agent-mira));
 }
 
+/* Agent chip button — resets button defaults; dot + name sit inside.
+   Cursor pointer, focus ring matches project pattern. */
+.agentChipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.agentChipBtn:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+
 /* Agent name */
 .agentName {
   font-size: 0.8125rem;
