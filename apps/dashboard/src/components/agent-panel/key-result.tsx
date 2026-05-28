@@ -16,6 +16,11 @@ import styles from "./agent-panel.module.css";
 
 export interface KeyResultProps {
   agentKey: Exclude<PanelAgentKey, "mira">;
+  /**
+   * Called when the user taps the activation CTA (core setup incomplete).
+   * Wired by the host to navigate to /settings/channels. Navigation only.
+   */
+  onActivate?: () => void;
 }
 
 /**
@@ -26,7 +31,7 @@ export interface KeyResultProps {
  * Precedence (from selectKeyResult):
  *   paused → activation → proof (lifetime then week fallback) → error
  */
-export function KeyResult({ agentKey }: KeyResultProps) {
+export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   const all = useAgentMetrics(agentKey, "all");
   const week = useAgentMetrics(agentKey, "week");
   const mission = useAgentMission(agentKey);
@@ -116,8 +121,8 @@ export function KeyResult({ agentKey }: KeyResultProps) {
             ))}
           </div>
         )}
-        {/* One amber action CTA */}
-        <button type="button" className={styles.heroActivationCta}>
+        {/* One amber action CTA — routes out to /settings/channels via onActivate */}
+        <button type="button" className={styles.heroActivationCta} onClick={onActivate}>
           {agentKey === "riley" ? "Connect Meta Ads" : "Connect inbox"}
         </button>
       </div>
@@ -233,11 +238,14 @@ function nonCoreSetupNudgeCopy(key: string, displayName: string): string {
 
 function nonCoreChannelNudgeCopy(
   kind: string,
-  agentKey: "alex" | "riley",
+  _agentKey: "alex" | "riley",
   displayName: string,
 ): string {
-  if (agentKey === "riley" && kind === "google-ads") {
-    return `Connect Google Ads to expand ${displayName}'s reach.`;
+  // Only MissionChannelKind values the producers actually emit can reach here.
+  // Riley emits [meta-ads] only (core); Alex emits [meta-ads, inbox-kind, calendar].
+  // The calendar channel is the most realistic non-core channel off for Alex.
+  if (kind === "calendar") {
+    return `Connect your calendar so ${displayName} can book consults.`;
   }
   return `Finish setup to get more from ${displayName}.`;
 }

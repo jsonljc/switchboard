@@ -31,6 +31,12 @@ export interface AgentPanelProps {
    * Host surfaces wire this to navigate to /results.
    */
   onSeeAll?: () => void;
+  /**
+   * Called when the user taps the activation CTA in slot ② (core setup incomplete).
+   * Host surfaces wire this to navigate to /settings/channels.
+   * Read-only: navigation only, no mutations.
+   */
+  onActivate?: () => void;
 }
 
 /**
@@ -62,6 +68,7 @@ export function AgentPanel({
   onOpenChange,
   onOpenDecision,
   onSeeAll,
+  onActivate,
 }: AgentPanelProps) {
   const display = agentDisplay[agentKey];
 
@@ -95,7 +102,7 @@ export function AgentPanel({
               {/* Slot ①: Identity + health/presence + verdict */}
               <IdentityStatus agentKey={agentKey} />
               {/* Slot ②: Key result hero (lifetime/week/activation/paused) */}
-              <KeyResult agentKey={agentKey} />
+              <KeyResult agentKey={agentKey} onActivate={onActivate} />
               {/* Slot ③: Open decisions → routes out to decision-detail */}
               <OpenDecisions agentKey={agentKey} onOpenDecision={onOpenDecision ?? (() => {})} />
               {/* Slot ④: Recent work log → "See all in Results →" */}

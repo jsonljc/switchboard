@@ -269,6 +269,7 @@ export function HomePage() {
           onSeeAll={() => router.push("/results")}
           // TODO: deep-link to the decision-detail sheet when the Inbox detail workstream lands (open the specific decision via sourceRef).
           onOpenDecision={() => router.push("/inbox")}
+          onActivate={() => router.push("/settings/channels")}
         />
       )}
     </>

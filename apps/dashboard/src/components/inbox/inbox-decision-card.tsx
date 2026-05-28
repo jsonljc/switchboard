@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
 import type { Decision } from "@/lib/decisions/types";
+import "./inbox-decision-card.css";
 import { canSwipeApprove, needsConfirm } from "@/lib/decisions/swipe-policy";
 import { dueIn, relativeTime } from "@/lib/decisions/time";
 import { useCardSwipe } from "@/components/decisions/use-card-swipe";

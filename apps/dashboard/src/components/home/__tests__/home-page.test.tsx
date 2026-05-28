@@ -114,12 +114,14 @@ vi.mock("@/components/agent-panel/agent-panel", () => ({
     open,
     onSeeAll,
     onOpenDecision,
+    onActivate,
   }: {
     agentKey: string;
     open: boolean;
     onOpenChange: () => void;
     onSeeAll?: () => void;
     onOpenDecision?: () => void;
+    onActivate?: () => void;
   }) =>
     open ? (
       <div role="dialog" data-testid={`mock-agent-panel-${agentKey}`}>
@@ -128,6 +130,9 @@ vi.mock("@/components/agent-panel/agent-panel", () => ({
         </button>
         <button onClick={onOpenDecision} data-testid="mock-open-decision">
           Open decision
+        </button>
+        <button onClick={onActivate} data-testid="mock-activate">
+          Activate
         </button>
       </div>
     ) : null,
@@ -425,5 +430,17 @@ describe("HomePage", () => {
     // Trigger the Open Decision button wired to onOpenDecision.
     fireEvent.click(screen.getByTestId("mock-open-decision"));
     expect(pushMock).toHaveBeenCalledWith("/inbox");
+  });
+
+  it("onActivate callback navigates to /settings/channels", () => {
+    render(<HomePage />);
+
+    // Open a panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+
+    // Trigger the Activate button wired to onActivate.
+    fireEvent.click(screen.getByTestId("mock-activate"));
+    expect(pushMock).toHaveBeenCalledWith("/settings/channels");
   });
 });

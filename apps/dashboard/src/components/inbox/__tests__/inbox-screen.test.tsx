@@ -52,12 +52,14 @@ vi.mock("@/components/agent-panel/agent-panel", () => ({
     onOpenChange,
     onSeeAll,
     onOpenDecision,
+    onActivate,
   }: {
     agentKey: string;
     open: boolean;
     onOpenChange: (o: boolean) => void;
     onSeeAll?: () => void;
     onOpenDecision?: () => void;
+    onActivate?: () => void;
   }) =>
     open ? (
       <div role="dialog" data-testid={`mock-agent-panel-${agentKey}`}>
@@ -69,6 +71,9 @@ vi.mock("@/components/agent-panel/agent-panel", () => ({
         </button>
         <button onClick={onOpenDecision} data-testid="mock-open-decision">
           Open decision
+        </button>
+        <button onClick={onActivate} data-testid="mock-activate">
+          Activate
         </button>
       </div>
     ) : null,
@@ -401,6 +406,15 @@ describe("<InboxScreen>", () => {
       fireEvent.click(screen.getByRole("button", { name: /open alex panel/i }));
       fireEvent.click(screen.getByTestId("mock-open-decision"));
       expect(pushMock).toHaveBeenCalledWith("/inbox");
+    });
+
+    it("onActivate navigates to /settings/channels", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+      render(<InboxScreen />);
+
+      fireEvent.click(screen.getByRole("button", { name: /open alex panel/i }));
+      fireEvent.click(screen.getByTestId("mock-activate"));
+      expect(pushMock).toHaveBeenCalledWith("/settings/channels");
     });
   });
 });

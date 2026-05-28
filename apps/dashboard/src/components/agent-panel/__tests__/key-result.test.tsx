@@ -328,22 +328,24 @@ describe("KeyResult slot — launch-blocker tests", () => {
     expect(screen.queryByTestId("activation-block")).not.toBeInTheDocument();
   });
 
-  // Gap 1 — non-core nudge present when proof + non-core channel is off
-  it("gap1b. proof + non-core channel off → proof hero shows + non-core-nudge present + no activation-block", () => {
+  // Gap 1 — non-core nudge present when proof + non-core setup step incomplete (Riley rules)
+  // Uses a real producer signal: Riley's setup emits [meta, rules]; when meta=done but rules=incomplete
+  // the non-core setup nudge fires in the proof branch.
+  it("gap1b. proof + non-core setup step incomplete (Riley rules) → proof hero shows + non-core-nudge present + no activation-block", () => {
     allData = makeMetricsVM({ kind: "ad-leads", value: 15 });
     weekData = makeMetricsVM({ kind: "ad-leads", value: 3 });
     missionData = {
       agentKey: "riley",
       displayName: "Riley",
-      setup: [{ key: "meta", done: true, primary: true }],
+      setup: [
+        { key: "meta", done: true, primary: true },
+        { key: "rules", done: false },
+      ],
       mission: {
         role: "ad-optimizer",
         pipeline: "ads",
         brand: "Clinic",
-        channels: [
-          { kind: "meta-ads", label: "Meta Ads", status: "ok" },
-          { kind: "google-ads", label: "Google Ads", status: "off" },
-        ],
+        channels: [{ kind: "meta-ads", label: "Meta Ads", status: "ok" }],
         rules: null,
       },
       composerPlaceholder: "",
@@ -352,11 +354,12 @@ describe("KeyResult slot — launch-blocker tests", () => {
     };
     render(<KeyResult agentKey="riley" />);
 
-    // Proof hero shown
+    // Proof hero shown (lifetime value)
     expect(screen.getByText("15")).toBeInTheDocument();
-    // Non-core nudge present
+    expect(screen.getByText(/since you hired Riley/i)).toBeInTheDocument();
+    // Non-core nudge present (rules setup row)
     expect(screen.getByTestId("non-core-nudge")).toBeInTheDocument();
-    expect(screen.getByText(/Connect Google Ads to expand Riley's reach/i)).toBeInTheDocument();
+    expect(screen.getByText(/Set your guardrails so Riley knows your limits/i)).toBeInTheDocument();
     // No activation block
     expect(screen.queryByTestId("activation-block")).not.toBeInTheDocument();
   });
@@ -383,6 +386,38 @@ describe("KeyResult slot — launch-blocker tests", () => {
     // No hero number or eyebrow should appear
     expect(screen.queryByText(/since you hired/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/this week/i)).not.toBeInTheDocument();
+  });
+
+  // Activation CTA — onActivate wired: clicking the button calls onActivate
+  it("activation-cta. onActivate is called when the activation button is clicked", () => {
+    allData = undefined;
+    allIsError = true;
+    weekData = undefined;
+    weekIsError = true;
+    missionData = {
+      agentKey: "riley",
+      displayName: "Riley",
+      setup: [{ key: "meta", done: false, primary: true }],
+      mission: {
+        role: "ad-optimizer",
+        pipeline: "ads",
+        brand: "Clinic",
+        channels: [],
+        rules: null,
+      },
+      composerPlaceholder: "",
+      commands: [],
+      targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    };
+    const onActivate = vi.fn();
+    render(<KeyResult agentKey="riley" onActivate={onActivate} />);
+
+    // Activation block rendered
+    expect(screen.getByTestId("activation-block")).toBeInTheDocument();
+    // Click the CTA button
+    const ctaBtn = screen.getByRole("button", { name: /Connect Meta Ads/i });
+    ctaBtn.click();
+    expect(onActivate).toHaveBeenCalledTimes(1);
   });
 
   // Gap 1 — all-complete proof renders NO nudge

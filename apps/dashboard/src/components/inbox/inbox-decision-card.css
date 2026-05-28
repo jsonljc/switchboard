@@ -1,0 +1,26 @@
+/* =========================================================
+   Inbox Decision Card — plain CSS for stub classNames.
+   Task 8 will port this to a CSS module; until then the card
+   uses unscoped class names defined here.
+   ========================================================= */
+
+/* Avatar trigger in the card head — resets button defaults so the avatar
+   still looks like an avatar, not a native button.
+   :focus-visible ring matches the project pattern:
+     .agentChip:focus-visible (home.module.css)
+     .agentChipBtn:focus-visible (results.module.css)
+   WCAG 2.4.7: visible keyboard focus indicator required. */
+.inbox-agent-btn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.inbox-agent-btn:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}

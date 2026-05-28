@@ -140,6 +140,7 @@ export function ResultsPage() {
             if (!o) setPanelAgent(null);
           }}
           onOpenDecision={() => router.push("/inbox")}
+          onActivate={() => router.push("/settings/channels")}
         />
       )}
     </>

@@ -157,6 +157,7 @@ export function InboxScreen() {
           onSeeAll={() => router.push("/results")}
           // From Inbox, "open decision" is a no-op navigation (already on inbox surface)
           onOpenDecision={() => router.push("/inbox")}
+          onActivate={() => router.push("/settings/channels")}
         />
       )}
     </>
