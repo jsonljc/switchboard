@@ -4,7 +4,7 @@
 **Branch (this spec):** `worktree-alex-skillpack-provisioning-guard` (based on `origin/main`)
 **Author:** Claude Opus 4.7 (1M context), at user request
 **Status:** Implementation design (spec). Awaiting user review → then writing-plans → code-only implementation PR.
-**Parent:** Deferred slice of `docs/superpowers/specs/2026-05-25-alex-live-integration-fixes-design.md` (§"Deferred", line ~189: *"`assertAlexSkillPackSeeded` → prod provisioning … whether a seed failure should set a provisioning status rather than `console.warn` silently"*). The keystone (PR #686) and multi-turn adapter (PR #681) fixes are MERGED.
+**Parent:** Deferred slice of `docs/superpowers/specs/2026-05-25-alex-live-integration-fixes-design.md` (§"Deferred", line ~189: _"`assertAlexSkillPackSeeded` → prod provisioning … whether a seed failure should set a provisioning status rather than `console.warn` silently"_). The keystone (PR #686) and multi-turn adapter (PR #681) fixes are MERGED.
 
 **Locked summary (the one-paragraph contract):**
 
@@ -24,6 +24,7 @@
 **Goal.** Close the only remaining loud-surface gap from the fail-open redesign: a silent `seedAlexSkillPack` failure must make the org **unable to go live** (blocked at the activation gate) and must leave an operator-readable log line — without making the hot config read or live lead traffic brittle.
 
 **Non-goals (scope fence).**
+
 - No change to `SkillMode` (stays fail-open), the Anthropic adapter, or the claim classifier.
 - No new `provisioningStatus` value (e.g. no `"degraded"`); a blocked org simply stays `"pending"`.
 - No change to `apps/api/src/routes/organizations.ts` — the GET `/config` best-effort seed + try/catch is **deliberately kept**.
@@ -37,10 +38,11 @@
 
 - `assertAlexSkillPackSeeded` (`packages/db/src/seed/seed-alex-skill-pack.ts:93`) is exported (`packages/db/src/index.ts:141`) and fully unit-tested (`seed-alex-skill-pack.test.ts:391-473`) but has **zero production callers**.
 - The only live caller of `seedAlexSkillPack` is the lazy seed inside **GET `/:orgId/config`** (`organizations.ts:89-93`), wrapped in a best-effort `try/catch` that only `console.warn`s. A silent seed failure therefore surfaces **nowhere** with enforcement.
-- Live `SkillMode` is deliberately fail-open + quiet on a missing/empty pack (PR #686 §2.5): the claim classifier is the runtime hard gate, and *presence* was to be enforced loudly at provisioning + eval-preflight instead of on live traffic.
+- Live `SkillMode` is deliberately fail-open + quiet on a missing/empty pack (PR #686 §2.5): the claim classifier is the runtime hard gate, and _presence_ was to be enforced loudly at provisioning + eval-preflight instead of on live traffic.
 - The eval-preflight half shipped (`evals/alex-conversation/eval-preflight.ts:34` `assertSkillPackContentPresent`). **This spec is the provisioning half.**
 
 **Provisioning lifecycle (why the activation gate is the right home):**
+
 - **GET `/config`** (`organizations.ts:43-97`) — lazy-creates `OrganizationConfig(provisioningStatus:"pending")`, seeds listing/deployment/day-one-agents + the skill pack (best-effort). A general-purpose read that auto-creates defaults so the UI always renders.
 - **POST `/provision`** (`organizations.ts:191-543`) — creates Connection + ManagedChannel rows; does **not** seed the skill pack.
 - **POST agent activate** (`agents.ts:357-419`) — the authoritative go-live gate: `buildReadinessContext` → `checkReadiness`; returns a structured **400** `{ error: "Readiness checks failed", readiness: report }` when `!report.ready` (`agents.ts:371-375`); otherwise flips channels to `active`, sets `OrganizationConfig.provisioningStatus:"active"` + `onboardingComplete:true` (`agents.ts:383-395`), and writes an `agent.activated` audit entry.
@@ -57,6 +59,7 @@
 5. **No audit-ledger write here** (§6).
 
 **Check shape (locked):**
+
 ```ts
 id:       "alex-skill-pack-seeded",
 label:    "Alex knowledge pack ready",
@@ -86,7 +89,9 @@ export interface KnowledgeEntryReader {
 export async function assertAlexSkillPackSeeded(
   prisma: KnowledgeEntryReader,
   orgId: string,
-): Promise<void> { /* body unchanged */ }
+): Promise<void> {
+  /* body unchanged */
+}
 ```
 
 - Backward-compatible: a full `PrismaClient` and the existing test mock (`seed-alex-skill-pack.test.ts:70-122`, cast to `PrismaClient`) both structurally satisfy `KnowledgeEntryReader`. `KnowledgeEntry.content` is `String @db.Text` (non-null), so the real return is assignable to `{ content: string | null } | null`. Function body, behavior, and thrown messages are **unchanged** — existing guard tests stay green.
@@ -110,7 +115,9 @@ export async function assertAlexSkillPackSeeded(
    } catch (err) {
      alexSkillPackSeeded = false;
      alexSkillPackDiagnostic = err instanceof Error ? err.message : String(err);
-     console.warn(`[readiness] alex-skill-pack-seeded failed org=${orgId}: ${alexSkillPackDiagnostic}`);
+     console.warn(
+       `[readiness] alex-skill-pack-seeded failed org=${orgId}: ${alexSkillPackDiagnostic}`,
+     );
    }
    ```
    and include `alexSkillPackSeeded` + `alexSkillPackDiagnostic` in the returned object. (Kept out of the `Promise.all` because it produces two derived values via `try/catch`; the guard issues ≤3 sequential `findFirst` reads — negligible for a rare go-live action.)
@@ -125,7 +132,7 @@ The activate handler already returns 400 when `!report.ready` and only then flip
 ## 5. Failure contract, lifecycle & idempotency (answers to the open questions)
 
 - **Status vs warn:** neither a 500 nor a new status value. A broken/empty pack keeps `provisioningStatus:"pending"` and yields the **existing** structured 400 from the activate route, with the failing `alex-skill-pack-seeded` check named in the report. A `console.warn` (operator log) carries the precise missing scope.
-- **Where / contract:** the readiness layer (`buildReadinessContext` + `checkReadiness`), enforced at activation and surfaced in GET `/readiness`. Failure contract = a failed *blocking* readiness check → activate 400; no exception escapes `buildReadinessContext` (the guard's throw is caught and converted).
+- **Where / contract:** the readiness layer (`buildReadinessContext` + `checkReadiness`), enforced at activation and surfaced in GET `/readiness`. Failure contract = a failed _blocking_ readiness check → activate 400; no exception escapes `buildReadinessContext` (the guard's throw is caught and converted).
 - **Idempotency / re-provisioning:** `seedAlexSkillPack` stays idempotent + best-effort at GET `/config` (self-heals on the next config access); the readiness check re-reads live DB state on every call, so once the seed heals, re-running activate passes. No retry/dedup logic needed.
 - **Interaction with the existing best-effort catch:** unchanged. We do **not** hard-fail the hot config read; the compensating control lives entirely at the readiness/activation layer.
 - **Polling caveat:** because the assertion runs inside `buildReadinessContext`, the `console.warn` may repeat while the org remains unseeded (GET `/readiness` can be polled). Acceptable for this small guard PR; if readiness polling becomes noisy, move diagnostics to the activation path only or add rate-limited logging.
@@ -159,7 +166,7 @@ This PR ships `console.warn` + the blocking readiness check only. An audit/event
     - `ctx.alexSkillPackDiagnostic` is set (non-null)
     - `checkReadiness(ctx).ready === false`
     - the failing check has `id === "alex-skill-pack-seeded"` and `blocking === true`.
-- **`seed-alex-skill-pack.test.ts`:** existing guard suite stays green under the narrowed signature; **add** one test that a *minimal* structural reader (only `knowledgeEntry.findFirst`) is accepted, proving the narrowing.
+- **`seed-alex-skill-pack.test.ts`:** existing guard suite stays green under the narrowed signature; **add** one test that a _minimal_ structural reader (only `knowledgeEntry.findFirst`) is accepted, proving the narrowing.
 - Run `pnpm test`, `pnpm typecheck`, `pnpm format:check` before the PR. (`pnpm reset` first if lower-layer `@switchboard/db` exports look stale.)
 
 ---

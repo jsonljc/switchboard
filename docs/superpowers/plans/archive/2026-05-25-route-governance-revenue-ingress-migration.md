@@ -4,7 +4,7 @@
 
 **Goal:** Remove the last `operator-direct-contract-deferred` bypass — route `POST /api/:orgId/revenue` through `PlatformIngress.submit` (gaining WorkTrace + idempotency + audit) via a new `operator.record_revenue` operator intent, instead of writing directly through `PrismaRevenueStore` + `PrismaOutboxStore`.
 
-**Architecture:** Mirror the Wave 2 Phase 1b operator-direct ingress pattern (`docs/superpowers/specs/2026-05-15-operator-direct-ingress-pattern.md`). A new operator intent + `OperatorMutationHandler` adapter does the revenue-store write and the conversion-event outbox emission *inside* the governed handler; the route becomes a thin ingress submitter wired with the canonical `requireIdempotencyKey` + `requireOrgForMutation` decorators (same as #654-A). The 3 read-only GET handlers in `revenue.ts` are untouched.
+**Architecture:** Mirror the Wave 2 Phase 1b operator-direct ingress pattern (`docs/superpowers/specs/2026-05-15-operator-direct-ingress-pattern.md`). A new operator intent + `OperatorMutationHandler` adapter does the revenue-store write and the conversion-event outbox emission _inside_ the governed handler; the route becomes a thin ingress submitter wired with the canonical `requireIdempotencyKey` + `requireOrgForMutation` decorators (same as #654-A). The 3 read-only GET handlers in `revenue.ts` are untouched.
 
 **Tech Stack:** Fastify, Zod, `@switchboard/core` platform (`PlatformIngress`, `OperatorMutationMode`, `IntentRegistry`), `@switchboard/db` (`PrismaRevenueStore`, `PrismaOutboxStore`), Vitest (mocked Prisma — CI has no Postgres).
 
@@ -18,7 +18,7 @@
 - **Idempotency:** the route forwards the `Idempotency-Key` header to `submit({ idempotencyKey })`; the platform guarantees dedup (DOCTRINE §6). `requireIdempotencyKey` makes the header mandatory (a tightening — document it; revenue recording is exactly where replay protection matters).
 - **No new error codes needed:** revenue `record` is a create with no domain "not found"; let infra errors propagate (ingress maps to a failed outcome / 500). Do NOT add a try/catch with a fabricated error code.
 - **Intent registration shape:** copy `registerOperatorIntent` defaults verbatim (`defaultMode: "operator_mutation"`, `approvalMode: "system_auto_approved"`, `idempotent: true`, `allowedTriggers: ["api"]`, etc.). Revenue recording is auto-approved (it is an operator recording a fact, not a risky outbound action).
-- **GOTCHA (cost a CI red in #654-A):** `check-routes --mode=error` does NOT run the `reachesIngress` ingress-reachability check — that runs in DEFAULT mode via `pnpm local:verify:fast`. After this migration the POST *does* reach `platformIngress.submit`, so `revenue.ts` should pass default mode WITHOUT an allowlist entry. **Verify both:** `pnpm exec tsx .agent/tools/check-routes.ts` (default) AND `... --mode=error`.
+- **GOTCHA (cost a CI red in #654-A):** `check-routes --mode=error` does NOT run the `reachesIngress` ingress-reachability check — that runs in DEFAULT mode via `pnpm local:verify:fast`. After this migration the POST _does_ reach `platformIngress.submit`, so `revenue.ts` should pass default mode WITHOUT an allowlist entry. **Verify both:** `pnpm exec tsx .agent/tools/check-routes.ts` (default) AND `... --mode=error`.
 - **commitlint:** subject must be lowercase-first; footer (Co-Authored-By) needs a leading blank line.
 
 ## File structure
@@ -38,6 +38,7 @@
 ### Task 1: Define the intent constant + parameter schema
 
 **Files:**
+
 - Modify: `apps/api/src/bootstrap/operator-intents/shared.ts`
 - Modify: `apps/api/src/routes/operator-intents-schemas.ts`
 
@@ -71,6 +72,7 @@ export type RecordRevenueParameters = z.infer<typeof RecordRevenueParametersSche
 ### Task 2: Build the record-revenue handler (TDD)
 
 **Files:**
+
 - Create: `apps/api/src/bootstrap/operator-intents/revenue.ts`
 - Create: `apps/api/src/bootstrap/operator-intents/__tests__/revenue.test.ts`
 
@@ -89,7 +91,13 @@ describe("buildRecordRevenueHandler", () => {
     const result = await handler.execute({
       organizationId: "org_a",
       actor: { id: "u1", type: "user" },
-      parameters: { contactId: "c1", amount: 100, currency: "SGD", type: "payment", recordedBy: "owner" },
+      parameters: {
+        contactId: "c1",
+        amount: 100,
+        currency: "SGD",
+        type: "payment",
+        recordedBy: "owner",
+      },
     } as never);
     expect(revenueStore.record).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org_a", contactId: "c1", amount: 100 }),
@@ -97,7 +105,12 @@ describe("buildRecordRevenueHandler", () => {
     expect(outboxWriter.write).toHaveBeenCalledWith(
       "evt_rev_rev_1",
       "purchased",
-      expect.objectContaining({ type: "purchased", contactId: "c1", value: 100, source: "revenue-api" }),
+      expect.objectContaining({
+        type: "purchased",
+        contactId: "c1",
+        value: 100,
+        source: "revenue-api",
+      }),
     );
     expect(result.outcome).toBe("completed");
     expect(result.outputs?.event).toEqual(event);
@@ -126,8 +139,7 @@ export function buildRecordRevenueHandler(
   return {
     async execute(workUnit) {
       const params = RecordRevenueParametersSchema.parse(workUnit.parameters);
-      const resolvedOpportunityId =
-        params.opportunityId ?? `rev-${params.contactId}-${Date.now()}`;
+      const resolvedOpportunityId = params.opportunityId ?? `rev-${params.contactId}-${Date.now()}`;
       const event = await revenueStore.record({
         organizationId: workUnit.organizationId,
         contactId: params.contactId,
@@ -184,12 +196,15 @@ if (revenueStore && outboxWriter) {
   handlers.set(RECORD_REVENUE_INTENT, buildRecordRevenueHandler(revenueStore, outboxWriter));
 }
 ```
+
 and after the consent intent registration:
+
 ```ts
 if (revenueStore && outboxWriter) {
   registerOperatorIntent(intentRegistry, RECORD_REVENUE_INTENT);
 }
 ```
+
 and bump the `intentCount` expression by `(revenueStore && outboxWriter ? 1 : 0)`.
 
 - [ ] **Step 3: Typecheck + commit** `feat(audit): wire record_revenue into operator-intents bootstrap (#654-B)`.
@@ -214,44 +229,47 @@ and bump the `intentCount` expression by `(revenueStore && outboxWriter ? 1 : 0)
 - [ ] **Step 2: Rewrite the POST handler** to:
 
 ```ts
-app.post(
-  "/:orgId/revenue",
-  { preHandler: requireOrgForMutation },
-  async (request, reply) => {
-    if (!app.platformIngress) {
-      return reply.code(503).send({ error: "PlatformIngress not available", statusCode: 503 });
-    }
-    const idempotencyKey = requireIdempotencyKey(request, reply);
-    if (!idempotencyKey) return;
+app.post("/:orgId/revenue", { preHandler: requireOrgForMutation }, async (request, reply) => {
+  if (!app.platformIngress) {
+    return reply.code(503).send({ error: "PlatformIngress not available", statusCode: 503 });
+  }
+  const idempotencyKey = requireIdempotencyKey(request, reply);
+  if (!idempotencyKey) return;
 
-    const parsed = RecordRevenueInputSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
-    }
+  const parsed = RecordRevenueInputSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
+  }
 
-    const submitRequest: CanonicalSubmitRequest = {
-      intent: RECORD_REVENUE_INTENT,
-      parameters: parsed.data,
-      actor: { id: request.actorId, type: "user" as const },
-      organizationId: request.orgId, // auth is authoritative; :orgId path param is informational
-      trigger: "api" as const,
-      idempotencyKey,
-      surface: { surface: "api" as const, requestId: request.id },
-    };
+  const submitRequest: CanonicalSubmitRequest = {
+    intent: RECORD_REVENUE_INTENT,
+    parameters: parsed.data,
+    actor: { id: request.actorId, type: "user" as const },
+    organizationId: request.orgId, // auth is authoritative; :orgId path param is informational
+    trigger: "api" as const,
+    idempotencyKey,
+    surface: { surface: "api" as const, requestId: request.id },
+  };
 
-    const response = await app.platformIngress.submit(submitRequest);
-    if (!response.ok) {
-      const notFound =
-        response.error.type === "intent_not_found" || response.error.type === "deployment_not_found";
-      return reply.code(notFound ? 404 : 400).send({ error: response.error.message, statusCode: notFound ? 404 : 400 });
-    }
-    if (response.result.outcome === "failed") {
-      return reply.code(500).send({ error: response.result.error?.message ?? "Revenue recording failed", statusCode: 500 });
-    }
-    // Preserve the prior 201 { event } response shape.
-    return reply.code(201).send({ event: response.result.outputs?.event });
-  },
-);
+  const response = await app.platformIngress.submit(submitRequest);
+  if (!response.ok) {
+    const notFound =
+      response.error.type === "intent_not_found" || response.error.type === "deployment_not_found";
+    return reply
+      .code(notFound ? 404 : 400)
+      .send({ error: response.error.message, statusCode: notFound ? 404 : 400 });
+  }
+  if (response.result.outcome === "failed") {
+    return reply
+      .code(500)
+      .send({
+        error: response.result.error?.message ?? "Revenue recording failed",
+        statusCode: 500,
+      });
+  }
+  // Preserve the prior 201 { event } response shape.
+  return reply.code(201).send({ event: response.result.outputs?.event });
+});
 ```
 
 > VERIFY against `@switchboard/core/platform` types: the exact `response` discriminated-union shape (`response.ok`, `response.result.outcome`, `response.result.outputs`, `response.error.type`). Copy the mapping from `execute.ts`/`actions.ts` (already on this pattern after #654-A) rather than guessing.
@@ -265,6 +283,7 @@ app.post(
 ### Task 6: Test-server wiring + integration tests (TDD)
 
 **Files:**
+
 - Modify: `apps/api/src/__tests__/test-server.ts`
 - Create/Modify: `apps/api/src/__tests__/api-revenue.test.ts`
 
@@ -304,6 +323,7 @@ app.post(
 3. **Type consistency:** `RECORD_REVENUE_INTENT`, `buildRecordRevenueHandler`, `OutboxWriter`, `RecordRevenueParametersSchema` used consistently across T1–T6.
 
 ## Out of scope
+
 - The 3 GET revenue handlers (read-only; unchanged).
 - `PrismaRevenueStore`/`PrismaOutboxStore` internals (reused as-is).
 - Stricter matrix cells, #643, Phase 3B — separate items.
