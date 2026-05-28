@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import Fastify from "fastify";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 import type { MetricsViewModel } from "@switchboard/core";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 /**
  * Lightweight test harness for the metrics route (mirrors the local metrics.test.ts
@@ -43,6 +44,7 @@ async function buildApp(opts: {
   };
 
   app.decorate("prisma", mockPrisma as never);
+  app.decorate("orgAgentEnablementStore", createInMemoryOrgAgentEnablementStore());
 
   app.addHook("onRequest", async (req) => {
     (req as unknown as { organizationIdFromAuth?: string }).organizationIdFromAuth = undefined;

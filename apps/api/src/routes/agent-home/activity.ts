@@ -21,6 +21,7 @@ import { AgentKeySchema } from "@switchboard/schemas";
 import type { ActivityRow } from "@switchboard/schemas";
 import type { CockpitActivityDeps } from "../../lib/cockpit-activity-deps.js";
 import { requireOrganizationScope } from "../../utils/require-org.js";
+import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
 
@@ -39,8 +40,6 @@ const QuerySchema = z.object({
 
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 50;
-
-const ALEX_RILEY_ONLY = ["alex", "riley"] as const;
 
 export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginAsync {
   return async (app) => {
@@ -66,15 +65,18 @@ export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginA
       if (!params.success) return reply.code(400).send({ error: "Invalid agentId" });
 
       const { agentId } = params.data;
-      if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
-        return reply.code(404).send({ error: "Agent not available on home" });
-      }
 
       const query = QuerySchema.safeParse(request.query);
       if (!query.success) return reply.code(400).send({ error: "Invalid query" });
 
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
+      if (!app.orgAgentEnablementStore) {
+        return reply.code(503).send({ error: "Enablement store unavailable" });
+      }
+      if (!(await isAgentHomeAccessible(agentId, orgId, app.orgAgentEnablementStore))) {
+        return reply.code(404).send({ error: "Agent not available on home" });
+      }
 
       const rawLimit = query.data.limit ?? DEFAULT_LIMIT;
       const limit = Math.max(1, Math.min(MAX_LIMIT, Math.floor(rawLimit)));
@@ -85,7 +87,7 @@ export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginA
 
       try {
         const entries = await deps.fetchAuditEntries({ orgId, limit });
-        const agentKey = agentId as AgentHomeKey; // narrowed by ALEX_RILEY_ONLY guard above
+        const agentKey = agentId as AgentHomeKey; // narrowed by the access gate above (alex/riley/mira)
         const translated = await translateAuditToCockpitActivity({
           entries,
           previewReader: deps.previewReader,

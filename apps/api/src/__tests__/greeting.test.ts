@@ -36,7 +36,7 @@ describe("GET /api/dashboard/agents/:agentKey/greeting", () => {
     expect(body.data.variant).toBeDefined();
   });
 
-  it("returns 404 for mira (not day-one)", async () => {
+  it("returns 404 for mira when the org has NOT enabled it (no data leak)", async () => {
     const res = await ctx.app.inject({
       method: "GET",
       url: "/api/dashboard/agents/mira/greeting",
@@ -45,6 +45,19 @@ describe("GET /api/dashboard/agents/:agentKey/greeting", () => {
     expect(res.statusCode).toBe(404);
     const body = res.json() as { error: string };
     expect(body.error).toContain("not available for greeting");
+  });
+
+  it("returns 200 for mira when the org enabled it", async () => {
+    await ctx.app.orgAgentEnablementStore!.enable("org-1", "mira");
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/greeting",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: agentHome.GreetingProjection };
+    expect(body.data.variant).toBeDefined();
+    expect(body.data.signal).toBeDefined();
   });
 
   it("returns 400 for unknown agent key", async () => {

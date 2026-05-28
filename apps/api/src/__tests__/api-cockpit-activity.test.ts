@@ -20,6 +20,7 @@ import { describe, it, expect, vi } from "vitest";
 import Fastify from "fastify";
 import { cockpitActivityRoutes } from "../routes/agent-home/activity.js";
 import { buildCockpitActivityDeps } from "../lib/cockpit-activity-deps.js";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 type AuditRow = {
   id: string;
@@ -72,6 +73,7 @@ async function buildApp(prisma: ReturnType<typeof buildMockPrisma>) {
   app.decorate("organizationIdFromAuth", undefined as string | undefined);
   app.decorate("principalIdFromAuth", undefined as string | undefined);
   app.decorate("prisma", prisma as unknown as never);
+  app.decorate("orgAgentEnablementStore", createInMemoryOrgAgentEnablementStore());
   app.addHook("onRequest", async (req) => {
     (req as unknown as { organizationIdFromAuth?: string }).organizationIdFromAuth = undefined;
     (req as unknown as { principalIdFromAuth?: string }).principalIdFromAuth = undefined;

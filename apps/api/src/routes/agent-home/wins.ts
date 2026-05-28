@@ -5,6 +5,7 @@ import { projectWins, type WinsSignalStore } from "@switchboard/core";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { getOrgTimezone } from "../../lib/org-timezone.js";
+import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
 
 const ParamsSchema = z.object({
   agentId: AgentKeySchema,
@@ -12,8 +13,6 @@ const ParamsSchema = z.object({
 const QuerySchema = z.object({
   window: z.enum(["today", "week", "month"]).default("today"),
 });
-
-const ALEX_RILEY_ONLY = ["alex", "riley"] as const;
 
 export const winsRoute: FastifyPluginAsync = async (app) => {
   // Dev/test mode: allow `x-org-id` header to set the org scope (mirrors
@@ -40,12 +39,14 @@ export const winsRoute: FastifyPluginAsync = async (app) => {
     if (!query.success) return reply.code(400).send({ error: "Invalid window" });
 
     const { agentId } = params.data;
-    if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
-      return reply.code(404).send({ error: "Agent not available on home" });
-    }
-
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
+    if (!app.orgAgentEnablementStore) {
+      return reply.code(503).send({ error: "Enablement store unavailable" });
+    }
+    if (!(await isAgentHomeAccessible(agentId, orgId, app.orgAgentEnablementStore))) {
+      return reply.code(404).send({ error: "Agent not available on home" });
+    }
 
     if (!app.recommendationStore) {
       return reply.code(503).send({ error: "Recommendations store unavailable" });
@@ -77,7 +78,7 @@ export const winsRoute: FastifyPluginAsync = async (app) => {
           return [
             {
               id: r.id,
-              agentKey: r.agentKey as "alex" | "riley",
+              agentKey: r.agentKey as "alex" | "riley" | "mira",
               status: r.status as "acted" | "confirmed",
               intent: r.intent,
               humanSummary: r.humanSummary,
@@ -93,7 +94,7 @@ export const winsRoute: FastifyPluginAsync = async (app) => {
     try {
       const vm = await projectWins({
         orgId,
-        agentKey: agentId as "alex" | "riley",
+        agentKey: agentId as "alex" | "riley" | "mira",
         window: query.data.window,
         now: new Date(),
         timezone,

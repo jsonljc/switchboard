@@ -2,14 +2,32 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { projectMetrics, getAgentTargets, type MetricsSignalStore } from "@switchboard/core";
+import { PrismaMiraCreativeReadModelReader } from "@switchboard/db";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { getOrgTimezone } from "../../lib/org-timezone.js";
+import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
 const QuerySchema = z.object({ window: z.enum(["week"]).default("week") });
 
-const ALEX_RILEY_ONLY = ["alex", "riley"] as const;
+// Load AgentRoster-derived targets (avgValueCents, targetCpbCents) for alex/riley.
+// agentId is the URL slug; AgentRoster.agentRole stores the canonical role
+// ("responder" | "optimizer"). Falls back to empty config for a zero-config
+// tenant. Mira has no roster row and ignores targets, so it skips the lookup.
+async function loadAgentTargets(
+  prisma: import("@switchboard/db").PrismaClient | null,
+  agentId: string,
+  orgId: string,
+): Promise<{ avgValueCents: number | null; targetCpbCents: number | null }> {
+  if (agentId === "mira") return getAgentTargets({ config: {} });
+  const rosterRole = agentId === "alex" ? "responder" : "optimizer";
+  const rosterRow = await prisma?.agentRoster.findUnique({
+    where: { organizationId_agentRole: { organizationId: orgId, agentRole: rosterRole } },
+    select: { config: true },
+  });
+  return getAgentTargets(rosterRow ?? { config: {} });
+}
 
 export const metricsRoute: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request) => {
@@ -33,30 +51,27 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
     if (!query.success) return reply.code(400).send({ error: "Invalid window" });
 
     const { agentId } = params.data;
-    if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
-      return reply.code(404).send({ error: "Agent not available on home" });
-    }
-
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
+    if (!app.orgAgentEnablementStore) {
+      return reply.code(503).send({ error: "Enablement store unavailable" });
+    }
+    if (!(await isAgentHomeAccessible(agentId, orgId, app.orgAgentEnablementStore))) {
+      return reply.code(404).send({ error: "Agent not available on home" });
+    }
 
     if (!app.reportStores) {
       return reply.code(503).send({ error: "Stores unavailable" });
     }
 
+    const prisma = app.prisma;
+    if (agentId === "mira" && !prisma) {
+      return reply.code(503).send({ error: "Database unavailable" });
+    }
+
     const reportStores = app.reportStores;
     const timezone = await getOrgTimezone(app.prisma, orgId);
-
-    // Load AgentRoster config for target values (avgValueCents, targetCpbCents).
-    // agentId is the URL slug ("alex" | "riley"); AgentRoster.agentRole stores
-    // the canonical role ("responder" | "optimizer"). Mirror mission.ts:253.
-    // Falls back to empty config when no roster row exists (zero-config tenant).
-    const rosterRole = agentId === "alex" ? "responder" : "optimizer";
-    const rosterRow = await app.prisma?.agentRoster.findUnique({
-      where: { organizationId_agentRole: { organizationId: orgId, agentRole: rosterRole } },
-      select: { config: true },
-    });
-    const targets = getAgentTargets(rosterRow ?? { config: {} });
+    const targets = await loadAgentTargets(app.prisma, agentId, orgId);
 
     // Meta Ads spend provider — decorated in apps/api/src/bootstrap/wire-metrics.ts.
     // Falls back to the null-returning provider in test harnesses that build a
@@ -76,14 +91,17 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
       getMetaSpendCents: ({ orgId: o, from, to }) => getMetaSpendCents({ orgId: o, from, to }),
     };
 
+    const miraReader = prisma ? new PrismaMiraCreativeReadModelReader(prisma) : undefined;
+
     try {
       const vm = await projectMetrics({
         orgId,
-        agentKey: agentId as "alex" | "riley",
+        agentKey: agentId as "alex" | "riley" | "mira",
         now: new Date(),
         timezone,
         store,
         targets,
+        ...(agentId === "mira" && miraReader ? { miraReader } : {}),
       });
       return reply.code(200).send({ vm });
     } catch (err) {

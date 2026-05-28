@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { metricsRoute } from "../metrics.js";
 import type { MetricsViewModel } from "@switchboard/core";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 async function buildApp(opts: {
   withStores?: boolean;
@@ -9,6 +10,7 @@ async function buildApp(opts: {
   conversionCount?: number;
   bookingThrows?: boolean;
   prisma?: import("@switchboard/db").PrismaClient | null;
+  enableMiraFor?: string;
 }) {
   const app = Fastify({ logger: false });
   app.decorate("authDisabled", true);
@@ -16,6 +18,9 @@ async function buildApp(opts: {
   app.decorate("principalIdFromAuth", undefined as string | undefined);
   // Default to null (no DB) so getOrgTimezone falls back to "Asia/Singapore"
   app.decorate("prisma", opts.prisma ?? null);
+  const enablementStore = createInMemoryOrgAgentEnablementStore();
+  if (opts.enableMiraFor) await enablementStore.enable(opts.enableMiraFor, "mira");
+  app.decorate("orgAgentEnablementStore", enablementStore);
   app.addHook("onRequest", async (req) => {
     (req as unknown as { organizationIdFromAuth?: string }).organizationIdFromAuth = undefined;
     (req as unknown as { principalIdFromAuth?: string }).principalIdFromAuth = undefined;
@@ -52,7 +57,7 @@ describe("metrics route", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("404 on agentId=mira", async () => {
+  it("404 on agentId=mira when the org has NOT enabled it (no data leak)", async () => {
     const app = await buildApp({ withStores: true });
     const res = await app.inject({
       method: "GET",
@@ -60,6 +65,33 @@ describe("metrics route", () => {
       headers: { "x-org-id": "org-1" },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("200 with a creatives-shipped hero for mira when the org enabled it", async () => {
+    const prisma = {
+      creativeJob: { findMany: vi.fn(async () => []) },
+      organizationConfig: { findFirst: vi.fn(async () => null) },
+    } as unknown as import("@switchboard/db").PrismaClient;
+    const app = await buildApp({ withStores: true, prisma, enableMiraFor: "org-1" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/metrics?window=week",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { vm: { hero: { kind: string; value: number } } };
+    expect(body.vm.hero.kind).toBe("creatives-shipped");
+    expect(body.vm.hero.value).toBe(0);
+  });
+
+  it("503 for mira when prisma is unavailable", async () => {
+    const app = await buildApp({ withStores: true, enableMiraFor: "org-1" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/metrics?window=week",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(503);
   });
 
   it("503 when reportStores is missing", async () => {

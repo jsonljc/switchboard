@@ -7,13 +7,13 @@ import {
   type AlexPipelineRow,
   type RileyPipelineRow,
 } from "@switchboard/core";
+import { PrismaMiraCreativeReadModelReader } from "@switchboard/db";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { getOrgTimezone } from "../../lib/org-timezone.js";
+import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
-
-const ALEX_RILEY_ONLY = ["alex", "riley"] as const;
 
 const RileyTargetEntitiesSchema = z.object({
   campaignId: z.string().min(1),
@@ -40,25 +40,32 @@ export const pipelineRoute: FastifyPluginAsync = async (app) => {
     if (!params.success) return reply.code(400).send({ error: "Invalid agentId" });
 
     const { agentId } = params.data;
-    if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
+    if (!app.orgAgentEnablementStore) {
+      return reply.code(503).send({ error: "Enablement store unavailable" });
+    }
+    if (!(await isAgentHomeAccessible(agentId, orgId, app.orgAgentEnablementStore))) {
       return reply.code(404).send({ error: "Agent not available on home" });
     }
 
-    const orgId = requireOrganizationScope(request, reply);
-    if (!orgId) return;
-
     // Per-agent precondition checks: Alex doesn't need recommendationStore,
-    // Riley doesn't need contactStore.
-    const agentKey = agentId as "alex" | "riley";
+    // Riley doesn't need contactStore, Mira needs prisma for the read-model reader.
+    const agentKey = agentId as "alex" | "riley" | "mira";
     if (agentKey === "alex" && !app.contactStore) {
       return reply.code(503).send({ error: "Contact store unavailable" });
     }
     if (agentKey === "riley" && !app.recommendationStore) {
       return reply.code(503).send({ error: "Recommendations store unavailable" });
     }
+    const prisma = app.prisma;
+    if (agentKey === "mira" && !prisma) {
+      return reply.code(503).send({ error: "Database unavailable" });
+    }
 
     const timezone = await getOrgTimezone(app.prisma, orgId);
     const log = app.log;
+    const miraReader = prisma ? new PrismaMiraCreativeReadModelReader(prisma) : undefined;
 
     const store: PipelineSignalStore = {
       async listAlexPipeline({ orgId: o, activitySince, limit }) {
@@ -125,6 +132,23 @@ export const pipelineRoute: FastifyPluginAsync = async (app) => {
           ];
         });
         return { rows, totalCount: result.totalCount };
+      },
+      async listMiraPipeline({ orgId: o, limit }) {
+        // Unreachable: the `agentKey === "mira" && !prisma` guard above 503s
+        // before we ever dispatch to Mira without a reader.
+        if (!miraReader) throw new Error("listMiraPipeline: prisma unavailable");
+        const rm = await miraReader.read(o, { now: new Date(), timezone, visibleLimit: limit });
+        return {
+          rows: rm.jobs.map((j) => ({
+            id: j.id,
+            title: j.title,
+            status: j.status,
+            createdAt: new Date(j.createdAt),
+          })),
+          // All creative jobs in the fetched window (cockpit summary count,
+          // NOT reporting-grade — see PR1 counts honesty note).
+          totalCount: rm.counts.total,
+        };
       },
     };
 

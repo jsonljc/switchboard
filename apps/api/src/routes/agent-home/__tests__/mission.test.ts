@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import Fastify from "fastify";
 import { missionRoute } from "../mission.js";
-import { buildAlexMissionResponse, buildRileyMissionResponse } from "../mission.js";
+import {
+  buildAlexMissionResponse,
+  buildRileyMissionResponse,
+  buildMiraMissionResponse,
+} from "../mission.js";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 describe("buildAlexMissionResponse", () => {
   const baseInputs = {
@@ -341,6 +346,44 @@ describe("buildRileyMissionResponse", () => {
   });
 });
 
+describe("buildMiraMissionResponse", () => {
+  it("returns Mira creative fields with meta off when nothing is connected", () => {
+    const out = buildMiraMissionResponse({
+      org: { id: "org-1", name: "Acme Medspa" },
+      connections: [],
+    });
+    expect(out.agentKey).toBe("mira");
+    expect(out.displayName).toBe("Mira");
+    expect(out.mission.role).toBe("Creative · drafts ad concepts for your review");
+    expect(out.mission.pipeline).toBe("Creatives · all drafts");
+    expect(out.mission.brand).toBe("Acme Medspa · —");
+    expect(out.mission.channels.map((c) => c.kind)).toEqual(["meta-ads"]);
+    expect(out.mission.channels[0]?.status).toBe("off");
+    expect(out.mission.rules).toBeNull();
+    expect(out.targets).toEqual({
+      avgValueCents: null,
+      targetCpbCents: null,
+      roasSource: "deterministic",
+    });
+    expect(out.commands).toEqual([]);
+    expect(out.setup).toEqual([{ key: "meta", done: false, primary: true }]);
+  });
+
+  it("marks meta done when a Meta Ads Connection exists", () => {
+    const out = buildMiraMissionResponse({
+      org: { id: "org-1", name: "Acme Medspa" },
+      connections: [{ serviceId: "meta-ads", status: "connected" }],
+    });
+    expect(out.mission.channels[0]?.status).toBe("ok");
+    expect(out.setup).toEqual([{ key: "meta", done: true, primary: false }]);
+  });
+
+  it("falls back to '(unnamed organization)' when org.name missing", () => {
+    const out = buildMiraMissionResponse({ org: { id: "org-1", name: "" }, connections: [] });
+    expect(out.mission.brand).toBe("(unnamed organization) · —");
+  });
+});
+
 type PrismaStub = {
   agentRoster: { findFirst: ReturnType<typeof vi.fn> };
   organizationConfig: { findUnique: ReturnType<typeof vi.fn> };
@@ -362,12 +405,15 @@ function buildPrismaStub(opts: {
   };
 }
 
-async function buildApp(prisma: PrismaStub | null) {
+async function buildApp(prisma: PrismaStub | null, enableMiraFor?: string) {
   const app = Fastify({ logger: false });
   app.decorate("authDisabled", true);
   app.decorate("organizationIdFromAuth", undefined as string | undefined);
   app.decorate("principalIdFromAuth", undefined as string | undefined);
   app.decorate("prisma", prisma as unknown as never);
+  const enablementStore = createInMemoryOrgAgentEnablementStore();
+  if (enableMiraFor) await enablementStore.enable(enableMiraFor, "mira");
+  app.decorate("orgAgentEnablementStore", enablementStore);
   app.addHook("onRequest", async (req) => {
     (req as unknown as { organizationIdFromAuth?: string }).organizationIdFromAuth = undefined;
     (req as unknown as { principalIdFromAuth?: string }).principalIdFromAuth = undefined;
@@ -420,7 +466,7 @@ describe("mission route", () => {
     expect(prisma.managedChannel.findMany).not.toHaveBeenCalled();
   });
 
-  it("404 for agents that are not Alex or Riley (e.g. Mira)", async () => {
+  it("404 for mira when the org has NOT enabled it (no data leak)", async () => {
     const app = await buildApp(buildPrismaStub({}));
     const res = await app.inject({
       method: "GET",
@@ -428,6 +474,31 @@ describe("mission route", () => {
       headers: { "x-org-id": "org-1" },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("200 for mira when enabled — roster-tolerant (no AgentRoster row required)", async () => {
+    // Deliberately no roster row; Mira must NOT 404 on a missing roster.
+    const prisma = buildPrismaStub({
+      roster: null,
+      org: { id: "org-1", name: "Acme Medspa" },
+      connections: [{ serviceId: "meta-ads", status: "connected" }],
+    });
+    const app = await buildApp(prisma, "org-1");
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/mission",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      agentKey: string;
+      mission: { role: string; channels: Array<{ kind: string; status: string }> };
+    };
+    expect(body.agentKey).toBe("mira");
+    expect(body.mission.role).toContain("Creative");
+    expect(body.mission.channels.find((c) => c.kind === "meta-ads")?.status).toBe("ok");
+    // Mira's mission must not read AgentRoster.
+    expect(prisma.agentRoster.findFirst).not.toHaveBeenCalled();
   });
 
   it("400 on unknown agentId", async () => {

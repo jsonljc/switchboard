@@ -1,8 +1,9 @@
 // @route-class: read-only
 import type { FastifyPluginAsync } from "fastify";
-import { isAgentKey, AGENT_REGISTRY } from "@switchboard/schemas";
+import { isAgentKey } from "@switchboard/schemas";
 import { agentHome } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { isAgentHomeAccessible } from "../lib/agent-home-access.js";
 
 export const greetingRoutes: FastifyPluginAsync = async (app) => {
   // Dev/test mode: allow `x-org-id` header to set the org scope (same pattern as decisionsRoutes)
@@ -44,19 +45,15 @@ export const greetingRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: `Unknown agent key: ${agentKey}`, statusCode: 400 });
       }
 
-      // Check if agent is day-one
-      const entry = AGENT_REGISTRY[agentKey];
-      if (entry.launchTier !== "day-one") {
+      // Per-org access gate: alex/riley always available; mira only when an
+      // OrgAgentEnablement{mira, enabled} row exists for this org (opt-in).
+      if (!app.orgAgentEnablementStore) {
+        return reply.code(503).send({ error: "Enablement store unavailable", statusCode: 503 });
+      }
+      if (!(await isAgentHomeAccessible(agentKey, orgId, app.orgAgentEnablementStore))) {
         return reply
           .code(404)
           .send({ error: `Agent ${agentKey} is not available for greeting`, statusCode: 404 });
-      }
-
-      // Greeting is only supported for alex and riley
-      if (agentKey !== "alex" && agentKey !== "riley") {
-        return reply
-          .code(400)
-          .send({ error: `Greeting not supported for agent: ${agentKey}`, statusCode: 400 });
       }
 
       // Check store is wired
