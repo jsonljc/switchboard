@@ -20,10 +20,10 @@ describe("composeActivityVoice", () => {
       composeActivityVoice({ time: "", kind: "booked", head: "for Thu 2pm", who: "Jen T." }),
     ).toBe("I booked Jen T.'s consult for Thu 2pm");
   });
-  it("unknown kind falls back to the head verbatim (no crash)", () => {
-    expect(
-      composeActivityVoice({ time: "", kind: "observed", head: "a spend anomaly" } as any),
-    ).toBe("I noted a spend anomaly");
+  it("schema-known kind with no explicit switch arm falls back to default safely", () => {
+    expect(composeActivityVoice({ time: "", kind: "observed", head: "a spend anomaly" })).toBe(
+      "I noted a spend anomaly",
+    );
   });
   it("every known ActivityKind returns a non-empty sentence (no silent gaps)", () => {
     for (const kind of KNOWN_ACTIVITY_KINDS) {

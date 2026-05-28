@@ -45,6 +45,22 @@ describe("coreSetupIncomplete", () => {
 });
 
 describe("selectKeyResult", () => {
+  it("paused with no data → all-null graceful shape (no fabricated values)", () => {
+    const r = selectKeyResult({
+      agentKey: "alex",
+      halted: true,
+      mission: undefined,
+      all: slot(undefined),
+      week: slot(undefined),
+    });
+    expect(r.kind).toBe("paused");
+    if (r.kind === "paused") {
+      expect(r.hero).toBeNull();
+      expect(r.scope).toBeNull();
+      expect(r.spendCents).toBeNull();
+      expect(r.targets).toBeNull();
+    }
+  });
   it("paused wins — returns paused with whatever real figure is available (never fabricated 0)", () => {
     const r = selectKeyResult({
       agentKey: "alex",

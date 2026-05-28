@@ -21,6 +21,8 @@ export function composeActivityVoice(row: ActivityRow): string {
     case "rotated":
     case "restructured":
       return `I adjusted ${row.head}`;
+    // Deliberately generic for informational-only kinds (started/connected/waiting/passed/watching/reviewing/alert/observed) —
+    // the activity log surfaces these factually without first-person framing.
     default:
       return `I noted ${row.head}`;
   }

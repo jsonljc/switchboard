@@ -38,6 +38,16 @@ describe("composeStatusLine", () => {
     expect(r.health).toBeNull();
     expect(r.presence).toBe("Last action 12m ago");
   });
+  it("state=null → presence falls back to stale copy (same as null lastActionAt)", () => {
+    const r = composeStatusLine({
+      oldestOpenItemAgeHours: 2,
+      fallingBehindHours: 12,
+      state: null,
+      nowMs: NOW,
+    });
+    expect(r.presence).toBe("No recorded action in 24h");
+    expect(r.health).toBe("Nothing old is waiting");
+  });
   it("no recorded action → stale presence copy", () => {
     const r = composeStatusLine({
       oldestOpenItemAgeHours: null,

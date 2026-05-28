@@ -25,10 +25,18 @@ export function composeStatusLine(input: StatusLineInput): StatusLine {
   const last = state?.lastActionAt ?? null;
   if (last) {
     const diffMin = Math.max(0, Math.round((nowMs - new Date(last).getTime()) / 60_000));
-    presence =
-      diffMin < 60
-        ? `Last action ${Math.max(1, diffMin)}m ago`
-        : `Last action ${Math.round(diffMin / 60)}h ago`;
+    if (diffMin < 1) {
+      presence = "Last action just now";
+    } else if (diffMin < 60) {
+      presence = `Last action ${diffMin}m ago`;
+    } else {
+      const h = Math.round(diffMin / 60);
+      if (h < 24) {
+        presence = `Last action ${Math.max(1, h)}h ago`;
+      } else {
+        presence = `Last action ${Math.round(h / 24)}d ago`;
+      }
+    }
   } else {
     presence = "No recorded action in 24h";
   }
