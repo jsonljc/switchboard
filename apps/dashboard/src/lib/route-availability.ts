@@ -41,8 +41,11 @@ export function isAgentHomeLinkLive(kind: AgentHomeLink["kind"]): boolean {
   switch (kind) {
     case "contact":
       return isMercuryToolLive("contacts");
-    case "ad-set":
     case "creative-job":
+      // Live as of Mira M1 PR5 — the /mira/creatives/[id] draft-review route
+      // exists, so agent-home tiles may produce clickable creative-job links.
+      return true;
+    case "ad-set":
     case "agent-setup":
     case "all-wins":
       return false;
