@@ -231,8 +231,16 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
     return this.verifyAndWrap(row);
   }
 
-  async getByIdempotencyKey(key: string): Promise<WorkTraceReadResult | null> {
-    const row = await this.prisma.workTrace.findUnique({ where: { idempotencyKey: key } });
+  async getByIdempotencyKey(
+    organizationId: string,
+    key: string,
+  ): Promise<WorkTraceReadResult | null> {
+    // Scoped to the (organizationId, idempotencyKey) unique. A global lookup by
+    // key alone could return another tenant's WorkTrace when two orgs share a
+    // key, leaking its outputs/parameters back through PlatformIngress's replay.
+    const row = await this.prisma.workTrace.findUnique({
+      where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: key } },
+    });
     if (!row) return null;
     return this.verifyAndWrap(row);
   }

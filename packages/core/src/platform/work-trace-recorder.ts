@@ -48,7 +48,7 @@ export interface WorkTraceStore {
       organizationId?: string;
     },
   ): Promise<WorkTraceUpdateResult>;
-  getByIdempotencyKey(key: string): Promise<WorkTraceReadResult | null>;
+  getByIdempotencyKey(organizationId: string, key: string): Promise<WorkTraceReadResult | null>;
 }
 
 export function buildWorkTrace(input: TraceInput): WorkTrace {

@@ -1814,7 +1814,7 @@ model WorkTrace {
   actorId          String
   actorType        String
   trigger          String
-  idempotencyKey   String? @unique
+  idempotencyKey   String?
 
   // Lifecycle state — the canonical operational record
   parameters        String? @db.Text // JSON: original action parameters
@@ -1866,6 +1866,7 @@ model WorkTrace {
   ingressPath           String    @default("platform_ingress")
   hashInputVersion      Int       @default(1)
 
+  @@unique([organizationId, idempotencyKey])
   @@index([organizationId, intent])
   @@index([traceId])
   @@index([requestedAt])
