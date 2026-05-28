@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript (ESM, `.js` relative imports), pnpm + Turborepo, Zod, Prisma (Postgres), Fastify (API), Next.js 14 App Router + TanStack Query (dashboard), Vitest.
 
+**Status (2026-05-28):** **M1 implemented on `feat/mira-m1`** — PR0–PR7 complete, each gated by spec + code-quality review. Whole-repo `pnpm reset && typecheck && format:check` green; all package test suites green **except** the two pre-existing, non-Mira flakes (`chat` `gateway-bridge-attribution` timeout under full-suite load — passes isolated; `dashboard` `auth-onboarding` `KnowledgeKind` `@prisma/client` mock — inherited on main). Grep audit clean (no stale `ALEX_RILEY_ONLY`, no PCD/publish/disclosure/lip-sync/submission in Mira surfaces, Mira stays `launchTier:"day-thirty"` with no global flip). **Pending: review + merge to `main`, then enable pilot orgs** (`seedMiraPilotOrgs` / an `OrgAgentEnablement{mira,enabled}` row) and a manual live-render pass of `/mira` + `/mira/creatives/[id]`. **Deferred (later spec→plan cycles):** G1 disclosure-at-publish, G2 consent enforcement, G3 forensic + tier + structured QC (`PcdPerformanceSnapshot`), and engine-supersede — all attach behind the read-model seam without touching Mira's surface.
+
 ---
 
 ## Context & doctrine
