@@ -1,0 +1,194 @@
+/*
+  Agent Panel — CSS Modules
+  Ported from prototype-ref/agent-panel/panel/panel.css (.ap* rules).
+  Token mapping:
+    prototype → real token
+    --coral/--teal/--violet        → hsl(var(--agent-{key}))
+    --coral-tint/--teal-tint       → hsl(var(--agent-{key}-tint))
+    --violet-tint                  → hsl(var(--agent-mira-tint))
+    --violet-deep                  → hsl(var(--agent-mira-deep))
+    --serif                        → var(--font-home-serif)
+    --sans                         → var(--font-home-sans)
+    --ink-1                        → var(--ink)
+    --ink-2/3/4                    → var(--ink-2/3/4)
+    --good                         → hsl(var(--agent-active))
+    --amber (status context)       → hsl(var(--agent-attention))
+    --critical / red               → DROPPED (no red in system)
+    --shadow-sheet                 → var(--shadow-sheet)
+    --shadow-lift                  → var(--shadow-lift)
+    --canvas-2/3/--hair/--hair-soft → already in globals.css
+    PR1 shell only: identity row, sheet sizing, Mira mark.
+    Slot-2/3/4 rules are deferred to later tasks.
+*/
+
+/* ─── Panel sheet ─── */
+.panel {
+  /* Override Radix SheetContent defaults for bottom sheet */
+  background: hsl(var(--canvas)) !important;
+  box-shadow: var(--shadow-sheet) !important;
+  border-top-left-radius: var(--radius-xl) !important;
+  border-top-right-radius: var(--radius-xl) !important;
+  height: 92%;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+/* Drag handle */
+.panel::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--canvas-3);
+  margin: 10px auto 0;
+  flex-shrink: 0;
+}
+
+/* ─── Identity row (Slot 1 header) ─── */
+.idRow {
+  display: flex !important;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px 18px;
+  border-bottom: 1px solid var(--hair-soft);
+  flex-shrink: 0;
+}
+
+.agentMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.agentName {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.014em;
+  font-family: var(--font-home-sans);
+}
+
+.role {
+  font-weight: 400;
+  color: var(--ink-3);
+  font-size: 14.5px;
+  letter-spacing: -0.005em;
+  font-family: var(--font-home-sans);
+}
+
+.role::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--ink-4);
+}
+
+/* ─── Scrollable body ─── */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Paused note placeholder (used by later tasks too) ─── */
+.pausedNote {
+  margin: 8px 20px 4px;
+  padding: 12px 16px;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  text-align: center;
+  font-family: var(--font-home-sans);
+}
+
+/* ─── Mira "not set up" body ─── */
+.notset {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 28px 28px;
+  gap: 18px;
+}
+
+.notsetMark {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: hsl(var(--agent-mira-tint));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-home-serif);
+  font-style: italic;
+  font-size: 38px;
+  font-weight: 500;
+  color: hsl(var(--agent-mira-deep));
+  letter-spacing: -0.02em;
+  position: relative;
+}
+
+.notsetMark::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed hsl(var(--agent-mira) / 0.4);
+}
+
+.notset h3 {
+  font-family: var(--font-home-serif);
+  font-size: 28px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  max-width: 18ch;
+  line-height: 1.15;
+  /* reset SheetHeader's text-align */
+  text-align: center;
+}
+
+.notsetSub {
+  font-size: 14.5px;
+  color: var(--ink-2);
+  line-height: 1.55;
+  max-width: 30ch;
+  font-family: var(--font-home-sans);
+}
+
+.notsetMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 6px 10px;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: 999px;
+}
+
+.notsetMeta::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--agent-mira));
+}
