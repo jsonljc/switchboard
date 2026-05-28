@@ -8,12 +8,16 @@ import type { CockpitKpiData } from "@/components/cockpit/types";
  * derivation (which would leak a `qualified` tile onto /mira).
  *
  * Unlike the Riley adapter, Mira's metrics carry NO `roi` (creative drafts have
- * no return-on-spend), so we gate on `tiles` only and never forward `roi`.
+ * no return-on-spend), so we emit an explicit `roi: null`. That null tells
+ * <KPIStrip> to SUPPRESS the ROI bar rather than fall through to legacyRoi()
+ * (which, with spend===null, renders a misleading "Connect Meta Ads to see
+ * return on spend" row on a draft-only creative agent).
  */
 export function metricsViewModelToMiraKpiData(vm: MetricsViewModelWire): CockpitKpiData | null {
   if (!vm.tiles) return null;
   return {
     range: `This week · ${vm.folioRange}`,
+    roi: null,
     tiles: vm.tiles.map((t) => ({
       label: t.label,
       value: typeof t.value === "number" ? String(t.value) : t.value,
