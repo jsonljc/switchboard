@@ -112,6 +112,97 @@
   font-family: var(--font-home-sans);
 }
 
+/* ─── Identity-status slot (Slot ①) ─── */
+
+.identityStatus {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--hair-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Inner identity row when rendered standalone inside the slot */
+.idRowInner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 2px;
+}
+
+.healthLine {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  font-family: var(--font-home-sans);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.presenceLine {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-family: var(--font-home-sans);
+  letter-spacing: -0.003em;
+  margin: 0;
+}
+
+.pausedBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: hsl(var(--agent-attention));
+  background: hsl(var(--agent-attention) / 0.1);
+  border: 1px solid hsl(var(--agent-attention) / 0.25);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-family: var(--font-home-sans);
+  align-self: flex-start;
+}
+
+.statusText {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-family: var(--font-home-sans);
+  letter-spacing: -0.003em;
+  margin: 0;
+}
+
+.verdictBlock {
+  padding-left: 2px;
+}
+
+.verdictText {
+  font-size: 14.5px;
+  color: var(--ink);
+  font-family: var(--font-home-sans);
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  margin: 0;
+}
+
+.verdictAccent {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.verdictEmpty {
+  font-size: 14.5px;
+  color: var(--ink-3);
+  font-family: var(--font-home-sans);
+  font-style: italic;
+  margin: 0;
+}
+
 /* ─── Mira "not set up" body ─── */
 .notset {
   flex: 1;
