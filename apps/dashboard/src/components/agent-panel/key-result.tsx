@@ -32,6 +32,18 @@ export function KeyResult({ agentKey }: KeyResultProps) {
   const mission = useAgentMission(agentKey);
   const { halted } = useHalt();
 
+  // Guard: on cold mount (data undefined, isError false) the hooks are still
+  // fetching. Without this check, selectKeyResult would return { kind: "error" }
+  // and flash "Couldn't load this week's number" before any response arrives —
+  // violating the three-states-never-collapse invariant (loading ≠ error).
+  if (all.isLoading || week.isLoading || mission.isLoading) {
+    return (
+      <div className={styles.heroCard} data-kind="loading" aria-busy="true">
+        <div className={styles.heroSkeleton} />
+      </div>
+    );
+  }
+
   const result = selectKeyResult({
     agentKey,
     halted,
@@ -168,7 +180,11 @@ export function KeyResult({ agentKey }: KeyResultProps) {
 }
 
 // Core channel keys per agent — if core is incomplete we are in activation, not proof.
-const CORE_CHANNEL: Record<"alex" | "riley", string> = { alex: "inbox", riley: "meta" };
+// CORE_SETUP_KEY is the setup-row key (used for setup[] filtering).
+// CORE_CHANNEL_KIND is the MissionChannelKind value (used for channel[] filtering).
+// "meta" is a setup-row key, not a MissionChannelKind; the channel enum uses "meta-ads".
+const CORE_SETUP_KEY: Record<"alex" | "riley", string> = { alex: "inbox", riley: "meta" };
+const CORE_CHANNEL_KIND: Record<"alex" | "riley", string> = { alex: "inbox", riley: "meta-ads" };
 
 /**
  * Find the first non-core incomplete setup step or channel for the agent.
@@ -181,20 +197,21 @@ function nonCoreNudge(
 ): string | null {
   if (!missionData) return null;
   const displayName = missionData.displayName || agentDisplay[agentKey].name;
-  const coreKey = CORE_CHANNEL[agentKey];
 
   // 1. Check setup rows first (non-primary, non-core, incomplete)
+  const coreSetupKey = CORE_SETUP_KEY[agentKey];
   const incompleteSetup = missionData.setup.find(
-    (s: MissionSetupRow) => s.key !== coreKey && !s.primary && !s.done,
+    (s: MissionSetupRow) => s.key !== coreSetupKey && !s.primary && !s.done,
   );
   if (incompleteSetup) {
     return nonCoreSetupNudgeCopy(incompleteSetup.key, displayName);
   }
 
-  // 2. Check channels — exclude the core channel key
+  // 2. Check channels — exclude the core MissionChannelKind for this agent
+  // ("meta-ads" for Riley, "inbox" for Alex).
+  const coreChannelKind = CORE_CHANNEL_KIND[agentKey];
   const incompleteChannel = missionData.mission.channels.find(
-    (ch: MissionChannel) =>
-      ch.kind !== coreKey && ch.kind !== `${coreKey}-ads` && ch.status === "off",
+    (ch: MissionChannel) => ch.kind !== coreChannelKind && ch.status === "off",
   );
   if (incompleteChannel) {
     return nonCoreChannelNudgeCopy(incompleteChannel.kind, agentKey, displayName);

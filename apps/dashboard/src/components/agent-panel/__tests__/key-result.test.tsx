@@ -6,24 +6,27 @@ import { render, screen } from "@testing-library/react";
 // Controllable per-test state
 let allData: unknown = undefined;
 let allIsError = false;
+let allIsLoading = false;
 let weekData: unknown = undefined;
 let weekIsError = false;
+let weekIsLoading = false;
 let missionData: unknown = undefined;
+let missionIsLoading = false;
 let haltedValue = false;
 
 vi.mock("@/hooks/use-agent-metrics", () => ({
   useAgentMetrics: vi.fn((agentKey: string, metricWindow: "week" | "all" = "week") => {
     if (metricWindow === "all") {
-      return { data: allData, isError: allIsError, isLoading: false, error: null };
+      return { data: allData, isError: allIsError, isLoading: allIsLoading, error: null };
     }
-    return { data: weekData, isError: weekIsError, isLoading: false, error: null };
+    return { data: weekData, isError: weekIsError, isLoading: weekIsLoading, error: null };
   }),
 }));
 
 vi.mock("@/hooks/use-agent-mission", () => ({
   useAgentMission: () => ({
     data: missionData,
-    isLoading: false,
+    isLoading: missionIsLoading,
     isError: false,
     error: null,
   }),
@@ -86,9 +89,12 @@ describe("KeyResult slot — launch-blocker tests", () => {
   beforeEach(() => {
     allData = undefined;
     allIsError = false;
+    allIsLoading = false;
     weekData = undefined;
     weekIsError = false;
+    weekIsLoading = false;
     missionData = undefined;
+    missionIsLoading = false;
     haltedValue = false;
   });
 
@@ -353,6 +359,30 @@ describe("KeyResult slot — launch-blocker tests", () => {
     expect(screen.getByText(/Connect Google Ads to expand Riley's reach/i)).toBeInTheDocument();
     // No activation block
     expect(screen.queryByTestId("activation-block")).not.toBeInTheDocument();
+  });
+
+  // Loading guard — on cold mount, isLoading:true must NOT collapse into error
+  it("loading. any hook isLoading:true → renders skeleton (data-kind=loading / aria-busy) and NOT the error message or any hero number", () => {
+    // Simulate cold mount: both metrics hooks still fetching, data undefined, isError false
+    allIsLoading = true;
+    weekIsLoading = true;
+    allData = undefined;
+    weekData = undefined;
+    allIsError = false;
+    weekIsError = false;
+    const { container } = render(<KeyResult agentKey="alex" />);
+
+    // Skeleton must be present — use attribute selectors (data-kind / aria-busy)
+    const loadingEl = container.querySelector("[data-kind='loading']");
+    expect(loadingEl).not.toBeNull();
+    expect(loadingEl?.getAttribute("aria-busy")).toBe("true");
+
+    // Error message must NOT appear — violates loading ≠ error invariant
+    expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
+
+    // No hero number or eyebrow should appear
+    expect(screen.queryByText(/since you hired/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/this week/i)).not.toBeInTheDocument();
   });
 
   // Gap 1 — all-complete proof renders NO nudge

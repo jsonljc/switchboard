@@ -399,6 +399,24 @@
   margin: 4px 0 0;
 }
 
+/* Loading skeleton — neutral muted block; no spinner per spec */
+.heroSkeleton {
+  height: 80px;
+  border-radius: var(--radius-md);
+  background: var(--canvas-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
 /* Error state */
 .heroError {
   background: var(--canvas-2);
@@ -430,7 +448,8 @@
   border-color: hsl(var(--agent-alex) / 0.22);
 }
 
-[data-agent="riley"] .heroActivation {
+/* Same-element: data-agent and heroActivation are on the SAME div — no descendant combinator */
+[data-agent="riley"].heroActivation {
   background: hsl(var(--agent-riley-tint));
   border-color: hsl(var(--agent-riley) / 0.22);
 }
