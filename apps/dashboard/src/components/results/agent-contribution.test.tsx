@@ -15,8 +15,17 @@ describe("AgentContribution", () => {
     expect(screen.getByText(/Not set up yet/i)).toBeInTheDocument();
     expect(container.querySelector('[data-agent="mira"]')?.textContent).not.toMatch(/S\$/);
   });
-  it("renders agent identity as a dot, not a button", () => {
+  it("renders one agent-chip button per agent (entry point for the agent panel)", () => {
     const { container } = render(<AgentContribution attribution={goodFixture.attribution} />);
-    expect(container.querySelectorAll("[data-agent] button").length).toBe(0);
+    // Each article[data-agent] has exactly one header button (the chip that opens the panel).
+    // Agent color (the dot) is identity-only — it lives inside the button, not as a standalone control.
+    expect(container.querySelectorAll("[data-agent] button").length).toBe(3); // riley, alex, mira
+  });
+
+  it("the agent chip buttons have descriptive aria-labels", () => {
+    render(<AgentContribution attribution={goodFixture.attribution} />);
+    expect(screen.getByRole("button", { name: /open riley panel/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open alex panel/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open mira panel/i })).toBeInTheDocument();
   });
 });

@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useReportWindow } from "@/app/(auth)/(mercury)/reports/hooks/use-report-window";
 import { useReportData } from "@/app/(auth)/(mercury)/reports/hooks/use-report-data";
 import { useConnections } from "@/hooks/use-connections";
 import { isMercuryToolLive } from "@/lib/route-availability";
+import { AgentPanel } from "@/components/agent-panel/agent-panel";
+import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
 import { buildResultsModel } from "./results-model";
 import { ResultsHeader } from "./results-header";
 import { VerdictLine } from "./verdict-line";
@@ -21,6 +24,8 @@ import { MetaConnectBanner, ErrorBanner, FirstRunNote, ResultsSkeleton } from ".
 import styles from "./results.module.css";
 
 export function ResultsPage() {
+  const router = useRouter();
+  const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
   const { window: w, setWindow } = useReportWindow();
   const { data, isLoading, isFetching, error, refresh } = useReportData(w);
   const liveMode = isMercuryToolLive("reports");
@@ -83,7 +88,7 @@ export function ResultsPage() {
         <VerdictLine pullquote={model.pullquote} />
         <HeroOutcomes model={model} />
         <WhatsWorking model={model} />
-        <AgentContribution attribution={model.attribution} />
+        <AgentContribution attribution={model.attribution} onOpenAgent={setPanelAgent} />
         <WorthIt cost={model.cost} narrative={model.costNarrative} />
         {/* No-Meta hides BOTH funnel and campaigns (spec §State-coverage); hide the
             whole disclosure when there's nothing left to reveal. */}
@@ -107,20 +112,37 @@ export function ResultsPage() {
   }
 
   return (
-    <div className={styles.column}>
-      <ResultsHeader
-        window={w}
-        onWindow={setWindow}
-        dateFolio={data?.dateFolio ?? null}
-        cacheAgeMinutes={cacheAgeMinutes}
-        onRecompute={() => void refresh()}
-        isRecomputing={isRecomputing}
-      />
-      {error && (
-        <ErrorBanner cacheAgeMinutes={cacheAgeMinutes ?? 0} onRetry={() => void refresh()} />
+    <>
+      <div className={styles.column}>
+        <ResultsHeader
+          window={w}
+          onWindow={setWindow}
+          dateFolio={data?.dateFolio ?? null}
+          cacheAgeMinutes={cacheAgeMinutes}
+          onRecompute={() => void refresh()}
+          isRecomputing={isRecomputing}
+        />
+        {error && (
+          <ErrorBanner cacheAgeMinutes={cacheAgeMinutes ?? 0} onRetry={() => void refresh()} />
+        )}
+        {showNoMeta && <MetaConnectBanner />}
+        {renderBody()}
+      </div>
+
+      {/* Agent panel — decoupled local state, mirrors Home's pattern.
+          onSeeAll from Results is same-page navigation — omitted (no-op would be confusing). */}
+      {panelAgent && (
+        <AgentPanel
+          key={panelAgent}
+          agentKey={panelAgent}
+          open
+          onOpenChange={(o) => {
+            if (!o) setPanelAgent(null);
+          }}
+          onOpenDecision={() => router.push("/inbox")}
+          onActivate={() => router.push("/settings/channels")}
+        />
       )}
-      {showNoMeta && <MetaConnectBanner />}
-      {renderBody()}
-    </div>
+    </>
   );
 }

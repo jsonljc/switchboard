@@ -104,6 +104,41 @@ vi.mock("next-auth/react", () => ({
   useSession: () => sessionState,
 }));
 
+// AgentPanel is a self-contained sheet tested independently in agent-panel.test.tsx.
+// Mock it here so the Home wiring test focuses on the open-state toggle, not
+// the deep Radix/sprite render tree. Buttons for onSeeAll / onOpenDecision are
+// rendered so tests can verify the route-out callbacks are wired correctly.
+vi.mock("@/components/agent-panel/agent-panel", () => ({
+  AgentPanel: ({
+    agentKey,
+    open,
+    onSeeAll,
+    onOpenDecision,
+    onActivate,
+  }: {
+    agentKey: string;
+    open: boolean;
+    onOpenChange: () => void;
+    onSeeAll?: () => void;
+    onOpenDecision?: () => void;
+    onActivate?: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" data-testid={`mock-agent-panel-${agentKey}`}>
+        <button onClick={onSeeAll} data-testid="mock-see-all">
+          See all
+        </button>
+        <button onClick={onOpenDecision} data-testid="mock-open-decision">
+          Open decision
+        </button>
+        <button onClick={onActivate} data-testid="mock-activate">
+          Activate
+        </button>
+      </div>
+    ) : null,
+}));
+
+import { fireEvent } from "@testing-library/react";
 import { HomePage } from "../home-page";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -340,5 +375,72 @@ describe("HomePage", () => {
     // Active proof line must be present (open leads) but must NOT contain "working".
     expect(verdictEl.textContent).toMatch(/open leads/i);
     expect(verdictEl.textContent).not.toMatch(/working/i);
+  });
+
+  it("clicking a Team Pulse chip opens the agent panel for that agent", () => {
+    // Panel is absent before interaction.
+    render(<HomePage />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Click the alex chip → panel should appear.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+  });
+
+  it("clicking the mira chip opens the agent panel for mira (honest not-set-up panel)", () => {
+    render(<HomePage />);
+    fireEvent.click(screen.getByTestId("agent-chip-mira"));
+    expect(screen.getByTestId("mock-agent-panel-mira")).toBeInTheDocument();
+  });
+
+  it("swapping agents — clicking riley after alex shows riley panel and removes alex panel", () => {
+    render(<HomePage />);
+
+    // Open alex panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-agent-panel-riley")).not.toBeInTheDocument();
+
+    // Click riley chip → riley panel appears, alex panel is gone.
+    fireEvent.click(screen.getByTestId("agent-chip-riley"));
+    expect(screen.getByTestId("mock-agent-panel-riley")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-agent-panel-alex")).not.toBeInTheDocument();
+  });
+
+  it("onSeeAll callback navigates to /results", () => {
+    render(<HomePage />);
+
+    // Open a panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+
+    // Trigger the See All button wired to onSeeAll.
+    fireEvent.click(screen.getByTestId("mock-see-all"));
+    expect(pushMock).toHaveBeenCalledWith("/results");
+  });
+
+  it("onOpenDecision callback navigates to /inbox", () => {
+    render(<HomePage />);
+
+    // Open a panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+
+    // Trigger the Open Decision button wired to onOpenDecision.
+    fireEvent.click(screen.getByTestId("mock-open-decision"));
+    expect(pushMock).toHaveBeenCalledWith("/inbox");
+  });
+
+  it("onActivate callback navigates to /settings/channels", () => {
+    render(<HomePage />);
+
+    // Open a panel first.
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+
+    // Trigger the Activate button wired to onActivate.
+    fireEvent.click(screen.getByTestId("mock-activate"));
+    expect(pushMock).toHaveBeenCalledWith("/settings/channels");
   });
 });

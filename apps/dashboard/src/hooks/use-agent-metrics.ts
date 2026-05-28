@@ -8,21 +8,27 @@ import { useScopedQueryKeys } from "./use-query-keys";
 
 /**
  * Live metrics hook. Fetches from the dashboard proxy
- * /api/dashboard/agents/[agentId]/metrics?window=week, which forwards to the
- * api server. Returns AgentBlockQuery<MetricsViewModelWire> shape.
+ * /api/dashboard/agents/[agentId]/metrics?window=<window>, which forwards to
+ * the api server. Returns AgentBlockQuery<MetricsViewModelWire> shape.
  *
  * A.3: Return type widened to MetricsViewModelWire (additive — targets,
  * spendCents, leads, qualifiedPct, bookedDelta, leadsDelta, qualifiedDelta).
  * Legacy API responses that omit these fields will surface as undefined;
  * consumers should null-coalesce where needed.
+ *
+ * @param metricWindow - "week" (default) for current-week scope; "all" for lifetime.
+ *   Passing "all" allows callers to fetch the lifetime figure and fall back to
+ *   "week" when the server returns 400 (isError: true, data: undefined).
  */
-export function useAgentMetrics(agentKey: AgentKey): AgentBlockQuery<MetricsViewModelWire> {
+export function useAgentMetrics(
+  agentKey: AgentKey,
+  metricWindow: "week" | "all" = "week",
+): AgentBlockQuery<MetricsViewModelWire> {
   const keys = useScopedQueryKeys();
-  const window = "week";
   const query = useQuery({
-    queryKey: keys?.metrics.feed(agentKey, window) ?? ["__disabled_metrics_feed__"],
+    queryKey: keys?.metrics.feed(agentKey, metricWindow) ?? ["__disabled_metrics_feed__"],
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard/agents/${agentKey}/metrics?window=${window}`);
+      const res = await fetch(`/api/dashboard/agents/${agentKey}/metrics?window=${metricWindow}`);
       if (!res.ok) throw new Error(`Metrics fetch failed (HTTP ${res.status})`);
       const json = (await res.json()) as { vm: MetricsViewModelWire };
       return json.vm;

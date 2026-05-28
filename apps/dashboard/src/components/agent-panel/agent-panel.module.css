@@ -1,0 +1,840 @@
+/*
+  Agent Panel — CSS Modules
+  Ported from prototype-ref/agent-panel/panel/panel.css (.ap* rules).
+  Token mapping:
+    prototype → real token
+    --coral/--teal/--violet        → hsl(var(--agent-{key}))
+    --coral-tint/--teal-tint       → hsl(var(--agent-{key}-tint))
+    --violet-tint                  → hsl(var(--agent-mira-tint))
+    --violet-deep                  → hsl(var(--agent-mira-deep))
+    --serif                        → var(--font-home-serif)
+    --sans                         → var(--font-home-sans)
+    --ink-1                        → var(--ink)
+    --ink-2/3/4                    → var(--ink-2/3/4)
+    --good                         → hsl(var(--agent-active))
+    --amber (status context)       → hsl(var(--agent-attention))
+    --critical / red               → DROPPED (no red in system)
+    --shadow-sheet                 → var(--shadow-sheet)
+    --shadow-lift                  → var(--shadow-lift)
+    --canvas-2/3/--hair/--hair-soft → already in globals.css
+    PR1 shell only: identity row, sheet sizing, Mira mark.
+    Slot-2/3/4 rules are deferred to later tasks.
+*/
+
+/* ─── Panel sheet ─── */
+.panel {
+  /* Override Radix SheetContent defaults for bottom sheet */
+  background: hsl(var(--canvas)) !important;
+  box-shadow: var(--shadow-sheet) !important;
+  border-top-left-radius: var(--radius-xl) !important;
+  border-top-right-radius: var(--radius-xl) !important;
+  height: 92%;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+/* Drag handle */
+.panel::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--canvas-3);
+  margin: 10px auto 0;
+  flex-shrink: 0;
+}
+
+/* ─── Identity row (Slot 1 header) ─── */
+.idRow {
+  display: flex !important;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px 18px;
+  border-bottom: 1px solid var(--hair-soft);
+  flex-shrink: 0;
+}
+
+.agentMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.agentName {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.014em;
+  font-family: var(--font-home-sans);
+}
+
+.role {
+  font-weight: 400;
+  color: var(--ink-3);
+  font-size: 14.5px;
+  letter-spacing: -0.005em;
+  font-family: var(--font-home-sans);
+}
+
+.role::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--ink-4);
+}
+
+/* ─── Scrollable body ─── */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Paused note placeholder (used by later tasks too) ─── */
+.pausedNote {
+  margin: 8px 20px 4px;
+  padding: 12px 16px;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  text-align: center;
+  font-family: var(--font-home-sans);
+}
+
+/* ─── Identity-status slot (Slot ①) ─── */
+
+.identityStatus {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--hair-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Inner identity row when rendered standalone inside the slot */
+.idRowInner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 2px;
+}
+
+.healthLine {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  font-family: var(--font-home-sans);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.presenceLine {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-family: var(--font-home-sans);
+  letter-spacing: -0.003em;
+  margin: 0;
+}
+
+.pausedBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: hsl(var(--agent-attention));
+  background: hsl(var(--agent-attention) / 0.1);
+  border: 1px solid hsl(var(--agent-attention) / 0.25);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-family: var(--font-home-sans);
+  align-self: flex-start;
+}
+
+.statusText {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-family: var(--font-home-sans);
+  letter-spacing: -0.003em;
+  margin: 0;
+}
+
+.verdictBlock {
+  padding-left: 2px;
+}
+
+.verdictText {
+  font-size: 14.5px;
+  color: var(--ink);
+  font-family: var(--font-home-sans);
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  margin: 0;
+}
+
+.verdictAccent {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.verdictEmpty {
+  font-size: 14.5px;
+  color: var(--ink-3);
+  font-family: var(--font-home-sans);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ─── Mira "not set up" body ─── */
+.notset {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 28px 28px;
+  gap: 18px;
+}
+
+.notsetMark {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: hsl(var(--agent-mira-tint));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-home-serif);
+  font-style: italic;
+  font-size: 38px;
+  font-weight: 500;
+  color: hsl(var(--agent-mira-deep));
+  letter-spacing: -0.02em;
+  position: relative;
+}
+
+.notsetMark::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed hsl(var(--agent-mira) / 0.4);
+}
+
+.notsetHeading {
+  font-family: var(--font-home-serif);
+  font-size: 28px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  max-width: 18ch;
+  line-height: 1.15;
+  /* reset SheetHeader's text-align */
+  text-align: center;
+}
+
+.notsetSub {
+  font-size: 14.5px;
+  color: var(--ink-2);
+  line-height: 1.55;
+  max-width: 30ch;
+  font-family: var(--font-home-sans);
+}
+
+.notsetMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 6px 10px;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: 999px;
+}
+
+.notsetMeta::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--agent-mira));
+}
+
+/* ─── Slot ②: Key result hero ─────────────────────────────────────────────
+   Ported from prototype-ref/agent-panel/panel/panel.css (.ap-hero* rules).
+   Token mapping: --coral-tint/--teal-tint → hsl(var(--agent-{key}-tint))
+                  --action                  → hsl(var(--action))
+                  --ink-1..4                → var(--ink) / var(--ink-2/3/4)
+                  --serif                   → var(--font-home-serif)
+                  --sans                    → var(--font-home-sans)
+   No --good / --critical / color-sentiment classes (comparator is neutral ink).
+*/
+
+.heroCard {
+  margin: 14px 20px 4px;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+/* Eyebrow: "since you hired Alex" or "this week" */
+.heroEyebrow {
+  font-family: var(--font-home-sans);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Hero number row: big numeral + unit label */
+.heroValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.heroValue {
+  font-family: var(--font-home-serif);
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+  font-feature-settings: "tnum";
+  font-weight: 500;
+}
+
+.heroUnit {
+  font-family: var(--font-home-serif);
+  font-size: 20px;
+  letter-spacing: -0.005em;
+  color: var(--ink-2);
+  font-weight: 400;
+}
+
+/* Muted treatment for paused state — never a fabricated 0 */
+.heroMuted {
+  color: var(--ink-3) !important;
+}
+
+/* True-zero state: dimmed but MUST show (zero ≠ error) */
+.heroZero .heroValue {
+  color: var(--ink-3);
+}
+.heroZero .heroUnit {
+  color: var(--ink-3);
+}
+.heroValueZero {
+  color: var(--ink-3);
+}
+
+/* CPL comparator — neutral ink only; no green/red, no .up/.down classes */
+.heroComp {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  margin: 0;
+}
+
+/* Paused note — sits under the muted hero value */
+.pausedHeroNote {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  text-align: center;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+/* Small setup note beneath the paused note (core-setup-incomplete + paused) */
+.setupNote {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.4;
+  font-family: var(--font-home-sans);
+  font-style: italic;
+  text-align: center;
+  margin: 4px 0 0;
+}
+
+/* Loading skeleton — neutral muted block; no spinner per spec */
+.heroSkeleton {
+  height: 80px;
+  border-radius: var(--radius-md);
+  background: var(--canvas-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Error state */
+.heroError {
+  background: var(--canvas-2);
+}
+
+.heroErrorMsg {
+  font-size: 14px;
+  color: var(--ink-2);
+  font-style: italic;
+  font-family: var(--font-home-sans);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.heroErrorMsg::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--ink-3);
+  flex-shrink: 0;
+}
+
+/* Activation block — tinted call-out, SAME slot position as the proof hero */
+.heroActivation {
+  background: hsl(var(--agent-alex-tint));
+  border-color: hsl(var(--agent-alex) / 0.22);
+}
+
+/* Same-element: data-agent and heroActivation are on the SAME div — no descendant combinator */
+[data-agent="riley"].heroActivation {
+  background: hsl(var(--agent-riley-tint));
+  border-color: hsl(var(--agent-riley) / 0.22);
+}
+
+.heroActivationLine {
+  font-family: var(--font-home-serif);
+  font-size: 19.5px;
+  line-height: 1.35;
+  letter-spacing: -0.008em;
+  color: var(--ink);
+  font-weight: 400;
+  text-wrap: pretty;
+  margin: 0;
+}
+
+.heroActivationLine em {
+  font-style: italic;
+}
+
+.heroActivationChannels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.channelChip {
+  font-family: var(--font-home-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--hair-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.channelChip::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: hsl(var(--agent-active));
+  flex-shrink: 0;
+}
+
+.channelChip[data-status="off"] {
+  color: var(--ink-3);
+  background: transparent;
+  border-style: dashed;
+}
+
+.channelChip[data-status="off"]::before {
+  background: var(--ink-4);
+}
+
+.channelChip[data-status="warn"]::before {
+  background: hsl(var(--agent-attention));
+}
+
+/* Non-core nudge — muted inline hint below the proof hero */
+.nonCoreNudge {
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  margin: 4px 0 0;
+}
+
+/* ─── Slot ③: Open decisions ───────────────────────────────────────────────
+   Ported from prototype-ref/agent-panel/panel/panel.css (.ap-section*, .ap-decision*, .ap-empty-line).
+   Token mapping:
+     --r-md     → var(--radius-md)
+     --ink-1    → var(--ink)
+     --ink-4    → var(--ink-4)
+     --serif    → var(--font-home-serif)
+     --surface  → var(--surface)
+*/
+
+.decisionSection {
+  padding: 18px 20px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Section header: "Needs you" title + count */
+.decisionSectionH {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.decisionSectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  font-family: var(--font-home-sans);
+}
+
+.decisionSectionMeta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Decision list */
+.decisionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+/* Each decision row is a native button for a11y */
+.decisionRow {
+  display: grid;
+  grid-template-columns: 1fr 14px;
+  gap: 12px;
+  padding: 13px 16px;
+  align-items: center;
+  border: none;
+  border-bottom: 1px solid var(--hair-soft);
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: background 140ms ease;
+  font-family: inherit;
+}
+
+.decisionRow:last-child {
+  border-bottom: none;
+}
+
+.decisionRow:hover {
+  background: var(--canvas-2);
+}
+
+.decisionRow:active {
+  background: var(--canvas-3);
+}
+
+.decisionRow:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+
+.decisionGist {
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.4;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+}
+
+.decisionArrow {
+  color: var(--ink-4);
+  display: inline-flex;
+  align-items: center;
+}
+
+.decisionArrow svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Empty / error state: italic serif line */
+.decisionEmptyLine {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 18;
+  font-style: italic;
+  font-size: 15.5px;
+  color: var(--ink-3);
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  margin: 0;
+}
+
+/* Error variant: dimmed canvas */
+.decisionEmptyErr {
+  background: var(--canvas-2);
+  color: var(--ink-3);
+}
+
+/* Loading skeleton */
+.decisionSkeleton {
+  height: 60px;
+  border-radius: var(--radius-md);
+  background: var(--canvas-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+/* ─── Slot ④: Work log ──────────────────────────────────────────────────────
+   Ported from prototype-ref/agent-panel/panel/panel.css (.ap-log* rules).
+   Token mapping:
+     --r-md     → var(--radius-md)
+     --ink-1    → var(--ink)
+     --ink-3/4  → var(--ink-3/4)
+     --mono     → var(--mono)
+     --surface  → var(--surface)
+     --canvas-2 → var(--canvas-2)
+*/
+
+/* Section wrapper — same rhythm as .decisionSection */
+.logSection {
+  padding: 18px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Section header */
+.logSectionH {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.logSectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  font-family: var(--font-home-sans);
+}
+
+/* Log card — same card style as decisions list */
+.apLog {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+/* Each row: text + timestamp in a 2-column grid */
+.apLogRow {
+  display: grid;
+  grid-template-columns: 1fr 64px;
+  gap: 12px;
+  padding: 11px 16px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--hair-soft);
+}
+
+.apLogRow:last-child {
+  border-bottom: none;
+}
+
+.apLogText {
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+}
+
+.apLogTime {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  font-feature-settings: "tnum";
+  text-align: right;
+}
+
+/* Footer: "See all in Results →" quiet affordance */
+.apLogFoot {
+  padding: 10px 16px;
+  border-top: 1px solid var(--hair-soft);
+  background: var(--canvas-2);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  text-align: left;
+}
+
+/* Native button styled as a quiet link — a11y: keyboard ring */
+.apLogFootLink {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: -0.005em;
+  font-family: var(--font-home-sans);
+  transition: color 140ms ease;
+}
+
+.apLogFootLink:hover {
+  color: var(--ink);
+}
+
+.apLogFootLink:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Empty / error state — italic serif line (mirrors .decisionEmptyLine) */
+.logEmptyLine {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 18;
+  font-style: italic;
+  font-size: 15.5px;
+  color: var(--ink-3);
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  margin: 0;
+}
+
+/* Error variant: dimmed canvas */
+.logEmptyErr {
+  background: var(--canvas-2);
+  color: var(--ink-3);
+}
+
+/* Loading skeleton */
+.logSkeleton {
+  height: 80px;
+  border-radius: var(--radius-md);
+  background: var(--canvas-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+/* Activation CTA — amber fill, anchored to the agent color */
+.heroActivationCta {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  background: hsl(var(--action));
+  color: hsl(var(--action-foreground));
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  border: none;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+
+.heroActivationCta:hover {
+  opacity: 0.88;
+}
+
+/* ─── Freshness foot (slot ⑤) ─────────────────────────────────────────────
+   Single muted "as of {time}" line. Per spec: provenance over liveness.
+   No slot label — it closes the panel reading, not introduces another section.
+*/
+.freshnessFoot {
+  font-family: var(--font-home-sans);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  text-align: center;
+  padding: 12px 20px 20px;
+  margin: 0;
+}

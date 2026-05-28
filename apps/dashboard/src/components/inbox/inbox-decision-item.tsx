@@ -5,10 +5,13 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/components/ui/use-toast";
 import { InboxDecisionCard } from "@/components/inbox/inbox-decision-card";
 import type { Decision } from "@/lib/decisions/types";
+import type { AgentKey } from "@switchboard/schemas";
 
 export interface InboxDecisionItemProps {
   decision: Decision;
   onOpenDetail: (decision: Decision) => void;
+  /** Open the agent panel for the card's agent. Bubbled from the avatar button. */
+  onOpenAgent?: (agentKey: AgentKey) => void;
 }
 
 /**
@@ -24,7 +27,7 @@ export interface InboxDecisionItemProps {
  *   - onOpenDetail / onTakeOver → bubble up to the parent screen's onOpenDetail
  *     (handoff "take over" opens the detail in PR3a; the handoff sheet is PR3b)
  */
-export function InboxDecisionItem({ decision, onOpenDetail }: InboxDecisionItemProps) {
+export function InboxDecisionItem({ decision, onOpenDetail, onOpenAgent }: InboxDecisionItemProps) {
   const { toast } = useToast();
   // The recommendation id is the decision's source id (NOT decision.id).
   const action = useRecommendationAction(decision.sourceRef.sourceId);
@@ -64,6 +67,7 @@ export function InboxDecisionItem({ decision, onOpenDetail }: InboxDecisionItemP
       onSkip={handleSkip}
       onOpenDetail={() => onOpenDetail(decision)}
       onTakeOver={() => onOpenDetail(decision)}
+      onOpenAgent={onOpenAgent}
     />
   );
 }

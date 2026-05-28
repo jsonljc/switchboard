@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import { TeamPulse } from "../team-pulse";
 import type { TeamPulseAgent } from "../types";
 
@@ -118,5 +118,32 @@ describe("TeamPulse component", () => {
       render(<TeamPulse agents={[]} />);
       expect(screen.queryByTestId(/^agent-chip-/)).not.toBeInTheDocument();
     });
+  });
+});
+
+describe("TeamPulse onOpenAgent", () => {
+  it("clicking the alex chip calls onOpenAgent with 'alex'", () => {
+    const onOpen = vi.fn();
+    render(<TeamPulse agents={allAgents} onOpenAgent={onOpen} />);
+    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    expect(onOpen).toHaveBeenCalledWith("alex");
+  });
+
+  it("clicking the mira chip calls onOpenAgent with 'mira' (not-set-up chips are still tappable)", () => {
+    const onOpen = vi.fn();
+    render(<TeamPulse agents={allAgents} onOpenAgent={onOpen} />);
+    fireEvent.click(screen.getByTestId("agent-chip-mira"));
+    expect(onOpen).toHaveBeenCalledWith("mira");
+  });
+
+  it("chips are rendered as buttons", () => {
+    const onOpen = vi.fn();
+    render(<TeamPulse agents={allAgents} onOpenAgent={onOpen} />);
+    const alexChip = screen.getByTestId("agent-chip-alex");
+    expect(alexChip.tagName.toLowerCase()).toBe("button");
+  });
+
+  it("renders without onOpenAgent prop (backward-compatible — no crash)", () => {
+    expect(() => render(<TeamPulse agents={allAgents} />)).not.toThrow();
   });
 });

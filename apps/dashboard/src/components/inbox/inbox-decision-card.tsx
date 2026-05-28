@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AGENT_REGISTRY } from "@switchboard/schemas";
+import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
 import type { Decision } from "@/lib/decisions/types";
+import "./inbox-decision-card.css";
 import { canSwipeApprove, needsConfirm } from "@/lib/decisions/swipe-policy";
 import { dueIn, relativeTime } from "@/lib/decisions/time";
 import { useCardSwipe } from "@/components/decisions/use-card-swipe";
@@ -35,6 +36,7 @@ const cx = {
   whyBtn: "inbox-why",
   threadBtn: "inbox-thread",
   footTime: "inbox-foot-time",
+  agentBtn: "inbox-agent-btn",
 } as const;
 
 export interface InboxDecisionCardProps {
@@ -48,6 +50,8 @@ export interface InboxDecisionCardProps {
   onOpenDetail: () => void;
   /** Hand the conversation to the human (handoffs only) — the primary action. */
   onTakeOver: () => void;
+  /** Open the agent panel for this card's agent. Called by the avatar button in the head. */
+  onOpenAgent?: (agentKey: AgentKey) => void;
   /** Reference "now" for the time helpers. Defaults to Date.now(); injectable for tests. */
   nowMs?: number;
 }
@@ -72,6 +76,7 @@ export function InboxDecisionCard({
   onSkip,
   onOpenDetail,
   onTakeOver,
+  onOpenAgent,
   nowMs = Date.now(),
 }: InboxDecisionCardProps) {
   const isHandoff = decision.kind === "handoff";
@@ -174,7 +179,23 @@ export function InboxDecisionCard({
         >
           <div className={cx.head}>
             <span className={cx.from} data-agent={decision.agentKey}>
-              <InboxAgentAvatar agentKey={decision.agentKey} size={22} />
+              {onOpenAgent ? (
+                <button
+                  type="button"
+                  className={cx.agentBtn}
+                  aria-label={`Open ${agentName} panel`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenAgent(decision.agentKey);
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                >
+                  <InboxAgentAvatar agentKey={decision.agentKey} size={22} />
+                </button>
+              ) : (
+                <InboxAgentAvatar agentKey={decision.agentKey} size={22} />
+              )}
               <span className={cx.fromName}>{agentName}</span>
               <span>{isHandoff ? "is handing this to you" : "needs you"}</span>
             </span>
