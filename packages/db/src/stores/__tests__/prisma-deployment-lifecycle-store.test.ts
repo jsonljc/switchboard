@@ -97,45 +97,78 @@ describe("PrismaDeploymentLifecycleStore.haltAll", () => {
   });
 });
 
-describe("PrismaDeploymentLifecycleStore.resume", () => {
+describe("PrismaDeploymentLifecycleStore.resumeAll", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("flips paused deployments to active scoped to skillSlug", async () => {
+  it("flips all paused deployments to active org-wide and writes an operator-mutation trace", async () => {
+    // Multi-agent: halt paused Alex, Mira, AND Riley. resumeAll must restore all
+    // three — the bug was scoping resume to skillSlug:"alex" so Riley/Mira stayed dark.
     const { prisma, tx } = makePrismaMock({
-      findMany: [{ id: "d1" }],
-      updateCount: 1,
+      findMany: [{ id: "d_alex" }, { id: "d_mira" }, { id: "d_riley" }],
+      updateCount: 3,
     });
     const wts = makeWorkTraceStoreMock();
     const store = new PrismaDeploymentLifecycleStore(prisma, wts);
 
-    const result = await store.resume({
+    const result = await store.resumeAll({
       organizationId: "org_1",
-      skillSlug: "alex",
       operator: { type: "user", id: "u_1" },
     });
 
-    expect(result.count).toBe(1);
-    expect(result.affectedDeploymentIds).toEqual(["d1"]);
+    expect(result.count).toBe(3);
+    expect(result.affectedDeploymentIds).toEqual(["d_alex", "d_mira", "d_riley"]);
+    expect(result.workTraceId).toMatch(/^[0-9a-f-]{36}$/);
 
+    // Org-wide, paused-only, NO skillSlug filter. status:"paused" is the exact
+    // inverse of haltAll's active→paused and leaves `suspended` rows (the separate
+    // suspendAll billing lifecycle) untouched. The where-clause carries
+    // organizationId, so this is tenant-scoped (no cross-org bleed).
     expect(tx.agentDeployment.findMany).toHaveBeenCalledWith({
-      where: { organizationId: "org_1", skillSlug: "alex", status: "paused" },
+      where: { organizationId: "org_1", status: "paused" },
       select: { id: true },
       orderBy: { id: "asc" },
     });
     expect(tx.agentDeployment.updateMany).toHaveBeenCalledWith({
-      where: { organizationId: "org_1", skillSlug: "alex", status: "paused" },
+      where: { organizationId: "org_1", status: "paused" },
       data: { status: "active" },
     });
 
-    const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(wts.recordOperatorMutation).toHaveBeenCalledTimes(1);
+    const [trace, ctx] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(trace.intent).toBe("agent_deployment.resume");
+    expect(trace.mode).toBe("operator_mutation");
+    expect(trace.ingressPath).toBe("store_recorded_operator_mutation");
+    expect(trace.hashInputVersion).toBe(2);
+    expect(trace.actor).toEqual({ type: "user", id: "u_1" });
     expect(trace.parameters).toMatchObject({
       actionKind: "agent_deployment.resume",
       orgId: "org_1",
-      skillSlug: "alex",
-      before: { status: "paused", ids: ["d1"] },
-      after: { status: "active", count: 1 },
+      before: { status: "paused", ids: ["d_alex", "d_mira", "d_riley"] },
+      after: { status: "active", count: 3 },
     });
+    // No per-skill scoping leaks into the trace.
+    expect((trace.parameters as Record<string, unknown>).skillSlug).toBeUndefined();
+    expect(ctx.tx).toBe(tx);
+
+    expect(wts.update).toHaveBeenCalledTimes(1);
+    const [updateId, fields] = (wts.update as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(updateId).toBe(result.workTraceId);
+    expect(fields).toMatchObject({ outcome: "completed" });
+  });
+
+  it("writes a trace even when nothing is paused (count: 0, idempotent re-run)", async () => {
+    const { prisma } = makePrismaMock({ findMany: [], updateCount: 0 });
+    const wts = makeWorkTraceStoreMock();
+    const store = new PrismaDeploymentLifecycleStore(prisma, wts);
+
+    const result = await store.resumeAll({
+      organizationId: "org_empty",
+      operator: { type: "user", id: "u_1" },
+    });
+
+    expect(result.count).toBe(0);
+    expect(result.affectedDeploymentIds).toEqual([]);
+    expect(wts.recordOperatorMutation).toHaveBeenCalledTimes(1);
   });
 });
 

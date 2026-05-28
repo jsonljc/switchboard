@@ -165,8 +165,8 @@ export type {
   DeploymentLifecycleActionKind,
   HaltAllInput,
   HaltAllResult,
-  ResumeInput,
-  ResumeResult,
+  ResumeAllInput,
+  ResumeAllResult,
   SuspendAllInput,
   SuspendAllResult,
 } from "./deployment-lifecycle-store.js";

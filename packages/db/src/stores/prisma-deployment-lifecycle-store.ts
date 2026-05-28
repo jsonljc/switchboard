@@ -4,8 +4,8 @@ import type {
   DeploymentLifecycleStore,
   HaltAllInput,
   HaltAllResult,
-  ResumeInput,
-  ResumeResult,
+  ResumeAllInput,
+  ResumeAllResult,
   SuspendAllInput,
   SuspendAllResult,
   WorkTrace,
@@ -102,29 +102,24 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     };
   }
 
-  async resume(input: ResumeInput): Promise<ResumeResult> {
+  async resumeAll(input: ResumeAllInput): Promise<ResumeAllResult> {
     const requestedAt = new Date();
     const executionStartedAt = new Date();
 
     const txResult = await this.prisma.$transaction(async (tx) => {
-      // See haltAll for the ordering / findMany-updateMany race rationale.
+      // Exact inverse of haltAll: org-wide, paused→active. See haltAll for the
+      // ordering / findMany-updateMany race rationale. Filtering on
+      // status:"paused" leaves `suspended` deployments (the separate suspendAll
+      // billing/abuse lifecycle) untouched.
       const before = await tx.agentDeployment.findMany({
-        where: {
-          organizationId: input.organizationId,
-          skillSlug: input.skillSlug,
-          status: "paused",
-        },
+        where: { organizationId: input.organizationId, status: "paused" },
         select: { id: true },
         orderBy: { id: "asc" },
       });
       const ids = before.map((r) => r.id);
 
       const updateResult = await tx.agentDeployment.updateMany({
-        where: {
-          organizationId: input.organizationId,
-          skillSlug: input.skillSlug,
-          status: "paused",
-        },
+        where: { organizationId: input.organizationId, status: "paused" },
         data: { status: "active" },
       });
 
@@ -140,7 +135,6 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
         parameters: {
           actionKind: "agent_deployment.resume",
           orgId: input.organizationId,
-          skillSlug: input.skillSlug,
           before: { status: "paused", ids },
           after: { status: "active", count: updateResult.count },
         },
@@ -149,7 +143,7 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
         matchedPolicies: [],
         outcome: "running",
         durationMs: 0,
-        executionSummary: `operator ${input.operator.id} resumed ${updateResult.count} ${input.skillSlug} deployment(s) for org ${input.organizationId}`,
+        executionSummary: `operator ${input.operator.id} resumed ${updateResult.count} deployment(s) for org ${input.organizationId}`,
         modeMetrics: { governanceMode: "operator_auto_allow" },
         ingressPath: "store_recorded_operator_mutation",
         hashInputVersion: 2,
@@ -173,11 +167,11 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
         completedAt: completedAt.toISOString(),
         durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
       },
-      { caller: "DeploymentLifecycleStore.resume" },
+      { caller: "DeploymentLifecycleStore.resumeAll" },
     );
     if (!finalize.ok) {
       console.warn(
-        `[deployment-lifecycle-store] resume finalize rejected for ${txResult.workUnitId}: ${finalize.reason}`,
+        `[deployment-lifecycle-store] resumeAll finalize rejected for ${txResult.workUnitId}: ${finalize.reason}`,
       );
     }
 

@@ -34,7 +34,7 @@ describe("Governance API", () => {
 
   const mockDeploymentLifecycleStore = {
     haltAll: vi.fn(),
-    resume: vi.fn(),
+    resumeAll: vi.fn(),
     suspendAll: vi.fn(),
   };
 
@@ -54,7 +54,7 @@ describe("Governance API", () => {
       affectedDeploymentIds: [],
       count: 0,
     });
-    mockDeploymentLifecycleStore.resume.mockResolvedValue({
+    mockDeploymentLifecycleStore.resumeAll.mockResolvedValue({
       workTraceId: "wt_default_resume",
       affectedDeploymentIds: [],
       count: 0,
@@ -386,12 +386,14 @@ describe("Governance API", () => {
   // ── POST /api/governance/resume ────────────────────────────────────
 
   describe("POST /api/governance/resume", () => {
-    it("calls deploymentLifecycleStore.resume scoped to skillSlug=alex", async () => {
+    it("calls deploymentLifecycleStore.resumeAll org-wide and restores every agent (not just alex)", async () => {
       mockGovernanceProfileStore.set.mockResolvedValue(undefined);
-      mockDeploymentLifecycleStore.resume.mockResolvedValueOnce({
+      // Halt paused Alex, Riley, AND Mira (org-wide). Resume must restore all
+      // three — the bug was resume({skillSlug:"alex"}) leaving Riley/Mira dark.
+      mockDeploymentLifecycleStore.resumeAll.mockResolvedValueOnce({
         workTraceId: "wt_resume_1",
-        affectedDeploymentIds: ["d_alex"],
-        count: 1,
+        affectedDeploymentIds: ["d_alex", "d_riley", "d_mira"],
+        count: 3,
       });
       // Decorate prisma so the early-exit guard does not short-circuit. The
       // actual buildReadinessContext + checkReadiness are mocked at module top.
@@ -404,11 +406,13 @@ describe("Governance API", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(mockDeploymentLifecycleStore.resume).toHaveBeenCalledWith({
+      // Org-wide and tenant-scoped: no skillSlug, only the caller's org.
+      expect(mockDeploymentLifecycleStore.resumeAll).toHaveBeenCalledWith({
         organizationId: "org_123",
-        skillSlug: "alex",
         operator: { type: "user", id: "operator" },
       });
+      // The removed per-skill resume() footgun must not exist on the store.
+      expect((mockDeploymentLifecycleStore as Record<string, unknown>).resume).toBeUndefined();
       const body = res.json();
       expect(body.resumed).toBe(true);
       expect(body.profile).toBe("guarded");

@@ -33,7 +33,7 @@ const mockChannelUpdateMany = vi.fn();
 const mockSuspendAll = vi.fn();
 const mockDeploymentLifecycleStore = {
   haltAll: vi.fn(),
-  resume: vi.fn(),
+  resumeAll: vi.fn(),
   suspendAll: mockSuspendAll,
 };
 

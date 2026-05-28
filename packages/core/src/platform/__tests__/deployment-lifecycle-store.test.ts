@@ -3,7 +3,7 @@ import type {
   DeploymentLifecycleActionKind,
   DeploymentLifecycleStore,
   HaltAllInput,
-  ResumeInput,
+  ResumeAllInput,
   SuspendAllInput,
 } from "../deployment-lifecycle-store.js";
 
@@ -26,13 +26,14 @@ describe("DeploymentLifecycleStore types", () => {
     expect(input.organizationId).toBe("org_1");
   });
 
-  it("ResumeInput requires skillSlug", () => {
-    const input: ResumeInput = {
+  it("ResumeAllInput is org-wide — organizationId + operator, no skillSlug", () => {
+    const input: ResumeAllInput = {
       organizationId: "org_1",
-      skillSlug: "alex",
       operator: { type: "user", id: "u_1" },
     };
-    expect(input.skillSlug).toBe("alex");
+    expect(input.organizationId).toBe("org_1");
+    // @ts-expect-error — resume is org-wide; per-skill scoping is the removed footgun.
+    expect(input.skillSlug).toBeUndefined();
   });
 
   it("SuspendAllInput accepts service actor", () => {
@@ -44,12 +45,12 @@ describe("DeploymentLifecycleStore types", () => {
     expect(input.operator.type).toBe("service");
   });
 
-  it("DeploymentLifecycleStore declares haltAll, resume, suspendAll", () => {
+  it("DeploymentLifecycleStore declares haltAll, resumeAll, suspendAll", () => {
     const store: DeploymentLifecycleStore = {
       haltAll: async () => ({ workTraceId: "t", affectedDeploymentIds: [], count: 0 }),
-      resume: async () => ({ workTraceId: "t", affectedDeploymentIds: [], count: 0 }),
+      resumeAll: async () => ({ workTraceId: "t", affectedDeploymentIds: [], count: 0 }),
       suspendAll: async () => ({ workTraceId: "t", affectedDeploymentIds: [], count: 0 }),
     };
-    expect(typeof store.haltAll).toBe("function");
+    expect(typeof store.resumeAll).toBe("function");
   });
 });
