@@ -282,6 +282,9 @@ export * from "./agents/index.js";
 export * from "./agent-home/index.js";
 export * as agentHome from "./agent-home/index.js";
 
+// Creative Read Model (Mira M1 — stable seam over legacy CreativeJob pipeline)
+export * from "./creative-read-model/index.js";
+
 // Reports projection (operator deep-dive surface)
 export * as reports from "./reports/index.js";
 
