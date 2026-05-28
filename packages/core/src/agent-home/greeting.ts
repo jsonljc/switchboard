@@ -2,7 +2,7 @@
 // Agent Home — Greeting Block Projection
 //
 // Projects variant + prose segments for the greeting block on agent home cards.
-// Supports Alex (leads) and Riley (ad sets). Mira excluded from day-one launch.
+// Supports Alex (leads), Riley (ad sets), and Mira (drafts).
 //
 // Variant Logic:
 //   - inboxCount=0 AND hoursSinceLastOperatorAction=null → "welcome"
@@ -13,9 +13,11 @@
 // Voice Profiles:
 //   - Alex: warm, conversational ("Maya is the one I'd answer first")
 //   - Riley: direct, numerical ("ad sets need your eye")
+//   - Mira: draft-only, calm ("Ready to create. I'll bring you drafts to review.")
 // ---------------------------------------------------------------------------
 
 import type { AgentKey } from "@switchboard/schemas";
+import type { AgentHomeKey } from "./agent-key.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // Public Types (Projection Interface)
@@ -59,7 +61,7 @@ export interface GreetingSignalStore {
 
 export interface ProjectGreetingInput {
   orgId: string;
-  agentKey: "alex" | "riley";
+  agentKey: AgentHomeKey;
   store: GreetingSignalStore;
 }
 
@@ -75,10 +77,10 @@ export interface GreetingAgentConfig {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Config Registry (Alex + Riley only, no Mira)
+// Config Registry (Alex, Riley, Mira)
 // ──────────────────────────────────────────────────────────────────────────
 
-const AGENT_CONFIGS: Record<"alex" | "riley", GreetingAgentConfig> = {
+const AGENT_CONFIGS: Record<AgentHomeKey, GreetingAgentConfig> = {
   alex: {
     agentKey: "alex",
     busyThreshold: 5,
@@ -90,6 +92,12 @@ const AGENT_CONFIGS: Record<"alex" | "riley", GreetingAgentConfig> = {
     busyThreshold: 4,
     busyAgeHoursThreshold: 12,
     countNoun: "ad sets",
+  },
+  mira: {
+    agentKey: "mira",
+    busyThreshold: 3,
+    busyAgeHoursThreshold: 24,
+    countNoun: "drafts",
   },
 };
 
@@ -139,19 +147,32 @@ export function buildSegments(
       return [
         { kind: "text", text: "I'm here when you need me. I'll bring you leads worth your time." },
       ];
-    } else {
-      // riley
+    } else if (agentKey === "riley") {
       return [{ kind: "text", text: "Ready to optimize. I'll flag what needs attention." }];
+    } else if (agentKey === "mira") {
+      return [
+        {
+          kind: "text",
+          text: "Ready to create. I'll bring you drafts to review — never published without you.",
+        },
+      ];
     }
+    // Unreachable at runtime for known AgentHomeKey values; defensive fallthrough
+    throw new Error(`Unhandled agentKey for welcome: ${agentKey}`);
   }
 
   if (variant === "quiet") {
     if (agentKey === "alex") {
       return [{ kind: "text", text: "All clear for now. I'll ping you when something lands." }];
-    } else {
-      // riley
+    } else if (agentKey === "riley") {
       return [{ kind: "text", text: "Nothing urgent right now. I'll alert you when I see drift." }];
+    } else if (agentKey === "mira") {
+      return [
+        { kind: "text", text: "No drafts need you right now. I'll ping you when one's ready." },
+      ];
     }
+    // Unreachable at runtime for known AgentHomeKey values; defensive fallthrough
+    throw new Error(`Unhandled agentKey for quiet: ${agentKey}`);
   }
 
   if (variant === "busy") {
@@ -168,13 +189,19 @@ export function buildSegments(
           { kind: "accent", text: topItem.name },
           { kind: "text", text: " is the one I'd answer first." },
         ];
-      } else {
-        // riley
+      } else if (agentKey === "riley") {
         return [
           { kind: "accent", text: topItem.name },
           { kind: "text", text: " needs your eye first." },
         ];
+      } else if (agentKey === "mira") {
+        return [
+          { kind: "accent", text: topItem.name },
+          { kind: "text", text: " is ready for your review." },
+        ];
       }
+      // Unreachable at runtime for known AgentHomeKey values; defensive fallthrough
+      throw new Error(`Unhandled agentKey for named-lead (topItem): ${agentKey}`);
     } else {
       // Fallback when topItem is null
       if (agentKey === "alex") {
@@ -184,15 +211,18 @@ export function buildSegments(
             text: "I've got a few leads lined up — ready when you are.",
           },
         ];
-      } else {
-        // riley
+      } else if (agentKey === "riley") {
         return [
           {
             kind: "text",
             text: "A few items need review — let me know when you're ready.",
           },
         ];
+      } else if (agentKey === "mira") {
+        return [{ kind: "text", text: "A few drafts are ready for review — whenever you are." }];
       }
+      // Unreachable at runtime for known AgentHomeKey values; defensive fallthrough
+      throw new Error(`Unhandled agentKey for named-lead (no topItem): ${agentKey}`);
     }
   }
 

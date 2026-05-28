@@ -1,6 +1,7 @@
 import type { AgentHomeKey } from "./agent-key.js";
 import { buildAlexPipelineViewModel, type AlexPipelineRow } from "./pipeline-alex.js";
 import { buildRileyPipelineViewModel, type RileyPipelineRow } from "./pipeline-riley.js";
+import { buildMiraPipelineViewModel, type MiraPipelineRow } from "./pipeline-mira.js";
 import type { PipelineViewModel } from "./pipeline-types.js";
 
 export const PIPELINE_VISIBLE_LIMIT = 5;
@@ -17,6 +18,11 @@ export interface PipelineSignalStore {
     orgId: string;
     limit: number;
   }): Promise<{ rows: RileyPipelineRow[]; totalCount: number }>;
+
+  listMiraPipeline(input: {
+    orgId: string;
+    limit: number;
+  }): Promise<{ rows: MiraPipelineRow[]; totalCount: number }>;
 }
 
 export interface ProjectPipelineInput {
@@ -40,6 +46,14 @@ export async function projectPipeline(input: ProjectPipelineInput): Promise<Pipe
     return buildAlexPipelineViewModel({ rows, totalCount, now, timezone });
   }
 
+  if (agentKey === "mira") {
+    const { rows, totalCount } = await store.listMiraPipeline({
+      orgId,
+      limit: PIPELINE_VISIBLE_LIMIT,
+    });
+    return buildMiraPipelineViewModel({ rows, totalCount, now });
+  }
+
   // agentKey === "riley"
   const { rows, totalCount } = await store.listRileyPipeline({
     orgId,
@@ -50,6 +64,7 @@ export async function projectPipeline(input: ProjectPipelineInput): Promise<Pipe
 
 export type { AlexPipelineRow } from "./pipeline-alex.js";
 export type { RileyPipelineRow } from "./pipeline-riley.js";
+export type { MiraPipelineRow } from "./pipeline-mira.js";
 export type {
   PipelineStage,
   PipelineTileViewModel,

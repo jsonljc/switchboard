@@ -1,6 +1,5 @@
 /**
- * Subset of @switchboard/schemas AgentKey that has agent-home pages in Slice B.
- * Mira (`launchTier: "day-thirty"`) is intentionally excluded — its agent home
- * ships in a future slice.
+ * Subset of @switchboard/schemas AgentKey that has agent-home pages.
+ * Mira (`launchTier: "day-thirty"`) ships its agent home in M1.
  */
-export type AgentHomeKey = "alex" | "riley";
+export type AgentHomeKey = "alex" | "riley" | "mira";

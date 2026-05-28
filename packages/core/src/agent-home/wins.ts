@@ -71,6 +71,7 @@ export interface WinsAgentConfig {
 const AGENT_VOICE_CONFIGS: Record<AgentHomeKey, WinsAgentConfig> = {
   alex: { agentKey: "alex", ackPhrase: "Sent.", defaultUndoLabel: "Undo last reply" },
   riley: { agentKey: "riley", ackPhrase: "Adjusted.", defaultUndoLabel: "Revert change" },
+  mira: { agentKey: "mira", ackPhrase: "Drafted.", defaultUndoLabel: "Undo" },
 };
 
 export interface ProjectWinsInput {
@@ -152,6 +153,13 @@ function composeWinProse(row: WinTerminalRecord, config: WinsAgentConfig): reado
   if (config.agentKey === "alex") {
     return [ack, { kind: "text", text: ` ${row.humanSummary}` }];
   }
-  // riley
-  return [ack, { kind: "text", text: ` ${row.humanSummary}` }];
+  if (config.agentKey === "riley") {
+    return [ack, { kind: "text", text: ` ${row.humanSummary}` }];
+  }
+  if (config.agentKey === "mira") {
+    return [ack, { kind: "text", text: ` ${row.humanSummary}` }];
+  }
+  // Exhaustiveness: TypeScript will error here if a new AgentHomeKey is added without a branch
+  const _exhaustive: never = config.agentKey;
+  throw new Error(`Unhandled agentKey: ${_exhaustive}`);
 }
