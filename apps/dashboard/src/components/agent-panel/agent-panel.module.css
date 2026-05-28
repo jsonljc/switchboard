@@ -283,3 +283,236 @@
   border-radius: 50%;
   background: hsl(var(--agent-mira));
 }
+
+/* ─── Slot ②: Key result hero ─────────────────────────────────────────────
+   Ported from prototype-ref/agent-panel/panel/panel.css (.ap-hero* rules).
+   Token mapping: --coral-tint/--teal-tint → hsl(var(--agent-{key}-tint))
+                  --action                  → hsl(var(--action))
+                  --ink-1..4                → var(--ink) / var(--ink-2/3/4)
+                  --serif                   → var(--font-home-serif)
+                  --sans                    → var(--font-home-sans)
+   No --good / --critical / color-sentiment classes (comparator is neutral ink).
+*/
+
+.heroCard {
+  margin: 14px 20px 4px;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+/* Eyebrow: "since you hired Alex" or "this week" */
+.heroEyebrow {
+  font-family: var(--font-home-sans);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Hero number row: big numeral + unit label */
+.heroValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.heroValue {
+  font-family: var(--font-home-serif);
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+  font-feature-settings: "tnum";
+  font-weight: 500;
+}
+
+.heroUnit {
+  font-family: var(--font-home-serif);
+  font-size: 20px;
+  letter-spacing: -0.005em;
+  color: var(--ink-2);
+  font-weight: 400;
+}
+
+/* Muted treatment for paused state — never a fabricated 0 */
+.heroMuted {
+  color: var(--ink-3) !important;
+}
+
+/* True-zero state: dimmed but MUST show (zero ≠ error) */
+.heroZero .heroValue {
+  color: var(--ink-3);
+}
+.heroZero .heroUnit {
+  color: var(--ink-3);
+}
+.heroValueZero {
+  color: var(--ink-3);
+}
+
+/* CPL comparator — neutral ink only; no green/red, no .up/.down classes */
+.heroComp {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  margin: 0;
+}
+
+/* Paused note — sits under the muted hero value */
+.pausedHeroNote {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  text-align: center;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+/* Small setup note beneath the paused note (core-setup-incomplete + paused) */
+.setupNote {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.4;
+  font-family: var(--font-home-sans);
+  font-style: italic;
+  text-align: center;
+  margin: 4px 0 0;
+}
+
+/* Error state */
+.heroError {
+  background: var(--canvas-2);
+}
+
+.heroErrorMsg {
+  font-size: 14px;
+  color: var(--ink-2);
+  font-style: italic;
+  font-family: var(--font-home-sans);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.heroErrorMsg::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--ink-3);
+  flex-shrink: 0;
+}
+
+/* Activation block — tinted call-out, SAME slot position as the proof hero */
+.heroActivation {
+  background: hsl(var(--agent-alex-tint));
+  border-color: hsl(var(--agent-alex) / 0.22);
+}
+
+[data-agent="riley"] .heroActivation {
+  background: hsl(var(--agent-riley-tint));
+  border-color: hsl(var(--agent-riley) / 0.22);
+}
+
+.heroActivationLine {
+  font-family: var(--font-home-serif);
+  font-size: 19.5px;
+  line-height: 1.35;
+  letter-spacing: -0.008em;
+  color: var(--ink);
+  font-weight: 400;
+  text-wrap: pretty;
+  margin: 0;
+}
+
+.heroActivationLine em {
+  font-style: italic;
+}
+
+.heroActivationChannels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.channelChip {
+  font-family: var(--font-home-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--hair-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.channelChip::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: hsl(var(--agent-active));
+  flex-shrink: 0;
+}
+
+.channelChip[data-status="off"] {
+  color: var(--ink-3);
+  background: transparent;
+  border-style: dashed;
+}
+
+.channelChip[data-status="off"]::before {
+  background: var(--ink-4);
+}
+
+.channelChip[data-status="warn"]::before {
+  background: hsl(var(--agent-attention));
+}
+
+/* Activation CTA — amber fill, anchored to the agent color */
+.heroActivationCta {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  background: hsl(var(--action));
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  border: none;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+
+.heroActivationCta:hover {
+  opacity: 0.88;
+}
