@@ -126,6 +126,7 @@ export { PrismaBaselineStore } from "./stores/prisma-baseline-store.js";
 export { createInMemoryOrgAgentEnablementStore } from "./stores/in-memory-org-agent-enablement-store.js";
 export { PrismaOrgAgentEnablementStore } from "./stores/prisma-org-agent-enablement-store.js";
 export { PrismaGreetingSignalStore } from "./stores/prisma-greeting-signal-store.js";
+export { PrismaMiraCreativeReadModelReader } from "./stores/prisma-mira-creative-read-model-reader.js";
 export { PrismaGovernanceVerdictStore } from "./prisma-governance-verdict-store.js";
 export { PrismaConversationLifecycleSnapshotStore } from "./prisma-conversation-lifecycle-snapshot-store.js";
 export { PrismaConversationLifecycleTransitionStore } from "./prisma-conversation-lifecycle-transition-store.js";
