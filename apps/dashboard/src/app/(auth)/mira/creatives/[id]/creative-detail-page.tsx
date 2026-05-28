@@ -19,6 +19,8 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
   const estimateQ = useCostEstimate(id, canAct);
 
   if (jobQ.isLoading) return <div style={{ padding: 28 }}>Loading draft…</div>;
+  if (jobQ.isError)
+    return <div style={{ padding: 28 }}>Couldn&apos;t load this draft — try again.</div>;
   if (!job) return <div style={{ padding: 28 }}>Draft not found.</div>;
 
   const production = (job.stageOutputs as Record<string, unknown> | undefined)?.["production"] as
@@ -109,7 +111,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               {/* Explicit cost label up front (confirmed decision) */}
               <span style={{ fontSize: 12, color: "#777" }}>
                 {estimateQ.data
-                  ? `Continue runs the next generation step (~$${estimateQ.data.basic?.cost ?? "—"}). Stop is free but can't be undone.`
+                  ? `Continue runs the next generation step (~$${estimateQ.data.basic.cost}). Stop is free but can't be undone.`
                   : "Continue runs the next generation step (a real cost). Stop is free but can't be undone."}
               </span>
             </div>
@@ -128,13 +130,14 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
             >
               <span style={{ fontSize: 13, color: "#3C315C" }}>
                 Continue this draft? This runs the next generation step and may cost
-                {estimateQ.data ? ` about $${estimateQ.data.basic?.cost ?? "—"}` : " money"}. It
-                stays a draft — nothing is published.
+                {estimateQ.data ? ` about $${estimateQ.data.basic.cost}` : " money"}. It stays a
+                draft — nothing is published.
               </span>
               <div style={{ display: "flex", gap: 12 }}>
                 <button
                   disabled={approve.isPending}
                   onClick={() => {
+                    // M1 deliberately continues at the default (basic) tier — no pro-tier selection on this page.
                     approve.mutate({ jobId: id, action: "continue" });
                     setConfirm(null);
                   }}
@@ -207,6 +210,12 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 </button>
               </div>
             </div>
+          )}
+
+          {approve.isError && (
+            <span style={{ color: "#7A2E2E", fontSize: 12 }}>
+              Couldn&apos;t update the draft — try again.
+            </span>
           )}
         </div>
       ) : (
