@@ -25,6 +25,20 @@ export const actionLifecycleRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
+      // Tenant isolation: when the addressed work unit has a legacy envelope,
+      // enforce that the caller's org owns it before executing. A missing
+      // envelope falls through to executeApproved, which owns the not-found /
+      // non-approved 400 (lifecycle route-class contract, #654). Mirrors the org
+      // guard already on POST /:id/undo.
+      const envelope = await app.storageContext.envelopes.getById(id);
+      if (envelope) {
+        const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
+          | string
+          | null
+          | undefined;
+        if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
+      }
+
       try {
         // Compatibility shim: direct execute goes through legacy PlatformLifecycle.
         // When lifecycle service is fully wired, this route must go through
