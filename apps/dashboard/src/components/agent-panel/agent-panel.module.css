@@ -662,6 +662,148 @@
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
 
+/* ─── Slot ④: Work log ──────────────────────────────────────────────────────
+   Ported from prototype-ref/agent-panel/panel/panel.css (.ap-log* rules).
+   Token mapping:
+     --r-md     → var(--radius-md)
+     --ink-1    → var(--ink)
+     --ink-3/4  → var(--ink-3/4)
+     --mono     → var(--mono)
+     --surface  → var(--surface)
+     --canvas-2 → var(--canvas-2)
+*/
+
+/* Section wrapper — same rhythm as .decisionSection */
+.logSection {
+  padding: 18px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Section header */
+.logSectionH {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.logSectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  font-family: var(--font-home-sans);
+}
+
+/* Log card — same card style as decisions list */
+.apLog {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+/* Each row: text + timestamp in a 2-column grid */
+.apLogRow {
+  display: grid;
+  grid-template-columns: 1fr 64px;
+  gap: 12px;
+  padding: 11px 16px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--hair-soft);
+}
+
+.apLogRow:last-child {
+  border-bottom: none;
+}
+
+.apLogText {
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+}
+
+.apLogTime {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  font-feature-settings: "tnum";
+  text-align: right;
+}
+
+/* Footer: "See all in Results →" quiet affordance */
+.apLogFoot {
+  padding: 10px 16px;
+  border-top: 1px solid var(--hair-soft);
+  background: var(--canvas-2);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  text-align: left;
+}
+
+/* Native button styled as a quiet link — a11y: keyboard ring */
+.apLogFootLink {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: -0.005em;
+  font-family: var(--font-home-sans);
+  transition: color 140ms ease;
+}
+
+.apLogFootLink:hover {
+  color: var(--ink);
+}
+
+.apLogFootLink:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Empty / error state — italic serif line (mirrors .decisionEmptyLine) */
+.logEmptyLine {
+  font-family: var(--font-home-serif);
+  font-variation-settings: "opsz" 18;
+  font-style: italic;
+  font-size: 15.5px;
+  color: var(--ink-3);
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  margin: 0;
+}
+
+/* Error variant: dimmed canvas */
+.logEmptyErr {
+  background: var(--canvas-2);
+  color: var(--ink-3);
+}
+
+/* Loading skeleton */
+.logSkeleton {
+  height: 80px;
+  border-radius: var(--radius-md);
+  background: var(--canvas-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
 /* Activation CTA — amber fill, anchored to the agent color */
 .heroActivationCta {
   align-self: flex-start;
