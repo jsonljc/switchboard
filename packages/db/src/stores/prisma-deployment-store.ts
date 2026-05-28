@@ -55,6 +55,12 @@ export class PrismaDeploymentStore {
     }) as unknown as AgentDeployment[];
   }
 
+  // NOTE: `"paused"` is reserved for the org-wide emergency-halt lifecycle
+  // (DeploymentLifecycleStore.haltAll → resumeAll, which resumes EVERY paused
+  // deployment in the org). Do not introduce a per-agent pause via
+  // updateStatus(..., "paused") without first giving resume a way to tell
+  // halt-paused from per-agent-paused — otherwise the next global resume would
+  // silently wake it (the inverse-safety-illusion bug class).
   async updateStatus(
     organizationId: string,
     id: string,
