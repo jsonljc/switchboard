@@ -24,15 +24,21 @@ export interface KeyResultProps {
 }
 
 /**
- * Slot ②: Key result hero — shows the cumulative "since you hired" figure
- * (window=all) with week fallback, activation when core setup is incomplete,
- * and the paused composition when halted. Read-only; mutates nothing.
+ * Slot ②: Key result hero — shows this week's figure, activation when core
+ * setup is incomplete, and the paused composition when halted. Read-only;
+ * mutates nothing.
  *
  * Precedence (from selectKeyResult):
- *   paused → activation → proof (lifetime then week fallback) → error
+ *   paused → activation → proof (week) → error
+ *
+ * Lifetime ("since you hired") scope is NOT yet supported: projectMetrics is
+ * week-only server-side, so requesting window="all" 400s on every open. We fetch
+ * the week window only and let selectKeyResult fall back to it; the lifetime
+ * branch stays dormant pending the deferred lifetime-metrics spec. The empty
+ * `all` slot is the single re-wire point once that backend lands.
  */
 export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
-  const all = useAgentMetrics(agentKey, "all");
+  const all = { data: undefined, isError: false } as const;
   const week = useAgentMetrics(agentKey, "week");
   const mission = useAgentMission(agentKey);
   const { halted } = useHalt();
@@ -41,7 +47,7 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   // fetching. Without this check, selectKeyResult would return { kind: "error" }
   // and flash "Couldn't load this week's number" before any response arrives —
   // violating the three-states-never-collapse invariant (loading ≠ error).
-  if (all.isLoading || week.isLoading || mission.isLoading) {
+  if (week.isLoading || mission.isLoading) {
     return (
       <div className={styles.heroCard} data-kind="loading" aria-busy="true">
         <div className={styles.heroSkeleton} />
