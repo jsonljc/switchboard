@@ -1,36 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { useCreativeJob, useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
-
-const STAGES = ["trends", "hooks", "scripts", "storyboard", "production", "complete"] as const;
+import { useMiraCreative } from "@/hooks/use-mira-creative";
+import { useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
 
 export function MiraCreativeDetailPage({ id }: { id: string }) {
-  const jobQ = useCreativeJob(id);
+  const jobQ = useMiraCreative(id);
   const approve = useApproveStage();
-  // Both actions require an explicit confirm: Continue is cost-bearing (a real
-  // provider call, no budget guard in M1) and Stop is irreversible (no resume).
   const [confirm, setConfirm] = useState<null | "continue" | "stop">(null);
   const job = jobQ.data;
 
-  const isComplete = job?.currentStage === "complete";
-  const isStopped = !!job?.stoppedAt;
-  const canAct = !!job && !isComplete && !isStopped;
-  const estimateQ = useCostEstimate(id, canAct);
+  const canContinue = !!job?.reviewAction.canContinue;
+  const canStop = !!job?.reviewAction.canStop;
+  const estimateQ = useCostEstimate(id, canContinue);
 
   if (jobQ.isLoading) return <div style={{ padding: 28 }}>Loading draft…</div>;
   if (jobQ.isError)
     return <div style={{ padding: 28 }}>Couldn&apos;t load this draft — try again.</div>;
   if (!job) return <div style={{ padding: 28 }}>Draft not found.</div>;
 
-  const production = (job.stageOutputs as Record<string, unknown> | undefined)?.["production"] as
-    | { assembledVideos?: Array<{ videoUrl?: string; thumbnailUrl?: string }> }
-    | undefined;
-  const video = production?.assembledVideos?.[0];
+  const videoUrl = job.draft?.videoUrl;
 
   return (
     <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Draft-only banner — never "published" language */}
       <div
         style={{
           background: "#EFECF6",
@@ -43,72 +35,64 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
         Draft only — not published. Nothing goes live without you.
       </div>
 
-      <h1 style={{ fontSize: 20, fontWeight: 700 }}>{job.productDescription}</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 700 }}>{job.title}</h1>
 
-      {video?.videoUrl ? (
+      {videoUrl ? (
         <video
-          src={video.videoUrl}
-          poster={video.thumbnailUrl}
+          src={videoUrl}
+          poster={job.draft?.thumbnailUrl}
           controls
+          playsInline
           style={{ width: "100%", borderRadius: 10 }}
         />
       ) : (
-        <div style={{ color: "#777" }}>No draft clip yet — still in {job.currentStage}.</div>
+        <div style={{ color: "#777" }}>No draft clip yet — still generating.</div>
       )}
 
-      {/* Stage progress */}
-      <ol style={{ display: "flex", gap: 8, listStyle: "none", padding: 0, flexWrap: "wrap" }}>
-        {STAGES.map((s) => {
-          const idx = STAGES.indexOf(s);
-          const curIdx = STAGES.indexOf(job.currentStage as (typeof STAGES)[number]);
-          const done = idx < curIdx;
-          return (
-            <li
-              key={s}
-              style={{
-                padding: "4px 10px",
-                borderRadius: 999,
-                background: done ? "#D8D2E8" : "#F2F2F2",
-                fontSize: 12,
-              }}
-            >
-              {s}
-            </li>
-          );
-        })}
-      </ol>
+      <div style={{ fontSize: 13, color: "#777" }}>
+        {job.status === "draft_ready"
+          ? "Draft completed — ready for your review."
+          : job.status === "stopped"
+            ? "This draft was stopped."
+            : job.status === "awaiting_review"
+              ? "Awaiting your review."
+              : "Still drafting."}
+      </div>
 
-      {canAct ? (
+      {canContinue || canStop ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {confirm === null && (
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <button
-                disabled={approve.isPending}
-                onClick={() => setConfirm("continue")}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: 8,
-                  background: "#3C315C",
-                  color: "white",
-                  border: "none",
-                }}
-              >
-                Continue draft
-              </button>
-              <button
-                disabled={approve.isPending}
-                onClick={() => setConfirm("stop")}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: 8,
-                  background: "transparent",
-                  color: "#3C315C",
-                  border: "1px solid #3C315C",
-                }}
-              >
-                Stop draft
-              </button>
-              {/* Explicit cost label up front (confirmed decision) */}
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              {canContinue && (
+                <button
+                  disabled={approve.isPending}
+                  onClick={() => setConfirm("continue")}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: 8,
+                    background: "#3C315C",
+                    color: "white",
+                    border: "none",
+                  }}
+                >
+                  Continue draft
+                </button>
+              )}
+              {canStop && (
+                <button
+                  disabled={approve.isPending}
+                  onClick={() => setConfirm("stop")}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: 8,
+                    background: "transparent",
+                    color: "#3C315C",
+                    border: "1px solid #3C315C",
+                  }}
+                >
+                  Stop draft
+                </button>
+              )}
               <span style={{ fontSize: 12, color: "#777" }}>
                 {estimateQ.data
                   ? `Continue runs the next generation step (~$${estimateQ.data.basic.cost}). Stop is free but can't be undone.`
@@ -129,15 +113,14 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               }}
             >
               <span style={{ fontSize: 13, color: "#3C315C" }}>
-                Continue this draft? This runs the next generation step and may cost
-                {estimateQ.data ? ` about $${estimateQ.data.basic.cost}` : " money"}. It stays a
-                draft — nothing is published.
+                Continue draft? Runs the next generation step. This may create provider cost
+                {estimateQ.data ? ` (about $${estimateQ.data.basic.cost})` : ""}. It stays a draft —
+                nothing is published.
               </span>
               <div style={{ display: "flex", gap: 12 }}>
                 <button
                   disabled={approve.isPending}
                   onClick={() => {
-                    // M1 deliberately continues at the default (basic) tier — no pro-tier selection on this page.
                     approve.mutate({ jobId: id, action: "continue" });
                     setConfirm(null);
                   }}
@@ -178,7 +161,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               }}
             >
               <span style={{ fontSize: 13, color: "#7A2E2E" }}>
-                Stop this draft? You can't continue it later — this can't be undone.
+                Stop this draft? You can&apos;t continue it later. This can&apos;t be undone.
               </span>
               <div style={{ display: "flex", gap: 12 }}>
                 <button
@@ -195,7 +178,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     border: "none",
                   }}
                 >
-                  Confirm stop
+                  Stop draft
                 </button>
                 <button
                   onClick={() => setConfirm(null)}
@@ -218,15 +201,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
             </span>
           )}
         </div>
-      ) : (
-        <div style={{ fontSize: 13, color: "#777" }}>
-          {isStopped
-            ? "This draft was stopped."
-            : isComplete
-              ? "Draft completed — ready for your review."
-              : ""}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
