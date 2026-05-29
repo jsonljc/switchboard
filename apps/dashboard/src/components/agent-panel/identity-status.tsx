@@ -1,10 +1,9 @@
 "use client";
 
-import { InboxAgentAvatar } from "@/components/inbox/inbox-agent-avatar";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentState } from "@/hooks/use-agents";
 import { useHalt } from "@/components/layout/halt/halt-context";
-import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
+import { type PanelAgentKey } from "./lib/agent-display";
 import { composeStatusLine } from "./lib/status-line";
 import styles from "./agent-panel.module.css";
 
@@ -36,7 +35,6 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
   const agentStateQuery = useAgentState();
   const { halted } = useHalt();
 
-  const display = agentDisplay[agentKey];
   const nowMs = Date.now();
 
   // Select this agent's state entry by agentRole. /api/agents/state returns the
@@ -63,14 +61,9 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
 
   return (
     <div className={styles.identityStatus}>
-      {/* Identity row: avatar + name/role */}
-      <div className={styles.idRowInner}>
-        <InboxAgentAvatar agentKey={agentKey} size={44} />
-        <div className={styles.agentMeta}>
-          <span className={styles.agentName}>{display.name}</span>
-          <span className={styles.role}>{display.role}</span>
-        </div>
-      </div>
+      {/* Identity (avatar + name/role) is owned by the panel SheetHeader — this
+          slot leads with the forward health/presence status line, not a
+          duplicate identity row. */}
 
       {/* Status section */}
       {halted ? (

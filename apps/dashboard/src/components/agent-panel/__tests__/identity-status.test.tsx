@@ -191,15 +191,11 @@ describe("IdentityStatus slot", () => {
     expect(screen.queryByText("Nothing old is waiting")).not.toBeInTheDocument();
   });
 
-  it("renders the agent avatar", () => {
+  it("does NOT render the agent identity row — the panel SheetHeader owns avatar/name/role", () => {
+    // Identity used to be duplicated here and in the SheetHeader. This slot now
+    // leads with the status line + verdict; the header is the sole identity.
     render(<IdentityStatus agentKey="riley" />);
-    const avatar = screen.getByTestId("agent-avatar");
-    expect(avatar).toHaveAttribute("data-agent-key", "riley");
-  });
-
-  it("renders agent name and role from agentDisplay", () => {
-    render(<IdentityStatus agentKey="riley" />);
-    expect(screen.getByText("Riley")).toBeInTheDocument();
-    expect(screen.getByText("Ad optimizer")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-avatar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ad optimizer")).not.toBeInTheDocument();
   });
 });
