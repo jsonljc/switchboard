@@ -73,6 +73,11 @@ export function MiraClipActions({
             Cancel
           </button>
         </div>
+        {approve.isError && (
+          <span style={{ color: "#fff", fontSize: 11 }}>
+            Couldn&apos;t update the draft — try again.
+          </span>
+        )}
       </div>
     );
   }
@@ -107,9 +112,16 @@ export function MiraClipActions({
             Cancel
           </button>
         </div>
+        {approve.isError && (
+          <span style={{ color: "#fff", fontSize: 11 }}>
+            Couldn&apos;t update the draft — try again.
+          </span>
+        )}
       </div>
     );
   }
+
+  if (!reviewAction.canContinue && !reviewAction.canStop) return null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
