@@ -13,6 +13,10 @@ const SAMPLE_UGC = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForB
  * is out of scope — if none exists, logs and skips: dev convenience only).
  */
 export async function seedMiraDemoCreatives(prisma: PrismaClient, orgId: string): Promise<void> {
+  if (process.env["NODE_ENV"] === "production") {
+    console.warn("seedMiraDemoCreatives: NODE_ENV=production — skipping demo creatives.");
+    return;
+  }
   const deployment = await prisma.agentDeployment.findFirst({ where: { organizationId: orgId } });
   if (!deployment) {
     console.warn(`seedMiraDemoCreatives: no deployment for ${orgId} — skipping demo creatives.`);

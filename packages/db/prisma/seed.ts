@@ -621,7 +621,6 @@ async function main() {
   // Requires a deployment to exist for org_dev (created by seedDemoData above)
   // and Mira enablement (created by seedMiraPilotOrgs above). Idempotent.
   await seedMiraDemoCreatives(prisma, "org_dev");
-  console.warn("Seeded Mira demo creatives for org_dev");
 }
 
 main()

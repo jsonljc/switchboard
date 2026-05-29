@@ -15,12 +15,14 @@ describe("seedMiraDemoCreatives", () => {
 
   it("seeds a polished + a UGC draft against the org's deployment", async () => {
     const creativeUpsert = vi.fn();
+    const agentTaskUpsert = vi.fn();
     const prisma = {
       agentDeployment: { findFirst: vi.fn().mockResolvedValue({ id: "dep1", listingId: "lst1" }) },
-      agentTask: { upsert: vi.fn() },
+      agentTask: { upsert: agentTaskUpsert },
       creativeJob: { upsert: creativeUpsert },
     } as unknown as import("@prisma/client").PrismaClient;
     await seedMiraDemoCreatives(prisma, "org_dev");
+    expect(agentTaskUpsert).toHaveBeenCalledTimes(2);
     expect(creativeUpsert).toHaveBeenCalledTimes(2);
     const modes = creativeUpsert.mock.calls.map((c) => c[0].create.mode).sort();
     expect(modes).toEqual(["polished", "ugc"]);
