@@ -24,8 +24,8 @@ export interface InboxDecisionItemProps {
  * Wiring:
  *   - onApprove  → action.primary()  + Undo toast (skipped on 409 { silent:true })
  *   - onSkip     → action.dismiss()
- *   - onOpenDetail / onTakeOver → bubble up to the parent screen's onOpenDetail
- *     (handoff "take over" opens the detail in PR3a; the handoff sheet is PR3b)
+ *   - onOpenDetail / onTakeOver → both bubble to the parent's onOpenDetail,
+ *     which mounts the detail sheet (handoff or approval)
  */
 export function InboxDecisionItem({ decision, onOpenDetail, onOpenAgent }: InboxDecisionItemProps) {
   const { toast } = useToast();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, fireEvent } from "@testing-library/react";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
 
 // ── Mutable mock state (house pattern) ───────────────────────────────────────
@@ -85,6 +85,17 @@ function makeHandoff(overrides: Partial<Decision> = {}): Decision {
   };
 }
 
+/** Simulate a horizontal mouse drag on the swipe track (mirrors inbox-decision-card.test). */
+function drag(track: HTMLElement, deltaX: number) {
+  fireEvent.mouseDown(track, { clientX: 0, clientY: 0 });
+  fireEvent.mouseMove(track, { clientX: deltaX < 0 ? -10 : 10, clientY: 0 });
+  fireEvent.mouseMove(track, { clientX: deltaX, clientY: 0 });
+  fireEvent.mouseUp(track, { clientX: deltaX, clientY: 0 });
+}
+function getTrack(container: HTMLElement): HTMLElement {
+  return container.querySelector("[data-swipe-track]") as HTMLElement;
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("InboxDecisionItem", () => {
@@ -119,9 +130,11 @@ describe("InboxDecisionItem", () => {
   describe("(2) approve — calls primary, shows Undo toast", () => {
     it("fires primaryMock and shows a toast with Undo action on success", async () => {
       primaryMock.mockResolvedValueOnce({});
-      render(<InboxDecisionItem decision={makeDecision()} onOpenDetail={vi.fn()} />);
+      const { container } = render(
+        <InboxDecisionItem decision={makeDecision()} onOpenDetail={vi.fn()} />,
+      );
 
-      fireEvent.click(screen.getByRole("button", { name: "Yes, send it" }));
+      drag(getTrack(container), 220); // swipe-right commits approve on a swipe-approvable card
       vi.runAllTimers();
 
       await vi.waitFor(() => {
@@ -148,9 +161,11 @@ describe("InboxDecisionItem", () => {
   describe("(3) 409 silent result — toast NOT fired", () => {
     it("skips the toast when primaryMock resolves { silent: true }", async () => {
       primaryMock.mockResolvedValueOnce({ silent: true });
-      render(<InboxDecisionItem decision={makeDecision()} onOpenDetail={vi.fn()} />);
+      const { container } = render(
+        <InboxDecisionItem decision={makeDecision()} onOpenDetail={vi.fn()} />,
+      );
 
-      fireEvent.click(screen.getByRole("button", { name: "Yes, send it" }));
+      drag(getTrack(container), 220);
       vi.runAllTimers();
 
       await vi.waitFor(() => {
@@ -160,12 +175,14 @@ describe("InboxDecisionItem", () => {
     });
   });
 
-  // Test 4: skip → dismissMock called
-  describe("(4) skip — calls dismiss", () => {
-    it("calls dismissMock when the secondary button is clicked", async () => {
-      render(<InboxDecisionItem decision={makeDecision()} onOpenDetail={vi.fn()} />);
+  // Test 4: swipe-left → dismissMock called
+  describe("(4) skip — swipe-left calls dismiss", () => {
+    it("calls dismissMock when the card is swiped left", async () => {
+      const { container } = render(
+        <InboxDecisionItem decision={makeDecision()} onOpenDetail={vi.fn()} />,
+      );
 
-      fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
+      drag(getTrack(container), -220);
       vi.runAllTimers();
 
       await vi.waitFor(() => {
@@ -175,27 +192,31 @@ describe("InboxDecisionItem", () => {
     });
   });
 
-  // Test 5a: Why button → onOpenDetail called with the decision
-  describe("(5a) Why button → onOpenDetail bubbles", () => {
-    it("calls onOpenDetail with the decision when Why is clicked", () => {
+  // Test 5a: whole-card tap → onOpenDetail called with the decision
+  describe("(5a) whole-card tap → onOpenDetail bubbles", () => {
+    it("calls onOpenDetail with the decision when the card is tapped", () => {
       const onOpenDetail = vi.fn();
       const decision = makeDecision();
-      render(<InboxDecisionItem decision={decision} onOpenDetail={onOpenDetail} />);
+      const { container } = render(
+        <InboxDecisionItem decision={decision} onOpenDetail={onOpenDetail} />,
+      );
 
-      fireEvent.click(screen.getByRole("button", { name: /why/i }));
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
       expect(onOpenDetail).toHaveBeenCalledTimes(1);
       expect(onOpenDetail).toHaveBeenCalledWith(decision);
     });
   });
 
-  // Test 5b: handoff primary (Take this one) → onOpenDetail called, NOT primaryMock/dismissMock
-  describe("(5b) handoff primary (Take this one) → onOpenDetail, not a commit", () => {
+  // Test 5b: handoff is tap-only → onOpenDetail called, NOT primaryMock/dismissMock
+  describe("(5b) handoff is tap-only → onOpenDetail, not a commit", () => {
     it("bubbles onOpenDetail and does NOT call primaryMock or dismissMock for a handoff", () => {
       const onOpenDetail = vi.fn();
       const handoff = makeHandoff();
-      render(<InboxDecisionItem decision={handoff} onOpenDetail={onOpenDetail} />);
+      const { container } = render(
+        <InboxDecisionItem decision={handoff} onOpenDetail={onOpenDetail} />,
+      );
 
-      fireEvent.click(screen.getByRole("button", { name: "Take this one" }));
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
       vi.runAllTimers();
 
       expect(onOpenDetail).toHaveBeenCalledTimes(1);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
@@ -21,6 +21,8 @@ import { AgentPanel } from "@/components/agent-panel/agent-panel";
 import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
 import { HandoffDetailSheet } from "@/components/inbox/handoff-detail-sheet";
 import type { Decision, DecisionKind } from "@/lib/decisions/types";
+import "./inbox-design-base.css";
+import "./inbox.css";
 
 // ── ApprovalDetailItem ────────────────────────────────────────────────────────
 // Internal component — mounted ONLY when an approval detail is open, so its
@@ -147,6 +149,16 @@ export function InboxScreen() {
   const [open, setOpen] = useState<{ decision: Decision; kind: DecisionKind } | null>(null);
   const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
 
+  // Esc closes the open detail sheet (aria-modal dialog convention).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   // Both feeds: filtered drives the list; unfiltered drives per-agent counts.
   // TanStack dedupes by query key so both are safe.
   const filtered = useDecisionFeed(agentFilter);
@@ -173,7 +185,15 @@ export function InboxScreen() {
   const decisions = filtered.data?.decisions ?? [];
 
   return (
-    <>
+    <div className="inbox-page">
+      <header className="inbox-pagehead">
+        <h1>inbox</h1>
+        <span className="inbox-pagehead-count">
+          {counts.total === 0
+            ? "That's everything"
+            : `${counts.total} ${counts.total === 1 ? "thing needs" : "things need"} you`}
+        </span>
+      </header>
       <InboxFilterRow counts={counts} selected={agentFilter} onSelect={setAgentFilter} />
 
       {decisions.length === 0 ? (
@@ -182,20 +202,22 @@ export function InboxScreen() {
           agentName={agentFilter ? AGENT_REGISTRY[agentFilter]?.displayName : undefined}
         />
       ) : (
-        <ul className="inbox-list">
+        <div className="inbox-queue">
           {decisions.map((d) => (
-            <li key={d.id} className="inbox-row">
-              <InboxDecisionItem
-                decision={d}
-                onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
-                onOpenAgent={setPanelAgent}
-              />
-            </li>
+            <InboxDecisionItem
+              key={d.id}
+              decision={d}
+              onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
+              onOpenAgent={setPanelAgent}
+            />
           ))}
-        </ul>
+        </div>
       )}
 
       {/* Detail layer */}
+      {open && (
+        <div className="scrim" data-open="true" aria-hidden="true" onClick={() => setOpen(null)} />
+      )}
       {open?.kind === "approval" && (
         <ApprovalDetailItem decision={open.decision} onClose={() => setOpen(null)} />
       )}
@@ -219,6 +241,6 @@ export function InboxScreen() {
           onActivate={() => router.push("/settings/channels")}
         />
       )}
-    </>
+    </div>
   );
 }

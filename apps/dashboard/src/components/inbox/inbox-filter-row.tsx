@@ -29,27 +29,29 @@ function FilterChip({ label, count, pressed, onClick, agentKey }: FilterChipProp
   return (
     <button
       type="button"
-      className="inbox-filter-chip"
+      className="filter-chip"
       data-agent={agentKey ?? "all"}
       aria-pressed={pressed}
       onClick={onClick}
     >
-      {agentKey && (
-        <span className="inbox-filter-chip-av">
+      {agentKey ? (
+        <span className="filter-chip-sprite">
           <InboxAgentAvatar agentKey={agentKey} size={26} />
         </span>
+      ) : (
+        <span className="filter-chip-dot" />
       )}
-      <span className="inbox-filter-chip-label">{label}</span>
-      <span className="inbox-filter-chip-count">{count}</span>
+      <span>{label}</span>
+      <span className="filter-chip-count">{count}</span>
     </button>
   );
 }
 
 /**
- * Presentational teammate filter. Renders an "All" chip plus one chip per agent.
- * Honesty rule: a `day-one` agent (Alex, Riley) always shows; a `day-thirty`
- * agent (Mira) shows ONLY when its count is > 0. Agent color is identity-only
- * (carried by the avatar) — the chip button is never painted with the accent.
+ * Presentational teammate filter (design: inbox-v2 `.filter-chip`). Renders an
+ * "All" chip plus one chip per agent. Honesty rule: a `day-one` agent (Alex,
+ * Riley) always shows; a `day-thirty` agent (Mira) shows ONLY when its count is
+ * > 0. Agent color is identity-only (the avatar/dot), never the chip fill.
  */
 export function InboxFilterRow({ counts, selected, onSelect }: InboxFilterRowProps) {
   return (

@@ -233,7 +233,7 @@ describe("<InboxScreen>", () => {
 
       render(<InboxScreen />);
 
-      expect(screen.getByText(/couldn't load your inbox/i)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
       expect(screen.queryByText(/that's everything/i)).toBeNull();
     });
 
@@ -266,7 +266,7 @@ describe("<InboxScreen>", () => {
 
       expect(screen.getByText(/loading/i)).toBeInTheDocument();
       expect(screen.queryByText(/that's everything/i)).toBeNull();
-      expect(screen.queryByText(/couldn't load your inbox/i)).toBeNull();
+      expect(screen.queryByText(/couldn't load/i)).toBeNull();
     });
   });
 
@@ -277,7 +277,9 @@ describe("<InboxScreen>", () => {
 
       render(<InboxScreen />);
 
-      expect(screen.getByText(/that's everything/i)).toBeInTheDocument();
+      // The pagehead count and the empty-state both say "That's everything";
+      // target the empty-state heading specifically to disambiguate.
+      expect(screen.getByRole("heading", { name: /that's everything/i })).toBeInTheDocument();
     });
   });
 
@@ -354,18 +356,19 @@ describe("<InboxScreen>", () => {
 
   // Test 6: open approval detail
   describe("(6) open approval detail sheet", () => {
-    it("renders the ApprovalDetailSheet when an approval card's Why is clicked", () => {
+    it("opens the ApprovalDetailSheet when the approval card is tapped", () => {
       feedByKey = (_agentKey) => successFeed([alexDecision]);
 
-      render(<InboxScreen />);
+      const { container } = render(<InboxScreen />);
 
-      // The Why button on the approval card
-      const whyBtn = screen.getByRole("button", { name: /why/i });
-      fireEvent.click(whyBtn);
+      // The doorway card opens its detail on a whole-card tap (no inline buttons).
+      const cardBody = container.querySelector("[data-card-body]") as HTMLElement;
+      fireEvent.click(cardBody);
 
-      // ApprovalDetailSheet renders with role="dialog"
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
-      // It contains "needs your okay"
+      // ApprovalDetailSheet renders role="dialog" with "needs your okay" copy.
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute("data-kind", "approval");
       expect(screen.getByText(/needs your okay/i)).toBeInTheDocument();
     });
   });
@@ -380,11 +383,11 @@ describe("<InboxScreen>", () => {
         refetch: vi.fn(),
       });
 
-      render(<InboxScreen />);
+      const { container } = render(<InboxScreen />);
 
-      // Open the detail the same way the approval-open test does: click the primary button
-      const takeOverBtn = screen.getByRole("button", { name: /take this one/i });
-      fireEvent.click(takeOverBtn);
+      // Handoffs are tap-only; a whole-card tap opens the detail sheet.
+      const cardBody = container.querySelector("[data-card-body]") as HTMLElement;
+      fireEvent.click(cardBody);
 
       expect(screen.queryByText(/handoff detail coming next/i)).not.toBeInTheDocument();
       // HandoffDetailSheet renders role="dialog"; the card also renders "is handing this to you"
@@ -476,6 +479,39 @@ describe("<InboxScreen>", () => {
       // Decision-detail (ApprovalDetailSheet) must NOT be open — its sentinel
       // text "needs your okay" must be absent, proving stopPropagation worked.
       expect(screen.queryByText(/needs your okay/i)).toBeNull();
+    });
+  });
+
+  // Test 9: scrim backdrop closes an open detail sheet
+  describe("(9) scrim closes the open detail sheet", () => {
+    it("clicking the scrim backdrop closes the detail sheet", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+
+      const { container } = render(<InboxScreen />);
+
+      // Open the approval detail via a whole-card tap.
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      // The scrim backdrop (aria-hidden) closes the sheet on click.
+      const scrim = container.querySelector(".scrim") as HTMLElement;
+      expect(scrim).toBeInTheDocument();
+      fireEvent.click(scrim);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  // Test 10: Escape closes the open detail sheet (aria-modal convention)
+  describe("(10) Escape closes the open detail sheet", () => {
+    it("closes the detail sheet on an Escape keydown", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+
+      const { container } = render(<InboxScreen />);
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 });

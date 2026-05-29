@@ -1,7 +1,15 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, fireEvent } from "@testing-library/react";
 import { InboxDecisionCard } from "../inbox-decision-card";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
+
+// Mock the animated sprite avatar to avoid canvas/act() noise — the card's
+// behavior (swipe/tap/affordance), not the sprite, is what these tests verify.
+vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
+  InboxAgentAvatar: ({ agentKey }: { agentKey: string }) => (
+    <span data-testid="agent-avatar" data-agent-key={agentKey} />
+  ),
+}));
 
 const lowSafe: RiskContract = {
   riskLevel: "low",
@@ -53,19 +61,13 @@ function makeHandoff(overrides: Partial<Decision> = {}): Decision {
   };
 }
 
-interface Handlers {
-  onApprove: ReturnType<typeof vi.fn>;
-  onSkip: ReturnType<typeof vi.fn>;
-  onOpenDetail: ReturnType<typeof vi.fn>;
-  onTakeOver: ReturnType<typeof vi.fn>;
-}
-
 function renderCard(decision: Decision) {
-  const handlers: Handlers = {
+  const handlers = {
     onApprove: vi.fn(),
     onSkip: vi.fn(),
     onOpenDetail: vi.fn(),
     onTakeOver: vi.fn(),
+    onOpenAgent: vi.fn(),
   };
   const utils = render(
     <InboxDecisionCard
@@ -74,13 +76,16 @@ function renderCard(decision: Decision) {
       onSkip={handlers.onSkip}
       onOpenDetail={handlers.onOpenDetail}
       onTakeOver={handlers.onTakeOver}
+      onOpenAgent={handlers.onOpenAgent}
     />,
   );
   const track = utils.container.querySelector("[data-swipe-track]") as HTMLElement;
-  return { ...utils, ...handlers, track };
+  const body = utils.container.querySelector("[data-card-body]") as HTMLElement;
+  const affordance = () => utils.container.querySelector(".decision-foot-affordance");
+  return { ...utils, ...handlers, track, body, affordance };
 }
 
-/** Simulate a horizontal mouse drag on the swipe track (mirrors swipe-decision-card.test). */
+/** Simulate a horizontal mouse drag on the swipe track. */
 function drag(track: HTMLElement, deltaX: number) {
   fireEvent.mouseDown(track, { clientX: 0, clientY: 0 });
   fireEvent.mouseMove(track, { clientX: deltaX < 0 ? -10 : 10, clientY: 0 });
@@ -88,7 +93,7 @@ function drag(track: HTMLElement, deltaX: number) {
   fireEvent.mouseUp(track, { clientX: deltaX, clientY: 0 });
 }
 
-describe("<InboxDecisionCard>", () => {
+describe("<InboxDecisionCard> (doorway card)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -112,33 +117,13 @@ describe("<InboxDecisionCard>", () => {
       expect(onSkip).not.toHaveBeenCalled();
     });
 
-    it("renders the agent head with 'needs you'", () => {
-      renderCard(makeApproval(lowSafe));
-      expect(screen.getByText("Alex")).toBeInTheDocument();
-      expect(screen.getByText(/needs you/i)).toBeInTheDocument();
-    });
-
-    it("shows the risk pill from the contract", () => {
-      renderCard(makeApproval({ ...lowSafe, riskLevel: "high" }));
-      expect(screen.getByText(/high risk/i)).toBeInTheDocument();
-    });
-
-    it("shows a needs-review pill when the contract is absent", () => {
-      renderCard(makeApproval(undefined));
-      expect(screen.getByText(/needs review/i)).toBeInTheDocument();
-    });
-
-    it("renders an optional replyPreview when present", () => {
-      renderCard(
-        makeApproval(lowSafe, {
-          meta: { riskContract: lowSafe, replyPreview: "Hi Maya, here's the comparison…" },
-        }),
-      );
-      expect(screen.getByText("Hi Maya, here's the comparison…")).toBeInTheDocument();
+    it("shows the 'Swipe →' foot affordance", () => {
+      const { affordance } = renderCard(makeApproval(lowSafe));
+      expect(affordance()).toHaveTextContent(/swipe/i);
     });
   });
 
-  // (b) approval financial → swipe-right does NOT approve, opens detail
+  // (b) approval with an effect → swipe-right does NOT approve, opens detail
   describe("approval — financialEffect:true (swipe-blocked)", () => {
     const financial: RiskContract = { ...lowSafe, financialEffect: true };
 
@@ -155,17 +140,52 @@ describe("<InboxDecisionCard>", () => {
       expect(onOpenDetail).toHaveBeenCalled();
     });
 
-    it("does NOT render a replyPreview for a swipe-blocked approval", () => {
-      renderCard(
-        makeApproval(financial, {
-          meta: { riskContract: financial, replyPreview: "Hidden until reviewable" },
-        }),
-      );
-      expect(screen.queryByText("Hidden until reviewable")).not.toBeInTheDocument();
+    it("shows the 'Tap to review →' foot affordance, not 'Swipe'", () => {
+      const { affordance } = renderCard(makeApproval(financial));
+      expect(affordance()).toHaveTextContent(/tap to review/i);
+      expect(affordance()).not.toHaveTextContent(/swipe/i);
     });
   });
 
-  // (c) handoff → SLA pill + "is handing this to you", no swipe-approve, primary → onTakeOver
+  // (c) lead row identity + risk pill + quiet contact + timestamp
+  describe("lead row, risk pill, contact, timestamp", () => {
+    it("renders the agent name and the 'approval' kind word", () => {
+      const { getByText } = renderCard(makeApproval(lowSafe));
+      expect(getByText("Alex")).toBeInTheDocument();
+      expect(getByText("approval")).toBeInTheDocument();
+    });
+
+    it("shows the risk pill from the contract", () => {
+      const { getByText } = renderCard(makeApproval({ ...lowSafe, riskLevel: "high" }));
+      expect(getByText(/high risk/i)).toBeInTheDocument();
+    });
+
+    it("renders no risk pill and is tap-only when the contract is absent", () => {
+      const { track, queryByText, affordance } = renderCard(makeApproval(undefined));
+      expect(track).toHaveAttribute("data-swipe-approve", "false");
+      expect(queryByText(/risk/i)).toBeNull();
+      expect(affordance()).toHaveTextContent(/tap to review/i);
+    });
+
+    it("renders the contact name (quiet) but NOT the channel (a sheet-only field)", () => {
+      const { getByText, queryByText } = renderCard(
+        makeApproval(lowSafe, {
+          meta: { riskContract: lowSafe, contactName: "Maya Lin", channel: "WhatsApp" },
+        }),
+      );
+      expect(getByText("Maya Lin")).toBeInTheDocument();
+      expect(queryByText("WhatsApp")).toBeNull();
+    });
+
+    it("renders a relative timestamp in the foot", () => {
+      const { getByText } = renderCard(
+        makeApproval(lowSafe, { createdAt: new Date(Date.now() - 5 * 60000).toISOString() }),
+      );
+      expect(getByText("5m ago")).toBeInTheDocument();
+    });
+  });
+
+  // (d) handoff → SLA pill + 'handoff' kind word, never swipe-approve, tap-only
   describe("handoff (always tap-only)", () => {
     it("is NEVER in swipe-approve mode even if a safe contract is somehow present", () => {
       const { track } = renderCard(makeHandoff({ meta: { riskContract: lowSafe } }));
@@ -173,26 +193,24 @@ describe("<InboxDecisionCard>", () => {
     });
 
     it("renders the SLA pill from slaDeadlineAt", () => {
-      renderCard(makeHandoff());
-      expect(screen.getByText(/due in/i)).toBeInTheDocument();
+      const { getByText } = renderCard(makeHandoff());
+      expect(getByText(/due in/i)).toBeInTheDocument();
     });
 
-    it("renders 'is handing this to you' in the head", () => {
-      renderCard(makeHandoff());
-      expect(screen.getByText(/is handing this to you/i)).toBeInTheDocument();
+    it("renders the agent name and the 'handoff' kind word", () => {
+      const { getByText } = renderCard(makeHandoff());
+      expect(getByText("Riley")).toBeInTheDocument();
+      expect(getByText("handoff")).toBeInTheDocument();
     });
 
     it("does not render a risk pill", () => {
-      renderCard(makeHandoff());
-      expect(screen.queryByText(/risk/i)).not.toBeInTheDocument();
+      const { queryByText } = renderCard(makeHandoff());
+      expect(queryByText(/risk/i)).not.toBeInTheDocument();
     });
 
-    it("primary button uses presentation.primaryLabel and calls onTakeOver", () => {
-      const { onTakeOver, onApprove } = renderCard(makeHandoff());
-      fireEvent.click(screen.getByRole("button", { name: "Take this one" }));
-      vi.runAllTimers();
-      expect(onTakeOver).toHaveBeenCalledTimes(1);
-      expect(onApprove).not.toHaveBeenCalled();
+    it("shows the 'Tap to open →' foot affordance", () => {
+      const { affordance } = renderCard(makeHandoff());
+      expect(affordance()).toHaveTextContent(/tap to open/i);
     });
 
     it("swipe-right does NOT approve — it opens detail", () => {
@@ -203,42 +221,38 @@ describe("<InboxDecisionCard>", () => {
       expect(onTakeOver).not.toHaveBeenCalled();
       expect(onOpenDetail).toHaveBeenCalled();
     });
+
+    it("swipe-left commits skip", () => {
+      const { track, onSkip, onTakeOver } = renderCard(makeHandoff());
+      drag(track, -220);
+      vi.runAllTimers();
+      expect(onSkip).toHaveBeenCalledTimes(1);
+      expect(onTakeOver).not.toHaveBeenCalled();
+    });
   });
 
-  // (d) whole-card tap (no drag) → onOpenDetail
-  describe("whole-card tap", () => {
+  // (e) whole-card tap → onOpenDetail (+ trailing synthetic-click suppression)
+  describe("whole-card tap opens detail", () => {
     it("a tap with no drag opens detail", () => {
-      const { container, onOpenDetail } = renderCard(makeApproval(lowSafe));
-      const body = container.querySelector("[data-card-body]") as HTMLElement;
+      const { body, onOpenDetail } = renderCard(makeApproval(lowSafe));
       fireEvent.click(body);
       expect(onOpenDetail).toHaveBeenCalledTimes(1);
     });
 
-    it("clicking the primary button does NOT trigger the card-tap detail open", () => {
-      const { onOpenDetail } = renderCard(makeApproval(lowSafe));
-      fireEvent.click(screen.getByRole("button", { name: "Approve & send" }));
-      vi.runAllTimers();
-      expect(onOpenDetail).not.toHaveBeenCalled();
-    });
-  });
-
-  // The browser emits a synthetic `click` AFTER mousedown→mousemove→mouseup.
-  // testing-library does NOT synthesize it, so we fire it explicitly to exercise
-  // the trailing-click path that the consumeClick suppression guards against.
-  describe("trailing synthetic click after a gesture", () => {
+    // The browser emits a synthetic click AFTER mousedown→mousemove→mouseup;
+    // testing-library does not, so we fire it explicitly to exercise the
+    // consumeClick suppression that guards against a drag being read as a tap.
     it("sub-threshold drag then click does NOT open detail (it was a drag, not a tap)", () => {
-      const { track, container, onOpenDetail } = renderCard(makeApproval(lowSafe));
-      const body = container.querySelector("[data-card-body]") as HTMLElement;
+      const { track, body, onOpenDetail } = renderCard(makeApproval(lowSafe));
       drag(track, 40); // moved past the dead-zone but snapped back
       vi.runAllTimers();
-      fireEvent.click(body); // the browser's trailing synthetic click
+      fireEvent.click(body);
       expect(onOpenDetail).not.toHaveBeenCalled();
     });
 
     it("blocked swipe-right then click opens detail EXACTLY ONCE (via prime, not doubled)", () => {
       const financial: RiskContract = { ...lowSafe, financialEffect: true };
-      const { track, container, onApprove, onOpenDetail } = renderCard(makeApproval(financial));
-      const body = container.querySelector("[data-card-body]") as HTMLElement;
+      const { track, body, onApprove, onOpenDetail } = renderCard(makeApproval(financial));
       drag(track, 220); // past threshold, blocked → primeBlocked calls onOpenDetail once
       vi.runAllTimers();
       fireEvent.click(body); // trailing click must be suppressed, not a second open
@@ -247,8 +261,7 @@ describe("<InboxDecisionCard>", () => {
     });
 
     it("a genuine no-move tap (down→up then click) opens detail once", () => {
-      const { container, onOpenDetail } = renderCard(makeApproval(lowSafe));
-      const body = container.querySelector("[data-card-body]") as HTMLElement;
+      const { body, onOpenDetail } = renderCard(makeApproval(lowSafe));
       fireEvent.mouseDown(body, { clientX: 0, clientY: 0 });
       fireEvent.mouseUp(body, { clientX: 0, clientY: 0 });
       fireEvent.click(body);
@@ -256,78 +269,13 @@ describe("<InboxDecisionCard>", () => {
     });
   });
 
-  // (e) contact line + foot render from meta
-  describe("contact line + foot", () => {
-    it("renders the contact name and channel from meta", () => {
-      renderCard(
-        makeApproval(lowSafe, {
-          meta: { riskContract: lowSafe, contactName: "Maya Lin", channel: "WhatsApp" },
-        }),
-      );
-      expect(screen.getByText("Maya Lin")).toBeInTheDocument();
-      expect(screen.getByText("WhatsApp")).toBeInTheDocument();
-    });
-
-    it("renders the Why control which opens detail", () => {
-      const { onOpenDetail } = renderCard(makeApproval(lowSafe));
-      fireEvent.click(screen.getByRole("button", { name: /why/i }));
-      expect(onOpenDetail).toHaveBeenCalledTimes(1);
-    });
-
-    it("renders View thread when threadHref is set and opens detail", () => {
-      const { onOpenDetail } = renderCard(makeApproval(lowSafe));
-      fireEvent.click(screen.getByRole("button", { name: /view thread/i }));
-      expect(onOpenDetail).toHaveBeenCalledTimes(1);
-    });
-
-    it("does NOT render View thread when threadHref is null (no dead link)", () => {
-      renderCard(makeApproval(lowSafe, { threadHref: null }));
-      expect(screen.queryByRole("button", { name: /view thread/i })).not.toBeInTheDocument();
-    });
-
-    it("renders a relative timestamp in the foot", () => {
-      renderCard(
-        makeApproval(lowSafe, { createdAt: new Date(Date.now() - 5 * 60000).toISOString() }),
-      );
-      expect(screen.getByText("5m ago")).toBeInTheDocument();
-    });
-  });
-
-  // Tap-Approve confirm-gating (mirrors SwipeDecisionCard) — needsConfirm routes through ConfirmSheet
-  describe("tap-Approve confirm gating", () => {
-    it("low+safe taps commit directly (no confirm dialog)", () => {
-      const { onApprove } = renderCard(makeApproval(lowSafe));
-      fireEvent.click(screen.getByRole("button", { name: "Approve & send" }));
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      vi.runAllTimers();
-      expect(onApprove).toHaveBeenCalledTimes(1);
-    });
-
-    it("requiresConfirmation opens the confirm sheet and commits only on affirmative", () => {
-      const { onApprove } = renderCard(makeApproval({ ...lowSafe, requiresConfirmation: true }));
-      fireEvent.click(screen.getByRole("button", { name: "Approve & send" }));
-      const dialog = screen.getByRole("dialog");
-      expect(onApprove).not.toHaveBeenCalled();
-      fireEvent.click(within(dialog).getByRole("button", { name: /yes/i }));
-      vi.runAllTimers();
-      expect(onApprove).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("skip / secondary is always available", () => {
-    it("tapping the secondary on an approval calls onSkip", () => {
-      const { onSkip } = renderCard(makeApproval(lowSafe));
-      fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
-      vi.runAllTimers();
-      expect(onSkip).toHaveBeenCalledTimes(1);
-    });
-
-    it("swipe-left commits skip on a handoff", () => {
-      const { track, onSkip, onTakeOver } = renderCard(makeHandoff());
-      drag(track, -220);
-      vi.runAllTimers();
-      expect(onSkip).toHaveBeenCalledTimes(1);
-      expect(onTakeOver).not.toHaveBeenCalled();
+  // (f) avatar identity button → onOpenAgent, never the card-tap detail
+  describe("agent avatar button", () => {
+    it("clicking the avatar calls onOpenAgent and does NOT open the detail", () => {
+      const { getByRole, onOpenAgent, onOpenDetail } = renderCard(makeApproval(lowSafe));
+      fireEvent.click(getByRole("button", { name: /open alex panel/i }));
+      expect(onOpenAgent).toHaveBeenCalledWith("alex");
+      expect(onOpenDetail).not.toHaveBeenCalled();
     });
   });
 });
