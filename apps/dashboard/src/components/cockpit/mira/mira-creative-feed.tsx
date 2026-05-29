@@ -10,6 +10,7 @@ export function MiraCreativeFeed() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const jobs = data?.jobs ?? [];
+  const safeActive = jobs.length > 0 ? Math.min(activeIndex, jobs.length - 1) : 0;
 
   // Update the active (in-view) clip on scroll. IntersectionObserver is the
   // browser path; the first clip is active on mount so autoplay starts without
@@ -58,7 +59,7 @@ export function MiraCreativeFeed() {
     >
       {jobs.map((job, i) => (
         <div key={job.id} data-clip-index={i} style={{ height: "100%", scrollSnapAlign: "start" }}>
-          <MiraClipCard job={job} isActive={i === activeIndex} />
+          <MiraClipCard job={job} isActive={i === safeActive} />
         </div>
       ))}
     </div>

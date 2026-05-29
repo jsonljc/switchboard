@@ -28,7 +28,15 @@ export function MiraFeedPage() {
     : null;
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#000" }}>
+    <div
+      style={{
+        height: "100dvh",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#000",
+      }}
+    >
       <div style={{ position: "relative", background: "#fff" }}>
         <Identity
           statusKey="IDLE"

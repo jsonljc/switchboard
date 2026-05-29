@@ -36,6 +36,9 @@ export function MiraClipCard({
     if (!el) return;
     if (isActive) void el.play().catch(() => {});
     else el.pause();
+    return () => {
+      el.pause();
+    };
   }, [isActive]);
 
   return (
