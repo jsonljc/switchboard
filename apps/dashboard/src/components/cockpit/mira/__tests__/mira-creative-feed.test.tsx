@@ -1,6 +1,35 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen, act } from "@testing-library/react";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
+
+// ---------------------------------------------------------------------------
+// Controllable IntersectionObserver — override BEFORE any component imports so
+// the feed picks up this class instead of the no-op in test-setup.ts.
+// ---------------------------------------------------------------------------
+let ioInstances: Array<{ cb: IntersectionObserverCallback; els: Element[] }> = [];
+beforeEach(() => {
+  ioInstances = [];
+});
+class FakeIO {
+  cb: IntersectionObserverCallback;
+  els: Element[] = [];
+  constructor(cb: IntersectionObserverCallback) {
+    this.cb = cb;
+    ioInstances.push(this);
+  }
+  observe(el: Element) {
+    this.els.push(el);
+  }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+// @ts-expect-error override
+global.IntersectionObserver = FakeIO;
+
+// ---------------------------------------------------------------------------
 
 const feed = vi.fn();
 vi.mock("@/hooks/use-mira-feed", () => ({ useMiraFeed: () => feed() }));
@@ -58,5 +87,69 @@ describe("MiraCreativeFeed", () => {
     feed.mockReturnValue({ data: undefined, isLoading: false, isError: true });
     render(<MiraCreativeFeed />);
     expect(screen.getByText(/Couldn't load/i)).toBeInTheDocument();
+  });
+
+  it("first clip active on mount, others paused", () => {
+    feed.mockReturnValue({
+      data: {
+        jobs: [clip("a"), clip("b")],
+        counts: {},
+        feed: { reviewableCount: 2, renderingCount: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play");
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause");
+
+    render(<MiraCreativeFeed />);
+
+    // card0 (isActive=true) → play; card1 (isActive=false) → pause
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(pauseSpy).toHaveBeenCalledTimes(1);
+
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+  });
+
+  it("scrolling promotes the next clip", () => {
+    feed.mockReturnValue({
+      data: {
+        jobs: [clip("a"), clip("b")],
+        counts: {},
+        feed: { reviewableCount: 2, renderingCount: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play");
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause");
+
+    const { container } = render(<MiraCreativeFeed />);
+
+    const playCountAfterMount = playSpy.mock.calls.length;
+    const pauseCountAfterMount = pauseSpy.mock.calls.length;
+
+    // Simulate IO firing for the second wrapper
+    const wrapper1 = container.querySelector('[data-clip-index="1"]');
+    expect(wrapper1).not.toBeNull();
+
+    // There should be at least one IO instance registered by the feed
+    expect(ioInstances.length).toBeGreaterThan(0);
+    const io = ioInstances[0];
+
+    act(() => {
+      io.cb(
+        [{ isIntersecting: true, target: wrapper1 } as unknown as IntersectionObserverEntry],
+        io as unknown as IntersectionObserver,
+      );
+    });
+
+    // After promoting card1: card1 plays, card0 pauses → net +1 play +1 pause vs mount
+    expect(playSpy.mock.calls.length).toBeGreaterThan(playCountAfterMount);
+    expect(pauseSpy.mock.calls.length).toBeGreaterThan(pauseCountAfterMount);
+
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
   });
 });
