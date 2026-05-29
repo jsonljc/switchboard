@@ -131,6 +131,14 @@ const REQUIRED_CLASSES = [
   "mode",
   "live",
   "dot",
+  // live-mode failure states (#472)
+  "bannerStale",
+  "unavailable",
+  "unavailableMsg",
+  "skeleton",
+  "skelHero",
+  "skelLine",
+  "skelBlock",
 ] as const;
 
 describe("reports.module.css class integrity", () => {

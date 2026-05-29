@@ -25,7 +25,7 @@ const ORG_PLACEHOLDER = "Aurora Aesthetics";
 
 export function ReportsPage() {
   const { window: activeWindow, setWindow } = useReportWindow();
-  const { data: fx, isLoading, isFetching, error, refresh, retry } = useReportData(activeWindow);
+  const { data: fx, isFetching, error, refresh, retry } = useReportData(activeWindow);
   const liveMode = isMercuryToolLive("reports");
 
   // Refresh state machine (per spec §4.2 + plan revision R6):
@@ -38,12 +38,15 @@ export function ReportsPage() {
   useEffect(() => {
     if (!isFetching) {
       setStillLoading(false);
-      setCacheAge(0);
+      // Only reset the cache age on a SUCCESSFUL settle. On an error settle the
+      // visible data is whatever last succeeded, so keep counting its true age —
+      // otherwise the stale banner would dishonestly claim "moments ago".
+      if (!error) setCacheAge(0);
       return;
     }
     const t = setTimeout(() => setStillLoading(true), 3000);
     return () => clearTimeout(t);
-  }, [isFetching]);
+  }, [isFetching, error]);
 
   useEffect(() => {
     if (cacheAge == null) return;
@@ -79,9 +82,12 @@ export function ReportsPage() {
 
       {showNoConnBanner && <NoConnectionBanner />}
 
-      {!fx && isLoading && <ReportsSkeleton />}
+      {/* Exhaustive over {fx, error}: when there is no data, either we are still
+          loading (incl. React Query's enabled:false pending state while the
+          session/org keys resolve) or the load errored. Never a blank body. */}
+      {!fx && !error && <ReportsSkeleton />}
 
-      {!fx && !isLoading && error && <ReportsUnavailable onRetry={() => void retry()} />}
+      {!fx && error && <ReportsUnavailable onRetry={() => void retry()} />}
 
       {fx && (
         <>
