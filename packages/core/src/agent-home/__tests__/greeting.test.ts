@@ -261,6 +261,43 @@ describe("projectGreeting", () => {
   });
 });
 
+describe("greeting — mira", () => {
+  const cfg: GreetingAgentConfig = {
+    agentKey: "mira",
+    busyThreshold: 3,
+    busyAgeHoursThreshold: 24,
+    countNoun: "drafts",
+  };
+  it("welcome variant copy", () => {
+    const seg = buildSegments(
+      "welcome",
+      { inboxCount: 0, oldestOpenItemAgeHours: null, hoursSinceLastOperatorAction: null },
+      cfg,
+      null,
+    );
+    expect(seg.map((s) => s.text).join("")).toContain("draft");
+  });
+  it("busy variant uses drafts noun", () => {
+    const seg = buildSegments(
+      "busy",
+      { inboxCount: 4, oldestOpenItemAgeHours: 2, hoursSinceLastOperatorAction: 1 },
+      cfg,
+      null,
+    );
+    expect(seg.map((s) => s.text).join("")).toContain("drafts");
+  });
+  it("named-lead points at the draft title", () => {
+    const seg = buildSegments(
+      "named-lead",
+      { inboxCount: 1, oldestOpenItemAgeHours: 5, hoursSinceLastOperatorAction: 1 },
+      cfg,
+      { name: "Spring promo", ageLabel: "2d" },
+    );
+    expect(seg.map((s) => s.text).join("")).toContain("Spring promo");
+    expect(seg.map((s) => s.text).join("")).toContain("review");
+  });
+});
+
 describe("InMemoryGreetingSignalStore", () => {
   it("returns default zero signal when not seeded", async () => {
     const store = new InMemoryGreetingSignalStore();

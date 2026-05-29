@@ -7,6 +7,7 @@ import { seedKnowledge } from "./seed-knowledge.js";
 import { seedDevData } from "./seed-dev-data.js";
 import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
 import { seedAlexSkillPack } from "../src/seed/seed-alex-skill-pack.js";
+import { seedMiraPilotOrgs } from "../src/seed/seed-mira-pilot-orgs.js";
 
 const prisma = new PrismaClient();
 
@@ -85,6 +86,11 @@ async function main() {
   // Slice A PR 2: seed day-one agent enablement for the dev org. Idempotent.
   await seedOrgDayOneAgents(prisma, "org_dev");
   console.warn("Seeded day-one agent enablement for org_dev");
+
+  // PR6: enable Mira for the local dev pilot org (opt-in only — no global flip).
+  // Mira is launchTier "day-thirty" and is NOT in seedOrgDayOneAgents.
+  await seedMiraPilotOrgs(prisma, ["org_dev"]);
+  console.warn("Seeded Mira pilot enablement for org_dev");
 
   // ── 4. Default identity spec ──
   const defaultSpec = await prisma.identitySpec.upsert({

@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildTestServer, type TestContext } from "../../../__tests__/test-server.js";
 import { pipelineRoute } from "../pipeline.js";
 import { createInMemoryRecommendationStore } from "@switchboard/core";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 describe("GET /api/dashboard/agents/:agentId/pipeline", () => {
   let ctx: TestContext;
@@ -183,13 +184,63 @@ describe("GET /api/dashboard/agents/:agentId/pipeline", () => {
     );
   });
 
-  it("returns 404 for mira", async () => {
+  it("returns 404 for mira when the org has NOT enabled it (no data leak)", async () => {
     const res = await ctx.app.inject({
       method: "GET",
       url: "/api/dashboard/agents/mira/pipeline",
       headers: { "x-org-id": "org-A" },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 200 with a creatives PipelineViewModel for mira when the org enabled it", async () => {
+    await ctx.app.orgAgentEnablementStore!.enable("org-A", "mira");
+    // Mira reads creative jobs via prisma; the harness defaults prisma to null.
+    (ctx.app as unknown as { prisma: unknown }).prisma = {
+      creativeJob: {
+        findMany: async () => [
+          {
+            id: "creative-1",
+            taskId: "t",
+            organizationId: "org-A",
+            deploymentId: "d",
+            productDescription: "Spring promo",
+            targetAudience: "a",
+            platforms: ["meta"],
+            brandVoice: null,
+            productImages: [],
+            references: [],
+            pastPerformance: null,
+            generateReferenceImages: false,
+            productionTier: null,
+            currentStage: "hooks",
+            stageOutputs: { trends: {} },
+            stoppedAt: null,
+            mode: "polished",
+            ugcPhase: null,
+            ugcPhaseOutputs: null,
+            ugcPhaseOutputsVersion: null,
+            ugcConfig: null,
+            ugcFailure: null,
+            createdAt: new Date("2026-05-26"),
+            updatedAt: new Date("2026-05-26"),
+          },
+        ],
+      },
+      organizationConfig: { findFirst: async () => null },
+    };
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/pipeline",
+      headers: { "x-org-id": "org-A" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      vm: { agentKey: string; pipelineKind: string; tiles: Array<{ id: string }> };
+    };
+    expect(body.vm.agentKey).toBe("mira");
+    expect(body.vm.pipelineKind).toBe("creatives");
+    expect(body.vm.tiles.map((t) => t.id)).toContain("creative-1");
   });
 
   it("returns 503 when Alex's contactStore is unavailable", async () => {
@@ -240,6 +291,7 @@ describe("GET /api/dashboard/agents/:agentId/pipeline — org timezone wiring", 
 
     const recommendationStore = createInMemoryRecommendationStore();
     app.decorate("recommendationStore", recommendationStore);
+    app.decorate("orgAgentEnablementStore", createInMemoryOrgAgentEnablementStore());
 
     await app.register(pipelineRoute, { prefix: "/api/dashboard" });
 

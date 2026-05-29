@@ -13,8 +13,8 @@ describe("agent route layout (post-split)", () => {
     expect(existsSync(join(AUTH_ROOT, "riley", "page.tsx"))).toBe(true);
   });
 
-  it("/mira intentionally absent (Mira not enabled; future PR adds her)", () => {
-    expect(existsSync(join(AUTH_ROOT, "mira"))).toBe(false);
+  it("/mira page directory exists (Mira enabled in M1)", () => {
+    expect(existsSync(join(AUTH_ROOT, "mira", "page.tsx"))).toBe(true);
   });
 
   it("[agentKey] dynamic segment removed", () => {

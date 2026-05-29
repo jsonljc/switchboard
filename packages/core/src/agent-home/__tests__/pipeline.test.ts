@@ -21,6 +21,7 @@ describe("projectPipeline", () => {
     const store: PipelineSignalStore = {
       listAlexPipeline: listAlex,
       listRileyPipeline: vi.fn(),
+      listMiraPipeline: vi.fn(),
     };
 
     const vm = await projectPipeline({
@@ -55,6 +56,7 @@ describe("projectPipeline", () => {
     const store: PipelineSignalStore = {
       listAlexPipeline: vi.fn(),
       listRileyPipeline: listRiley,
+      listMiraPipeline: vi.fn(),
     };
 
     const vm = await projectPipeline({
@@ -75,6 +77,7 @@ describe("projectPipeline", () => {
     const store: PipelineSignalStore = {
       listAlexPipeline: vi.fn().mockResolvedValue({ rows: [], totalCount: 0 }),
       listRileyPipeline: vi.fn(),
+      listMiraPipeline: vi.fn(),
     };
     await projectPipeline({ orgId: "org-A", agentKey: "alex", now: NOW, timezone: TZ, store });
     expect((store.listAlexPipeline as ReturnType<typeof vi.fn>).mock.calls[0]![0].limit).toBe(5);
@@ -85,6 +88,7 @@ describe("projectPipeline", () => {
     const store: PipelineSignalStore = {
       listAlexPipeline: listAlex,
       listRileyPipeline: vi.fn(),
+      listMiraPipeline: vi.fn(),
     };
     await projectPipeline({ orgId: "org-A", agentKey: "alex", now: NOW, timezone: TZ, store });
     const args = listAlex.mock.calls[0]![0] as { activitySince: Date };
@@ -96,6 +100,7 @@ describe("projectPipeline", () => {
     const store: PipelineSignalStore = {
       listAlexPipeline: vi.fn().mockResolvedValue({ rows: [], totalCount: 17 }),
       listRileyPipeline: vi.fn(),
+      listMiraPipeline: vi.fn(),
     };
     const vm = await projectPipeline({
       orgId: "org-A",

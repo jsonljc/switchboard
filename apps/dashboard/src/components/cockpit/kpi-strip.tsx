@@ -58,7 +58,11 @@ const openReportButton = (
 export function KPIStrip({ kpis, collapsed = false, accent }: KPIStripProps) {
   const legacy = toLegacyInput(kpis);
   const tiles = kpis.tiles ?? legacyTiles(legacy);
-  const roi = kpis.roi ?? legacyRoi(legacy);
+  // Distinguish "no roi field" (undefined → legacy fallback for Alex) from an
+  // explicit `null` ("no ROI concept — hide the bar," for Mira). `??` would
+  // conflate the two and force every roi-less agent into the legacy
+  // "Connect Meta Ads" degraded bar.
+  const roi = kpis.roi === undefined ? legacyRoi(legacy) : kpis.roi;
 
   if (collapsed) {
     const head = collapsedHeadline({ ...kpis, ...legacy });

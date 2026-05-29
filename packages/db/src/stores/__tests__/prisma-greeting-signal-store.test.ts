@@ -5,11 +5,152 @@
 // Tests signal projection from PendingActionRecord + AuditEntry.
 // ---------------------------------------------------------------------------
 
-import { describe, beforeEach, it, expect } from "vitest";
+import { describe, beforeEach, it, expect, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { PrismaGreetingSignalStore } from "../prisma-greeting-signal-store.js";
 
 const ORG_ID = `test-greeting-${Date.now()}`;
+
+// ──────────────────────────────────────────────────────────────────────────
+// Mira greeting signal (mocked Prisma — runs in CI without Postgres). Mira's
+// signal derives from the creative read-model seam, NOT PendingActionRecord.
+// ──────────────────────────────────────────────────────────────────────────
+
+const creativeJobBase = {
+  taskId: "t",
+  deploymentId: "d",
+  productDescription: "Spring promo",
+  targetAudience: "a",
+  platforms: ["meta"],
+  brandVoice: null,
+  productImages: [],
+  references: [],
+  pastPerformance: null,
+  generateReferenceImages: false,
+  productionTier: null,
+  stageOutputs: {},
+  stoppedAt: null,
+  mode: "polished",
+  ugcPhase: null,
+  ugcPhaseOutputs: null,
+  ugcPhaseOutputsVersion: null,
+  ugcConfig: null,
+  ugcFailure: null,
+};
+
+function mockPrisma(creativeJobs: unknown[], lastOperatorTimestamp: Date | null = null) {
+  return {
+    creativeJob: { findMany: vi.fn().mockResolvedValue(creativeJobs) },
+    auditEntry: {
+      findFirst: vi
+        .fn()
+        .mockResolvedValue(lastOperatorTimestamp ? { timestamp: lastOperatorTimestamp } : null),
+    },
+    // PendingActionRecord must never be touched on the Mira path.
+    pendingActionRecord: {
+      count: vi.fn(),
+      findFirst: vi.fn(),
+    },
+  } as unknown as PrismaClient;
+}
+
+describe("PrismaGreetingSignalStore — Mira (mocked Prisma)", () => {
+  it("getSignal: inboxCount === awaitingReview, derived from the read-model seam", async () => {
+    const prisma = mockPrisma([
+      // awaiting_review (mid-pipeline with outputs)
+      {
+        ...creativeJobBase,
+        id: "a",
+        organizationId: ORG_ID,
+        currentStage: "hooks",
+        stageOutputs: { trends: {} },
+        createdAt: new Date("2026-05-26T10:00:00Z"),
+        updatedAt: new Date("2026-05-26T10:00:00Z"),
+      },
+      // in_progress (fresh, no outputs) — not counted as awaiting_review
+      {
+        ...creativeJobBase,
+        id: "b",
+        organizationId: ORG_ID,
+        currentStage: "trends",
+        stageOutputs: {},
+        createdAt: new Date("2026-05-27T10:00:00Z"),
+        updatedAt: new Date("2026-05-27T10:00:00Z"),
+      },
+    ]);
+    const store = new PrismaGreetingSignalStore(prisma);
+
+    const signal = await store.getSignal(ORG_ID, "mira");
+
+    expect(signal.inboxCount).toBe(1);
+    expect(signal.oldestOpenItemAgeHours).not.toBeNull();
+    // Mira path must query creative jobs, not pending-action records.
+    expect(prisma.creativeJob.findMany as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: ORG_ID } }),
+    );
+    expect(prisma.pendingActionRecord.count as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+  });
+
+  it("getSignal: zero awaiting-review jobs → inboxCount 0, oldest age null", async () => {
+    const prisma = mockPrisma([
+      {
+        ...creativeJobBase,
+        id: "b",
+        organizationId: ORG_ID,
+        currentStage: "trends",
+        stageOutputs: {},
+        createdAt: new Date("2026-05-27T10:00:00Z"),
+        updatedAt: new Date("2026-05-27T10:00:00Z"),
+      },
+    ]);
+    const store = new PrismaGreetingSignalStore(prisma);
+
+    const signal = await store.getSignal(ORG_ID, "mira");
+
+    expect(signal.inboxCount).toBe(0);
+    expect(signal.oldestOpenItemAgeHours).toBeNull();
+  });
+
+  it("getTopItem: returns the oldest awaiting-review draft's title", async () => {
+    const prisma = mockPrisma([
+      {
+        ...creativeJobBase,
+        id: "newer",
+        organizationId: ORG_ID,
+        productDescription: "Newer draft",
+        currentStage: "hooks",
+        stageOutputs: { trends: {} },
+        createdAt: new Date("2026-05-27T10:00:00Z"),
+        updatedAt: new Date("2026-05-27T10:00:00Z"),
+      },
+      {
+        ...creativeJobBase,
+        id: "older",
+        organizationId: ORG_ID,
+        productDescription: "Older draft",
+        currentStage: "hooks",
+        stageOutputs: { trends: {} },
+        createdAt: new Date("2026-05-25T10:00:00Z"),
+        updatedAt: new Date("2026-05-25T10:00:00Z"),
+      },
+    ]);
+    const store = new PrismaGreetingSignalStore(prisma);
+
+    const topItem = await store.getTopItem(ORG_ID, "mira");
+
+    expect(topItem).not.toBeNull();
+    expect(topItem?.name).toBe("Older draft");
+  });
+
+  it("getTopItem: null when no awaiting-review drafts exist", async () => {
+    const prisma = mockPrisma([]);
+    const store = new PrismaGreetingSignalStore(prisma);
+
+    const topItem = await store.getTopItem(ORG_ID, "mira");
+
+    expect(topItem).toBeNull();
+  });
+});
 
 describe.skipIf(!process.env.DATABASE_URL)("PrismaGreetingSignalStore", () => {
   const prisma = new PrismaClient();

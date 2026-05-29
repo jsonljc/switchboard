@@ -112,7 +112,10 @@ export type RoiBar = RoiBarFull | RoiBarDegraded;
 export interface CockpitKpiData {
   range: string;
   tiles?: readonly KpiTile[];
-  roi?: RoiBar;
+  // `undefined` = fall back to the legacy ROI derivation (Alex). An explicit
+  // `null` = this agent has no return-on-spend concept, so suppress the bar
+  // entirely (Mira). Riley always passes a concrete RoiBar.
+  roi?: RoiBar | null;
   // legacy flat shape (Alex-side adapter)
   booked?: number | null;
   bookedDelta?: string | null;

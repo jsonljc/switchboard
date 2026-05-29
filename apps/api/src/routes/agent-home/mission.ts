@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { getAgentTargets } from "@switchboard/core";
 import { requireOrganizationScope } from "../../utils/require-org.js";
+import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
 
@@ -50,7 +51,7 @@ export type MissionSetupRow = {
 };
 
 export type MissionAggregatorResponse = {
-  agentKey: "alex" | "riley";
+  agentKey: "alex" | "riley" | "mira";
   displayName: string;
   mission: {
     role: string;
@@ -73,6 +74,10 @@ const RILEY_ROLE = "Ad optimizer · score, recommend, never act without your app
 const RILEY_PIPELINE = "Ad sets · all campaigns";
 const RILEY_COMPOSER_PLACEHOLDER = "Tell Riley what to do — coming soon";
 const CRM_PROVIDER_SERVICE_ID = "crm-data-provider";
+
+const MIRA_ROLE = "Creative · drafts ad concepts for your review";
+const MIRA_PIPELINE = "Creatives · all drafts";
+const MIRA_COMPOSER_PLACEHOLDER = "Tell Mira what to do — coming soon";
 
 function mapConnectionStatus(status: string): MissionChannelStatus {
   if (status === "connected") return "ok";
@@ -231,7 +236,49 @@ export function buildRileyMissionResponse(inputs: {
   };
 }
 
-const ALEX_RILEY_ONLY = ["alex", "riley"] as const;
+// Mira has no AgentRoster row in M1 (seedOrgDayOneAgents deliberately skips it),
+// so this builder takes only org + connections — no roster input.
+export function buildMiraMissionResponse(inputs: {
+  org: OrgInput;
+  connections: ConnectionInput[];
+}): MissionAggregatorResponse {
+  const { org, connections } = inputs;
+  const metaConnection = connections.find((c) => c.serviceId === "meta-ads");
+  const metaStatus: MissionChannelStatus = metaConnection
+    ? mapConnectionStatus(metaConnection.status)
+    : "off";
+  const brandName = org.name.trim().length > 0 ? org.name : "(unnamed organization)";
+  return {
+    agentKey: "mira",
+    displayName: "Mira",
+    mission: {
+      role: MIRA_ROLE,
+      pipeline: MIRA_PIPELINE,
+      brand: `${brandName} · —`,
+      channels: [{ kind: "meta-ads", label: "Meta Ads", status: metaStatus }],
+      rules: null,
+    },
+    composerPlaceholder: MIRA_COMPOSER_PLACEHOLDER,
+    commands: [],
+    targets: { avgValueCents: null, targetCpbCents: null, roasSource: "deterministic" },
+    setup: [{ key: "meta", done: !!metaConnection, primary: !metaConnection }],
+  };
+}
+
+// Mira mission, sourced from the DB (org name + connections only — no roster).
+async function buildMiraMissionFromDb(
+  prisma: import("@switchboard/db").PrismaClient,
+  orgId: string,
+): Promise<MissionAggregatorResponse> {
+  const [org, connections] = await Promise.all([
+    prisma.organizationConfig.findUnique({ where: { id: orgId } }),
+    prisma.connection.findMany({
+      where: { organizationId: orgId },
+      select: { serviceId: true, status: true },
+    }),
+  ]);
+  return buildMiraMissionResponse({ org: { id: orgId, name: org?.name ?? "" }, connections });
+}
 
 export const missionRoute: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request) => {
@@ -253,15 +300,23 @@ export const missionRoute: FastifyPluginAsync = async (app) => {
     if (!params.success) return reply.code(400).send({ error: "Invalid agentId" });
 
     const { agentId } = params.data;
-    if (!ALEX_RILEY_ONLY.includes(agentId as (typeof ALEX_RILEY_ONLY)[number])) {
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
+    if (!app.orgAgentEnablementStore) {
+      return reply.code(503).send({ error: "Enablement store unavailable" });
+    }
+    if (!(await isAgentHomeAccessible(agentId, orgId, app.orgAgentEnablementStore))) {
       return reply.code(404).send({ error: "Agent not available on home" });
     }
 
-    const orgId = requireOrganizationScope(request, reply);
-    if (!orgId) return;
-
     if (!app.prisma) {
       return reply.code(503).send({ error: "Prisma unavailable" });
+    }
+
+    // Mira branch: no AgentRoster row exists for Mira, so do NOT require one
+    // (the alex/riley path below 404s on a missing roster).
+    if (agentId === "mira") {
+      return reply.code(200).send(await buildMiraMissionFromDb(app.prisma, orgId));
     }
 
     try {

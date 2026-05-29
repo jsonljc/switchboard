@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildTestServer, type TestContext } from "../../../__tests__/test-server.js";
 import { winsRoute } from "../wins.js";
 import { createInMemoryRecommendationStore } from "@switchboard/core";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 describe("GET /api/dashboard/agents/:agentId/wins", () => {
   let ctx: TestContext;
@@ -53,13 +54,25 @@ describe("GET /api/dashboard/agents/:agentId/wins", () => {
     expect(body.vm.freshness.dataSource).toBe("live");
   });
 
-  it("returns 404 for mira", async () => {
+  it("returns 404 for mira when the org has NOT enabled it (no data leak)", async () => {
     const res = await ctx.app.inject({
       method: "GET",
       url: "/api/dashboard/agents/mira/wins",
       headers: { "x-org-id": "org-A" },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 200 with empty wins for mira when the org enabled it", async () => {
+    await ctx.app.orgAgentEnablementStore!.enable("org-A", "mira");
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/wins",
+      headers: { "x-org-id": "org-A" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { vm: { wins: unknown[] } };
+    expect(body.vm.wins).toEqual([]);
   });
 
   it("returns 400 for unknown agent key", async () => {
@@ -117,6 +130,7 @@ describe("GET /api/dashboard/agents/:agentId/wins — org timezone wiring", () =
 
     const recommendationStore = createInMemoryRecommendationStore();
     app.decorate("recommendationStore", recommendationStore);
+    app.decorate("orgAgentEnablementStore", createInMemoryOrgAgentEnablementStore());
 
     await app.register(winsRoute, { prefix: "/api/dashboard" });
 

@@ -30,9 +30,12 @@ describe("resolveAgentHomeLink", () => {
     expect(r.disabled).toBe(true);
   });
 
-  it("creative-job links resolve disabled (phase D)", () => {
+  it("creative-job links resolve to /mira/creatives/[id] (live as of Mira M1)", () => {
     const r = resolveAgentHomeLink({ kind: "creative-job", id: "cj-1" });
-    expect(r.disabled).toBe(true);
+    expect(r.disabled).toBe(false);
+    if (!r.disabled) {
+      expect(r.href).toBe("/mira/creatives/cj-1");
+    }
   });
 
   it("agent-setup links resolve disabled until route ships", () => {

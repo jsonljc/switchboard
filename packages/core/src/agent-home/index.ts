@@ -29,6 +29,7 @@ export {
 export { computeWindowStart, type WinTimeWindow } from "./window.js";
 export { formatTimeFolio } from "./time-folio.js";
 export { formatRelativeAge } from "./relative-age.js";
+export { buildMiraPipelineViewModel, type BuildMiraPipelineInput } from "./pipeline-mira.js";
 export {
   projectPipeline,
   PIPELINE_VISIBLE_LIMIT,
@@ -36,6 +37,7 @@ export {
   type ProjectPipelineInput,
   type AlexPipelineRow,
   type RileyPipelineRow,
+  type MiraPipelineRow,
   type PipelineStage,
   type PipelineTileViewModel,
   type PipelineViewModel,
@@ -45,6 +47,7 @@ export {
 
 // Metrics (PR-S5)
 export { projectMetrics, type ProjectMetricsInput } from "./metrics.js";
+export { buildMiraMetricsViewModel, type BuildMiraMetricsInput } from "./metrics-mira.js";
 export type {
   MetricsSignalStore,
   MetricsViewModel,

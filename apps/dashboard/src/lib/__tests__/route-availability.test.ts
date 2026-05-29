@@ -69,7 +69,14 @@ describe("isAgentHomeLinkLive", () => {
     expect(isAgentHomeLinkLive("contact")).toBe(false);
   });
 
-  it.each(["ad-set", "creative-job", "agent-setup", "all-wins"] as const)(
+  it("creative-job is live as of Mira M1 (returns true regardless of env)", () => {
+    vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "");
+    expect(isAgentHomeLinkLive("creative-job")).toBe(true);
+    vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "true");
+    expect(isAgentHomeLinkLive("creative-job")).toBe(true);
+  });
+
+  it.each(["ad-set", "agent-setup", "all-wins"] as const)(
     "%s is not yet live (returns false regardless of env)",
     (kind) => {
       vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "true");

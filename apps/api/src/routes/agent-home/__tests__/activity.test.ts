@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { cockpitActivityRoutes } from "../activity.js";
 import type { CockpitActivityDeps } from "../../../lib/cockpit-activity-deps.js";
 import type { ActivityPreviewReader, AuditEntryForTranslator } from "@switchboard/core";
+import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 function makePreviewReader(): ActivityPreviewReader {
   return {
@@ -24,11 +25,14 @@ function makeDeps(opts: {
   };
 }
 
-async function buildApp(deps: CockpitActivityDeps) {
+async function buildApp(deps: CockpitActivityDeps, enableMiraFor?: string) {
   const app = Fastify({ logger: false });
   app.decorate("authDisabled", true);
   app.decorate("organizationIdFromAuth", undefined as string | undefined);
   app.decorate("principalIdFromAuth", undefined as string | undefined);
+  const enablementStore = createInMemoryOrgAgentEnablementStore();
+  if (enableMiraFor) await enablementStore.enable(enableMiraFor, "mira");
+  app.decorate("orgAgentEnablementStore", enablementStore);
   app.addHook("onRequest", async (req) => {
     (req as unknown as { organizationIdFromAuth?: string }).organizationIdFromAuth = undefined;
     (req as unknown as { principalIdFromAuth?: string }).principalIdFromAuth = undefined;
@@ -79,7 +83,7 @@ describe("cockpit /activity route", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("returns 404 for valid AgentKey outside agent-home (e.g., mira)", async () => {
+  it("returns 404 for mira when the org has NOT enabled it (no data leak)", async () => {
     const deps = makeDeps({ entries: [] });
     const app = await buildApp(deps);
     const res = await app.inject({
@@ -88,6 +92,18 @@ describe("cockpit /activity route", () => {
       headers: { "x-org-id": "org-1" },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 200 with empty rows for mira when the org enabled it (no audit actor in M1)", async () => {
+    const deps = makeDeps({ entries: [] });
+    const app = await buildApp(deps, "org-1");
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/activity",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ rows: [] });
   });
 
   it("skips preview fetch when expandPreview=false", async () => {
