@@ -68,16 +68,19 @@ export const creativesRoute: FastifyPluginAsync = async (app) => {
 
     const timezone = await getOrgTimezone(prisma, orgId);
     const reader = new PrismaMiraCreativeReadModelReader(prisma);
-    const rm = await reader.read(orgId, { now: new Date(), timezone, visibleLimit: FEED_WINDOW });
-
-    const reviewable = rm.jobs.filter(isReviewable);
-    const renderingCount = rm.jobs.filter(isRendering).length;
-    const jobs = reviewable.slice(0, q.data.limit);
-
-    return reply.code(200).send({
-      jobs,
-      counts: rm.counts,
-      feed: { reviewableCount: reviewable.length, renderingCount },
-    });
+    try {
+      const rm = await reader.read(orgId, { now: new Date(), timezone, visibleLimit: FEED_WINDOW });
+      const reviewable = rm.jobs.filter(isReviewable);
+      const renderingCount = rm.jobs.filter(isRendering).length;
+      const jobs = reviewable.slice(0, q.data.limit);
+      return reply.code(200).send({
+        jobs,
+        counts: rm.counts,
+        feed: { reviewableCount: reviewable.length, renderingCount },
+      });
+    } catch (err) {
+      app.log.error({ err, requestId: request.id }, "creative feed read failed");
+      return reply.code(500).send({ error: "Creative feed read failed", requestId: request.id });
+    }
   });
 };

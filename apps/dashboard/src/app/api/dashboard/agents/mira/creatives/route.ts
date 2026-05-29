@@ -14,8 +14,9 @@ export async function GET(request: Request) {
   try {
     await requireDashboardSession();
     const client = await getApiClient();
-    const limit = Number(new URL(request.url).searchParams.get("limit") ?? 20);
-    const data = await client.listMiraCreatives(Number.isFinite(limit) ? limit : 20);
+    const raw = Number(new URL(request.url).searchParams.get("limit") ?? 20);
+    const limit = Number.isFinite(raw) ? Math.min(50, Math.max(1, raw)) : 20;
+    const data = await client.listMiraCreatives(limit);
     return NextResponse.json(data);
   } catch (err: unknown) {
     return errorResponse(err);
