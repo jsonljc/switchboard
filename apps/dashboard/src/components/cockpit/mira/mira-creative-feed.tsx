@@ -1,16 +1,27 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMiraFeed } from "@/hooks/use-mira-feed";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { MiraClipCard } from "./mira-clip-card";
 
 export function MiraCreativeFeed() {
   const { data, isLoading, isError } = useMiraFeed();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [resolved, setResolved] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
 
-  const jobs = data?.jobs ?? [];
+  const jobs = (data?.jobs ?? []).filter((j) => !resolved.has(j.id));
   const safeActive = jobs.length > 0 ? Math.min(activeIndex, jobs.length - 1) : 0;
+
+  function handleResolve(jobId: string) {
+    setResolved((prev) => new Set(prev).add(jobId));
+    setActiveIndex((i) => Math.min(i, Math.max(0, jobs.length - 2)));
+    if (keys) void queryClient.invalidateQueries({ queryKey: keys.miraFeed.list() });
+  }
 
   // Update the active (in-view) clip on scroll. IntersectionObserver is the
   // browser path; the first clip is active on mount so autoplay starts without
@@ -59,7 +70,7 @@ export function MiraCreativeFeed() {
     >
       {jobs.map((job, i) => (
         <div key={job.id} data-clip-index={i} style={{ height: "100%", scrollSnapAlign: "start" }}>
-          <MiraClipCard job={job} isActive={i === safeActive} />
+          <MiraClipCard job={job} isActive={i === safeActive} onResolve={handleResolve} />
         </div>
       ))}
     </div>

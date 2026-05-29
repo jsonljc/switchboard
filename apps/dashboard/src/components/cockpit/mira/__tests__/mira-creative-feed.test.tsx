@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
@@ -34,8 +35,30 @@ global.IntersectionObserver = FakeIO;
 const feed = vi.fn();
 vi.mock("@/hooks/use-mira-feed", () => ({ useMiraFeed: () => feed() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/components/layout/halt/halt-context", () => ({
+  useHalt: () => ({ halted: false, toggleHalt: vi.fn() }),
+}));
+vi.mock("@/hooks/use-creative-pipeline", () => ({
+  useApproveStage: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  useCostEstimate: () => ({ data: null }),
+}));
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null, status: "loading" }) }));
+vi.mock("@/hooks/use-query-keys", () => ({ useScopedQueryKeys: () => null }));
 
 import { MiraCreativeFeed } from "../mira-creative-feed";
+
+function makeQc() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+function renderFeed() {
+  const qc = makeQc();
+  return render(
+    <QueryClientProvider client={qc}>
+      <MiraCreativeFeed />
+    </QueryClientProvider>,
+  );
+}
 
 function clip(id: string): MiraCreativeJobSummary {
   return {
@@ -62,7 +85,7 @@ describe("MiraCreativeFeed", () => {
       isLoading: false,
       isError: false,
     });
-    render(<MiraCreativeFeed />);
+    renderFeed();
     expect(screen.getAllByTestId("mira-clip")).toHaveLength(2);
   });
 
@@ -72,20 +95,20 @@ describe("MiraCreativeFeed", () => {
       isLoading: false,
       isError: false,
     });
-    render(<MiraCreativeFeed />);
+    renderFeed();
     expect(screen.getByText(/No drafts to review yet/i)).toBeInTheDocument();
   });
 
   it("loading → skeleton, not empty copy", () => {
     feed.mockReturnValue({ data: undefined, isLoading: true, isError: false });
-    render(<MiraCreativeFeed />);
+    renderFeed();
     expect(screen.queryByText(/No drafts to review yet/i)).toBeNull();
     expect(screen.getByTestId("mira-feed-skeleton")).toBeInTheDocument();
   });
 
   it("error → retry card", () => {
     feed.mockReturnValue({ data: undefined, isLoading: false, isError: true });
-    render(<MiraCreativeFeed />);
+    renderFeed();
     expect(screen.getByText(/Couldn't load/i)).toBeInTheDocument();
   });
 
@@ -102,7 +125,7 @@ describe("MiraCreativeFeed", () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play");
     const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause");
 
-    render(<MiraCreativeFeed />);
+    renderFeed();
 
     // card0 (isActive=true) → play; card1 (isActive=false) → pause
     expect(playSpy).toHaveBeenCalledTimes(1);
@@ -125,7 +148,7 @@ describe("MiraCreativeFeed", () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play");
     const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause");
 
-    const { container } = render(<MiraCreativeFeed />);
+    const { container } = renderFeed();
 
     const playCountAfterMount = playSpy.mock.calls.length;
     const pauseCountAfterMount = pauseSpy.mock.calls.length;

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
+import { MiraClipActions } from "./mira-clip-actions";
 
 function statusLabel(status: MiraCreativeJobSummary["status"]): string {
   switch (status) {
@@ -17,16 +18,17 @@ function statusLabel(status: MiraCreativeJobSummary["status"]): string {
 
 /**
  * One full-bleed clip page. `isActive` drives autoplay (only the in-view clip
- * plays). `footer` is the action rail slot (wired in PR3B).
+ * plays). `onResolve` is called after Continue/Stop succeeds so the feed can
+ * dismiss the clip and advance.
  */
 export function MiraClipCard({
   job,
   isActive,
-  footer,
+  onResolve,
 }: {
   job: MiraCreativeJobSummary;
   isActive: boolean;
-  footer?: ReactNode;
+  onResolve: (jobId: string) => void;
 }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -112,8 +114,10 @@ export function MiraClipCard({
         <span style={{ opacity: 0.8 }}> · {job.source.mode === "ugc" ? "UGC" : "Polished"} ↗</span>
       </button>
 
-      {/* action rail slot (PR3B) */}
-      <div style={{ position: "absolute", right: 14, bottom: 24 }}>{footer}</div>
+      {/* action rail */}
+      <div style={{ position: "absolute", right: 14, bottom: 24 }}>
+        <MiraClipActions jobId={job.id} reviewAction={job.reviewAction} onResolve={onResolve} />
+      </div>
     </section>
   );
 }

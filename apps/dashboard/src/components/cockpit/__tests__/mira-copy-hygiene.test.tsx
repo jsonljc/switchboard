@@ -17,6 +17,11 @@ const SOURCES = [
   resolve(DASHBOARD_ROOT, "src/components/cockpit/mira-cockpit-page.tsx"),
   resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/mira-config.ts"),
   resolve(DASHBOARD_ROOT, "src/app/(auth)/mira/creatives/[id]/creative-detail-page.tsx"),
+  // Live feed surfaces (PR3A/3B) — guard against forbidden CTAs on the active UI
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-feed-page.tsx"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-card.tsx"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-creative-feed.tsx"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-actions.tsx"),
 ];
 
 const FORBIDDEN: Array<{ label: string; re: RegExp }> = [
