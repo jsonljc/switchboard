@@ -169,6 +169,7 @@ export async function bootstrapContainedWorkflows(
     workflowId: string;
     budgetClass: "cheap" | "standard" | "expensive";
     approvalPolicy: "none" | "threshold" | "always";
+    approvalMode?: "system_auto_approved";
     allowedTriggers: Array<"api" | "chat" | "schedule" | "internal">;
   }> = [
     {
@@ -193,12 +194,21 @@ export async function bootstrapContainedWorkflows(
       allowedTriggers: ["api"],
     },
     {
-      // Alex→Mira draft-only handoff. No spend (handler never fires the pipeline),
-      // so cheap/no-approval; "internal" only — reachable via delegation, not the API.
+      // Alex→Mira draft-only handoff. No spend (the handler never fires the
+      // creative pipeline), reversible (just a CreativeJob draft row), and
+      // internal-trigger-only (not reachable from the public API).
+      // approvalMode:"system_auto_approved" short-circuits the policy/approval
+      // step BEFORE identity resolution: an agent-actor child has no seeded
+      // IdentitySpec, so without this the child would hard-deny with
+      // GOVERNANCE_ERROR — and there is nothing for the compliance floor to catch
+      // on a no-outbound draft. It STILL flows through ingress (entitlement,
+      // idempotency, WorkTrace, audit, dispatch). Spend-bearing targets must NOT
+      // copy this — they keep approvalPolicy:"threshold" and park for approval.
       intent: "creative.concept.draft",
       workflowId: "creative.concept.draft",
       budgetClass: "cheap",
       approvalPolicy: "none",
+      approvalMode: "system_auto_approved",
       allowedTriggers: ["internal"],
     },
     {
@@ -241,6 +251,7 @@ export async function bootstrapContainedWorkflows(
       mutationClass: "write",
       budgetClass: reg.budgetClass,
       approvalPolicy: reg.approvalPolicy,
+      approvalMode: reg.approvalMode,
       idempotent: false,
       allowedTriggers: reg.allowedTriggers,
       timeoutMs: 300_000,
