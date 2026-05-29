@@ -8,6 +8,7 @@ import { seedDevData } from "./seed-dev-data.js";
 import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
 import { seedAlexSkillPack } from "../src/seed/seed-alex-skill-pack.js";
 import { seedMiraPilotOrgs } from "../src/seed/seed-mira-pilot-orgs.js";
+import { seedMiraDemoCreatives } from "../src/seed/seed-mira-demo-creatives.js";
 
 const prisma = new PrismaClient();
 
@@ -615,6 +616,12 @@ async function main() {
   // ── Dev-only domain data ──
   // Skipped in production. Idempotent — keyed on `dev_*` IDs.
   await seedDevData(prisma);
+
+  // ── Mira demo creative drafts (dev-only) ──
+  // Requires a deployment to exist for org_dev (created by seedDemoData above)
+  // and Mira enablement (created by seedMiraPilotOrgs above). Idempotent.
+  await seedMiraDemoCreatives(prisma, "org_dev");
+  console.warn("Seeded Mira demo creatives for org_dev");
 }
 
 main()
