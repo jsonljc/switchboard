@@ -3,8 +3,8 @@
 import { useAgentMission } from "./use-agent-mission";
 
 /**
- * Mira is opt-in per org. Its agent-home endpoints 404 unless enabled, so the
- * mission probe is the dashboard's source of truth for enablement.
+ * Mira is opt-in per org. Its agent-home endpoint returns non-2xx unless
+ * enabled, so the mission probe is the dashboard's source of truth for enablement.
  *   enabled === undefined → still loading (don't flash "not set up")
  */
 export function useMiraEnabled(): { enabled: boolean | undefined; isLoading: boolean } {

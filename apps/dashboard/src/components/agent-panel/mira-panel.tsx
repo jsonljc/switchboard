@@ -23,7 +23,7 @@ export function MiraPanel() {
         <p className={styles.notsetSub}>
           Review her latest creative drafts and decide what moves forward.
         </p>
-        <button type="button" onClick={() => router.push("/mira")}>
+        <button type="button" className={styles.miraOpenCta} onClick={() => router.push("/mira")}>
           Open Mira&apos;s workspace →
         </button>
       </div>

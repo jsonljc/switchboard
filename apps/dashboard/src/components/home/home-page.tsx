@@ -91,7 +91,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   const topAgentKey = topDecision?.agentKey;
   const topAgentName = topAgentKey ? AGENT_REGISTRY[topAgentKey]?.displayName : undefined;
 
-  // ── Open leads / oldest wait (alex + riley greetings; mira 404s) ───────────
+  // ── Open leads / oldest wait (alex + riley greetings; mira non-2xx ⇒ skipped) ──
   const greetingSignals = [alexGreeting.data?.signal, rileyGreeting.data?.signal].filter(
     (s): s is NonNullable<typeof s> => Boolean(s),
   );
@@ -107,7 +107,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   // from mission core-completion (e.g. inbox / Meta connected), so an org that
   // hasn't connected an agent's core channel sees it honestly "Not set up" —
   // not the old static launchTier flag. Mira uses useMiraEnabled (probe the
-  // gated mission endpoint: 200 → enabled, 404 → not). When a mission hook is
+  // gated mission endpoint: 2xx ⇒ enabled, non-2xx ⇒ not enabled). When a mission hook is
   // loading or errored, fall back to launchTier rather than flipping to a
   // transient "Not set up".
   // Working status needs positive evidence we can attribute to a canonical
