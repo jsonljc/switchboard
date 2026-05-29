@@ -28,6 +28,39 @@ export interface ContainedWorkflowBootstrapResult {
   instantFormAdapter: InstantFormAdapter;
 }
 
+/**
+ * Builds the governed child-work submitter: resolves the child's deployment by
+ * intent and submits through PlatformIngress with trigger:"internal". Shared by
+ * the contained-workflow services AND the SkillMode delegate tool so both use the
+ * one front door (no parallel mutation paths).
+ */
+export function createSubmitChildWork(deps: {
+  platformIngress: PlatformIngress;
+  deploymentResolver: DeploymentResolver | null;
+}): (request: ChildWorkRequest) => Promise<SubmitWorkResponse> {
+  return async (request: ChildWorkRequest): Promise<SubmitWorkResponse> => {
+    const deployment = await resolveDeploymentForIntent(
+      deps.deploymentResolver,
+      request.organizationId,
+      request.intent,
+    );
+    return deps.platformIngress.submit({
+      organizationId: request.organizationId,
+      actor: request.actor,
+      intent: request.intent,
+      parameters: request.parameters,
+      targetHint: deployment
+        ? { deploymentId: deployment.deploymentId, skillSlug: deployment.skillSlug }
+        : undefined,
+      trigger: "internal",
+      surface: { surface: "api" },
+      parentWorkUnitId: request.parentWorkUnitId,
+      idempotencyKey: request.idempotencyKey,
+      priority: request.priority as "low" | "normal" | "high" | undefined,
+    });
+  };
+}
+
 export async function bootstrapContainedWorkflows(
   deps: ContainedWorkflowBootstrapDeps,
 ): Promise<ContainedWorkflowBootstrapResult> {
@@ -98,27 +131,7 @@ export async function bootstrapContainedWorkflows(
     now: () => new Date(),
   });
 
-  const submitChildWork = async (request: ChildWorkRequest): Promise<SubmitWorkResponse> => {
-    const deployment = await resolveDeploymentForIntent(
-      deploymentResolver,
-      request.organizationId,
-      request.intent,
-    );
-    return platformIngress.submit({
-      organizationId: request.organizationId,
-      actor: request.actor,
-      intent: request.intent,
-      parameters: request.parameters,
-      targetHint: deployment
-        ? { deploymentId: deployment.deploymentId, skillSlug: deployment.skillSlug }
-        : undefined,
-      trigger: "internal",
-      surface: { surface: "api" },
-      parentWorkUnitId: request.parentWorkUnitId,
-      idempotencyKey: request.idempotencyKey,
-      priority: request.priority as "low" | "normal" | "high" | undefined,
-    });
-  };
+  const submitChildWork = createSubmitChildWork({ platformIngress, deploymentResolver });
 
   const services = { submitChildWork };
 

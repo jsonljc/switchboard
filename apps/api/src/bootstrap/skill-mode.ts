@@ -46,6 +46,12 @@ interface SkillModeBootstrapDeps {
    */
   contextBuilder?: import("@switchboard/core").ContextBuilder;
   /**
+   * Optional agent→agent delegation. When provided, Alex gets a `delegate` tool
+   * that submits governed child work via this port (PlatformIngress front door).
+   * Omitted in tests/local → no delegate tool is registered.
+   */
+  childWorkSubmitter?: import("@switchboard/core/skill-runtime").ChildWorkSubmitter;
+  /**
    * Optional WorkTraceStore. When provided, PrismaOpportunityStore uses it to
    * emit WorkTrace entries on stage transitions. When absent, stage transitions
    * are persisted but not traced.
@@ -72,6 +78,7 @@ export async function bootstrapSkillMode(
     createCrmWriteToolFactory,
     createCalendarBookToolFactory,
     createEscalateToolFactory,
+    createDelegateToolFactory,
     BookingFailureHandler,
     createAgentDeploymentGovernanceResolver,
     InMemoryGovernancePostureCache,
@@ -253,6 +260,19 @@ export async function bootstrapSkillMode(
     notifier: handoffNotifier,
   });
 
+  // Agent→agent delegation (Alex→Mira creative concept). Only wired when the
+  // caller supplies a childWorkSubmitter (the PlatformIngress front door). The
+  // delegate tool exposes one operation per allowlisted target; the child carries
+  // the real governance weight at PlatformIngress.
+  const { DELEGATION_TARGETS } = await import("./delegation-targets.js");
+  const delegateFactory = deps.childWorkSubmitter
+    ? createDelegateToolFactory({
+        submitter: deps.childWorkSubmitter,
+        targets: DELEGATION_TARGETS,
+        maxDepth: 1,
+      })
+    : undefined;
+
   const calendarBookFactory = createCalendarBookToolFactory({
     calendarProviderFactory,
     isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
@@ -296,6 +316,7 @@ export async function bootstrapSkillMode(
     ["crm-write", crmWriteFactory],
     ["escalate", escalateFactory],
   ]);
+  if (delegateFactory) toolFactories.set("delegate", delegateFactory);
 
   // Schema-only tool map for Anthropic tool registration & GovernanceHook.
   // Trust-bound tools are materialized with a synthetic context here to
@@ -311,6 +332,7 @@ export async function bootstrapSkillMode(
     ["calendar-book", calendarBookFactory(SCHEMA_ONLY_CTX)],
     ["escalate", escalateFactory(SCHEMA_ONLY_CTX)],
   ]);
+  if (delegateFactory) toolsMap.set("delegate", delegateFactory(SCHEMA_ONLY_CTX));
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });

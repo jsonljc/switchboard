@@ -468,6 +468,40 @@ export async function buildServer() {
   let simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null = null;
   let skillModeConsentService: import("@switchboard/core").ConsentService | null = null;
   let skillModeContactConsentReader: import("@switchboard/core").ContactConsentReader | null = null;
+
+  // Agent→agent delegation submitter. PlatformIngress is constructed further below,
+  // so this is late-bound: the delegate tool only calls submitChildWork at runtime
+  // (during an Alex conversation), by which point submitChildWorkRef is assigned.
+  // Adapts the platform SubmitWorkResponse to the core ChildWorkSubmitter port.
+  let submitChildWorkRef:
+    | ((
+        req: import("@switchboard/core/platform").ChildWorkRequest,
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | undefined;
+  const childWorkSubmitter: import("@switchboard/core/skill-runtime").ChildWorkSubmitter = {
+    async submitChildWork(req) {
+      if (!submitChildWorkRef) return { ok: false, error: "platform_not_ready" };
+      const resp = await submitChildWorkRef({
+        intent: req.intent,
+        organizationId: req.organizationId,
+        actor: req.actor,
+        parameters: req.parameters,
+        parentWorkUnitId: req.parentWorkUnitId,
+        idempotencyKey: req.idempotencyKey,
+      });
+      if (!resp.ok) {
+        const err = resp.error as { code?: string; message?: string };
+        return { ok: false, error: err.code ?? err.message ?? "submit_failed" };
+      }
+      const approvalRequired = "approvalRequired" in resp && resp.approvalRequired === true;
+      return {
+        ok: true,
+        outcome: approvalRequired ? "pending_approval" : resp.result.outcome,
+        childWorkUnitId: resp.workUnit.id,
+      };
+    },
+  };
+
   try {
     if (!prismaClient) {
       throw new Error("SkillMode requires DATABASE_URL — prismaClient is null");
@@ -479,6 +513,7 @@ export async function buildServer() {
       modeRegistry,
       logger: app.log,
       contextBuilder,
+      childWorkSubmitter,
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;
@@ -643,6 +678,14 @@ export async function buildServer() {
     operatorAlerter,
   });
   app.decorate("platformIngress", platformIngress);
+
+  // Late-bind the delegation submitter now that PlatformIngress exists (see the
+  // childWorkSubmitter declaration above). Reuses createSubmitChildWork so agent
+  // delegation flows through the same governed front door as contained workflows.
+  {
+    const { createSubmitChildWork } = await import("./bootstrap/contained-workflows.js");
+    submitChildWorkRef = createSubmitChildWork({ platformIngress, deploymentResolver });
+  }
 
   // --- Contained workflow mode (creative pipeline, Meta lead intake) ---
   let instantFormAdapter: import("@switchboard/ad-optimizer").InstantFormAdapter | undefined;
