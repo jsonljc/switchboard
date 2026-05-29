@@ -364,6 +364,16 @@ describe("AgentPanel state matrix", () => {
     expect(screen.getByTestId("freshness-foot")).toHaveTextContent(/^as of /);
   });
 
+  // ── Identity is rendered ONCE ────────────────────────────────────────────────
+  // The SheetHeader owns the agent identity (avatar + name + role). The
+  // IdentityStatus slot must NOT repeat it, or the panel shows a stacked
+  // duplicate "Alex · Lead response" header. InboxAgentAvatar is mocked to
+  // data-testid="agent-avatar", so exactly one avatar means no duplication.
+  it("renders the agent identity exactly once (header owns it; slot does not duplicate)", () => {
+    renderAlexPanel();
+    expect(document.querySelectorAll('[data-testid="agent-avatar"]')).toHaveLength(1);
+  });
+
   // ── Row 3: Metrics window=all 400 → falls back to week ───────────────────────
   // Hero appears under "this week" label; NOT "since you hired"; NOT an error.
   it("3. Metrics window=all 400 → week hero under 'this week', not 'since you hired', not error", () => {
