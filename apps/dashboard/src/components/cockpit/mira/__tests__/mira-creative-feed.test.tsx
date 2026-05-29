@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
 
@@ -39,7 +39,11 @@ vi.mock("@/components/layout/halt/halt-context", () => ({
   useHalt: () => ({ halted: false, toggleHalt: vi.fn() }),
 }));
 vi.mock("@/hooks/use-creative-pipeline", () => ({
-  useApproveStage: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  useApproveStage: () => ({
+    mutate: vi.fn((_args: unknown, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.()),
+    isPending: false,
+    isError: false,
+  }),
   useCostEstimate: () => ({ data: null }),
 }));
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null, status: "loading" }) }));
@@ -174,5 +178,39 @@ describe("MiraCreativeFeed", () => {
 
     playSpy.mockRestore();
     pauseSpy.mockRestore();
+  });
+
+  it("resolving a clip dismisses it from the feed", async () => {
+    feed.mockReturnValue({
+      data: {
+        jobs: [clip("a"), clip("b")],
+        counts: {},
+        feed: { reviewableCount: 2, renderingCount: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderFeed();
+
+    // Two clips on mount
+    expect(screen.getAllByTestId("mira-clip")).toHaveLength(2);
+
+    // Drive the first clip's rail: Continue → Confirm continue
+    // The mock for useApproveStage calls opts.onSuccess() immediately,
+    // which propagates onResolve("a") → handleResolve in the feed.
+    const continueButtons = screen.getAllByRole("button", { name: /continue draft/i });
+    await act(async () => {
+      fireEvent.click(continueButtons[0]);
+    });
+    const confirmButtons = screen.getAllByRole("button", { name: /confirm continue/i });
+    await act(async () => {
+      fireEvent.click(confirmButtons[0]);
+    });
+
+    // First clip (id="a", title="Clip a") should be gone; only one clip remains
+    expect(screen.getAllByTestId("mira-clip")).toHaveLength(1);
+    expect(screen.queryByText("Clip a")).toBeNull();
+    expect(screen.getByText("Clip b")).toBeInTheDocument();
   });
 });
