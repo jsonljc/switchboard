@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { buildCreativeConceptDraftWorkflow } from "../creative-concept-draft-workflow.js";
 
 const brief = { productDescription: "Botox for first-timers", targetAudience: "women 30-45" };
@@ -25,7 +27,9 @@ const workUnit = () => ({
 const deps = (over: Record<string, unknown> = {}) => ({
   taskStore: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
   jobStore: { create: vi.fn().mockResolvedValue({ id: "job-1" }) },
-  deploymentStore: { findById: vi.fn().mockResolvedValue({ listingId: "listing-1" }) },
+  deploymentStore: {
+    findById: vi.fn().mockResolvedValue({ listingId: "listing-1", organizationId: "org-1" }),
+  },
   enablementStore: { list: vi.fn().mockResolvedValue([{ agentKey: "mira", status: "enabled" }]) },
   ...over,
 });
@@ -78,5 +82,31 @@ describe("creative.concept.draft workflow", () => {
     expect(res.outcome).toBe("failed");
     expect(res.error?.code).toBe("DEPLOYMENT_NOT_FOUND");
     expect(d.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the resolved deployment belongs to another org", async () => {
+    const d = deps({
+      deploymentStore: {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ listingId: "listing-x", organizationId: "org-OTHER" }),
+      },
+    });
+    const res = await buildCreativeConceptDraftWorkflow(d).execute(workUnit(), services);
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("DEPLOYMENT_NOT_FOUND");
+    expect(d.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it("never imports the creative pipeline or inngest (structural no-spend guarantee)", () => {
+    const src = readFileSync(
+      fileURLToPath(new URL("../creative-concept-draft-workflow.ts", import.meta.url)),
+      "utf8",
+    );
+    // Strip comments first — the docstring intentionally *mentions* these names to
+    // explain the guarantee; what matters is that the CODE references neither.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(code).not.toMatch(/creative-pipeline/);
+    expect(code).not.toMatch(/inngest/i);
   });
 });

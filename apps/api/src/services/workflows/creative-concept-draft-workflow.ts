@@ -26,7 +26,9 @@ export interface CreativeConceptDraftDeps {
       generateReferenceImages: boolean;
     }): Promise<{ id: string }>;
   };
-  deploymentStore: { findById(id: string): Promise<{ listingId: string } | null> };
+  deploymentStore: {
+    findById(id: string): Promise<{ listingId: string; organizationId: string } | null>;
+  };
   enablementStore: { list(orgId: string): Promise<Array<{ agentKey: string; status: string }>> };
 }
 
@@ -89,6 +91,15 @@ export function buildCreativeConceptDraftWorkflow(deps: CreativeConceptDraftDeps
             code: "DEPLOYMENT_NOT_FOUND",
             message: `No AgentDeployment for id=${deploymentId}; a creative deployment (skillSlug="creative", status="active") must exist.`,
           },
+        };
+      }
+      // Defense-in-depth: deploymentId was resolved org-scoped upstream, but never
+      // trust a cross-tenant read. Conflate mismatch with not-found (don't leak existence).
+      if (deployment.organizationId !== orgId) {
+        return {
+          outcome: "failed",
+          summary: "Resolved deployment does not belong to this organization",
+          error: { code: "DEPLOYMENT_NOT_FOUND", message: "Deployment org mismatch." },
         };
       }
 
