@@ -61,7 +61,7 @@ Shape (the API derives the Graph `components` array from this):
   name: string,        // ^[a-z0-9_]{1,512}$  (lowercase, digits, underscore)
   language: string,    // /^[a-zA-Z_-]+$/, 2..16  (reuse send-test's rule)
   category: "MARKETING" | "UTILITY" | "AUTHENTICATION",
-  header?: { text: string },                 // TEXT-only; 1..60; <=1 variable
+  header?: { text: string },                 // TEXT-only; 1..60; NO variables
   body: { text: string, examples?: string[] }, // required; 1..1024
   footer?: { text: string },                 // 1..60; NO variables
   buttons?: Array<
@@ -75,7 +75,7 @@ Shape (the API derives the Graph `components` array from this):
 Validation rules enforced by the schema (Meta-derived):
 
 - `name`: lowercase alphanumeric + underscore only.
-- `header.text`: ≤60 chars, at most one `{{1}}` variable.
+- `header.text`: ≤60 chars, **no** variables (no header-sample input is collected, and Meta rejects an unsampled header variable).
 - `body.text`: required, ≤1024 chars. Variables must be sequential
   (`{{1}}`, `{{2}}`, …). **Every body variable requires a matching `examples`
   entry** — Meta rejects unsampled variables. The schema cross-checks
@@ -105,7 +105,7 @@ Handler flow (same skeleton as `POST /send-test`):
    unset.
 5. Map the request to Meta's `components` array (BODY always present; HEADER/
    FOOTER/BUTTONS appended when provided; body `examples` →
-   `example.body_text: [[...]]`; header variable → `example.header_text`).
+   `example.body_text: [[...]]`).
 6. `graphPost(`${GRAPH_BASE}/${wabaId}/message_templates`, body, token, fetch)`.
 7. On success, return `{ id, status, category }` from Graph (status is normally
    `PENDING`). On failure, return the standard
@@ -113,12 +113,12 @@ Handler flow (same skeleton as `POST /send-test`):
 
 **Error-mapping addition:** Meta returns code `100` / HTTP 400 for invalid
 template params (bad name, missing sample, etc.). `graphPost` currently maps
-unknown codes to `WHATSAPP_UPSTREAM_ERROR` (502). The create route adds a thin
-local mapping so a Graph **400 / code 100** surfaces as a **400**
+unknown codes to `WHATSAPP_UPSTREAM_ERROR` (502). A branch is added to the shared
+`graphPost` so a Graph **code 100** surfaces as a **400**
 `WHATSAPP_TEMPLATE_INVALID` carrying Meta's verbatim message — so the form can
-show the user what to fix. (Kept local to the create route, matching the
-existing comment in `whatsapp-send-test.ts` that warns against moving the shared
-helper without coordinated updates.)
+show the user what to fix. (Matched on `code === 100` only — NOT a broad
+`status === 400` — because the existing `132000/132001 → WHATSAPP_TEMPLATE_NOT_FOUND`
+branch also returns HTTP 400 and must not be shadowed.)
 
 ### 3. Dashboard form — `apps/dashboard/src/components/settings/whatsapp-template-create.tsx`
 
@@ -167,18 +167,18 @@ Dialog form ──(Zod client check)──> useCreateWhatsAppTemplate
 
 ## Error handling
 
-| Condition                            | Code                               | HTTP |
-| ------------------------------------ | ---------------------------------- | ---- |
-| No auth                              | `AUTH_REQUIRED`                    | 401  |
-| Schema invalid                       | `WHATSAPP_BAD_REQUEST`             | 400  |
-| No whatsapp Connection               | `WHATSAPP_NOT_CONNECTED`           | 404  |
-| Connection missing WABA              | `WHATSAPP_WABA_MISSING`            | 500  |
-| Token unset                          | `WHATSAPP_TOKEN_MISSING`           | 500  |
-| Meta rejects params (code 100 / 400) | `WHATSAPP_TEMPLATE_INVALID`        | 400  |
-| Token invalid (190)                  | `WHATSAPP_TOKEN_INVALID`           | 502  |
-| Permission denied (200/10/403)       | `WHATSAPP_GRAPH_PERMISSION_DENIED` | 403  |
-| Rate limited (429/4/80007)           | `WHATSAPP_RATE_LIMITED`            | 429  |
-| Other upstream                       | `WHATSAPP_UPSTREAM_ERROR`          | 502  |
+| Condition                      | Code                               | HTTP |
+| ------------------------------ | ---------------------------------- | ---- |
+| No auth                        | `AUTH_REQUIRED`                    | 401  |
+| Schema invalid                 | `WHATSAPP_BAD_REQUEST`             | 400  |
+| No whatsapp Connection         | `WHATSAPP_NOT_CONNECTED`           | 404  |
+| Connection missing WABA        | `WHATSAPP_WABA_MISSING`            | 500  |
+| Token unset                    | `WHATSAPP_TOKEN_MISSING`           | 500  |
+| Meta rejects params (code 100) | `WHATSAPP_TEMPLATE_INVALID`        | 400  |
+| Token invalid (190)            | `WHATSAPP_TOKEN_INVALID`           | 502  |
+| Permission denied (200/10/403) | `WHATSAPP_GRAPH_PERMISSION_DENIED` | 403  |
+| Rate limited (429/4/80007)     | `WHATSAPP_RATE_LIMITED`            | 429  |
+| Other upstream                 | `WHATSAPP_UPSTREAM_ERROR`          | 502  |
 
 `retryable` derived via the existing `isRetryable` (rate-limited / upstream /
 network).
