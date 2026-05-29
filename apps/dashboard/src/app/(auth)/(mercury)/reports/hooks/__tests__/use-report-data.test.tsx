@@ -123,4 +123,45 @@ describe("useReportData (PR-R1 fixture form)", () => {
     fetchMock.mockRestore();
     vi.doUnmock("@/hooks/use-query-keys");
   });
+
+  it("retry() refetches in live mode (a second fetch is issued)", async () => {
+    process.env.NEXT_PUBLIC_REPORTS_LIVE = "true";
+    vi.resetModules();
+    vi.doMock("@/hooks/use-query-keys", () => ({
+      useScopedQueryKeys: () => ({
+        reports: {
+          all: () => ["test-org", "reports"] as const,
+          byWindow: (w: string) => ["test-org", "reports", w] as const,
+        },
+      }),
+    }));
+    const { useReportData: liveUseReportData } = await import("../use-report-data");
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify(goodFixture), { status: 200 }));
+
+    const { result } = renderHook(() => liveUseReportData("THIS MONTH"), {
+      wrapper: createWrapper(),
+    });
+
+    const { waitFor } = await import("@testing-library/react");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await result.current.retry();
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    fetchMock.mockRestore();
+    vi.doUnmock("@/hooks/use-query-keys");
+  });
+
+  it("retry() is a safe no-op in fixture mode", async () => {
+    const { result } = renderHook(() => useReportData("THIS MONTH"), { wrapper: createWrapper() });
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(result.current.data).toEqual(goodFixture);
+  });
 });
