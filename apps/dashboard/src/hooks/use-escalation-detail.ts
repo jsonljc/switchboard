@@ -19,6 +19,7 @@ export interface ConversationTurn {
   timestamp?: string;
 }
 
+// route-governance: local-view-model
 export interface LeadSnapshot {
   leadId?: string;
   name?: string;
@@ -29,12 +30,14 @@ export interface LeadSnapshot {
   source?: string;
 }
 
+// route-governance: local-view-model
 export interface QualificationSnapshot {
   qualificationStage?: string;
   leadScore?: number;
   signalsCaptured?: Record<string, unknown>;
 }
 
+// route-governance: local-view-model
 export interface ConversationSummary {
   turnCount?: number;
   keyTopics?: string[];
