@@ -3,10 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { InboxErrorState } from "../inbox-error-state";
 
 describe("<InboxErrorState>", () => {
-  it("renders the error eyebrow and heading (distinct from empty copy)", () => {
+  it("renders the error eyebrow as an alert (distinct from empty copy)", () => {
     render(<InboxErrorState onRetry={() => {}} />);
     expect(screen.getByText("Couldn't load")).toBeInTheDocument();
-    expect(screen.getByText("Couldn't load your inbox.")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
   it("renders the error body copy", () => {

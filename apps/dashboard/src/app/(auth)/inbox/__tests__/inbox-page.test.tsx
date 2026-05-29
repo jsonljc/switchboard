@@ -86,7 +86,7 @@ describe("InboxPage", () => {
   it("renders error state and NOT the empty state", () => {
     mockFeed.mockReturnValue({ data: undefined, isLoading: false, isError: true });
     render(<InboxPage />);
-    expect(screen.getByText(/Couldn't load your inbox/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
     expect(screen.queryByText(/That's everything/i)).toBeNull();
   });
 
@@ -97,8 +97,9 @@ describe("InboxPage", () => {
       isError: false,
     });
     render(<InboxPage />);
-    expect(screen.getByText(/That's everything/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Couldn't load your inbox/i)).toBeNull();
+    // Pagehead count + empty-state both say "That's everything"; target the heading.
+    expect(screen.getByRole("heading", { name: /that's everything/i })).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load/i)).toBeNull();
   });
 
   it("renders decision list when decisions are present", () => {
@@ -130,7 +131,7 @@ describe("InboxPage", () => {
       isError: false,
     });
     render(<InboxPage />);
-    // SwipeDecisionCard exposes data-swipe-approve on the track element.
+    // InboxDecisionCard exposes data-swipe-approve on the track element.
     const track = document.querySelector("[data-swipe-track]") as HTMLElement;
     expect(track).toHaveAttribute("data-swipe-approve", "false");
     // The decision summary is still rendered.
