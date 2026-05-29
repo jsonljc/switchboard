@@ -20,12 +20,12 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  ExternalLink,
   Phone,
   FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { WhatsAppSendTest } from "./whatsapp-send-test";
+import { CreateTemplateDialog } from "./whatsapp-template-create";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -339,27 +339,16 @@ function TemplatesSection({
   data,
   isLoading,
   error,
-  wabaId,
 }: {
   data: { templates: WhatsAppTemplate[] } | undefined;
   isLoading: boolean;
   error: Error | null;
-  wabaId: string | null;
 }) {
-  const metaUrl = wabaId
-    ? `https://business.facebook.com/wa/manage/message-templates/?waba_id=${wabaId}`
-    : "https://business.facebook.com/wa/manage/message-templates/";
-
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Message templates</CardTitle>
-        <Button variant="outline" size="sm" asChild>
-          <a href={metaUrl} target="_blank" rel="noopener noreferrer" className="gap-1.5">
-            <ExternalLink className="h-3.5 w-3.5" />
-            Create Template
-          </a>
-        </Button>
+        <CreateTemplateDialog />
       </CardHeader>
       <CardContent>
         {isLoading && <SectionSkeleton />}
@@ -473,7 +462,6 @@ export function WhatsAppManagement() {
         data={templates.data}
         isLoading={templates.isLoading}
         error={templates.error}
-        wabaId={account.data.account.id}
       />
     </div>
   );
