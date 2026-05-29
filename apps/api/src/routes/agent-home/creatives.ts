@@ -105,10 +105,15 @@ export const creativesRoute: FastifyPluginAsync = async (app) => {
 
     const timezone = await getOrgTimezone(prisma, orgId);
     const reader = new PrismaMiraCreativeReadModelReader(prisma);
-    // Org-scoped read → find by id. Cross-org ids are simply absent (→ 404).
-    const rm = await reader.read(orgId, { now: new Date(), timezone, visibleLimit: FEED_WINDOW });
-    const job = rm.jobs.find((j) => j.id === id);
-    if (!job) return reply.code(404).send({ error: "Creative not found" });
-    return reply.code(200).send({ job });
+    try {
+      // Org-scoped read → find by id. Cross-org ids are simply absent (→ 404).
+      const rm = await reader.read(orgId, { now: new Date(), timezone, visibleLimit: FEED_WINDOW });
+      const job = rm.jobs.find((j) => j.id === id);
+      if (!job) return reply.code(404).send({ error: "Creative not found" });
+      return reply.code(200).send({ job });
+    } catch (err) {
+      app.log.error({ err, requestId: request.id }, "creative detail read failed");
+      return reply.code(500).send({ error: "Creative detail read failed", requestId: request.id });
+    }
   });
 };
