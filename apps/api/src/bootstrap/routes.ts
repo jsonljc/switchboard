@@ -43,6 +43,7 @@ import { whatsappTestRoutes } from "../routes/whatsapp-test.js";
 import { whatsappOnboardingRoutes } from "../routes/whatsapp-onboarding.js";
 import { whatsappManagementRoutes } from "../routes/whatsapp-management.js";
 import { whatsappSendTestRoutes } from "../routes/whatsapp-send-test.js";
+import { whatsappTemplateCreateRoutes } from "../routes/whatsapp-template-create.js";
 import { revenueRoutes } from "../routes/revenue.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
@@ -184,6 +185,7 @@ export async function registerRoutes(
   });
   await app.register(whatsappManagementRoutes, { prefix: "/api/dashboard/whatsapp" });
   await app.register(whatsappSendTestRoutes, { prefix: "/api/dashboard/whatsapp" });
+  await app.register(whatsappTemplateCreateRoutes, { prefix: "/api/dashboard/whatsapp" });
   await app.register(googleCalendarOAuthRoutes, { prefix: "/api/connections" });
   await app.register(dlqRoutes, { prefix: "/api/dlq" });
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });

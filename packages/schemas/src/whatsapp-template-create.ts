@@ -9,7 +9,7 @@ function countVariables(text: string): number {
   return new Set(matches.map((m) => m.replace(/\D/g, ""))).size;
 }
 
-/** TEXT-only; media headers (IMAGE/VIDEO/DOCUMENT) are out of scope. */
+/** TEXT-only, no variables; media headers (IMAGE/VIDEO/DOCUMENT) are out of scope. */
 const HeaderSchema = z.object({ text: z.string().min(1).max(60) });
 const BodySchema = z.object({
   text: z.string().min(1).max(1024),
@@ -53,11 +53,11 @@ export const WhatsAppCreateTemplateRequestSchema = z
     buttons: z.array(ButtonSchema).max(10, "at most 10 buttons allowed").optional(),
   })
   .superRefine((val, ctx) => {
-    if (val.header && countVariables(val.header.text) > 1) {
+    if (val.header && countVariables(val.header.text) > 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["header", "text"],
-        message: "header may contain at most one {{1}} variable",
+        message: "header must not contain variables (header samples are not supported)",
       });
     }
     if (val.footer && countVariables(val.footer.text) > 0) {

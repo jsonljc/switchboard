@@ -61,9 +61,9 @@ describe("WhatsAppCreateTemplateRequestSchema", () => {
     ).toThrow();
   });
 
-  it("rejects a header with more than one variable", () => {
+  it("rejects a header containing any variable", () => {
     expect(() =>
-      WhatsAppCreateTemplateRequestSchema.parse({ ...base, header: { text: "{{1}} {{2}}" } }),
+      WhatsAppCreateTemplateRequestSchema.parse({ ...base, header: { text: "Hello {{1}}" } }),
     ).toThrow();
   });
 
