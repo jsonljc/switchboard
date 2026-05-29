@@ -9,6 +9,7 @@ import { getOrgTimezone } from "../../lib/org-timezone.js";
 import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
+const ParamsWithIdSchema = z.object({ agentId: AgentKeySchema, id: z.string().min(1) });
 const QuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) });
 
 // Wide read window so server-side filtering sees the whole fetched window
@@ -82,5 +83,32 @@ export const creativesRoute: FastifyPluginAsync = async (app) => {
       app.log.error({ err, requestId: request.id }, "creative feed read failed");
       return reply.code(500).send({ error: "Creative feed read failed", requestId: request.id });
     }
+  });
+
+  app.get("/agents/:agentId/creatives/:id", async (request, reply) => {
+    const params = ParamsWithIdSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "Invalid params" });
+    const { agentId, id } = params.data;
+    if (agentId !== "mira")
+      return reply.code(404).send({ error: "Feed not available for this agent" });
+
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
+    if (!app.orgAgentEnablementStore) {
+      return reply.code(503).send({ error: "Enablement store unavailable" });
+    }
+    if (!(await isAgentHomeAccessible(agentId, orgId, app.orgAgentEnablementStore))) {
+      return reply.code(404).send({ error: "Agent not available on home" });
+    }
+    const prisma = app.prisma;
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+
+    const timezone = await getOrgTimezone(prisma, orgId);
+    const reader = new PrismaMiraCreativeReadModelReader(prisma);
+    // Org-scoped read → find by id. Cross-org ids are simply absent (→ 404).
+    const rm = await reader.read(orgId, { now: new Date(), timezone, visibleLimit: FEED_WINDOW });
+    const job = rm.jobs.find((j) => j.id === id);
+    if (!job) return reply.code(404).send({ error: "Creative not found" });
+    return reply.code(200).send({ job });
   });
 };

@@ -132,4 +132,26 @@ describe("GET /agents/mira/creatives", () => {
     const res = await get(PILOT, "/api/dashboard/agents/mira/creatives?limit=999");
     expect(res.statusCode).toBe(400);
   });
+
+  it("single: UGC creative returns a seam-derived draft video", async () => {
+    const res = await get(PILOT, "/api/dashboard/agents/mira/creatives/ugc-ready");
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      job: { id: string; draft?: { videoUrl?: string }; source: { mode: string } };
+    };
+    expect(body.job.id).toBe("ugc-ready");
+    expect(body.job.draft?.videoUrl).toBe("https://x/u.mp4");
+    expect(body.job.source.mode).toBe("ugc");
+  });
+
+  it("single: cross-org id → 404", async () => {
+    // PILOT's job is invisible to OTHER (enable OTHER so the gate passes, prove WHERE isolation).
+    await ctx.app.orgAgentEnablementStore!.enable(OTHER, "mira");
+    try {
+      const res = await get(OTHER, "/api/dashboard/agents/mira/creatives/polished-ready");
+      expect(res.statusCode).toBe(404);
+    } finally {
+      await ctx.app.orgAgentEnablementStore!.setStatus(OTHER, "mira", "disabled");
+    }
+  });
 });
