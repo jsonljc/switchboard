@@ -15,6 +15,9 @@ import { CostVsValue } from "./components/cost-vs-value";
 import { ManagedComparison } from "./components/managed-comparison";
 import { Colophon } from "./components/colophon";
 import { FixtureModeBanner } from "./components/fixture-mode-banner";
+import { ReportsUnavailable } from "./components/reports-unavailable";
+import { ReportsSkeleton } from "./components/reports-skeleton";
+import { StaleDataBanner } from "./components/stale-data-banner";
 import styles from "./reports.module.css";
 
 // Org placeholder until session/org context resolution lands (spec §10.7).
@@ -22,7 +25,7 @@ const ORG_PLACEHOLDER = "Aurora Aesthetics";
 
 export function ReportsPage() {
   const { window: activeWindow, setWindow } = useReportWindow();
-  const { data: fx, isFetching, refresh } = useReportData(activeWindow);
+  const { data: fx, isLoading, isFetching, error, refresh, retry } = useReportData(activeWindow);
   const liveMode = isMercuryToolLive("reports");
 
   // Refresh state machine (per spec §4.2 + plan revision R6):
@@ -76,8 +79,13 @@ export function ReportsPage() {
 
       {showNoConnBanner && <NoConnectionBanner />}
 
+      {!fx && isLoading && <ReportsSkeleton />}
+
+      {!fx && !isLoading && error && <ReportsUnavailable onRetry={() => void retry()} />}
+
       {fx && (
         <>
+          {error && <StaleDataBanner cacheAge={cacheAge} onRetry={() => void retry()} />}
           <PullQuote q={fx.pullquote} />
           <Attribution data={fx.attribution} />
           <Funnel rows={fx.funnel} narrative={fx.funnelNarrative} />
