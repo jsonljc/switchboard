@@ -53,6 +53,12 @@ vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   ),
 }));
 
+// Mock next/navigation and use-mira-enabled so MiraPanel renders in a non-Next env
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/hooks/use-mira-enabled", () => ({
+  useMiraEnabled: () => ({ enabled: false, isLoading: false }),
+}));
+
 // Import component after mocks
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
 
