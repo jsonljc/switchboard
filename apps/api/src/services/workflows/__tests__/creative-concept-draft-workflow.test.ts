@@ -19,7 +19,7 @@ const workUnit = () => ({
   traceId: "trace-1",
   trigger: "internal" as const,
   priority: "normal" as const,
-  requestedAt: new Date(),
+  requestedAt: new Date().toISOString(),
 });
 
 const deps = (over: Record<string, unknown> = {}) => ({

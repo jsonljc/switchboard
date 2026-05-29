@@ -42,6 +42,8 @@ export async function bootstrapContainedWorkflows(
 
   const { buildCreativeJobSubmitWorkflow } =
     await import("../services/workflows/creative-job-submit-workflow.js");
+  const { buildCreativeConceptDraftWorkflow } =
+    await import("../services/workflows/creative-concept-draft-workflow.js");
   const { buildCreativeJobDecisionWorkflow } =
     await import("../services/workflows/creative-job-decision-workflow.js");
   const { buildMetaLeadIntakeWorkflow } =
@@ -51,7 +53,13 @@ export async function bootstrapContainedWorkflows(
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
-  const { PrismaLeadIntakeStore } = await import("@switchboard/db");
+  const {
+    PrismaLeadIntakeStore,
+    PrismaAgentTaskStore,
+    PrismaCreativeJobStore,
+    PrismaDeploymentStore,
+    PrismaOrgAgentEnablementStore,
+  } = await import("@switchboard/db");
   const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
 
   // Single source of truth for Contact creation from leads (CTWA + Instant Form).
@@ -114,8 +122,25 @@ export async function bootstrapContainedWorkflows(
 
   const services = { submitChildWork };
 
+  // Alex→Mira delegation target: draft-only creative concept (no pipeline / no spend).
+  const creativeConceptDraftWorkflow = buildCreativeConceptDraftWorkflow({
+    taskStore: new PrismaAgentTaskStore(
+      prismaClient as ConstructorParameters<typeof PrismaAgentTaskStore>[0],
+    ),
+    jobStore: new PrismaCreativeJobStore(
+      prismaClient as ConstructorParameters<typeof PrismaCreativeJobStore>[0],
+    ),
+    deploymentStore: new PrismaDeploymentStore(
+      prismaClient as ConstructorParameters<typeof PrismaDeploymentStore>[0],
+    ),
+    enablementStore: new PrismaOrgAgentEnablementStore(
+      prismaClient as ConstructorParameters<typeof PrismaOrgAgentEnablementStore>[0],
+    ),
+  });
+
   const handlers = new Map<string, WorkflowHandler>([
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
+    ["creative.concept.draft", creativeConceptDraftWorkflow],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
     ["lead.intake", buildLeadIntakeWorkflow(leadIntakeHandler)],
@@ -153,6 +178,15 @@ export async function bootstrapContainedWorkflows(
       budgetClass: "standard",
       approvalPolicy: "threshold",
       allowedTriggers: ["api"],
+    },
+    {
+      // Alex→Mira draft-only handoff. No spend (handler never fires the pipeline),
+      // so cheap/no-approval; "internal" only — reachable via delegation, not the API.
+      intent: "creative.concept.draft",
+      workflowId: "creative.concept.draft",
+      budgetClass: "cheap",
+      approvalPolicy: "none",
+      allowedTriggers: ["internal"],
     },
     {
       intent: "lead.intake",
