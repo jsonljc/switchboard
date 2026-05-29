@@ -1,41 +1,23 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 
-const { notFoundFn, fetchEnabledFn } = vi.hoisted(() => {
-  const notFoundFn = vi.fn(() => {
-    throw new Error("NEXT_NOT_FOUND");
+// The /riley cockpit was retired; the route is now a thin redirect to the agent
+// panel deep-link on Home. redirect() throws internally in Next, so we mock it.
+const { redirectFn } = vi.hoisted(() => {
+  const redirectFn = vi.fn((_url: string) => {
+    throw new Error("NEXT_REDIRECT");
   });
-  const fetchEnabledFn = vi.fn(async () => ["alex", "riley"]);
-  return { notFoundFn, fetchEnabledFn };
+  return { redirectFn };
 });
 
-vi.mock("next/navigation", () => ({ notFound: notFoundFn }));
-vi.mock("@/lib/api-client/agents-server", () => ({
-  fetchEnabledAgentsServer: fetchEnabledFn,
-}));
-// The editorial shell is mounted once by the (auth) layout's AppShell — the page
-// renders RileyCockpitPage directly and no longer wraps it in a shell.
-vi.mock("@/components/cockpit/riley-cockpit-page", () => ({
-  RileyCockpitPage: () => <div data-testid="riley-cockpit-page">riley-cockpit</div>,
-}));
+vi.mock("next/navigation", () => ({ redirect: redirectFn }));
 
 import RileyPage from "../page";
 
-describe("RileyPage server gate", () => {
-  afterEach(() => {
-    notFoundFn.mockClear();
-    fetchEnabledFn.mockReset();
-    fetchEnabledFn.mockImplementation(async () => ["alex", "riley"]);
-  });
+describe("RileyPage redirect stub", () => {
+  afterEach(() => redirectFn.mockClear());
 
-  it("renders RileyCockpitPage when riley is enabled", async () => {
-    const tree = await RileyPage();
-    const { render, screen } = await import("@testing-library/react");
-    render(tree);
-    expect(screen.getByTestId("riley-cockpit-page")).toBeInTheDocument();
-  });
-
-  it("notFound() when riley is not enabled", async () => {
-    fetchEnabledFn.mockImplementation(async () => ["alex"]);
-    await expect(RileyPage()).rejects.toThrow("NEXT_NOT_FOUND");
+  it("redirects to the Riley agent-panel deep-link on Home", async () => {
+    await expect(RileyPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirectFn).toHaveBeenCalledWith("/?agent=riley");
   });
 });
