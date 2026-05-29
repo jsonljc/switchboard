@@ -350,6 +350,15 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     return this.request<MiraFeedResponse>(path);
   }
 
+  /**
+   * Reads a single Mira creative by id (seam-derived, org-scoped).
+   * Endpoint: GET /api/dashboard/agents/mira/creatives/:id
+   */
+  async getMiraCreative(id: string): Promise<{ job: MiraCreativeJobSummary }> {
+    const path = `/api/dashboard/agents/mira/creatives/${encodeURIComponent(id)}`;
+    return this.request<{ job: MiraCreativeJobSummary }>(path);
+  }
+
   // Metrics (Slice B agent-home metrics block — PR-S5)
   /**
    * Reads the Metrics block for a given agent.
