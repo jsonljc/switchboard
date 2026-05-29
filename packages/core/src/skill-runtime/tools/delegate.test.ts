@@ -95,6 +95,18 @@ describe("delegate tool", () => {
     expect(res.error?.code).toBe("DELEGATION_FAILED");
   });
 
+  it("treats an executed-but-failed child (ok:true, outcome:failed) as an error", async () => {
+    const submitter: ChildWorkSubmitter = {
+      submitChildWork: vi
+        .fn()
+        .mockResolvedValue({ ok: true, outcome: "failed", error: "DEPLOYMENT_NOT_FOUND" }),
+    };
+    const tool = createDelegateToolFactory({ submitter, targets: [target] })(ctx());
+    const res = await tool.operations["creative_concept"]!.execute({});
+    expect(res.status).toBe("error");
+    expect(res.error?.code).toBe("DELEGATION_FAILED");
+  });
+
   it("declares effectCategory propose and is idempotent", () => {
     const tool = createDelegateToolFactory({ submitter: okSubmitter(), targets: [target] })(ctx());
     const op = tool.operations["creative_concept"]!;

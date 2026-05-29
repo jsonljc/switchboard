@@ -80,10 +80,14 @@ export function createDelegateToolFactory(deps: DelegateToolDeps): DelegateToolF
             parentWorkUnitId: ctx.workUnitId,
             idempotencyKey,
           });
-          if (!result.ok) {
+          // A child that did not succeed is a failure — including one that
+          // executed but returned outcome:"failed" (e.g. a governance deny or a
+          // handler error like DEPLOYMENT_NOT_FOUND). Never report those as
+          // success, or the model will tell the customer the handoff worked.
+          if (!result.ok || result.outcome === "failed") {
             return fail(
               "DELEGATION_FAILED",
-              `Delegation to ${target.intent} failed: ${result.error ?? "unknown error"}.`,
+              `Delegation to ${target.intent} failed: ${result.error ?? result.outcome ?? "unknown error"}.`,
               {
                 modelRemediation:
                   "Tell the customer you'll have the team follow up; do not retry blindly.",

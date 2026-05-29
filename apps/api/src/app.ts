@@ -478,29 +478,8 @@ export async function buildServer() {
         req: import("@switchboard/core/platform").ChildWorkRequest,
       ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
     | undefined;
-  const childWorkSubmitter: import("@switchboard/core/skill-runtime").ChildWorkSubmitter = {
-    async submitChildWork(req) {
-      if (!submitChildWorkRef) return { ok: false, error: "platform_not_ready" };
-      const resp = await submitChildWorkRef({
-        intent: req.intent,
-        organizationId: req.organizationId,
-        actor: req.actor,
-        parameters: req.parameters,
-        parentWorkUnitId: req.parentWorkUnitId,
-        idempotencyKey: req.idempotencyKey,
-      });
-      if (!resp.ok) {
-        const err = resp.error as { code?: string; message?: string };
-        return { ok: false, error: err.code ?? err.message ?? "submit_failed" };
-      }
-      const approvalRequired = "approvalRequired" in resp && resp.approvalRequired === true;
-      return {
-        ok: true,
-        outcome: approvalRequired ? "pending_approval" : resp.result.outcome,
-        childWorkUnitId: resp.workUnit.id,
-      };
-    },
-  };
+  const { createChildWorkSubmitter } = await import("./bootstrap/delegation-submitter.js");
+  const childWorkSubmitter = createChildWorkSubmitter(() => submitChildWorkRef);
 
   try {
     if (!prismaClient) {
