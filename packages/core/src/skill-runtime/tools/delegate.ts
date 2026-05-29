@@ -97,7 +97,19 @@ export function createDelegateToolFactory(deps: DelegateToolDeps): DelegateToolF
           if (result.outcome === "pending_approval") {
             return pendingApproval(`Delegated ${target.intent}; awaiting team approval.`);
           }
-          return ok({ childWorkUnitId: result.childWorkUnitId, outcome: result.outcome });
+          // Allowlist the success outcomes — never claim "done" for an unexpected
+          // or non-terminal outcome (e.g. "running" from a future async target).
+          if (result.outcome === "completed" || result.outcome === "queued") {
+            return ok({ childWorkUnitId: result.childWorkUnitId, outcome: result.outcome });
+          }
+          return fail(
+            "DELEGATION_INCONCLUSIVE",
+            `Delegation to ${target.intent} returned an unexpected outcome: ${result.outcome ?? "none"}.`,
+            {
+              modelRemediation:
+                "Tell the customer you'll have the team follow up; do not retry blindly.",
+            },
+          );
         },
       };
     }

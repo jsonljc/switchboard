@@ -107,6 +107,18 @@ describe("delegate tool", () => {
     expect(res.error?.code).toBe("DELEGATION_FAILED");
   });
 
+  it("does not claim success for an unexpected/non-terminal outcome", async () => {
+    const submitter: ChildWorkSubmitter = {
+      submitChildWork: vi
+        .fn()
+        .mockResolvedValue({ ok: true, outcome: "running", childWorkUnitId: "wu-child" }),
+    };
+    const tool = createDelegateToolFactory({ submitter, targets: [target] })(ctx());
+    const res = await tool.operations["creative_concept"]!.execute({});
+    expect(res.status).toBe("error");
+    expect(res.error?.code).toBe("DELEGATION_INCONCLUSIVE");
+  });
+
   it("declares effectCategory propose and is idempotent", () => {
     const tool = createDelegateToolFactory({ submitter: okSubmitter(), targets: [target] })(ctx());
     const op = tool.operations["creative_concept"]!;
