@@ -159,3 +159,16 @@ Logical commits on `feat/agent-handoff` (kept separable so the user can split at
 5. apps/api: bootstrap wiring (share `submitChildWork`, register factory).
 6. skill: `skills/alex/SKILL.md` delegate guidance.
 7. green-gate: typecheck/lint/format/test/build, then code-review.
+
+## 9. Live verification (prerequisite for an end-to-end demo)
+
+**Status at implementation close (2026-05-29):** all 7 tasks landed on `feat/agent-handoff`. Build (10/10), typecheck (19/19), lint (0 errors), and format are clean. The full test suite is green except the pre-existing `apps/chat` `gateway-bridge-attribution` timeout flake (untouched by this work; passes in isolation). New unit tests cover the delegate tool (depth guard, allowlist-by-construction, lineage, deterministic idempotency, pending-approval + failure surfacing), the context composer, the draft handler (creates job, **no** pipeline send, enablement gate, fail-closed), and the target config.
+
+**To actually see a draft land on `/mira`**, the target org needs BOTH:
+
+1. `OrgAgentEnablement(agentKey="mira", status="enabled")` — `seedMiraPilotOrgs` already writes this for pilot orgs; otherwise the handler returns `{ outcome:"completed", outputs:{ skipped:true, reason:"mira_not_enabled" } }` (graceful — Alex says nothing misleading).
+2. An **active `AgentDeployment` with `skillSlug="creative"`** for the org, so `submitChildWork` resolves a real deployment and `listingId` resolves from it. If none exists, `resolveDeploymentForIntent` falls back to the literal `"api-direct"` and the handler fails closed with `DEPLOYMENT_NOT_FOUND` (safe — no draft, no spend, no partial write).
+
+**The one live gap:** `seedMiraPilotOrgs` seeds only the enablement row, not a creative deployment/listing. Seeding (or provisioning) a `skillSlug="creative"` deployment for the pilot org is the single prerequisite to a live draft and is intentionally **out of this code-only branch** — it touches provisioning/seed data and the shared DB, and should be done deliberately by the operator. Until then, the primitive is fully exercised and tested (the governed child submit, lineage, governance, and fail-closed paths all work); only the final draft-row persistence waits on that deployment existing.
+
+**Safety recap (holds regardless of the above):** the delegate tool can only submit allowlisted intents (v1 = `creative.concept.draft` only), a delegated child cannot delegate again (depth cap 1), the target fires no pipeline/spend, and the child re-runs full governance at `PlatformIngress` — there is no agent auto-execute bypass.
