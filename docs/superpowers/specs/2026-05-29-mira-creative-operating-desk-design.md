@@ -55,9 +55,9 @@ The front door and default surface. A calm hub, **not** a giant chat page and **
 
 1. **Open brief box** — "What should Mira make?" Conversational and lightweight. Accepts product, angle, audience, offer, and a creative reference. Submitting creates a production job. (Borrows chat's low-friction front door without making the whole product a thread.)
 2. **Mira proposals** — proposal cards Mira generates from Riley's recent performance ("Based on Riley's last 7 days, I'd make…"). Each card states the angle, the reason, and the intended use. Accept → becomes a production job. _(Phase 3.)_
-3. **In production** — a small tray, not the main event. "3 drafts generating." Optional peek into shot plan → stage → QC flags. Transparency without obligation.
+3. **In production** — a small tray, not the main event. "3 drafts generating." Plain stage copy by default; deeper shot-plan/QC detail only surfaces on a problem. Transparency without obligation, never an engineering console.
 4. **Ready to review** — a prominent CTA into the Screening Room. "4 drafts ready" → opens the feed.
-5. **Approved / handed to Riley** — a light shelf of recent approved assets with status: _waiting for Riley · in use · learning · winner · fatigued_. _(Phases 4–5.)_
+5. **Recently approved drafts** — a light, read-only shelf. In Phase 2 it shows only creatively-approved drafts with neutral copy ("Drafts you liked. Sending to Riley comes later."). The richer per-asset status (_waiting for Riley · in use · winner · fatigued_) is a **Phase 4–5 privilege**, unlocked only after the Riley attribution contract and governed handoff exist.
 
 ### 2. Screening Room — `/mira/review` (north-star route; shipped today at `/mira`)
 
@@ -103,21 +103,65 @@ Seam-backed feed endpoint, UGC detail parity, vertical review feed, Continue/Sto
 
 ### Phase 2 — Director's Desk v1 _(next plan targets this)_
 
-- `/mira` becomes the Desk.
-- Modules: **Open brief box**, **Ready to review** (links into the feed), **In production** tray, **Recent approved** shelf (read-only, lightweight).
-- **Move the feed to `/mira/review`** with a redirect/alias.
-- **No autonomous proposal system yet** — manual / open-brief first.
-- Briefing in v1 may be intent-capture that creates a production job through the existing creative pipeline path; keep it draft-only (no publish, no disclosure, no new mutating cross-agent path).
+**Guiding principle: keep v1 boring enough to be trustworthy.** Phase 2 is a calm _control surface_ — create draft requests, see production status, enter the review feed, see recently approved drafts. It is the _beginning_ of the operating desk, not a preview of the autonomous creative OS. The single biggest risk is making the Desk _look_ alive (learning, performance, distribution) before the contracts behind it exist. Phase 2 must not imply any capability that Phases 3–5 own.
+
+**Modules:**
+
+- **Open brief box** — "What should Mira make?" (governed internal draft request — see contract below).
+- **Ready to review** — CTA into the feed (`/mira/review`).
+- **In production** tray — plain status only (see copy rules).
+- **Recently approved drafts** shelf — read-only, lightweight; "Drafts you liked. Sending to Riley comes later." Deliberately _not_ "Recent approved": "approved" is overloaded in Switchboard (creatively-liked vs. ready-for-distribution vs. externally-approved-to-publish). Phase 2 means only **reviewed/creatively-liked drafts**; "Sent to Riley" (governed handoff) and "Published" are unavailable and must read as such.
+
+**Routing:** `/mira` becomes the Desk; **move the feed to `/mira/review`** with a redirect/backward-compatible alias.
+
+**No autonomous proposal system yet** — manual / open-brief only.
+
+#### Phase 2 desk-item state contract
+
+A desk item (a brief and the draft work it spawns) may be in exactly one of these **allowed** states:
+
+`empty` · `brief_submitted` · `in_production` · `ready_to_review` · `reviewed_continue` · `reviewed_stopped` · `approved_draft` · `handoff_unavailable`
+
+**Forbidden in Phase 2** (these belong to Phase 4/5 and may only appear as explicitly-disabled "coming later" copy):
+
+`sent_to_riley` · `in_use` · `learning` · `winner` · `fatigued` · `published`
+
+#### Phase 2 copy guardrails
+
+Phase 2 UI and fixtures must **not** use these words (except inside disabled/future "Coming later" copy): _publish, launch, distribute, performance, winner, fatigued, learning, improved, drove, recovered, saved._ This is stricter than the global honest-impact rule because Phase 2 has no performance data at all.
+
+- **In production tray** defaults to plain stage copy: "Writing concept" → "Generating draft" → "Checking quality" → "Ready to review." Deeper QC/shot-plan detail surfaces **only on a problem**: "Needs your input," "Reference image missing," "Couldn't generate safely," "Draft failed quality check." No engineering-console detail by default.
+- **Recently approved shelf** shows only `approved_draft` items with neutral copy; no status chips like _in use / winner / fatigued_.
+
+#### Open brief = governed internal draft request
+
+The brief box submits a typed, auditable **internal** production mutation — not external governance, but not an unbounded fire-and-forget either. Name it `createCreativeDraftRequest` (NOT approve / handoff / publish). It captures and returns:
+
+- **captures:** org ID, actor, brief text, optional creative reference, `requestSource: "mira.open_brief"`, idempotency key (submission may retry)
+- **returns:** job ID, draft status, expected output count, cost/quota implication (if any)
+- **guarantees:** no Riley side effect, no external publish side effect, draft-only
+
+If creating drafts is cost-bearing, the brief box needs a lightweight **"Create drafts"** confirmation that surfaces the cost/quota implication — symmetric with the feed's cost-confirmed **Continue**.
+
+#### Route migration is a product migration, not a UI refactor
+
+The PR must include **route-level tests** (the meaning of `/mira` is changing):
+
+- `/mira` renders the Desk when Mira is enabled
+- `/mira` preserves the existing org-enablement 404 gate (disabled org behaves exactly as before)
+- `/mira/review` renders the feed when enabled (and is itself gated)
+- existing entry points (Home Team Pulse, MiraPanel drill-in, deep links) land on the Desk, not a broken feed
+- "Ready to review" routes to `/mira/review`; direct `/mira/review` works
 
 ### Phase 3 — Proposal cards
 
-Mira-generated proposals using Riley performance context. Examples:
+Mira-generated proposals using Riley context. Examples:
 
 - "Your Reels placements are scaling but hooks are fatiguing — make 3 new opening hooks around price objection."
 - "This offer converts better on FB than IG — make a more direct-response version."
 - "Demo clips are outperforming lifestyle clips — create 2 demo-first drafts."
 
-Depends on the Riley→Mira data contract (see Open Dependencies).
+Depends on the Riley→Mira data contract (see Open Dependencies). **Until per-creative attribution exists, proposal cards must be framed on coarse account-level signals** — "Based on recent account patterns…", never "Based on your last creative's performance…". The UI must not imply asset-level learning it cannot back.
 
 ### Phase 4 — Approved-asset handoff
 
@@ -125,7 +169,7 @@ The real approved-asset state and the handoff to Riley. **Not "publish," not "la
 
 ### Phase 5 — Live / Learning Shelf
 
-Post-distribution outcomes on the shelf. "This angle worked — Mira will propose more like it." Compounding loop; gives Switchboard memory and intelligence.
+Post-distribution outcomes on the shelf. Compounding loop; gives Switchboard memory and intelligence. **Copy stays directional and threshold-defined** — e.g. "This angle saw stronger signals," "Riley used this in recent campaigns," "Not enough data yet." Banned: "This creative drove revenue," "improved ROAS," "Mira learned this works." Status words like _winner_ and _fatigued_ may not appear in UI until each has a formal, defined threshold.
 
 ---
 
@@ -142,6 +186,7 @@ Post-distribution outcomes on the shelf. "This angle worked — Mira will propos
 - **Honest-impact guardrail.** Riley surfaces ban causal language ("saved / caused / recovered / improved / prevented") with a CI tripwire. Any Mira learning-shelf or proposal copy that references performance must stay **directional** and comply with the same rule.
 - **Draft-only until governance.** No publish, launch, disclosure, lip-sync, or new submission path through Phase 3. Approval handoff (Phase 4) is the first governed mutating step and is gated.
 - **Surfaces stay separated.** The feed never absorbs briefing/proposals/tracking; the Desk never becomes the review surface.
+- **Don't show the OS before the contracts exist.** The single biggest product risk is the Desk _implying_ a full operating system (learning, performance, distribution) before Riley attribution and governed handoff are real. Each phase may only show capability its backend can honestly back; "approval" must never read as "approved for ads." Phase 2 enforces this via the state contract + copy guardrails above.
 
 ## Naming
 
