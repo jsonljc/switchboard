@@ -12,8 +12,15 @@ import type {
   WinsViewModel,
 } from "@/lib/agent-home/types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
+import type { MiraCreativeJobSummary, MiraCreativeCounts } from "@switchboard/core";
 import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardClientCore } from "./core";
+
+export interface MiraFeedResponse {
+  jobs: MiraCreativeJobSummary[];
+  counts: MiraCreativeCounts;
+  feed: { reviewableCount: number; renderingCount: number };
+}
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   // Approvals
@@ -331,6 +338,25 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   async listPipeline(agentKey: string): Promise<{ vm: PipelineViewModel }> {
     const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/pipeline`;
     return this.request<{ vm: PipelineViewModel }>(path);
+  }
+
+  // Mira creative review feed
+  /**
+   * Reads the Mira creative review feed (server-filtered, video-bearing jobs only).
+   * Endpoint: GET /api/dashboard/agents/mira/creatives?limit=…
+   */
+  async listMiraCreatives(limit = 20): Promise<MiraFeedResponse> {
+    const path = `/api/dashboard/agents/mira/creatives?limit=${encodeURIComponent(String(limit))}`;
+    return this.request<MiraFeedResponse>(path);
+  }
+
+  /**
+   * Reads a single Mira creative by id (seam-derived, org-scoped).
+   * Endpoint: GET /api/dashboard/agents/mira/creatives/:id
+   */
+  async getMiraCreative(id: string): Promise<{ job: MiraCreativeJobSummary }> {
+    const path = `/api/dashboard/agents/mira/creatives/${encodeURIComponent(id)}`;
+    return this.request<{ job: MiraCreativeJobSummary }>(path);
   }
 
   // Metrics (Slice B agent-home metrics block — PR-S5)
