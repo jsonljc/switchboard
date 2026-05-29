@@ -54,9 +54,17 @@ function centsPerLeadToDisplay(spendCents: number | null, leads: number): string
   return `$${perLead}`;
 }
 
-export function HomePage() {
+export interface HomePageProps {
+  /**
+   * Agent to auto-open the panel for on mount, from the `/?agent=` deep-link
+   * (e.g. the retired /alex and /riley routes redirect here). null = no panel.
+   */
+  initialAgent?: PanelAgentKey | null;
+}
+
+export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   const router = useRouter();
-  const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
+  const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(initialAgent);
 
   const session = useSession();
   const decisionFeed = useDecisionFeed(null);

@@ -41,12 +41,13 @@ function isChromeFree(pathname: string): boolean {
 /**
  * Paths exempt from the onboarding-completeness gate. Narrower than the
  * chrome-free set — Mercury surfaces, /settings, /operator/* still redirect
- * to /onboarding when the org is incomplete. Agent homes (/alex, /riley, /mira)
- * bypass because they are always reachable post-auth. "/" (Home) is NOT exempt —
- * an authenticated but not-yet-onboarded user landing on Home is redirected to
- * /onboarding so they complete setup before accessing any content.
+ * to /onboarding when the org is incomplete. The /mira cockpit bypasses because
+ * it is always reachable post-auth. "/" (Home) is NOT exempt — an authenticated
+ * but not-yet-onboarded user landing on Home is redirected to /onboarding so they
+ * complete setup before accessing any content. (/alex and /riley were retired;
+ * they now redirect to Home's ?agent= deep-link, which is gated like any "/".)
  */
-const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/alex", "/riley", "/mira"]);
+const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/mira"]);
 export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding"];
 
 export function AppShell({

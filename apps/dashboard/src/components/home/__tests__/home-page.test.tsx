@@ -390,6 +390,18 @@ describe("HomePage", () => {
     expect(verdictEl.textContent).not.toMatch(/working/i);
   });
 
+  it("auto-opens the agent panel for a deep-linked initialAgent (no interaction)", () => {
+    // /?agent=alex deep-link → server passes initialAgent → panel is open on mount.
+    render(<HomePage initialAgent="alex" />);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
+  });
+
+  it("does not open any panel when initialAgent is absent or null", () => {
+    render(<HomePage initialAgent={null} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("clicking a Team Pulse chip opens the agent panel for that agent", () => {
     // Panel is absent before interaction.
     render(<HomePage />);

@@ -274,8 +274,8 @@ describe("Onboarding-redirect behavior", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it("does not redirect from editorial paths /alex (existing behavior preserved)", () => {
-    pathnameRef.current = "/alex";
+  it("does not redirect from the gate-exempt /mira cockpit", () => {
+    pathnameRef.current = "/mira";
     orgConfigMock.mockReturnValue({
       data: { config: { onboardingComplete: false } },
       isLoading: false,
@@ -286,6 +286,23 @@ describe("Onboarding-redirect behavior", () => {
       </AppShell>,
     );
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects from the retired /alex path when onboarding is incomplete (no longer gate-exempt)", () => {
+    // /alex was retired; it is no longer in ONBOARDING_GATE_EXEMPT_EXACT and is
+    // gated like any other path (in production it redirects to /?agent=alex,
+    // which is itself gated as "/").
+    pathnameRef.current = "/alex";
+    orgConfigMock.mockReturnValue({
+      data: { config: { onboardingComplete: false } },
+      isLoading: false,
+    });
+    render(
+      <AppShell>
+        <span>x</span>
+      </AppShell>,
+    );
+    expect(replaceMock).toHaveBeenCalledWith("/onboarding");
   });
 
   it("redirects from / (Home) when onboarding is incomplete", () => {
@@ -318,8 +335,8 @@ describe("Onboarding-redirect behavior", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it("skips org-config fetch on editorial paths", () => {
-    pathnameRef.current = "/alex";
+  it("skips org-config fetch on the gate-exempt /mira cockpit", () => {
+    pathnameRef.current = "/mira";
     render(
       <AppShell>
         <span>x</span>

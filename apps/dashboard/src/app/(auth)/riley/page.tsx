@@ -1,12 +1,7 @@
-import { notFound } from "next/navigation";
-import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
-import { RileyCockpitPage } from "@/components/cockpit/riley-cockpit-page";
+import { redirect } from "next/navigation";
 
-// The editorial shell (header + providers) is mounted once by the (auth) layout's
-// AppShell, so this page renders its cockpit content directly.
+// The /riley cockpit was retired in favor of the read-only agent panel. This route
+// redirects to Home's `?agent=` deep-link, which auto-opens the Riley panel.
 export default async function RileyPage() {
-  const enabled = await fetchEnabledAgentsServer();
-  if (!enabled.includes("riley")) notFound();
-
-  return <RileyCockpitPage />;
+  redirect("/?agent=riley");
 }
