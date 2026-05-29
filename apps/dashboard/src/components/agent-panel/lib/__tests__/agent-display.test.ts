@@ -28,6 +28,13 @@ describe("parsePanelAgentKey", () => {
     expect(parsePanelAgentKey(42)).toBeNull();
     expect(parsePanelAgentKey(["alex"])).toBeNull();
   });
+
+  it("returns null for inherited Object.prototype keys (untrusted ?agent= input)", () => {
+    expect(parsePanelAgentKey("toString")).toBeNull();
+    expect(parsePanelAgentKey("constructor")).toBeNull();
+    expect(parsePanelAgentKey("__proto__")).toBeNull();
+    expect(parsePanelAgentKey("hasOwnProperty")).toBeNull();
+  });
 });
 
 describe("labelForHeroKind", () => {
