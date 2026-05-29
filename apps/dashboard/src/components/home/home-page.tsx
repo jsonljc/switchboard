@@ -10,6 +10,7 @@ import { useAgentRoster, useAgentState } from "@/hooks/use-agents";
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useAgentActivityCockpit } from "@/hooks/use-agent-activity-cockpit";
 import { useAgentMission } from "@/hooks/use-agent-mission";
+import { useMiraEnabled } from "@/hooks/use-mira-enabled";
 import { useGovernanceStatus } from "@/hooks/use-governance";
 import type { Decision } from "@/lib/decisions/types";
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
@@ -76,6 +77,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   const alexActivity = useAgentActivityCockpit("alex", { limit: 4 });
   const alexMission = useAgentMission("alex");
   const rileyMission = useAgentMission("riley");
+  const miraEnabled = useMiraEnabled();
   const governance = useGovernanceStatus();
 
   // ── Halt state (a halted/paused agent is NEVER "working") ──────────────────
@@ -104,8 +106,8 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   // Presence (`setUp`) reflects REAL per-agent enablement: alex/riley derive it
   // from mission core-completion (e.g. inbox / Meta connected), so an org that
   // hasn't connected an agent's core channel sees it honestly "Not set up" —
-  // not the old static launchTier flag. Mira has no mission endpoint (404), so
-  // she stays launchTier (day-thirty → not set up). When a mission hook is
+  // not the old static launchTier flag. Mira uses useMiraEnabled (probe the
+  // gated mission endpoint: 200 → enabled, 404 → not). When a mission hook is
   // loading or errored, fall back to launchTier rather than flipping to a
   // transient "Not set up".
   // Working status needs positive evidence we can attribute to a canonical
@@ -126,6 +128,10 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
         setUp = !coreSetupIncomplete(alexMission.data, "alex");
       } else if (key === "riley" && rileyMission.data) {
         setUp = !coreSetupIncomplete(rileyMission.data, "riley");
+      } else if (key === "mira") {
+        // Real per-org enablement (probe). Loading/unknown → not set up (Mira is
+        // day-thirty), so we never flash a transient wrong state.
+        setUp = miraEnabled.enabled === true;
       } else {
         setUp = entry.launchTier === "day-one";
       }
