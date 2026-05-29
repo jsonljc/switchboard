@@ -38,14 +38,19 @@ So the same defect produces two blank states: initial-load blank and error blank
 ### State machine (live mode)
 
 The page renders `PageHead` + `FixtureModeBanner` at the top in **all** branches, then the body
-branches on hook state:
+branches **exhaustively over `{data, error}`** (NOT on `isLoading` — see the trap below):
 
-| Condition            | Body renders                                                                                       |
-| -------------------- | -------------------------------------------------------------------------------------------------- |
-| `!data && isLoading` | `<ReportsSkeleton/>` — fixes the initial-load blank                                                |
-| `error && !data`     | `<ReportsUnavailable onRetry/>` — calm "temporarily unavailable" + Try again                       |
-| `data && error`      | full report **+** `<StaleDataBanner onRetry cacheAge/>` ("Couldn't refresh — showing last loaded") |
-| `data && !error`     | full report (unchanged from today)                                                                 |
+| Condition         | Body renders                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `!data && !error` | `<ReportsSkeleton/>` — loading / not-ready catch-all (initial load AND the keys-pending state)     |
+| `!data && error`  | `<ReportsUnavailable onRetry/>` — calm "temporarily unavailable" + Try again                       |
+| `data && error`   | full report **+** `<StaleDataBanner onRetry cacheAge/>` ("Couldn't refresh — showing last loaded") |
+| `data && !error`  | full report (unchanged from today)                                                                 |
+
+**Do not gate the skeleton on `isLoading`.** React Query's `enabled: false` pending state
+(session/org keys unresolved) reports `isLoading === false` with `data` undefined and `error`
+null, so an `isLoading` gate would leave a blank body — the exact #472 regression. Using
+`!data && !error` as the skeleton catch-all makes the four branches exhaustive.
 
 ### Fixture mode is untouched — acceptance #3 holds by construction
 

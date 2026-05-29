@@ -1395,6 +1395,27 @@
   max-width: 32em;
   text-wrap: pretty;
 }
+/* Page-level recovery CTA — a substantial secondary action, not the small
+   topbar refresh chip (.btn). Mirrors the secondary-action language of the
+   inbox error state and the .cta banner button. */
+.retryAction {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 10px 18px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  transition:
+    background var(--duration) var(--ease),
+    color var(--duration) var(--ease);
+}
+.retryAction:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
 
 /* ============== Loading skeleton (#472) ============== */
 .skeleton {
@@ -1432,5 +1453,16 @@
   }
   to {
     background-position: 0 0;
+  }
+}
+
+/* Respect reduced-motion: still off — placeholder, not a spinner — but no
+   looping animation. Covers the new shimmer plus this file's other loops. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton > div,
+  .livePip.fixture::before,
+  .spinner,
+  .fadeIn {
+    animation: none;
   }
 }

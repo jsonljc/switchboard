@@ -18,7 +18,7 @@ export function ReportsUnavailable({ onRetry }: ReportsUnavailableProps) {
         We couldn&apos;t load your report just now. This is usually momentary — your numbers are
         safe. Try again in a moment.
       </p>
-      <button type="button" className={styles.btn} onClick={onRetry}>
+      <button type="button" className={styles.retryAction} onClick={onRetry}>
         Try again
       </button>
     </div>

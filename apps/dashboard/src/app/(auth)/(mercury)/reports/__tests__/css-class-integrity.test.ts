@@ -135,6 +135,7 @@ const REQUIRED_CLASSES = [
   "bannerStale",
   "unavailable",
   "unavailableMsg",
+  "retryAction",
   "skeleton",
   "skelHero",
   "skelLine",

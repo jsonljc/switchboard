@@ -53,8 +53,11 @@ describe("ReportsPage (live mode failure states, #472)", () => {
     };
   });
 
-  it("renders the skeleton while loading with no data (not a blank body)", () => {
-    hookState.current = { ...hookState.current, isLoading: true };
+  it("renders the skeleton when there is no data and no error (not a blank body)", () => {
+    // The page branches on {data, error}, not isLoading — no data + no error is
+    // the loading/not-ready catch-all. (Real loading-vs-pending coverage lives
+    // in reports-page-pending.test.tsx, which drives the real hook.)
+    hookState.current = { ...hookState.current, data: undefined, error: null };
     renderPage();
     expect(screen.getByLabelText(/loading report/i)).toBeInTheDocument();
   });
