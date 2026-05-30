@@ -1739,13 +1739,20 @@ const PILOT = "pilot";
 
 describe("POST /agents/mira/brief", () => {
   let ctx: TestContext;
-  // beforeAll: build a server registering miraBriefRoute at prefix "/api/dashboard",
-  //   with app.prisma mocked so:
+  // beforeAll: follow the LOCAL-mock pattern from creatives-route.test.ts (there is
+  //   NO `ctx.spies` accessor and NO prisma-injection option on TestContext). Build a
+  //   local `buildPrismaMock()` of vi.fn() stubs and attach it:
+  //     (ctx.app as unknown as { prisma: unknown }).prisma = prismaMock;
+  //   Stubs needed:
   //   - agentDeployment.findFirst({where:{organizationId:PILOT, skillSlug:"creative", ...}})
-  //       resolves a row { id:"dep", status:"listed", skillSlug:"creative", listing:{ id:"lst", status:"listed" } }
-  //       (whatever shape resolveByOrgAndSlug expects) and resolves NOTHING for any other org.
+  //       resolves a row matching whatever shape resolveByOrgAndSlug expects, and resolves
+  //       NOTHING for any other org (drives the fail-closed 409 path).
   //   - agentTask.create / creativeJob.create echo an { id } back.
-  //   Stub the Inngest client send to a no-op spy. Track recommendation/campaign spies.
+  //   - recommendation.create / campaign.create as vi.fn() (for the no-cross-agent assert).
+  //   Stub the Inngest client send to a no-op spy. Keep refs to the local stubs in scope
+  //   so the it() blocks can assert on them directly (e.g. `const prismaMock = …` outside beforeAll).
+  //   buildTestServer ALREADY registers idempotencyMiddleware (test-server.ts), so the replay
+  //   test works without extra wiring.
 
   async function post(org: string, body: unknown, key?: string) {
     return ctx.app.inject({
@@ -1775,9 +1782,10 @@ describe("POST /agents/mira/brief", () => {
     await post(PILOT, { promoting: "Summer Botox special" });
     // Assert the prisma mock's recommendation/campaign/pendingAction namespaces were never written.
     // (Set these up as vi.fn() spies in beforeAll; only agentTask.create + creativeJob.create are allowed.)
-    expect(ctx.spies.recommendation.create).not.toHaveBeenCalled();
-    expect(ctx.spies.campaign?.create ?? vi.fn()).not.toHaveBeenCalled();
-    expect(ctx.spies.creativeJob.create).toHaveBeenCalledTimes(1);
+    // Assert on the LOCAL prismaMock stubs (see beforeAll) — there is no ctx.spies.
+    expect(prismaMock.recommendation.create).not.toHaveBeenCalled();
+    expect(prismaMock.campaign.create).not.toHaveBeenCalled();
+    expect(prismaMock.creativeJob.create).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when the org has no creative deployment", async () => {
@@ -1802,7 +1810,7 @@ describe("POST /agents/mira/brief", () => {
 });
 ```
 
-> The replay test requires `idempotencyMiddleware` registered on the test server. If `buildTestServer` does not register it, register it in `beforeAll` (import from `../../../middleware/idempotency.js`) so the global POST-dedup path is exercised. The `ctx.spies.*` shape is illustrative — wire whatever spy accessors `buildTestServer` exposes; the REQUIREMENT is asserting zero recommendation/campaign writes.
+> `buildTestServer` already registers `idempotencyMiddleware` (`apps/api/src/__tests__/test-server.ts`), so the replay test needs no extra wiring. There is **no** `ctx.spies` accessor — use the local `buildPrismaMock()` pattern from `creatives-route.test.ts` (the no-cross-agent REQUIREMENT is: `recommendation.create`/`campaign.create` were never called; only `agentTask.create` + `creativeJob.create` fired).
 
 - [ ] **Step 3: Run it to verify it fails** → `pnpm --filter @switchboard/api test -- mira-brief-route` → FAIL (route missing)
 
@@ -1921,7 +1929,7 @@ export const miraBriefRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-> **Verify the resolver/store signatures at execution time.** `resolveByOrgAndSlug` returns the live builder's shape (`{ deploymentId, listingId, … }`) — see [[reference_governance_trust_path]]; the resolver-bug is already fixed on main (`prisma-deployment-resolver.ts:113` gates `!== "listed"`). If `PrismaAgentTaskStore.create` / `PrismaCreativeJobStore.create` field names differ, copy them from the existing brief path `apps/api/src/routes/creative-pipeline.ts` (the reference creation flow). The pipeline event name/shape must match what `apps/api/src/routes/creative-pipeline.ts` sends today.
+> **Verify the resolver/store signatures at execution time.** `resolveByOrgAndSlug` resolves the org's `skillSlug:"creative"` deployment and throws if there is no live deployment — read its actual return shape (`{ deploymentId, listingId, … }`) from `prisma-deployment-resolver.ts` before relying on field names; see [[reference_governance_trust_path]]. **Listing-status caveat:** the canonical-`"listed"` fix (#763) is on `main` but is **not** in this branch's base — confirm it is present in the branch you implement from (`grep "listed" packages/.../prisma-deployment-resolver.ts`) before seeding a `"listed"`-status deployment; an older base still gates `!== "active"` ([[feedback_deployment_resolver_listing_status_active_bug]]). If `PrismaAgentTaskStore.create` / `PrismaCreativeJobStore.create` field names differ, copy them from the existing brief path `apps/api/src/routes/creative-pipeline.ts` (the reference creation flow). The pipeline event name/shape must match what `apps/api/src/routes/creative-pipeline.ts` sends today.
 
 - [ ] **Step 5: Register the route** — in `apps/api/src/bootstrap/routes.ts`, beside the `creativesRoute` registration:
 
@@ -1937,7 +1945,7 @@ await app.register(miraBriefRoute, { prefix: "/api/dashboard" });
 Run: `pnpm --filter @switchboard/api test -- mira-brief-route`
 Expected: PASS (create, no-cross-agent, fail-closed, 400, replay-dedup).
 
-- [ ] **Step 7: Verify route governance** — Run: `pnpm test -- route-class-validator` (the `.agent/tools/route-class-validator.ts` check). Expected: PASS — `@route-class: lifecycle` is valid for a job-creating mutation.
+- [ ] **Step 7: Verify route governance** — Run: `pnpm test -- route-class-validator` (the `.agent/tools/route-class-validator.ts` check). Expected: PASS. NOTE: the validator only enforces `operator-direct` and `read-only` classes today — a `lifecycle` route passes trivially (it is not deeply checked), so this is a "didn't regress the validator" gate, NOT positive confirmation of lifecycle governance. The real governance guarantees here are the draft-only + no-cross-agent assertions in the route test (Step 2).
 
 - [ ] **Step 8: Commit**
 
@@ -2030,19 +2038,17 @@ describe("useCreateCreativeDraftRequest", () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it("sends an Idempotency-Key header and returns the contract", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        status: 201,
-        json: async () => ({
-          jobId: "j1",
-          status: "brief_submitted",
-          expectedDraftCount: 1,
-          cost: { upfront: null, generationGatedInReview: true },
-          requestSource: "mira.open_brief",
-        }),
-      });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        jobId: "j1",
+        status: "brief_submitted",
+        expectedDraftCount: 1,
+        cost: { upfront: null, generationGatedInReview: true },
+        requestSource: "mira.open_brief",
+      }),
+    });
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useCreateCreativeDraftRequest(), { wrapper });
     await act(async () => {
@@ -2711,8 +2717,12 @@ const PILOT = "pilot";
 describe("POST /agents/mira/creatives/:id/decision", () => {
   let ctx: TestContext;
   // beforeAll: register miraDecisionRoute at "/api/dashboard"; enablement enabled for PILOT.
-  //   prisma.creativeJob.updateMany resolves { count: 1 } for {id:"job1", organizationId:PILOT},
-  //   and { count: 0 } otherwise. Track recommendation/campaign spies for the no-cross-agent check.
+  //   Use the LOCAL buildPrismaMock() pattern (no ctx.spies). Attach via
+  //   (ctx.app as unknown as { prisma }).prisma = prismaMock. Stubs:
+  //   - creativeJob.updateMany resolves { count: 1 } for {id:"job1", organizationId:PILOT},
+  //       { count: 0 } otherwise (drives the cross-org 404).
+  //   - recommendation.create / campaign.create as vi.fn() for the no-cross-agent assert.
+  //   Keep `prismaMock` in scope so the it() blocks assert on it directly.
 
   async function decide(org: string, id: string, decision: "kept" | "passed" | null) {
     return ctx.app.inject({
@@ -2727,8 +2737,8 @@ describe("POST /agents/mira/creatives/:id/decision", () => {
     const res = await decide(PILOT, "job1", "kept");
     expect(res.statusCode).toBe(200);
     expect((res.json() as { decision: string }).decision).toBe("kept");
-    expect(ctx.spies.recommendation.create).not.toHaveBeenCalled();
-    expect(ctx.spies.creativeJob.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.recommendation.create).not.toHaveBeenCalled();
+    expect(prismaMock.creativeJob.updateMany).toHaveBeenCalledTimes(1);
   });
 
   it("passes a draft (200)", async () => {
@@ -3306,7 +3316,7 @@ Expected: PASS (current seeds are clean) — or a FAIL that flags real fixture c
 
 - [ ] **Step 3: Seed one kept draft so the shelf renders locally**
 
-In `packages/db/src/seed/seed-mira-demo-creatives.ts`, add a third draft to the `drafts` array that is completed AND kept (so it leaves the feed and lands on the shelf). It must reuse the same fixed-id idempotency pattern and carry `reviewDecision: "kept"`, `reviewDecidedAt: new Date()`, and a `currentStage: "complete"` polished payload with an assembled video + thumbnail (so `deriveDraft` yields a thumbnail). Mirror the existing polished draft's `stageOutputs.production.assembledVideos[0]` shape; set `id: "dev_mira_demo_kept"`, `taskId: "dev_mira_demo_task_kept"`. Keep all copy free of banned words ([[feedback_fixtures_as_product_copy]]).
+In `packages/db/src/seed/seed-mira-demo-creatives.ts`, add a third draft to the `drafts` array that is completed AND kept (so it leaves the feed and lands on the shelf). It must reuse the same fixed-id idempotency pattern and carry `reviewDecision: "kept"`, `reviewDecidedAt: new Date()`, and a `currentStage: "complete"` polished payload with an assembled video + thumbnail (so `deriveDraft` yields a thumbnail). Mirror the existing polished draft's `stageOutputs.production.assembledVideos[0]` shape; set `id: "dev_mira_demo_kept"`, `taskId: "dev_mira_demo_task_kept"`. The seed uses `prisma.creativeJob.upsert` with separate `create`/`update` payloads — add `reviewDecision: "kept"` + `reviewDecidedAt` to **both** branches, or a re-seed won't flip an already-present row. Keep all copy free of banned words ([[feedback_fixtures_as_product_copy]]).
 
 - [ ] **Step 4: Run the fixture-ban test again + commit**
 
@@ -3361,7 +3371,7 @@ pnpm db:migrate   # applies the review-decision migration
 pnpm db:seed      # enables Mira + seeds demo creatives incl. the kept draft
 ```
 
-The brief mutation resolves `skillSlug:"creative"` fail-closed, so the pilot org needs a `skillSlug:"creative"` deployment (listing status `"listed"`) or `/mira/brief` returns `creative_deployment_not_provisioned` (409). If the dedicated creative-deployment seed is absent, ensure one exists for the pilot org (see [[project_alex_live_integration_fixes]] / [[reference_governance_trust_path]]). For the desk buckets to all populate, the pilot org needs at least one `in_progress`, one `failed`, one `draft_ready`, and one kept job.
+The brief mutation resolves a **deployment `skillSlug:"creative"`** fail-closed (this is the deployment skill slug — NOT Mira's agent `role`, which also happens to be `"creative"`; they are different axes). So the pilot org needs a `skillSlug:"creative"` deployment (listing status `"listed"`) or `/mira/brief` returns `creative_deployment_not_provisioned` (409). If the dedicated creative-deployment seed is absent, ensure one exists for the pilot org (see [[project_alex_live_integration_fixes]] / [[reference_governance_trust_path]]). For the desk buckets to all populate, the pilot org needs at least one `in_progress`, one `failed`, one `draft_ready`, and one kept job.
 
 - [ ] **Step 3: Verify in the browser** ([[reference_dashboard_visual_verification]]):
   - `/mira` renders the **Desk** — four modules in order: brief box, the one hero Ready-to-review CTA, the calm in-production tray, the kept-drafts shelf. NOT the black feed.
