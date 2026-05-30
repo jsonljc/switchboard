@@ -198,3 +198,6 @@ export {
   type OutcomeCopyTemplate,
   type OutcomeCopyValues,
 } from "./recommendation-outcome-copy.js";
+
+// Mira Director's Desk — open-brief schema, mapping, and intent classifier (PR3)
+export * from "./mira-brief.js";
