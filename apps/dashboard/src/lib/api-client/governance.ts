@@ -12,7 +12,7 @@ import type {
   WinsViewModel,
 } from "@/lib/agent-home/types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
-import type { MiraCreativeJobSummary, MiraCreativeCounts } from "@switchboard/core";
+import type { MiraCreativeJobSummary, MiraCreativeCounts, MiraDeskModel } from "@switchboard/core";
 import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardClientCore } from "./core";
 
@@ -348,6 +348,11 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   async listMiraCreatives(limit = 20): Promise<MiraFeedResponse> {
     const path = `/api/dashboard/agents/mira/creatives?limit=${encodeURIComponent(String(limit))}`;
     return this.request<MiraFeedResponse>(path);
+  }
+
+  /** Reads the Mira Director's Desk read-model (read-only, org-scoped). */
+  async getMiraDesk(): Promise<{ desk: MiraDeskModel }> {
+    return this.request<{ desk: MiraDeskModel }>("/api/dashboard/agents/mira/desk");
   }
 
   /**
