@@ -6,3 +6,4 @@ export {
   deriveDraft,
 } from "./status-mapper.js";
 export { buildMiraCreativeReadModel, type BuildMiraReadModelOpts } from "./build-read-model.js";
+export * from "./desk-model.js";
