@@ -28,7 +28,10 @@ export async function ensureAlexListingForOrg(
       name: "Alex",
       description: "AI-powered lead conversion agent",
       type: "ai-agent",
-      status: "active",
+      // Canonical published AgentListingStatus is "listed" (enum has no "active"
+      // — that's a DeploymentStatus). The deployment below is correctly "active".
+      // The resolver gates on listing.status === "listed".
+      status: "listed",
       trustScore: 0,
       autonomyLevel: "supervised",
       priceTier: "free",

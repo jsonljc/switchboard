@@ -18,7 +18,7 @@ function makeDeploymentRow(overrides: Record<string, unknown> = {}) {
     listing: {
       id: "list-1",
       trustScore: 42,
-      status: "active",
+      status: "listed",
     },
     connections: [],
     ...overrides,
@@ -72,9 +72,24 @@ describe("PrismaDeploymentResolver", () => {
       );
     });
 
-    it("throws DeploymentInactiveError when listing is delisted", async () => {
+    it("resolves a deployment whose listing is published (status 'listed')", async () => {
+      // "listed" is the canonical published AgentListingStatus (the seed + the
+      // AgentListingStatus enum agree on it). The resolver must treat it as
+      // resolvable; "active" is a DeploymentStatus value, never a listing status.
       const row = makeDeploymentRow({
-        listing: { id: "list-1", trustScore: 42, status: "delisted" },
+        listing: { id: "list-1", trustScore: 42, status: "listed" },
+      });
+      const prisma = makeMockPrisma(row);
+      const resolver = new PrismaDeploymentResolver(prisma);
+
+      const result = await resolver.resolveByDeploymentId("dep-1");
+
+      expect(result.deploymentId).toBe("dep-1");
+    });
+
+    it("throws DeploymentInactiveError when listing is suspended", async () => {
+      const row = makeDeploymentRow({
+        listing: { id: "list-1", trustScore: 42, status: "suspended" },
       });
       const prisma = makeMockPrisma(row);
       const resolver = new PrismaDeploymentResolver(prisma);
@@ -93,10 +108,10 @@ describe("PrismaDeploymentResolver", () => {
 
     it("computes trust level correctly", async () => {
       const autonomous = makeDeploymentRow({
-        listing: { id: "l", trustScore: 60, status: "active" },
+        listing: { id: "l", trustScore: 60, status: "listed" },
       });
       const supervised = makeDeploymentRow({
-        listing: { id: "l", trustScore: 10, status: "active" },
+        listing: { id: "l", trustScore: 10, status: "listed" },
       });
 
       const p1 = makeMockPrisma(autonomous);
@@ -113,7 +128,7 @@ describe("PrismaDeploymentResolver", () => {
       const row = makeDeploymentRow({
         // score-derived trustLevel would be "supervised" (trustScore 10), but the
         // explicit launch posture override pins "autonomous" independently.
-        listing: { id: "l", trustScore: 10, status: "active" },
+        listing: { id: "l", trustScore: 10, status: "listed" },
         governanceSettings: { trustLevelOverride: "autonomous" },
       });
       const prisma = makeMockPrisma(row);

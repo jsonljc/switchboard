@@ -9,6 +9,7 @@ import { seedOrgDayOneAgents } from "../src/seed/seed-org-day-one-agents.js";
 import { seedAlexSkillPack } from "../src/seed/seed-alex-skill-pack.js";
 import { seedMiraPilotOrgs } from "../src/seed/seed-mira-pilot-orgs.js";
 import { seedMiraDemoCreatives } from "../src/seed/seed-mira-demo-creatives.js";
+import { seedMiraCreativeDeployment } from "../src/seed/seed-mira-creative-deployment.js";
 
 const prisma = new PrismaClient();
 
@@ -600,6 +601,14 @@ async function main() {
   // ── Marketplace Listings ──
   console.warn("\n--- Marketplace Listings ---");
   await seedMarketplace(prisma);
+
+  // ── Mira creative deployment (Alex→Mira handoff live prereq) ──
+  // Mira is enabled for org_dev (seedMiraPilotOrgs above) and /mira renders
+  // org_dev. The draft-only handoff also needs an ACTIVE skillSlug="creative"
+  // deployment in the SAME org, or the child resolver fails closed. Must run
+  // after seedMarketplace (depends on the performance-creative-director listing).
+  await seedMiraCreativeDeployment(prisma, "org_dev");
+  console.warn("Seeded Mira creative deployment for org_dev");
 
   // ── Marketplace Demo Data ──
   console.warn("\n--- Marketplace Demo Data ---");

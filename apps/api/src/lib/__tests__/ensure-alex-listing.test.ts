@@ -72,7 +72,7 @@ describe("ensureAlexListingForOrg", () => {
         name: "Alex",
         description: "AI-powered lead conversion agent",
         type: "ai-agent",
-        status: "active",
+        status: "listed",
         trustScore: 0,
         autonomyLevel: "supervised",
         priceTier: "free",
