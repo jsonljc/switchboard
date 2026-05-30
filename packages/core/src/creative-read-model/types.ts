@@ -30,6 +30,8 @@ export interface MiraCreativeJobSummary {
   source: { engine: "legacy_creative_job"; mode: "polished" | "ugc" };
   createdAt: string;
   updatedAt: string;
+  /** Phase-2 Keep/Pass review decision. null/undefined = undecided (in the feed). */
+  reviewDecision?: "kept" | "passed" | null;
 }
 
 export interface MiraCreativeCounts {
