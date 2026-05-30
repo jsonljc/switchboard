@@ -57,7 +57,7 @@ The front door and default surface. A calm hub, **not** a giant chat page and **
 2. **Mira proposals** — proposal cards Mira generates from Riley's recent performance ("Based on Riley's last 7 days, I'd make…"). Each card states the angle, the reason, and the intended use. Accept → becomes a production job. _(Phase 3.)_
 3. **In production** — a small tray, not the main event. "3 drafts generating." Plain stage copy by default; deeper shot-plan/QC detail only surfaces on a problem. Transparency without obligation, never an engineering console.
 4. **Ready to review** — a prominent CTA into the Screening Room. "4 drafts ready" → opens the feed.
-5. **Recently approved drafts** — a light, read-only shelf. In Phase 2 it shows only creatively-approved drafts with neutral copy ("Drafts you liked. Sending to Riley comes later."). The richer per-asset status (_waiting for Riley · in use · winner · fatigued_) is a **Phase 4–5 privilege**, unlocked only after the Riley attribution contract and governed handoff exist.
+5. **Recently approved drafts** — a light, read-only shelf. In Phase 2 it shows only creatively-approved drafts with neutral copy ("Drafts you kept. Sending to Riley comes later."). The richer per-asset status (_waiting for Riley · in use · winner · fatigued_) is a **Phase 4–5 privilege**, unlocked only after the Riley attribution contract and governed handoff exist.
 
 ### 2. Screening Room — `/mira/review` (north-star route; shipped today at `/mira`)
 
@@ -110,7 +110,7 @@ Seam-backed feed endpoint, UGC detail parity, vertical review feed, Continue/Sto
 - **Open brief box** — "What should Mira make?" (governed internal draft request — see contract below).
 - **Ready to review** — CTA into the feed (`/mira/review`).
 - **In production** tray — plain status only (see copy rules).
-- **Recently approved drafts** shelf — read-only, lightweight; "Drafts you liked. Sending to Riley comes later." Deliberately _not_ "Recent approved": "approved" is overloaded in Switchboard (creatively-liked vs. ready-for-distribution vs. externally-approved-to-publish). Phase 2 means only **reviewed/creatively-liked drafts**; "Sent to Riley" (governed handoff) and "Published" are unavailable and must read as such.
+- **Recently approved drafts** shelf — read-only, lightweight; "Drafts you kept. Sending to Riley comes later." Deliberately _not_ "Recent approved": "approved" is overloaded in Switchboard (creatively-liked vs. ready-for-distribution vs. externally-approved-to-publish). Phase 2 means only **reviewed/creatively-liked drafts**; "Sent to Riley" (governed handoff) and "Published" are unavailable and must read as such.
 
 **Routing:** `/mira` becomes the Desk; **move the feed to `/mira/review`** with a redirect/backward-compatible alias.
 
@@ -157,9 +157,11 @@ The PR must include **route-level tests** (the meaning of `/mira` is changing):
 
 Mira-generated proposals using Riley context. Examples:
 
-- "Your Reels placements are scaling but hooks are fatiguing — make 3 new opening hooks around price objection."
-- "This offer converts better on FB than IG — make a more direct-response version."
-- "Demo clips are outperforming lifestyle clips — create 2 demo-first drafts."
+- "Recent signals suggest your opening hooks could use a refresh — want 3 new hooks around price objection?"
+- "Signals point to this offer landing better on FB than IG — want a more direct-response version?"
+- "Recent signals lean toward demo-style clips — want 2 demo-first drafts?"
+
+These are **directional prompts, not causal claims** — phrased as suggestions the owner accepts or declines, never as asserted asset-level outcomes (see Constraints and the Phase-3 coarse-signal rule below).
 
 Depends on the Riley→Mira data contract (see Open Dependencies). **Until per-creative attribution exists, proposal cards must be framed on coarse account-level signals** — "Based on recent account patterns…", never "Based on your last creative's performance…". The UI must not imply asset-level learning it cannot back.
 
