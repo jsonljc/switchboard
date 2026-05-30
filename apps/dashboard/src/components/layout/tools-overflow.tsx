@@ -6,11 +6,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuPortal,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { isMercuryToolLive, type ToolsNavId } from "@/lib/route-availability";
+import { useMiraEnabled } from "@/hooks/use-mira-enabled";
 import styles from "./tools-overflow.module.css";
 
 export const TOOLS_NAV_ITEMS: ReadonlyArray<{
@@ -40,12 +42,23 @@ export function isPathActive(pathname: string, href: string): boolean {
 
 export function ToolsOverflow() {
   const pathname = usePathname() ?? "";
+  const { enabled: miraEnabled } = useMiraEnabled();
   const visibleItems = TOOLS_NAV_ITEMS.filter((it) => isMercuryToolLive(it.id));
+  // The advanced operator surface rides the same flag as customer reports — no
+  // separate env var (avoids the allowlist dance) and it only matters once
+  // reports are live anyway.
+  const advancedReportsLive = isMercuryToolLive("reports");
 
-  // Hide the entire trigger when zero Tools routes are live (decision §2 row 11).
-  if (visibleItems.length === 0) return null;
+  // Hide the entire trigger only when there is nothing to show: no live Tools
+  // routes AND Mira is not enabled for this org.
+  if (visibleItems.length === 0 && !miraEnabled) return null;
 
-  const isToolsRoute = TOOLS_PREFIXES.some((p) => isPathActive(pathname, p));
+  const miraActive = isPathActive(pathname, "/mira");
+  const reportsAdvancedActive = isPathActive(pathname, "/reports");
+  const isToolsRoute =
+    TOOLS_PREFIXES.some((p) => isPathActive(pathname, p)) ||
+    (miraEnabled && miraActive) ||
+    (advancedReportsLive && reportsAdvancedActive);
   const settingsActive = isPathActive(pathname, "/settings");
 
   return (
@@ -65,6 +78,24 @@ export function ToolsOverflow() {
               </DropdownMenuItem>
             );
           })}
+          {miraEnabled && (
+            <DropdownMenuItem asChild data-active={miraActive || undefined}>
+              <Link href="/mira" aria-current={miraActive ? "page" : undefined}>
+                Mira
+              </Link>
+            </DropdownMenuItem>
+          )}
+          {advancedReportsLive && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Advanced</DropdownMenuLabel>
+              <DropdownMenuItem asChild data-active={reportsAdvancedActive || undefined}>
+                <Link href="/reports" aria-current={reportsAdvancedActive ? "page" : undefined}>
+                  Operator reports
+                </Link>
+              </DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild data-active={settingsActive || undefined}>
             <Link href="/settings" aria-current={settingsActive ? "page" : undefined}>

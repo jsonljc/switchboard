@@ -9,6 +9,7 @@ import { RightDrawerProvider } from "./right-drawer-context";
 import { ToolsOverflow } from "./tools-overflow";
 import { TweaksPanelMount } from "./tweaks-panel-mount";
 import { PrimaryNav } from "./primary-nav";
+import { AccountMenu } from "./account-menu";
 
 /**
  * The single editorial shell. Mounted exactly once by AppShell (the (auth)
@@ -37,7 +38,7 @@ export function EditorialAuthShellInner({ children }: { children: ReactNode }) {
               <LiveSignalPopover />
               <InboxDrawer />
               <HaltButtonClient />
-              <span className="me-chip">M</span>
+              <AccountMenu />
               <ToolsOverflow />
             </div>
           </div>
