@@ -95,6 +95,10 @@ export interface SkillExecutionParams {
    * trace id (or a synthetic id) when omitted.
    */
   sessionId?: string;
+  /** Parent WorkUnit id, flowed into SkillRequestContext for delegation lineage. */
+  workUnitId?: string;
+  /** Delegation depth of the parent WorkUnit (default 0). */
+  delegationDepth?: number;
 }
 
 export interface SkillExecutionResult {
@@ -372,4 +376,8 @@ export interface SkillRequestContext {
   actorId?: string;
   traceId?: string;
   surface?: "chat" | "simulation" | "api" | "system";
+  /** The parent WorkUnit this skill executes inside. Anchors delegation lineage. */
+  workUnitId?: string;
+  /** Delegation depth of the parent WorkUnit (0 for top-level). Guards recursion. */
+  delegationDepth?: number;
 }

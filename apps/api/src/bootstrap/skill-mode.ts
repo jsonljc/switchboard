@@ -46,6 +46,12 @@ interface SkillModeBootstrapDeps {
    */
   contextBuilder?: import("@switchboard/core").ContextBuilder;
   /**
+   * Optional agent→agent delegation. When provided, Alex gets a `delegate` tool
+   * that submits governed child work via this port (PlatformIngress front door).
+   * Omitted in tests/local → no delegate tool is registered.
+   */
+  childWorkSubmitter?: import("@switchboard/core/skill-runtime").ChildWorkSubmitter;
+  /**
    * Optional WorkTraceStore. When provided, PrismaOpportunityStore uses it to
    * emit WorkTrace entries on stage transitions. When absent, stage transitions
    * are persisted but not traced.
@@ -72,6 +78,7 @@ export async function bootstrapSkillMode(
     createCrmWriteToolFactory,
     createCalendarBookToolFactory,
     createEscalateToolFactory,
+    createDelegateToolFactory,
     BookingFailureHandler,
     createAgentDeploymentGovernanceResolver,
     InMemoryGovernancePostureCache,
@@ -253,6 +260,19 @@ export async function bootstrapSkillMode(
     notifier: handoffNotifier,
   });
 
+  // Agent→agent delegation (Alex→Mira creative concept). Only wired when the
+  // caller supplies a childWorkSubmitter (the PlatformIngress front door). The
+  // delegate tool exposes one operation per allowlisted target; the child carries
+  // the real governance weight at PlatformIngress.
+  const { DELEGATION_TARGETS } = await import("./delegation-targets.js");
+  const delegateFactory = deps.childWorkSubmitter
+    ? createDelegateToolFactory({
+        submitter: deps.childWorkSubmitter,
+        targets: DELEGATION_TARGETS,
+        maxDepth: 1,
+      })
+    : undefined;
+
   const calendarBookFactory = createCalendarBookToolFactory({
     calendarProviderFactory,
     isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
@@ -296,6 +316,7 @@ export async function bootstrapSkillMode(
     ["crm-write", crmWriteFactory],
     ["escalate", escalateFactory],
   ]);
+  if (delegateFactory) toolFactories.set("delegate", delegateFactory);
 
   // Schema-only tool map for Anthropic tool registration & GovernanceHook.
   // Trust-bound tools are materialized with a synthetic context here to
@@ -311,6 +332,7 @@ export async function bootstrapSkillMode(
     ["calendar-book", calendarBookFactory(SCHEMA_ONLY_CTX)],
     ["escalate", escalateFactory(SCHEMA_ONLY_CTX)],
   ]);
+  if (delegateFactory) toolsMap.set("delegate", delegateFactory(SCHEMA_ONLY_CTX));
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
@@ -633,11 +655,19 @@ export async function bootstrapSkillMode(
   // schema-only synthetic context. SimulationPolicyHook still blocks write/external_send/
   // external_mutation/irreversible operations.
   const { SimulationPolicyHook } = await import("@switchboard/core/skill-runtime");
+  // A simulation must never perform real side effects. The delegate tool submits a
+  // real governed child WorkUnit (effectCategory "propose", which SimulationPolicyHook
+  // does not block), so exclude it from the simulation executor entirely. (It is also
+  // inert today because /simulate supplies no workUnitId — this makes that by-design.)
+  const simulationToolFactories = new Map(toolFactories);
+  simulationToolFactories.delete("delegate");
+  const simulationToolsMap = new Map(toolsMap);
+  simulationToolsMap.delete("delegate");
   // Safety gate and claim classifier shared instances — same resolver/cache so simulation
   // shares posture warm-hits from the main executor. SimulationPolicyHook trails last to
   // block any write operations that survive governance filtering.
   const simulationHooks = [
-    new GovernanceHook(toolsMap),
+    new GovernanceHook(simulationToolsMap),
     safetyGateHook,
     claimClassifierHook,
     pdpaConsentGateHook,
@@ -646,11 +676,11 @@ export async function bootstrapSkillMode(
   ];
   const simulationExecutor = new SkillExecutorImpl(
     adapter,
-    toolsMap,
+    simulationToolsMap,
     undefined,
     simulationHooks,
     undefined,
-    toolFactories,
+    simulationToolFactories,
   );
 
   return { simulationExecutor, alexSkill, consentService, contactConsentReader };

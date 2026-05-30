@@ -28,6 +28,39 @@ export interface ContainedWorkflowBootstrapResult {
   instantFormAdapter: InstantFormAdapter;
 }
 
+/**
+ * Builds the governed child-work submitter: resolves the child's deployment by
+ * intent and submits through PlatformIngress with trigger:"internal". Shared by
+ * the contained-workflow services AND the SkillMode delegate tool so both use the
+ * one front door (no parallel mutation paths).
+ */
+export function createSubmitChildWork(deps: {
+  platformIngress: PlatformIngress;
+  deploymentResolver: DeploymentResolver | null;
+}): (request: ChildWorkRequest) => Promise<SubmitWorkResponse> {
+  return async (request: ChildWorkRequest): Promise<SubmitWorkResponse> => {
+    const deployment = await resolveDeploymentForIntent(
+      deps.deploymentResolver,
+      request.organizationId,
+      request.intent,
+    );
+    return deps.platformIngress.submit({
+      organizationId: request.organizationId,
+      actor: request.actor,
+      intent: request.intent,
+      parameters: request.parameters,
+      targetHint: deployment
+        ? { deploymentId: deployment.deploymentId, skillSlug: deployment.skillSlug }
+        : undefined,
+      trigger: "internal",
+      surface: { surface: "api" },
+      parentWorkUnitId: request.parentWorkUnitId,
+      idempotencyKey: request.idempotencyKey,
+      priority: request.priority as "low" | "normal" | "high" | undefined,
+    });
+  };
+}
+
 export async function bootstrapContainedWorkflows(
   deps: ContainedWorkflowBootstrapDeps,
 ): Promise<ContainedWorkflowBootstrapResult> {
@@ -42,6 +75,8 @@ export async function bootstrapContainedWorkflows(
 
   const { buildCreativeJobSubmitWorkflow } =
     await import("../services/workflows/creative-job-submit-workflow.js");
+  const { buildCreativeConceptDraftWorkflow } =
+    await import("../services/workflows/creative-concept-draft-workflow.js");
   const { buildCreativeJobDecisionWorkflow } =
     await import("../services/workflows/creative-job-decision-workflow.js");
   const { buildMetaLeadIntakeWorkflow } =
@@ -51,7 +86,13 @@ export async function bootstrapContainedWorkflows(
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
-  const { PrismaLeadIntakeStore } = await import("@switchboard/db");
+  const {
+    PrismaLeadIntakeStore,
+    PrismaAgentTaskStore,
+    PrismaCreativeJobStore,
+    PrismaDeploymentStore,
+    PrismaOrgAgentEnablementStore,
+  } = await import("@switchboard/db");
   const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
 
   // Single source of truth for Contact creation from leads (CTWA + Instant Form).
@@ -90,32 +131,29 @@ export async function bootstrapContainedWorkflows(
     now: () => new Date(),
   });
 
-  const submitChildWork = async (request: ChildWorkRequest): Promise<SubmitWorkResponse> => {
-    const deployment = await resolveDeploymentForIntent(
-      deploymentResolver,
-      request.organizationId,
-      request.intent,
-    );
-    return platformIngress.submit({
-      organizationId: request.organizationId,
-      actor: request.actor,
-      intent: request.intent,
-      parameters: request.parameters,
-      targetHint: deployment
-        ? { deploymentId: deployment.deploymentId, skillSlug: deployment.skillSlug }
-        : undefined,
-      trigger: "internal",
-      surface: { surface: "api" },
-      parentWorkUnitId: request.parentWorkUnitId,
-      idempotencyKey: request.idempotencyKey,
-      priority: request.priority as "low" | "normal" | "high" | undefined,
-    });
-  };
+  const submitChildWork = createSubmitChildWork({ platformIngress, deploymentResolver });
 
   const services = { submitChildWork };
 
+  // Alex→Mira delegation target: draft-only creative concept (no pipeline / no spend).
+  const creativeConceptDraftWorkflow = buildCreativeConceptDraftWorkflow({
+    taskStore: new PrismaAgentTaskStore(
+      prismaClient as ConstructorParameters<typeof PrismaAgentTaskStore>[0],
+    ),
+    jobStore: new PrismaCreativeJobStore(
+      prismaClient as ConstructorParameters<typeof PrismaCreativeJobStore>[0],
+    ),
+    deploymentStore: new PrismaDeploymentStore(
+      prismaClient as ConstructorParameters<typeof PrismaDeploymentStore>[0],
+    ),
+    enablementStore: new PrismaOrgAgentEnablementStore(
+      prismaClient as ConstructorParameters<typeof PrismaOrgAgentEnablementStore>[0],
+    ),
+  });
+
   const handlers = new Map<string, WorkflowHandler>([
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
+    ["creative.concept.draft", creativeConceptDraftWorkflow],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
     ["lead.intake", buildLeadIntakeWorkflow(leadIntakeHandler)],
@@ -131,6 +169,7 @@ export async function bootstrapContainedWorkflows(
     workflowId: string;
     budgetClass: "cheap" | "standard" | "expensive";
     approvalPolicy: "none" | "threshold" | "always";
+    approvalMode?: "system_auto_approved";
     allowedTriggers: Array<"api" | "chat" | "schedule" | "internal">;
   }> = [
     {
@@ -153,6 +192,24 @@ export async function bootstrapContainedWorkflows(
       budgetClass: "standard",
       approvalPolicy: "threshold",
       allowedTriggers: ["api"],
+    },
+    {
+      // Alex→Mira draft-only handoff. No spend (the handler never fires the
+      // creative pipeline), reversible (just a CreativeJob draft row), and
+      // internal-trigger-only (not reachable from the public API).
+      // approvalMode:"system_auto_approved" short-circuits the policy/approval
+      // step BEFORE identity resolution: an agent-actor child has no seeded
+      // IdentitySpec, so without this the child would hard-deny with
+      // GOVERNANCE_ERROR — and there is nothing for the compliance floor to catch
+      // on a no-outbound draft. It STILL flows through ingress (entitlement,
+      // idempotency, WorkTrace, audit, dispatch). Spend-bearing targets must NOT
+      // copy this — they keep approvalPolicy:"threshold" and park for approval.
+      intent: "creative.concept.draft",
+      workflowId: "creative.concept.draft",
+      budgetClass: "cheap",
+      approvalPolicy: "none",
+      approvalMode: "system_auto_approved",
+      allowedTriggers: ["internal"],
     },
     {
       intent: "lead.intake",
@@ -194,6 +251,7 @@ export async function bootstrapContainedWorkflows(
       mutationClass: "write",
       budgetClass: reg.budgetClass,
       approvalPolicy: reg.approvalPolicy,
+      approvalMode: reg.approvalMode,
       idempotent: false,
       allowedTriggers: reg.allowedTriggers,
       timeoutMs: 300_000,

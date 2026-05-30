@@ -79,6 +79,13 @@ export class SkillMode implements ExecutionMode {
         trustScore: workUnit.deployment?.trustScore ?? 0,
         trustLevel: constraints.trustLevel,
         sessionId: workUnit.traceId ?? workUnit.id,
+        workUnitId: workUnit.id,
+        // Authoritative from the (server-set) work-unit parameters, never from LLM
+        // tool input — the delegate tool sets the child's __delegationDepth itself.
+        delegationDepth:
+          typeof workUnit.parameters.__delegationDepth === "number"
+            ? workUnit.parameters.__delegationDepth
+            : 0,
       });
 
       const durationMs = Date.now() - startMs;

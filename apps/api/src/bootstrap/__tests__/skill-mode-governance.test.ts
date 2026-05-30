@@ -51,6 +51,9 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   createEscalateToolFactory: vi.fn(() => () => ({
     operations: { owner: { effectCategory: "external_send" } },
   })),
+  createDelegateToolFactory: vi.fn(() => () => ({
+    operations: { creative_concept: { effectCategory: "propose" } },
+  })),
   BookingFailureHandler: vi.fn().mockImplementation(() => ({})),
   alexBuilder: vi.fn(async () => ({})),
   createAgentDeploymentGovernanceResolver: vi.fn(() => vi.fn(async () => ({ status: "missing" }))),

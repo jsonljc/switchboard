@@ -14,6 +14,7 @@ import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
+import { composeSkillRequestContext } from "./skill-request-context.js";
 import { denied, pendingApproval, fail, ok } from "./tool-result.js";
 import type { ToolResult } from "./tool-result.js";
 import { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
@@ -130,11 +131,7 @@ export class SkillExecutorImpl implements SkillExecutor {
   }
 
   private buildRequestContext(params: SkillExecutionParams): SkillRequestContext {
-    return {
-      sessionId: params.sessionId ?? `${params.deploymentId}-${Date.now()}`,
-      orgId: params.orgId,
-      deploymentId: params.deploymentId,
-    };
+    return composeSkillRequestContext(params);
   }
 
   private resolveProfile(

@@ -34,13 +34,23 @@ export {
   createCalendarBookToolFactory,
   createWebScannerTool,
   createEscalateToolFactory,
+  createDelegateToolFactory,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,
+  DelegateToolFactory,
+  DelegateToolDeps,
   CalendarBookToolFactory,
   CrmWriteToolFactory,
   CalendarProviderFactory,
 } from "./tools/index.js";
+export type {
+  ChildWorkSubmitter,
+  DelegationRequest,
+  DelegationResult,
+  DelegationTarget,
+} from "./delegation-port.js";
+export { composeSkillRequestContext } from "./skill-request-context.js";
 export {
   alexBuilder,
   salesPipelineBuilder,

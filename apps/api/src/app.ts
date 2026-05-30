@@ -468,6 +468,19 @@ export async function buildServer() {
   let simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null = null;
   let skillModeConsentService: import("@switchboard/core").ConsentService | null = null;
   let skillModeContactConsentReader: import("@switchboard/core").ContactConsentReader | null = null;
+
+  // Agent→agent delegation submitter. PlatformIngress is constructed further below,
+  // so this is late-bound: the delegate tool only calls submitChildWork at runtime
+  // (during an Alex conversation), by which point submitChildWorkRef is assigned.
+  // Adapts the platform SubmitWorkResponse to the core ChildWorkSubmitter port.
+  let submitChildWorkRef:
+    | ((
+        req: import("@switchboard/core/platform").ChildWorkRequest,
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | undefined;
+  const { createChildWorkSubmitter } = await import("./bootstrap/delegation-submitter.js");
+  const childWorkSubmitter = createChildWorkSubmitter(() => submitChildWorkRef);
+
   try {
     if (!prismaClient) {
       throw new Error("SkillMode requires DATABASE_URL — prismaClient is null");
@@ -479,6 +492,7 @@ export async function buildServer() {
       modeRegistry,
       logger: app.log,
       contextBuilder,
+      childWorkSubmitter,
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;
@@ -643,6 +657,14 @@ export async function buildServer() {
     operatorAlerter,
   });
   app.decorate("platformIngress", platformIngress);
+
+  // Late-bind the delegation submitter now that PlatformIngress exists (see the
+  // childWorkSubmitter declaration above). Reuses createSubmitChildWork so agent
+  // delegation flows through the same governed front door as contained workflows.
+  {
+    const { createSubmitChildWork } = await import("./bootstrap/contained-workflows.js");
+    submitChildWorkRef = createSubmitChildWork({ platformIngress, deploymentResolver });
+  }
 
   // --- Contained workflow mode (creative pipeline, Meta lead intake) ---
   let instantFormAdapter: import("@switchboard/ad-optimizer").InstantFormAdapter | undefined;
