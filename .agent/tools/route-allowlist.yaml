@@ -153,6 +153,8 @@
 
 - path: "apps/api/src/routes/whatsapp-send-test.ts"
   reason: "Permanently justified: Tech Provider verification surface — sends to testRecipients allowlist only, persists a diagnostic audit record, not a revenue-affecting operator business action."
+- path: "apps/api/src/routes/whatsapp-template-create.ts"
+  reason: "Permanently justified: Tech Provider verification surface — creates a WhatsApp message template via Meta Graph (whatsapp_business_management) for App Review demo; channel-config mutation on Meta's side, not a governed revenue-affecting business action, no WorkTrace surface."
 - path: "apps/api/src/routes/meta-deletion.ts"
   reason: "Permanently justified: Meta GDPR data-deletion webhook — signed_request HMAC-verified against META_APP_SECRET, no operator identity, regulatory compliance handler required by Meta App Review."
 - path: "apps/api/src/routes/dashboard-reports.ts"
