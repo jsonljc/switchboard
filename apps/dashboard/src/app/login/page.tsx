@@ -380,17 +380,28 @@ function LoginForm() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label
-                    htmlFor="password"
-                    style={{
-                      display: "block",
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      color: "var(--sw-text-primary)",
-                    }}
-                  >
-                    Password
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="password"
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 500,
+                        color: "var(--sw-text-primary)",
+                      }}
+                    >
+                      Password
+                    </label>
+                    <Link
+                      href="/forgot-password"
+                      style={{
+                        fontSize: "13px",
+                        color: "var(--sw-text-muted)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <input
                     id="password"
                     type="password"

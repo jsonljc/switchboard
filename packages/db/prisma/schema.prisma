@@ -388,6 +388,7 @@ model DashboardUser {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   sessions        DashboardSession[]
+  passwordResetTokens DashboardPasswordResetToken[]
 }
 
 model DashboardSession {
@@ -406,6 +407,21 @@ model DashboardVerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/// Single-use, hashed password-reset tokens (forgot-password flow).
+/// The raw token is emailed to the user; only its SHA-256 hash is stored, so a
+/// DB leak does not expose usable reset links. Prior tokens for a user are
+/// invalidated when a new one is issued, and deleted once consumed.
+model DashboardPasswordResetToken {
+  id        String        @id @default(uuid())
+  userId    String
+  tokenHash String        @unique
+  expiresAt DateTime
+  createdAt DateTime      @default(now())
+  user      DashboardUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model OrganizationConfig {

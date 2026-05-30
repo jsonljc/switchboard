@@ -129,4 +129,32 @@ describe("email module", () => {
       expect(allowed).toBe(false);
     });
   });
+
+  describe("sendPasswordResetEmail", () => {
+    it("sends a reset email with a /reset-password link when RESEND_API_KEY is set", async () => {
+      mockSendEmail.mockResolvedValue({ id: "email_1" });
+
+      const { sendPasswordResetEmail } = await import("../email");
+      const result = await sendPasswordResetEmail("test@example.com", "tok123");
+
+      expect(result.sent).toBe(true);
+      expect(result.url).toContain("/reset-password?token=tok123");
+      expect(mockSendEmail).toHaveBeenCalledOnce();
+      const emailArg = mockSendEmail.mock.calls[0]![0];
+      expect(emailArg.to).toBe("test@example.com");
+      expect(emailArg.subject.toLowerCase()).toContain("reset");
+      expect(emailArg.html).toContain("reset-password");
+    });
+
+    it("does not send but still returns the url when RESEND_API_KEY is not set", async () => {
+      vi.stubEnv("RESEND_API_KEY", "");
+
+      const { sendPasswordResetEmail } = await import("../email");
+      const result = await sendPasswordResetEmail("test@example.com", "tok123");
+
+      expect(result.sent).toBe(false);
+      expect(result.url).toContain("/reset-password?token=tok123");
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+  });
 });
