@@ -27,13 +27,15 @@ const PLAN_MONTHLY_USD: Record<string, number> = {
   Scale: 799,
 };
 
-async function resolveInsightsProvider(
+// Exported for unit testing the connection lookup (serviceId must match the
+// canonical Meta Ads serviceId written by the credential resolver).
+export async function resolveInsightsProvider(
   app: { prisma: import("@switchboard/db").PrismaClient | null },
   orgId: string,
 ): Promise<ReportInsightsProvider | null> {
   if (!app.prisma) return null;
   const conn = await app.prisma.connection.findFirst({
-    where: { organizationId: orgId, serviceId: "meta", status: "connected" },
+    where: { organizationId: orgId, serviceId: "meta-ads", status: "connected" },
     select: { externalAccountId: true, credentials: true },
   });
   if (!conn?.externalAccountId || !conn.credentials) return null;
