@@ -162,7 +162,7 @@ describe("Organizations API — Config", () => {
             slug: "alex-conversion",
             name: "Alex",
             type: "ai-agent",
-            status: "active",
+            status: "listed",
             autonomyLevel: "supervised",
             priceTier: "free",
           }),

@@ -106,7 +106,11 @@ export class PrismaDeploymentResolver implements DeploymentResolver {
     if (row.status !== "active") {
       throw new DeploymentInactiveError(row.id, `status is ${row.status}`);
     }
-    if (row.listing.status !== "active") {
+    // "listed" is the published/resolvable AgentListingStatus (enum:
+    // pending_review | listed | suspended | deprecated). NOT "active" — that is a
+    // DeploymentStatus value and never a listing status, so the old `!== "active"`
+    // gate rejected every real listing and forced an "api-direct" fallback.
+    if (row.listing.status !== "listed") {
       throw new DeploymentInactiveError(row.id, `listing is ${row.listing.status}`);
     }
     if (!row.skillSlug) {
