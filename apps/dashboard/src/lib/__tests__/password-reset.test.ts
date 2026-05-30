@@ -55,10 +55,14 @@ function makeFakePrisma(users: UserRow[]) {
         ).length,
       findUnique: async ({ where }: { where: { tokenHash: string } }) =>
         tokens.find((t) => t.tokenHash === where.tokenHash) ?? null,
-      deleteMany: async ({ where }: { where: { userId: string } }) => {
+      deleteMany: async ({ where }: { where: { userId?: string; tokenHash?: string } }) => {
         let count = 0;
         for (let i = tokens.length - 1; i >= 0; i--) {
-          if (tokens[i]!.userId === where.userId) {
+          const t = tokens[i]!;
+          const matches =
+            (where.userId === undefined || t.userId === where.userId) &&
+            (where.tokenHash === undefined || t.tokenHash === where.tokenHash);
+          if (matches) {
             tokens.splice(i, 1);
             count++;
           }
@@ -141,6 +145,22 @@ describe("resetPasswordWithToken", () => {
     const result = await resetPasswordWithToken(prisma, token!, "newpassword123");
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/expired/i);
+  });
+
+  it("only invalidates the submitted expired token, not a fresh sibling", async () => {
+    const prisma = makeFakePrisma([{ id: "u1", email: "a@b.co", passwordHash: "old" }]);
+    const first = (await requestPasswordReset(prisma, "a@b.co")).token!;
+    const second = (await requestPasswordReset(prisma, "a@b.co")).token!;
+    const firstRow = prisma._tokens.find((t) => t.tokenHash === hashResetToken(first))!;
+    firstRow.expiresAt = new Date(Date.now() - 1000);
+
+    const result = await resetPasswordWithToken(prisma, first, "newpassword123");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/expired/i);
+    // the still-valid sibling token must survive
+    expect(prisma._tokens).toHaveLength(1);
+    expect(prisma._tokens[0]!.tokenHash).toBe(hashResetToken(second));
   });
 
   it("rejects a weak new password and leaves the password unchanged", async () => {

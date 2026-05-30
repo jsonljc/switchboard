@@ -225,3 +225,63 @@ describe("dashboard middleware auth", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 });
+
+describe("auth-mutation rate limiting", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
+  });
+
+  const forgot = (ip: string) =>
+    new NextRequest("http://localhost/api/auth/forgot-password", {
+      headers: { "x-forwarded-for": ip },
+    });
+
+  it("keeps /api/auth/forgot-password public (no login redirect)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(forgot("9.9.9.9"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("429s after the per-IP limit on forgot-password", async () => {
+    const { middleware } = await import("../middleware");
+
+    for (let i = 0; i < 10; i++) {
+      expect(middleware(forgot("5.5.5.5")).status).toBe(200);
+    }
+    expect(middleware(forgot("5.5.5.5")).status).toBe(429);
+  });
+
+  it("tracks each IP independently", async () => {
+    const { middleware } = await import("../middleware");
+
+    for (let i = 0; i < 11; i++) middleware(forgot("5.5.5.5"));
+    // a different IP is unaffected by the first IP's exhausted budget
+    expect(middleware(forgot("7.7.7.7")).status).toBe(200);
+  });
+
+  it("also throttles reset-password", async () => {
+    const { middleware } = await import("../middleware");
+    const reset = () =>
+      middleware(
+        new NextRequest("http://localhost/api/auth/reset-password", {
+          headers: { "x-forwarded-for": "6.6.6.6" },
+        }),
+      );
+
+    for (let i = 0; i < 10; i++) expect(reset().status).toBe(200);
+    expect(reset().status).toBe(429);
+  });
+});

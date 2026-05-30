@@ -53,14 +53,18 @@ export async function resetPasswordWithToken(
   const pw = validatePassword(newPassword);
   if (!pw.valid) return { ok: false, error: pw.error };
 
+  const tokenHash = hashResetToken(token);
   const record = await prisma.dashboardPasswordResetToken.findUnique({
-    where: { tokenHash: hashResetToken(token) },
+    where: { tokenHash },
   });
   if (!record) {
     return { ok: false, error: "Invalid or expired reset link. Please request a new one." };
   }
   if (record.expiresAt < new Date()) {
-    await prisma.dashboardPasswordResetToken.deleteMany({ where: { userId: record.userId } });
+    // Invalidate only the expired token itself — a fresh sibling issued by a
+    // later request must remain usable. (The success path below consumes all
+    // of the user's tokens; an expired submission must not.)
+    await prisma.dashboardPasswordResetToken.deleteMany({ where: { tokenHash } });
     return { ok: false, error: "This reset link has expired. Please request a new one." };
   }
 

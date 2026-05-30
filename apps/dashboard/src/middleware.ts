@@ -38,12 +38,25 @@ interface RateLimitEntry {
 
 const ipMap = new Map<string, RateLimitEntry>();
 
+// Public, unauthenticated auth-mutation endpoints (forgot/reset password) get a
+// much tighter per-IP cap than the general dashboard proxy — they trigger email
+// sends + DB lookups and are a natural abuse target. Separate map so the two
+// budgets don't bleed into each other.
+const AUTH_MUTATION_MAX_REQUESTS = 10;
+const AUTH_MUTATION_PATHS = new Set(["/api/auth/forgot-password", "/api/auth/reset-password"]);
+const authIpMap = new Map<string, RateLimitEntry>();
+
 // Periodic cleanup to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of ipMap) {
     if (now > entry.resetAt) {
       ipMap.delete(ip);
+    }
+  }
+  for (const [ip, entry] of authIpMap) {
+    if (now > entry.resetAt) {
+      authIpMap.delete(ip);
     }
   }
 }, WINDOW_MS);
@@ -72,6 +85,38 @@ export function middleware(request: NextRequest) {
     entry.count++;
 
     if (entry.count > MAX_REQUESTS) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((entry.resetAt - now) / 1000)),
+          },
+        },
+      );
+    }
+
+    return NextResponse.next();
+  }
+
+  // Tighter per-IP throttle for unauthenticated auth-mutation endpoints.
+  if (AUTH_MUTATION_PATHS.has(pathname)) {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      "unknown";
+
+    const now = Date.now();
+    let entry = authIpMap.get(ip);
+
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + WINDOW_MS };
+      authIpMap.set(ip, entry);
+    }
+
+    entry.count++;
+
+    if (entry.count > AUTH_MUTATION_MAX_REQUESTS) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },
         {
@@ -125,5 +170,7 @@ export const config = {
     "/riley/:path*",
     "/inbox/:path*",
     "/results/:path*",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
   ],
 };

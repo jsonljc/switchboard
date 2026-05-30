@@ -28,6 +28,13 @@ export async function POST(request: NextRequest) {
 
   let resetUrl: string | undefined;
   if (token) {
+    // Awaited deliberately (not fire-and-forget): Next.js on Vercel does not
+    // guarantee un-awaited async work completes after the response returns, so
+    // `void sendPasswordResetEmail(...)` would drop emails. The cost is that an
+    // existing-account request is latency-distinguishable from an unknown one —
+    // an accepted, low-practicality residual timing channel for v1 (the existing
+    // registration flow behaves identically). Flatten later via `after()`/
+    // waitUntil if it ever matters.
     const { sent, url } = await sendPasswordResetEmail(email, token);
     // Local-dev affordance: when no email provider is configured, surface the
     // link so the flow is testable. Gated to non-production only (Vercel preview
