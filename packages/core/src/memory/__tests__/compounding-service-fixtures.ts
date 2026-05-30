@@ -34,6 +34,8 @@ export function createMockDeps() {
       create: vi.fn().mockResolvedValue({ id: "mem-1" }),
       incrementConfidence: vi.fn().mockResolvedValue({ id: "mem-1", sourceCount: 2 }),
       countByDeployment: vi.fn().mockResolvedValue(0),
+      findEvictionCandidate: vi.fn().mockResolvedValue(null),
+      delete: vi.fn().mockResolvedValue(undefined),
     },
   };
 }

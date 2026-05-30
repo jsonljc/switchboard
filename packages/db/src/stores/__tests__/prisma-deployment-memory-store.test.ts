@@ -221,6 +221,28 @@ describe("PrismaDeploymentMemoryStore", () => {
     });
   });
 
+  it("findEvictionCandidate selects the lowest-confidence, oldest entry", async () => {
+    (prisma.deploymentMemory.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "mem-stale",
+      confidence: 0.31,
+    });
+
+    const result = await store.findEvictionCandidate("org-1", "dep-1");
+
+    expect(result).toEqual({ id: "mem-stale", confidence: 0.31 });
+    expect(prisma.deploymentMemory.findFirst).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", deploymentId: "dep-1" },
+      orderBy: [{ confidence: "asc" }, { lastSeenAt: "asc" }],
+      select: { id: true, confidence: true },
+    });
+  });
+
+  it("findEvictionCandidate returns null when the deployment has no entries", async () => {
+    (prisma.deploymentMemory.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const result = await store.findEvictionCandidate("org-1", "dep-1");
+    expect(result).toBeNull();
+  });
+
   it("findByCategoryAndCanonicalKey filters by all four columns", async () => {
     (prisma.deploymentMemory.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
       {

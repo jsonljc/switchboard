@@ -65,6 +65,16 @@ export interface CompoundingDeploymentMemoryStore {
     newConfidence: number,
   ): Promise<{ id: string; sourceCount: number }>;
   countByDeployment(organizationId: string, deploymentId: string): Promise<number>;
+  /**
+   * Lowest-value eviction candidate for a deployment: lowest confidence,
+   * tie-broken by oldest lastSeenAt (LRU). Returns null when the deployment
+   * has no entries. Used to admit a higher-value fact once the cap is hit.
+   */
+  findEvictionCandidate(
+    organizationId: string,
+    deploymentId: string,
+  ): Promise<{ id: string; confidence: number } | null>;
+  delete(organizationId: string, id: string): Promise<void>;
 }
 
 export interface DeploymentMemoryEvidenceStore {
@@ -107,6 +117,9 @@ export interface CompoundingDeps {
 const MIN_MESSAGES = 2;
 const SIMILARITY_THRESHOLD = 0.92;
 const MAX_MEMORY_ENTRIES = 500;
+// Confidence a brand-new fact is stored at (matches the store's create default).
+// Also the rank a newcomer must beat to evict an entry once the cap is hit.
+const NEW_FACT_CONFIDENCE = 0.5;
 const FAQ_PROMOTION_THRESHOLD = 3;
 const FAQ_DRAFT_EXPIRY_MS = 72 * 60 * 60 * 1000; // 72 hours
 const MAX_PATTERNS_PER_CONVERSATION = 5;
@@ -316,9 +329,11 @@ export class ConversationCompoundingService {
     deploymentId: string,
     fact: { fact: string; confidence: number; category: string },
   ): Promise<void> {
-    const count = await this.memoryStore.countByDeployment(organizationId, deploymentId);
-    if (count >= MAX_MEMORY_ENTRIES) return;
-
+    // Reinforcement runs first and unconditionally: incrementing confidence on
+    // an existing row never grows the entry count, so the cap must NOT gate it.
+    // Gating reinforcement at the cap is the "write-deafness" bug — a fact
+    // repeated after the deployment fills up would never get its confidence
+    // bumped.
     const existing = await this.memoryStore.findByCategory(
       organizationId,
       deploymentId,
@@ -341,11 +356,32 @@ export class ConversationCompoundingService {
       }
     }
 
+    // No similar entry — this is a NEW fact, so the cap applies. At cap, admit
+    // it only by evicting the lowest-value entry, and only when the newcomer
+    // outranks that entry (hybrid policy). Otherwise drop it. Without this the
+    // memory would freeze permanently at the cap, since nothing else deletes
+    // entries (decay only lowers confidence to a floor).
+    const count = await this.memoryStore.countByDeployment(organizationId, deploymentId);
+    if (count >= MAX_MEMORY_ENTRIES) {
+      const candidate = await this.memoryStore.findEvictionCandidate(organizationId, deploymentId);
+      if (!candidate || NEW_FACT_CONFIDENCE <= candidate.confidence) return;
+      try {
+        await this.memoryStore.delete(organizationId, candidate.id);
+      } catch (err) {
+        // The candidate was deleted by a concurrent writer between find and
+        // delete — drop this fact rather than create a row without a freed
+        // slot (which would push past the cap).
+        console.warn("[CompoundingService] eviction delete failed, dropping new fact", err);
+        return;
+      }
+    }
+
     await this.memoryStore.create({
       organizationId,
       deploymentId,
       category: fact.category,
       content: fact.fact,
+      confidence: NEW_FACT_CONFIDENCE,
     });
   }
 
