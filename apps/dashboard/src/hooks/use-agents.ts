@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
-import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
+import type { AgentRosterEntry, DerivedAgentStateEntry } from "@/lib/api-client-types";
 
 async function fetchRoster(): Promise<{ roster: AgentRosterEntry[] }> {
   const res = await fetch("/api/dashboard/agents/roster");
@@ -10,7 +10,7 @@ async function fetchRoster(): Promise<{ roster: AgentRosterEntry[] }> {
   return res.json();
 }
 
-async function fetchState(): Promise<{ states: AgentStateEntry[] }> {
+async function fetchState(): Promise<{ states: DerivedAgentStateEntry[] }> {
   const res = await fetch("/api/dashboard/agents/state");
   if (!res.ok) throw new Error("Failed to fetch agent state");
   return res.json();

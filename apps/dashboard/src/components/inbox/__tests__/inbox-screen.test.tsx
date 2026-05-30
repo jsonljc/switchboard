@@ -32,6 +32,49 @@ vi.mock("@/hooks/use-recommendation-action", () => ({
 
 vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
+const invalidateQueriesMock = vi.fn();
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }),
+  };
+});
+
+vi.mock("@/hooks/use-query-keys", () => ({
+  useScopedQueryKeys: () => ({
+    decisions: { all: () => ["org1", "decisions"] },
+    escalations: { all: () => ["org1", "escalations"] },
+  }),
+}));
+
+const escalationDetailState = {
+  data: {
+    escalation: {
+      id: "esc_9",
+      reason: "human_requested",
+      status: "pending",
+      conversationSummary: {},
+      leadSnapshot: { channel: "WhatsApp" },
+    },
+    conversationHistory: [],
+  },
+  isLoading: false,
+  isError: false,
+  refetch: vi.fn(),
+};
+vi.mock("@/hooks/use-escalation-detail", () => ({
+  useEscalationDetail: () => escalationDetailState,
+}));
+const sendMock = vi.fn(() => Promise.resolve({ ok: true, escalation: { id: "esc_9" } }));
+const resolveMock = vi.fn(() => Promise.resolve());
+vi.mock("@/hooks/use-escalation-reply", () => ({
+  useEscalationReply: () => ({ send: sendMock, isPending: false }),
+}));
+vi.mock("@/hooks/use-escalation-resolve", () => ({
+  useEscalationResolve: () => ({ resolve: resolveMock, isPending: false }),
+}));
+
 // Mock heavy deps to avoid sprite/canvas noise
 vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   InboxAgentAvatar: ({ agentKey }: { agentKey: string }) => (
@@ -134,6 +177,14 @@ function makeHandoff(overrides: Partial<Decision> = {}): Decision {
   };
 }
 
+const handoffDecision = makeHandoff({
+  id: "dec_h1",
+  agentKey: "riley",
+  humanSummary: "Maya is price-shopping the combo.",
+  sourceRef: { kind: "handoff", sourceId: "esc_9" },
+  meta: { slaDeadlineAt: "2026-05-25T09:53:00Z" },
+});
+
 // Shared test decisions
 const alexDecision = makeDecision({ id: "dec-alex-1", agentKey: "alex" });
 const rileyHandoff = makeHandoff({ id: "dec-riley-1", agentKey: "riley" });
@@ -182,7 +233,7 @@ describe("<InboxScreen>", () => {
 
       render(<InboxScreen />);
 
-      expect(screen.getByText(/couldn't load your inbox/i)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
       expect(screen.queryByText(/that's everything/i)).toBeNull();
     });
 
@@ -215,7 +266,7 @@ describe("<InboxScreen>", () => {
 
       expect(screen.getByText(/loading/i)).toBeInTheDocument();
       expect(screen.queryByText(/that's everything/i)).toBeNull();
-      expect(screen.queryByText(/couldn't load your inbox/i)).toBeNull();
+      expect(screen.queryByText(/couldn't load/i)).toBeNull();
     });
   });
 
@@ -226,7 +277,9 @@ describe("<InboxScreen>", () => {
 
       render(<InboxScreen />);
 
-      expect(screen.getByText(/that's everything/i)).toBeInTheDocument();
+      // The pagehead count and the empty-state both say "That's everything";
+      // target the empty-state heading specifically to disambiguate.
+      expect(screen.getByRole("heading", { name: /that's everything/i })).toBeInTheDocument();
     });
   });
 
@@ -303,49 +356,45 @@ describe("<InboxScreen>", () => {
 
   // Test 6: open approval detail
   describe("(6) open approval detail sheet", () => {
-    it("renders the ApprovalDetailSheet when an approval card's Why is clicked", () => {
+    it("opens the ApprovalDetailSheet when the approval card is tapped", () => {
       feedByKey = (_agentKey) => successFeed([alexDecision]);
 
-      render(<InboxScreen />);
+      const { container } = render(<InboxScreen />);
 
-      // The Why button on the approval card
-      const whyBtn = screen.getByRole("button", { name: /why/i });
-      fireEvent.click(whyBtn);
+      // The doorway card opens its detail on a whole-card tap (no inline buttons).
+      const cardBody = container.querySelector("[data-card-body]") as HTMLElement;
+      fireEvent.click(cardBody);
 
-      // ApprovalDetailSheet renders with role="dialog"
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
-      // It contains "needs your okay"
+      // ApprovalDetailSheet renders role="dialog" with "needs your okay" copy.
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute("data-kind", "approval");
       expect(screen.getByText(/needs your okay/i)).toBeInTheDocument();
     });
   });
 
-  // Test 7: handoff detail → GUARD
-  describe("(7) handoff detail renders guard, no dialog, no crash", () => {
-    it("renders the guard placeholder when a handoff card's primary is clicked", () => {
-      feedByKey = (_agentKey) => successFeed([rileyHandoff]);
+  // Test 7: handoff detail sheet (replaces guard)
+  describe("(7) handoff detail sheet opens when a handoff card is tapped", () => {
+    it("opens the handoff detail sheet when a handoff card is tapped (no guard placeholder)", () => {
+      feedByKey = () => ({
+        data: { decisions: [handoffDecision] },
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
 
-      render(<InboxScreen />);
+      const { container } = render(<InboxScreen />);
 
-      // The primary button on the handoff card is "Take this one"
-      const takeOverBtn = screen.getByRole("button", { name: "Take this one" });
-      fireEvent.click(takeOverBtn);
+      // Handoffs are tap-only; a whole-card tap opens the detail sheet.
+      const cardBody = container.querySelector("[data-card-body]") as HTMLElement;
+      fireEvent.click(cardBody);
 
-      // Guard text renders
-      expect(screen.getByText("Handoff detail coming next.")).toBeInTheDocument();
-      // No dialog
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-
-    it("does not crash when a handoff's Why button is clicked", () => {
-      feedByKey = (_agentKey) => successFeed([rileyHandoff]);
-
-      render(<InboxScreen />);
-
-      const whyBtn = screen.getByRole("button", { name: /why/i });
-      fireEvent.click(whyBtn);
-
-      expect(screen.getByText("Handoff detail coming next.")).toBeInTheDocument();
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByText(/handoff detail coming next/i)).not.toBeInTheDocument();
+      // HandoffDetailSheet renders role="dialog"; the card also renders "is handing this to you"
+      // so assert via the dialog role to avoid getByText ambiguity
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute("data-kind", "handoff");
     });
   });
 
@@ -430,6 +479,39 @@ describe("<InboxScreen>", () => {
       // Decision-detail (ApprovalDetailSheet) must NOT be open — its sentinel
       // text "needs your okay" must be absent, proving stopPropagation worked.
       expect(screen.queryByText(/needs your okay/i)).toBeNull();
+    });
+  });
+
+  // Test 9: scrim backdrop closes an open detail sheet
+  describe("(9) scrim closes the open detail sheet", () => {
+    it("clicking the scrim backdrop closes the detail sheet", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+
+      const { container } = render(<InboxScreen />);
+
+      // Open the approval detail via a whole-card tap.
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      // The scrim backdrop (aria-hidden) closes the sheet on click.
+      const scrim = container.querySelector(".scrim") as HTMLElement;
+      expect(scrim).toBeInTheDocument();
+      fireEvent.click(scrim);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  // Test 10: Escape closes the open detail sheet (aria-modal convention)
+  describe("(10) Escape closes the open detail sheet", () => {
+    it("closes the detail sheet on an Escape keydown", () => {
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+
+      const { container } = render(<InboxScreen />);
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 });

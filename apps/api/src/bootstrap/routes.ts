@@ -64,6 +64,7 @@ import { dashboardAutomationsRoutes } from "../routes/dashboard-automations.js";
 import { dashboardActivityRoutes } from "../routes/dashboard-activity.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
+import { creativesRoute } from "../routes/agent-home/creatives.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 import { missionRoute } from "../routes/agent-home/mission.js";
 import { cockpitActivityRoutes } from "../routes/agent-home/activity.js";
@@ -117,6 +118,8 @@ export async function registerRoutes(
   await app.register(winsRoute, { prefix: "/api/dashboard" });
   // pipelineRoute: GET /api/dashboard/agents/:agentId/pipeline — agent-home pipeline feed
   await app.register(pipelineRoute, { prefix: "/api/dashboard" });
+  // creativesRoute: GET /api/dashboard/agents/:agentId/creatives — Mira creative review feed
+  await app.register(creativesRoute, { prefix: "/api/dashboard" });
   // metricsRoute: GET /api/dashboard/agents/:agentId/metrics — agent-home metrics feed
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
   // missionRoute: GET /api/dashboard/agents/:agentId/mission — agent-home mission aggregator

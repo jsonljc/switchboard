@@ -25,3 +25,14 @@ global.IntersectionObserver = class IntersectionObserver {
   }
   unobserve() {}
 } as unknown as typeof IntersectionObserver;
+
+// jsdom does not implement HTMLMediaElement play/pause — stub so feed/clip tests
+// can assert play()/pause() calls without "Not implemented" errors.
+Object.defineProperty(HTMLMediaElement.prototype, "play", {
+  configurable: true,
+  value: () => Promise.resolve(),
+});
+Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+  configurable: true,
+  value: () => {},
+});

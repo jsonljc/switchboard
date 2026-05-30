@@ -1,12 +1,10 @@
 "use client";
 
-import { InboxAgentAvatar } from "@/components/inbox/inbox-agent-avatar";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentState } from "@/hooks/use-agents";
 import { useHalt } from "@/components/layout/halt/halt-context";
-import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
+import { type PanelAgentKey } from "./lib/agent-display";
 import { composeStatusLine } from "./lib/status-line";
-import type { AgentStateEntry } from "@/lib/api-client-types";
 import styles from "./agent-panel.module.css";
 
 /**
@@ -37,22 +35,16 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
   const agentStateQuery = useAgentState();
   const { halted } = useHalt();
 
-  const display = agentDisplay[agentKey];
   const nowMs = Date.now();
 
-  // Select this agent's state entry by agentRole (legacy role string from derived state).
-  // The runtime shape from /api/agents/state has agentRole, even though the TypeScript
-  // type (AgentStateEntry from api-client-types) uses agentRosterId for embedded state.
-  // We cast to access the runtime field safely.
-  type DerivedStateEntry = AgentStateEntry & { agentRole?: string; lastActionAt?: string | null };
-
+  // Select this agent's state entry by agentRole. /api/agents/state returns the
+  // derived shape (DerivedAgentStateEntry, keyed by agentRole) — modeled in
+  // api-client-types so this reads type-safely with no runtime cast.
   const agentRole =
     agentKey !== "mira" ? AGENT_ROLE_FOR_KEY[agentKey as Exclude<PanelAgentKey, "mira">] : null;
   const stateEntry =
     agentRole != null
-      ? ((agentStateQuery.data?.states as DerivedStateEntry[] | undefined)?.find(
-          (s) => s.agentRole === agentRole,
-        ) ?? null)
+      ? (agentStateQuery.data?.states.find((s) => s.agentRole === agentRole) ?? null)
       : null;
 
   const fallingBehindHours =
@@ -69,14 +61,9 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
 
   return (
     <div className={styles.identityStatus}>
-      {/* Identity row: avatar + name/role */}
-      <div className={styles.idRowInner}>
-        <InboxAgentAvatar agentKey={agentKey} size={44} />
-        <div className={styles.agentMeta}>
-          <span className={styles.agentName}>{display.name}</span>
-          <span className={styles.role}>{display.role}</span>
-        </div>
-      </div>
+      {/* Identity (avatar + name/role) is owned by the panel SheetHeader — this
+          slot leads with the forward health/presence status line, not a
+          duplicate identity row. */}
 
       {/* Status section */}
       {halted ? (

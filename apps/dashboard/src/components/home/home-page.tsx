@@ -10,6 +10,7 @@ import { useAgentRoster, useAgentState } from "@/hooks/use-agents";
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useAgentActivityCockpit } from "@/hooks/use-agent-activity-cockpit";
 import { useAgentMission } from "@/hooks/use-agent-mission";
+import { useMiraEnabled } from "@/hooks/use-mira-enabled";
 import { useGovernanceStatus } from "@/hooks/use-governance";
 import type { Decision } from "@/lib/decisions/types";
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
@@ -54,9 +55,17 @@ function centsPerLeadToDisplay(spendCents: number | null, leads: number): string
   return `$${perLead}`;
 }
 
-export function HomePage() {
+export interface HomePageProps {
+  /**
+   * Agent to auto-open the panel for on mount, from the `/?agent=` deep-link
+   * (e.g. the retired /alex and /riley routes redirect here). null = no panel.
+   */
+  initialAgent?: PanelAgentKey | null;
+}
+
+export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   const router = useRouter();
-  const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
+  const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(initialAgent);
 
   const session = useSession();
   const decisionFeed = useDecisionFeed(null);
@@ -68,6 +77,7 @@ export function HomePage() {
   const alexActivity = useAgentActivityCockpit("alex", { limit: 4 });
   const alexMission = useAgentMission("alex");
   const rileyMission = useAgentMission("riley");
+  const miraEnabled = useMiraEnabled();
   const governance = useGovernanceStatus();
 
   // ── Halt state (a halted/paused agent is NEVER "working") ──────────────────
@@ -81,7 +91,7 @@ export function HomePage() {
   const topAgentKey = topDecision?.agentKey;
   const topAgentName = topAgentKey ? AGENT_REGISTRY[topAgentKey]?.displayName : undefined;
 
-  // ── Open leads / oldest wait (alex + riley greetings; mira 404s) ───────────
+  // ── Open leads / oldest wait (alex + riley greetings; mira non-2xx ⇒ skipped) ──
   const greetingSignals = [alexGreeting.data?.signal, rileyGreeting.data?.signal].filter(
     (s): s is NonNullable<typeof s> => Boolean(s),
   );
@@ -96,8 +106,8 @@ export function HomePage() {
   // Presence (`setUp`) reflects REAL per-agent enablement: alex/riley derive it
   // from mission core-completion (e.g. inbox / Meta connected), so an org that
   // hasn't connected an agent's core channel sees it honestly "Not set up" —
-  // not the old static launchTier flag. Mira has no mission endpoint (404), so
-  // she stays launchTier (day-thirty → not set up). When a mission hook is
+  // not the old static launchTier flag. Mira uses useMiraEnabled (probe the
+  // gated mission endpoint: 2xx ⇒ enabled, non-2xx ⇒ not enabled). When a mission hook is
   // loading or errored, fall back to launchTier rather than flipping to a
   // transient "Not set up".
   // Working status needs positive evidence we can attribute to a canonical
@@ -118,6 +128,10 @@ export function HomePage() {
         setUp = !coreSetupIncomplete(alexMission.data, "alex");
       } else if (key === "riley" && rileyMission.data) {
         setUp = !coreSetupIncomplete(rileyMission.data, "riley");
+      } else if (key === "mira") {
+        // Real per-org enablement (probe). Loading/unknown → not set up (Mira is
+        // day-thirty), so we never flash a transient wrong state.
+        setUp = miraEnabled.enabled === true;
       } else {
         setUp = entry.launchTier === "day-one";
       }

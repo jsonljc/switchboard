@@ -9,6 +9,19 @@ export const agentDisplay: Record<PanelAgentKey, { name: string; role: string }>
   mira: { name: "Mira", role: "Creative" },
 };
 
+/**
+ * Narrows an untrusted value (e.g. a `?agent=` query param) to a known
+ * PanelAgentKey, or null. Used by Home's server page to validate the agent
+ * deep-link before auto-opening the panel.
+ */
+export function parsePanelAgentKey(value: unknown): PanelAgentKey | null {
+  // Own-property check, not `in` — `in` matches inherited keys (toString,
+  // __proto__, …), which would let a crafted ?agent= value past the guard.
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(agentDisplay, value)
+    ? (value as PanelAgentKey)
+    : null;
+}
+
 export function labelForHeroKind(kind: HeroMetric["kind"]): string {
   switch (kind) {
     case "tours-booked":

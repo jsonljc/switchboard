@@ -14,6 +14,11 @@ export interface AgentRosterEntry {
   agentState?: AgentStateEntry | null;
 }
 
+/**
+ * Persisted agent state — the `AgentState` Prisma row embedded in a roster
+ * entry by `GET /api/dashboard/agents/roster` (`include: { agentState: true }`).
+ * Keyed by `agentRosterId`. Distinct from {@link DerivedAgentStateEntry}.
+ */
 export interface AgentStateEntry {
   id: string;
   agentRosterId: string;
@@ -24,6 +29,26 @@ export interface AgentStateEntry {
   lastActionSummary: string | null;
   metrics: Record<string, unknown>;
   updatedAt: string;
+}
+
+/**
+ * Derived agent state — the on-demand shape returned by
+ * `GET /api/dashboard/agents/state` (`{ states: DerivedAgentStateEntry[] }`).
+ * Computed from recent audit entries by `deriveAgentStates` in `@switchboard/db`,
+ * NOT a persisted row: keyed by `agentRole`, no id/agentRosterId/updatedAt.
+ *
+ * Mirrors `DerivedAgentState` from `@switchboard/db`, except `lastActionAt` is a
+ * JSON-serialized ISO string over the wire (a `Date` server-side). Keep in sync
+ * with that source of truth — the type-assertion test in
+ * `api-client-types.test.ts` enforces structural agreement.
+ */
+export interface DerivedAgentStateEntry {
+  agentRole: string;
+  activityStatus: "idle" | "working" | "analyzing" | "waiting_approval" | "error";
+  currentTask: string | null;
+  lastActionAt: string | null;
+  lastActionSummary: string | null;
+  metrics: { actionsToday: number };
 }
 
 export interface PendingApproval {

@@ -12,6 +12,7 @@ export interface UseReportData {
   isFetching: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
+  retry: () => Promise<void>;
 }
 
 // Captured at module load; the existing test file relies on this (its per-test
@@ -23,7 +24,7 @@ export function useReportData(window: ReportWindow): UseReportData {
   const keys = useScopedQueryKeys();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isFetching, error } = useQuery<ReportData>({
+  const { data, isLoading, isFetching, error, refetch } = useQuery<ReportData>({
     queryKey: keys?.reports.byWindow(window) ?? ["__disabled_reports__"],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/reports?window=${encodeURIComponent(window)}`);
@@ -46,6 +47,11 @@ export function useReportData(window: ReportWindow): UseReportData {
     });
   }, [window, keys, queryClient]);
 
+  const retry = useCallback(async () => {
+    if (!isLive || !keys) return;
+    await refetch();
+  }, [keys, refetch]);
+
   if (!isLive) {
     return {
       data: FIXTURES_BY_WINDOW[window],
@@ -53,6 +59,7 @@ export function useReportData(window: ReportWindow): UseReportData {
       isFetching: false,
       error: null,
       refresh: async () => {},
+      retry: async () => {},
     };
   }
 
@@ -62,5 +69,6 @@ export function useReportData(window: ReportWindow): UseReportData {
     isFetching,
     error: error as Error | null,
     refresh,
+    retry,
   };
 }

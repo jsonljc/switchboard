@@ -85,6 +85,7 @@ export const scopedKeys = (orgId: string) => ({
   },
   escalations: {
     all: () => [orgId, "escalations"] as const,
+    detail: (id: string) => [orgId, "escalations", "detail", id] as const,
   },
   governance: {
     all: () => [orgId, "governance"] as const,
@@ -119,6 +120,11 @@ export const scopedKeys = (orgId: string) => ({
     list: (deploymentId: string) => [orgId, "creativeJobs", "list", deploymentId] as const,
     detail: (id: string) => [orgId, "creativeJobs", "detail", id] as const,
     estimate: (id: string) => [orgId, "creativeJobs", "estimate", id] as const,
+  },
+  miraFeed: {
+    all: () => [orgId, "miraFeed"] as const,
+    list: () => [orgId, "miraFeed", "list"] as const,
+    detail: (id: string) => [orgId, "miraFeed", "detail", id] as const,
   },
   adOptimizer: {
     all: () => [orgId, "adOptimizer"] as const,

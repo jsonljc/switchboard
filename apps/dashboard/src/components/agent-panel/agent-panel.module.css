@@ -57,15 +57,6 @@
   flex-shrink: 0;
 }
 
-.agentMeta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-}
-
 .agentName {
   font-size: 19px;
   font-weight: 600;
@@ -120,13 +111,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-/* Inner identity row when rendered standalone inside the slot */
-.idRowInner {
-  display: flex;
-  align-items: center;
-  gap: 14px;
 }
 
 .statusBlock {
@@ -823,6 +807,33 @@
 
 .heroActivationCta:hover {
   opacity: 0.88;
+}
+
+/* Mira "open workspace" drill-in CTA — small pill, Mira-tinted accent */
+.miraOpenCta {
+  align-self: center;
+  margin-top: 4px;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  background: hsl(var(--agent-mira));
+  color: hsl(var(--action-foreground));
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.003em;
+  font-family: var(--font-home-sans);
+  border: none;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+
+.miraOpenCta:hover {
+  opacity: 0.88;
+}
+
+.miraOpenCta:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+  border-radius: var(--radius-pill);
 }
 
 /* ─── Freshness foot (slot ⑤) ─────────────────────────────────────────────

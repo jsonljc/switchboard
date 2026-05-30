@@ -131,6 +131,12 @@ vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   ),
 }));
 
+// Mock next/navigation and use-mira-enabled so MiraPanel renders in a non-Next env
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/hooks/use-mira-enabled", () => ({
+  useMiraEnabled: () => ({ enabled: false, isLoading: false }),
+}));
+
 // ── Import component after all mocks ─────────────────────────────────────────
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
 
@@ -362,6 +368,16 @@ describe("AgentPanel state matrix", () => {
     // Freshness foot
     expect(screen.getByTestId("freshness-foot")).toBeInTheDocument();
     expect(screen.getByTestId("freshness-foot")).toHaveTextContent(/^as of /);
+  });
+
+  // ── Identity is rendered ONCE ────────────────────────────────────────────────
+  // The SheetHeader owns the agent identity (avatar + name + role). The
+  // IdentityStatus slot must NOT repeat it, or the panel shows a stacked
+  // duplicate "Alex · Lead response" header. InboxAgentAvatar is mocked to
+  // data-testid="agent-avatar", so exactly one avatar means no duplication.
+  it("renders the agent identity exactly once (header owns it; slot does not duplicate)", () => {
+    renderAlexPanel();
+    expect(document.querySelectorAll('[data-testid="agent-avatar"]')).toHaveLength(1);
   });
 
   // ── Row 3: Metrics window=all 400 → falls back to week ───────────────────────
