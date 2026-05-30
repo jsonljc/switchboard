@@ -2,25 +2,33 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "../llm-adapter.js";
 import type { ModelConfig } from "../model-router.js";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
+const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
 
-function buildSystemContent(prompt: ConversationPrompt): string {
-  let system = prompt.systemPrompt;
+// Build the system prompt as content blocks so prompt caching can mark only the
+// static base prompt with cache_control. Order is preserved (base -> retrieved
+// context -> agent instructions) so the model sees the same content; only the
+// base prompt block is cached. The per-turn RAG context and the trailing agent
+// instructions are intentionally left uncached to keep the cached prefix
+// byte-stable across turns — a dynamic value in the prefix would bust the cache.
+function buildSystemContent(prompt: ConversationPrompt): Anthropic.TextBlockParam[] {
+  const blocks: Anthropic.TextBlockParam[] = [
+    { type: "text", text: prompt.systemPrompt, cache_control: { type: "ephemeral" } },
+  ];
 
   if (prompt.retrievedContext.length > 0) {
     const contextLines = prompt.retrievedContext.map(
       (c: RetrievedChunk, i: number) =>
         `[Source ${i + 1} (${c.sourceType}, similarity: ${c.similarity.toFixed(2)})]:\n${c.content}`,
     );
-    system += `\n\nRelevant context:\n${contextLines.join("\n\n")}`;
+    blocks.push({ type: "text", text: `Relevant context:\n${contextLines.join("\n\n")}` });
   }
 
   if (prompt.agentInstructions) {
-    system += `\n\n${prompt.agentInstructions}`;
+    blocks.push({ type: "text", text: prompt.agentInstructions });
   }
 
-  return system;
+  return blocks;
 }
 
 export function createAnthropicAdapter(apiKey?: string): LLMAdapter {

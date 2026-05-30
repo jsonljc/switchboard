@@ -94,9 +94,11 @@ describe("createAnthropicAdapter", () => {
     );
 
     const callArgs = createMock.mock.calls[0]![0];
-    expect(callArgs.system).toContain("You are Bloom's assistant.");
-    expect(callArgs.system).toContain("Be concise.");
-    expect(callArgs.system).toContain("We sell roses.");
+    // system is now a content-block array; join block text to assert all three pieces are present.
+    const joined = callArgs.system.map((b: { text: string }) => b.text).join("\n\n");
+    expect(joined).toContain("You are Bloom's assistant.");
+    expect(joined).toContain("Be concise.");
+    expect(joined).toContain("We sell roses.");
   });
 
   it("uses modelConfig when provided", async () => {
@@ -113,5 +115,69 @@ describe("createAnthropicAdapter", () => {
     expect(callArgs.model).toBe("claude-opus-4-6");
     expect(callArgs.max_tokens).toBe(2048);
     expect(callArgs.temperature).toBe(0.5);
+  });
+});
+
+describe("createAnthropicAdapter prompt caching", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("sends system as a block array: base cached, RAG + instructions uncached, order preserved", async () => {
+    const adapter = createAnthropicAdapter("test-key");
+    await adapter.generateReply(
+      makePrompt({
+        systemPrompt: "BASE PROMPT",
+        retrievedContext: [{ content: "We sell roses.", sourceType: "document", similarity: 0.95 }],
+        agentInstructions: "Be concise.",
+      }),
+    );
+
+    const callArgs = createMock.mock.calls[0]![0];
+
+    // system is an array
+    expect(Array.isArray(callArgs.system)).toBe(true);
+
+    // block 0 is the base prompt and carries the cache breakpoint
+    expect(callArgs.system[0]).toMatchObject({
+      type: "text",
+      text: "BASE PROMPT",
+      cache_control: { type: "ephemeral" },
+    });
+
+    // RAG block: starts with "Relevant context:\n" and is explicitly NOT cached
+    const ragBlock = callArgs.system[1];
+    expect(ragBlock.text.startsWith("Relevant context:\n")).toBe(true);
+    expect(ragBlock.text).toContain("We sell roses.");
+    expect(ragBlock.cache_control).toBeUndefined();
+
+    // agent-instructions block: explicitly NOT cached
+    const instructionsBlock = callArgs.system[2];
+    expect(instructionsBlock.text).toBe("Be concise.");
+    expect(instructionsBlock.cache_control).toBeUndefined();
+  });
+
+  it("caches the base prompt block when there is no RAG or agent instructions", async () => {
+    const adapter = createAnthropicAdapter("test-key");
+    await adapter.generateReply(
+      makePrompt({ systemPrompt: "BASE ONLY", retrievedContext: [], agentInstructions: "" }),
+    );
+
+    const callArgs = createMock.mock.calls[0]![0];
+    expect(Array.isArray(callArgs.system)).toBe(true);
+    expect(callArgs.system).toHaveLength(1);
+    expect(callArgs.system[0]).toMatchObject({
+      type: "text",
+      text: "BASE ONLY",
+      cache_control: { type: "ephemeral" },
+    });
+  });
+
+  it("falls back to claude-sonnet-4-6 when no modelConfig is provided", async () => {
+    const adapter = createAnthropicAdapter("test-key");
+    await adapter.generateReply(makePrompt());
+
+    const callArgs = createMock.mock.calls[0]![0];
+    expect(callArgs.model).toBe("claude-sonnet-4-6");
   });
 });
