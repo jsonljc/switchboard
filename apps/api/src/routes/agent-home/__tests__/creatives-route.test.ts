@@ -37,6 +37,7 @@ function baseJob(over: Record<string, unknown>) {
 }
 
 // Newest → oldest. Two newest have NO video (rendering); two older ARE reviewable.
+// A stopped row is included to exercise the desk's reviewed_stopped bucket.
 const PILOT_ROWS = [
   baseJob({
     id: "rendering-newest",
@@ -69,6 +70,13 @@ const PILOT_ROWS = [
     ugcPhase: "complete",
     ugcPhaseOutputs: { production: { assets: [{ outputs: { videoUrl: "https://x/u.mp4" } }] } },
   }), // draft_ready + UGC video
+  baseJob({
+    id: "stopped-1",
+    createdAt: new Date("2026-05-24"),
+    currentStage: "production",
+    stoppedAt: new Date("2026-05-24T12:00:00Z"),
+    stageOutputs: {},
+  }), // stopped — exercises the reviewed_stopped desk bucket
 ];
 
 function buildPrismaMock() {
@@ -153,5 +161,51 @@ describe("GET /agents/mira/creatives", () => {
     } finally {
       await ctx.app.orgAgentEnablementStore!.setStatus(OTHER, "mira", "disabled");
     }
+  });
+});
+
+describe("GET /agents/mira/desk", () => {
+  let ctx: TestContext;
+
+  beforeAll(async () => {
+    ctx = await buildTestServer();
+    (ctx.app as unknown as { prisma: unknown }).prisma = buildPrismaMock();
+    await ctx.app.register(creativesRoute, { prefix: "/api/dashboard" });
+    await ctx.app.orgAgentEnablementStore!.enable(PILOT, "mira");
+  });
+  afterAll(async () => ctx.app.close());
+
+  it("returns the bucketed desk model for an enabled org", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/desk",
+      headers: { "x-org-id": PILOT },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      desk: { inProduction: unknown[]; readyToReviewCount: number; isEmpty: boolean };
+    };
+    expect(body.desk.readyToReviewCount).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(body.desk.inProduction)).toBe(true);
+  });
+
+  it("404s for a non-mira agent", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/desk",
+      headers: { "x-org-id": PILOT },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("404s when the org is not enabled (no cross-org leak)", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/desk",
+      headers: { "x-org-id": OTHER },
+    });
+    // OTHER is never enabled in this suite → gating must 404 (matches the sibling
+    // creatives cross-org test; asserting 404 actually enforces the leak guard).
+    expect(res.statusCode).toBe(404);
   });
 });

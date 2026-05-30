@@ -4,6 +4,7 @@ import { z } from "zod";
 import { PrismaMiraCreativeReadModelReader } from "@switchboard/db";
 import { AgentKeySchema } from "@switchboard/schemas";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
+import { buildMiraDeskModel } from "@switchboard/core";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { getOrgTimezone } from "../../lib/org-timezone.js";
 import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
@@ -114,6 +115,33 @@ export const creativesRoute: FastifyPluginAsync = async (app) => {
     } catch (err) {
       app.log.error({ err, requestId: request.id }, "creative detail read failed");
       return reply.code(500).send({ error: "Creative detail read failed", requestId: request.id });
+    }
+  });
+
+  app.get("/agents/:agentId/desk", async (request, reply) => {
+    const params = ParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "Invalid agentId" });
+    if (params.data.agentId !== "mira")
+      return reply.code(404).send({ error: "Desk not available for this agent" });
+
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
+    if (!app.orgAgentEnablementStore)
+      return reply.code(503).send({ error: "Enablement store unavailable" });
+    if (!(await isAgentHomeAccessible(params.data.agentId, orgId, app.orgAgentEnablementStore)))
+      return reply.code(404).send({ error: "Agent not available on home" });
+
+    const prisma = app.prisma;
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+
+    const timezone = await getOrgTimezone(prisma, orgId);
+    const reader = new PrismaMiraCreativeReadModelReader(prisma);
+    try {
+      const rm = await reader.read(orgId, { now: new Date(), timezone, visibleLimit: FEED_WINDOW });
+      return reply.code(200).send({ desk: buildMiraDeskModel(rm) });
+    } catch (err) {
+      app.log.error({ err, requestId: request.id }, "mira desk read failed");
+      return reply.code(500).send({ error: "Mira desk read failed", requestId: request.id });
     }
   });
 };
