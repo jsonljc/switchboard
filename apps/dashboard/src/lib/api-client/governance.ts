@@ -361,6 +361,17 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     return this.request<{ desk: MiraDeskModel }>("/api/dashboard/agents/mira/desk");
   }
 
+  /** Mira Keep/Pass review decision (draft-only). `null` un-keeps. */
+  async setCreativeReviewDecision(
+    id: string,
+    decision: "kept" | "passed" | null,
+  ): Promise<{ id: string; decision: "kept" | "passed" | null }> {
+    return this.request(`/api/dashboard/agents/mira/creatives/${encodeURIComponent(id)}/decision`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    });
+  }
+
   /** createCreativeDraftRequest — draft-only open-brief mutation (Phase 2). */
   async createCreativeDraftRequest(
     brief: MiraBriefRequest,
