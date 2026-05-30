@@ -26,12 +26,10 @@ describe("whatsapp templates dashboard proxy", () => {
   });
 
   it("POST forwards the body to createWhatsAppTemplate and relays status", async () => {
-    const createWhatsAppTemplate = vi
-      .fn()
-      .mockResolvedValue({
-        status: 200,
-        data: { id: "1", status: "PENDING", category: "MARKETING" },
-      });
+    const createWhatsAppTemplate = vi.fn().mockResolvedValue({
+      status: 200,
+      data: { id: "1", status: "PENDING", category: "MARKETING" },
+    });
     (getApiClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       createWhatsAppTemplate,
     });

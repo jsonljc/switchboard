@@ -1,3 +1,4 @@
+// @route-class: ingress-receiver
 import { NextRequest, NextResponse } from "next/server";
 import { isDevBypassEnabled, getDevDashboardSession } from "@/lib/dev-auth";
 import { handlers } from "@/lib/auth";
