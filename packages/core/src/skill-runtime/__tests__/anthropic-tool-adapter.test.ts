@@ -320,3 +320,105 @@ describe("AnthropicToolAdapter", () => {
     ).rejects.toThrow(/unknown content_block: server_thinking/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Prompt caching — cache_control breakpoints on the STATIC prefix only.
+// Render order is tools -> system -> messages, so a breakpoint on the last tool
+// caches the tools block and a breakpoint on the system block caches tools+system.
+// The dynamic tail (messages) is never marked. We can only assert request SHAPE
+// here; real cache hits require a live call (see PR notes / optional smoke).
+// ---------------------------------------------------------------------------
+
+describe("AnthropicToolAdapter prompt caching", () => {
+  const okResponse = () => ({
+    content: [{ type: "text", text: "ok" }],
+    stop_reason: "end_turn",
+    usage: { input_tokens: 10, output_tokens: 5 },
+  });
+
+  const toolDef = (name: string) => ({
+    name,
+    description: `Tool ${name}`,
+    input_schema: { type: "object", properties: {} },
+  });
+
+  it("sends the system prompt as a cached text block (cache_control: ephemeral)", async () => {
+    const mockCreate = vi.fn().mockResolvedValue(okResponse());
+    const adapter = new AnthropicToolAdapter({ messages: { create: mockCreate } } as never);
+
+    await adapter.chatWithTools({
+      system: "STATIC SYSTEM PROMPT",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [toolDef("alpha"), toolDef("beta")],
+    });
+
+    const sent = mockCreate.mock.calls[0]![0] as {
+      system: Array<{ type: string; text: string; cache_control?: { type: string } }>;
+    };
+    expect(Array.isArray(sent.system)).toBe(true);
+    const lastSystem = sent.system[sent.system.length - 1]!;
+    expect(lastSystem).toMatchObject({
+      type: "text",
+      text: "STATIC SYSTEM PROMPT",
+      cache_control: { type: "ephemeral" },
+    });
+  });
+
+  it("marks only the last tool definition with cache_control (one breakpoint for the tools block)", async () => {
+    const mockCreate = vi.fn().mockResolvedValue(okResponse());
+    const adapter = new AnthropicToolAdapter({ messages: { create: mockCreate } } as never);
+
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [toolDef("alpha"), toolDef("beta")],
+    });
+
+    const sent = mockCreate.mock.calls[0]![0] as {
+      tools: Array<{ name: string; cache_control?: { type: string } }>;
+    };
+    expect(sent.tools).toHaveLength(2);
+    // Earlier tools share the prefix cached by the last breakpoint — no marker of their own.
+    expect(sent.tools[0]!.cache_control).toBeUndefined();
+    expect(sent.tools[1]!.cache_control).toEqual({ type: "ephemeral" });
+  });
+
+  it("caches the system prompt even when there are no tools", async () => {
+    const mockCreate = vi.fn().mockResolvedValue(okResponse());
+    const adapter = new AnthropicToolAdapter({ messages: { create: mockCreate } } as never);
+
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [],
+    });
+
+    const sent = mockCreate.mock.calls[0]![0] as {
+      tools?: unknown;
+      system: Array<{ cache_control?: { type: string } }>;
+    };
+    expect(sent.tools).toBeUndefined();
+    expect(sent.system[sent.system.length - 1]!.cache_control).toEqual({ type: "ephemeral" });
+  });
+
+  it("does not cache the dynamic tail — no cache_control on conversation messages", async () => {
+    const mockCreate = vi.fn().mockResolvedValue(okResponse());
+    const adapter = new AnthropicToolAdapter({ messages: { create: mockCreate } } as never);
+
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [
+        { role: "user", content: "first" },
+        { role: "assistant", content: "second" },
+      ],
+      tools: [toolDef("alpha")],
+    });
+
+    const sent = mockCreate.mock.calls[0]![0] as {
+      messages: Array<{ cache_control?: unknown }>;
+    };
+    for (const message of sent.messages) {
+      expect(message.cache_control).toBeUndefined();
+    }
+  });
+});
