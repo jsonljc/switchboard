@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import { RESET_TOKEN_EXPIRY_MINUTES } from "./password-reset";
 
 const VERIFICATION_TOKEN_EXPIRY_HOURS = 24;
 const MAX_REGISTRATION_ATTEMPTS_PER_HOUR = 3;
@@ -98,4 +99,39 @@ export async function checkRegistrationRateLimit(
     },
   });
   return recentAttempts < MAX_REGISTRATION_ATTEMPTS_PER_HOUR;
+}
+
+export async function sendPasswordResetEmail(
+  email: string,
+  token: string,
+): Promise<{ sent: boolean; url: string }> {
+  const url = `${getBaseUrl()}/reset-password?token=${token}`;
+
+  const resend = getResendClient();
+  if (!resend) {
+    console.warn("[email] RESEND_API_KEY not set — password reset email not sent");
+    return { sent: false, url };
+  }
+
+  await resend.emails.send({
+    from: getEmailFrom(),
+    to: email,
+    subject: "Reset your Switchboard password",
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <h1 style="font-size: 24px; color: #1A1714; margin-bottom: 16px;">Reset your password</h1>
+        <p style="color: #4A4540; line-height: 1.6; margin-bottom: 24px;">
+          We received a request to reset your Switchboard password. Click the button below to choose a new one.
+        </p>
+        <a href="${url}" style="display: inline-block; padding: 12px 32px; background: #A07850; color: #ffffff; text-decoration: none; border-radius: 9999px; font-weight: 600; font-size: 15px;">
+          Reset password
+        </a>
+        <p style="color: #7A736C; font-size: 13px; margin-top: 32px;">
+          This link expires in ${RESET_TOKEN_EXPIRY_MINUTES} minutes. If you didn't request a reset, you can safely ignore this email — your password won't change.
+        </p>
+      </div>
+    `,
+  });
+
+  return { sent: true, url };
 }
