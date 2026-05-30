@@ -8,7 +8,7 @@ export function NoConnectionBanner() {
         Campaigns and funnel will read zero until a Meta Ads connection is reattached. Stripe and
         booking data continue to feed the attribution number above.
       </span>
-      <a className={styles.cta} href="/settings/connections">
+      <a className={styles.cta} href="/settings/channels">
         Connect under Settings
       </a>
     </div>
