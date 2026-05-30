@@ -118,19 +118,32 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
       content: encodeOutgoingContent(m.content),
     }));
 
+    // Prompt caching: mark the static tool-definitions prefix with cache_control
+    // on the LAST tool. Render order is tools -> system -> messages, so a single
+    // breakpoint at the end of the tools block prefix-caches every tool before it;
+    // the system breakpoint below then caches tools+system together. Mirrors the
+    // claim-classifier's caching shape. The dynamic message tail stays unmarked.
     const anthropicTools: Anthropic.Tool[] | undefined =
       params.tools.length > 0
-        ? params.tools.map((t) => ({
-            name: encodeToolName(t.name), // encode "." → "__" so the name satisfies ^[a-zA-Z0-9_-]{1,128}$
-            description: t.description,
-            input_schema: t.input_schema as Anthropic.Tool.InputSchema,
-          }))
+        ? params.tools.map((t, i) => {
+            const tool: Anthropic.Tool = {
+              name: encodeToolName(t.name), // encode "." → "__" so the name satisfies ^[a-zA-Z0-9_-]{1,128}$
+              description: t.description,
+              input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+            };
+            if (i === params.tools.length - 1) {
+              tool.cache_control = { type: "ephemeral" };
+            }
+            return tool;
+          })
         : undefined;
 
     const response = await this.client.messages.create({
       model: params.profile?.model ?? DEFAULT_MODEL,
       max_tokens: params.profile?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS,
-      system: params.system,
+      // Cache the system prompt; combined with the last-tool breakpoint above this
+      // caches the full tools+system static prefix (see anthropicTools comment).
+      system: [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }],
       messages: anthropicMessages,
       tools: anthropicTools,
       ...(params.profile?.temperature !== undefined && {
