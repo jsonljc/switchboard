@@ -11,6 +11,7 @@ Each prompt is verified against the backend at the moment it was written — fil
 - [/mission](2026-05-13-mission.md) — operator command center across agents. Greenfield route; data hooks exist.
 - [/reports](2026-05-13-reports.md) — renewal-checkpoint statement. Schema locked (PRs R1..R6); this is an editorial second pass.
 - [/results](2026-05-26-results.md) — customer-facing Results tab (Home·Inbox·Results). Reuses the locked `ReportDataV1`; supersedes the 2026-05-13 `/reports` statement-page prompt for the customer surface. Producer-audited (corrected 2026-05-26).
+- [inbox detail](2026-05-25-inbox-detail.md) — Inbox list editorial pass + the rich decision detail sheet (handoff fully backed; approval detail marked `pending backend`). Preserves the P1-B risk-gated swipe/confirm contract.
 
 ## Locked design snapshots
 
