@@ -17,6 +17,6 @@ export type { BillingStatus, CheckoutResult, PortalResult } from "./billing";
 export type { PendingApproval, HealthCheck, SimulateResult } from "../api-client-types";
 
 // The final composed client
-import { SwitchboardBillingClient } from "./billing";
+import { SwitchboardWhatsAppClient } from "./whatsapp";
 
-export class SwitchboardClient extends SwitchboardBillingClient {}
+export class SwitchboardClient extends SwitchboardWhatsAppClient {}

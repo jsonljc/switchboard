@@ -328,6 +328,51 @@ describe("POST /send-test — Graph error mapping", () => {
     expect(prisma.whatsAppTestSend.create).not.toHaveBeenCalled();
   });
 
+  it("maps Graph code 132000 at HTTP 400 to 400 WHATSAPP_TEMPLATE_NOT_FOUND (not WHATSAPP_TEMPLATE_INVALID)", async () => {
+    const prisma = buildPrismaMock();
+    prisma.managedChannel.findFirst.mockResolvedValue({
+      id: "ch_1",
+      connectionId: "conn_1",
+      testRecipients: ["+15551234567"],
+    });
+    prisma.connection.findFirst.mockResolvedValue({
+      id: "conn_1",
+      externalAccountId: "WABA_1",
+    });
+
+    const graphApiFetch = vi
+      .fn()
+      .mockImplementationOnce(async () => approvedTemplatesResponse())
+      .mockImplementationOnce(
+        async () =>
+          new Response(JSON.stringify({ error: { code: 132000, message: "Template not found" } }), {
+            status: 400,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+
+    app = await buildApp({ prisma, graphApiFetch });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/send-test",
+      payload: {
+        phoneNumberId: "PN_123",
+        templateName: "appt_reminder",
+        languageCode: "en_US",
+        toNumber: "+15551234567",
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: { code: string; retryable: boolean } };
+    expect(body.error.code).toBe("WHATSAPP_TEMPLATE_NOT_FOUND");
+    expect(body.error.retryable).toBe(false);
+
+    expect(graphApiFetch).toHaveBeenCalledTimes(2);
+    expect(prisma.whatsAppTestSend.create).not.toHaveBeenCalled();
+  });
+
   it("maps Graph 200 without message id to 502 WHATSAPP_NO_MESSAGE_ID (retryable)", async () => {
     const prisma = buildPrismaMock();
     prisma.managedChannel.findFirst.mockResolvedValue({

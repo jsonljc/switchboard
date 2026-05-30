@@ -60,6 +60,8 @@ export async function graphPost(
     return { ok: false, code: "WHATSAPP_GRAPH_PERMISSION_DENIED", message, httpStatus: 403 };
   if (res.status === 429 || code === 4 || subcode === 80007)
     return { ok: false, code: "WHATSAPP_RATE_LIMITED", message, httpStatus: 429 };
+  if (code === 100)
+    return { ok: false, code: "WHATSAPP_TEMPLATE_INVALID", message, httpStatus: 400 };
   if (code === 132000 || code === 132001)
     return { ok: false, code: "WHATSAPP_TEMPLATE_NOT_FOUND", message, httpStatus: 400 };
   return { ok: false, code: "WHATSAPP_UPSTREAM_ERROR", message, httpStatus: 502 };

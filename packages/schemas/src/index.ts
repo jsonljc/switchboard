@@ -172,6 +172,7 @@ export * from "./conversation-lifecycle.js";
 
 // WhatsApp send-test schemas (slice 2a — request/result/row for operator send-test flow)
 export * from "./whatsapp-test-send.js";
+export * from "./whatsapp-template-create.js";
 
 // Canonical-key enum + Zod refinement (PR-3.2a — outcome-pattern bucketing)
 export * from "./canonical-keys.js";
