@@ -15,12 +15,13 @@ describe("buildSidebarSections", () => {
     expect(s.primary.map((i) => i.href)).toEqual(["/", "/inbox", "/results"]);
     expect(s.settings.href).toBe("/settings");
   });
-  it("dedupes a tools item whose href duplicates a primary destination", () => {
+  it("dedupes the reports tool (→/results) vs primary Results but still surfaces Full reports", () => {
     const s = buildSidebarSections({
       miraEnabled: false,
       liveToolIds: ["contacts", "automations", "reports"],
     });
-    expect(s.tools.map((i) => i.href)).toEqual(["/contacts", "/automations"]); // 'reports'→/results deduped
+    expect(s.tools.map((i) => i.href)).toEqual(["/contacts", "/automations", "/reports"]);
+    expect(s.tools.map((i) => i.href)).not.toContain("/results"); // reports tool item deduped vs primary Results
   });
   it("includes Mira only when enabled", () => {
     expect(

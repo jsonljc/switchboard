@@ -213,13 +213,15 @@ describe("buildSidebarSections", () => {
     expect(s.settings.href).toBe("/settings");
   });
 
-  it("dedupes a tools item whose href duplicates a primary destination", () => {
-    // 'reports' tools item points at /results (same as primary Results) → must not appear in tools
+  it("dedupes the reports tool (→/results) vs primary Results but still surfaces Full reports", () => {
+    // 'reports' tools item points at /results (dup of primary Results) → deduped;
+    // Full reports (/reports) still appears because the reports tool is live.
     const s = buildSidebarSections({
       miraEnabled: false,
       liveToolIds: ["contacts", "automations", "reports"],
     });
-    expect(s.tools.map((i) => i.href)).toEqual(["/contacts", "/automations"]);
+    expect(s.tools.map((i) => i.href)).toEqual(["/contacts", "/automations", "/reports"]);
+    expect(s.tools.map((i) => i.href)).not.toContain("/results");
   });
 
   it("includes Mira only when enabled", () => {

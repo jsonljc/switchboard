@@ -51,11 +51,11 @@ export function buildSidebarSections(opts: {
     .filter((t) => !primaryHrefs.has(t.href))
     .map(({ id: _id, ...item }) => item);
   if (opts.miraEnabled) tools.push({ label: "Mira", href: "/mira", icon: Sparkles });
-  // Full reports (/reports) is the advanced operator surface. It is shown
-  // when: (a) the reports tool is live AND (b) no other regular tool items are
-  // visible — preventing a duplicate-ish experience when Pipeline/Automations
-  // are already populating the tools section.
-  if (opts.liveToolIds.includes("reports") && tools.length === 0)
+  // Full reports (/reports) is the advanced operator surface, shown whenever the
+  // reports tool is live (the same gate ToolsOverflow uses). The "reports" TOOLS
+  // item itself points at /results and was already deduped against primary
+  // Results above, so /reports is the only reports entry that survives.
+  if (opts.liveToolIds.includes("reports"))
     tools.push({ label: "Full reports", href: "/reports", icon: FileText });
   return {
     primary: PRIMARY,
