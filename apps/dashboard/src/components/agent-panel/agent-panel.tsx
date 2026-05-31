@@ -15,6 +15,7 @@ import { KeyResult } from "./key-result";
 import { OpenDecisions } from "./open-decisions";
 import { WorkLog } from "./work-log";
 import type { Decision } from "@/lib/decisions/types";
+import { useIsDesktop } from "@/hooks/use-is-desktop";
 import styles from "./agent-panel.module.css";
 
 export interface AgentPanelProps {
@@ -71,6 +72,7 @@ export function AgentPanel({
   onActivate,
 }: AgentPanelProps) {
   const display = agentDisplay[agentKey];
+  const isDesktop = useIsDesktop();
 
   // Freshness foot: render-time clock formatted as h:mmap/pm (per spec —
   // "the panel's whole thesis is provenance over liveness"). We use the
@@ -85,7 +87,7 @@ export function AgentPanel({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={styles.panel}>
+      <SheetContent side={isDesktop ? "right" : "bottom"} className={styles.panel}>
         <SheetHeader>
           <SheetTitle className={styles.idRow}>
             <InboxAgentAvatar agentKey={agentKey} size={44} />

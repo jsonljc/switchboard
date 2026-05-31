@@ -58,9 +58,13 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/hooks/use-mira-enabled", () => ({
   useMiraEnabled: () => ({ enabled: false, isLoading: false }),
 }));
+// useIsDesktop drives the Sheet `side` (right on desktop, bottom otherwise).
+// Default false so the other shell tests render the unchanged bottom sheet.
+vi.mock("@/hooks/use-is-desktop", () => ({ useIsDesktop: vi.fn(() => false) }));
 
 // Import component after mocks
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
+import { useIsDesktop } from "@/hooks/use-is-desktop";
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -84,5 +88,16 @@ describe("AgentPanel shell", () => {
     expect(screen.queryByTestId("slot-key-result")).not.toBeInTheDocument();
     expect(screen.queryByTestId("slot-open-decisions")).not.toBeInTheDocument();
     expect(screen.queryByTestId("slot-work-log")).not.toBeInTheDocument();
+  });
+
+  it("docks as a right side-panel on desktop, bottom sheet otherwise", () => {
+    vi.mocked(useIsDesktop).mockReturnValue(true);
+    const { rerender } = render(<AgentPanel agentKey="alex" open onOpenChange={() => {}} />);
+    // side="right" → Radix Content carries the right-edge variant classes
+    expect(screen.getByRole("dialog").className).toContain("right-0");
+
+    vi.mocked(useIsDesktop).mockReturnValue(false);
+    rerender(<AgentPanel agentKey="alex" open onOpenChange={() => {}} />);
+    expect(screen.getByRole("dialog").className).toContain("bottom-0");
   });
 });

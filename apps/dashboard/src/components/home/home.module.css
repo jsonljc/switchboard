@@ -25,6 +25,30 @@
   }
 }
 
+/* ─── Bento (desktop only) ─── */
+.bento { display: contents; }
+.bentoMain,
+.bentoRail { display: contents; }
+@media (min-width: 1024px) {
+  .column {
+    max-width: none; /* fill the shell content frame instead of the 640px column */
+    padding: 32px 0 56px;
+  }
+  .bento {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--home-rail, 320px);
+    gap: 28px;
+    align-items: start;
+  }
+  .bentoMain,
+  .bentoRail {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    min-width: 0;
+  }
+}
+
 /* =========================================================
    VERDICT — the one sentence that earns the screen
    ========================================================= */
