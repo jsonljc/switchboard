@@ -118,3 +118,54 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     hashInputVersion: WORK_TRACE_HASH_VERSION_LATEST,
   };
 }
+
+export interface ClaimTraceInput {
+  workUnit: WorkUnit;
+  governanceDecision: GovernanceDecision;
+  governanceCompletedAt: string;
+  executionStartedAt: string;
+}
+
+/**
+ * Build the `running` WorkTrace persisted as an idempotency CLAIM before the
+ * domain mutation (D1). Unlike buildWorkTrace there is no executionResult yet:
+ * outcome is `running`, executionStartedAt is sealed here (ONE_SHOT — never
+ * re-sent at finalize), and completedAt/error/outputs are intentionally absent.
+ */
+export function buildClaimTrace(input: ClaimTraceInput): WorkTrace {
+  const { workUnit, governanceDecision } = input;
+
+  let governanceConstraints: import("./governance-types.js").ExecutionConstraints | undefined;
+  if ("constraints" in governanceDecision) {
+    governanceConstraints = governanceDecision.constraints;
+  }
+
+  return {
+    workUnitId: workUnit.id,
+    traceId: workUnit.traceId,
+    parentWorkUnitId: workUnit.parentWorkUnitId,
+    deploymentId: workUnit.deployment?.deploymentId,
+    intent: workUnit.intent,
+    mode: workUnit.resolvedMode,
+    organizationId: workUnit.organizationId,
+    actor: workUnit.actor,
+    trigger: workUnit.trigger,
+    idempotencyKey: workUnit.idempotencyKey,
+
+    parameters: workUnit.parameters,
+    deploymentContext: workUnit.deployment,
+    governanceConstraints,
+
+    governanceOutcome: governanceDecision.outcome,
+    riskScore: governanceDecision.riskScore,
+    matchedPolicies: governanceDecision.matchedPolicies,
+    outcome: "running",
+    durationMs: 0,
+    injectedPatternIds: [],
+    requestedAt: workUnit.requestedAt,
+    governanceCompletedAt: input.governanceCompletedAt,
+    executionStartedAt: input.executionStartedAt,
+    ingressPath: "platform_ingress",
+    hashInputVersion: WORK_TRACE_HASH_VERSION_LATEST,
+  };
+}

@@ -39,9 +39,10 @@ export type { ApprovalMode } from "./intent-registration.js";
 
 // Tracing
 export type { WorkTrace } from "./work-trace.js";
-export { buildWorkTrace } from "./work-trace-recorder.js";
+export { buildWorkTrace, buildClaimTrace } from "./work-trace-recorder.js";
 export type {
   TraceInput,
+  ClaimTraceInput,
   WorkTraceStore,
   WorkTraceUpdateResult,
   WorkTraceReadResult,
