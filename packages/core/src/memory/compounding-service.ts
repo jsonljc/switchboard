@@ -2,11 +2,13 @@ import type { ConversationEndEvent } from "../channel-gateway/conversation-lifec
 import type { EmbeddingAdapter } from "../embedding-adapter.js";
 import {
   CANONICAL_KEY_PATTERN,
+  MAX_DEPLOYMENT_MEMORY_ENTRIES,
   MEDSPA_CANONICAL_KEYS,
   OUTCOME_PATTERN_MERGE_THRESHOLD,
   computeConfidenceScore,
   isKnownCanonicalKey,
 } from "@switchboard/schemas";
+import { StaleVersionError } from "../approval/state-machine.js";
 import { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
 import { shouldExtractOutcomePatterns } from "./outcome-pattern-extractor.js";
 import { resolveBookingAttribution, type BookingAttributionStore } from "./booking-attribution.js";
@@ -116,10 +118,11 @@ export interface CompoundingDeps {
 
 const MIN_MESSAGES = 2;
 const SIMILARITY_THRESHOLD = 0.92;
-const MAX_MEMORY_ENTRIES = 500;
-// Confidence a brand-new fact is stored at (matches the store's create default).
-// Also the rank a newcomer must beat to evict an entry once the cap is hit.
-const NEW_FACT_CONFIDENCE = 0.5;
+// Confidence a brand-new fact (sourceCount 1) is stored at, derived from the
+// canonical formula rather than hardcoded so it can't drift from the value the
+// store actually persists. This is also the rank a newcomer must beat to evict
+// an existing entry once the cap is hit.
+const NEW_FACT_CONFIDENCE = computeConfidenceScore(1, false);
 const FAQ_PROMOTION_THRESHOLD = 3;
 const FAQ_DRAFT_EXPIRY_MS = 72 * 60 * 60 * 1000; // 72 hours
 const MAX_PATTERNS_PER_CONVERSATION = 5;
@@ -362,17 +365,21 @@ export class ConversationCompoundingService {
     // memory would freeze permanently at the cap, since nothing else deletes
     // entries (decay only lowers confidence to a floor).
     const count = await this.memoryStore.countByDeployment(organizationId, deploymentId);
-    if (count >= MAX_MEMORY_ENTRIES) {
+    if (count >= MAX_DEPLOYMENT_MEMORY_ENTRIES) {
       const candidate = await this.memoryStore.findEvictionCandidate(organizationId, deploymentId);
       if (!candidate || NEW_FACT_CONFIDENCE <= candidate.confidence) return;
       try {
         await this.memoryStore.delete(organizationId, candidate.id);
       } catch (err) {
-        // The candidate was deleted by a concurrent writer between find and
-        // delete — drop this fact rather than create a row without a freed
-        // slot (which would push past the cap).
-        console.warn("[CompoundingService] eviction delete failed, dropping new fact", err);
-        return;
+        // StaleVersionError means the candidate was deleted by a concurrent
+        // writer between find and delete — drop this fact rather than create a
+        // row without a freed slot (which would push past the cap). Any other
+        // error is a real failure and must propagate to the caller's boundary.
+        if (err instanceof StaleVersionError) {
+          console.warn("[CompoundingService] eviction candidate vanished, dropping new fact", err);
+          return;
+        }
+        throw err;
       }
     }
 

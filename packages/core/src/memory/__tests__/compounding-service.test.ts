@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ConversationCompoundingService } from "../compounding-service.js";
+import { StaleVersionError } from "../../approval/state-machine.js";
 import {
   createInMemoryMetrics,
   setMetrics,
@@ -224,6 +225,30 @@ describe("ConversationCompoundingService", () => {
     );
   });
 
+  it("does not evict an entry whose confidence ties the newcomer", async () => {
+    // Boundary: the rule is `NEW_FACT_CONFIDENCE <= candidate.confidence -> drop`,
+    // so an equal-confidence candidate (0.5, the new-fact rank) must survive —
+    // a newcomer only displaces a strictly-lower entry, never an equal one.
+    deps.deploymentMemoryStore.countByDeployment.mockResolvedValue(500);
+    deps.deploymentMemoryStore.findEvictionCandidate.mockResolvedValue({
+      id: "mem-tie",
+      confidence: 0.5,
+    });
+    deps.llmClient.complete
+      .mockResolvedValueOnce(JSON.stringify({ summary: "Chat.", outcome: "info_request" }))
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          facts: [{ fact: "New fact", confidence: 0.8, category: "fact" }],
+          questions: [],
+        }),
+      );
+
+    await service.processConversationEnd(baseEvent);
+
+    expect(deps.deploymentMemoryStore.delete).not.toHaveBeenCalled();
+    expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
+  });
+
   it("drops a new fact at cap when no entry ranks below the newcomer", async () => {
     deps.deploymentMemoryStore.countByDeployment.mockResolvedValue(500);
     deps.deploymentMemoryStore.findEvictionCandidate.mockResolvedValue({
@@ -245,16 +270,16 @@ describe("ConversationCompoundingService", () => {
     expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
   });
 
-  it("drops the new fact without throwing when the eviction candidate vanished mid-flight", async () => {
+  it("drops the new fact on a StaleVersionError when the eviction candidate vanished mid-flight", async () => {
     // Race: another writer deleted the candidate between find and delete.
-    // delete() throws (P2025 / StaleVersionError) — we must not create a row
-    // without having freed a slot, and must not surface the error.
+    // delete() throws StaleVersionError (P2025) — we must not create a row
+    // without having freed a slot, and must swallow this specific error.
     deps.deploymentMemoryStore.countByDeployment.mockResolvedValue(500);
     deps.deploymentMemoryStore.findEvictionCandidate.mockResolvedValue({
       id: "mem-gone",
       confidence: 0.3,
     });
-    deps.deploymentMemoryStore.delete.mockRejectedValue(new Error("StaleVersionError"));
+    deps.deploymentMemoryStore.delete.mockRejectedValue(new StaleVersionError("mem-gone", -1, -1));
     deps.llmClient.complete
       .mockResolvedValueOnce(JSON.stringify({ summary: "Chat.", outcome: "info_request" }))
       .mockResolvedValueOnce(
@@ -266,6 +291,40 @@ describe("ConversationCompoundingService", () => {
 
     await expect(service.processConversationEnd(baseEvent)).resolves.not.toThrow();
     expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
+  });
+
+  it("does not swallow a non-StaleVersionError raised by the eviction delete", async () => {
+    // A genuine DB failure during eviction must NOT be treated as the benign
+    // race: it is rethrown past the eviction catch (no eviction warn) and lands
+    // on processConversationEnd's error boundary (console.error). No fact is
+    // created without a freed slot.
+    deps.deploymentMemoryStore.countByDeployment.mockResolvedValue(500);
+    deps.deploymentMemoryStore.findEvictionCandidate.mockResolvedValue({
+      id: "mem-stale",
+      confidence: 0.3,
+    });
+    deps.deploymentMemoryStore.delete.mockRejectedValue(new Error("connection reset"));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    deps.llmClient.complete
+      .mockResolvedValueOnce(JSON.stringify({ summary: "Chat.", outcome: "info_request" }))
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          facts: [{ fact: "New fact", confidence: 0.8, category: "fact" }],
+          questions: [],
+        }),
+      );
+
+    await expect(service.processConversationEnd(baseEvent)).resolves.not.toThrow();
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[CompoundingService] Failed to process conversation end:",
+      expect.objectContaining({ message: "connection reset" }),
+    );
+    expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("tracks questions as FAQ and promotes to knowledge store at exactly 3 occurrences", async () => {
