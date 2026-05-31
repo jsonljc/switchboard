@@ -60,6 +60,9 @@ vi.mock("../account-menu", () => ({
     </button>
   ),
 }));
+vi.mock("../app-sidebar", () => ({
+  AppSidebar: () => <nav aria-label="Primary sidebar" />,
+}));
 
 describe("EditorialAuthShellInner", () => {
   it("renders primary nav with inbox link and no per-agent links", () => {

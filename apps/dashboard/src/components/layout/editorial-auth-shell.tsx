@@ -10,6 +10,7 @@ import { ToolsOverflow } from "./tools-overflow";
 import { TweaksPanelMount } from "./tweaks-panel-mount";
 import { PrimaryNav } from "./primary-nav";
 import { AccountMenu } from "./account-menu";
+import { AppSidebar } from "./app-sidebar";
 
 /**
  * The single editorial shell. Mounted exactly once by AppShell (the (auth)
@@ -32,20 +33,27 @@ export function EditorialAuthShellInner({ children }: { children: ReactNode }) {
                 <span className="brand-dot" />
                 Switchboard
               </a>
-              <PrimaryNav />
+              <span className="hide-at-lg">
+                <PrimaryNav />
+              </span>
             </div>
             <div className="header-actions">
               <LiveSignalPopover />
               <InboxDrawer />
               <HaltButtonClient />
               <AccountMenu />
-              <ToolsOverflow />
+              <span className="hide-at-lg">
+                <ToolsOverflow />
+              </span>
             </div>
           </div>
         </header>
-        <main className="app-main">
-          <div className="app-content">{children}</div>
-        </main>
+        <div className="app-body">
+          <AppSidebar />
+          <main className="app-main">
+            <div className="app-content">{children}</div>
+          </main>
+        </div>
         <TweaksPanelMount />
       </RightDrawerProvider>
     </HaltProvider>
