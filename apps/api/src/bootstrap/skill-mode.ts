@@ -277,6 +277,7 @@ export async function bootstrapSkillMode(
     calendarProviderFactory,
     isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
     bookingStore,
+    contactStore,
     opportunityStore: {
       findActiveByContact: async (orgId: string, contactId: string) => {
         const active = await opportunityStore.findActiveByContact(orgId, contactId);
