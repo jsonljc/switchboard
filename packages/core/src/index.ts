@@ -296,3 +296,6 @@ export * from "./consent/index.js";
 
 // Route Templates (surface-URL injection contract — Route Governance Contract v1 §8.5)
 export type { RouteTemplates } from "./lib/route-templates.js";
+
+// Deployment Resolver (Prisma-backed implementation — used by api routes for skill-slug lookups)
+export { PrismaDeploymentResolver } from "./platform/prisma-deployment-resolver.js";

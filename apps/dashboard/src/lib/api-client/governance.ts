@@ -1,4 +1,10 @@
-import type { AuditEntry, Policy, ActivityRow } from "@switchboard/schemas";
+import type {
+  AuditEntry,
+  Policy,
+  ActivityRow,
+  MiraBriefRequest,
+  MiraBriefResult,
+} from "@switchboard/schemas";
 import type {
   PendingApproval,
   SimulateResult,
@@ -353,6 +359,18 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   /** Reads the Mira Director's Desk read-model (read-only, org-scoped). */
   async getMiraDesk(): Promise<{ desk: MiraDeskModel }> {
     return this.request<{ desk: MiraDeskModel }>("/api/dashboard/agents/mira/desk");
+  }
+
+  /** createCreativeDraftRequest — draft-only open-brief mutation (Phase 2). */
+  async createCreativeDraftRequest(
+    brief: MiraBriefRequest,
+    idempotencyKey: string,
+  ): Promise<MiraBriefResult> {
+    return this.request<MiraBriefResult>("/api/dashboard/agents/mira/brief", {
+      method: "POST",
+      body: JSON.stringify(brief),
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
   }
 
   /**

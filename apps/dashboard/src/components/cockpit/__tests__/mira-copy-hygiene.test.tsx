@@ -26,6 +26,7 @@ const SOURCES = [
   resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-in-production-tray.tsx"),
   resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-ready-to-review.tsx"),
   resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/desk-copy.ts"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-brief-box.tsx"),
 ];
 
 const FORBIDDEN: Array<{ label: string; re: RegExp }> = [

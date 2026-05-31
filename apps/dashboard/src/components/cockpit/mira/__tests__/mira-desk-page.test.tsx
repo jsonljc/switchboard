@@ -11,6 +11,9 @@ vi.mock("@/hooks/use-agent-mission", () => ({
 vi.mock("@/components/layout/halt/halt-context", () => ({
   useHalt: () => ({ halted: false, toggleHalt: vi.fn() }),
 }));
+vi.mock("@/hooks/use-create-creative-draft-request", () => ({
+  useCreateCreativeDraftRequest: () => ({ mutateAsync: vi.fn(), isPending: false, isError: false }),
+}));
 
 const FORBIDDEN =
   /\b(sent to riley|in use|winner|fatigued|published|distribute|performance|learning|improved|drove|recovered|saved)\b/i;

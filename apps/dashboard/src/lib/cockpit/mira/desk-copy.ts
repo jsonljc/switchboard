@@ -1,4 +1,4 @@
-import type { CreativeJobStage } from "@switchboard/schemas";
+import type { CreativeJobStage, MiraBriefGoal, MiraBriefVibe } from "@switchboard/schemas";
 import type { MiraDeskProblemCode } from "@switchboard/core";
 
 // Plain, non-engineering stage copy for the In-production tray (spec §copy guardrails).
@@ -27,3 +27,41 @@ export const DESK_COPY = {
   readyTitle: "Ready to review",
   readyEmptyBody: "Nothing to review yet. New drafts land here when Mira finishes.",
 } as const;
+
+// ---------------------------------------------------------------------------
+// PR3 — Brief box + Intent Preview copy
+// ---------------------------------------------------------------------------
+
+export const BRIEF_HEADING_EMPTY = "What should Mira work on next?";
+export const BRIEF_PROMOTING_LABEL = "What are we promoting?";
+export const BRIEF_PROMOTING_PLACEHOLDER = "Summer Botox special — $11/unit through July";
+
+export const GOAL_LABEL: Record<MiraBriefGoal, string> = {
+  more_bookings: "More bookings",
+  fill_slow_days: "Fill slow days",
+  new_treatment: "New treatment",
+  brand: "Brand",
+};
+
+export const VIBE_LABEL: Record<MiraBriefVibe, string> = {
+  warm: "Warm & trustworthy",
+  luxe: "Luxe",
+  fun: "Fun",
+  clinical: "Clinical",
+};
+
+// Three example chips that fill the line (kills blank-box freeze).
+export const BRIEF_EXAMPLES = [
+  "Summer Botox special — $11/unit through July",
+  "Introduce our new lip filler treatment",
+  "Fill weekday afternoon facial slots",
+] as const;
+
+/** The Intent-Preview readback (cost-confirm copy). Generation cost is gated in review. */
+export function intentSummary(promoting: string, goalLabel: string, vibeLabel: string): string {
+  return `Got it — a draft ad for "${promoting.trim()}", aimed at ${goalLabel.toLowerCase()}, ${vibeLabel.toLowerCase()} tone. You'll review the draft before anything goes further; generating the video is a separate step you confirm in review.`;
+}
+
+// Off-scope redirect — NEVER answers the question; points back to ad creative.
+export const BRIEF_OFFSCOPE_REDIRECT =
+  "That sounds like a scheduling or results question — your front desk and reports handle those. Mira makes the ad creative. Want a draft about an offer or treatment instead?";
