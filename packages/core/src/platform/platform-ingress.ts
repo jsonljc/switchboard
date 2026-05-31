@@ -19,7 +19,7 @@ import { NoopOperatorAlerter, safeAlert } from "../observability/operator-alerte
 import { buildInfrastructureFailureAuditParams } from "../observability/infrastructure-failure.js";
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import { normalizeWorkUnit } from "./work-unit.js";
-import { buildWorkTrace } from "./work-trace-recorder.js";
+import { buildWorkTrace, buildClaimTrace } from "./work-trace-recorder.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
 
 export const TRACE_PERSIST_RETRY_POLICY = {
@@ -98,6 +98,27 @@ export class PlatformIngress {
       );
       if (existingResult) {
         const existingTrace = existingResult.trace;
+        // D1: a `running` trace is an unresolved CLAIM from a prior keyed
+        // attempt — committed-but-unconfirmed (finalize blipped), or a
+        // concurrent in-flight submit. The prior mutation may have committed,
+        // so we must never re-execute. Fail closed (non-retryable; needs
+        // reconciliation). `running` is exclusively a claim state on the
+        // ingress path, so this branch never shadows a legitimate cached
+        // result (completed/failed/queued/pending_approval fall through).
+        if (existingTrace.outcome === "running") {
+          return {
+            ok: false,
+            error: {
+              type: "idempotency_in_flight",
+              intent: request.intent,
+              message:
+                `A prior attempt for idempotency key "${request.idempotencyKey}" is unresolved and ` +
+                `may have already committed. Not re-executing to avoid a double-apply; manual ` +
+                `reconciliation required.`,
+              retryable: false,
+            },
+          };
+        }
         const result: ExecutionResult = {
           workUnitId: existingTrace.workUnitId,
           outcome: existingTrace.outcome,
@@ -290,8 +311,49 @@ export class PlatformIngress {
       return { ok: true, result, workUnit, approvalRequired: true };
     }
 
-    // 7. Execute
+    // 7. Execute — claim-first for keyed requests (D1). For keyed requests we
+    // persist a `running` claim BEFORE dispatch so a retry can never see
+    // "nothing happened"; we finalize the claim (running -> terminal) after.
+    // No-key requests keep the legacy single-persist path (no replay risk).
     const executionStartedAt = new Date().toISOString();
+    const claim = await this.claimIdempotency(
+      traceStore,
+      workUnit,
+      decision,
+      governanceCompletedAt,
+      executionStartedAt,
+    );
+    if (claim.kind === "conflict") {
+      // Lost the atomic claim race — a concurrent winner is already executing
+      // this idempotency key. Fail closed; do not run a duplicate.
+      return {
+        ok: false,
+        error: {
+          type: "idempotency_in_flight",
+          intent: request.intent,
+          message:
+            `A concurrent attempt for idempotency key "${request.idempotencyKey}" is in progress. ` +
+            `Not executing a duplicate; the prior attempt may commit — reconcile if it does not complete.`,
+          retryable: false,
+        },
+      };
+    }
+    if (claim.kind === "claim_failed") {
+      // The canonical claim could not be recorded; nothing was dispatched, so
+      // no mutation committed. Safe to retry (distinct from idempotency_in_flight).
+      return {
+        ok: false,
+        error: {
+          type: "upstream_error",
+          intent: request.intent,
+          message:
+            "Could not record the idempotency claim before execution; no action was taken. Safe to retry.",
+          retryable: true,
+        },
+      };
+    }
+    const keyed = claim.kind === "claimed";
+
     let executionResult: ExecutionResult;
     try {
       executionResult = await modeRegistry.dispatch(
@@ -301,22 +363,30 @@ export class PlatformIngress {
         { traceId: workUnit.traceId, governanceDecision: decision },
       );
     } catch (executionErr) {
-      // Invariant (#677 §2.4): persistTrace never rethrows (it owns its own retry +
-      // infra-failure audit), and recordInfrastructureFailure is non-throwing, so the
-      // original executionErr always survives to the rethrow below — trace-persist
-      // failure can never mask it. EXECUTION_EXCEPTION is a platform code, never a
-      // domain code (#677 §2.3): it must not appear in OPERATOR_INTENT_ERROR_CODES.
+      // Invariant (#677 §2.4): the trace write (persistTrace/finalizeTrace) never
+      // rethrows (it owns its own retry + infra-failure audit), and
+      // recordInfrastructureFailure is non-throwing, so the original executionErr
+      // always survives to the rethrow below — trace-persist failure can never mask
+      // it. EXECUTION_EXCEPTION is a platform code, never a domain code (#677 §2.3):
+      // it must not appear in OPERATOR_INTENT_ERROR_CODES.
       const completedAt = new Date().toISOString();
       const failed = this.buildFailedResult(workUnit, "EXECUTION_EXCEPTION", "Execution failed");
-      await this.persistTrace(
-        traceStore,
-        workUnit,
-        decision,
-        governanceCompletedAt,
-        failed,
-        executionStartedAt,
-        completedAt,
-      );
+      if (keyed) {
+        // Update the running claim -> failed. A handler that throws commits
+        // nothing (its domain write is atomic), so this matches reality. If
+        // THIS update fails, the running claim remains and a retry fails closed.
+        await this.finalizeTrace(traceStore, workUnit, failed, completedAt);
+      } else {
+        await this.persistTrace(
+          traceStore,
+          workUnit,
+          decision,
+          governanceCompletedAt,
+          failed,
+          executionStartedAt,
+          completedAt,
+        );
+      }
       await this.recordInfrastructureFailure({
         errorType: "execution_exception",
         error: executionErr,
@@ -327,15 +397,23 @@ export class PlatformIngress {
     }
     const completedAt = new Date().toISOString();
 
-    await this.persistTrace(
-      traceStore,
-      workUnit,
-      decision,
-      governanceCompletedAt,
-      executionResult,
-      executionStartedAt,
-      completedAt,
-    );
+    if (keyed) {
+      // Domain mutation committed. Finalize the claim; if finalize fails we
+      // STILL return the successful result (the mutation happened) and leave the
+      // running claim for reconciliation — the retry, not this call, prevents
+      // the double spend.
+      await this.finalizeTrace(traceStore, workUnit, executionResult, completedAt);
+    } else {
+      await this.persistTrace(
+        traceStore,
+        workUnit,
+        decision,
+        governanceCompletedAt,
+        executionResult,
+        executionStartedAt,
+        completedAt,
+      );
+    }
 
     return { ok: true, result: executionResult, workUnit };
   }
@@ -374,29 +452,121 @@ export class PlatformIngress {
       completedAt,
     });
 
+    const result = await this.runWithRetry(() => traceStore.persist(trace));
+    if (!result.ok) {
+      // Terminal failure — exactly one infra-failure audit + one alert.
+      await this.recordInfrastructureFailure({
+        errorType: "trace_persist_failed",
+        error: result.error,
+        workUnit,
+        retryable: false,
+      });
+    }
+  }
+
+  /**
+   * Run `fn` under the trace-persist retry policy (jittered backoff). Returns
+   * the value on success, or the last error if every attempt threw. Never
+   * throws — callers decide how a terminal failure is surfaced.
+   */
+  private async runWithRetry<T>(
+    fn: () => Promise<T>,
+  ): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> {
     const delayFn = this.config.delayFn ?? defaultDelayFn;
     const { maxAttempts } = TRACE_PERSIST_RETRY_POLICY;
     let lastError: unknown;
-
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       if (attempt > 1) {
         await delayFn(jitteredDelayMs(attempt));
       }
       try {
-        await traceStore.persist(trace);
-        return; // success — no audit, no alert
+        return { ok: true, value: await fn() };
       } catch (err) {
         lastError = err;
       }
     }
+    return { ok: false, error: lastError };
+  }
 
-    // Terminal failure — exactly one infra-failure audit + one alert via the existing helper.
-    await this.recordInfrastructureFailure({
-      errorType: "trace_persist_failed",
-      error: lastError,
+  /**
+   * Claim the idempotency key by persisting a `running` trace BEFORE dispatch (D1).
+   * - skipped: no key (or no store) -> legacy single-persist path.
+   * - claimed: running claim persisted; caller must finalize via update().
+   * - conflict: lost the race (P2002) -> caller fails closed.
+   * - claim_failed: transient store error before any mutation -> caller returns retryable.
+   */
+  private async claimIdempotency(
+    traceStore: WorkTraceStore | undefined,
+    workUnit: WorkUnit,
+    decision: GovernanceDecision,
+    governanceCompletedAt: string,
+    executionStartedAt: string,
+  ): Promise<{ kind: "skipped" | "claimed" | "conflict" | "claim_failed" }> {
+    if (!traceStore || !workUnit.idempotencyKey) return { kind: "skipped" };
+    const claimTrace = buildClaimTrace({
       workUnit,
-      retryable: false,
+      governanceDecision: decision,
+      governanceCompletedAt,
+      executionStartedAt,
     });
+    const result = await this.runWithRetry(() => traceStore.claim(claimTrace));
+    if (!result.ok) {
+      await this.recordInfrastructureFailure({
+        errorType: "trace_persist_failed",
+        error: result.error,
+        workUnit,
+        retryable: true,
+      });
+      return { kind: "claim_failed" };
+    }
+    return result.value.claimed ? { kind: "claimed" } : { kind: "conflict" };
+  }
+
+  /**
+   * Finalize a `running` claim by updating it to its terminal outcome. Never
+   * throws: a terminal update failure leaves the running claim in place (a retry
+   * then fails closed) and records an infra-failure. executionStartedAt is NOT
+   * re-sent — it is ONE_SHOT and was sealed at claim time.
+   */
+  private async finalizeTrace(
+    traceStore: WorkTraceStore | undefined,
+    workUnit: WorkUnit,
+    executionResult: ExecutionResult,
+    completedAt: string,
+  ): Promise<void> {
+    if (!traceStore) return;
+    const result = await this.runWithRetry(() =>
+      traceStore.update(
+        workUnit.id,
+        {
+          outcome: executionResult.outcome,
+          durationMs: executionResult.durationMs,
+          executionSummary: executionResult.summary,
+          executionOutputs: executionResult.outputs,
+          error: executionResult.error,
+          injectedPatternIds: executionResult.injectedPatternIds ?? [],
+          completedAt,
+        },
+        { caller: "platform_ingress_finalize", organizationId: workUnit.organizationId },
+      ),
+    );
+    if (!result.ok) {
+      await this.recordInfrastructureFailure({
+        errorType: "trace_persist_failed",
+        error: result.error,
+        workUnit,
+        retryable: false,
+      });
+      return;
+    }
+    if (!result.value.ok) {
+      await this.recordInfrastructureFailure({
+        errorType: "trace_persist_failed",
+        error: new Error(`finalize update rejected: ${result.value.reason}`),
+        workUnit,
+        retryable: false,
+      });
+    }
   }
 
   private async recordInfrastructureFailure(input: {
