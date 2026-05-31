@@ -196,8 +196,10 @@
 .inbox-detail-empty { display: none; }
 
 /* ─── Desktop master-detail two-pane (additive at lg) ─── */
+/* Scoped under .app-main (the shell wrapper) so specificity (0,2,0) beats
+   inbox.css's later-imported `.inbox-page { display: flex }` (0,1,0). */
 @media (min-width: 1024px) {
-  .inbox-page {
+  .app-main .inbox-page {
     max-width: none; /* fill the shell content frame */
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--inbox-detail-w, 460px);
@@ -205,7 +207,7 @@
     align-items: start;
     padding-bottom: 32px;
   }
-  .inbox-list { grid-column: 1; min-width: 0; }
+  .app-main .inbox-list { grid-column: 1; min-width: 0; }
   /* dock the detail sheet (and the empty placeholder) into the right column */
   .sheet,
   .inbox-detail-empty { grid-column: 2; }
