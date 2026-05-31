@@ -11,6 +11,11 @@ vi.mock("@/hooks/use-creative-pipeline", () => ({
   useApproveStage: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
   useCostEstimate: () => ({ data: null }),
 }));
+// MiraClipActions (rendered by MiraClipCard) now calls useReviewDecision for the
+// Keep/Pass branch — mock it so the card tests don't need a QueryClientProvider.
+vi.mock("@/hooks/use-review-decision", () => ({
+  useReviewDecision: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+}));
 
 import { MiraClipCard } from "../mira-clip-card";
 
