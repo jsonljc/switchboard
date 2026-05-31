@@ -19,6 +19,14 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockUsePathname(),
 }));
 
+const mockUseMiraEnabled = vi.fn((): { enabled: boolean | undefined; isLoading: boolean } => ({
+  enabled: false,
+  isLoading: false,
+}));
+vi.mock("@/hooks/use-mira-enabled", () => ({
+  useMiraEnabled: () => mockUseMiraEnabled(),
+}));
+
 function setAllToolsLive(value: boolean) {
   vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", value ? "true" : "");
   vi.stubEnv("NEXT_PUBLIC_AUTOMATIONS_LIVE", value ? "true" : "");
@@ -34,6 +42,7 @@ async function openMenu() {
 
 beforeEach(() => {
   mockUsePathname.mockReturnValue("/");
+  mockUseMiraEnabled.mockReturnValue({ enabled: false, isLoading: false });
 });
 
 afterEach(() => {
@@ -50,7 +59,7 @@ describe("ToolsOverflow", () => {
   });
 
   // Case 2
-  it("opens the menu and lists the three Tools items + Settings with separator", async () => {
+  it("opens the menu and lists Tools items, the Advanced reports entry, and Settings", async () => {
     setAllToolsLive(true);
     render(<ToolsOverflow />);
     await openMenu();
@@ -60,12 +69,15 @@ describe("ToolsOverflow", () => {
       "Pipeline",
       "Automations",
       "Reports",
+      "Full reports",
       "Settings",
     ]);
     // Activity is intentionally not in the nav (kept reachable by URL only).
     expect(within(menu).queryByText("Activity")).not.toBeInTheDocument();
-    // Separator between Reports and Settings.
-    expect(within(menu).getByRole("separator")).toBeInTheDocument();
+    // Mira is hidden unless the org has it enabled.
+    expect(within(menu).queryByText("Mira")).not.toBeInTheDocument();
+    // Two separators: before the Advanced group and before Settings.
+    expect(within(menu).getAllByRole("separator")).toHaveLength(2);
   });
 
   // Case 3
@@ -194,5 +206,76 @@ describe("ToolsOverflow", () => {
     for (const item of items) {
       expect(item).not.toHaveAttribute("aria-current");
     }
+  });
+
+  // Case 12 — Mira entry (gated on org enablement)
+  it("shows a Mira entry → /mira when the org has Mira enabled", async () => {
+    setAllToolsLive(true);
+    mockUseMiraEnabled.mockReturnValue({ enabled: true, isLoading: false });
+    render(<ToolsOverflow />);
+    await openMenu();
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("Mira").closest("a")).toHaveAttribute("href", "/mira");
+  });
+
+  it("hides Mira when the org does not have it enabled", async () => {
+    setAllToolsLive(true);
+    render(<ToolsOverflow />);
+    await openMenu();
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).queryByText("Mira")).not.toBeInTheDocument();
+  });
+
+  it("shows the Tools trigger for a Mira-only org (no Mercury tools live)", async () => {
+    setAllToolsLive(false);
+    mockUseMiraEnabled.mockReturnValue({ enabled: true, isLoading: false });
+    render(<ToolsOverflow />);
+    const trigger = screen.getByRole("button", { name: /tools/i });
+    expect(trigger).toBeInTheDocument();
+    await userEvent.click(trigger);
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("Mira")).toBeInTheDocument();
+  });
+
+  it("does not show Mira while enablement is still loading (no flash)", async () => {
+    setAllToolsLive(true);
+    mockUseMiraEnabled.mockReturnValue({ enabled: undefined, isLoading: true });
+    render(<ToolsOverflow />);
+    await openMenu();
+    const menu = await screen.findByRole("menu");
+    // Mercury tools are live so the trigger shows, but Mira stays absent until
+    // the probe resolves — no "not set up" flash.
+    expect(within(menu).queryByText("Mira")).not.toBeInTheDocument();
+  });
+
+  it("keeps the trigger hidden for a Mira-only org while enablement is loading", () => {
+    setAllToolsLive(false);
+    mockUseMiraEnabled.mockReturnValue({ enabled: undefined, isLoading: true });
+    const { container } = render(<ToolsOverflow />);
+    // Nothing resolved yet (no live tools, enablement unknown) → no trigger
+    // until the probe settles, then it appears. Locks the no-flash behavior.
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  // Case 13 — Advanced reports (flag-gated on NEXT_PUBLIC_REPORTS_LIVE)
+  it("shows 'Full reports' → /reports under an Advanced group when reports are live", async () => {
+    setAllToolsLive(true);
+    render(<ToolsOverflow />);
+    await openMenu();
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("Advanced")).toBeInTheDocument();
+    expect(within(menu).getByText("Full reports").closest("a")).toHaveAttribute("href", "/reports");
+  });
+
+  it("hides 'Full reports' and the Advanced group when reports are not live", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CONTACTS_LIVE", "true");
+    vi.stubEnv("NEXT_PUBLIC_AUTOMATIONS_LIVE", "true");
+    vi.stubEnv("NEXT_PUBLIC_ACTIVITY_LIVE", "true");
+    vi.stubEnv("NEXT_PUBLIC_REPORTS_LIVE", "");
+    render(<ToolsOverflow />);
+    await openMenu();
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).queryByText("Full reports")).not.toBeInTheDocument();
+    expect(within(menu).queryByText("Advanced")).not.toBeInTheDocument();
   });
 });

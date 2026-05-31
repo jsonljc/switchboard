@@ -14,7 +14,10 @@ async function fetchMission(agentKey: string): Promise<MissionAggregatorResponse
   return (await res.json()) as MissionAggregatorResponse;
 }
 
-export function useAgentMission(agentKey: string) {
+export function useAgentMission(
+  agentKey: string,
+  options?: { refetchInterval?: number | false; staleTime?: number },
+) {
   const keys = useScopedQueryKeys();
   const { halted } = useHalt();
   const query = useQuery({
@@ -22,7 +25,8 @@ export function useAgentMission(agentKey: string) {
       ? [...keys.mission.detail(agentKey), halted ? "halted" : "live"]
       : ["__disabled_mission__"],
     queryFn: () => fetchMission(agentKey),
-    refetchInterval: 60_000,
+    refetchInterval: options?.refetchInterval ?? 60_000,
+    staleTime: options?.staleTime,
     enabled: !!keys,
   });
   return {
