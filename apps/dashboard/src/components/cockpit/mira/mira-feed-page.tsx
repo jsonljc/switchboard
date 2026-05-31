@@ -8,6 +8,7 @@ import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useMiraFeed } from "@/hooks/use-mira-feed";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { MIRA_ACCENT, MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-config";
+import { T } from "@/components/cockpit/tokens";
 import { MiraCreativeFeed } from "./mira-creative-feed";
 
 export function MiraFeedPage() {
@@ -37,7 +38,7 @@ export function MiraFeedPage() {
         background: "#000",
       }}
     >
-      <div style={{ position: "relative", background: "#fff" }}>
+      <div style={{ position: "relative", background: T.paper }}>
         <Identity
           statusKey="IDLE"
           halted={haltCtx.halted}

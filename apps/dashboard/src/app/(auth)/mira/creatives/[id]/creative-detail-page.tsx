@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useMiraCreative } from "@/hooks/use-mira-creative";
 import { useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
+import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
+import { T } from "@/components/cockpit/tokens";
 
 export function MiraCreativeDetailPage({ id }: { id: string }) {
   const jobQ = useMiraCreative(id);
@@ -25,8 +27,8 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
     <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 16 }}>
       <div
         style={{
-          background: "#EFECF6",
-          color: "#3C315C",
+          background: MIRA_ACCENT.paper,
+          color: MIRA_ACCENT.deep,
           padding: "8px 12px",
           borderRadius: 8,
           fontSize: 13,
@@ -35,7 +37,9 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
         Draft only — not published. Nothing goes live without you.
       </div>
 
-      <h1 style={{ fontSize: 20, fontWeight: 700 }}>{job.title}</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em", color: T.ink }}>
+        {job.title}
+      </h1>
 
       {videoUrl ? (
         <video
@@ -46,10 +50,10 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
           style={{ width: "100%", borderRadius: 10 }}
         />
       ) : (
-        <div style={{ color: "#777" }}>No draft clip yet — still generating.</div>
+        <div style={{ color: T.ink3 }}>No draft clip yet — still generating.</div>
       )}
 
-      <div style={{ fontSize: 13, color: "#777" }}>
+      <div style={{ fontSize: 13, color: T.ink3 }}>
         {job.status === "draft_ready"
           ? "Draft completed — ready for your review."
           : job.status === "stopped"
@@ -70,9 +74,9 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                   style={{
                     padding: "10px 16px",
                     borderRadius: 8,
-                    background: "#3C315C",
+                    background: T.amber,
                     color: "white",
-                    border: "none",
+                    border: `1px solid ${T.amberDeep}`,
                   }}
                 >
                   Continue draft
@@ -86,14 +90,14 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "10px 16px",
                     borderRadius: 8,
                     background: "transparent",
-                    color: "#3C315C",
-                    border: "1px solid #3C315C",
+                    color: T.ink2,
+                    border: `1px solid ${T.hair}`,
                   }}
                 >
                   Stop draft
                 </button>
               )}
-              <span style={{ fontSize: 12, color: "#777" }}>
+              <span style={{ fontSize: 12, color: T.ink3 }}>
                 {estimateQ.data
                   ? `Continue runs the next generation step (~$${estimateQ.data.basic.cost}). Stop is free but can't be undone.`
                   : "Continue runs the next generation step (a real cost). Stop is free but can't be undone."}
@@ -109,10 +113,10 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 gap: 8,
                 padding: 12,
                 borderRadius: 8,
-                background: "#EFECF6",
+                background: MIRA_ACCENT.paper,
               }}
             >
-              <span style={{ fontSize: 13, color: "#3C315C" }}>
+              <span style={{ fontSize: 13, color: T.ink2 }}>
                 Continue draft? Runs the next generation step. This may create provider cost
                 {estimateQ.data ? ` (about $${estimateQ.data.basic.cost})` : ""}. It stays a draft —
                 nothing is published.
@@ -127,9 +131,9 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                   style={{
                     padding: "8px 14px",
                     borderRadius: 8,
-                    background: "#3C315C",
+                    background: T.amber,
                     color: "white",
-                    border: "none",
+                    border: `1px solid ${T.amberDeep}`,
                   }}
                 >
                   Confirm continue
@@ -140,7 +144,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "8px 14px",
                     borderRadius: 8,
                     background: "transparent",
-                    border: "1px solid #999",
+                    border: `1px solid ${T.hair}`,
                   }}
                 >
                   Cancel
@@ -160,7 +164,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 background: "#F6ECEC",
               }}
             >
-              <span style={{ fontSize: 13, color: "#7A2E2E" }}>
+              <span style={{ fontSize: 13, color: T.red }}>
                 Stop this draft? You can&apos;t continue it later. This can&apos;t be undone.
               </span>
               <div style={{ display: "flex", gap: 12 }}>
@@ -173,7 +177,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                   style={{
                     padding: "8px 14px",
                     borderRadius: 8,
-                    background: "#7A2E2E",
+                    background: T.red,
                     color: "white",
                     border: "none",
                   }}
@@ -186,7 +190,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "8px 14px",
                     borderRadius: 8,
                     background: "transparent",
-                    border: "1px solid #999",
+                    border: `1px solid ${T.hair}`,
                   }}
                 >
                   Cancel
@@ -196,7 +200,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
           )}
 
           {approve.isError && (
-            <span style={{ color: "#7A2E2E", fontSize: 12 }}>
+            <span style={{ color: T.red, fontSize: 12 }}>
               Couldn&apos;t update the draft — try again.
             </span>
           )}

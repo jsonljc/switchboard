@@ -3,6 +3,7 @@
 import type { MiraDeskItem } from "@switchboard/core";
 import { STAGE_COPY, PROBLEM_COPY, DESK_COPY } from "@/lib/cockpit/mira/desk-copy";
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
+import { T } from "@/components/cockpit/tokens";
 
 // Calm, muted tray (NOT the hero). Plain stage copy by default; a problem
 // message only when something is wrong. No engineering-console detail.
@@ -11,17 +12,27 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
     <section
       aria-label={DESK_COPY.inProductionTitle}
       style={{
-        background: "#fff",
-        borderRadius: 14,
+        background: T.paper,
+        borderRadius: 8,
         padding: 16,
-        border: `1px solid ${MIRA_ACCENT.soft}`,
+        border: `1px solid ${T.hair}`,
       }}
     >
-      <h2 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#666" }}>
+      <h2
+        style={{
+          margin: "0 0 8px",
+          fontFamily: "JetBrains Mono",
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: T.ink3,
+        }}
+      >
         {DESK_COPY.inProductionTitle}
       </h2>
       {items.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 13, color: "#666" }}>{DESK_COPY.inProductionEmpty}</p>
+        <p style={{ margin: 0, fontSize: 13, color: T.ink3 }}>{DESK_COPY.inProductionEmpty}</p>
       ) : (
         <ul
           style={{
@@ -40,11 +51,18 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
                 display: "flex",
                 justifyContent: "space-between",
                 fontSize: 13,
-                color: "#333",
+                color: T.ink2,
               }}
             >
               <span>{it.title}</span>
-              <span style={{ color: it.problem ? "#7A2E2E" : MIRA_ACCENT.base }}>
+              <span
+                style={{
+                  fontFamily: "JetBrains Mono",
+                  fontSize: 12,
+                  letterSpacing: "0.02em",
+                  color: it.problem ? T.red : MIRA_ACCENT.base,
+                }}
+              >
                 {it.problem ? PROBLEM_COPY[it.problem] : STAGE_COPY[it.stage]}
               </span>
             </li>
