@@ -28,4 +28,31 @@ describe("composeSkillRequestContext", () => {
     expect(ctx.workUnitId).toBeUndefined();
     expect(ctx.delegationDepth).toBeUndefined();
   });
+
+  it("reads contactId from params.parameters.contactId (trusted bag), never top-level/LLM", () => {
+    const ctx = composeSkillRequestContext({
+      skill: { body: "", parameters: [] } as never,
+      parameters: { contactId: "ct_authoritative", message: "hi" },
+      messages: [],
+      deploymentId: "dep_1",
+      orgId: "org_1",
+      trustScore: 0,
+      trustLevel: "supervised",
+      sessionId: "sess_1",
+    });
+    expect(ctx.contactId).toBe("ct_authoritative");
+  });
+
+  it("contactId is undefined when the param bag omits it (tools fail closed downstream)", () => {
+    const ctx = composeSkillRequestContext({
+      skill: { body: "", parameters: [] } as never,
+      parameters: {},
+      messages: [],
+      deploymentId: "dep_1",
+      orgId: "org_1",
+      trustScore: 0,
+      trustLevel: "supervised",
+    });
+    expect(ctx.contactId).toBeUndefined();
+  });
 });
