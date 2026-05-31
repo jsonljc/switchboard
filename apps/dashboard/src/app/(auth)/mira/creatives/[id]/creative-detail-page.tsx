@@ -110,10 +110,11 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 8,
-                padding: 12,
+                gap: 12,
+                padding: 14,
                 borderRadius: 8,
-                background: MIRA_ACCENT.paper,
+                background: T.paper,
+                border: `1px solid ${T.hair}`,
               }}
             >
               <span style={{ fontSize: 13, color: T.ink2 }}>
@@ -121,7 +122,42 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 {estimateQ.data ? ` (about $${estimateQ.data.basic.cost})` : ""}. It stays a draft —
                 nothing is published.
               </span>
-              <div style={{ display: "flex", gap: 12 }}>
+              {estimateQ.data ? (
+                <div
+                  style={{
+                    background: "var(--canvas-2)",
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "JetBrains Mono",
+                      fontSize: 10,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: T.ink3,
+                    }}
+                  >
+                    Provider cost
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                      letterSpacing: "-0.01em",
+                      color: T.ink,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {`about $${estimateQ.data.basic.cost}`}
+                  </span>
+                </div>
+              ) : null}
+              <div style={{ display: "flex", gap: 10 }}>
                 <button
                   disabled={approve.isPending}
                   onClick={() => {
@@ -129,7 +165,8 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     setConfirm(null);
                   }}
                   style={{
-                    padding: "8px 14px",
+                    flex: 1,
+                    padding: "10px 16px",
                     borderRadius: 8,
                     background: T.amber,
                     color: "white",
@@ -141,9 +178,11 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 <button
                   onClick={() => setConfirm(null)}
                   style={{
-                    padding: "8px 14px",
+                    flex: 1,
+                    padding: "10px 16px",
                     borderRadius: 8,
                     background: "transparent",
+                    color: T.ink2,
                     border: `1px solid ${T.hair}`,
                   }}
                 >
@@ -158,16 +197,36 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 8,
-                padding: 12,
+                gap: 10,
+                padding: 14,
                 borderRadius: 8,
+                // Intentional red wash: #F6ECEC here (stop confirm on cream) vs the
+                // feed's rgba(122,46,46) on black (mira-clip-actions.tsx) — both deliberate.
                 background: "#F6ECEC",
               }}
             >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontFamily: "JetBrains Mono",
+                  fontSize: 10,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: T.red,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ width: 6, height: 6, borderRadius: "50%", background: T.red }}
+                />
+                Irreversible
+              </span>
               <span style={{ fontSize: 13, color: T.red }}>
                 Stop this draft? You can&apos;t continue it later. This can&apos;t be undone.
               </span>
-              <div style={{ display: "flex", gap: 12 }}>
+              <div style={{ display: "flex", gap: 10 }}>
                 <button
                   disabled={approve.isPending}
                   onClick={() => {
@@ -175,7 +234,8 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     setConfirm(null);
                   }}
                   style={{
-                    padding: "8px 14px",
+                    flex: 1,
+                    padding: "10px 16px",
                     borderRadius: 8,
                     background: T.red,
                     color: "white",
@@ -187,9 +247,11 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 <button
                   onClick={() => setConfirm(null)}
                   style={{
-                    padding: "8px 14px",
+                    flex: 1,
+                    padding: "10px 16px",
                     borderRadius: 8,
                     background: "transparent",
+                    color: T.ink2,
                     border: `1px solid ${T.hair}`,
                   }}
                 >
