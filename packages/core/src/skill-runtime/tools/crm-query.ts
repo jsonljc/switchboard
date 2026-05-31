@@ -26,21 +26,16 @@ export function createCrmQueryToolFactory(
         inputSchema: { type: "object", properties: {}, required: [] },
         execute: async (_params: unknown) => {
           if (!ctx.contactId) {
-            return fail(
-              "execution",
-              "MISSING_CONTACT",
-              "No contact is associated with this conversation.",
-              {
-                modelRemediation:
-                  "Do not call contact.get. Continue without contact details or escalate to the operator.",
-                retryable: false,
-              },
-            );
+            return fail("MISSING_CONTACT", "No contact is associated with this conversation.", {
+              modelRemediation:
+                "Do not call contact.get. Continue without contact details or escalate to the operator.",
+              retryable: false,
+            });
           }
           const contact = await contactStore.findById(ctx.orgId, ctx.contactId);
           const safe = sanitizeContactForPrompt(contact);
           if (!safe) {
-            return fail("execution", "CONTACT_NOT_FOUND", "The contact record could not be read.", {
+            return fail("CONTACT_NOT_FOUND", "The contact record could not be read.", {
               modelRemediation: "Continue without contact details or escalate to the operator.",
               retryable: false,
             });
