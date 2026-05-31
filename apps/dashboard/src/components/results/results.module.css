@@ -1353,3 +1353,27 @@
   cursor: default;
   opacity: 0.6;
 }
+
+/* ─── Results desktop layout (additive at lg) ─── */
+@media (min-width: 1024px) {
+  /* Lift the 640px cap so the page fills the shell content frame */
+  .column {
+    max-width: none;
+    padding-block: 32px 56px;
+  }
+
+  /* KPI hero outcomes: vertical flex stack → responsive grid */
+  .heroOutcomes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  /* Funnel rows: stacked list → two-column grid */
+  .funnelRows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 32px;
+    align-items: start;
+  }
+}
