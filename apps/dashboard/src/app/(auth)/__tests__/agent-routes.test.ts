@@ -17,6 +17,14 @@ describe("agent route layout (post-split)", () => {
     expect(existsSync(join(AUTH_ROOT, "mira", "page.tsx"))).toBe(true);
   });
 
+  it("/mira/review page directory exists (feed moved here in Phase 2)", () => {
+    expect(existsSync(join(AUTH_ROOT, "mira", "review", "page.tsx"))).toBe(true);
+  });
+
+  it("/mira/creatives/[id] deep link is UNCHANGED (no ?draftId on the feed — YAGNI)", () => {
+    expect(existsSync(join(AUTH_ROOT, "mira", "creatives", "[id]", "page.tsx"))).toBe(true);
+  });
+
   it("[agentKey] dynamic segment removed", () => {
     expect(existsSync(join(AUTH_ROOT, "[agentKey]"))).toBe(false);
   });
