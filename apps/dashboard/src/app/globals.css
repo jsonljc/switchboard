@@ -524,6 +524,7 @@
     .app-body {
       max-width: var(--app-frame, 1280px);
       margin-inline: auto;
+      padding-inline: 40px; /* matches .app-header-row inset so body aligns with the header */
       display: grid;
       grid-template-columns: var(--app-sidebar-w, 216px) minmax(0, 1fr);
       gap: 40px;
@@ -541,6 +542,9 @@
       padding-top: 8px;
     }
     .hide-at-lg { display: none; }
+  }
+  @media (min-width: 1280px) {
+    .app-body { padding-inline: 56px; } /* matches .app-header-row at >=1280 */
   }
 
   .brand-cluster {
