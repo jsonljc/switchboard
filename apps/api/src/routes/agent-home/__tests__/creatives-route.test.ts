@@ -272,7 +272,11 @@ describe("review decisions through the real endpoints (inbox-zero)", () => {
     });
     expect(res.statusCode).toBe(200);
     const { desk } = res.json() as {
-      desk: { readyToReviewCount: number; keptDrafts: { id: string }[]; inProduction: { id: string }[] };
+      desk: {
+        readyToReviewCount: number;
+        keptDrafts: { id: string }[];
+        inProduction: { id: string }[];
+      };
     };
     expect(desk.readyToReviewCount).toBe(1); // only ibz-undecided
     expect(desk.keptDrafts.map((d) => d.id)).toEqual(["ibz-kept"]);
