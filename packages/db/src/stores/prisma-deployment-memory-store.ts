@@ -101,6 +101,18 @@ export class PrismaDeploymentMemoryStore {
     });
   }
 
+  async findEvictionCandidate(
+    organizationId: string,
+    deploymentId: string,
+  ): Promise<{ id: string; confidence: number } | null> {
+    // Lowest confidence wins; ties broken by oldest lastSeenAt (LRU).
+    return this.prisma.deploymentMemory.findFirst({
+      where: { organizationId, deploymentId },
+      orderBy: [{ confidence: "asc" }, { lastSeenAt: "asc" }],
+      select: { id: true, confidence: true },
+    });
+  }
+
   async decayStale(input: {
     cutoffDate: Date;
     decayAmount: number;
