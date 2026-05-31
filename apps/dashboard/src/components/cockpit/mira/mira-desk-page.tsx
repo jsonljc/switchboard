@@ -8,6 +8,7 @@ import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useMiraDesk } from "@/hooks/use-mira-desk";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { MIRA_ACCENT, MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-config";
+import { T } from "@/components/cockpit/tokens";
 import { MiraReadyToReview } from "./mira-ready-to-review";
 import { MiraInProductionTray } from "./mira-in-production-tray";
 import { MiraBriefBox } from "./mira-brief-box";
@@ -38,10 +39,10 @@ export function MiraDeskPage() {
         display: "flex",
         flexDirection: "column",
         minHeight: "100%",
-        background: MIRA_ACCENT.paper,
+        background: T.bg,
       }}
     >
-      <div style={{ position: "relative", background: "#fff" }}>
+      <div style={{ position: "relative", background: T.paper }}>
         <Identity
           statusKey="IDLE"
           halted={haltCtx.halted}
@@ -65,9 +66,9 @@ export function MiraDeskPage() {
 
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
         {pending ? (
-          <p style={{ color: MIRA_ACCENT.deep, fontSize: 14 }}>Loading Mira&apos;s desk…</p>
+          <p style={{ color: T.ink3, fontSize: 14 }}>Loading Mira&apos;s desk…</p>
         ) : deskQ.error ? (
-          <p style={{ color: "#7A2E2E", fontSize: 14 }}>
+          <p style={{ color: T.red, fontSize: 14 }}>
             Couldn&apos;t load Mira&apos;s desk. Try again.
           </p>
         ) : (

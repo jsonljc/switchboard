@@ -6,6 +6,7 @@ import { classifyBriefIntent } from "@switchboard/schemas";
 import { useCreateCreativeDraftRequest } from "@/hooks/use-create-creative-draft-request";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
+import { T } from "@/components/cockpit/tokens";
 import {
   BRIEF_HEADING_EMPTY,
   BRIEF_PROMOTING_LABEL,
@@ -57,45 +58,51 @@ export function MiraBriefBox() {
     borderRadius: 999,
     fontSize: 12,
     cursor: "pointer",
-    border: `1px solid ${MIRA_ACCENT.soft}`,
+    border: `1px solid ${active ? MIRA_ACCENT.deep : T.hair}`,
     background: active ? MIRA_ACCENT.deep : "transparent",
-    color: active ? "#fff" : MIRA_ACCENT.deep,
+    color: active ? "#fff" : T.ink2,
   });
   const btn = {
-    padding: "8px 14px",
-    borderRadius: 8,
-    border: "none",
+    padding: "8px 16px",
+    borderRadius: 4,
+    border: `1px solid ${T.amberDeep}`,
+    background: T.amber,
     color: "#fff",
     fontSize: 13,
+    fontWeight: 600,
     cursor: "pointer",
+    fontFamily: "inherit",
   } as const;
 
   return (
     <section
       aria-label="Brief Mira"
       style={{
-        background: "#fff",
-        borderRadius: 14,
+        background: T.paper,
+        borderRadius: 8,
         padding: 16,
-        border: `1px solid ${MIRA_ACCENT.soft}`,
+        border: `1px solid ${T.hair}`,
       }}
     >
-      <h2 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: MIRA_ACCENT.deep }}>
+      <h2
+        style={{
+          margin: "0 0 8px",
+          fontSize: 15,
+          fontWeight: 600,
+          letterSpacing: "-0.01em",
+          color: T.ink,
+        }}
+      >
         {BRIEF_HEADING_EMPTY}
       </h2>
 
       {phase === "preview" ? (
-        <div style={{ background: MIRA_ACCENT.paper, borderRadius: 10, padding: 12 }}>
-          <p style={{ margin: "0 0 10px", fontSize: 13, color: MIRA_ACCENT.deep }}>
+        <div style={{ background: MIRA_ACCENT.paper, borderRadius: 8, padding: 12 }}>
+          <p style={{ margin: "0 0 10px", fontSize: 13, color: T.ink2 }}>
             {intentSummary(promoting, GOAL_LABEL[goal], VIBE_LABEL[vibe])}
           </p>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              disabled={create.isPending}
-              onClick={makeTheDraft}
-              style={{ ...btn, background: MIRA_ACCENT.deep }}
-            >
+            <button type="button" disabled={create.isPending} onClick={makeTheDraft} style={btn}>
               Make the draft
             </button>
             <button
@@ -104,30 +111,27 @@ export function MiraBriefBox() {
               onClick={() => setPhase("edit")}
               style={{
                 ...btn,
-                background: "transparent",
-                border: `1px solid ${MIRA_ACCENT.soft}`,
-                color: MIRA_ACCENT.deep,
+                background: T.paper,
+                border: `1px solid ${T.hair}`,
+                color: T.ink,
+                fontWeight: 500,
               }}
             >
               Tweak
             </button>
           </div>
           {create.isError && (
-            <p style={{ margin: "8px 0 0", fontSize: 12, color: "#7A2E2E" }}>
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: T.red }}>
               Couldn&apos;t start the draft — try again.
             </p>
           )}
         </div>
       ) : phase === "offscope" ? (
-        <div style={{ background: MIRA_ACCENT.paper, borderRadius: 10, padding: 12 }}>
-          <p style={{ margin: "0 0 10px", fontSize: 13, color: MIRA_ACCENT.deep }}>
+        <div style={{ background: MIRA_ACCENT.paper, borderRadius: 8, padding: 12 }}>
+          <p style={{ margin: "0 0 10px", fontSize: 13, color: T.ink2 }}>
             {BRIEF_OFFSCOPE_REDIRECT}
           </p>
-          <button
-            type="button"
-            onClick={() => setPhase("edit")}
-            style={{ ...btn, background: MIRA_ACCENT.deep }}
-          >
+          <button type="button" onClick={() => setPhase("edit")} style={btn}>
             Edit the brief
           </button>
         </div>
@@ -135,7 +139,7 @@ export function MiraBriefBox() {
         <>
           <label
             htmlFor={PROMOTING_FIELD_ID}
-            style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 4 }}
+            style={{ display: "block", fontSize: 12, color: T.ink3, marginBottom: 4 }}
           >
             {BRIEF_PROMOTING_LABEL}
           </label>
@@ -152,9 +156,12 @@ export function MiraBriefBox() {
               width: "100%",
               resize: "vertical",
               borderRadius: 8,
-              border: `1px solid ${MIRA_ACCENT.soft}`,
+              border: `1px solid ${T.hair}`,
+              background: T.paper,
+              color: T.ink,
               padding: 10,
               fontSize: 14,
+              fontFamily: "inherit",
             }}
           />
 
@@ -188,14 +195,15 @@ export function MiraBriefBox() {
               onClick={preview}
               style={{
                 ...btn,
-                background: canPreview ? MIRA_ACCENT.deep : "#bbb",
+                background: canPreview ? T.amber : T.ink5,
+                border: `1px solid ${canPreview ? T.amberDeep : T.ink5}`,
                 cursor: canPreview ? "pointer" : "not-allowed",
               }}
             >
               Preview
             </button>
             {halted && (
-              <span style={{ fontSize: 12, color: "#7A2E2E" }}>Resume Mira to brief her.</span>
+              <span style={{ fontSize: 12, color: T.red }}>Resume Mira to brief her.</span>
             )}
             {phase === "submitted" && (
               <span style={{ fontSize: 13, color: MIRA_ACCENT.base }}>
