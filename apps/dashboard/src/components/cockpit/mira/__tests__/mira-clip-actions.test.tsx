@@ -7,6 +7,11 @@ beforeEach(() => {
   approveMock = { mutate: vi.fn(), isPending: false, isError: false };
 });
 
+const decideMock = vi.fn().mockResolvedValue({ id: "j", decision: "kept" });
+vi.mock("@/hooks/use-review-decision", () => ({
+  useReviewDecision: () => ({ mutate: decideMock, isPending: false, isError: false }),
+}));
+
 let halted = false;
 vi.mock("@/hooks/use-creative-pipeline", () => ({
   useApproveStage: () => approveMock,
@@ -72,5 +77,24 @@ describe("MiraClipActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm continue/i }));
     expect(screen.getByText(/try again/i)).toBeInTheDocument();
     expect(onResolve).not.toHaveBeenCalled();
+  });
+});
+
+describe("MiraClipActions — Keep/Pass on review_draft", () => {
+  beforeEach(() => decideMock.mockClear());
+  const reviewable = { canContinue: false, canStop: false, label: "review_draft" as const };
+
+  it("renders Keep + Pass (not Continue/Stop) for a draft_ready clip", () => {
+    render(<MiraClipActions jobId="j" reviewAction={reviewable} onResolve={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /^keep/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^pass/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /continue/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the draft and resolves the clip", () => {
+    const onResolve = vi.fn();
+    render(<MiraClipActions jobId="j" reviewAction={reviewable} onResolve={onResolve} />);
+    fireEvent.click(screen.getByRole("button", { name: /^keep/i }));
+    expect(decideMock).toHaveBeenCalledWith({ id: "j", decision: "kept" }, expect.anything());
   });
 });
