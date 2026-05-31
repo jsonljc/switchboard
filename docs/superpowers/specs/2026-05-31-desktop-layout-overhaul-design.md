@@ -60,7 +60,7 @@ These ship first, mostly invisible, and unblock the screen PRs.
 
 ### 4.4 Reusable layout primitives
 
-- **Main+rail grid:** promote the orphaned `.dashboard-content-grid` / `.dashboard-rail` (`globals.css:354-393`) into a documented primitive that engages at `lg` (currently 1440) → retune to 1024. Used by Home (and available to Results).
+- **Main+rail grid:** retune the orphaned `.dashboard-content-grid` / `.dashboard-rail` (`globals.css:354-393`) to engage at `lg` (was 1440). NOTE: Home ultimately uses a local `.bento` grid (see §6), so this primitive is lg-ready but currently unconsumed — left in place for a future Results/Home adoption.
 - **Desktop sidebar:** generalize the `settings-layout.tsx:34-58` pattern (`hidden lg:block w-[var] shrink-0` aside + `flex-1 min-w-0` content + active-link `cn()` idiom) into a shell-level app sidebar primitive consumed by PR2.
 
 ## 5. Desktop Navigation — Persistent Left Sidebar (PR2)
@@ -75,7 +75,7 @@ These ship first, mostly invisible, and unblock the screen PRs.
 - **≥1024px:** transform the single `styles.column` stack (`home/home-page.tsx:287`, `home.module.css`) into a bento:
   - Verdict hero spans full content width (row 1).
   - Row 2 is the main+rail grid. To keep mobile byte-identical (the bento containers are `display:contents` below lg), the split follows **contiguous slices of the existing module order**: **main column** = the next 2–3 active modules after the hero (active: Needs You, Team Pulse, This Week; calm: This Week, Team Pulse); **status rail** (~320px) = the quiet remainder (While You Slept, Work In Progress, Permissions).
-- Implemented with the revived grid primitive. Drop the 640px cap at `lg` (`home.module.css:21`). Module components are reused unchanged; only their container reflows.
+- Implemented as a **local `.bento` grid** in `home.module.css` (Home needs a full-width hero stacked above the grid + `display:contents` below `lg` to preserve the exact mobile module order, so it uses its own grid rather than the shared `.dashboard-*` primitive). Drop the 640px cap at `lg`. Module components are reused unchanged; only their container reflows.
 - **<1024px:** unchanged single column (Needs-You-first ordering preserved).
 
 ## 7. Inbox — Master-Detail Two-Pane (PR4)

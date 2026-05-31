@@ -10,7 +10,11 @@ import { useState, useEffect } from "react";
  * - Updates reactively via a MediaQueryList `change` listener.
  * - jsdom has no matchMedia → always returns false in tests (avoids ReferenceError).
  *
- * Mirror of the inline matchMedia pattern in results-page.tsx.
+ * Caution: a consumer that renders during hydration and branches its DOM on this value
+ * can hit a hydration mismatch (SSR=false, client=true) — mount-gate or use
+ * `suppressHydrationWarning` if so. The only consumer today (AgentPanel) mounts
+ * client-side on user action, so it is unaffected. (results-page.tsx keeps the older
+ * mount-then-flip matchMedia pattern — the hydration-safe choice in the SSR path.)
  */
 export function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = useState(

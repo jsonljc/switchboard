@@ -217,9 +217,9 @@
     bottom: auto; /* base/768 set bottom:0 — clear it so sticky uses only the top threshold */
     right: auto;
     left: auto;
-    /* width comes from inbox.css `.sheet.ds { width: 480px }` (0,2,0, later import);
-       the grid track above is sized to match it so the docked pane fits exactly. */
-    max-height: calc(100dvh - var(--header-h, 68px) - 48px);
+    /* width + height are governed by inbox.css `.sheet.ds` (0,2,0, later import): the
+       grid track is sized to its 480px width, and `.app-main .sheet.ds` below re-caps
+       the height (its `max-height: 92%` resolves to none against auto-height ancestors). */
     transform: none;
     border-left: none;
     border: 1px solid var(--hair);
@@ -227,6 +227,13 @@
     box-shadow: var(--shadow-sheet);
   }
   .sheet[data-open="true"] { transform: none; }
+  /* Re-cap the docked pane height: `.sheet.ds { max-height: 92% }` (0,2,0) wins over a
+     bare `.sheet`, and 92% resolves to `none` (auto-height ancestors), so scope to 0,3,0
+     here — the pane caps at the viewport and `.sheet-body` (flex:1; overflow-y:auto)
+     scrolls within it instead of growing the page. */
+  .app-main .sheet.ds {
+    max-height: calc(100dvh - var(--header-h, 68px) - 48px);
+  }
   /* no dimming overlay in two-pane mode */
   .scrim { display: none; }
   .inbox-detail-empty {
