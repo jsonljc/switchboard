@@ -2,9 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MiraDeskPage } from "../mira-desk-page";
 
-// The Desk reads the existing feed count for its Ready-to-review CTA (PR1).
-const feedMock = vi.fn();
-vi.mock("@/hooks/use-mira-feed", () => ({ useMiraFeed: () => feedMock() }));
+const deskMock = vi.fn();
+vi.mock("@/hooks/use-mira-desk", () => ({ useMiraDesk: () => deskMock() }));
 vi.mock("@/hooks/use-agent-greeting", () => ({ useAgentGreeting: () => ({ data: null }) }));
 vi.mock("@/hooks/use-agent-mission", () => ({
   useAgentMission: () => ({ data: null, isLoading: false }),
@@ -13,27 +12,54 @@ vi.mock("@/components/layout/halt/halt-context", () => ({
   useHalt: () => ({ halted: false, toggleHalt: vi.fn() }),
 }));
 
-describe("MiraDeskPage (shell)", () => {
-  beforeEach(() => feedMock.mockReset());
+const FORBIDDEN =
+  /\b(sent to riley|in use|winner|fatigued|published|distribute|performance|learning|improved|drove|recovered|saved)\b/i;
 
-  it("shows the ready-to-review count and links to /mira/review", () => {
-    feedMock.mockReturnValue({
-      data: { feed: { reviewableCount: 4, renderingCount: 1 } },
+const counts = {
+  total: 0,
+  shippedThisWeek: 0,
+  shippedPrevWeek: 0,
+  inFlight: 0,
+  awaitingReview: 0,
+  stopped: 0,
+};
+
+describe("MiraDeskPage", () => {
+  beforeEach(() => deskMock.mockReset());
+
+  it("renders the in-production tray and the ready-to-review hero from the desk model", () => {
+    deskMock.mockReturnValue({
+      data: {
+        inProduction: [
+          { id: "p", title: "Promo", stage: "production", state: "in_production", updatedAt: "x" },
+        ],
+        readyToReviewCount: 2,
+        counts: { ...counts, total: 3, inFlight: 1 },
+        isEmpty: false,
+      },
       isLoading: false,
       isError: false,
+      error: null,
     });
     render(<MiraDeskPage />);
-    expect(screen.getByText(/4 drafts ready/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /review/i })).toHaveAttribute("href", "/mira/review");
+    expect(screen.getByText(/2 drafts ready/i)).toBeInTheDocument();
+    expect(screen.getByText(/generating draft/i)).toBeInTheDocument();
   });
 
-  it("renders a calm empty state when nothing is ready", () => {
-    feedMock.mockReturnValue({
-      data: { feed: { reviewableCount: 0, renderingCount: 0 } },
+  it("shows a loading state while keys are pending (data undefined, no error)", () => {
+    deskMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, error: null });
+    render(<MiraDeskPage />);
+    expect(screen.getByText(/loading/i)).toBeInTheDocument(); // gated on !data && !error, not isLoading
+  });
+
+  it("never renders a forbidden Phase-4/5 word", () => {
+    deskMock.mockReturnValue({
+      data: { inProduction: [], readyToReviewCount: 0, counts, isEmpty: true },
       isLoading: false,
       isError: false,
+      error: null,
     });
-    render(<MiraDeskPage />);
-    expect(screen.getByText(/nothing to review yet/i)).toBeInTheDocument();
+    const { container } = render(<MiraDeskPage />);
+    expect(container.textContent ?? "").not.toMatch(FORBIDDEN);
   });
 });

@@ -1,23 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Identity } from "@/components/cockpit/identity";
 import { MissionPopover } from "@/components/cockpit/mission-popover";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentMission } from "@/hooks/use-agent-mission";
-import { useMiraFeed } from "@/hooks/use-mira-feed";
+import { useMiraDesk } from "@/hooks/use-mira-desk";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { MIRA_ACCENT, MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-config";
+import { MiraReadyToReview } from "./mira-ready-to-review";
+import { MiraInProductionTray } from "./mira-in-production-tray";
 
-// Phase 2 Director's Desk. PR1 ships the shell: identity header + the one hero
-// Ready-to-review CTA into the feed (/mira/review). PR2 adds the In-production
-// tray; PR3 adds the brief box at the top; PR4 adds the Kept-drafts shelf.
+// Phase-2 Director's Desk. Module order (Decision 3): brief box (PR3) · the one
+// hero Ready-to-review CTA · calm In-production tray · Kept-drafts shelf (PR4).
 export function MiraDeskPage() {
   const haltCtx = useHalt();
   const greetingQ = useAgentGreeting("mira");
   const mission = useAgentMission("mira");
-  const feedQ = useMiraFeed();
+  const deskQ = useMiraDesk();
   const [missionOpen, setMissionOpen] = useState(false);
 
   const line =
@@ -25,7 +25,10 @@ export function MiraDeskPage() {
       ?.map((s) => s.text)
       .join(" ")
       .trim() || null;
-  const reviewable = feedQ.data?.feed.reviewableCount ?? 0;
+  const desk = deskQ.data;
+  // Gate on (!data && !error) — NOT isLoading — because a keys-pending query is
+  // disabled (isLoading false, data undefined). See [[feedback_react_query_enabled_false_isloading]].
+  const pending = !desk && !deskQ.error;
 
   return (
     <div
@@ -59,37 +62,20 @@ export function MiraDeskPage() {
       </div>
 
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-        <section
-          aria-label="Ready to review"
-          style={{
-            background: "#fff",
-            borderRadius: 14,
-            padding: 16,
-            border: `1px solid ${MIRA_ACCENT.soft}`,
-          }}
-        >
-          {reviewable > 0 ? (
-            <Link
-              href="/mira/review"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                textDecoration: "none",
-                color: MIRA_ACCENT.deep,
-              }}
-            >
-              <span style={{ fontSize: 16, fontWeight: 600 }}>
-                {reviewable} draft{reviewable === 1 ? "" : "s"} ready to review
-              </span>
-              <span aria-hidden="true">→</span>
-            </Link>
-          ) : (
-            <p style={{ margin: 0, color: MIRA_ACCENT.deep, fontSize: 14 }}>
-              Nothing to review yet. New drafts land here when Mira finishes.
-            </p>
-          )}
-        </section>
+        {pending ? (
+          <p style={{ color: MIRA_ACCENT.deep, fontSize: 14 }}>Loading Mira&apos;s desk…</p>
+        ) : deskQ.error ? (
+          <p style={{ color: "#7A2E2E", fontSize: 14 }}>
+            Couldn&apos;t load Mira&apos;s desk. Try again.
+          </p>
+        ) : (
+          <>
+            {/* PR3 mounts <MiraBriefBox /> here, at the top. */}
+            <MiraReadyToReview count={desk!.readyToReviewCount} />
+            <MiraInProductionTray items={desk!.inProduction} />
+            {/* PR4 mounts <MiraKeptShelf /> here, at the bottom. */}
+          </>
+        )}
       </div>
     </div>
   );
