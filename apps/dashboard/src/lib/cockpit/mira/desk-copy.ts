@@ -20,12 +20,16 @@ export const PROBLEM_COPY: Record<MiraDeskProblemCode, string> = {
 };
 
 // Static Desk strings. No banned words; future affordances use neutral phrasing.
-// (PR3 adds brief/intent copy here; PR4 adds the kept-shelf copy here.)
 export const DESK_COPY = {
   inProductionTitle: "In production",
   inProductionEmpty: "Mira's not working on anything right now. Send her a brief above.",
   readyTitle: "Ready to review",
   readyEmptyBody: "Nothing to review yet. New drafts land here when Mira finishes.",
+  // PR4 — Kept-drafts shelf copy. handoff_unavailable surfaces ONLY here (neutral sub-copy);
+  // never as a red/blocked status chip.
+  keptTitle: "Kept drafts",
+  keptSub: "Drafts you kept. Sending to Riley comes later.",
+  keptEmpty: "Drafts you keep will live here. Sending them to Riley comes later.",
 } as const;
 
 // ---------------------------------------------------------------------------
