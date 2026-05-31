@@ -43,7 +43,9 @@ export function EditorialAuthShellInner({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main>{children}</main>
+        <main className="app-main">
+          <div className="app-content">{children}</div>
+        </main>
         <TweaksPanelMount />
       </RightDrawerProvider>
     </HaltProvider>
