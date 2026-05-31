@@ -398,7 +398,7 @@ export class SkillExecutorImpl implements SkillExecutor {
               `Tool input did not match declared schema: ${validation.issues.join("; ")}`,
               {
                 modelRemediation:
-                  "Re-issue the tool call with input matching the declared inputSchema. Do not include trust-bound identifiers (orgId, deploymentId) — those are injected by the runtime.",
+                  "Re-issue the tool call with input matching the declared inputSchema. Do not include trust-bound identifiers (orgId, deploymentId, contactId) — those are injected by the runtime.",
                 retryable: false,
               },
             );

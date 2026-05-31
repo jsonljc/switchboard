@@ -67,6 +67,12 @@ interface CalendarBookToolDeps {
   opportunityStore: OpportunityStoreSubset;
   runTransaction: TransactionFn;
   failureHandler: BookingFailureHandler;
+  contactStore: {
+    findById(
+      orgId: string,
+      contactId: string,
+    ): Promise<{ name?: string | null; email?: string | null } | null>;
+  };
 }
 
 const NOT_CONFIGURED_REMEDIATION =
@@ -141,41 +147,47 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
         inputSchema: {
           type: "object",
           properties: {
-            contactId: { type: "string" },
             service: { type: "string" },
             slotStart: { type: "string", description: "ISO 8601" },
             slotEnd: { type: "string", description: "ISO 8601" },
             calendarId: { type: "string" },
-            attendeeName: { type: "string" },
-            attendeeEmail: { type: "string" },
           },
-          required: ["contactId", "service", "slotStart", "slotEnd", "calendarId"],
+          required: ["service", "slotStart", "slotEnd", "calendarId"],
         },
         execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as {
-            contactId: string;
             service: string;
             slotStart: string;
             slotEnd: string;
             calendarId: string;
-            attendeeName?: string;
-            attendeeEmail?: string;
           };
 
           const orgId = ctx.orgId;
+          const contactId = ctx.contactId;
+          if (!contactId) {
+            return fail("MISSING_CONTACT", "No contact is associated with this conversation.", {
+              modelRemediation:
+                "Do not call booking.create without an active contact. Escalate to the operator.",
+              retryable: false,
+            });
+          }
+          const contactRecord = await deps.contactStore.findById(orgId, contactId);
+          const attendeeName = contactRecord?.name ?? null;
+          const attendeeEmail = contactRecord?.email ?? null;
+
           const resolved = await resolveProviderOrFail(deps, orgId);
           if ("failure" in resolved) return resolved.failure;
           const provider = resolved.provider;
 
           // Resolve or create opportunity
           let opportunityId: string | null = null;
-          const existing = await deps.opportunityStore.findActiveByContact(orgId, input.contactId);
+          const existing = await deps.opportunityStore.findActiveByContact(orgId, contactId);
           if (existing) {
             opportunityId = existing.id;
           } else {
             const created = await deps.opportunityStore.create({
               organizationId: orgId,
-              contactId: input.contactId,
+              contactId,
               service: input.service,
             });
             opportunityId = created.id;
@@ -186,19 +198,19 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           try {
             booking = await deps.bookingStore.create({
               organizationId: orgId,
-              contactId: input.contactId,
+              contactId,
               opportunityId,
               service: input.service,
               startsAt: new Date(input.slotStart),
               endsAt: new Date(input.slotEnd),
-              attendeeName: input.attendeeName ?? null,
-              attendeeEmail: input.attendeeEmail ?? null,
+              attendeeName,
+              attendeeEmail,
             });
           } catch (err) {
             if (isPrismaUniqueConstraintError(err)) {
               const existingBooking = await deps.bookingStore.findBySlot(
                 orgId,
-                input.contactId,
+                contactId,
                 input.service,
                 new Date(input.slotStart),
               );
@@ -221,7 +233,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           let calendarResult: { calendarEventId?: string | null };
           try {
             calendarResult = await provider.createBooking({
-              contactId: input.contactId,
+              contactId,
               organizationId: orgId,
               opportunityId,
               slot: {
@@ -231,15 +243,15 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                 available: true,
               },
               service: input.service,
-              attendeeName: input.attendeeName,
-              attendeeEmail: input.attendeeEmail,
+              attendeeName: attendeeName ?? undefined,
+              attendeeEmail: attendeeEmail ?? undefined,
               createdByType: "agent" as const,
             });
           } catch (error) {
             const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
               orgId,
-              contactId: input.contactId,
+              contactId,
               service: input.service,
               provider: "google_calendar",
               error,
@@ -269,7 +281,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   status: "pending",
                   payload: {
                     type: "booked",
-                    contactId: input.contactId,
+                    contactId,
                     organizationId: orgId,
                     value: 0,
                     occurredAt: new Date().toISOString(),
@@ -289,7 +301,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
             const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
               orgId,
-              contactId: input.contactId,
+              contactId,
               service: input.service,
               provider: "google_calendar",
               error,

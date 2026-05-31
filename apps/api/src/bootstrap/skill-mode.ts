@@ -74,7 +74,7 @@ export async function bootstrapSkillMode(
     AnthropicToolAdapter,
     BuilderRegistry,
     ContextResolverImpl,
-    createCrmQueryTool,
+    createCrmQueryToolFactory,
     createCrmWriteToolFactory,
     createCalendarBookToolFactory,
     createEscalateToolFactory,
@@ -277,6 +277,7 @@ export async function bootstrapSkillMode(
     calendarProviderFactory,
     isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
     bookingStore,
+    contactStore,
     opportunityStore: {
       findActiveByContact: async (orgId: string, contactId: string) => {
         const active = await opportunityStore.findActiveByContact(orgId, contactId);
@@ -306,12 +307,14 @@ export async function bootstrapSkillMode(
     failureHandler,
   });
 
+  const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);
   const crmWriteFactory = createCrmWriteToolFactory(opportunityStore, activityStore);
 
   // Per-request tool factories — the executor materializes a fresh tool per
   // execution with a trusted SkillRequestContext closed in. These are the
   // canonical execution path for trust-bound tools (AI-1).
   const toolFactories = new Map<string, SkillToolFactory>([
+    ["crm-query", crmQueryFactory],
     ["calendar-book", calendarBookFactory],
     ["crm-write", crmWriteFactory],
     ["escalate", escalateFactory],
@@ -327,7 +330,7 @@ export async function bootstrapSkillMode(
     deploymentId: "__schema_only__",
   };
   const toolsMap = new Map([
-    ["crm-query", createCrmQueryTool(contactStore, activityStore)],
+    ["crm-query", crmQueryFactory(SCHEMA_ONLY_CTX)],
     ["crm-write", crmWriteFactory(SCHEMA_ONLY_CTX)],
     ["calendar-book", calendarBookFactory(SCHEMA_ONLY_CTX)],
     ["escalate", escalateFactory(SCHEMA_ONLY_CTX)],

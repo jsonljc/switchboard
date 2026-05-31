@@ -1,5 +1,6 @@
 import type { ParameterBuilder } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
+import { sanitizeContactForPrompt } from "../pii.js";
 
 export const salesPipelineBuilder: ParameterBuilder = async (ctx, config, stores) => {
   const contactId = config.contactId;
@@ -24,7 +25,7 @@ export const salesPipelineBuilder: ParameterBuilder = async (ctx, config, stores
     BUSINESS_NAME: ctx.persona.businessName,
     PIPELINE_STAGE: opportunity.stage,
     OPPORTUNITY_ID: opportunity.id,
-    LEAD_PROFILE: leadProfile,
+    LEAD_PROFILE: sanitizeContactForPrompt(leadProfile),
     PERSONA_CONFIG: {
       tone: ctx.persona.tone,
       qualificationCriteria: ctx.persona.qualificationCriteria,

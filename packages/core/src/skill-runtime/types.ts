@@ -380,4 +380,8 @@ export interface SkillRequestContext {
   workUnitId?: string;
   /** Delegation depth of the parent WorkUnit (0 for top-level). Guards recursion. */
   delegationDepth?: number;
+  /** Authoritative contact for this conversation. Sourced ONLY from trusted
+   * server params (the work-unit/builder param bag), never from LLM tool input.
+   * Tools read this instead of accepting contactId as a model argument. */
+  contactId?: string;
 }

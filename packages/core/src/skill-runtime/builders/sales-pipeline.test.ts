@@ -52,7 +52,7 @@ describe("salesPipelineBuilder", () => {
     expect(result.BUSINESS_NAME).toBe("TestBiz");
     expect(result.PIPELINE_STAGE).toBe("qualified");
     expect(result.OPPORTUNITY_ID).toBe("opp2");
-    expect(result.LEAD_PROFILE).toEqual({ id: "c1", name: "Alice" });
+    expect(result.LEAD_PROFILE).toEqual({ name: "Alice", stage: null, source: null });
     expect((result.PERSONA_CONFIG as any).tone).toBe("friendly");
     expect((result.PERSONA_CONFIG as any).bookingLink).toBe("https://book.test");
   });

@@ -280,4 +280,68 @@ describe("alexBuilder", () => {
       }),
     );
   });
+
+  it("surfaces resolvedContactId as parameters.contactId for an EXISTING contact", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores();
+    const result = await alexBuilder(ctx, { ...config, contactId: "ct_existing" }, stores);
+    expect(result.parameters.contactId).toBe("ct_existing");
+  });
+
+  it("surfaces the MINTED contactId for a brand-new lead", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores({
+      opportunityStore: {
+        findActiveByContact: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({ id: "opp_new", stage: "new", createdAt: new Date() }),
+      } as never,
+      contactStore: {
+        findById: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "ct_minted" }),
+      } as never,
+    });
+    const result = await alexBuilder(ctx, { ...config, contactId: "ct_stale" }, stores);
+    expect(result.parameters.contactId).toBe("ct_minted");
+  });
+
+  it("LEAD_PROFILE is sanitized — no phone/email/id", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores({
+      contactStore: {
+        findById: vi.fn().mockResolvedValue({
+          id: "ct_1",
+          name: "Jane",
+          phone: "+65...",
+          email: "j@x.com",
+          stage: "new",
+          source: "whatsapp",
+        }),
+      } as never,
+    });
+    const result = await alexBuilder(ctx, config, stores);
+    expect(result.parameters.LEAD_PROFILE).toEqual({
+      name: "Jane",
+      stage: "new",
+      source: "whatsapp",
+    });
+  });
+
+  it("never calls findById with an undefined id; LEAD_PROFILE is null when no contact resolves", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores({
+      opportunityStore: {
+        findActiveByContact: vi
+          .fn()
+          .mockResolvedValue([{ id: "opp", stage: "new", createdAt: new Date() }]),
+      } as never,
+      contactStore: {
+        findById: vi.fn().mockResolvedValue(null),
+      } as never,
+    });
+    const findByIdMock = stores.contactStore.findById as unknown as ReturnType<typeof vi.fn>;
+    findByIdMock.mockClear();
+    const result = await alexBuilder(ctx, { ...config, contactId: undefined as never }, stores);
+    expect(result.parameters.LEAD_PROFILE).toBeNull();
+    expect(findByIdMock).not.toHaveBeenCalled();
+  });
 });
