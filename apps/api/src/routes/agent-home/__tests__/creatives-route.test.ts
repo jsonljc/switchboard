@@ -209,3 +209,74 @@ describe("GET /agents/mira/desk", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+// End-to-end inbox-zero: prove `reviewDecision` flows raw row → reader →
+// build-read-model → {isReviewable (feed), buildMiraDeskModel (desk)}. The
+// per-unit tests cover the model in isolation; this locks the reader↔model seam
+// through the real endpoints (a decided draft must leave the feed AND the desk
+// ready-count; kept → shelf; passed → gone).
+describe("review decisions through the real endpoints (inbox-zero)", () => {
+  let ctx: TestContext;
+
+  // Three draft_ready+video rows — all would be reviewable IF undecided.
+  function ready(id: string, over: Record<string, unknown>) {
+    return baseJob({
+      id,
+      createdAt: new Date("2026-05-26"),
+      currentStage: "complete",
+      stageOutputs: {
+        production: { assembledVideos: [{ videoUrl: `https://x/${id}.mp4`, thumbnailUrl: "t" }] },
+      },
+      ...over,
+    });
+  }
+  const INBOX_ROWS = [
+    ready("ibz-undecided", {}),
+    ready("ibz-kept", { reviewDecision: "kept" }),
+    ready("ibz-passed", { reviewDecision: "passed" }),
+  ];
+
+  beforeAll(async () => {
+    ctx = await buildTestServer();
+    (ctx.app as unknown as { prisma: unknown }).prisma = {
+      creativeJob: {
+        findMany: async (args: { where?: { organizationId?: string } }) =>
+          args?.where?.organizationId === PILOT ? INBOX_ROWS : [],
+      },
+      organizationConfig: { findFirst: async () => null },
+    };
+    await ctx.app.register(creativesRoute, { prefix: "/api/dashboard" });
+    await ctx.app.orgAgentEnablementStore!.enable(PILOT, "mira");
+  });
+  afterAll(async () => ctx.app.close());
+
+  it("feed excludes decided drafts (only the undecided one is reviewable)", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/creatives",
+      headers: { "x-org-id": PILOT },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { jobs: { id: string }[]; feed: { reviewableCount: number } };
+    expect(body.feed.reviewableCount).toBe(1);
+    expect(body.jobs.map((j) => j.id)).toEqual(["ibz-undecided"]);
+    expect(res.body).not.toContain("ibz-kept");
+    expect(res.body).not.toContain("ibz-passed");
+  });
+
+  it("desk: kept → shelf; passed → gone; ready-count excludes both", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/desk",
+      headers: { "x-org-id": PILOT },
+    });
+    expect(res.statusCode).toBe(200);
+    const { desk } = res.json() as {
+      desk: { readyToReviewCount: number; keptDrafts: { id: string }[]; inProduction: { id: string }[] };
+    };
+    expect(desk.readyToReviewCount).toBe(1); // only ibz-undecided
+    expect(desk.keptDrafts.map((d) => d.id)).toEqual(["ibz-kept"]);
+    expect(desk.inProduction).toEqual([]);
+    expect(JSON.stringify(desk)).not.toContain("ibz-passed");
+  });
+});

@@ -109,6 +109,9 @@ export function buildMiraDeskModel(rm: MiraCreativeReadModel): MiraDeskModel {
     readyToReviewCount,
     keptDrafts: keptDrafts.slice(0, KEPT_SHELF_CAP),
     counts: rm.counts,
+    // "no jobs at all in the window" — NOT "all three modules are empty". An org
+    // with only kept/passed drafts is NOT isEmpty. Don't gate an onboarding nudge
+    // on this; check the individual buckets instead.
     isEmpty: rm.jobs.length === 0,
   };
 }
