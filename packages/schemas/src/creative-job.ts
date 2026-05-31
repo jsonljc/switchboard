@@ -218,6 +218,8 @@ export const CreativeJobSchema = z.object({
   ugcPhaseOutputsVersion: z.string().nullable().optional(),
   ugcConfig: z.record(z.unknown()).nullable().optional(),
   ugcFailure: z.record(z.unknown()).nullable().optional(),
+  reviewDecision: z.enum(["kept", "passed"]).nullable().optional(),
+  reviewDecidedAt: z.coerce.date().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

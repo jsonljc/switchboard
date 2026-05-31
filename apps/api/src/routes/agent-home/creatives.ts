@@ -23,6 +23,7 @@ const FEED_WINDOW = 200;
 // the seam's deriveDraft, so this is mode-agnostic here.
 export function isReviewable(job: MiraCreativeJobSummary): boolean {
   return (
+    !job.reviewDecision && // Keep/Pass removes the draft from the feed (inbox-zero)
     (job.status === "awaiting_review" || job.status === "draft_ready") &&
     typeof job.draft?.videoUrl === "string"
   );

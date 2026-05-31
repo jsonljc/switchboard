@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildMiraDeskModel, deriveDeskItemState, type MiraDeskItemState } from "../desk-model.js";
+import {
+  buildMiraDeskModel,
+  deriveDeskItemState,
+  type MiraDeskItemState,
+  type MiraDeskModel,
+} from "../desk-model.js";
 import type {
   MiraCreativeJobSummary,
   MiraCreativeReadModel,
@@ -81,5 +86,27 @@ describe("buildMiraDeskModel", () => {
 
   it("reports empty when there are no jobs", () => {
     expect(buildMiraDeskModel({ jobs: [], counts }).isEmpty).toBe(true);
+  });
+});
+
+describe("buildMiraDeskModel — review decisions (PR4)", () => {
+  it("kept drafts go to the shelf (approved_draft); passed drafts disappear; decided ⇒ not ready-to-review", () => {
+    const jobs: MiraCreativeJobSummary[] = [
+      job({ id: "r1", status: "draft_ready", draft: { videoUrl: "x" } }), // undecided → ready
+      job({
+        id: "k1",
+        status: "draft_ready",
+        draft: { videoUrl: "y", thumbnailUrl: "t1" },
+        reviewDecision: "kept",
+      }),
+      job({ id: "x1", status: "draft_ready", draft: { videoUrl: "z" }, reviewDecision: "passed" }),
+    ];
+    const desk: MiraDeskModel = buildMiraDeskModel({ jobs, counts: { ...counts, total: 3 } });
+    expect(desk.readyToReviewCount).toBe(1); // only the undecided one
+    expect(desk.keptDrafts.map((i) => i.id)).toEqual(["k1"]); // kept → shelf
+    expect(desk.keptDrafts[0]?.state).toBe("approved_draft");
+    expect(desk.keptDrafts[0]?.thumbnailUrl).toBe("t1");
+    // passed (x1) appears in neither bucket.
+    expect(desk.inProduction).toEqual([]);
   });
 });

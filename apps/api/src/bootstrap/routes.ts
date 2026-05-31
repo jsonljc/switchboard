@@ -67,6 +67,7 @@ import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
 import { creativesRoute } from "../routes/agent-home/creatives.js";
 import { miraBriefRoute } from "../routes/agent-home/mira-brief.js";
+import { miraDecisionRoute } from "../routes/agent-home/mira-decision.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 import { missionRoute } from "../routes/agent-home/mission.js";
 import { cockpitActivityRoutes } from "../routes/agent-home/activity.js";
@@ -124,6 +125,8 @@ export async function registerRoutes(
   await app.register(creativesRoute, { prefix: "/api/dashboard" });
   // miraBriefRoute: POST /api/dashboard/agents/mira/brief — createCreativeDraftRequest (draft-only)
   await app.register(miraBriefRoute, { prefix: "/api/dashboard" });
+  // miraDecisionRoute: POST …/creatives/:id/decision — Keep/Pass (draft-only, no-cross-agent)
+  await app.register(miraDecisionRoute, { prefix: "/api/dashboard" });
   // metricsRoute: GET /api/dashboard/agents/:agentId/metrics — agent-home metrics feed
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
   // missionRoute: GET /api/dashboard/agents/:agentId/mission — agent-home mission aggregator

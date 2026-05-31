@@ -41,6 +41,7 @@ export interface MiraDeskItem {
 export interface MiraDeskModel {
   inProduction: MiraDeskItem[];
   readyToReviewCount: number;
+  keptDrafts: MiraDeskItem[];
   counts: MiraCreativeCounts;
   isEmpty: boolean;
 }
@@ -75,14 +76,28 @@ function toItem(job: MiraCreativeJobSummary, state: MiraDeskItemState): MiraDesk
   };
 }
 
+const KEPT_SHELF_CAP = 8;
+
 /** Bucket the seam read-model into Phase-2 desk modules. Pure; no I/O, no copy.
- *  PR2 buckets in-production + ready-count only. PR4 adds the kept-drafts shelf. */
+ *  Review decision is checked FIRST: passed → gone; kept → shelf (approved_draft).
+ *  Undecided jobs fall through to status-derived buckets (in_production / ready-count).
+ *
+ *  Window caveat: kept drafts are read from the same windowed rm.jobs (≤ FEED_WINDOW).
+ *  Kept drafts older than the window won't appear — acceptable at M1 pilot scale;
+ *  revisit with a dedicated query if the shelf needs full history. */
 export function buildMiraDeskModel(rm: MiraCreativeReadModel): MiraDeskModel {
   const inProduction: MiraDeskItem[] = [];
+  const keptDrafts: MiraDeskItem[] = [];
   let readyToReviewCount = 0;
 
   for (const job of rm.jobs) {
-    const state = deriveDeskItemState(job);
+    if (job.reviewDecision === "passed") continue; // dismissed — gone from the desk
+    if (job.reviewDecision === "kept") {
+      // the verdict → shelf
+      keptDrafts.push(toItem(job, "approved_draft"));
+      continue;
+    }
+    const state = deriveDeskItemState(job); // undecided → status buckets
     if (state === "in_production") inProduction.push(toItem(job, state));
     else if (state === "ready_to_review") readyToReviewCount += 1;
     // reviewed_stopped: counted in counts.stopped, not its own module in v1.
@@ -92,7 +107,11 @@ export function buildMiraDeskModel(rm: MiraCreativeReadModel): MiraDeskModel {
   return {
     inProduction,
     readyToReviewCount,
+    keptDrafts: keptDrafts.slice(0, KEPT_SHELF_CAP),
     counts: rm.counts,
+    // "no jobs at all in the window" — NOT "all three modules are empty". An org
+    // with only kept/passed drafts is NOT isEmpty. Don't gate an onboarding nudge
+    // on this; check the individual buckets instead.
     isEmpty: rm.jobs.length === 0,
   };
 }

@@ -11,6 +11,7 @@ import { MIRA_ACCENT, MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-conf
 import { MiraReadyToReview } from "./mira-ready-to-review";
 import { MiraInProductionTray } from "./mira-in-production-tray";
 import { MiraBriefBox } from "./mira-brief-box";
+import { MiraKeptShelf } from "./mira-kept-shelf";
 
 // Phase-2 Director's Desk. Module order (Decision 3): brief box (PR3) · the one
 // hero Ready-to-review CTA · calm In-production tray · Kept-drafts shelf (PR4).
@@ -74,7 +75,7 @@ export function MiraDeskPage() {
             <MiraBriefBox />
             <MiraReadyToReview count={desk!.readyToReviewCount} />
             <MiraInProductionTray items={desk!.inProduction} />
-            {/* PR4 mounts <MiraKeptShelf /> here, at the bottom. */}
+            <MiraKeptShelf items={desk!.keptDrafts} />
           </>
         )}
       </div>

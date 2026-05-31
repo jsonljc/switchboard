@@ -14,6 +14,9 @@ vi.mock("@/components/layout/halt/halt-context", () => ({
 vi.mock("@/hooks/use-create-creative-draft-request", () => ({
   useCreateCreativeDraftRequest: () => ({ mutateAsync: vi.fn(), isPending: false, isError: false }),
 }));
+vi.mock("@/hooks/use-review-decision", () => ({
+  useReviewDecision: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 
 const FORBIDDEN =
   /\b(sent to riley|in use|winner|fatigued|published|distribute|performance|learning|improved|drove|recovered|saved)\b/i;
@@ -37,6 +40,7 @@ describe("MiraDeskPage", () => {
           { id: "p", title: "Promo", stage: "production", state: "in_production", updatedAt: "x" },
         ],
         readyToReviewCount: 2,
+        keptDrafts: [],
         counts: { ...counts, total: 3, inFlight: 1 },
         isEmpty: false,
       },
@@ -57,7 +61,7 @@ describe("MiraDeskPage", () => {
 
   it("never renders a forbidden Phase-4/5 word", () => {
     deskMock.mockReturnValue({
-      data: { inProduction: [], readyToReviewCount: 0, counts, isEmpty: true },
+      data: { inProduction: [], readyToReviewCount: 0, keptDrafts: [], counts, isEmpty: true },
       isLoading: false,
       isError: false,
       error: null,

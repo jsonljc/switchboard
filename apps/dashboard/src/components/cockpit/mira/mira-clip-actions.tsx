@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { MiraReviewAction } from "@switchboard/core";
 import { useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
 import { useHalt } from "@/components/layout/halt/halt-context";
+import { useReviewDecision } from "@/hooks/use-review-decision";
 
 export function MiraClipActions({
   jobId,
@@ -16,6 +17,7 @@ export function MiraClipActions({
   onResolve: (jobId: string) => void;
 }) {
   const approve = useApproveStage();
+  const decide = useReviewDecision();
   const { halted } = useHalt();
   const [confirm, setConfirm] = useState<null | "continue" | "stop">(null);
   const estimateQ = useCostEstimate(jobId, reviewAction.canContinue && confirm === "continue");
@@ -116,6 +118,32 @@ export function MiraClipActions({
           <span style={{ color: "#fff", fontSize: 11 }}>
             Couldn&apos;t update the draft — try again.
           </span>
+        )}
+      </div>
+    );
+  }
+
+  if (reviewAction.label === "review_draft") {
+    const decideAndResolve = (decision: "kept" | "passed") =>
+      decide.mutate({ id: jobId, decision }, { onSuccess: () => onResolve(jobId) });
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
+        <button
+          style={{ ...btn, background: "#3C315C" }}
+          disabled={decide.isPending}
+          onClick={() => decideAndResolve("kept")}
+        >
+          Keep
+        </button>
+        <button
+          style={{ ...btn, background: "rgba(0,0,0,0.55)" }}
+          disabled={decide.isPending}
+          onClick={() => decideAndResolve("passed")}
+        >
+          Pass
+        </button>
+        {decide.isError && (
+          <span style={{ color: "#fff", fontSize: 11 }}>Couldn&apos;t save — try again.</span>
         )}
       </div>
     );

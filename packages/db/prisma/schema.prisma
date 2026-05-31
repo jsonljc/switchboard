@@ -1339,6 +1339,11 @@ model CreativeJob {
   ugcConfig              Json?
   ugcFailure             Json?
 
+  // Phase-2 review decision (Keep/Pass). Creative-only, firewalled from Riley.
+  // null = undecided (still in the feed); "kept" = on the shelf; "passed" = dismissed.
+  reviewDecision  String?
+  reviewDecidedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1351,6 +1356,7 @@ model CreativeJob {
   @@index([productIdentityId])
   @@index([creatorIdentityId])
   @@index([registryBackfilled])
+  @@index([organizationId, reviewDecision])
 }
 
 model CreatorIdentity {
