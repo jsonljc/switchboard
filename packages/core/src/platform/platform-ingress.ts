@@ -102,9 +102,12 @@ export class PlatformIngress {
         // attempt — committed-but-unconfirmed (finalize blipped), or a
         // concurrent in-flight submit. The prior mutation may have committed,
         // so we must never re-execute. Fail closed (non-retryable; needs
-        // reconciliation). `running` is exclusively a claim state on the
-        // ingress path, so this branch never shadows a legitimate cached
-        // result (completed/failed/queued/pending_approval fall through).
+        // reconciliation). A `running` trace reached via this org-scoped
+        // idempotency-key lookup is exclusively an ingress claim — the
+        // conversation/lifecycle stores persist only KEYLESS `running` rows,
+        // which this lookup can never return — so the branch never shadows a
+        // legitimate cached result (completed/failed/queued/pending_approval
+        // fall through).
         if (existingTrace.outcome === "running") {
           return {
             ok: false,
