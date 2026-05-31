@@ -108,26 +108,20 @@ describe("useAgentMetrics window param", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("?window=week"));
   });
 
-  it("passing 'all' requests ?window=all URL", async () => {
+  // Lifetime ("all") window is intentionally not requestable: projectMetrics is
+  // week-only server-side, so the hook accepts "week" only (see use-agent-metrics).
+  it("explicit 'week' requests ?window=week URL", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ vm: { hero: { kind: "ad-leads", value: 214 } } }),
+      json: async () => ({ vm: { hero: { kind: "ad-leads", value: 5 } } }),
     });
-    const { result } = renderHook(() => useAgentMetrics("riley", "all"), { wrapper });
+    const { result } = renderHook(() => useAgentMetrics("riley", "week"), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/agents/riley/metrics?window=all");
-    expect(result.current.data?.hero?.value).toBe(214);
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/agents/riley/metrics?window=week");
   });
 
-  it("a 400 response with window=all surfaces as isError:true and data:undefined (caller can fall back to week)", async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 400 });
-    const { result } = renderHook(() => useAgentMetrics("riley", "all"), { wrapper });
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.data).toBeUndefined();
-  });
-
-  it("'week' and 'all' produce distinct real query keys", () => {
+  it("week query keys are distinct per agent", () => {
     const keys = scopedKeys("test-org");
-    expect(keys.metrics.feed("riley", "week")).not.toEqual(keys.metrics.feed("riley", "all"));
+    expect(keys.metrics.feed("riley", "week")).not.toEqual(keys.metrics.feed("alex", "week"));
   });
 });

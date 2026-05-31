@@ -349,18 +349,18 @@ describe("AgentPanel state matrix", () => {
   });
 
   // ── Row 2: Normal active ──────────────────────────────────────────────────────
-  // Health line + lifetime hero + decision count + first-person work-log all present.
-  it("2. Normal active — health + hero (lifetime) + decisions + work-log all render together", () => {
-    // allData = lifetime value 42 → "since you hired Alex"
+  // Health line + this-week hero + decision count + first-person work-log all present.
+  it("2. Normal active — health + hero (this week) + decisions + work-log all render together", () => {
+    // weekData = week value 7 → "this week" (lifetime/window=all is not fetched)
     // decisions = 1
     // work-log = "I replied to … about Botox pricing"
     renderAlexPanel();
 
     // Health line (fresh)
     expect(screen.getByText("Nothing old is waiting")).toBeInTheDocument();
-    // Lifetime hero number and eyebrow
-    expect(screen.getByText("42")).toBeInTheDocument();
-    expect(screen.getByText(/since you hired Alex/i)).toBeInTheDocument();
+    // This-week hero number and eyebrow
+    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.getByText(/this week/i)).toBeInTheDocument();
     // Decision count
     expect(screen.getByText("1")).toBeInTheDocument();
     // First-person work-log sentence
@@ -380,11 +380,10 @@ describe("AgentPanel state matrix", () => {
     expect(document.querySelectorAll('[data-testid="agent-avatar"]')).toHaveLength(1);
   });
 
-  // ── Row 3: Metrics window=all 400 → falls back to week ───────────────────────
-  // Hero appears under "this week" label; NOT "since you hired"; NOT an error.
-  it("3. Metrics window=all 400 → week hero under 'this week', not 'since you hired', not error", () => {
-    allData = undefined;
-    allIsError = true;
+  // ── Row 3: Week hero scope ───────────────────────────────────────────────────
+  // Hero appears under "this week" label; NEVER "since you hired" (lifetime is
+  // not fetched — projectMetrics is week-only); NOT an error.
+  it("3. week hero renders under 'this week', not 'since you hired', not error", () => {
     weekData = makeMetricsVM({ kind: "tours-booked", value: 7 });
 
     renderAlexPanel();
@@ -406,7 +405,7 @@ describe("AgentPanel state matrix", () => {
   it("4. One-slot error (decisions) — decisions shows error; identity/hero/work-log still render", () => {
     feedIsError = true;
     feedData = undefined;
-    // allData stays from beforeEach (value=42), work-log stays (replied row)
+    // weekData stays from beforeEach (value=7), work-log stays (replied row)
 
     renderAlexPanel();
 
@@ -416,8 +415,8 @@ describe("AgentPanel state matrix", () => {
     // Identity still renders (health line present)
     expect(screen.getByText("Nothing old is waiting")).toBeInTheDocument();
 
-    // Hero still renders (value 42 from allData)
-    expect(screen.getByText("42")).toBeInTheDocument();
+    // Hero still renders (week value 7)
+    expect(screen.getByText("7")).toBeInTheDocument();
 
     // Work-log still renders (first-person sentence)
     expect(screen.getByText(/I replied to/i)).toBeInTheDocument();

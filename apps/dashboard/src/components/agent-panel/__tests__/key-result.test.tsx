@@ -44,6 +44,7 @@ vi.mock("@/components/layout/halt/halt-context", () => ({
 
 // Import component after mocks
 import { KeyResult } from "../key-result";
+import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -96,26 +97,28 @@ describe("KeyResult slot — launch-blocker tests", () => {
     missionData = undefined;
     missionIsLoading = false;
     haltedValue = false;
+    vi.mocked(useAgentMetrics).mockClear();
   });
 
-  // Blocker 1: window=all succeeds → hero under "since you hired …" (lifetime), shows the lifetime value.
-  it("1. window=all succeeds → shows lifetime value under 'since you hired' eyebrow", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 214 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 5 });
+  // Lifetime ("since you hired") metrics are not yet supported server-side
+  // (projectMetrics is week-only); requesting window="all" 400s on every panel
+  // open. KeyResult must fetch the week window ONLY and never request lifetime.
+  it("0. fetches the week window only — never requests the lifetime ('all') window", () => {
+    weekData = makeMetricsVM({ kind: "tours-booked", value: 9 });
     render(<KeyResult agentKey="alex" />);
 
-    // The big number shown should be the ALL-window value (214), not the week value (5)
-    expect(screen.getByText("214")).toBeInTheDocument();
-    // Eyebrow must contain "since you hired" (lifetime scope)
-    expect(screen.getByText(/since you hired Alex/i)).toBeInTheDocument();
-    // "this week" must NOT appear
-    expect(screen.queryByText(/this week/i)).not.toBeInTheDocument();
+    const windows = vi.mocked(useAgentMetrics).mock.calls.map((c) => c[1]);
+    expect(windows).toContain("week");
+    expect(windows).not.toContain("all");
+
+    // Hero shows the week value under the honest "this week" eyebrow.
+    expect(screen.getByText("9")).toBeInTheDocument();
+    expect(screen.getByText(/this week/i)).toBeInTheDocument();
+    expect(screen.queryByText(/since you hired/i)).not.toBeInTheDocument();
   });
 
-  // Blocker 2: window=all 400/isError + week ok → hero under "this week" label, shows the WEEK value — NOT an error, NEVER "since you hired".
-  it("2. window=all errors + week ok → shows week value under 'this week' label, not 'since you hired'", () => {
-    allData = undefined;
-    allIsError = true;
+  // Blocker 2: week ok → hero under "this week" label, shows the WEEK value.
+  it("2. week ok → shows week value under 'this week' label, not 'since you hired'", () => {
     weekData = makeMetricsVM({ kind: "tours-booked", value: 7 });
     render(<KeyResult agentKey="alex" />);
 
@@ -175,7 +178,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Blocker 6: Riley CPL beat: spendCents 142000, hero ad-leads value 32, targetCpbCents 3500 → renders "$44.38 per lead · $9.38 over your $35 target" (neutral text; assert NO element has a green/up or red/down class).
   it("6. Riley CPL beat — correct neutral text, no green/red classes", () => {
-    allData = makeMetricsVM({
+    weekData = makeMetricsVM({
       kind: "ad-leads",
       value: 32,
       spendCents: 142000,
@@ -296,8 +299,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Gap 1 — non-core nudge present when proof + non-primary setup step incomplete
   it("gap1a. proof + non-core setup step incomplete → proof hero shows + non-core-nudge present + no activation-block", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 8 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 2 });
+    weekData = makeMetricsVM({ kind: "tours-booked", value: 8 });
     missionData = {
       agentKey: "alex",
       displayName: "Alex",
@@ -318,9 +320,9 @@ describe("KeyResult slot — launch-blocker tests", () => {
     };
     render(<KeyResult agentKey="alex" />);
 
-    // Proof hero shown (lifetime value)
+    // Proof hero shown (week value, "this week" scope)
     expect(screen.getByText("8")).toBeInTheDocument();
-    expect(screen.getByText(/since you hired Alex/i)).toBeInTheDocument();
+    expect(screen.getByText(/this week/i)).toBeInTheDocument();
     // Non-core nudge present
     expect(screen.getByTestId("non-core-nudge")).toBeInTheDocument();
     expect(screen.getByText(/Set your guardrails so Alex knows your limits/i)).toBeInTheDocument();
@@ -332,8 +334,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
   // Uses a real producer signal: Riley's setup emits [meta, rules]; when meta=done but rules=incomplete
   // the non-core setup nudge fires in the proof branch.
   it("gap1b. proof + non-core setup step incomplete (Riley rules) → proof hero shows + non-core-nudge present + no activation-block", () => {
-    allData = makeMetricsVM({ kind: "ad-leads", value: 15 });
-    weekData = makeMetricsVM({ kind: "ad-leads", value: 3 });
+    weekData = makeMetricsVM({ kind: "ad-leads", value: 15 });
     missionData = {
       agentKey: "riley",
       displayName: "Riley",
@@ -354,9 +355,9 @@ describe("KeyResult slot — launch-blocker tests", () => {
     };
     render(<KeyResult agentKey="riley" />);
 
-    // Proof hero shown (lifetime value)
+    // Proof hero shown (week value, "this week" scope)
     expect(screen.getByText("15")).toBeInTheDocument();
-    expect(screen.getByText(/since you hired Riley/i)).toBeInTheDocument();
+    expect(screen.getByText(/this week/i)).toBeInTheDocument();
     // Non-core nudge present (rules setup row)
     expect(screen.getByTestId("non-core-nudge")).toBeInTheDocument();
     expect(screen.getByText(/Set your guardrails so Riley knows your limits/i)).toBeInTheDocument();
@@ -422,8 +423,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Gap 1 — all-complete proof renders NO nudge
   it("gap1c. proof + all setup complete → no non-core-nudge", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 20 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 4 });
+    weekData = makeMetricsVM({ kind: "tours-booked", value: 20 });
     missionData = {
       agentKey: "alex",
       displayName: "Alex",

@@ -16,13 +16,15 @@ import { useScopedQueryKeys } from "./use-query-keys";
  * Legacy API responses that omit these fields will surface as undefined;
  * consumers should null-coalesce where needed.
  *
- * @param metricWindow - "week" (default) for current-week scope; "all" for lifetime.
- *   Passing "all" allows callers to fetch the lifetime figure and fall back to
- *   "week" when the server returns 400 (isError: true, data: undefined).
+ * @param metricWindow - "week" (default) for current-week scope. Lifetime
+ *   ("all") scope is intentionally NOT accepted: projectMetrics is week-only
+ *   server-side and 400s on any other window. The param is kept (week-only) so
+ *   the lifetime window can be re-introduced deliberately when the lifetime-
+ *   metrics backend lands (its own spec).
  */
 export function useAgentMetrics(
   agentKey: AgentKey,
-  metricWindow: "week" | "all" = "week",
+  metricWindow: "week" = "week",
 ): AgentBlockQuery<MetricsViewModelWire> {
   const keys = useScopedQueryKeys();
   const query = useQuery({
