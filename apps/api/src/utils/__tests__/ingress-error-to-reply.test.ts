@@ -58,4 +58,21 @@ describe("ingressErrorToReply", () => {
       expect(send).toHaveBeenCalledWith({ error: "bad", statusCode: 400 });
     },
   );
+
+  it("maps idempotency_in_flight to 409 and surfaces retryable=false", () => {
+    const { reply, code, send } = mkReply();
+    const err: IngressError = {
+      type: "idempotency_in_flight",
+      intent: "x",
+      message: "unresolved prior attempt",
+      retryable: false,
+    };
+    ingressErrorToReply(err, reply);
+    expect(code).toHaveBeenCalledWith(409);
+    expect(send).toHaveBeenCalledWith({
+      error: "unresolved prior attempt",
+      statusCode: 409,
+      retryable: false,
+    });
+  });
 });

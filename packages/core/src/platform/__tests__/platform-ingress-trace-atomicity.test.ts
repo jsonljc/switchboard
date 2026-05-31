@@ -8,7 +8,9 @@ import type {
   WorkTraceStore,
   WorkTraceReadResult,
   WorkTraceClaimResult,
+  WorkTraceUpdateResult,
 } from "../work-trace-recorder.js";
+import { validateUpdate } from "../work-trace-lock.js";
 import type { IntentRegistration } from "../intent-registration.js";
 import type { ExecutionMode } from "../execution-context.js";
 import type { GovernanceDecision, ExecutionConstraints } from "../governance-types.js";
@@ -144,17 +146,32 @@ class InMemoryTraceStore implements WorkTraceStore {
     return trace ? ({ trace } as WorkTraceReadResult) : null;
   }
 
-  async update(
-    workUnitId: string,
-    fields: Partial<WorkTrace>,
-  ): Promise<{ ok: true; trace: WorkTrace }> {
+  async update(workUnitId: string, fields: Partial<WorkTrace>): Promise<WorkTraceUpdateResult> {
     if (this.failFinalizeCount > 0) {
       this.failFinalizeCount--;
       throw new Error("trace store down (finalize blip)");
     }
     const current = this.byWorkUnit.get(workUnitId);
-    const merged = { ...(current ?? ({} as WorkTrace)), ...fields } as WorkTrace;
-    if (current) this.store(merged);
+    if (!current) return { ok: true, trace: {} as WorkTrace };
+    // Faithfully enforce the WorkTrace lock transitions (mirrors PrismaWorkTraceStore)
+    // so this fake REJECTS an illegal finalize (e.g. running -> queued when the lock
+    // forbids it) exactly as the real store would — that fidelity is what catches a
+    // finalize wedge. A merge-only fake would mask it.
+    const validation = validateUpdate({ current, update: fields });
+    if (!validation.ok) {
+      return {
+        ok: false,
+        code: "WORK_TRACE_LOCKED",
+        traceUnchanged: true,
+        reason: validation.diagnostic.reason,
+      };
+    }
+    const merged = {
+      ...current,
+      ...fields,
+      ...(validation.computedLockedAt ? { lockedAt: validation.computedLockedAt } : {}),
+    } as WorkTrace;
+    this.store(merged);
     return { ok: true, trace: merged };
   }
 
@@ -354,4 +371,44 @@ describe("PlatformIngress D1 — trace-atomicity double-spend window", () => {
     expect(persistSpy).toHaveBeenCalledTimes(1);
     expect(ledger).toHaveLength(1);
   });
+
+  // Regression: a keyed submit whose mode returns a NON-terminal outcome (a
+  // workflow that resolves to `queued`/`pending_approval`) must finalize the
+  // running claim to that outcome — not wedge at `running` and fail closed on a
+  // legitimate replay. The fake store enforces the real lock transitions, so this
+  // fails if running->{queued,pending_approval} is not a legal finalize.
+  it.each(["queued", "pending_approval"] as const)(
+    "finalizes a keyed submit whose dispatch returns %s without wedging at running",
+    async (nonTerminal) => {
+      const traceStore = new InMemoryTraceStore();
+      const nonTerminalMode: ExecutionMode = {
+        name: "operator_mutation",
+        execute: vi.fn(
+          async (workUnit: WorkUnit): Promise<ExecutionResult> => ({
+            workUnitId: workUnit.id,
+            outcome: nonTerminal,
+            summary: `dispatch resolved to ${nonTerminal}`,
+            outputs: {},
+            mode: "workflow",
+            durationMs: 5,
+            traceId: workUnit.traceId,
+          }),
+        ),
+      };
+      const ingress = new PlatformIngress(buildConfig(traceStore, nonTerminalMode));
+      const request = { ...baseRequest, idempotencyKey: `nt-${nonTerminal}` };
+
+      const first = await ingress.submit(request);
+      expect(first.ok).toBe(true);
+      // The claim was finalized to the real (non-terminal) outcome, not stuck running.
+      const finalized = await traceStore.getByIdempotencyKey("org-1", `nt-${nonTerminal}`);
+      expect(finalized?.trace.outcome).toBe(nonTerminal);
+
+      // A legitimate idempotent replay returns the cached result — it must NOT
+      // fail closed (the op succeeded; only `running` is indeterminate).
+      const replay = await ingress.submit(request);
+      expect(replay.ok).toBe(true);
+      if (replay.ok) expect(replay.result.outcome).toBe(nonTerminal);
+    },
+  );
 });

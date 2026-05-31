@@ -140,6 +140,12 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       });
       return { claimed: true };
     } catch (err: unknown) {
+      // A P2002 here is treated as "lost the idempotency-key claim". We do not
+      // inspect err.meta.target to confirm it was the (org, idempotencyKey)
+      // unique rather than the workUnitId @unique — intentional, and identical
+      // to persist()'s guard above: workUnitId is a fresh per-submit cuid (a PK
+      // collision is not reachable), and failing closed on the unlikely case is
+      // the safe direction (it can never cause a double-apply).
       if (this.isUniqueConstraintError(err) && trace.idempotencyKey) {
         return { claimed: false };
       }
