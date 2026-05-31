@@ -1,5 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { buildSidebarSections } from "../app-sidebar";
+import { AppSidebar } from "../app-sidebar";
+vi.mock("next/navigation", () => ({ usePathname: () => "/inbox" }));
+vi.mock("@/hooks/use-mira-enabled", () => ({ useMiraEnabled: () => ({ enabled: false }) }));
+vi.mock("@/lib/route-availability", async (orig) => ({
+  ...(await orig()),
+  isMercuryToolLive: () => true,
+}));
 
 describe("buildSidebarSections", () => {
   it("always shows the three primary destinations + Settings", () => {
@@ -37,5 +45,14 @@ describe("buildSidebarSections", () => {
         (i) => i.href === "/reports",
       ),
     ).toBeDefined();
+  });
+});
+
+describe("AppSidebar", () => {
+  it("renders primary destinations and marks the active route", () => {
+    render(<AppSidebar />);
+    expect(screen.getByRole("link", { name: /inbox/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /home/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /results/i })).toBeInTheDocument();
   });
 });
