@@ -212,6 +212,7 @@
   .sheet {
     position: sticky;
     top: calc(var(--header-h, 68px) + 16px);
+    bottom: auto; /* base/768 set bottom:0 — clear it so sticky uses only the top threshold */
     right: auto;
     left: auto;
     width: auto;
