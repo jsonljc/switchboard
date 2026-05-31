@@ -151,6 +151,7 @@ function buildFixtures(cfg: FixtureConfig) {
   const traceReadResult: WorkTraceReadResult = { trace, integrity: cfg.verdict };
   const traceStore: WorkTraceStore = {
     persist: vi.fn().mockResolvedValue(undefined),
+    claim: vi.fn().mockResolvedValue({ claimed: true }),
     getByWorkUnitId: vi.fn().mockResolvedValue(traceReadResult),
     getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue({ ok: true as const, trace }),
@@ -360,6 +361,7 @@ describe("PlatformLifecycle — admission gate in executeAfterApproval (via exec
 
     const traceStore: WorkTraceStore = {
       persist: vi.fn().mockResolvedValue(undefined),
+      claim: vi.fn().mockResolvedValue({ claimed: true }),
       getByWorkUnitId: vi.fn().mockResolvedValue({
         trace,
         integrity: { status: "ok" as const },

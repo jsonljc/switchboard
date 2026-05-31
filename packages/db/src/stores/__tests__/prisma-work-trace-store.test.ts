@@ -310,3 +310,41 @@ describe("PrismaWorkTraceStore.recordOperatorMutation", () => {
     consoleError.mockRestore();
   });
 });
+
+describe("PrismaWorkTraceStore.claim (D1 idempotency claim primitive)", () => {
+  function makeClaimStore(create: ReturnType<typeof vi.fn>) {
+    const mockPrisma = {
+      workTrace: { create },
+      $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb({ workTrace: { create } })),
+    };
+    return new PrismaWorkTraceStore(mockPrisma as never, {
+      auditLedger: new AuditLedger(new InMemoryLedgerStorage()),
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
+  }
+
+  it("returns { claimed: true } on a fresh insert", async () => {
+    const create = vi.fn().mockResolvedValue({});
+    const store = makeClaimStore(create);
+    await expect(
+      store.claim(makeTrace({ idempotencyKey: "key-1", outcome: "running" })),
+    ).resolves.toEqual({ claimed: true });
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("returns { claimed: false } on an idempotency-key P2002 conflict (does NOT throw)", async () => {
+    const create = vi.fn().mockRejectedValue({ code: "P2002" });
+    const store = makeClaimStore(create);
+    await expect(
+      store.claim(makeTrace({ idempotencyKey: "key-1", outcome: "running" })),
+    ).resolves.toEqual({ claimed: false });
+  });
+
+  it("rethrows non-P2002 store errors so the caller can retry", async () => {
+    const create = vi.fn().mockRejectedValue(new Error("connection reset"));
+    const store = makeClaimStore(create);
+    await expect(
+      store.claim(makeTrace({ idempotencyKey: "key-1", outcome: "running" })),
+    ).rejects.toThrow("connection reset");
+  });
+});

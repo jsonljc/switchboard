@@ -45,6 +45,7 @@ export type {
   WorkTraceStore,
   WorkTraceUpdateResult,
   WorkTraceReadResult,
+  WorkTraceClaimResult,
 } from "./work-trace-recorder.js";
 export * from "./work-trace-lock.js";
 export {

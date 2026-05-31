@@ -28,6 +28,7 @@ import type {
   WorkTraceStore,
   WorkTraceUpdateResult,
   WorkTraceReadResult,
+  WorkTraceClaimResult,
 } from "@switchboard/core/platform";
 import type {
   Contact,
@@ -48,6 +49,21 @@ export class InMemoryWorkTraceStore implements WorkTraceStore {
 
   async persist(trace: WorkTrace): Promise<void> {
     this.traces.set(trace.workUnitId, { ...trace });
+  }
+
+  async claim(trace: WorkTrace): Promise<WorkTraceClaimResult> {
+    if (trace.idempotencyKey) {
+      for (const existing of this.traces.values()) {
+        if (
+          existing.organizationId === trace.organizationId &&
+          existing.idempotencyKey === trace.idempotencyKey
+        ) {
+          return { claimed: false };
+        }
+      }
+    }
+    this.traces.set(trace.workUnitId, { ...trace });
+    return { claimed: true };
   }
 
   async getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadResult | null> {

@@ -178,6 +178,7 @@ function createMockStores() {
     persist: vi.fn(async (t) => {
       traces.set(t.workUnitId, t);
     }),
+    claim: vi.fn().mockResolvedValue({ claimed: true }),
     getByWorkUnitId: vi.fn(async (id: string): Promise<WorkTraceReadResult | null> => {
       const trace = traces.get(id);
       if (!trace) return null;
