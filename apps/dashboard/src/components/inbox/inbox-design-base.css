@@ -191,3 +191,51 @@
 .inbox-queue .decision:hover {
   border-color: var(--hair-soft);
 }
+
+/* placeholder is desktop-only */
+.inbox-detail-empty { display: none; }
+
+/* ─── Desktop master-detail two-pane (additive at lg) ─── */
+@media (min-width: 1024px) {
+  .inbox-page {
+    max-width: none; /* fill the shell content frame */
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--inbox-detail-w, 460px);
+    gap: 32px;
+    align-items: start;
+    padding-bottom: 32px;
+  }
+  .inbox-list { grid-column: 1; min-width: 0; }
+  /* dock the detail sheet (and the empty placeholder) into the right column */
+  .sheet,
+  .inbox-detail-empty { grid-column: 2; }
+  .sheet {
+    position: sticky;
+    top: calc(var(--header-h, 68px) + 16px);
+    right: auto;
+    left: auto;
+    width: auto;
+    max-height: calc(100dvh - var(--header-h, 68px) - 48px);
+    transform: none;
+    border-left: none;
+    border: 1px solid var(--hair);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sheet);
+  }
+  .sheet[data-open="true"] { transform: none; }
+  /* no dimming overlay in two-pane mode */
+  .scrim { display: none; }
+  .inbox-detail-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: sticky;
+    top: calc(var(--header-h, 68px) + 16px);
+    min-height: 240px;
+    color: var(--ink-3);
+    font-family: var(--serif);
+    font-style: italic;
+    border: 1px dashed var(--hair);
+    border-radius: var(--r-lg);
+  }
+}
