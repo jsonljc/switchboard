@@ -42,7 +42,9 @@ export function isPathActive(pathname: string, href: string): boolean {
 
 export function ToolsOverflow() {
   const pathname = usePathname() ?? "";
-  const { enabled: miraEnabled } = useMiraEnabled();
+  // poll:false — the header mounts on every authed page; enablement is static,
+  // so don't add an app-wide 60s mission poll just to gate the Mira item.
+  const { enabled: miraEnabled } = useMiraEnabled({ poll: false });
   const visibleItems = TOOLS_NAV_ITEMS.filter((it) => isMercuryToolLive(it.id));
   // The advanced operator surface rides the same flag as customer reports — no
   // separate env var (avoids the allowlist dance) and it only matters once
@@ -91,7 +93,7 @@ export function ToolsOverflow() {
               <DropdownMenuLabel>Advanced</DropdownMenuLabel>
               <DropdownMenuItem asChild data-active={reportsAdvancedActive || undefined}>
                 <Link href="/reports" aria-current={reportsAdvancedActive ? "page" : undefined}>
-                  Operator reports
+                  Full reports
                 </Link>
               </DropdownMenuItem>
             </>
