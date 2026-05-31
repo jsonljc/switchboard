@@ -74,7 +74,7 @@ These ship first, mostly invisible, and unblock the screen PRs.
 
 - **≥1024px:** transform the single `styles.column` stack (`home/home-page.tsx:287`, `home.module.css`) into a bento:
   - Verdict hero spans full content width (row 1).
-  - Row 2 is the main+rail grid: **main column** = This Week (week-note) + Needs You cards; **status rail** (~320px) = Team Pulse + While You Slept + Work In Progress + Permissions.
+  - Row 2 is the main+rail grid. To keep mobile byte-identical (the bento containers are `display:contents` below lg), the split follows **contiguous slices of the existing module order**: **main column** = the next 2–3 active modules after the hero (active: Needs You, Team Pulse, This Week; calm: This Week, Team Pulse); **status rail** (~320px) = the quiet remainder (While You Slept, Work In Progress, Permissions).
 - Implemented with the revived grid primitive. Drop the 640px cap at `lg` (`home.module.css:21`). Module components are reused unchanged; only their container reflows.
 - **<1024px:** unchanged single column (Needs-You-first ordering preserved).
 

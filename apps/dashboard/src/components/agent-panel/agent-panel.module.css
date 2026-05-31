@@ -855,6 +855,9 @@
   /* Right-panel geometry — override bottom-sheet sizing */
   .panel {
     width: min(560px, 92vw) !important;
+    /* the shared right-sheet variant adds lg:max-w-md/xl:max-w-lg (448/512px);
+       clear that cap so the panel reaches its intended 560px. */
+    max-width: min(560px, 92vw) !important;
     height: 100% !important;
     max-height: none !important;
     border-top-left-radius: 0 !important;

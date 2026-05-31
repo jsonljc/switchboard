@@ -202,7 +202,7 @@
   .app-main .inbox-page {
     max-width: none; /* fill the shell content frame */
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--inbox-detail-w, 460px);
+    grid-template-columns: minmax(0, 1fr) var(--inbox-detail-w, 480px);
     gap: 32px;
     align-items: start;
     padding-bottom: 32px;
@@ -217,7 +217,8 @@
     bottom: auto; /* base/768 set bottom:0 — clear it so sticky uses only the top threshold */
     right: auto;
     left: auto;
-    width: auto;
+    /* width comes from inbox.css `.sheet.ds { width: 480px }` (0,2,0, later import);
+       the grid track above is sized to match it so the docked pane fits exactly. */
     max-height: calc(100dvh - var(--header-h, 68px) - 48px);
     transform: none;
     border-left: none;

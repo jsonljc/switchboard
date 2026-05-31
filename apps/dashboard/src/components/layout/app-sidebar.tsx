@@ -101,22 +101,22 @@ export function AppSidebar() {
     liveToolIds,
   });
   return (
-    <aside className="app-sidebar" aria-label="Primary">
-      <nav className="space-y-0.5">
+    <nav className="app-sidebar" aria-label="Primary">
+      <div className="space-y-0.5">
         {primary.map((i) => (
           <NavLink key={i.href} item={i} pathname={pathname} />
         ))}
-      </nav>
+      </div>
       {tools.length > 0 && (
-        <nav className="space-y-0.5 mt-4 pt-4" style={{ borderTop: "1px solid var(--hair-soft)" }}>
+        <div className="space-y-0.5 mt-4 pt-4" style={{ borderTop: "1px solid var(--hair-soft)" }}>
           {tools.map((i) => (
             <NavLink key={i.href} item={i} pathname={pathname} />
           ))}
-        </nav>
+        </div>
       )}
-      <nav className="space-y-0.5 mt-4 pt-4" style={{ borderTop: "1px solid var(--hair-soft)" }}>
+      <div className="space-y-0.5 mt-4 pt-4" style={{ borderTop: "1px solid var(--hair-soft)" }}>
         <NavLink item={settings} pathname={pathname} />
-      </nav>
-    </aside>
+      </div>
+    </nav>
   );
 }
