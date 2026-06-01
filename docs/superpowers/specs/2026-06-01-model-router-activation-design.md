@@ -51,15 +51,19 @@ current "router is always `undefined`" silent bug into an **explicit, tested dec
 
    ```ts
    export function resolveModelRouter(
-     env: NodeJS.ProcessEnv = process.env,
+     flagValue: string | undefined = process.env.ALEX_MODEL_ROUTER_ENABLED,
    ): ModelRouter | undefined {
-     return env.ALEX_MODEL_ROUTER_ENABLED === "true" ? new ModelRouter() : undefined;
+     return flagValue === "true" ? new ModelRouter() : undefined;
    }
    ```
 
-   Co-located `model-router-factory.test.ts` is the regression test: flag unset → `undefined`,
-   flag `"false"`/other → `undefined`, flag `"true"` → `ModelRouter` instance. This guards the
-   exact decision that was previously a hardcoded `undefined`.
+   The flag-value param defaults from the literal `process.env.ALEX_MODEL_ROUTER_ENABLED`
+   (which `scripts/check-env-completeness.ts` greps for, so the var is detected and must be
+   categorized) while keeping the unit test pure — it injects the string directly with no
+   `process.env` mutation. Co-located `model-router-factory.test.ts` is the regression test:
+   flag unset (`undefined`) → `undefined`, `"false"`/other → `undefined`, `"true"` →
+   `ModelRouter` instance. This guards the exact decision that was previously a hardcoded
+   `undefined`.
 
 2. **`apps/api/src/bootstrap/skill-mode.ts`:** import `ModelRouter` from `@switchboard/core`
    and `resolveModelRouter` from the factory; replace the `undefined` at the production
