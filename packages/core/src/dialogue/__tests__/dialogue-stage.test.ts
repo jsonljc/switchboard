@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { emotionalSignalToStage } from "./dialogue-stage.js";
-import type { EmotionalSignal } from "./types.js";
+import { emotionalSignalToStage } from "../dialogue-stage.js";
+import type { EmotionalSignal } from "../types.js";
 
 function signal(overrides: Partial<EmotionalSignal> = {}): EmotionalSignal {
   return {

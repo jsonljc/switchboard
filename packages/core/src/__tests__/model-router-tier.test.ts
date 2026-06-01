@@ -85,4 +85,16 @@ describe("ModelRouter.resolveTier", () => {
       "critical",
     );
   });
+
+  it("Stage raises a premium rule slot: tool-followup (Rule 4) + fear → critical", () => {
+    expect(router.resolveTier(ctx({ previousTurnUsedTools: true, currentStage: "fear" }))).toBe(
+      "critical",
+    );
+  });
+
+  it("Stage no-op on equal rank: high-risk (Rule 5) premium + objection stays premium", () => {
+    expect(router.resolveTier(ctx({ hasHighRiskTools: true, currentStage: "objection" }))).toBe(
+      "premium",
+    );
+  });
 });

@@ -165,4 +165,24 @@ describe("SkillExecutorImpl - ModelRouter integration", () => {
       "claude-haiku-4-5-20251001",
     );
   });
+
+  it("multi-turn: the LATEST user message drives the stage (later fear → critical)", async () => {
+    expect(
+      await modelForMessages([
+        { role: "user", content: "just browsing" },
+        { role: "assistant", content: "sure, take your time" },
+        { role: "user", content: "I'm terrified of the pain" },
+      ]),
+    ).toBe("claude-opus-4-6");
+  });
+
+  it("multi-turn: an EARLIER high-stakes message does not linger once the latest is neutral", async () => {
+    expect(
+      await modelForMessages([
+        { role: "user", content: "I'm terrified of the pain" },
+        { role: "assistant", content: "totally understandable — it's gentle" },
+        { role: "user", content: "ok sounds good" },
+      ]),
+    ).toBe("claude-haiku-4-5-20251001");
+  });
 });
