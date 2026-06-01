@@ -77,6 +77,9 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   loadRewriteTemplates: vi.fn(() => []),
   splitSentences: vi.fn((text: string) => [text]),
   renderHandoffTemplate: vi.fn(() => "Handoff message"),
+  createScheduleFollowUpToolFactory: vi.fn(() => () => ({
+    operations: { schedule: { effectCategory: "write" } },
+  })),
 }));
 
 vi.mock("@switchboard/core/platform", () => ({
@@ -148,6 +151,12 @@ vi.mock("@switchboard/db", () => ({
   })),
   PrismaKnowledgeEntryStore: vi.fn().mockImplementation(() => ({
     findActive: vi.fn(async () => []),
+  })),
+  PrismaScheduledFollowUpStore: vi.fn().mockImplementation(() => ({
+    findDue: vi.fn(async () => []),
+    markSent: vi.fn(async () => {}),
+    markSkipped: vi.fn(async () => {}),
+    markFailed: vi.fn(async () => {}),
   })),
 }));
 
