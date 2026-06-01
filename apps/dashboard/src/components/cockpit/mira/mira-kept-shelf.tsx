@@ -33,9 +33,9 @@ export function MiraKeptShelf({ items }: { items: MiraDeskItem[] }) {
       >
         {DESK_COPY.keptTitle}
       </h2>
-      <p style={{ margin: "0 0 10px", fontSize: 12, color: T.ink4 }}>{DESK_COPY.keptSub}</p>
+      <p style={{ margin: "0 0 10px", fontSize: 12, color: T.ink3 }}>{DESK_COPY.keptSub}</p>
       {items.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 13, color: T.ink4 }}>{DESK_COPY.keptEmpty}</p>
+        <p style={{ margin: 0, fontSize: 13, color: T.ink3 }}>{DESK_COPY.keptEmpty}</p>
       ) : (
         <ul
           style={{

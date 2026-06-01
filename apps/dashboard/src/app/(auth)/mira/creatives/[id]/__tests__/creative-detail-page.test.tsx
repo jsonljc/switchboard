@@ -4,11 +4,12 @@ import type { MiraCreativeJobSummary } from "@switchboard/core";
 
 const mockCreative = vi.fn();
 const mockMutate = vi.fn();
+const mockEstimate = vi.fn();
 const mockApprove = { mutate: mockMutate, isPending: false, isError: false };
 vi.mock("@/hooks/use-mira-creative", () => ({ useMiraCreative: () => mockCreative() }));
 vi.mock("@/hooks/use-creative-pipeline", () => ({
   useApproveStage: () => mockApprove,
-  useCostEstimate: () => ({ data: null }),
+  useCostEstimate: () => mockEstimate(),
 }));
 
 import { MiraCreativeDetailPage } from "../creative-detail-page";
@@ -31,6 +32,8 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
   beforeEach(() => {
     mockCreative.mockReset();
     mockMutate.mockReset();
+    mockEstimate.mockReset();
+    mockEstimate.mockReturnValue({ data: null });
   });
 
   it("renders a UGC draft clip (no 'No draft clip yet')", () => {
@@ -92,6 +95,24 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     // Click the "Confirm continue" button — mutation fires with correct args
     fireEvent.click(screen.getByRole("button", { name: "Confirm continue" }));
     expect(mockMutate).toHaveBeenCalledWith({ jobId: "j", action: "continue" });
+  });
+
+  it("continue confirm shows the cost-readback breakdown when an estimate is present", () => {
+    mockEstimate.mockReturnValue({ data: { basic: { cost: 12 } } });
+    mockCreative.mockReturnValue({
+      data: summary({
+        reviewAction: { canContinue: true, canStop: false, label: "review_draft" },
+        draft: { videoUrl: "https://x/p.mp4" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue draft" }));
+    // PR-B financial-breakdown: labeled "Provider cost" readback reusing the
+    // existing `about $X` string on the var(--canvas-2) inset.
+    expect(screen.getByText("Provider cost")).toBeInTheDocument();
+    expect(screen.getByText("about $12")).toBeInTheDocument();
   });
 
   it("stop requires an irreversible confirm before mutating", () => {
