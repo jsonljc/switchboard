@@ -82,10 +82,9 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
 
     const campaignDays = rows.filter((r) => r.campaignId === input.campaignId);
 
-    // Fallback: if the daily Graph pull returned no rows for this campaign (Meta
-    // partial failure / dev run / no spend in window) but the caller supplied weekly
-    // snapshots, preserve the old weekly-snapshot breach count rather than silently
-    // reporting 0.
+    // NOTE: currently DORMANT in production — the audit-runner does not yet pass
+    // `snapshots`, so this branch is a safe-by-default contract for a future
+    // weekly-snapshot source (follow-up). It fails safe (daily/0) when unfed.
     if (campaignDays.length === 0 && input.snapshots && input.snapshots.length > 0) {
       let weekly = 0;
       for (const snap of input.snapshots) {

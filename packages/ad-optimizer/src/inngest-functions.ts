@@ -84,9 +84,13 @@ function fmt(d: Date): string {
 
 // TODO(scale): Both weekly-audit and daily-signal-health crons loop
 // deployments serially. Each deployment runs ~4–6 Graph API calls inside a
-// single Inngest step, so wall time scales O(N). Acceptable up to ~25
-// deployments; revisit (parallelize via Promise.all of step.run) if launch
-// tenancy crosses that threshold.
+// single Inngest step, so wall time scales O(N). With the real
+// MetaCampaignInsightsProvider wired in, cost is now per-campaign (not just
+// per-deployment): each campaign adds ~4 serialized Graph calls (learning
+// inputs + daily breach window) behind the 60s RATE_LIMIT_MS, so total wall
+// time ≈ N_deployments × N_campaigns × 60s. Acceptable at current tenancy;
+// revisit (parallelize via Promise.all of step.run) if launch
+// tenancy crosses ~25 deployments or average campaign count > 5.
 
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());

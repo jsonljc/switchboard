@@ -116,7 +116,7 @@ export class MetaAdsClient {
       { field: "campaign.id", operator: "EQUAL", value: campaignId },
     ]);
     const entityResp = await this.get(
-      `/${this.accountId}/adsets?fields=id,name,campaign_id,effective_status,learning_stage_info&filtering=${encodeURIComponent(filtering)}`,
+      `/${this.accountId}/adsets?fields=id,name,campaign_id,learning_stage_info&filtering=${encodeURIComponent(filtering)}`,
     );
     const entities = (entityResp.data as Record<string, unknown>[]) ?? [];
 
