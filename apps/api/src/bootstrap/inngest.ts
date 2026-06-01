@@ -78,7 +78,10 @@ import type {
 import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 import { createScheduledFollowUpDispatchCron } from "../services/cron/scheduled-follow-up-dispatch.js";
-import type { ScheduledFollowUpDispatchDeps } from "../services/cron/scheduled-follow-up-dispatch.js";
+import type {
+  ScheduledFollowUpDispatchDeps,
+  SubmitScheduledFollowUp,
+} from "../services/cron/scheduled-follow-up-dispatch.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
@@ -116,15 +119,7 @@ export interface RegisterInngestOptions {
    * submits through the same PlatformIngress front door as all other
    * governed work. No parentWorkUnitId — cron work units are trace roots.
    */
-  submitScheduledFollowUp?: (input: {
-    organizationId: string;
-    contactId: string;
-    conversationThreadId: string | null;
-    channel: string;
-    templateIntentClass: string;
-    reason: string;
-    followUpId: string;
-  }) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>;
+  submitScheduledFollowUp?: SubmitScheduledFollowUp;
 }
 
 export async function registerInngest(

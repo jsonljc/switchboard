@@ -669,15 +669,7 @@ export async function buildServer() {
   // --- Contained workflow mode (creative pipeline, Meta lead intake) ---
   let instantFormAdapter: import("@switchboard/ad-optimizer").InstantFormAdapter | undefined;
   let submitScheduledFollowUp:
-    | ((input: {
-        organizationId: string;
-        contactId: string;
-        conversationThreadId: string | null;
-        channel: string;
-        templateIntentClass: string;
-        reason: string;
-        followUpId: string;
-      }) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | import("./services/cron/scheduled-follow-up-dispatch.js").SubmitScheduledFollowUp
     | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");

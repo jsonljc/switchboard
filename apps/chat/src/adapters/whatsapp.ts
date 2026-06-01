@@ -2,8 +2,6 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
 import { withRetry } from "@switchboard/core";
-export type { WhatsAppTemplateConsentReason } from "@switchboard/core";
-export { isWithinWhatsAppWindow, canSendWhatsAppTemplate } from "@switchboard/core";
 import {
   MEDIA_TYPES,
   extractWhatsAppValue,
@@ -12,6 +10,8 @@ import {
   parseUnsupportedMessage,
   parseTextMessage,
 } from "./whatsapp-parsers.js";
+export type { WhatsAppTemplateConsentReason } from "@switchboard/core";
+export { isWithinWhatsAppWindow, canSendWhatsAppTemplate } from "@switchboard/core";
 
 /**
  * Token bucket rate limiter for WhatsApp Business API (80 msg/sec per phone number).

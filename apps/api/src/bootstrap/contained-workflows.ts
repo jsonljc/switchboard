@@ -9,6 +9,8 @@ import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/plat
 import type { ChildWorkRequest } from "@switchboard/core/platform";
 import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
+import { buildFollowUpSendSubmitRequest } from "../services/workflows/followup-send-request.js";
+import type { FollowUpSendSubmitInput } from "../services/cron/scheduled-follow-up-dispatch.js";
 
 interface ContainedWorkflowBootstrapDeps {
   prismaClient: unknown;
@@ -32,15 +34,7 @@ export interface ContainedWorkflowBootstrapResult {
    * Resolves the conversation deployment by intent and submits through
    * PlatformIngress with trigger:"schedule".
    */
-  submitScheduledFollowUp: (input: {
-    organizationId: string;
-    contactId: string;
-    conversationThreadId: string | null;
-    channel: string;
-    templateIntentClass: string;
-    reason: string;
-    followUpId: string;
-  }) => Promise<SubmitWorkResponse>;
+  submitScheduledFollowUp: (input: FollowUpSendSubmitInput) => Promise<SubmitWorkResponse>;
 }
 
 /**
@@ -326,39 +320,15 @@ export async function bootstrapContainedWorkflows(
 
   logger.info("Contained workflow mode registered");
 
-  const submitScheduledFollowUp = async (input: {
-    organizationId: string;
-    contactId: string;
-    conversationThreadId: string | null;
-    channel: string;
-    templateIntentClass: string;
-    reason: string;
-    followUpId: string;
-  }): Promise<SubmitWorkResponse> => {
+  const submitScheduledFollowUp = async (
+    input: FollowUpSendSubmitInput,
+  ): Promise<SubmitWorkResponse> => {
     const deployment = await resolveDeploymentForIntent(
       deploymentResolver,
       input.organizationId,
       "conversation.followup.send",
     );
-    return platformIngress.submit({
-      organizationId: input.organizationId,
-      actor: { id: "system:scheduled-follow-up", type: "system" },
-      intent: "conversation.followup.send",
-      parameters: {
-        contactId: input.contactId,
-        conversationThreadId: input.conversationThreadId,
-        channel: input.channel,
-        templateIntentClass: input.templateIntentClass,
-        reason: input.reason,
-        followUpId: input.followUpId,
-      },
-      trigger: "schedule",
-      surface: { surface: "api" },
-      idempotencyKey: `followup-send:${input.followUpId}`,
-      targetHint: deployment
-        ? { deploymentId: deployment.deploymentId, skillSlug: deployment.skillSlug }
-        : undefined,
-    });
+    return platformIngress.submit(buildFollowUpSendSubmitRequest(input, deployment));
   };
 
   return { instantFormAdapter, submitScheduledFollowUp };

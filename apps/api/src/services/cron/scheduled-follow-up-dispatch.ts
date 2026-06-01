@@ -19,6 +19,10 @@ export interface FollowUpSendSubmitInput {
   followUpId: string;
 }
 
+export type SubmitScheduledFollowUp = (
+  input: FollowUpSendSubmitInput,
+) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>;
+
 export interface ScheduledFollowUpDispatchDeps {
   failure: AsyncFailureContext;
   findDueFollowUps: () => Promise<DueScheduledFollowUp[]>;
