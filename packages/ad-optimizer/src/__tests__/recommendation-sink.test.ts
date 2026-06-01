@@ -271,7 +271,7 @@ describe("runRecommendationSink", () => {
 
 describe("runRecommendationSink — structured spend amount", () => {
   const run = async (rec: RecommendationOutput) => {
-    const emit = vi.fn(async () => ({ surface: "queue" }) as EmitOutcome);
+    const emit: RecommendationEmitter = vi.fn(async () => ({ surface: "queue" }) as EmitOutcome);
     await runRecommendationSink({
       orgId: "org-1",
       auditRunId: "run-1",
@@ -279,7 +279,8 @@ describe("runRecommendationSink — structured spend amount", () => {
       emit,
       emissionContext: { cronId: "c1" },
     });
-    return (emit.mock.calls[0]![0] as RecommendationInput).parameters as Record<string, unknown>;
+    const input = (emit as ReturnType<typeof vi.fn>).mock.calls[0]![0] as RecommendationInput;
+    return input.parameters as Record<string, unknown>;
   };
 
   it("populates parameters.spendAmount from dollarsAtRisk for a financialEffect action", async () => {
