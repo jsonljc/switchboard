@@ -268,3 +268,69 @@ it("falls back to weekly snapshot count when no daily rows are returned", async 
   expect(r.granularity).toBe("weekly");
   expect(r.periodsAboveTarget).toBe(1);
 });
+
+// ── Task 4: real learning phase from material child ad sets ──────────────────
+
+function adset(id: string, status: "LEARNING" | "SUCCESS" | "FAIL" | "UNKNOWN", spend: number) {
+  return {
+    adSetId: id,
+    adSetName: id,
+    campaignId: "c_1",
+    learningStageStatus: status,
+    frequency: 1,
+    spend,
+    conversions: 1,
+    cpa: spend,
+    roas: 0,
+    inlineLinkClickCtr: 1,
+  };
+}
+function providerWithAdSets(rows: ReturnType<typeof adset>[]) {
+  const adsClient = {
+    getCampaignInsights: vi.fn(async () => [
+      { campaignId: "c_1", effectiveStatus: "ACTIVE", conversions: 7 } as never,
+    ]),
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+    getAdSetLearningInputs: vi.fn(async () => rows),
+  };
+  return new MetaCampaignInsightsProvider(adsClient as never);
+}
+
+it("learningPhase=true when a material child ad set is LEARNING", async () => {
+  const p = providerWithAdSets([adset("a", "LEARNING", 300), adset("b", "SUCCESS", 700)]); // a=30%
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(true);
+});
+
+it("learningPhase=true when status coverage < 80% of spend", async () => {
+  const p = providerWithAdSets([adset("a", "UNKNOWN", 500), adset("b", "SUCCESS", 500)]); // 50% known
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(true);
+});
+
+it("learningPhase=false when all material children SUCCESS and coverage ok", async () => {
+  const p = providerWithAdSets([adset("a", "SUCCESS", 600), adset("b", "SUCCESS", 400)]);
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(false);
+  expect(out.optimizationEvents).toBe(7); // still read from insights
+});
+
+it("learningPhase=false when only an immaterial (5% spend) ad set is UNKNOWN", async () => {
+  const p = providerWithAdSets([adset("a", "UNKNOWN", 50), adset("b", "SUCCESS", 950)]); // 95% known
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(false); // a tiny unknown ad set must not overprotect the account
+});
+
+it("learningPhase=false when client lacks getAdSetLearningInputs (graceful)", async () => {
+  const adsClient = {
+    getCampaignInsights: vi.fn(async () => [
+      { campaignId: "c_1", effectiveStatus: "ACTIVE", conversions: 3 } as never,
+    ]),
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+  };
+  const p = new MetaCampaignInsightsProvider(adsClient as never);
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(false);
+});

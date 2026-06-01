@@ -6,6 +6,9 @@ import type {
   WeeklyCampaignSnapshot,
 } from "@switchboard/schemas";
 
+const MATERIAL_CHILD_SPEND_SHARE = 0.1;
+const MIN_LEARNING_COVERAGE = 0.8;
+
 export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
   private readonly adsClient: AdsClientInterface;
 
@@ -29,12 +32,32 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
 
     const match = insights.find((i) => i.campaignId === input.campaignId);
 
+    const learningPhase = await this.deriveLearningPhase(input.campaignId);
+
     return {
       effectiveStatus: match?.effectiveStatus ?? "UNKNOWN",
-      learningPhase: false,
+      learningPhase,
       lastModifiedDays: 0,
       optimizationEvents: match?.conversions ?? 0,
     };
+  }
+
+  private async deriveLearningPhase(campaignId: string): Promise<boolean> {
+    if (!this.adsClient.getAdSetLearningInputs) return false;
+    const adSets = await this.adsClient.getAdSetLearningInputs(campaignId);
+    const totalSpend = adSets.reduce((s, a) => s + a.spend, 0);
+    if (totalSpend <= 0 || adSets.length === 0) return false;
+
+    const knownSpend = adSets
+      .filter((a) => a.learningStageStatus !== "UNKNOWN")
+      .reduce((s, a) => s + a.spend, 0);
+    if (knownSpend / totalSpend < MIN_LEARNING_COVERAGE) return true; // incomplete coverage ⇒ protect
+
+    const anyMaterialChildLearning = adSets.some(
+      (a) =>
+        a.spend / totalSpend >= MATERIAL_CHILD_SPEND_SHARE && a.learningStageStatus === "LEARNING",
+    );
+    return anyMaterialChildLearning;
   }
 
   async getTargetBreachStatus(input: {
