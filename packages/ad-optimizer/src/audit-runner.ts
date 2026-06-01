@@ -45,12 +45,21 @@ export interface AdsClientInterface {
   getCampaignInsights(params: {
     dateRange: { since: string; until: string };
     fields: string[];
+    timeIncrement?: number;
   }): Promise<CampaignInsight[]>;
   getAdSetInsights(params: {
     dateRange: { since: string; until: string };
     fields: string[];
+    campaignId?: string;
   }): Promise<unknown[]>;
   getAccountSummary(): Promise<AccountSummary>;
+  /**
+   * Optional: per-ad-set learning status + spend for a campaign, read from the
+   * Meta entity edge (`learning_stage_info`) joined with insights spend. Used by
+   * MetaCampaignInsightsProvider to derive campaign-level learning phase. Optional
+   * so existing fakes/clients that don't implement it degrade to learningPhase:false.
+   */
+  getAdSetLearningInputs?(campaignId: string): Promise<AdSetLearningInput[]>;
 }
 
 export interface AuditConfig {
