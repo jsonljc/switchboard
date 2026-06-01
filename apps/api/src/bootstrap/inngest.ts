@@ -23,6 +23,7 @@ import {
   PrismaRecommendationEmissionMirror,
   PrismaRecommendationOutcomeStore,
   PrismaAttributableRecommendationStore,
+  PrismaScheduledFollowUpStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -76,6 +77,11 @@ import type {
 } from "../services/cron/reconciliation.js";
 import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
+import { createScheduledFollowUpDispatchCron } from "../services/cron/scheduled-follow-up-dispatch.js";
+import type {
+  ScheduledFollowUpDispatchDeps,
+  SubmitScheduledFollowUp,
+} from "../services/cron/scheduled-follow-up-dispatch.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
@@ -107,6 +113,13 @@ export interface RegisterInngestOptions {
    * NoopOperatorAlerter when not provided (development / test environments).
    */
   operatorAlerter?: OperatorAlerter;
+  /**
+   * Top-level submit closure for the scheduled-follow-up dispatch cron.
+   * Built in bootstrapContainedWorkflows and threaded here so the cron
+   * submits through the same PlatformIngress front door as all other
+   * governed work. No parentWorkUnitId — cron work units are trace roots.
+   */
+  submitScheduledFollowUp?: SubmitScheduledFollowUp;
 }
 
 export async function registerInngest(
@@ -534,6 +547,22 @@ export async function registerInngest(
     },
   };
 
+  // Scheduled follow-up dispatch cron dependencies
+  const followUpStore = new PrismaScheduledFollowUpStore(app.prisma);
+  const scheduledFollowUpDispatchDeps: ScheduledFollowUpDispatchDeps = {
+    failure: asyncFailure,
+    findDueFollowUps: () => followUpStore.findDue(new Date(), 100),
+    submitFollowUpSend: (input) => {
+      if (!options.submitScheduledFollowUp) {
+        throw new Error("submitScheduledFollowUp not wired");
+      }
+      return options.submitScheduledFollowUp(input);
+    },
+    markSent: (id) => followUpStore.markSent(id),
+    markSkipped: (id, reason) => followUpStore.markSkipped(id, reason),
+    markFailed: (id, error, nextRetryAt) => followUpStore.markFailed(id, error, nextRetryAt),
+  };
+
   // PCD Registry backfill cron dependencies
   const productIdentityStore = new PrismaProductIdentityStore(app.prisma);
 
@@ -799,6 +828,7 @@ export async function registerInngest(
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
+      createScheduledFollowUpDispatchCron(scheduledFollowUpDispatchDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
       createLifecycleStalledSweepCron({
         failure: asyncFailure,

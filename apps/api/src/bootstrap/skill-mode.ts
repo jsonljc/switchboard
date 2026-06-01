@@ -80,6 +80,7 @@ export async function bootstrapSkillMode(
     createCalendarBookToolFactory,
     createEscalateToolFactory,
     createDelegateToolFactory,
+    createScheduleFollowUpToolFactory,
     BookingFailureHandler,
     createAgentDeploymentGovernanceResolver,
     InMemoryGovernancePostureCache,
@@ -105,6 +106,7 @@ export async function bootstrapSkillMode(
     PrismaDeploymentStore,
     PrismaGovernanceVerdictStore,
     PrismaKnowledgeEntryStore,
+    PrismaScheduledFollowUpStore,
     createPrismaApprovedComplianceClaimStore,
     createPrismaConsentStore,
     createPrismaContactConsentReader,
@@ -310,6 +312,9 @@ export async function bootstrapSkillMode(
 
   const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);
   const crmWriteFactory = createCrmWriteToolFactory(opportunityStore, activityStore);
+  const scheduleFollowUpFactory = createScheduleFollowUpToolFactory({
+    followUpStore: new PrismaScheduledFollowUpStore(prismaClient),
+  });
 
   // Per-request tool factories — the executor materializes a fresh tool per
   // execution with a trusted SkillRequestContext closed in. These are the
@@ -321,6 +326,7 @@ export async function bootstrapSkillMode(
     ["escalate", escalateFactory],
   ]);
   if (delegateFactory) toolFactories.set("delegate", delegateFactory);
+  toolFactories.set("follow-up", scheduleFollowUpFactory);
 
   // Schema-only tool map for Anthropic tool registration & GovernanceHook.
   // Trust-bound tools are materialized with a synthetic context here to
@@ -337,6 +343,7 @@ export async function bootstrapSkillMode(
     ["escalate", escalateFactory(SCHEMA_ONLY_CTX)],
   ]);
   if (delegateFactory) toolsMap.set("delegate", delegateFactory(SCHEMA_ONLY_CTX));
+  toolsMap.set("follow-up", scheduleFollowUpFactory(SCHEMA_ONLY_CTX));
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
@@ -671,8 +678,10 @@ export async function bootstrapSkillMode(
   // inert today because /simulate supplies no workUnitId — this makes that by-design.)
   const simulationToolFactories = new Map(toolFactories);
   simulationToolFactories.delete("delegate");
+  simulationToolFactories.delete("follow-up");
   const simulationToolsMap = new Map(toolsMap);
   simulationToolsMap.delete("delegate");
+  simulationToolsMap.delete("follow-up");
   // Safety gate and claim classifier shared instances — same resolver/cache so simulation
   // shares posture warm-hits from the main executor. SimulationPolicyHook trails last to
   // block any write operations that survive governance filtering.

@@ -51,6 +51,7 @@ tools:
   - calendar-book
   - escalate
   - delegate
+  - follow-up
 
 context:
   # Advisory at runtime: required:false so a missing scope degrades to empty
@@ -270,6 +271,23 @@ Do **not**:
 - Promise the customer a specific ad or timeline — say only that you'll have the team put together some ideas.
 
 Provide `productDescription` (the treatment/offer) and `targetAudience` (who it's for), drawn from what the lead told you.
+
+## Scheduling a follow-up (follow-up)
+
+When a qualified lead goes quiet or hesitant and a later nudge would genuinely help, schedule ONE follow-up with `follow-up.followup.schedule`. This stores a reminder — it does **not** message the customer now, and it only sends later if consent, the WhatsApp window, and an approved template all allow.
+
+Use it **only** when:
+
+- The lead is qualified/interested but has stopped responding or asked to think about it, and
+- You have already answered their immediate question.
+
+Do **not**:
+
+- Schedule more than one follow-up per conversation.
+- Use it instead of `escalate` (use escalate for human help / out-of-scope / frustration).
+- Promise the customer a specific message or time.
+
+Provide `reason` (why you're following up) and `delay` (`in_1_day`, `in_3_days`, or `in_1_week`). Optionally add a short `note` for the team.
 
 ## Tone
 
