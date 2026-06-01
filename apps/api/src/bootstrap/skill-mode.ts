@@ -17,6 +17,7 @@ import type {
 import type { ConsentService, ContactConsentReader, PlaybookReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
+import { resolveModelRouter } from "./model-router-factory.js";
 
 export interface SkillModeBootstrapResult {
   simulationExecutor: SkillExecutor;
@@ -544,10 +545,16 @@ export async function bootstrapSkillMode(
     pdpaConsentGateHook,
     whatsAppWindowGateHook,
   ];
+  const modelRouter = resolveModelRouter();
+  logger.info(
+    modelRouter
+      ? "ModelRouter ENABLED — per-turn model tiering active for Alex"
+      : "ModelRouter disabled (set ALEX_MODEL_ROUTER_ENABLED=true to enable) — adapter default model in use",
+  );
   const skillExecutor = new SkillExecutorImpl(
     adapter,
     toolsMap,
-    undefined,
+    modelRouter,
     hooks,
     undefined,
     toolFactories,

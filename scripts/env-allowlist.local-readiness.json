@@ -2,6 +2,7 @@
   "$schema-note": "Every env var the code reads must appear in exactly one category. New uncategorized vars cause check-env-completeness.ts to fail.",
   "required_in_env_example": [
     "ALERT_WEBHOOK_URL",
+    "ALEX_MODEL_ROUTER_ENABLED",
     "ALLOW_SELF_APPROVAL",
     "ANTHROPIC_API_KEY",
     "API_KEYS",
