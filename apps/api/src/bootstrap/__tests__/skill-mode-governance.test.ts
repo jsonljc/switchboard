@@ -41,7 +41,9 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   ContextResolverImpl: vi.fn().mockImplementation(() => ({
     resolve: vi.fn(async () => ({ variables: {}, metadata: [] })),
   })),
-  createCrmQueryTool: vi.fn(() => ({ operations: { get: { effectCategory: "read" } } })),
+  createCrmQueryToolFactory: vi.fn(() => () => ({
+    operations: { get: { effectCategory: "read" } },
+  })),
   createCrmWriteToolFactory: vi.fn(() => () => ({
     operations: { upsert: { effectCategory: "write" } },
   })),

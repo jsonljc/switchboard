@@ -5,6 +5,9 @@ import type { PrismaClient } from "@prisma/client";
 const SAMPLE_POLISHED =
   "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
 const SAMPLE_UGC = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4";
+const SAMPLE_KEPT = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
+const SAMPLE_KEPT_THUMB =
+  "https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg";
 
 /**
  * Seeds two demo creative drafts (one polished, one UGC) for `orgId` so the
@@ -35,6 +38,8 @@ export async function seedMiraDemoCreatives(prisma: PrismaClient, orgId: string)
       ugcPhase: null as string | null,
       ugcPhaseOutputs: null as unknown,
       productDescription: "Spring glow facial — limited promo",
+      reviewDecision: null as string | null,
+      reviewDecidedAt: null as Date | null,
     },
     {
       id: "dev_mira_demo_ugc",
@@ -45,6 +50,26 @@ export async function seedMiraDemoCreatives(prisma: PrismaClient, orgId: string)
       ugcPhase: "complete",
       ugcPhaseOutputs: { production: { assets: [{ outputs: { videoUrl: SAMPLE_UGC } }] } },
       productDescription: "UGC testimonial — first-visit offer",
+      reviewDecision: null as string | null,
+      reviewDecidedAt: null as Date | null,
+    },
+    {
+      id: "dev_mira_demo_kept",
+      taskId: "dev_mira_demo_task_kept",
+      mode: "polished",
+      currentStage: "complete",
+      stageOutputs: {
+        production: {
+          assembledVideos: [
+            { videoUrl: SAMPLE_KEPT, thumbnailUrl: SAMPLE_KEPT_THUMB, duration: 20 },
+          ],
+        },
+      },
+      ugcPhase: null as string | null,
+      ugcPhaseOutputs: null as unknown,
+      productDescription: "Hydration reset treatment — book before the end of the month",
+      reviewDecision: "kept" as string | null,
+      reviewDecidedAt: new Date("2026-05-30T10:00:00Z") as Date | null,
     },
   ];
 
@@ -69,6 +94,8 @@ export async function seedMiraDemoCreatives(prisma: PrismaClient, orgId: string)
         stageOutputs: d.stageOutputs,
         ugcPhase: d.ugcPhase,
         ugcPhaseOutputs: d.ugcPhaseOutputs as object,
+        reviewDecision: d.reviewDecision,
+        reviewDecidedAt: d.reviewDecidedAt,
       },
       create: {
         id: d.id,
@@ -83,8 +110,10 @@ export async function seedMiraDemoCreatives(prisma: PrismaClient, orgId: string)
         stageOutputs: d.stageOutputs,
         ugcPhase: d.ugcPhase,
         ugcPhaseOutputs: d.ugcPhaseOutputs as object,
+        reviewDecision: d.reviewDecision,
+        reviewDecidedAt: d.reviewDecidedAt,
       },
     });
   }
-  console.warn(`seedMiraDemoCreatives: seeded 2 demo drafts for ${orgId}`);
+  console.warn(`seedMiraDemoCreatives: seeded 3 demo drafts for ${orgId}`);
 }

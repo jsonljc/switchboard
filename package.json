@@ -36,7 +36,8 @@
     "dashboard:release-check": "pnpm dashboard:preflight && pnpm --filter @switchboard/dashboard test && pnpm --filter @switchboard/dashboard build",
     "classifier-eval": "pnpm --filter @switchboard/core classifier-eval",
     "eval:classifier": "tsx evals/claim-classifier/run-eval.ts",
-    "eval:alex-conversation": "tsx evals/alex-conversation/run-eval.ts"
+    "eval:alex-conversation": "tsx evals/alex-conversation/run-eval.ts",
+    "eval:governance": "tsx evals/governance-decision/run-eval.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

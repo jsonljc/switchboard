@@ -37,6 +37,7 @@ export function buildMiraCreativeReadModel(
       source: { engine: "legacy_creative_job", mode: job.mode === "ugc" ? "ugc" : "polished" },
       createdAt: new Date(job.createdAt).toISOString(),
       updatedAt: new Date(job.updatedAt).toISOString(),
+      reviewDecision: job.reviewDecision ?? null,
     };
   });
 

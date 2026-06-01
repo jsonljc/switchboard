@@ -186,35 +186,44 @@ export function InboxScreen() {
 
   return (
     <div className="inbox-page">
-      <header className="inbox-pagehead">
-        <h1>inbox</h1>
-        <span className="inbox-pagehead-count">
-          {counts.total === 0
-            ? "That's everything"
-            : `${counts.total} ${counts.total === 1 ? "thing needs" : "things need"} you`}
-        </span>
-      </header>
-      <InboxFilterRow counts={counts} selected={agentFilter} onSelect={setAgentFilter} />
+      <div className="inbox-list">
+        <header className="inbox-pagehead">
+          <h1>inbox</h1>
+          <span className="inbox-pagehead-count">
+            {counts.total === 0
+              ? "That's everything"
+              : `${counts.total} ${counts.total === 1 ? "thing needs" : "things need"} you`}
+          </span>
+        </header>
+        <InboxFilterRow counts={counts} selected={agentFilter} onSelect={setAgentFilter} />
 
-      {decisions.length === 0 ? (
-        <InboxEmptyState
-          filtered={agentFilter !== null}
-          agentName={agentFilter ? AGENT_REGISTRY[agentFilter]?.displayName : undefined}
-        />
-      ) : (
-        <div className="inbox-queue">
-          {decisions.map((d) => (
-            <InboxDecisionItem
-              key={d.id}
-              decision={d}
-              onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
-              onOpenAgent={setPanelAgent}
-            />
-          ))}
+        {decisions.length === 0 ? (
+          <InboxEmptyState
+            filtered={agentFilter !== null}
+            agentName={agentFilter ? AGENT_REGISTRY[agentFilter]?.displayName : undefined}
+          />
+        ) : (
+          <div className="inbox-queue">
+            {decisions.map((d) => (
+              <InboxDecisionItem
+                key={d.id}
+                decision={d}
+                onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
+                onOpenAgent={setPanelAgent}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop docked-detail placeholder — display:none below lg, so mobile is unaffected */}
+      {!open && (
+        <div className="inbox-detail-empty" aria-hidden="true">
+          Select an item to see details
         </div>
       )}
 
-      {/* Detail layer */}
+      {/* Detail layer (scrim hidden at lg; sheets dock into the right pane at lg) */}
       {open && (
         <div className="scrim" data-open="true" aria-hidden="true" onClick={() => setOpen(null)} />
       )}

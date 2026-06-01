@@ -3,12 +3,17 @@
 // is intentionally no composer placeholder here. A footer note explains where
 // drafts originate instead.
 
-// Ink-violet identity accent. Matches AGENT_REGISTRY mira accent hsl(265 30% 35%).
+// Mira identity accent. Adopts the canonical per-agent token --agent-mira
+// (270 45% 58%) — violet is IDENTITY ONLY (avatar, tints, identity edges),
+// never on action buttons (the cockpit uses the single amber T.amber for
+// committing actions). Mirrors RILEY_ACCENT's shape; unlike Riley's still-
+// hardcoded hex this consumes the live token, matching the shipped Mira
+// agent-panel. (The old "hsl(265 30% 35%)" note was wrong — no such token.)
 export const MIRA_ACCENT = {
-  base: "#5B4B8A" /* ink violet */,
-  deep: "#3C315C",
-  soft: "#D8D2E8",
-  paper: "#EFECF6",
+  base: "hsl(var(--agent-mira))",
+  deep: "hsl(var(--agent-mira-deep))",
+  soft: "hsl(var(--agent-mira) / 0.30)",
+  paper: "hsl(var(--agent-mira-tint))",
 } as const;
 
 export const MIRA_MISSION_SUBTITLE = "Creative drafts — for your review";

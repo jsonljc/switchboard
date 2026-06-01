@@ -3,6 +3,7 @@ import type { BusinessFacts } from "@switchboard/schemas";
 import type { SkillServices, SkillStores } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
 import { renderBusinessFacts } from "../context-resolver.js";
+import { sanitizeContactForPrompt } from "../pii.js";
 
 /**
  * PR-3.2c: alex returns parameters AND the surfaced pattern IDs so they
@@ -34,13 +35,12 @@ export const alexBuilder = async (
 ): Promise<AlexBuilderResult> => {
   const contactId = config.contactId;
   const orgId = config.orgId;
+  let resolvedContactId = contactId;
 
   let opportunities = await stores.opportunityStore.findActiveByContact(orgId, contactId);
 
   // Auto-create Contact + Opportunity for new leads
   if (opportunities.length === 0) {
-    let resolvedContactId = contactId;
-
     // Check if Contact exists; if not, create one
     const existingContact = await stores.contactStore.findById(orgId, contactId);
     if (!existingContact && stores.contactStore.create) {
@@ -86,7 +86,12 @@ export const alexBuilder = async (
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   )[0]!;
 
-  const leadProfile = await stores.contactStore.findById(orgId, contactId);
+  // Guard: NEVER call findById with an undefined id. If no contact resolved
+  // (config.contactId absent AND no mint), LEAD_PROFILE is null; the existing
+  // no-opportunity ParameterResolutionError still escalates.
+  const leadProfile = resolvedContactId
+    ? await stores.contactStore.findById(orgId, resolvedContactId)
+    : null;
 
   let BUSINESS_FACTS = "";
   if (stores.businessFactsStore) {
@@ -110,7 +115,7 @@ export const alexBuilder = async (
       agentId: "alex",
       deploymentId: config.deploymentId,
       query: config.message ?? "",
-      contactId: config.contactId,
+      contactId: resolvedContactId,
       pilotMode: config.pilotMode ?? false,
     });
     OUTCOME_PATTERNS = builtCtx.outcomePatternContext;
@@ -120,7 +125,7 @@ export const alexBuilder = async (
   const parameters = {
     BUSINESS_NAME: ctx.persona.businessName,
     OPPORTUNITY_ID: opportunity.id,
-    LEAD_PROFILE: leadProfile,
+    LEAD_PROFILE: sanitizeContactForPrompt(leadProfile),
     BUSINESS_FACTS,
     OUTCOME_PATTERNS,
     PERSONA_CONFIG: {
@@ -131,6 +136,8 @@ export const alexBuilder = async (
       bookingLink: ctx.persona.bookingLink ?? "",
       customInstructions: ctx.persona.customInstructions ?? "",
     },
+    // trusted runtime value read by composeSkillRequestContext, not a prompt token
+    contactId: resolvedContactId,
   };
 
   return {

@@ -1,8 +1,14 @@
+/* eslint-disable max-lines -- this file crossed the 600-line guideline when the
+   D1 claim() idempotency primitive was added (PR #780). Suggested seam: extract
+   the row<->trace serialization (buildWorkTraceCreateData/mapRowToTrace/
+   parseQualificationSignals) into a prisma-work-trace-serde module. Remove this
+   disable when the file is split. */
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
   WorkTrace,
   WorkTraceStore,
   WorkTraceUpdateResult,
+  WorkTraceClaimResult,
   WorkTraceLockDiagnostic,
   WorkTraceReadResult,
   IntegrityVerdict,
@@ -85,6 +91,68 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
     } catch (err: unknown) {
       if (this.isUniqueConstraintError(err) && trace.idempotencyKey) {
         return;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * D1 idempotency claim: insert a `running` WorkTrace BEFORE the domain
+   * mutation. Mirrors persist() (trace + paired anchor in one $transaction) but
+   * REPORTS the idempotency-key P2002 as `{ claimed: false }` instead of
+   * swallowing it to void — that return value is the concurrency lock for
+   * PlatformIngress's claim-first execute path. Non-P2002 errors throw so the
+   * caller can retry.
+   */
+  async claim(trace: WorkTrace): Promise<WorkTraceClaimResult> {
+    const traceVersion = 1;
+    const hashInputVersion = trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;
+    const contentHash = computeWorkTraceContentHash(trace, traceVersion);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.workTrace.create({
+          data: this.buildWorkTraceCreateData(trace, {
+            traceVersion,
+            contentHash,
+            hashInputVersion,
+          }),
+        });
+
+        await this.auditLedger.record(
+          {
+            eventType: "work_trace.persisted",
+            actorType: trace.actor.type === "service" ? "service_account" : trace.actor.type,
+            actorId: trace.actor.id,
+            entityType: "work_trace",
+            entityId: trace.workUnitId,
+            riskCategory: "low",
+            visibilityLevel: "system",
+            summary: `WorkTrace ${trace.workUnitId} claimed at v${traceVersion}`,
+            organizationId: trace.organizationId,
+            traceId: trace.traceId,
+            snapshot: {
+              workUnitId: trace.workUnitId,
+              traceId: trace.traceId,
+              contentHash,
+              traceVersion,
+              hashAlgorithm: "sha256",
+              hashVersion: hashInputVersion,
+            },
+          },
+          { tx },
+        );
+      });
+      return { claimed: true };
+    } catch (err: unknown) {
+      // A P2002 here is treated as "lost the idempotency-key claim". We do not
+      // inspect err.meta.target to confirm it was the (org, idempotencyKey)
+      // unique rather than the workUnitId @unique — intentional, and identical
+      // to persist()'s guard above: workUnitId is a fresh per-submit cuid (a PK
+      // collision is not reachable), and failing closed on the unlikely case is
+      // the safe direction (it can never cause a double-apply).
+      if (this.isUniqueConstraintError(err) && trace.idempotencyKey) {
+        return { claimed: false };
       }
       throw err;
     }

@@ -217,14 +217,10 @@ When the lead expresses readiness to book or schedule:
    - If reply is ambiguous ("the later one", "morning", "around 2"), ask a clarification question — do NOT guess or call booking.create
 
 4. Once a slot is confirmed, call `calendar-book.booking.create` with:
-   - orgId: organization ID from context
-   - contactId: contact ID from context
    - service: the discussed service
    - slotStart: selected slot start time
    - slotEnd: selected slot end time
    - calendarId: "primary"
-   - attendeeName: from lead profile if known
-   - attendeeEmail: from lead profile if known
 
 5. Confirm naturally:
    "You're all set! I've booked [service] for [day] at [time]. You'll receive a calendar invite shortly."

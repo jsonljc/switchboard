@@ -1,4 +1,10 @@
-import type { AuditEntry, Policy, ActivityRow } from "@switchboard/schemas";
+import type {
+  AuditEntry,
+  Policy,
+  ActivityRow,
+  MiraBriefRequest,
+  MiraBriefResult,
+} from "@switchboard/schemas";
 import type {
   PendingApproval,
   SimulateResult,
@@ -12,7 +18,7 @@ import type {
   WinsViewModel,
 } from "@/lib/agent-home/types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
-import type { MiraCreativeJobSummary, MiraCreativeCounts } from "@switchboard/core";
+import type { MiraCreativeJobSummary, MiraCreativeCounts, MiraDeskModel } from "@switchboard/core";
 import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardClientCore } from "./core";
 
@@ -348,6 +354,34 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   async listMiraCreatives(limit = 20): Promise<MiraFeedResponse> {
     const path = `/api/dashboard/agents/mira/creatives?limit=${encodeURIComponent(String(limit))}`;
     return this.request<MiraFeedResponse>(path);
+  }
+
+  /** Reads the Mira Director's Desk read-model (read-only, org-scoped). */
+  async getMiraDesk(): Promise<{ desk: MiraDeskModel }> {
+    return this.request<{ desk: MiraDeskModel }>("/api/dashboard/agents/mira/desk");
+  }
+
+  /** Mira Keep/Pass review decision (draft-only). `null` un-keeps. */
+  async setCreativeReviewDecision(
+    id: string,
+    decision: "kept" | "passed" | null,
+  ): Promise<{ id: string; decision: "kept" | "passed" | null }> {
+    return this.request(`/api/dashboard/agents/mira/creatives/${encodeURIComponent(id)}/decision`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    });
+  }
+
+  /** createCreativeDraftRequest — draft-only open-brief mutation (Phase 2). */
+  async createCreativeDraftRequest(
+    brief: MiraBriefRequest,
+    idempotencyKey: string,
+  ): Promise<MiraBriefResult> {
+    return this.request<MiraBriefResult>("/api/dashboard/agents/mira/brief", {
+      method: "POST",
+      body: JSON.stringify(brief),
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
   }
 
   /**

@@ -125,6 +125,7 @@ export const scopedKeys = (orgId: string) => ({
     all: () => [orgId, "miraFeed"] as const,
     list: () => [orgId, "miraFeed", "list"] as const,
     detail: (id: string) => [orgId, "miraFeed", "detail", id] as const,
+    desk: () => [orgId, "miraFeed", "desk"] as const,
   },
   adOptimizer: {
     all: () => [orgId, "adOptimizer"] as const,

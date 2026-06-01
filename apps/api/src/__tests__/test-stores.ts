@@ -1,3 +1,8 @@
+/* eslint-disable max-lines -- this test-fixtures aggregator crossed the 600-line
+   guideline when the D1 claim-first WorkTrace store fixtures (claim + finalize
+   lifecycle on InMemory/ObservableWorkTraceStore) were added (PR #780). Suggested
+   seam: extract the WorkTrace store fixtures into test-stores-work-trace.ts and
+   re-export. Remove this disable when split. */
 // Shared in-memory store stubs used by buildTestServer.
 //
 // Extracted from test-server.ts so the latter stays under the 600-line
@@ -28,6 +33,7 @@ import type {
   WorkTraceStore,
   WorkTraceUpdateResult,
   WorkTraceReadResult,
+  WorkTraceClaimResult,
 } from "@switchboard/core/platform";
 import type {
   Contact,
@@ -48,6 +54,21 @@ export class InMemoryWorkTraceStore implements WorkTraceStore {
 
   async persist(trace: WorkTrace): Promise<void> {
     this.traces.set(trace.workUnitId, { ...trace });
+  }
+
+  async claim(trace: WorkTrace): Promise<WorkTraceClaimResult> {
+    if (trace.idempotencyKey) {
+      for (const existing of this.traces.values()) {
+        if (
+          existing.organizationId === trace.organizationId &&
+          existing.idempotencyKey === trace.idempotencyKey
+        ) {
+          return { claimed: false };
+        }
+      }
+    }
+    this.traces.set(trace.workUnitId, { ...trace });
+    return { claimed: true };
   }
 
   async getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadResult | null> {
@@ -78,7 +99,7 @@ export class InMemoryWorkTraceStore implements WorkTraceStore {
 }
 
 /**
- * Test-only WorkTraceStore wrapper that records every persist() call so route
+ * Test-only WorkTraceStore wrapper that records each ingress WorkTrace so route
  * tests can verify ingress-path flow. Subclasses InMemoryWorkTraceStore to
  * avoid runtime monkey-patching of the base store — the wrapper itself is the
  * observation point.
@@ -86,6 +107,13 @@ export class InMemoryWorkTraceStore implements WorkTraceStore {
  * Used by operator-direct ingress route tests (Wave 2 Phase 1b) to assert
  * `intent`, `mode`, `outcome`, `organizationId` on the most recent persisted
  * trace.
+ *
+ * D1 claim-first: a keyed operator-mutation submit now CREATES the WorkTrace via
+ * claim() (outcome `running`) and FINALIZES it via update() (running ->
+ * completed/failed). To keep "exactly one WorkTrace per route call" semantics,
+ * we count a trace creation on persist() (no-key path) OR a successful claim()
+ * — never on the finalize update — and refresh the recorded outcome when the
+ * matching trace is finalized.
  */
 export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
   public lastPersistedSummary: {
@@ -96,8 +124,9 @@ export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
     error?: Pick<ExecutionError, "code" | "message">;
   } | null = null;
   public persistCount = 0;
+  private lastRecordedWorkUnitId: string | null = null;
 
-  async persist(trace: WorkTrace): Promise<void> {
+  private record(trace: WorkTrace): void {
     this.lastPersistedSummary = {
       intent: trace.intent,
       mode: trace.mode,
@@ -105,13 +134,39 @@ export class ObservableWorkTraceStore extends InMemoryWorkTraceStore {
       organizationId: trace.organizationId,
       ...(trace.error ? { error: { code: trace.error.code, message: trace.error.message } } : {}),
     };
+    this.lastRecordedWorkUnitId = trace.workUnitId;
+  }
+
+  async persist(trace: WorkTrace): Promise<void> {
+    this.record(trace);
     this.persistCount += 1;
     await super.persist(trace);
+  }
+
+  async claim(trace: WorkTrace) {
+    const result = await super.claim(trace);
+    if (result.claimed) {
+      this.record(trace);
+      this.persistCount += 1;
+    }
+    return result;
+  }
+
+  async update(workUnitId: string, fields: Partial<WorkTrace>): Promise<WorkTraceUpdateResult> {
+    const result = await super.update(workUnitId, fields);
+    // Refresh the recorded summary's outcome/error when THIS trace is finalized
+    // (running -> terminal). Scoped to the trace we recorded so unrelated
+    // lifecycle/approval updates don't clobber the ingress observation.
+    if (result.ok && workUnitId === this.lastRecordedWorkUnitId) {
+      this.record(result.trace);
+    }
+    return result;
   }
 
   resetCounters(): void {
     this.lastPersistedSummary = null;
     this.persistCount = 0;
+    this.lastRecordedWorkUnitId = null;
   }
 }
 

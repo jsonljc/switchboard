@@ -20,6 +20,7 @@ function makeForbiddenUpdateSpy() {
 function makeWorkTraceStore() {
   return {
     persist: vi.fn(),
+    claim: vi.fn().mockResolvedValue({ claimed: true }),
     getByWorkUnitId: vi.fn().mockResolvedValue({
       trace: { workUnitId: "wt_1", parameters: { message: { text: "x" } } },
       integrity: { status: "ok" as const },

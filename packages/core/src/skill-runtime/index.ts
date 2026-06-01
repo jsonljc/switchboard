@@ -29,7 +29,7 @@ export {
 } from "./governance.js";
 export { ParameterResolutionError, validateBuilderRegistration } from "./parameter-builder.js";
 export {
-  createCrmQueryTool,
+  createCrmQueryToolFactory,
   createCrmWriteToolFactory,
   createCalendarBookToolFactory,
   createWebScannerTool,

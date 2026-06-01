@@ -4,6 +4,9 @@ import { useState } from "react";
 import type { MiraReviewAction } from "@switchboard/core";
 import { useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
 import { useHalt } from "@/components/layout/halt/halt-context";
+import { useReviewDecision } from "@/hooks/use-review-decision";
+import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
+import { T } from "@/components/cockpit/tokens";
 
 export function MiraClipActions({
   jobId,
@@ -16,6 +19,7 @@ export function MiraClipActions({
   onResolve: (jobId: string) => void;
 }) {
   const approve = useApproveStage();
+  const decide = useReviewDecision();
   const { halted } = useHalt();
   const [confirm, setConfirm] = useState<null | "continue" | "stop">(null);
   const estimateQ = useCostEstimate(jobId, reviewAction.canContinue && confirm === "continue");
@@ -38,7 +42,9 @@ export function MiraClipActions({
     border: "none",
     color: "#fff",
     fontSize: 13,
+    fontWeight: 600,
     cursor: "pointer",
+    fontFamily: "inherit",
   } as const;
 
   if (confirm === "continue") {
@@ -48,7 +54,7 @@ export function MiraClipActions({
           display: "flex",
           flexDirection: "column",
           gap: 6,
-          background: "rgba(60,49,92,0.95)",
+          background: "rgba(14,12,10,0.92)",
           padding: 10,
           borderRadius: 10,
           maxWidth: 220,
@@ -60,7 +66,12 @@ export function MiraClipActions({
         </span>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            style={{ ...btn, background: "#fff", color: "#3C315C" }}
+            style={{
+              ...btn,
+              background: T.amber,
+              color: "#fff",
+              border: `1px solid ${T.amberDeep}`,
+            }}
             disabled={approve.isPending}
             onClick={() => run("continue")}
           >
@@ -99,7 +110,7 @@ export function MiraClipActions({
         </span>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            style={{ ...btn, background: "#fff", color: "#7A2E2E" }}
+            style={{ ...btn, background: "#fff", color: T.red }}
             disabled={approve.isPending}
             onClick={() => run("stop")}
           >
@@ -121,6 +132,32 @@ export function MiraClipActions({
     );
   }
 
+  if (reviewAction.label === "review_draft") {
+    const decideAndResolve = (decision: "kept" | "passed") =>
+      decide.mutate({ id: jobId, decision }, { onSuccess: () => onResolve(jobId) });
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
+        <button
+          style={{ ...btn, background: MIRA_ACCENT.deep }}
+          disabled={decide.isPending}
+          onClick={() => decideAndResolve("kept")}
+        >
+          Keep
+        </button>
+        <button
+          style={{ ...btn, background: "rgba(0,0,0,0.55)" }}
+          disabled={decide.isPending}
+          onClick={() => decideAndResolve("passed")}
+        >
+          Pass
+        </button>
+        {decide.isError && (
+          <span style={{ color: "#fff", fontSize: 11 }}>Couldn&apos;t save — try again.</span>
+        )}
+      </div>
+    );
+  }
+
   if (!reviewAction.canContinue && !reviewAction.canStop) return null;
 
   return (
@@ -135,7 +172,7 @@ export function MiraClipActions({
             Halted
           </button>
         ) : (
-          <button style={{ ...btn, background: "#3C315C" }} onClick={() => setConfirm("continue")}>
+          <button style={{ ...btn, background: T.amber }} onClick={() => setConfirm("continue")}>
             Continue draft
           </button>
         ))}

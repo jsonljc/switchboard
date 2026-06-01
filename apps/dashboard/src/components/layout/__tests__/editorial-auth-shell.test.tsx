@@ -48,6 +48,21 @@ vi.mock("../primary-nav", () => ({
     </nav>
   ),
 }));
+// Stub the menu children: both depend on react-query/session providers the shell
+// test intentionally does not mount (same rationale as the use-governance stub).
+vi.mock("../tools-overflow", () => ({
+  ToolsOverflow: () => <button type="button">Tools</button>,
+}));
+vi.mock("../account-menu", () => ({
+  AccountMenu: () => (
+    <button type="button" aria-label="Account menu">
+      M
+    </button>
+  ),
+}));
+vi.mock("../app-sidebar", () => ({
+  AppSidebar: () => <nav aria-label="Primary sidebar" />,
+}));
 
 describe("EditorialAuthShellInner", () => {
   it("renders primary nav with inbox link and no per-agent links", () => {

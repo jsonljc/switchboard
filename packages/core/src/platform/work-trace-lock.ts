@@ -7,7 +7,13 @@ export const ALLOWED_OUTCOME_TRANSITIONS: Readonly<Record<WorkOutcome, ReadonlyS
   {
     pending_approval: new Set<WorkOutcome>(["queued", "running", "completed", "failed"]),
     queued: new Set<WorkOutcome>(["running", "completed", "failed"]),
-    running: new Set<WorkOutcome>(["completed", "failed"]),
+    // `running` is the D1 claim state: PlatformIngress persists a `running`
+    // claim before dispatch, then finalizes it to the dispatch outcome. That
+    // outcome is usually terminal (completed/failed) but a keyed workflow submit
+    // can legitimately resolve to a NON-terminal outcome (queued async child
+    // work, or pending_approval) — finalize must be able to record those, or
+    // the claim wedges at `running` and a legitimate replay fails closed.
+    running: new Set<WorkOutcome>(["queued", "pending_approval", "completed", "failed"]),
     completed: new Set<WorkOutcome>(),
     failed: new Set<WorkOutcome>(),
   };

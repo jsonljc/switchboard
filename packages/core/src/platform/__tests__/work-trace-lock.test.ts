@@ -48,7 +48,15 @@ describe("ALLOWED_OUTCOME_TRANSITIONS", () => {
       "failed",
       "running",
     ]);
-    expect([...ALLOWED_OUTCOME_TRANSITIONS.running].sort()).toEqual(["completed", "failed"]);
+    // `running` is the D1 claim state and must finalize to ANY dispatch outcome,
+    // including the non-terminal `queued`/`pending_approval` a keyed workflow can
+    // resolve to — otherwise the claim wedges at running.
+    expect([...ALLOWED_OUTCOME_TRANSITIONS.running].sort()).toEqual([
+      "completed",
+      "failed",
+      "pending_approval",
+      "queued",
+    ]);
     expect(ALLOWED_OUTCOME_TRANSITIONS.completed.size).toBe(0);
     expect(ALLOWED_OUTCOME_TRANSITIONS.failed.size).toBe(0);
   });
@@ -61,6 +69,16 @@ describe("validateUpdate — outcome transitions", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(typeof result.computedLockedAt).toBe("string");
   });
+
+  it.each(["queued", "pending_approval"] as const)(
+    "allows running -> %s (D1 claim finalizing to a non-terminal dispatch outcome) without locking",
+    (nonTerminal) => {
+      const current = makeTrace({ outcome: "running" });
+      const result = validateUpdate({ current, update: { outcome: nonTerminal } });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.computedLockedAt).toBeNull();
+    },
+  );
 
   it("rejects completed -> running (illegal regress on locked trace)", () => {
     const current = makeTrace({

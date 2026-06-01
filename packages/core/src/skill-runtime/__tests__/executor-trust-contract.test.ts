@@ -111,6 +111,7 @@ describe("Executor + factory trust contract (AI-1)", () => {
       opportunityStore: { findActiveByContact: vi.fn(), create: vi.fn() } as never,
       runTransaction: vi.fn() as never,
       failureHandler: { handle: vi.fn() } as never,
+      contactStore: { findById: vi.fn().mockResolvedValue(null) } as never,
     });
 
     const adapter = makeAdapter([

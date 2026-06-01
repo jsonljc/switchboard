@@ -1,14 +1,13 @@
 import { notFound } from "next/navigation";
 import { fetchEnabledAgentsServer } from "@/lib/api-client/agents-server";
-import { MiraFeedPage } from "@/components/cockpit/mira/mira-feed-page";
+import { MiraDeskPage } from "@/components/cockpit/mira/mira-desk-page";
 
-// The editorial shell (header + providers) is mounted once by the (auth) layout's
-// AppShell, so this page renders its cockpit content directly. Mira is opt-in per
-// org (no global day-one), so the route 404s unless this org has Mira enabled.
-// This renders the review feed for enabled orgs.
+// Phase 2: `/mira` is the Director's Desk (calm control surface). The vertical
+// review feed moved to `/mira/review`; the per-draft deep link stays
+// `/mira/creatives/[id]`. Mira is opt-in per org — 404 unless enabled.
 export default async function MiraPage() {
   const enabled = await fetchEnabledAgentsServer();
   if (!enabled.includes("mira")) notFound();
 
-  return <MiraFeedPage />;
+  return <MiraDeskPage />;
 }

@@ -47,7 +47,7 @@ function isChromeFree(pathname: string): boolean {
  * complete setup before accessing any content. (/alex and /riley were retired;
  * they now redirect to Home's ?agent= deep-link, which is gated like any "/".)
  */
-const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/mira"]);
+export const ONBOARDING_GATE_EXEMPT_EXACT = new Set(["/mira", "/mira/review"]);
 export const ONBOARDING_EXEMPT_PATHS = ["/login", "/onboarding"];
 
 export function AppShell({

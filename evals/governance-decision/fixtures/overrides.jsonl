@@ -1,0 +1,5 @@
+{"id":"override-read-sup-forces-approval","effectCategory":"read","trustLevel":"supervised","governanceOverride":{"supervised":"require-approval"},"expectedDecision":"require-approval","notes":"override wins over base auto-approve"}
+{"id":"override-read-aut-forces-deny","effectCategory":"read","trustLevel":"autonomous","governanceOverride":{"autonomous":"deny"},"expectedDecision":"deny","notes":"an override can deny an otherwise auto-approved read"}
+{"id":"override-irreversible-gui-relaxed","effectCategory":"irreversible","trustLevel":"guided","governanceOverride":{"guided":"auto-approve"},"expectedDecision":"auto-approve","notes":"an override can relax the base require-approval"}
+{"id":"override-partial-falls-back","effectCategory":"irreversible","trustLevel":"supervised","governanceOverride":{"guided":"auto-approve"},"expectedDecision":"deny","notes":"override only covers guided; supervised falls back to base deny"}
+{"id":"override-write-sup-forces-deny","effectCategory":"write","trustLevel":"supervised","governanceOverride":{"supervised":"deny"},"expectedDecision":"deny","notes":"override escalates base require-approval to deny"}

@@ -142,6 +142,7 @@ describe("Convergence E2E", () => {
 
     traceStore = {
       traces: [] as WorkTrace[],
+      claim: vi.fn().mockResolvedValue({ claimed: true }),
       persist: vi.fn(async (trace: WorkTrace) => {
         traceStore.traces.push(trace);
       }),

@@ -282,9 +282,22 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
         permissionsNode,
       ];
 
+  // Bento split (desktop only — display:contents below lg keeps the flat mobile order):
+  // hero = verdict (modules[0]); main = next N "active" modules; rail = the quiet remainder.
+  const [heroNode, ...restNodes] = modules;
+  const mainCount = isCalm ? 2 : 3; // active: NeedsYou, TeamPulse, ThisWeek · calm: ThisWeek, TeamPulse
+  const mainNodes = restNodes.slice(0, mainCount);
+  const railNodes = restNodes.slice(mainCount);
+
   return (
     <>
-      <div className={styles.column}>{modules}</div>
+      <div className={styles.column}>
+        {heroNode}
+        <div className={styles.bento}>
+          <div className={styles.bentoMain}>{mainNodes}</div>
+          <div className={styles.bentoRail}>{railNodes}</div>
+        </div>
+      </div>
       {panelAgent && (
         <AgentPanel
           key={panelAgent}

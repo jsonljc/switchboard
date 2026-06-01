@@ -10,6 +10,7 @@ import { gradeDeterministic } from "./grade.js";
 import { judgeTurn, JUDGE_RUBRIC_VERSION } from "./judge.js";
 import type { ScenarioResult } from "./score.js";
 import { compareAgainstBaseline, summarizeResults } from "./score.js";
+import { evaluateOracle } from "./oracle.js";
 import { BaselineSchema } from "./schema.js";
 import type { Baseline } from "./schema.js";
 import { createAnthropicClaimClassifier } from "@switchboard/core";
@@ -320,7 +321,23 @@ async function main(): Promise<void> {
       );
     }
 
-    scenarioResults.push(aggregateScenarioResult(fixture.id, turnResults));
+    const scenarioResult = aggregateScenarioResult(fixture.id, turnResults);
+
+    // Optional trajectory oracle (conversation-level): fold violations into the
+    // deterministic gate. Scenarios without an `oracle` block are unaffected, so
+    // this is fully backward compatible with the original 8 fixtures.
+    if (fixture.oracle) {
+      const oracleResult = evaluateOracle(outcome.toolCalls, fixture.oracle);
+      if (!oracleResult.pass) {
+        scenarioResult.deterministicPass = false;
+        scenarioResult.violations = [
+          ...scenarioResult.violations,
+          ...oracleResult.violations.map((v) => `oracle:${v.code}`),
+        ];
+      }
+    }
+
+    scenarioResults.push(scenarioResult);
 
     // Print investigation block for this scenario if any turn had claim flags.
     const anyFlags = investigationTurns.some((t) => t.claimFlags.length > 0);

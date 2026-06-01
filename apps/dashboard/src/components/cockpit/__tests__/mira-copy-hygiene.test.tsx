@@ -21,6 +21,13 @@ const SOURCES = [
   resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-card.tsx"),
   resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-creative-feed.tsx"),
   resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-actions.tsx"),
+  // Phase 2 Director's Desk surfaces:
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-desk-page.tsx"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-in-production-tray.tsx"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-ready-to-review.tsx"),
+  resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/desk-copy.ts"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-brief-box.tsx"),
+  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-kept-shelf.tsx"),
 ];
 
 const FORBIDDEN: Array<{ label: string; re: RegExp }> = [
@@ -28,6 +35,17 @@ const FORBIDDEN: Array<{ label: string; re: RegExp }> = [
   { label: "Launch", re: /\bLaunch\b/i },
   { label: "Go live", re: /\bGo live\b/i },
   { label: "Approve creative", re: /Approve creative/i },
+  // Phase-2 banned words (spec §"Phase 2 copy guardrails"). "Riley"/"Keep"/"kept"
+  // are ALLOWED ("Sending to Riley comes later"); the capability VERBS are not.
+  { label: "distribute", re: /\bdistribut/i },
+  { label: "performance", re: /\bperformance\b/i },
+  { label: "winner", re: /\bwinner\b/i },
+  { label: "fatigued", re: /\bfatigued\b/i },
+  { label: "learning", re: /\blearning\b/i },
+  { label: "improved", re: /\bimproved\b/i },
+  { label: "drove", re: /\bdrove\b/i },
+  { label: "recovered", re: /\brecovered\b/i },
+  { label: "saved", re: /\bsaved\b/i },
 ];
 
 describe("Mira M1 copy hygiene — draft-only, no publish/launch CTAs", () => {

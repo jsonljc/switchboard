@@ -1,0 +1,21 @@
+{"id":"grid-read-supervised","effectCategory":"read","trustLevel":"supervised","expectedDecision":"auto-approve","notes":"reads always auto-approve"}
+{"id":"grid-read-guided","effectCategory":"read","trustLevel":"guided","expectedDecision":"auto-approve"}
+{"id":"grid-read-autonomous","effectCategory":"read","trustLevel":"autonomous","expectedDecision":"auto-approve"}
+{"id":"grid-propose-supervised","effectCategory":"propose","trustLevel":"supervised","expectedDecision":"auto-approve","notes":"proposals are non-mutating drafts"}
+{"id":"grid-propose-guided","effectCategory":"propose","trustLevel":"guided","expectedDecision":"auto-approve"}
+{"id":"grid-propose-autonomous","effectCategory":"propose","trustLevel":"autonomous","expectedDecision":"auto-approve"}
+{"id":"grid-simulate-supervised","effectCategory":"simulate","trustLevel":"supervised","expectedDecision":"auto-approve","notes":"simulations have no side effects"}
+{"id":"grid-simulate-guided","effectCategory":"simulate","trustLevel":"guided","expectedDecision":"auto-approve"}
+{"id":"grid-simulate-autonomous","effectCategory":"simulate","trustLevel":"autonomous","expectedDecision":"auto-approve"}
+{"id":"grid-write-supervised","effectCategory":"write","trustLevel":"supervised","expectedDecision":"require-approval","notes":"supervised writes need a human"}
+{"id":"grid-write-guided","effectCategory":"write","trustLevel":"guided","expectedDecision":"auto-approve"}
+{"id":"grid-write-autonomous","effectCategory":"write","trustLevel":"autonomous","expectedDecision":"auto-approve"}
+{"id":"grid-external_send-supervised","effectCategory":"external_send","trustLevel":"supervised","expectedDecision":"require-approval","notes":"outbound sends gated below autonomous"}
+{"id":"grid-external_send-guided","effectCategory":"external_send","trustLevel":"guided","expectedDecision":"require-approval"}
+{"id":"grid-external_send-autonomous","effectCategory":"external_send","trustLevel":"autonomous","expectedDecision":"auto-approve"}
+{"id":"grid-external_mutation-supervised","effectCategory":"external_mutation","trustLevel":"supervised","expectedDecision":"require-approval","notes":"external mutations gated below autonomous"}
+{"id":"grid-external_mutation-guided","effectCategory":"external_mutation","trustLevel":"guided","expectedDecision":"require-approval"}
+{"id":"grid-external_mutation-autonomous","effectCategory":"external_mutation","trustLevel":"autonomous","expectedDecision":"auto-approve"}
+{"id":"grid-irreversible-supervised","effectCategory":"irreversible","trustLevel":"supervised","expectedDecision":"deny","notes":"supervised may never take irreversible actions"}
+{"id":"grid-irreversible-guided","effectCategory":"irreversible","trustLevel":"guided","expectedDecision":"require-approval"}
+{"id":"grid-irreversible-autonomous","effectCategory":"irreversible","trustLevel":"autonomous","expectedDecision":"require-approval","notes":"even autonomous needs approval for irreversible"}

@@ -38,6 +38,17 @@ function makeRunTransaction() {
   );
 }
 
+function makeContactStore() {
+  return {
+    findById: vi.fn().mockResolvedValue({
+      id: "ct_1",
+      name: "Jane Tan",
+      email: "jane@example.com",
+      phone: "+6591234567",
+    }),
+  };
+}
+
 function makeFailureHandler() {
   return {
     handle: vi.fn().mockResolvedValue({
@@ -66,6 +77,7 @@ describe("createCalendarBookToolFactory", () => {
   let opportunityStore: ReturnType<typeof makeOpportunityStore>;
   let runTransaction: ReturnType<typeof makeRunTransaction>;
   let failureHandler: ReturnType<typeof makeFailureHandler>;
+  let contactStore: ReturnType<typeof makeContactStore>;
   let factory: ReturnType<typeof createCalendarBookToolFactory>;
   let tool: ReturnType<typeof factory>;
 
@@ -77,6 +89,7 @@ describe("createCalendarBookToolFactory", () => {
     opportunityStore = makeOpportunityStore();
     runTransaction = makeRunTransaction();
     failureHandler = makeFailureHandler();
+    contactStore = makeContactStore();
     factory = createCalendarBookToolFactory({
       calendarProviderFactory: calendarProviderFactory as never,
       isCalendarProviderConfigured: isCalendarProviderConfigured as never,
@@ -84,8 +97,9 @@ describe("createCalendarBookToolFactory", () => {
       opportunityStore: opportunityStore as never,
       runTransaction: runTransaction as never,
       failureHandler: failureHandler as never,
+      contactStore: contactStore as never,
     });
-    tool = factory(TRUSTED_CTX);
+    tool = factory({ ...TRUSTED_CTX, contactId: "ct_1" });
   });
 
   it("has id 'calendar-book'", () => {
@@ -177,13 +191,10 @@ describe("createCalendarBookToolFactory", () => {
 
     const result = await tool.operations["booking.create"]!.execute({
       orgId: "evil-org", // attempt to spoof — must be ignored
-      contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
       calendarId: "primary",
-      attendeeName: "Alice",
-      attendeeEmail: "alice@example.com",
     });
 
     expect(bookingStore.create).toHaveBeenCalledWith(
@@ -209,7 +220,6 @@ describe("createCalendarBookToolFactory", () => {
     calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
 
     await tool.operations["booking.create"]!.execute({
-      contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
@@ -228,7 +238,6 @@ describe("createCalendarBookToolFactory", () => {
     opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
 
     const result = await tool.operations["booking.create"]!.execute({
-      contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
@@ -248,7 +257,6 @@ describe("createCalendarBookToolFactory", () => {
     calendarProvider.createBooking.mockRejectedValue(new Error("503 Service Unavailable"));
 
     const result = await tool.operations["booking.create"]!.execute({
-      contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
@@ -284,7 +292,6 @@ describe("createCalendarBookToolFactory", () => {
     });
 
     const result = await tool.operations["booking.create"]!.execute({
-      contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
@@ -300,6 +307,49 @@ describe("createCalendarBookToolFactory", () => {
         retryable: true,
       }),
     );
+  });
+
+  it("booking.create inputSchema omits contactId, attendeeName, attendeeEmail", () => {
+    const schema = tool.operations["booking.create"]!.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).not.toHaveProperty("contactId");
+    expect(schema.properties).not.toHaveProperty("attendeeName");
+    expect(schema.properties).not.toHaveProperty("attendeeEmail");
+    expect(schema.required).not.toContain("contactId");
+  });
+
+  it("booking.create uses ctx.contactId (ignores model-supplied) and resolves attendee server-side", async () => {
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+    await tool.operations["booking.create"]!.execute({
+      contactId: "ATTACKER",
+      service: "botox",
+      slotStart: "2026-06-01T10:00:00Z",
+      slotEnd: "2026-06-01T10:30:00Z",
+      calendarId: "primary",
+    });
+    expect(bookingStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactId: "ct_1",
+        attendeeName: "Jane Tan",
+        attendeeEmail: "jane@example.com",
+      }),
+    );
+  });
+
+  it("booking.create fails closed when ctx.contactId is absent", async () => {
+    tool = factory({ ...TRUSTED_CTX, contactId: undefined });
+    const result = await tool.operations["booking.create"]!.execute({
+      service: "botox",
+      slotStart: "2026-06-01T10:00:00Z",
+      slotEnd: "2026-06-01T10:30:00Z",
+      calendarId: "primary",
+    });
+    expect(result.status).not.toBe("success");
+    expect(bookingStore.create).not.toHaveBeenCalled();
   });
 
   describe("slots.query failure paths", () => {
@@ -343,7 +393,6 @@ describe("createCalendarBookToolFactory", () => {
       isCalendarProviderConfigured.mockReturnValue(false);
 
       const result = await tool.operations["booking.create"]!.execute({
-        contactId: "ct_1",
         service: "consultation",
         slotStart: "2026-04-20T10:00:00+08:00",
         slotEnd: "2026-04-20T10:30:00+08:00",
@@ -361,7 +410,6 @@ describe("createCalendarBookToolFactory", () => {
       calendarProviderFactory.mockRejectedValue(new Error("Boom"));
 
       const result = await tool.operations["booking.create"]!.execute({
-        contactId: "ct_1",
         service: "consultation",
         slotStart: "2026-04-20T10:00:00+08:00",
         slotEnd: "2026-04-20T10:30:00+08:00",

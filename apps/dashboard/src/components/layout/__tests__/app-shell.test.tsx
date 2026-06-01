@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AppShell, ONBOARDING_EXEMPT_PATHS } from "../app-shell";
+import { AppShell, ONBOARDING_EXEMPT_PATHS, ONBOARDING_GATE_EXEMPT_EXACT } from "../app-shell";
 
 const pathnameRef = { current: "/contacts" };
 const replaceMock = vi.fn();
@@ -385,6 +385,13 @@ describe("AppShell — dataModeControlsAllowed prop forwarding", () => {
       </AppShell>,
     );
     expect(devPanelProps.current.dataModeControlsAllowed).toBe(false);
+  });
+});
+
+describe("onboarding gate exemptions", () => {
+  it("exempts both the Mira desk and the review feed", () => {
+    expect(ONBOARDING_GATE_EXEMPT_EXACT.has("/mira")).toBe(true);
+    expect(ONBOARDING_GATE_EXEMPT_EXACT.has("/mira/review")).toBe(true);
   });
 });
 

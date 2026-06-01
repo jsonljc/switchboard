@@ -13,5 +13,7 @@ export function composeSkillRequestContext(params: SkillExecutionParams): SkillR
     deploymentId: params.deploymentId,
     workUnitId: params.workUnitId,
     delegationDepth: params.delegationDepth,
+    contactId:
+      typeof params.parameters.contactId === "string" ? params.parameters.contactId : undefined,
   };
 }

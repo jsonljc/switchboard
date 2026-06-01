@@ -319,11 +319,21 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
       updatedAt: new Date(),
     });
 
-    const traces: WorkTrace[] = [];
+    // D1 claim-first: a keyed execute CREATES the WorkTrace via claim() (outcome
+    // `running`) and FINALIZES it via update() (running -> completed). persist()
+    // is the no-key path only, so this keyed mock implements claim + update.
+    const byWorkUnit = new Map<string, WorkTrace>();
     const mockTraceStore = {
-      persist: vi.fn(async (trace: WorkTrace) => {
-        traces.push(trace);
+      claim: vi.fn(async (trace: WorkTrace) => {
+        byWorkUnit.set(trace.workUnitId, trace);
+        return { claimed: true as const };
       }),
+      update: vi.fn(async (workUnitId: string, fields: Partial<WorkTrace>) => {
+        const merged = { ...(byWorkUnit.get(workUnitId) as WorkTrace), ...fields } as WorkTrace;
+        byWorkUnit.set(workUnitId, merged);
+        return { ok: true as const, trace: merged };
+      }),
+      persist: vi.fn(),
       getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -345,8 +355,12 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(mockTraceStore.persist).toHaveBeenCalledOnce();
-    const trace = traces[0]!;
+    expect(mockTraceStore.claim).toHaveBeenCalledOnce();
+    expect(mockTraceStore.update).toHaveBeenCalledOnce();
+    expect(mockTraceStore.persist).not.toHaveBeenCalled();
+    // The finalized trace carries the claim's governance snapshot + the update's
+    // terminal outcome/completedAt.
+    const trace = [...byWorkUnit.values()][0]!;
     expect(trace.intent).toBe("digital-ads.campaign.pause");
     expect(trace.organizationId).toBe(ORG_ID);
     expect(trace.governanceOutcome).toBe("execute");
