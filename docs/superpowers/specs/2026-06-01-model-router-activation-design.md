@@ -68,8 +68,13 @@ current "router is always `undefined`" silent bug into an **explicit, tested dec
 2. **`apps/api/src/bootstrap/skill-mode.ts`:** import `ModelRouter` from `@switchboard/core`
    and `resolveModelRouter` from the factory; replace the `undefined` at the production
    executor (`:550`) with `resolveModelRouter()`. A startup log line records whether routing is
-   enabled. The **simulation executor (`:680`) is left on the fallback** — it is inert today
-   (no `workUnitId`) and routing there adds risk without benefit; out of scope for PR1.
+   enabled. The **simulation executor (`:680`) is left on the fallback** — out of scope for
+   PR1. (Note: `/simulate` IS live and executes the LLM per turn; the "no `workUnitId`"
+   inertness belongs to the _delegate tool_, which is separately excluded from simulation, not
+   to the executor.) Consequence, documented as an accepted limitation: once the flag is
+   flipped on, `/simulate` will preview the adapter default model while production tiers
+   per-turn. Routing the simulation executor for preview fidelity is a deliberate follow-up,
+   not part of PR1.
 
 3. **Env plumbing:** add `ALEX_MODEL_ROUTER_ENABLED` to
    `scripts/env-allowlist.local-readiness.json` (CI lint + test both fail on an uncategorized
