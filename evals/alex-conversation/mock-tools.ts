@@ -228,6 +228,7 @@ export function createMockTools(): MockTools {
                 "complex_objection",
                 "negative_sentiment",
                 "compliance_concern",
+                "medical_safety",
                 "booking_failure",
                 "max_turns_exceeded",
               ],
