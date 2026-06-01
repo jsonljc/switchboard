@@ -1,0 +1,115 @@
+import { Inngest } from "inngest";
+import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
+import type { SubmitWorkResponse } from "@switchboard/core/platform";
+import type { DueScheduledFollowUp } from "@switchboard/core";
+
+const inngestClient = new Inngest({ id: "switchboard" });
+
+const MAX_ATTEMPTS = 3;
+const MAX_BACKOFF_MS = 24 * 60 * 60 * 1000; // 24h
+const BASE_INTERVAL_MS = 15 * 60 * 1000; // 15m
+
+export interface FollowUpSendSubmitInput {
+  organizationId: string;
+  contactId: string;
+  conversationThreadId: string | null;
+  channel: string;
+  templateIntentClass: string;
+  reason: string;
+  followUpId: string;
+}
+
+export interface ScheduledFollowUpDispatchDeps {
+  failure: AsyncFailureContext;
+  findDueFollowUps: () => Promise<DueScheduledFollowUp[]>;
+  submitFollowUpSend: (input: FollowUpSendSubmitInput) => Promise<SubmitWorkResponse>;
+  markSent: (id: string) => Promise<void>;
+  markSkipped: (id: string, reason: string) => Promise<void>;
+  markFailed: (id: string, error: string, nextRetryAt: Date | null) => Promise<void>;
+  now?: () => Date;
+}
+
+export interface StepTools {
+  run: <T>(name: string, fn: () => T | Promise<T>) => Promise<T>;
+}
+
+export async function executeScheduledFollowUpDispatch(
+  step: StepTools,
+  deps: ScheduledFollowUpDispatchDeps,
+): Promise<{ processed: number; sent: number; skipped: number; failed: number }> {
+  const now = deps.now ?? (() => new Date());
+  const due = await step.run("find-due-followups", () => deps.findDueFollowUps());
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const followUp of due) {
+    await step.run(`followup-${followUp.id}`, async () => {
+      const response = await deps.submitFollowUpSend({
+        organizationId: followUp.organizationId,
+        contactId: followUp.contactId,
+        conversationThreadId: followUp.conversationThreadId,
+        channel: followUp.channel,
+        templateIntentClass: followUp.templateIntentClass,
+        reason: followUp.reason,
+        followUpId: followUp.id,
+      });
+
+      if (!response.ok) {
+        const nextRetryAt = computeNextRetry(followUp.attempts, now);
+        await deps.markFailed(followUp.id, response.error.type, nextRetryAt);
+        failed++;
+        return;
+      }
+
+      const outputs = (response.result.outputs ?? {}) as { sent?: boolean; skipReason?: string };
+      if (outputs.sent === true) {
+        await deps.markSent(followUp.id);
+        sent++;
+        return;
+      }
+      if (outputs.sent === false) {
+        await deps.markSkipped(followUp.id, outputs.skipReason ?? "unknown");
+        skipped++;
+        return;
+      }
+
+      // Unexpected (no terminal sent flag) → treat as a retryable failure.
+      const nextRetryAt = computeNextRetry(followUp.attempts, now);
+      await deps.markFailed(followUp.id, "no_terminal_outcome", nextRetryAt);
+      failed++;
+    });
+  }
+
+  return { processed: due.length, sent, skipped, failed };
+}
+
+function computeNextRetry(currentAttempts: number, now: () => Date): Date | null {
+  if (currentAttempts + 1 >= MAX_ATTEMPTS) return null; // terminal
+  const backoffMs = Math.min(BASE_INTERVAL_MS * Math.pow(2, currentAttempts), MAX_BACKOFF_MS);
+  return new Date(now().getTime() + backoffMs);
+}
+
+export function createScheduledFollowUpDispatchCron(deps: ScheduledFollowUpDispatchDeps) {
+  return inngestClient.createFunction(
+    {
+      id: "scheduled-follow-up-dispatch",
+      name: "Scheduled Follow-Up Dispatch",
+      retries: 2,
+      triggers: [{ cron: "*/15 * * * *" }],
+      onFailure: makeOnFailureHandler(
+        {
+          functionId: "scheduled-follow-up-dispatch",
+          eventDomain: "scheduled-follow-up",
+          riskCategory: "high",
+          alert: true,
+        },
+        deps.failure,
+      ) as (arg: unknown) => Promise<void>,
+    },
+    async ({ step }) => {
+      return executeScheduledFollowUpDispatch(step as unknown as StepTools, deps);
+    },
+  );
+}

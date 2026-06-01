@@ -668,6 +668,17 @@ export async function buildServer() {
 
   // --- Contained workflow mode (creative pipeline, Meta lead intake) ---
   let instantFormAdapter: import("@switchboard/ad-optimizer").InstantFormAdapter | undefined;
+  let submitScheduledFollowUp:
+    | ((input: {
+        organizationId: string;
+        contactId: string;
+        conversationThreadId: string | null;
+        channel: string;
+        templateIntentClass: string;
+        reason: string;
+        followUpId: string;
+      }) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
     const result = await bootstrapContainedWorkflows({
@@ -679,6 +690,7 @@ export async function buildServer() {
       logger: app.log,
     });
     instantFormAdapter = result.instantFormAdapter;
+    submitScheduledFollowUp = result.submitScheduledFollowUp;
   }
 
   // --- Phase 3b: lifecycle disqualification hook + store decoration (Wave 2 Phase 1b.3) ---
@@ -864,7 +876,7 @@ export async function buildServer() {
   app.get("/metrics", metricsRoute);
 
   // --- Inngest serve handler (creative pipeline orchestration) ---
-  await registerInngest(app, { instantFormAdapter, operatorAlerter });
+  await registerInngest(app, { instantFormAdapter, operatorAlerter, submitScheduledFollowUp });
 
   // --- Phase 3b: lifecycle disqualification route deps ---
   // The lifecycle hook was already bootstrapped and decorated on app earlier

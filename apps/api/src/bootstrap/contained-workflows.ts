@@ -26,6 +26,21 @@ export interface ContainedWorkflowBootstrapResult {
    * preserve the "no parallel mutation paths" doctrine.
    */
   instantFormAdapter: InstantFormAdapter;
+  /**
+   * Top-level submit closure for the scheduled-follow-up dispatch cron. No
+   * parentWorkUnitId — cron-initiated work units are legitimate trace roots.
+   * Resolves the conversation deployment by intent and submits through
+   * PlatformIngress with trigger:"schedule".
+   */
+  submitScheduledFollowUp: (input: {
+    organizationId: string;
+    contactId: string;
+    conversationThreadId: string | null;
+    channel: string;
+    templateIntentClass: string;
+    reason: string;
+    followUpId: string;
+  }) => Promise<SubmitWorkResponse>;
 }
 
 /**
@@ -311,5 +326,40 @@ export async function bootstrapContainedWorkflows(
 
   logger.info("Contained workflow mode registered");
 
-  return { instantFormAdapter };
+  const submitScheduledFollowUp = async (input: {
+    organizationId: string;
+    contactId: string;
+    conversationThreadId: string | null;
+    channel: string;
+    templateIntentClass: string;
+    reason: string;
+    followUpId: string;
+  }): Promise<SubmitWorkResponse> => {
+    const deployment = await resolveDeploymentForIntent(
+      deploymentResolver,
+      input.organizationId,
+      "conversation.followup.send",
+    );
+    return platformIngress.submit({
+      organizationId: input.organizationId,
+      actor: { id: "system:scheduled-follow-up", type: "system" },
+      intent: "conversation.followup.send",
+      parameters: {
+        contactId: input.contactId,
+        conversationThreadId: input.conversationThreadId,
+        channel: input.channel,
+        templateIntentClass: input.templateIntentClass,
+        reason: input.reason,
+        followUpId: input.followUpId,
+      },
+      trigger: "schedule",
+      surface: { surface: "api" },
+      idempotencyKey: `followup-send:${input.followUpId}`,
+      targetHint: deployment
+        ? { deploymentId: deployment.deploymentId, skillSlug: deployment.skillSlug }
+        : undefined,
+    });
+  };
+
+  return { instantFormAdapter, submitScheduledFollowUp };
 }
