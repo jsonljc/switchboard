@@ -59,6 +59,7 @@ import {
   MetaAdsClient,
   RealCrmDataProvider,
   SignalHealthChecker,
+  MetaCampaignInsightsProvider,
 } from "@switchboard/ad-optimizer";
 import type {
   CronDependencies,
@@ -238,20 +239,7 @@ export async function registerInngest(
       const funnelStore = new PrismaCrmFunnelStore(app.prisma!);
       return new RealCrmDataProvider(funnelStore);
     },
-    createInsightsProvider: (_adsClient) => ({
-      // Stub insights provider — real implementation delegates to MetaCampaignInsightsProvider
-      getCampaignLearningData: async () => ({
-        effectiveStatus: "ACTIVE",
-        learningPhase: false,
-        lastModifiedDays: 30,
-        optimizationEvents: 100,
-      }),
-      getTargetBreachStatus: async () => ({
-        periodsAboveTarget: 0,
-        granularity: "daily",
-        isApproximate: false,
-      }),
-    }),
+    createInsightsProvider: (adsClient) => new MetaCampaignInsightsProvider(adsClient),
     saveAuditReport: async (deploymentId, report) => {
       const deployment = await deploymentStore.findById(deploymentId);
       if (!deployment) return;
