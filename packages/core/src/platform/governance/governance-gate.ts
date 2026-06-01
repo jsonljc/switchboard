@@ -16,8 +16,10 @@ import type { IntentRegistration } from "../intent-registration.js";
 import type { GovernanceDecision, ExecutionConstraints } from "../governance-types.js";
 import { toActionProposal, toEvaluationContext } from "./work-unit-adapter.js";
 import { toGovernanceDecision } from "./decision-adapter.js";
+import { applySpendApprovalThreshold } from "./spend-approval-threshold.js";
 import { DEFAULT_CARTRIDGE_CONSTRAINTS } from "./default-constraints.js";
 import { createGuardrailState } from "../../engine/policy-engine.js";
+import { extractSpendAmount } from "../../engine/spend-limits.js";
 import { profileToPosture, DEFAULT_GOVERNANCE_PROFILE } from "../../governance/profile.js";
 
 /**
@@ -166,6 +168,20 @@ export class GovernanceGate {
 
     const trace = this.deps.evaluate(proposal, evalContext, engineContext, config);
 
-    return toGovernanceDecision(trace, constraints);
+    const decision = toGovernanceDecision(trace, constraints);
+
+    // Spend-approval threshold — the per-deployment "less-human-in-loop" autonomy
+    // lever. Dormant unless the deployment is explicitly autonomous; it can only
+    // relax a reversible financial approval at/under the threshold to execute, or
+    // escalate an over-threshold execute to require_approval. It NEVER touches a
+    // deny, so the compliance/limit floor is unaffected.
+    return applySpendApprovalThreshold(decision, {
+      trustLevelOverride: workUnit.deployment?.trustLevelOverride,
+      spendAutonomyEnabled: workUnit.deployment?.spendAutonomyEnabled,
+      threshold: workUnit.deployment?.policyOverrides?.spendApprovalThreshold,
+      spendAmount: extractSpendAmount(proposal),
+      mutationClass: registration.mutationClass,
+      reversibility: riskInput.reversibility,
+    });
   }
 }

@@ -49,4 +49,16 @@ describe("deny floor is independent of the trust-gated tool-call path", () => {
       expect(proto.beforeToolCall).toBeUndefined();
     }
   });
+
+  it("the spend-approval threshold lever lives in the platform gate, not as a skill-runtime hook", async () => {
+    // The autonomy spend lever post-processes the platform GovernanceDecision; it
+    // is NOT a SkillHook, so it has no beforeToolCall/afterSkill phase and cannot
+    // relax the banned-phrase / claim / consent floor regardless of trust posture.
+    // Pin the module shape so a future refactor can't turn it into a trust-gated
+    // hook that bypasses the deny floor.
+    const mod = await import("../../platform/governance/spend-approval-threshold.js");
+    expect(typeof mod.applySpendApprovalThreshold).toBe("function");
+    expect("beforeToolCall" in mod).toBe(false);
+    expect("afterSkill" in mod).toBe(false);
+  });
 });

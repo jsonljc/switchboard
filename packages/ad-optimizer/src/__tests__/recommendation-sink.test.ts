@@ -268,3 +268,25 @@ describe("runRecommendationSink", () => {
     expect(fix.declineToast).toBe("Acknowledged — back to scanning the pixel.");
   });
 });
+
+describe("runRecommendationSink — spend amount is NOT scraped into the gate", () => {
+  const run = async (rec: RecommendationOutput) => {
+    const emit: RecommendationEmitter = vi.fn(async () => ({ surface: "queue" }) as EmitOutcome);
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "run-1",
+      recommendations: [rec],
+      emit,
+      emissionContext: { cronId: "c1" },
+    });
+    const input = (emit as ReturnType<typeof vi.fn>).mock.calls[0]![0] as RecommendationInput;
+    return input.parameters as Record<string, unknown>;
+  };
+
+  it("does NOT inject spendAmount from the scraped impact string (it is an impact projection, not a spend delta)", async () => {
+    // "saves $40/day" is a projected SAVING, not the budget delta the governance
+    // spend threshold compares against — so it must not flow to the gate as spendAmount.
+    const params = await run(baseRec({ action: "pause", estimatedImpact: "saves $40/day" }));
+    expect(params["spendAmount"]).toBeUndefined();
+  });
+});

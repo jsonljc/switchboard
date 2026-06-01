@@ -324,6 +324,17 @@ export async function runRecommendationSink(
         externalEffect,
         clientFacing: false,
         requiresConfirmation: false,
+        // NOTE: we deliberately do NOT inject a `spendAmount` here for the
+        // governance spend-approval threshold. `dollarsAtRisk` is scraped from the
+        // human-authored `estimatedImpact` string, which is an IMPACT projection
+        // (often revenue/savings, e.g. "saves $450/mo"), NOT the budget *delta* the
+        // threshold must compare against. Feeding it to the gate would mis-classify
+        // under/over threshold. A correct producer requires a STRUCTURED budget-delta
+        // field on RecommendationOutput (which it does not yet carry) AND a path that
+        // routes it through PlatformIngress — neither exists today (act_on_recommendation
+        // submits only {recommendationId, action, note}). The gate's extractSpendAmount
+        // already reads `spendAmount`/`budgetChange`/`newBudget`, so it is ready to
+        // consume such a structured field once a producer supplies it.
         parameters: { ...((rec as { params?: Record<string, unknown> }).params ?? {}) },
         presentation: buildPresentation(rec),
         targetEntities: { campaignId: rec.campaignId, campaignName: rec.campaignName },
