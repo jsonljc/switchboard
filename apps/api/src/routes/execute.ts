@@ -101,6 +101,19 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
 
         // Ingress rejection (intent not found, trigger not allowed)
         if (!response.ok) {
+          // D1: an in-flight/unresolved idempotency claim is a 409 Conflict, not a
+          // generic 400 — the prior attempt may have committed and must not be
+          // blindly retried (surface the retryable flag so SDKs/operators can tell
+          // it apart from a malformed request). NOTE: this mirrors the shared
+          // `ingressErrorToReply` 409 branch; /execute keeps its own bespoke error
+          // map (it never adopted the shared helper), so keep the two in sync.
+          if (response.error.type === "idempotency_in_flight") {
+            return reply.code(409).send({
+              error: response.error.message,
+              statusCode: 409,
+              retryable: response.error.retryable ?? false,
+            });
+          }
           const notFound =
             response.error.type === "intent_not_found" ||
             response.error.type === "deployment_not_found";

@@ -4,7 +4,8 @@ type IngressErrorTypeBase =
   | "trigger_not_allowed"
   | "deployment_not_found"
   | "upstream_error"
-  | "network_error";
+  | "network_error"
+  | "idempotency_in_flight";
 
 export type IngressError =
   | {

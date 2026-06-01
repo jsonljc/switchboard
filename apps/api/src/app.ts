@@ -755,6 +755,7 @@ export async function buildServer() {
     modeRegistry,
     traceStore: workTraceStore ?? {
       persist: async () => {},
+      claim: async () => ({ claimed: true as const }),
       getByWorkUnitId: async () => null,
       update: async () => ({ ok: true as const, trace: {} as never }),
       getByIdempotencyKey: async () => null,

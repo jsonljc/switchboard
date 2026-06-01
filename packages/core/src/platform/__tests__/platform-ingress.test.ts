@@ -203,6 +203,7 @@ describe("PlatformIngress", () => {
   it("persists WorkTrace on successful execution", async () => {
     const traceStore: WorkTraceStore = {
       persist: vi.fn().mockResolvedValue(undefined),
+      claim: vi.fn().mockResolvedValue({ claimed: true }),
       getByWorkUnitId: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({ ok: true, trace: {} as never }),
       getByIdempotencyKey: vi.fn().mockResolvedValue(null),
@@ -223,6 +224,7 @@ describe("PlatformIngress", () => {
     const getByIdempotencyKey = vi.fn().mockResolvedValue(null);
     const traceStore: WorkTraceStore = {
       persist: vi.fn().mockResolvedValue(undefined),
+      claim: vi.fn().mockResolvedValue({ claimed: true }),
       getByWorkUnitId: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({ ok: true, trace: {} as never }),
       getByIdempotencyKey,
@@ -240,6 +242,7 @@ describe("PlatformIngress", () => {
   it("persists WorkTrace on governance deny", async () => {
     const traceStore: WorkTraceStore = {
       persist: vi.fn().mockResolvedValue(undefined),
+      claim: vi.fn().mockResolvedValue({ claimed: true }),
       getByWorkUnitId: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({ ok: true, trace: {} as never }),
       getByIdempotencyKey: vi.fn().mockResolvedValue(null),

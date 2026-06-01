@@ -94,6 +94,7 @@ function makeTraceStore(verdict: IntegrityVerdict): WorkTraceStore {
   const readResult: WorkTraceReadResult = { trace, integrity: verdict };
   return {
     persist: vi.fn().mockResolvedValue(undefined),
+    claim: vi.fn().mockResolvedValue({ claimed: true }),
     getByWorkUnitId: vi.fn().mockResolvedValue(readResult),
     getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue({ ok: true as const, trace }),
@@ -209,6 +210,7 @@ describe("ApprovalLifecycleService.rejectLifecycle — admission gate", () => {
       const trace = makeBaseTrace();
       const traceStore: WorkTraceStore = {
         persist: vi.fn().mockResolvedValue(undefined),
+        claim: vi.fn().mockResolvedValue({ claimed: true }),
         getByWorkUnitId: vi.fn().mockResolvedValue(null),
         getByIdempotencyKey: vi.fn().mockResolvedValue(null),
         update: vi.fn().mockResolvedValue({ ok: true as const, trace }),
@@ -235,6 +237,7 @@ describe("ApprovalLifecycleService.rejectLifecycle — admission gate", () => {
 
       const traceStore: WorkTraceStore = {
         persist: vi.fn().mockResolvedValue(undefined),
+        claim: vi.fn().mockResolvedValue({ claimed: true }),
         getByWorkUnitId: vi.fn().mockResolvedValue({ trace, integrity: { status: "ok" } }),
         getByIdempotencyKey: vi.fn().mockResolvedValue(null),
         update: vi.fn().mockResolvedValue({

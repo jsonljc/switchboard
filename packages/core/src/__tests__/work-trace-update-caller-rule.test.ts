@@ -48,6 +48,7 @@ const baseTrace: WorkTrace = {
 function instrumentedStore(log: CallLog, base: WorkTrace): WorkTraceStore {
   return {
     persist: vi.fn().mockResolvedValue(undefined),
+    claim: vi.fn().mockResolvedValue({ claimed: true }),
     getByWorkUnitId: vi.fn(async (id: string): Promise<WorkTraceReadResult | null> => {
       log.reads.push(id);
       log.ordered.push(`read:${id}`);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildWorkTrace } from "../work-trace-recorder.js";
+import { buildWorkTrace, buildClaimTrace } from "../work-trace-recorder.js";
 import type { TraceInput } from "../work-trace-recorder.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { GovernanceDecision } from "../governance-types.js";
@@ -228,5 +228,26 @@ describe("buildWorkTrace ingressPath", () => {
   it("defaults hashInputVersion to the latest version", () => {
     const t = buildWorkTrace(baseInput);
     expect(t.hashInputVersion).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("buildClaimTrace (D1 idempotency claim)", () => {
+  it("produces a running claim with sealed executionStartedAt and no execution fields", () => {
+    const t = buildClaimTrace({
+      workUnit: { ...baseWorkUnit, idempotencyKey: "claim-key" },
+      governanceDecision: executeDecision,
+      governanceCompletedAt: "2026-04-16T10:00:00.050Z",
+      executionStartedAt: "2026-05-31T00:00:00.000Z",
+    });
+    expect(t.outcome).toBe("running");
+    expect(t.executionStartedAt).toBe("2026-05-31T00:00:00.000Z");
+    expect(t.completedAt).toBeUndefined();
+    expect(t.executionOutputs).toBeUndefined();
+    expect(t.error).toBeUndefined();
+    expect(t.durationMs).toBe(0);
+    expect(t.ingressPath).toBe("platform_ingress");
+    expect(t.idempotencyKey).toBe("claim-key");
+    expect(t.governanceConstraints).toBe(executeDecision.constraints);
+    expect(t.governanceOutcome).toBe("execute");
   });
 });
