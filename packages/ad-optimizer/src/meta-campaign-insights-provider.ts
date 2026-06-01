@@ -8,6 +8,12 @@ import type {
 
 const MATERIAL_CHILD_SPEND_SHARE = 0.1;
 const MIN_LEARNING_COVERAGE = 0.8;
+// The Meta insights edge does not expose campaign last-modified. The native ad-set
+// learningPhase (deriveLearningPhase, from learning_stage_info) is the authoritative
+// learning signal, so report a value >= the V1 guard's 7-day recency window: this keeps
+// the legacy "recently-modified + <50 conversions" data heuristic from firing on data we
+// don't actually have, and lets the native signal govern.
+const LAST_MODIFIED_DAYS_UNKNOWN = 30;
 
 export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
   private readonly adsClient: AdsClientInterface;
@@ -37,7 +43,7 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     return {
       effectiveStatus: match?.effectiveStatus ?? "UNKNOWN",
       learningPhase,
-      lastModifiedDays: 0,
+      lastModifiedDays: LAST_MODIFIED_DAYS_UNKNOWN,
       optimizationEvents: match?.conversions ?? 0,
     };
   }
