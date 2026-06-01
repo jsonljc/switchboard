@@ -7,12 +7,21 @@ import type { computeRiskScore } from "./risk-scorer.js";
 
 type RiskScoreResult = ReturnType<typeof computeRiskScore>;
 
+/**
+ * Canonical spend-amount keys, in precedence order. `spendAmount` is the
+ * preferred key for new producers; `amount`/`budgetChange`/`newBudget` are
+ * accepted aliases for existing producers. This single extractor feeds BOTH the
+ * spend-limit deny check (below) and the spend-approval-threshold autonomy lever
+ * in the governance gate, so they can never disagree about "the amount".
+ */
+const SPEND_KEYS = ["spendAmount", "amount", "budgetChange", "newBudget"] as const;
+
 export function extractSpendAmount(proposal: ActionProposal): number | null {
-  return typeof proposal.parameters["amount"] === "number"
-    ? proposal.parameters["amount"]
-    : typeof proposal.parameters["budgetChange"] === "number"
-      ? proposal.parameters["budgetChange"]
-      : null;
+  for (const key of SPEND_KEYS) {
+    const value = proposal.parameters[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return null;
 }
 
 export function checkSpendLimits(
