@@ -113,4 +113,56 @@ describe("SkillExecutorImpl - ModelRouter integration", () => {
       }),
     );
   });
+
+  // Full chain: messages → classifyEmotionalSignal → emotionalSignalToStage →
+  // TierContext.currentStage → resolveTier → resolved profile model.
+  async function modelForMessages(
+    messages: Array<{ role: "user" | "assistant"; content: string }>,
+  ): Promise<string | undefined> {
+    const mockAdapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue(makeEndTurnResponse("done")),
+    };
+    const executor = new SkillExecutorImpl(mockAdapter, new Map(), new ModelRouter());
+    await executor.execute({
+      skill: minimalSkill,
+      parameters: {},
+      messages,
+      deploymentId: "dep-1",
+      orgId: "org-1",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+    const call = (mockAdapter.chatWithTools as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    return call?.profile?.model;
+  }
+
+  it("full chain: ready_now message → closing → premium (sonnet)", async () => {
+    expect(await modelForMessages([{ role: "user", content: "can I book now?" }])).toBe(
+      "claude-sonnet-4-6",
+    );
+  });
+
+  it("full chain: fear message → critical (opus)", async () => {
+    expect(await modelForMessages([{ role: "user", content: "I'm terrified of the pain" }])).toBe(
+      "claude-opus-4-6",
+    );
+  });
+
+  it("fear is bounded: a price-laden message stays premium, not critical", async () => {
+    expect(
+      await modelForMessages([{ role: "user", content: "scared the price is too high" }]),
+    ).toBe("claude-sonnet-4-6");
+  });
+
+  it("defensive: no user message (assistant only) → no stage → default haiku", async () => {
+    expect(await modelForMessages([{ role: "assistant", content: "hello there" }])).toBe(
+      "claude-haiku-4-5-20251001",
+    );
+  });
+
+  it("defensive: whitespace-only user text → no stage → default haiku", async () => {
+    expect(await modelForMessages([{ role: "user", content: "   " }])).toBe(
+      "claude-haiku-4-5-20251001",
+    );
+  });
 });

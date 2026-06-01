@@ -28,8 +28,10 @@ import type {
   LLMToolResultBlock,
   ToolCallingLLMAdapter,
 } from "./llm-types.js";
-import type { ModelRouter } from "../model-router.js";
+import type { ModelRouter, DialogueStage } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
+import { classifyEmotionalSignal } from "../dialogue/emotional-classifier.js";
+import { emotionalSignalToStage } from "../dialogue/dialogue-stage.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
 import {
   runBeforeLlmCallHooks,
@@ -142,6 +144,8 @@ export class SkillExecutorImpl implements SkillExecutor {
   ): ResolvedModelProfile | undefined {
     if (!this.router) return undefined;
 
+    const currentStage = this.deriveCurrentStage(params.messages);
+
     const logs: GovernanceLogEntry[] = governanceHook?.getGovernanceLogs() ?? [];
     const tierCtx = buildTierContext({
       turnCount: turnCount - 1,
@@ -152,6 +156,7 @@ export class SkillExecutorImpl implements SkillExecutor {
         (log) => log.decision === "require-approval" || log.decision === "deny",
       ),
       minimumModelTier: params.skill.minimumModelTier,
+      currentStage,
     });
     const slot = this.router.resolveTier(tierCtx);
     const modelConfig = this.router.resolve(slot);
@@ -161,6 +166,23 @@ export class SkillExecutorImpl implements SkillExecutor {
       temperature: modelConfig.temperature,
       timeoutMs: modelConfig.timeoutMs,
     };
+  }
+
+  /**
+   * Derive the coarse dialogue stage from the latest user message using the
+   * LLM-free emotional classifier (pure/sync regex). Defensive: returns
+   * `undefined` when there is no user message or its text is empty, so tiering
+   * silently falls back to the previous-turn rules. Only called when a router
+   * is present (see `resolveProfile`), so there is no overhead when routing is
+   * disabled.
+   */
+  private deriveCurrentStage(
+    messages: SkillExecutionParams["messages"],
+  ): DialogueStage | undefined {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    const text = lastUser?.content.trim();
+    if (!text) return undefined;
+    return emotionalSignalToStage(classifyEmotionalSignal({ message: text }));
   }
 
   async execute(params: SkillExecutionParams): Promise<SkillExecutionResult> {
