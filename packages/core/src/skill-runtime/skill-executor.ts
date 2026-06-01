@@ -140,11 +140,10 @@ export class SkillExecutorImpl implements SkillExecutor {
     params: SkillExecutionParams,
     turnCount: number,
     toolCallRecords: ToolCallRecord[],
+    currentStage: DialogueStage | undefined,
     governanceHook?: GovernanceHook,
   ): ResolvedModelProfile | undefined {
     if (!this.router) return undefined;
-
-    const currentStage = this.deriveCurrentStage(params.messages);
 
     const logs: GovernanceLogEntry[] = governanceHook?.getGovernanceLogs() ?? [];
     const tierCtx = buildTierContext({
@@ -172,9 +171,9 @@ export class SkillExecutorImpl implements SkillExecutor {
    * Derive the coarse dialogue stage from the latest user message using the
    * LLM-free emotional classifier (pure/sync regex). Defensive: returns
    * `undefined` when there is no user message or its text is empty, so tiering
-   * silently falls back to the previous-turn rules. Only called when a router
-   * is present (see `resolveProfile`), so there is no overhead when routing is
-   * disabled.
+   * silently falls back to the previous-turn rules. Called once per `execute()`
+   * (guarded by `this.router`), since the stage is a property of the customer's
+   * current message and is constant across the internal tool-loop turns.
    */
   private deriveCurrentStage(
     messages: SkillExecutionParams["messages"],
@@ -213,10 +212,21 @@ export class SkillExecutorImpl implements SkillExecutor {
     let turnCount = 0;
     const startTime = Date.now();
 
+    // The dialogue stage is a property of the customer's latest message, which is
+    // constant across this execution's internal tool-loop turns — derive it once.
+    // Guarded by `this.router` so there is zero overhead when routing is disabled.
+    const currentStage = this.router ? this.deriveCurrentStage(params.messages) : undefined;
+
     while (turnCount < this.policy.maxLlmTurns) {
       turnCount++;
 
-      const profile = this.resolveProfile(params, turnCount, toolCallRecords, governanceHook);
+      const profile = this.resolveProfile(
+        params,
+        turnCount,
+        toolCallRecords,
+        currentStage,
+        governanceHook,
+      );
 
       const llmCtx = {
         turnCount,

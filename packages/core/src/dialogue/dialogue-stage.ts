@@ -11,6 +11,12 @@ import type { EmotionalSignal } from "./types.js";
  * classifier's own concern precedence (price > trust > timing > fear), so a
  * price-laden message is classified `price` (→ objection) and never reaches
  * `fear`.
+ *
+ * `closing` derives from the classifier's `ready_now` signal, which the
+ * classifier tests before `exploring` — so a tentative-but-action-word message
+ * ("maybe I'll book now") favors recall over precision and may over-fire to
+ * `closing`. This is acceptable: the tier merge is a rank-max, so the worst case
+ * is over-spend (Sonnet on a soft turn), never under-serving a high-stakes turn.
  */
 export function emotionalSignalToStage(signal: EmotionalSignal): DialogueStage | undefined {
   if (signal.concernType === "fear") return "fear";
