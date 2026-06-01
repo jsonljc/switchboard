@@ -6,7 +6,11 @@ import type { ExecutionResult } from "../execution-result.js";
 import type { WorkOutcome } from "../types.js";
 import { buildWorkTrace } from "../work-trace-recorder.js";
 import type { TraceInput } from "../work-trace-recorder.js";
-import { assertNoMutatingBypass, MutatingBypassError } from "../work-trace-bypass-guard.js";
+import {
+  assertNoMutatingBypass,
+  isExecutedOutcome,
+  MutatingBypassError,
+} from "../work-trace-bypass-guard.js";
 
 // Doctrine under test (DOCTRINE.md / CLAUDE.md): "No mutating bypass paths."
 // A WorkTrace whose outcome is the terminal success value "completed" asserts a
@@ -96,6 +100,19 @@ function executedTrace(overrides: Partial<WorkTrace> = {}): WorkTrace {
     ...overrides,
   };
 }
+
+describe("isExecutedOutcome", () => {
+  it("is true only for the terminal success outcome", () => {
+    expect(isExecutedOutcome("completed")).toBe(true);
+  });
+
+  it.each(["failed", "pending_approval", "queued", "running"] as WorkOutcome[])(
+    "is false for non-executed outcome %s",
+    (outcome) => {
+      expect(isExecutedOutcome(outcome)).toBe(false);
+    },
+  );
+});
 
 describe("assertNoMutatingBypass — the no-mutating-bypass guard", () => {
   it("admits a completed trace governance authorized before execution started", () => {

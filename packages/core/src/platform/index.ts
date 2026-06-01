@@ -57,11 +57,7 @@ export {
   verifyWorkTraceIntegrity,
 } from "./work-trace-integrity.js";
 export type { IntegrityVerdict, IntegrityOverride } from "./work-trace-integrity.js";
-export {
-  MutatingBypassError,
-  assertNoMutatingBypass,
-  isExecutedOutcome,
-} from "./work-trace-bypass-guard.js";
+export { MutatingBypassError, assertNoMutatingBypass } from "./work-trace-bypass-guard.js";
 export {
   WORK_TRACE_HASH_VERSION,
   WORK_TRACE_HASH_VERSION_V1,
