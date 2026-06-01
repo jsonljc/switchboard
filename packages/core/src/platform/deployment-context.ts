@@ -29,6 +29,15 @@ export interface DeploymentContext {
    * deny-based compliance floor. See `resolveTrustLevelOverride` in @switchboard/schemas.
    */
   trustLevelOverride?: TrustLevel;
+  /**
+   * Explicit per-deployment opt-in for the spend-approval autonomy lever, from
+   * `governanceSettings.spendAutonomy` (boolean). Required to be a SEPARATE signal
+   * from `policyOverrides.spendApprovalThreshold` because that column is
+   * non-nullable (`Float @default(50)`) and thus always populated — so the bare
+   * presence of a threshold cannot mean "the operator opted in". Defaults `false`;
+   * the lever stays dormant until explicitly enabled. See `resolveSpendAutonomyEnabled`.
+   */
+  spendAutonomyEnabled?: boolean;
   persona?: AgentPersona;
   policyOverrides?: DeploymentPolicyOverrides;
   // PR-3.2e: raw AgentDeployment.inputConfig forwarded for builders that

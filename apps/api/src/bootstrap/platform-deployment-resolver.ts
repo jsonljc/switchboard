@@ -34,6 +34,10 @@ export function resolveAuthoritativeDeployment(
         // left the stored threshold inert in production. (persona/inputConfig are
         // also dropped by this live mapper — a separate, out-of-scope #644 gap.)
         policyOverrides: result.policyOverrides,
+        // Forward the explicit spend-autonomy opt-in. The threshold column is
+        // always populated (Float @default 50), so this separate flag — not the
+        // threshold's presence — is what activates the lever.
+        spendAutonomyEnabled: result.spendAutonomyEnabled,
       };
     },
   };

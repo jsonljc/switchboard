@@ -310,7 +310,6 @@ export async function runRecommendationSink(
   for (const rec of args.recommendations) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
     const { financialEffect, externalEffect } = ACTION_RISK_CONTRACT[rec.action];
-    const dollarsAtRisk = estimateRisk(rec);
     const result = await args.emit(
       {
         orgId: args.orgId,
@@ -319,20 +318,24 @@ export async function runRecommendationSink(
         action: rec.action,
         humanSummary: humanizeRecommendation(rec),
         confidence: rec.confidence,
-        dollarsAtRisk,
+        dollarsAtRisk: estimateRisk(rec),
         riskLevel: URGENCY_TO_RISK[rec.urgency],
         financialEffect,
         externalEffect,
         clientFacing: false,
         requiresConfirmation: false,
-        parameters: {
-          ...((rec as { params?: Record<string, unknown> }).params ?? {}),
-          // Surface the dollar figure as STRUCTURED data so the governance gate's
-          // extractSpendAmount (and the spend-approval threshold) can read it.
-          // Only for financial actions with a known figure — an unknown amount
-          // must fail safe (stay parked), so we omit spendAmount when it's 0.
-          ...(financialEffect && dollarsAtRisk > 0 ? { spendAmount: dollarsAtRisk } : {}),
-        },
+        // NOTE: we deliberately do NOT inject a `spendAmount` here for the
+        // governance spend-approval threshold. `dollarsAtRisk` is scraped from the
+        // human-authored `estimatedImpact` string, which is an IMPACT projection
+        // (often revenue/savings, e.g. "saves $450/mo"), NOT the budget *delta* the
+        // threshold must compare against. Feeding it to the gate would mis-classify
+        // under/over threshold. A correct producer requires a STRUCTURED budget-delta
+        // field on RecommendationOutput (which it does not yet carry) AND a path that
+        // routes it through PlatformIngress — neither exists today (act_on_recommendation
+        // submits only {recommendationId, action, note}). The gate's extractSpendAmount
+        // already reads `spendAmount`/`budgetChange`/`newBudget`, so it is ready to
+        // consume such a structured field once a producer supplies it.
+        parameters: { ...((rec as { params?: Record<string, unknown> }).params ?? {}) },
         presentation: buildPresentation(rec),
         targetEntities: { campaignId: rec.campaignId, campaignName: rec.campaignName },
         expiresAt,

@@ -77,14 +77,27 @@ can never disagree about what "the amount" is. (This also fixes a latent bug:
 Alex budget actions that use `newBudget` were invisible to the spend-limit check
 before.)
 
-### 3.2 Thread `spendApprovalThreshold` to the gate (#644 fix)
+### 3.2 Thread `spendApprovalThreshold` + an explicit opt-in to the gate (#644 fix)
 
 `resolveAuthoritativeDeployment` adds `policyOverrides: result.policyOverrides`
-to the `DeploymentContext` it returns. (`toDeploymentContext` already threads
-it; this brings the live mapper to parity for `policyOverrides` only.) Scope
-note: `persona`/`inputConfig` are also dropped by the live mapper — that is a
-pre-existing #644 gap with different behavioural blast radius (prompt persona,
-pilotMode) and is intentionally **out of scope** here; documented in the PR.
+to the `DeploymentContext` it returns (the threshold _value_). (`toDeploymentContext`
+already threads it; this brings the live mapper to parity for `policyOverrides`.)
+Scope note: `persona`/`inputConfig` are also dropped by the live mapper — a
+pre-existing #644 gap with different blast radius (prompt persona, pilotMode),
+intentionally **out of scope** here.
+
+**Explicit opt-in (critical safety design).** `spendApprovalThreshold` is a
+non-nullable Prisma column (`Float @default(50)`), so `policyOverrides.spendApprovalThreshold`
+is **always populated at $50** for any real deployment. The bare presence of a
+threshold therefore CANNOT mean "the operator chose this boundary" — and the seed
+already ships Alex/Riley as `trustLevelOverride:"autonomous"`. Relying on
+"autonomous + threshold present" would make the $50 default an **unchosen**
+auto-execute boundary the instant a spend producer reaches the gate. So the lever
+requires a **separate, explicitly-set** signal: `governanceSettings.spendAutonomy === true`
+(resolved by `resolveSpendAutonomyEnabled`, threaded as `DeploymentContext.spendAutonomyEnabled`,
+mirroring `trustLevelOverride`). The column supplies the dollar _value_; this flag
+supplies _activation_. Defaults `false` ⇒ dormant. Seeded-autonomous deployments
+stay dormant until an operator deliberately opts in.
 
 ### 3.3 Gate logic — `applySpendApprovalThreshold`
 
@@ -94,18 +107,21 @@ applied in `GovernanceGate.evaluate` immediately after
 
 ```
 applySpendApprovalThreshold(decision, {
-  trustLevelOverride,   // workUnit.deployment?.trustLevelOverride
-  threshold,            // workUnit.deployment?.policyOverrides?.spendApprovalThreshold
-  spendAmount,          // extractSpendAmount(proposal)
-  mutationClass,        // registration.mutationClass
-  reversibility,        // riskInput.reversibility
+  trustLevelOverride,    // workUnit.deployment?.trustLevelOverride
+  spendAutonomyEnabled,  // workUnit.deployment?.spendAutonomyEnabled (explicit opt-in)
+  threshold,             // workUnit.deployment?.policyOverrides?.spendApprovalThreshold
+  spendAmount,           // extractSpendAmount(proposal)
+  mutationClass,         // registration.mutationClass
+  reversibility,         // riskInput.reversibility
 })
 ```
 
 Rules (in order; any unmet guard ⇒ return `decision` **unchanged**):
 
-1. `trustLevelOverride === "autonomous"` — else dormant. **This is the safe
-   default**: every guided/supervised deployment is byte-identical to today.
+1. `trustLevelOverride === "autonomous"` — else dormant. **Safe default**: every
+   guided/supervised deployment is byte-identical to today.
+   1b. `spendAutonomyEnabled === true` — the explicit per-deployment opt-in (§3.2).
+   Else dormant, even for an autonomous deployment carrying the $50 column default.
 2. `decision.outcome !== "deny"` — **never touch a deny** (forbidden behaviour,
    spend-limit exceeded, policy deny, irreversible-at-supervised deny all stand).
 3. `threshold` is a finite number — else no threshold configured.
@@ -113,6 +129,12 @@ Rules (in order; any unmet guard ⇒ return `decision` **unchanged**):
    only governs spend.
 5. Let `amount = |spendAmount|` and
    `isReversible = mutationClass !== "destructive" && reversibility !== "none"`.
+   **Production caveat:** no cartridge populates `reversibility` today (the gate
+   falls back to `DEFAULT_RISK_INPUT.reversibility = "full"`), so this brake
+   effectively reduces to `mutationClass !== "destructive"`. Any future executor
+   for irreversible financial actions (payment charges/refunds) MUST register them
+   as `mutationClass:"destructive"` (or supply `reversibility:"none"`) or they
+   become eligible for auto-execute under threshold.
 6. If `amount <= threshold`:
    - `require_approval` **and** `approvalLevel === "standard"` **and**
      `isReversible` → **downgrade to execute** (the autonomy grant). Carry over
@@ -135,45 +157,49 @@ under threshold under autonomous_; everything else is a no-op or an escalation. 
 deny is a fixed point.
 
 **Schema-default note:** `spendApprovalThreshold` is `Float @default(50)`
-(non-nullable), so once `policyOverrides` is threaded, every deployment carries
-`threshold = 50` unless overridden. Combined with rule 1, an **autonomous**
-deployment therefore auto-approves reversible financial standard-approval actions
-**≤ $50** by default. This is the intended calibration (the schema default _is_
-the grant) and is opt-in (requires `trustLevelOverride="autonomous"`, which no
-production deployment currently sets). Operators tune the dollar grant per
-deployment.
+(non-nullable), so every deployment carries `threshold = 50`. This value is used
+**only after** the explicit `spendAutonomyEnabled` opt-in (§3.2, rule 1b) — so the
+$50 default is never an _unchosen_ auto-execute boundary. When an operator opts a
+deployment in, $50 becomes its default reversible-standard-spend grant until they
+tune `spendApprovalThreshold` per deployment.
 
 `evaluate`'s `system_auto_approved` short-circuit (top of the method) is
 untouched — it is an explicit "skip approval lookup" path for operator-direct
 intents and is not part of the agent-autonomy lane.
 
-### 3.4 Producer-population (Riley) + honest boundary
+### 3.4 Producer reality + honest boundary
 
-The Riley recommendation-sink (`packages/ad-optimizer/src/recommendation-sink.ts`)
-will inject the dollar figure as **structured** `parameters.spendAmount` (number)
-for `financialEffect` actions, instead of leaving it trapped in the
-`estimatedImpact` display string. So a recommendation now _carries_ its amount in
-a field `extractSpendAmount` reads. The end-to-end test drives the gate from this
-exact producer parameter shape (not a hand-built fixture) — per
-`feedback_safety_gate_needs_producer_population`.
+The extractor (§3.1) reads a producer's **structured** spend field
+(`spendAmount`/`amount`/`budgetChange`/`newBudget`). The end-to-end gate test
+drives the gate from exactly that shape (`budgetChange`), not a hand-built
+decision — per `feedback_safety_gate_needs_producer_population`.
 
-**Boundary flagged for review (not a hidden hole):** no _live_ autonomous-agent
-spend-execution path submits these through the gate today — Riley's apply
-(`operator.act_on_recommendation`) is human-initiated and only transitions
-recommendation state; the `digital-ads` executor is an unregistered stub
-(`registerCartridges()` is empty); the one amount-carrying gate action
-(`operator.record_revenue`) is `system_auto_approved` and _records_ revenue
-rather than spending. Therefore, **in production the threshold is dormant** until
-(a) an org sets a deployment's `trustLevelOverride="autonomous"` **and** (b) an
-autonomous-agent spend action reaches the gate. Dormant = today's full
-approval-gating, so this **fails safe**. Wiring an autonomous-agent
-spend-execution path (or gating `act_on_recommendation`) is a larger, separate
-workstream deliberately **out of scope**; gating a human-initiated click by an
-_autonomy_ threshold would itself be a new illusion and is avoided.
+**What we deliberately do NOT do:** we do not scrape Riley's `dollarsAtRisk` into
+`parameters.spendAmount`. `dollarsAtRisk` comes from `estimateRisk`, which pulls
+the first dollar value out of the human `estimatedImpact` string — an _impact
+projection_ (often revenue/savings, e.g. "saves $450/mo"), **not** the budget
+delta the threshold must compare against. Feeding it to the gate would
+mis-classify under/over threshold. A correct Riley producer needs a **structured
+budget-delta field** on `RecommendationOutput` (which it does not yet carry) AND a
+path that routes it through `PlatformIngress` — neither exists today
+(`operator.act_on_recommendation` submits only `{recommendationId, action, note}`).
+The sink carries a code comment recording this prerequisite.
 
-Net effect of this PR: the stored field becomes **enforced when active, wired to
-the gate, fed a structured amount, and proven by tests** — no longer ignored —
-while not fabricating autonomy that does not exist.
+**Boundary flagged for review (not a hidden hole):** no _live_ path submits an
+amount-carrying spend action through the gate today — Riley's apply is
+human-initiated and only transitions recommendation state; the `digital-ads`
+executor is an unregistered stub; `operator.record_revenue` is
+`system_auto_approved` and _records_ revenue. So in production the lever is
+**doubly dormant**: it needs (a) explicit `spendAutonomy` opt-in, (b)
+`trustLevelOverride:"autonomous"`, AND (c) a producer that routes a structured
+spend amount through the gate. Each absent ⇒ today's full approval-gating, so it
+**fails safe**. Wiring an autonomous-agent spend-execution path is a larger,
+separate workstream deliberately **out of scope**; gating a human-initiated click
+by an _autonomy_ threshold would itself be a new illusion and is avoided.
+
+Net effect of this PR: the stored field becomes **enforceable, correctly wired,
+safe-by-default (explicit opt-in), and proven by tests** — no longer silently
+ignored — without fabricating autonomy or feeding the gate a wrong number.
 
 ## 4. Safety invariants (must be test-pinned)
 
@@ -185,6 +211,11 @@ while not fabricating autonomy that does not exist.
    `require_approval` is **not** downgraded.
 3. **Default is dormant.** Guided/supervised (or absent override) → no-op even
    with a threshold and a spend amount present. Byte-identical to today.
+   3b. **Opt-in required.** An **autonomous** deployment that has NOT set
+   `spendAutonomy=true` is a no-op even with the $50 column default present — the
+   always-populated default never silently grants.
+   3c. **Only standard approvals relax.** `elevated`/`mandatory` approvals (high
+   risk, system-critical posture, manual gate) are never downgraded.
 4. **Non-financial untouched.** Autonomous + no extractable amount → no-op.
 5. **Deny-floor independence.** The banned-phrase, claim-classifier, and PDPA
    consent gates are skill-runtime `afterSkill` hooks
@@ -199,18 +230,24 @@ while not fabricating autonomy that does not exist.
 
 ## 5. Files
 
-| File                                                                    | Change                                   |
-| ----------------------------------------------------------------------- | ---------------------------------------- |
-| `packages/core/src/engine/spend-limits.ts`                              | extend `extractSpendAmount`              |
-| `packages/core/src/engine/__tests__/spend-limits.test.ts`               | **new** unit tests                       |
-| `packages/core/src/platform/governance/spend-approval-threshold.ts`     | **new** pure helper                      |
-| `packages/core/src/platform/__tests__/spend-approval-threshold.test.ts` | **new** unit tests                       |
-| `packages/core/src/platform/governance/governance-gate.ts`              | call helper after `toGovernanceDecision` |
-| `packages/core/src/platform/__tests__/governance-gate.test.ts`          | extend: e2e + invariants                 |
-| `apps/api/src/bootstrap/platform-deployment-resolver.ts`                | thread `policyOverrides`                 |
-| `apps/api/src/__tests__/platform-deployment-resolver.test.ts`           | assert threshold forwards                |
-| `packages/ad-optimizer/src/recommendation-sink.ts`                      | populate `parameters.spendAmount`        |
-| `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`       | assert populated                         |
+| File                                                                              | Change                                                 |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `packages/schemas/src/policy-overrides-config.ts`                                 | add `resolveSpendAutonomyEnabled`                      |
+| `packages/schemas/src/__tests__/policy-overrides-config.test.ts`                  | resolver tests                                         |
+| `packages/core/src/engine/spend-limits.ts`                                        | extend `extractSpendAmount`                            |
+| `packages/core/src/engine/__tests__/spend-limits.test.ts`                         | **new** unit tests                                     |
+| `packages/core/src/platform/governance/spend-approval-threshold.ts`               | **new** pure helper (opt-in + standard-only)           |
+| `packages/core/src/platform/__tests__/spend-approval-threshold.test.ts`           | **new** unit tests                                     |
+| `packages/core/src/platform/governance/governance-gate.ts`                        | call helper after `toGovernanceDecision`               |
+| `packages/core/src/platform/__tests__/governance-gate.test.ts`                    | extend: e2e + invariants                               |
+| `packages/core/src/platform/deployment-context.ts`                                | add `spendAutonomyEnabled` field                       |
+| `packages/core/src/platform/deployment-resolver.ts`                               | thread `spendAutonomyEnabled` (result + mapper)        |
+| `packages/core/src/platform/prisma-deployment-resolver.ts`                        | resolve `spendAutonomyEnabled` from governanceSettings |
+| `apps/api/src/bootstrap/platform-deployment-resolver.ts`                          | thread `policyOverrides` + `spendAutonomyEnabled`      |
+| `apps/api/src/__tests__/platform-deployment-resolver.test.ts`                     | assert both forward                                    |
+| `packages/ad-optimizer/src/recommendation-sink.ts`                                | document why spendAmount is NOT scraped                |
+| `packages/ad-optimizer/src/__tests__/recommendation-sink.test.ts`                 | assert no scraped spendAmount                          |
+| `packages/core/src/skill-runtime/__tests__/deny-floor-trust-independence.test.ts` | pin lever outside the deny floor                       |
 
 ## 6. Out of scope
 

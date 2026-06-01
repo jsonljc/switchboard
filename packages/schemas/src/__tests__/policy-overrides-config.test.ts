@@ -3,6 +3,7 @@ import {
   DeploymentPolicyOverridesSchema,
   resolvePolicyOverrides,
   resolveTrustLevelOverride,
+  resolveSpendAutonomyEnabled,
 } from "../policy-overrides-config.js";
 
 describe("DeploymentPolicyOverridesSchema", () => {
@@ -103,5 +104,23 @@ describe("resolveTrustLevelOverride", () => {
     expect(resolveTrustLevelOverride(null)).toBeUndefined();
     expect(resolveTrustLevelOverride(undefined)).toBeUndefined();
     expect(resolveTrustLevelOverride("autonomous")).toBeUndefined();
+  });
+});
+
+describe("resolveSpendAutonomyEnabled", () => {
+  it("is true only when explicitly set to boolean true", () => {
+    expect(resolveSpendAutonomyEnabled({ spendAutonomy: true })).toBe(true);
+  });
+  it("is false for absent, falsy, or truthy-but-not-true values (no silent opt-in)", () => {
+    expect(resolveSpendAutonomyEnabled({})).toBe(false);
+    expect(resolveSpendAutonomyEnabled({ spendAutonomy: false })).toBe(false);
+    // A non-boolean truthy value must NOT opt in — only literal `true` does.
+    expect(resolveSpendAutonomyEnabled({ spendAutonomy: "true" })).toBe(false);
+    expect(resolveSpendAutonomyEnabled({ spendAutonomy: 1 })).toBe(false);
+  });
+  it("is false for non-object inputs", () => {
+    expect(resolveSpendAutonomyEnabled(null)).toBe(false);
+    expect(resolveSpendAutonomyEnabled(undefined)).toBe(false);
+    expect(resolveSpendAutonomyEnabled("true")).toBe(false);
   });
 });

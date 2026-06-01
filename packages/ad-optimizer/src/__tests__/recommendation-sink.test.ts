@@ -269,7 +269,7 @@ describe("runRecommendationSink", () => {
   });
 });
 
-describe("runRecommendationSink — structured spend amount", () => {
+describe("runRecommendationSink — spend amount is NOT scraped into the gate", () => {
   const run = async (rec: RecommendationOutput) => {
     const emit: RecommendationEmitter = vi.fn(async () => ({ surface: "queue" }) as EmitOutcome);
     await runRecommendationSink({
@@ -283,20 +283,10 @@ describe("runRecommendationSink — structured spend amount", () => {
     return input.parameters as Record<string, unknown>;
   };
 
-  it("populates parameters.spendAmount from dollarsAtRisk for a financialEffect action", async () => {
-    // pause is financialEffect:true; "saves $40/day" ⇒ dollarsAtRisk 40.
+  it("does NOT inject spendAmount from the scraped impact string (it is an impact projection, not a spend delta)", async () => {
+    // "saves $40/day" is a projected SAVING, not the budget delta the governance
+    // spend threshold compares against — so it must not flow to the gate as spendAmount.
     const params = await run(baseRec({ action: "pause", estimatedImpact: "saves $40/day" }));
-    expect(params["spendAmount"]).toBe(40);
-  });
-
-  it("omits spendAmount when no dollar figure is present (fail-safe: stays parked)", async () => {
-    const params = await run(baseRec({ action: "scale", estimatedImpact: "better reach" }));
-    expect(params["spendAmount"]).toBeUndefined();
-  });
-
-  it("omits spendAmount for a non-financial (informational) action", async () => {
-    // hold is financialEffect:false even with a dollar figure in the impact.
-    const params = await run(baseRec({ action: "hold", estimatedImpact: "~$50 at stake" }));
     expect(params["spendAmount"]).toBeUndefined();
   });
 });

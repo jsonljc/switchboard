@@ -34,6 +34,7 @@ const deny = (): GovernanceDecision => ({
 });
 const base = {
   trustLevelOverride: "autonomous" as const,
+  spendAutonomyEnabled: true,
   threshold: 100,
   spendAmount: 50,
   mutationClass: "write" as const,
@@ -70,6 +71,14 @@ describe("applySpendApprovalThreshold", () => {
       applySpendApprovalThreshold(approve(), { ...base, trustLevelOverride: undefined }),
     ).toEqual(approve());
   });
+  it("is dormant unless spend-autonomy is explicitly opted in (the always-$50 default must not auto-grant)", () => {
+    expect(
+      applySpendApprovalThreshold(approve(), { ...base, spendAutonomyEnabled: false }),
+    ).toEqual(approve());
+    expect(
+      applySpendApprovalThreshold(approve(), { ...base, spendAutonomyEnabled: undefined }),
+    ).toEqual(approve());
+  });
   it("is a no-op when no threshold is configured", () => {
     expect(applySpendApprovalThreshold(approve(), { ...base, threshold: undefined })).toEqual(
       approve(),
@@ -95,12 +104,22 @@ describe("applySpendApprovalThreshold", () => {
     expect(r.outcome).toBe("require_approval");
     expect(r.matchedPolicies).toEqual(["POLICY_RULE"]);
   });
+  const approveAt = (approvalLevel: string): GovernanceDecision => ({
+    outcome: "require_approval",
+    riskScore: 10,
+    approvalLevel,
+    approvers: [],
+    constraints,
+    matchedPolicies: ["POLICY_RULE"],
+  });
   it("does NOT downgrade a mandatory approval under threshold (system-critical / manual gate)", () => {
-    const mandatory: GovernanceDecision = { ...approve(), approvalLevel: "mandatory" };
-    expect(applySpendApprovalThreshold(mandatory, base).outcome).toBe("require_approval");
+    expect(applySpendApprovalThreshold(approveAt("mandatory"), base).outcome).toBe(
+      "require_approval",
+    );
   });
   it("does NOT downgrade an elevated (high-risk) approval under threshold", () => {
-    const elevated: GovernanceDecision = { ...approve(), approvalLevel: "elevated" };
-    expect(applySpendApprovalThreshold(elevated, base).outcome).toBe("require_approval");
+    expect(applySpendApprovalThreshold(approveAt("elevated"), base).outcome).toBe(
+      "require_approval",
+    );
   });
 });

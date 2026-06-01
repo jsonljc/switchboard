@@ -177,6 +177,7 @@ export class GovernanceGate {
     // deny, so the compliance/limit floor is unaffected.
     return applySpendApprovalThreshold(decision, {
       trustLevelOverride: workUnit.deployment?.trustLevelOverride,
+      spendAutonomyEnabled: workUnit.deployment?.spendAutonomyEnabled,
       threshold: workUnit.deployment?.policyOverrides?.spendApprovalThreshold,
       spendAmount: extractSpendAmount(proposal),
       mutationClass: registration.mutationClass,

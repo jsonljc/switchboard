@@ -3,6 +3,7 @@ import {
   resolvePersona,
   resolvePolicyOverrides,
   resolveTrustLevelOverride,
+  resolveSpendAutonomyEnabled,
 } from "@switchboard/schemas";
 import type { DeploymentResolver, DeploymentResolverResult } from "./deployment-resolver.js";
 import { DeploymentInactiveError } from "./deployment-resolver.js";
@@ -130,6 +131,7 @@ export class PrismaDeploymentResolver implements DeploymentResolver {
       trustScore: row.listing.trustScore,
       trustLevel: trustLevelFromScore(row.listing.trustScore),
       trustLevelOverride: resolveTrustLevelOverride(row.governanceSettings),
+      spendAutonomyEnabled: resolveSpendAutonomyEnabled(row.governanceSettings),
       persona: resolvePersona(inputConfig),
       inputConfig,
       policyOverrides: resolvePolicyOverrides(row as unknown as Record<string, unknown>),

@@ -14,6 +14,8 @@ export interface DeploymentResolverResult {
   trustScore: number;
   /** Explicit launch-posture trust override (see DeploymentContext.trustLevelOverride). */
   trustLevelOverride?: TrustLevel;
+  /** Explicit opt-in for the spend-approval autonomy lever (see DeploymentContext). */
+  spendAutonomyEnabled?: boolean;
   persona?: AgentPersona;
   inputConfig: Record<string, unknown>;
   policyOverrides?: DeploymentPolicyOverrides;
@@ -42,6 +44,7 @@ export function toDeploymentContext(result: DeploymentResolverResult): Deploymen
     trustLevel: result.trustLevel,
     trustScore: result.trustScore,
     trustLevelOverride: result.trustLevelOverride,
+    spendAutonomyEnabled: result.spendAutonomyEnabled,
     persona: result.persona,
     policyOverrides: result.policyOverrides,
     inputConfig: result.inputConfig,

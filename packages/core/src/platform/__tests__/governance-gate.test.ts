@@ -539,6 +539,7 @@ describe("GovernanceGate spend-approval threshold", () => {
         trustLevel: "guided",
         trustScore: 42,
         trustLevelOverride: "autonomous",
+        spendAutonomyEnabled: true,
         policyOverrides: { spendApprovalThreshold: threshold },
       },
     });
@@ -603,6 +604,31 @@ describe("GovernanceGate spend-approval threshold", () => {
     );
 
     expect(decision.outcome).toBe("require_approval");
+  });
+
+  it("is dormant for an autonomous deployment that has NOT opted into spend autonomy", async () => {
+    const deps = makeDeps({
+      evaluate: vi.fn().mockReturnValue(makeTrace({ approvalRequired: "standard" })),
+    });
+    const gate = new GovernanceGate(deps);
+    const wu = makeWorkUnit({
+      intent: "digital-ads.campaign.adjust_budget",
+      parameters: { budgetChange: 50 },
+      deployment: {
+        deploymentId: "dep-1",
+        skillSlug: "riley",
+        trustLevel: "guided",
+        trustScore: 42,
+        trustLevelOverride: "autonomous",
+        // spendAutonomyEnabled omitted ⇒ the always-$50 column default must NOT grant.
+        policyOverrides: { spendApprovalThreshold: 100 },
+      },
+    });
+
+    const decision = await gate.evaluate(wu, budgetReg());
+
+    expect(decision.outcome).toBe("require_approval");
+    expect(decision.matchedPolicies).not.toContain("SPEND_APPROVAL_THRESHOLD");
   });
 
   it("is dormant for a guided deployment (byte-identical to today)", async () => {

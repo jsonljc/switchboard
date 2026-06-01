@@ -9,6 +9,13 @@ export const SPEND_APPROVAL_THRESHOLD_MARKER = "SPEND_APPROVAL_THRESHOLD";
 export interface SpendApprovalThresholdContext {
   /** Deployment launch posture. The threshold engages ONLY when "autonomous". */
   trustLevelOverride?: TrustLevel;
+  /**
+   * Explicit per-deployment opt-in (`governanceSettings.spendAutonomy`). Required
+   * because `threshold` (the `spendApprovalThreshold` column) is non-nullable and
+   * always populated at its $50 default — so its presence cannot mean "opted in".
+   * The lever is dormant unless this is `true`.
+   */
+  spendAutonomyEnabled?: boolean;
   /** Per-deployment spendApprovalThreshold (dollars). Undefined ⇒ no-op. */
   threshold?: number;
   /** Action spend amount; null for a non-financial action ⇒ no-op. */
@@ -38,6 +45,10 @@ export function applySpendApprovalThreshold(
 ): GovernanceDecision {
   // Opt-in: only an explicitly-autonomous deployment uses the threshold.
   if (ctx.trustLevelOverride !== "autonomous") return decision;
+  // Explicit opt-in required. The spendApprovalThreshold column is non-nullable
+  // ($50 default), so its presence cannot signal operator intent — this separate
+  // governanceSettings.spendAutonomy flag must be deliberately set. Absent ⇒ dormant.
+  if (ctx.spendAutonomyEnabled !== true) return decision;
   // Never relax a deny — the compliance/limit floor is independent of autonomy.
   if (decision.outcome === "deny") return decision;
   // No threshold configured.
@@ -46,6 +57,12 @@ export function applySpendApprovalThreshold(
   if (ctx.spendAmount === null || !Number.isFinite(ctx.spendAmount)) return decision;
 
   const amount = Math.abs(ctx.spendAmount);
+  // Reversibility brake. NOTE: in production no cartridge populates `reversibility`
+  // (the gate falls back to DEFAULT_RISK_INPUT.reversibility = "full"), so this brake
+  // effectively reduces to `mutationClass !== "destructive"`. Any future executor for
+  // irreversible financial actions (e.g. payment charges/refunds) MUST register them
+  // as `mutationClass: "destructive"` (or supply a cartridge risk input with
+  // `reversibility: "none"`) or they would be eligible for auto-execute under threshold.
   const isReversible = ctx.mutationClass !== "destructive" && ctx.reversibility !== "none";
 
   if (amount <= ctx.threshold) {

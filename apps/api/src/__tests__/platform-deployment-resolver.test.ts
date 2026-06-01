@@ -92,4 +92,16 @@ describe("resolveAuthoritativeDeployment", () => {
 
     expect(ctx.policyOverrides).toBeUndefined();
   });
+
+  it("forwards the explicit spendAutonomyEnabled opt-in to the context", async () => {
+    const authoritative = resolveAuthoritativeDeployment(
+      makeResolver(makeResult({ spendAutonomyEnabled: true })),
+    );
+
+    const ctx = await authoritative.resolve(REQUEST);
+
+    // The lever's activation flag must reach the gate; without it the gate cannot
+    // distinguish an opted-in deployment from one merely carrying the $50 default.
+    expect(ctx.spendAutonomyEnabled).toBe(true);
+  });
 });
