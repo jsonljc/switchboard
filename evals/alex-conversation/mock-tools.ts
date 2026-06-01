@@ -249,11 +249,62 @@ export function createMockTools(): MockTools {
     },
   };
 
+  const followUp: SkillTool = {
+    id: "follow-up",
+    operations: {
+      "followup.schedule": recordingOp(
+        "follow-up",
+        "followup.schedule",
+        "Schedule a governed re-engagement follow-up for a lead. Use on genuine deferrals when the lead wants to be contacted later. Does not message the customer now.",
+        "write",
+        {
+          type: "object",
+          properties: {
+            contactId: { type: "string", description: "Contact UUID" },
+            reason: {
+              type: "string",
+              description: "What the lead was weighing or why they deferred",
+            },
+            delayDays: { type: "number", description: "Days until follow-up (default 2)" },
+          },
+          required: ["contactId", "reason"],
+        },
+        () => ({ followUpId: "fu_mock", status: "scheduled" }),
+        false,
+      ),
+    },
+  };
+
+  const delegate: SkillTool = {
+    id: "delegate",
+    operations: {
+      "task.delegate": recordingOp(
+        "delegate",
+        "task.delegate",
+        "Delegate a task to another agent (e.g. Mira for creative). Use for governed agent-to-agent handoffs.",
+        "write",
+        {
+          type: "object",
+          properties: {
+            targetAgent: { type: "string", description: "Target agent slug" },
+            taskDescription: { type: "string", description: "What to do" },
+            context: { type: "string", description: "Relevant context to pass" },
+          },
+          required: ["targetAgent", "taskDescription"],
+        },
+        () => ({ delegationId: "del_mock", status: "pending" }),
+        false,
+      ),
+    },
+  };
+
   const tools = new Map<string, SkillTool>([
     ["crm-query", crmQuery],
     ["crm-write", crmWrite],
     ["calendar-book", calendarBook],
     ["escalate", escalate],
+    ["follow-up", followUp],
+    ["delegate", delegate],
   ]);
 
   return { tools, calls };

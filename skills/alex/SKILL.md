@@ -192,7 +192,7 @@ After qualification, handle any objections and move toward booking.
 
 - Reframe around value, not pressure.
 - Never disparage competitors.
-- If they say "let me think about it," suggest a specific next step with a timeline.
+- If they say "let me think about it," surface the concern with one open question; on a genuine deferral, call the `follow-up` tool (`followup.schedule`) and say you'll check in in a couple of days; do not promise a specific slot or reservation.
 
 ### Phase 4: Book
 

@@ -264,7 +264,7 @@ describe("gradeDeterministic — tool constraint check", () => {
     expect(result.violations.some((v) => v.code === "unexpected-tool:crm-write")).toBe(true);
   });
 
-  it("accepts all four default Alex tool ids without violation", async () => {
+  it("accepts four of the six default Alex tool ids without violation", async () => {
     const turn = makeTurn("Done.", [
       makeToolCall("crm-query"),
       makeToolCall("crm-write"),
@@ -361,9 +361,9 @@ describe("gradeDeterministic — claimWarnings detail (sentence + confidence + c
 // ---------------------------------------------------------------------------
 
 describe("ALEX_ALLOWED_TOOL_IDS", () => {
-  it("contains exactly the four declared Alex tools", () => {
+  it("contains exactly the six declared Alex tools", () => {
     expect([...ALEX_ALLOWED_TOOL_IDS].sort()).toEqual(
-      ["calendar-book", "crm-query", "crm-write", "escalate"].sort(),
+      ["calendar-book", "crm-query", "crm-write", "delegate", "escalate", "follow-up"].sort(),
     );
   });
 });
