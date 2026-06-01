@@ -26,3 +26,8 @@ export {
   canSendWhatsAppTemplate,
 } from "./whatsapp-window.js";
 export type { WhatsAppTemplateConsentReason } from "./whatsapp-window.js";
+export { evaluateProactiveSendEligibility } from "./proactive-eligibility.js";
+export type {
+  ProactiveSendEligibility,
+  ProactiveEligibilityInput,
+} from "./proactive-eligibility.js";
