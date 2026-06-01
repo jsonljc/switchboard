@@ -1,3 +1,8 @@
+/* eslint-disable max-lines -- this test-fixtures aggregator crossed the 600-line
+   guideline when the D1 claim-first WorkTrace store fixtures (claim + finalize
+   lifecycle on InMemory/ObservableWorkTraceStore) were added (PR #780). Suggested
+   seam: extract the WorkTrace store fixtures into test-stores-work-trace.ts and
+   re-export. Remove this disable when split. */
 // Shared in-memory store stubs used by buildTestServer.
 //
 // Extracted from test-server.ts so the latter stays under the 600-line

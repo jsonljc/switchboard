@@ -1,3 +1,8 @@
+/* eslint-disable max-lines -- this file crossed the 600-line guideline when the
+   D1 claim() idempotency primitive was added (PR #780). Suggested seam: extract
+   the row<->trace serialization (buildWorkTraceCreateData/mapRowToTrace/
+   parseQualificationSignals) into a prisma-work-trace-serde module. Remove this
+   disable when the file is split. */
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
   WorkTrace,
