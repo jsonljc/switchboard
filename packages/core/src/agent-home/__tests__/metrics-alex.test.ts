@@ -53,7 +53,7 @@ function makeInput(
 }
 
 describe("buildAlexMetricsViewModel", () => {
-  it("hero.kind is 'tours-booked' and value comes from the this-week count", async () => {
+  it("hero.kind is 'appointments-booked' and value comes from the this-week count", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const store = makeStore({
       bookingsByRange: (from, to) => {
@@ -69,19 +69,19 @@ describe("buildAlexMetricsViewModel", () => {
       store,
       targets: DEFAULT_TARGETS,
     });
-    expect(vm.hero.kind).toBe("tours-booked");
-    if (vm.hero.kind !== "tours-booked") throw new Error();
+    expect(vm.hero.kind).toBe("appointments-booked");
+    if (vm.hero.kind !== "appointments-booked") throw new Error();
     expect(vm.hero.value).toBe(14);
     expect(vm.hero.comparator).toEqual({ window: "week", value: 9 });
   });
 
-  it("excludes 'cancelled' status when counting bookings", async () => {
+  it("excludes 'cancelled' and 'failed' statuses when counting bookings", async () => {
     const store = makeStore();
     const week = buildWeekContext(WED_NOW, TZ);
     await buildAlexMetricsViewModel({ orgId: "org-1", week, store, targets: DEFAULT_TARGETS });
     const calls = (store.countBookingsCreated as ReturnType<typeof vi.fn>).mock.calls;
     for (const [arg] of calls) {
-      expect(arg.excludeStatuses).toEqual(["cancelled"]);
+      expect(arg.excludeStatuses).toEqual(["cancelled", "failed"]);
     }
   });
 

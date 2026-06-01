@@ -24,8 +24,8 @@ export function parsePanelAgentKey(value: unknown): PanelAgentKey | null {
 
 export function labelForHeroKind(kind: HeroMetric["kind"]): string {
   switch (kind) {
-    case "tours-booked":
-      return "consults booked";
+    case "appointments-booked":
+      return "appointments booked";
     case "ad-leads":
       return "leads";
     case "creatives-shipped":

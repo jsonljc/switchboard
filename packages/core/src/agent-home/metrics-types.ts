@@ -11,7 +11,7 @@ export interface MetricComparator {
 }
 
 export type HeroMetric =
-  | { kind: "tours-booked"; value: number; comparator: MetricComparator }
+  | { kind: "appointments-booked"; value: number; comparator: MetricComparator }
   | { kind: "ad-leads"; value: number; comparator: MetricComparator }
   | { kind: "creatives-shipped"; value: number; comparator: MetricComparator }
   | {

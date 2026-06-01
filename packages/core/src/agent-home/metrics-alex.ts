@@ -14,7 +14,7 @@ const ALEX_VOICE = {
   flat: () => `Flat vs last week.`,
 };
 
-const EXCLUDE_STATUSES = ["cancelled"] as const;
+const EXCLUDE_STATUSES = ["cancelled", "failed"] as const;
 
 export async function buildAlexMetricsViewModel(
   input: PerAgentBuilderInput,
@@ -94,7 +94,7 @@ export async function buildAlexMetricsViewModel(
 
   return {
     hero: {
-      kind: "tours-booked",
+      kind: "appointments-booked",
       value: heroValue,
       comparator: { window: "week", value: heroPrev },
     },

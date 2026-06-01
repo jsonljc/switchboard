@@ -191,7 +191,7 @@ function makeMission(coreDone: boolean): MissionAggregatorResponse {
 }
 
 const METRICS: MetricsViewModelWire = {
-  hero: { kind: "tours-booked", value: 7, comparator: { window: "week", value: 5 } },
+  hero: { kind: "appointments-booked", value: 7, comparator: { window: "week", value: 5 } },
   heroSubProseSegments: [],
   spark: [],
   stats: [

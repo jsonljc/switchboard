@@ -33,14 +33,14 @@ describe("metrics proxy", () => {
   });
 
   it("200 passthrough for window=week", async () => {
-    listMetrics.mockResolvedValueOnce({ vm: { hero: { kind: "tours-booked" } } });
+    listMetrics.mockResolvedValueOnce({ vm: { hero: { kind: "appointments-booked" } } });
     const res = await GET(
       buildRequest("http://localhost/api/dashboard/agents/alex/metrics?window=week"),
       { params: buildParams("alex") },
     );
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.vm.hero.kind).toBe("tours-booked");
+    expect(body.vm.hero.kind).toBe("appointments-booked");
     expect(listMetrics).toHaveBeenCalledWith("alex", "week");
   });
 

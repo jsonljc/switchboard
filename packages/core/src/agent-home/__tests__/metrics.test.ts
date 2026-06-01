@@ -24,7 +24,7 @@ describe("projectMetrics orchestrator", () => {
       store: makeStore(),
       targets: DEFAULT_TARGETS,
     });
-    expect(vm.hero.kind).toBe("tours-booked");
+    expect(vm.hero.kind).toBe("appointments-booked");
   });
 
   it("dispatches to riley builder for agentKey='riley'", async () => {

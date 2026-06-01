@@ -123,7 +123,7 @@ describe("metrics route", () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { vm: MetricsViewModel };
-    expect(body.vm.hero.kind).toBe("tours-booked");
+    expect(body.vm.hero.kind).toBe("appointments-booked");
     expect(typeof body.vm.folioRange).toBe("string");
     expect(body.vm.freshness.dataSource).toBe("live");
   });

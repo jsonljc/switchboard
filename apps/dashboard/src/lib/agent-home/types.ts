@@ -93,7 +93,7 @@ export interface WinsViewModel {
 // `revenue-attributed` exists in the union but is not the default for either
 // agent in Slice B (no per-agent attribution wiring on LifecycleRevenueEvent yet).
 export type HeroMetric =
-  | { kind: "tours-booked"; value: number; comparator: MetricComparator }
+  | { kind: "appointments-booked"; value: number; comparator: MetricComparator }
   | { kind: "ad-leads"; value: number; comparator: MetricComparator }
   | { kind: "creatives-shipped"; value: number; comparator: MetricComparator }
   | { kind: "revenue-attributed"; value: number; currency: string; comparator: MetricComparator };

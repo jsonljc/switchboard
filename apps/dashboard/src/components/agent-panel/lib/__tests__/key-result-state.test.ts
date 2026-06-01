@@ -120,7 +120,7 @@ describe("selectKeyResult", () => {
       halted: false,
       mission: undefined,
       all: slot(undefined),
-      week: slot(vm({ hero: { kind: "tours-booked", value: 0, comparator: {} } })),
+      week: slot(vm({ hero: { kind: "appointments-booked", value: 0, comparator: {} } })),
     });
     expect(r.kind === "proof" && r.hero.value).toBe(0);
   });
