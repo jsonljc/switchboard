@@ -201,3 +201,6 @@ export {
 
 // Mira Director's Desk — open-brief schema, mapping, and intent classifier (PR3)
 export * from "./mira-brief.js";
+
+// Scheduled follow-up types
+export * from "./scheduled-follow-up.js";
