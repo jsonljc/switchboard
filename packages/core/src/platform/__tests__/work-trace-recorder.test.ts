@@ -180,6 +180,9 @@ describe("buildWorkTrace", () => {
       governanceDecision: executeDecision,
       governanceCompletedAt: "2026-04-16T10:00:01.000Z",
       executionResult,
+      // A completed execution must record when it started (>= governanceCompletedAt);
+      // the no-mutating-bypass guard rejects a completed trace without it.
+      executionStartedAt: "2026-04-16T10:00:01.500Z",
       modeMetrics: { llmTokens: 500, toolCalls: 3 },
     };
 
