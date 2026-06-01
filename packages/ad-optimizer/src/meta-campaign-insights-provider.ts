@@ -46,20 +46,41 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     endDate: Date;
     snapshots?: WeeklyCampaignSnapshot[];
   }): Promise<TargetBreachResult> {
-    const snapshots = input.snapshots ?? [];
+    const BREACH_WINDOW_DAYS = 14;
+    const until = input.endDate;
+    const since = new Date(until);
+    since.setDate(since.getDate() - BREACH_WINDOW_DAYS);
 
-    let periodsAboveTarget = 0;
-    for (const snap of snapshots) {
-      if (snap.cpa != null && snap.cpa > input.targetCPA) {
-        periodsAboveTarget++;
+    const rows = await this.adsClient.getCampaignInsights({
+      dateRange: { since: fmt(since), until: fmt(until) },
+      fields: ["campaign_id", "spend", "conversions"],
+      timeIncrement: 1,
+    });
+
+    const campaignDays = rows.filter((r) => r.campaignId === input.campaignId);
+
+    // Fallback: if the daily Graph pull returned no rows for this campaign (Meta
+    // partial failure / dev run / no spend in window) but the caller supplied weekly
+    // snapshots, preserve the old weekly-snapshot breach count rather than silently
+    // reporting 0.
+    if (campaignDays.length === 0 && input.snapshots && input.snapshots.length > 0) {
+      let weekly = 0;
+      for (const snap of input.snapshots) {
+        if (snap.cpa != null && snap.cpa > input.targetCPA) weekly++;
       }
+      return { periodsAboveTarget: weekly, granularity: "weekly", isApproximate: true };
     }
 
-    return {
-      periodsAboveTarget,
-      granularity: "weekly",
-      isApproximate: true,
-    };
+    let periodsAboveTarget = 0;
+    for (const day of campaignDays) {
+      if (day.spend <= 0) continue; // no spend → not a breach day
+      // Local boolean — never carry Infinity into rationale/logs/evidence downstream.
+      const breached =
+        day.conversions > 0 ? day.spend / day.conversions > input.targetCPA : day.spend > 0;
+      if (breached) periodsAboveTarget++;
+    }
+
+    return { periodsAboveTarget, granularity: "daily", isApproximate: false };
   }
 }
 
