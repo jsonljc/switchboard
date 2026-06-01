@@ -4,5 +4,9 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["claim-classifier/**/*.ts", "alex-conversation/**/*.ts"]
+  "include": [
+    "claim-classifier/**/*.ts",
+    "alex-conversation/**/*.ts",
+    "governance-decision/**/*.ts"
+  ]
 }
