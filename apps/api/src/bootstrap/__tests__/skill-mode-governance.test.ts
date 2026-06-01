@@ -97,6 +97,7 @@ vi.mock("@switchboard/core", () => ({
     clearConsent: vi.fn(),
   })),
   loadRevocationKeywords: vi.fn(() => []),
+  ModelRouter: class ModelRouter {},
 }));
 
 vi.mock("@switchboard/core/notifications", () => ({
@@ -220,6 +221,39 @@ describe("bootstrapSkillMode governance wiring", () => {
       (arg) => Array.isArray(arg) && arg.some((h) => h === governanceInstance),
     );
     expect(hooksArg).toBeDefined();
+  });
+
+  it("wires a ModelRouter into the production executor (arg-3) only when the flag is enabled", async () => {
+    process.env["ALEX_MODEL_ROUTER_ENABLED"] = "true";
+    try {
+      await bootstrapSkillMode({
+        prismaClient: buildPrismaClient(),
+        intentRegistry: {} as never,
+        modeRegistry: { register } as never,
+        logger: { info: vi.fn(), error: vi.fn() },
+      });
+
+      // calls[0] = production executor, calls[1] = simulation executor.
+      // The 3rd positional arg (index 2) is the `router`. Guards the original
+      // "router is always undefined" bug from silently regressing: production
+      // gets a router when the flag is on, simulation stays on the fallback.
+      expect(SkillExecutorImpl.mock.calls[0]![2]).toBeDefined();
+      expect(SkillExecutorImpl.mock.calls[1]![2]).toBeUndefined();
+    } finally {
+      delete process.env["ALEX_MODEL_ROUTER_ENABLED"];
+    }
+  });
+
+  it("leaves the production executor router undefined when the flag is off", async () => {
+    delete process.env["ALEX_MODEL_ROUTER_ENABLED"];
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    expect(SkillExecutorImpl.mock.calls[0]![2]).toBeUndefined();
   });
 
   it("registers ClaimClassifierHook immediately after DeterministicSafetyGateHook in hook chain", async () => {
