@@ -112,6 +112,7 @@ export interface StatCell {
   rawValue: number | null;
   unit: "count" | "percent" | "currency";
   unavailable?: boolean;
+  hint?: string;
 }
 
 // This shape is mirrored at packages/core/src/agent-home/metrics.ts. The core
@@ -132,6 +133,8 @@ export interface MetricsViewModel {
   spendCents?: number | null;
   leads?: number;
   qualifiedPct?: number;
+  showed?: number;
+  showCoverage?: number;
   bookedDelta?: string | null;
   leadsDelta?: string | null;
   qualifiedDelta?: string | null;

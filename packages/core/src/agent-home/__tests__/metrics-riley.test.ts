@@ -33,6 +33,8 @@ function makeStore(opts: {
       return 0;
     }),
     getMetaSpendCents: vi.fn(async () => null),
+    countCurrentlyAtStageUpdatedInWindow: vi.fn(async () => 0),
+    latestOpportunityStageUpdatedAt: vi.fn(async () => null),
   };
 }
 
@@ -376,6 +378,8 @@ describe("voice divergence (Alex vs Riley)", () => {
         }),
         countConversionsByType: vi.fn(async () => 0),
         getMetaSpendCents: vi.fn(async () => null),
+        countCurrentlyAtStageUpdatedInWindow: vi.fn(async () => 0),
+        latestOpportunityStageUpdatedAt: vi.fn(async () => null),
       },
       targets: DEFAULT_TARGETS,
     });
@@ -390,6 +394,8 @@ describe("voice divergence (Alex vs Riley)", () => {
           return 0;
         }),
         getMetaSpendCents: vi.fn(async () => null),
+        countCurrentlyAtStageUpdatedInWindow: vi.fn(async () => 0),
+        latestOpportunityStageUpdatedAt: vi.fn(async () => null),
       },
       targets: DEFAULT_TARGETS,
     });

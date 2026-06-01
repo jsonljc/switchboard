@@ -11,6 +11,8 @@ function makeStore(): MetricsSignalStore {
     countBookingsCreated: vi.fn(async () => 0),
     countConversionsByType: vi.fn(async () => 0),
     getMetaSpendCents: vi.fn(async () => null),
+    countCurrentlyAtStageUpdatedInWindow: vi.fn(async () => 0),
+    latestOpportunityStageUpdatedAt: vi.fn(async () => null),
   };
 }
 

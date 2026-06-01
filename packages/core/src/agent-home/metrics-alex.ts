@@ -26,6 +26,13 @@ export async function buildAlexMetricsViewModel(
   const leadsP = countLeads(store, orgId, week.weekStart, week.weekEnd);
   const leadsPrevP = countLeads(store, orgId, week.prevWeekStart, week.prevWeekEnd);
   const spendCentsP = store.getMetaSpendCents({ orgId, from: week.weekStart, to: week.weekEnd });
+  const showedP = store.countCurrentlyAtStageUpdatedInWindow({
+    orgId,
+    stage: "showed",
+    from: week.weekStart,
+    to: week.weekEnd,
+  });
+  const boardLastUpdatedP = store.latestOpportunityStageUpdatedAt({ orgId, stage: "showed" });
   const weeklyCountsP = Promise.all(
     week.weeklyBuckets.map((b) => countBookings(store, orgId, b.from, b.to)),
   );
@@ -33,16 +40,27 @@ export async function buildAlexMetricsViewModel(
     week.dailyBuckets.map((b) => countBookings(store, orgId, b.from, b.to)),
   );
 
-  const [heroValue, heroPrev, leads, leadsPrev, spendCents, weeklyCounts, dailyCounts] =
-    await Promise.all([
-      heroValueP,
-      heroPrevP,
-      leadsP,
-      leadsPrevP,
-      spendCentsP,
-      weeklyCountsP,
-      dailyCountsP,
-    ]);
+  const [
+    heroValue,
+    heroPrev,
+    leads,
+    leadsPrev,
+    spendCents,
+    showed,
+    boardLastUpdated,
+    weeklyCounts,
+    dailyCounts,
+  ] = await Promise.all([
+    heroValueP,
+    heroPrevP,
+    leadsP,
+    leadsPrevP,
+    spendCentsP,
+    showedP,
+    boardLastUpdatedP,
+    weeklyCountsP,
+    dailyCountsP,
+  ]);
 
   const spark: SparkPoint[] = [
     ...week.weeklyBuckets.map((b, i) => ({ label: b.label, value: weeklyCounts[i] ?? 0 })),
@@ -55,9 +73,21 @@ export async function buildAlexMetricsViewModel(
 
   const subprose: ProseSegment[] = [{ kind: "text", text: voiceText(heroValue, heroPrev) }];
 
-  const conversion = leads > 0 ? heroValue / leads : 0;
   const qualifiedPct = leads > 0 ? Math.round((heroValue / leads) * 100) : 0;
   const qualifiedPrev = leadsPrev > 0 ? Math.round((heroPrev / leadsPrev) * 100) : null;
+
+  const showCoverage = heroValue > 0 ? showed / heroValue : 0;
+  const showedUnavailable = boardLastUpdated === null;
+  const showedCell: StatCell = showedUnavailable
+    ? { label: "Showed", display: "—", rawValue: null, unit: "percent", unavailable: true }
+    : {
+        label: "Showed",
+        display: `${showed} (${Math.round(showCoverage * 100)}%)`,
+        rawValue: showCoverage,
+        unit: "percent",
+        unavailable: false,
+        hint: `Operator-confirmed · board updated ${boardLastUpdated.toISOString().slice(0, 10)}`,
+      };
 
   const spendCell: StatCell =
     spendCents !== null
@@ -83,12 +113,7 @@ export async function buildAlexMetricsViewModel(
       rawValue: leads,
       unit: "count",
     },
-    {
-      label: "Conversion",
-      display: `${Math.round(conversion * 100)}%`,
-      rawValue: conversion,
-      unit: "percent",
-    },
+    showedCell,
     spendCell,
   ];
 
@@ -112,6 +137,8 @@ export async function buildAlexMetricsViewModel(
     spendCents,
     leads,
     qualifiedPct,
+    showed,
+    showCoverage,
     bookedDelta: formatNumericDelta(heroValue, heroPrev),
     leadsDelta: formatNumericDelta(leads, leadsPrev),
     qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),
