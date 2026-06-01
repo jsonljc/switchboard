@@ -54,6 +54,23 @@ export const JUDGE_RUBRIC_HASH = createHash("sha256")
   .digest("hex")
   .slice(0, 16);
 
+/**
+ * Max output tokens for a single judge verdict.
+ *
+ * MUST be high enough to fit the entire `judge_turn` tool call — including the
+ * free-form `notes` reasoning field. At 512 the judge routinely hit
+ * `stop_reason: "max_tokens"` partway through `notes`, truncating the tool-use
+ * JSON so the required `notes` field was dropped → Zod parse failure →
+ * fail-closed verdict (`semanticHardRulePass: false`, `softScore: 0`). That
+ * silently masked *passing* Alex turns as fabricated failures (~44% of scenarios
+ * in the first full golden-suite baseline run). A live probe confirmed the
+ * mechanism: at 512, `output_tokens` 509 / `stop_reason: max_tokens` / no `notes`
+ * field; at 1024 the same verdict completed and parsed. 2048 leaves ample
+ * headroom for verbose verdicts carrying multiple violations. The API bills on
+ * actual output tokens, not the cap, so a generous ceiling is free.
+ */
+export const JUDGE_MAX_TOKENS = 2048;
+
 // ---------------------------------------------------------------------------
 // Tool definition for structured output
 // ---------------------------------------------------------------------------
@@ -211,7 +228,7 @@ export async function judgeTurn(input: JudgeTurnInput, deps: JudgeTurnDeps): Pro
   try {
     const response = await deps.client.messages.create({
       model: deps.model,
-      max_tokens: 512,
+      max_tokens: JUDGE_MAX_TOKENS,
       system: JUDGE_RUBRIC,
       tools: [JUDGE_TOOL],
       tool_choice: { type: "tool", name: "judge_turn" },
