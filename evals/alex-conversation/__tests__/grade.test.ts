@@ -361,9 +361,12 @@ describe("gradeDeterministic — claimWarnings detail (sentence + confidence + c
 // ---------------------------------------------------------------------------
 
 describe("ALEX_ALLOWED_TOOL_IDS", () => {
-  it("contains exactly the four declared Alex tools", () => {
+  it("contains exactly the declared Alex tools the harness mocks", () => {
+    // Mirrors the tool set the eval harness registers in mock-tools.ts (and that
+    // the grader treats as allowed). `follow-up` was added for A3 parity so a
+    // re-engagement scheduling call is offered and graded, not flagged unexpected.
     expect([...ALEX_ALLOWED_TOOL_IDS].sort()).toEqual(
-      ["calendar-book", "crm-query", "crm-write", "escalate"].sort(),
+      ["calendar-book", "crm-query", "crm-write", "escalate", "follow-up"].sort(),
     );
   });
 });
