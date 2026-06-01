@@ -148,6 +148,12 @@ describe("SkillExecutorImpl - ModelRouter integration", () => {
     );
   });
 
+  it("full chain: objection (price concern) → premium (sonnet)", async () => {
+    expect(await modelForMessages([{ role: "user", content: "this is too expensive" }])).toBe(
+      "claude-sonnet-4-6",
+    );
+  });
+
   it("fear is bounded: a price-laden message stays premium, not critical", async () => {
     expect(
       await modelForMessages([{ role: "user", content: "scared the price is too high" }]),
