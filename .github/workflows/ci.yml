@@ -448,3 +448,55 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm eval:alex-conversation
+
+  eval-governance-decision:
+    name: Eval — Governance Decision
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter governance-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
+          filters: |
+            governance:
+              - '.github/workflows/ci.yml'
+              - 'evals/governance-decision/**'
+              - 'evals/vitest.config.ts'
+              - 'packages/core/src/skill-runtime/governance.ts'
+              - 'packages/core/src/skill-runtime/governance-types.ts'
+
+      - name: Skip notice (no governance-relevant changes)
+        if: steps.filter.outputs.governance != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Governance Decision skipped: no governance-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+
+      - name: Run eval unit tests
+        if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
+      # Deterministic, model-free, DB-free — no ANTHROPIC_API_KEY needed. Blocking.
+      - name: Run governance-decision eval
+        if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm eval:governance

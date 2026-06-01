@@ -1,4 +1,24 @@
 import { z } from "zod";
+import { ConversationOracleSchema } from "./oracle.js";
+
+/**
+ * Funnel/agent stage a scenario primarily exercises. Optional — used by the
+ * matrix-coverage test to assert the suite spans the funnel. `full-arc` is a
+ * single multi-turn fixture walking discovery → objection → qualification →
+ * booking.
+ */
+export const ConversationStageSchema = z.enum([
+  "discovery",
+  "objection",
+  "qualification",
+  "booking",
+  "post-booking",
+  "safety",
+  "refusal",
+  "reactivation",
+  "full-arc",
+]);
+export type ConversationStage = z.infer<typeof ConversationStageSchema>;
 
 export const LeadTurnSchema = z.object({ role: z.literal("lead"), content: z.string().min(1) });
 export const GradeSpecSchema = z.object({
@@ -16,6 +36,12 @@ export const ConversationFixtureSchema = z
     locale: z.enum(["sg", "my"]),
     scenario: z.string().min(1),
     turns: z.array(z.union([LeadTurnSchema, AlexTurnSchema])).min(2),
+    /** Optional funnel/agent stage (matrix coverage). Backward compatible. */
+    stage: ConversationStageSchema.optional(),
+    /** Optional free-form tags (concern axes, edge dimensions). */
+    tags: z.array(z.string()).optional(),
+    /** Optional machine-checkable trajectory oracle (see oracle.ts). */
+    oracle: ConversationOracleSchema.optional(),
   })
   .refine((f) => f.turns[f.turns.length - 1]?.role === "alex", "fixture must end on an alex turn")
   .refine((f) => f.turns[0]?.role === "lead", "fixture must start on a lead turn");
