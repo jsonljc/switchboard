@@ -527,3 +527,136 @@ describe("GovernanceGate", () => {
     });
   });
 });
+
+describe("GovernanceGate spend-approval threshold", () => {
+  const autonomousWorkUnit = (parameters: Record<string, unknown>, threshold = 100) =>
+    makeWorkUnit({
+      intent: "digital-ads.campaign.adjust_budget",
+      parameters,
+      deployment: {
+        deploymentId: "dep-1",
+        skillSlug: "riley",
+        trustLevel: "guided",
+        trustScore: 42,
+        trustLevelOverride: "autonomous",
+        policyOverrides: { spendApprovalThreshold: threshold },
+      },
+    });
+  const budgetReg = (mutationClass: "write" | "destructive" = "write") =>
+    makeRegistration({ intent: "digital-ads.campaign.adjust_budget", mutationClass });
+
+  it("downgrades an under-threshold reversible budget approval to execute (autonomous)", async () => {
+    const deps = makeDeps({
+      evaluate: vi.fn().mockReturnValue(makeTrace({ approvalRequired: "standard" })),
+    });
+    const gate = new GovernanceGate(deps);
+
+    const decision = await gate.evaluate(autonomousWorkUnit({ budgetChange: 50 }), budgetReg());
+
+    expect(decision.outcome).toBe("execute");
+    expect(decision.matchedPolicies).toContain("SPEND_APPROVAL_THRESHOLD");
+  });
+
+  it("parks an over-threshold budget action even when the engine would execute", async () => {
+    const deps = makeDeps(); // default trace ⇒ execute
+    const gate = new GovernanceGate(deps);
+
+    const decision = await gate.evaluate(autonomousWorkUnit({ budgetChange: 500 }), budgetReg());
+
+    expect(decision.outcome).toBe("require_approval");
+    expect(decision.matchedPolicies).toContain("SPEND_APPROVAL_THRESHOLD");
+  });
+
+  it("keeps a deny denied under autonomous + under threshold (deny-floor independence)", async () => {
+    const deps = makeDeps({
+      evaluate: vi.fn().mockReturnValue(
+        makeTrace({
+          finalDecision: "deny",
+          checks: [
+            {
+              checkCode: "SPEND_LIMIT",
+              checkData: {},
+              humanDetail: "limit",
+              matched: true,
+              effect: "deny",
+            },
+          ],
+        }),
+      ),
+    });
+    const gate = new GovernanceGate(deps);
+
+    const decision = await gate.evaluate(autonomousWorkUnit({ budgetChange: 50 }), budgetReg());
+
+    expect(decision.outcome).toBe("deny");
+  });
+
+  it("does NOT downgrade an irreversible (destructive) action under threshold", async () => {
+    const deps = makeDeps({
+      evaluate: vi.fn().mockReturnValue(makeTrace({ approvalRequired: "standard" })),
+    });
+    const gate = new GovernanceGate(deps);
+
+    const decision = await gate.evaluate(
+      autonomousWorkUnit({ budgetChange: 50 }),
+      budgetReg("destructive"),
+    );
+
+    expect(decision.outcome).toBe("require_approval");
+  });
+
+  it("is dormant for a guided deployment (byte-identical to today)", async () => {
+    const deps = makeDeps({
+      evaluate: vi.fn().mockReturnValue(makeTrace({ approvalRequired: "standard" })),
+    });
+    const gate = new GovernanceGate(deps);
+    const wu = makeWorkUnit({
+      parameters: { budgetChange: 50 },
+      deployment: {
+        deploymentId: "dep-1",
+        skillSlug: "riley",
+        trustLevel: "guided",
+        trustScore: 42,
+        policyOverrides: { spendApprovalThreshold: 100 },
+      },
+    });
+
+    const decision = await gate.evaluate(wu, budgetReg());
+
+    expect(decision.outcome).toBe("require_approval");
+    expect(decision.matchedPolicies).not.toContain("SPEND_APPROVAL_THRESHOLD");
+  });
+
+  it("is a no-op for a non-financial action under autonomous", async () => {
+    const deps = makeDeps({
+      evaluate: vi.fn().mockReturnValue(makeTrace({ approvalRequired: "standard" })),
+    });
+    const gate = new GovernanceGate(deps);
+
+    const decision = await gate.evaluate(
+      autonomousWorkUnit({ note: "no money here" }),
+      budgetReg(),
+    );
+
+    expect(decision.outcome).toBe("require_approval");
+    expect(decision.matchedPolicies).not.toContain("SPEND_APPROVAL_THRESHOLD");
+  });
+
+  it("leaves the system_auto_approved short-circuit untouched", async () => {
+    const deps = makeDeps();
+    const gate = new GovernanceGate(deps);
+
+    const decision = await gate.evaluate(
+      autonomousWorkUnit({ budgetChange: 500 }),
+      makeRegistration({
+        intent: "digital-ads.campaign.adjust_budget",
+        mutationClass: "write",
+        approvalMode: "system_auto_approved",
+      }),
+    );
+
+    // The auto-approve path returns before the threshold post-processor runs.
+    expect(decision.outcome).toBe("execute");
+    expect(decision.matchedPolicies).not.toContain("SPEND_APPROVAL_THRESHOLD");
+  });
+});
