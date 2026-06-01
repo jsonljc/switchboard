@@ -78,7 +78,9 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     const BREACH_WINDOW_DAYS = 14;
     const until = input.endDate;
     const since = new Date(until);
-    since.setDate(since.getDate() - BREACH_WINDOW_DAYS);
+    // -(N-1): Meta's time_range is inclusive of both ends, so this spans exactly
+    // BREACH_WINDOW_DAYS daily buckets.
+    since.setDate(since.getDate() - (BREACH_WINDOW_DAYS - 1));
 
     const rows = await this.adsClient.getCampaignInsights({
       dateRange: { since: fmt(since), until: fmt(until) },

@@ -524,7 +524,7 @@ describe("getAdSetLearningInputs", () => {
   it("maps entity learning_stage_info + insights spend into AdSetLearningInput[]", async () => {
     const fetchMock = vi
       .fn()
-      // 1st call: adsets entity edge (learning_stage_info + effective_status)
+      // 1st call: adsets entity edge (learning_stage_info)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({

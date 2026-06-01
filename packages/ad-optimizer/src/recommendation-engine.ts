@@ -184,7 +184,11 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   const isAboveAddCreativeCpa = cpa > ADD_CREATIVE_CPA_MULTIPLIER * targetCPA;
   const isAbovePauseCpa = cpa > PAUSE_CPA_MULTIPLIER * targetCPA;
 
-  // Daily data — add_creative at 2x, pause at 3x
+  // Daily data — add_creative at 2x, pause at 3x.
+  // Note: ANDs the 7-day aggregate CPA (getCPA(deltas)) with the 14-day daily breach
+  // window (periodsAboveTarget >= KILL_DAYS_THRESHOLD). Intentional fail-safe — Riley
+  // won't pause a campaign that is currently recovering (low recent aggregate CPA) even
+  // if it had many bad days earlier, nor one newly-bad with fewer than 7 breach days.
   if (
     isAboveAddCreativeCpa &&
     targetBreach.granularity === "daily" &&
