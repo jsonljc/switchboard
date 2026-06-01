@@ -584,3 +584,19 @@ describe("getAdSetLearningInputs", () => {
     expect(rows.find((r) => r.adSetId === "as_2")!.learningStageStatus).toBe("SUCCESS");
   });
 });
+
+describe("fractional conversions", () => {
+  it("preserves fractional conversions (parseFloat, not parseInt)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ campaign_id: "c_1", spend: "100", conversions: "2.5" }] }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    const rows = await client.getCampaignInsights({
+      dateRange: { since: "2026-05-25", until: "2026-06-01" },
+      fields: ["campaign_id", "spend", "conversions"],
+    });
+    expect(rows[0]!.conversions).toBe(2.5);
+  });
+});

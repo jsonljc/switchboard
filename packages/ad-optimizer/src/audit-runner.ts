@@ -547,7 +547,7 @@ export class AuditRunner {
       // v1: log the rollup. v1.5 will write a first-class activity-trail event
       // (deferred — AgentEvent requires deploymentId not yet in AuditConfig).
       console.warn(
-        `[ad-optimizer] Nova reviewed ${recommendations.length} candidates -> ` +
+        `[ad-optimizer] Riley reviewed ${recommendations.length} candidates -> ` +
           `queue=${sinkResult.routedQueue} shadow=${sinkResult.routedShadow} dropped=${sinkResult.dropped}`,
       );
     }

@@ -115,8 +115,10 @@ export class MetaAdsClient {
     const filtering = JSON.stringify([
       { field: "campaign.id", operator: "EQUAL", value: campaignId },
     ]);
+    // NOTE: reads Graph page 1 only (no paging.next follow). limit=200 covers typical
+    // accounts; revisit for campaigns with >200 ad sets before broad enablement.
     const entityResp = await this.get(
-      `/${this.accountId}/adsets?fields=id,name,campaign_id,learning_stage_info&filtering=${encodeURIComponent(filtering)}`,
+      `/${this.accountId}/adsets?fields=id,name,campaign_id,learning_stage_info&filtering=${encodeURIComponent(filtering)}&limit=200`,
     );
     const entities = (entityResp.data as Record<string, unknown>[]) ?? [];
 
@@ -319,7 +321,7 @@ export class MetaAdsClient {
       impressions: parseInt(raw.impressions ?? "0", 10),
       inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
       spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseInt(raw.conversions ?? "0", 10),
+      conversions: parseFloat(raw.conversions ?? "0"),
       revenue: parseFloat(raw.revenue ?? "0"),
       frequency: parseFloat(raw.frequency ?? "0"),
       cpm: parseFloat(raw.cpm ?? "0"),
@@ -338,7 +340,7 @@ export class MetaAdsClient {
       impressions: parseInt(raw.impressions ?? "0", 10),
       inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
       spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseInt(raw.conversions ?? "0", 10),
+      conversions: parseFloat(raw.conversions ?? "0"),
       frequency: parseFloat(raw.frequency ?? "0"),
       cpm: parseFloat(raw.cpm ?? "0"),
       inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),
