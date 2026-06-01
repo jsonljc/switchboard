@@ -95,4 +95,12 @@ describe("applySpendApprovalThreshold", () => {
     expect(r.outcome).toBe("require_approval");
     expect(r.matchedPolicies).toEqual(["POLICY_RULE"]);
   });
+  it("does NOT downgrade a mandatory approval under threshold (system-critical / manual gate)", () => {
+    const mandatory: GovernanceDecision = { ...approve(), approvalLevel: "mandatory" };
+    expect(applySpendApprovalThreshold(mandatory, base).outcome).toBe("require_approval");
+  });
+  it("does NOT downgrade an elevated (high-risk) approval under threshold", () => {
+    const elevated: GovernanceDecision = { ...approve(), approvalLevel: "elevated" };
+    expect(applySpendApprovalThreshold(elevated, base).outcome).toBe("require_approval");
+  });
 });

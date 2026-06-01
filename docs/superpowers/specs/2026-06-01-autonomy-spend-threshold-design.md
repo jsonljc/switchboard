@@ -114,20 +114,34 @@ Rules (in order; any unmet guard ⇒ return `decision` **unchanged**):
 5. Let `amount = |spendAmount|` and
    `isReversible = mutationClass !== "destructive" && reversibility !== "none"`.
 6. If `amount <= threshold`:
-   - `require_approval` **and** `isReversible` → **downgrade to execute** (the
-     autonomy grant). Carry over riskScore/constraints/matchedPolicies; append a
-     `"SPEND_APPROVAL_THRESHOLD"` marker to `matchedPolicies` for the audit trail.
-   - otherwise unchanged (irreversible-under-threshold stays parked; an execute
-     stays execute).
+   - `require_approval` **and** `approvalLevel === "standard"` **and**
+     `isReversible` → **downgrade to execute** (the autonomy grant). Carry over
+     riskScore/constraints/matchedPolicies; append a `"SPEND_APPROVAL_THRESHOLD"`
+     marker to `matchedPolicies` for the audit trail. **Only the routine
+     `"standard"` approval is relaxed** — `"elevated"` (high risk category) and
+     `"mandatory"` (system-critical posture or a manual-approval gate) are stronger
+     non-spend safety signals that the spend lever must never override; they stay
+     parked even under threshold.
+   - otherwise unchanged (irreversible / elevated / mandatory under threshold stays
+     parked; an execute stays execute).
 7. If `amount > threshold`:
    - `execute` → **escalate to require_approval** (`approvalLevel:"standard"`,
      the "asks above $X" guarantee; the safe direction). Marker appended.
    - otherwise unchanged (already parked).
 
 The helper is total (defined for every base outcome) and **monotone in safety**:
-the only relaxation is downgrading a _reversible financial require_approval under
-threshold under autonomous_; everything else is a no-op or an escalation. A deny
-is a fixed point.
+the only relaxation is downgrading a _reversible financial **standard** approval
+under threshold under autonomous_; everything else is a no-op or an escalation. A
+deny is a fixed point.
+
+**Schema-default note:** `spendApprovalThreshold` is `Float @default(50)`
+(non-nullable), so once `policyOverrides` is threaded, every deployment carries
+`threshold = 50` unless overridden. Combined with rule 1, an **autonomous**
+deployment therefore auto-approves reversible financial standard-approval actions
+**≤ $50** by default. This is the intended calibration (the schema default _is_
+the grant) and is opt-in (requires `trustLevelOverride="autonomous"`, which no
+production deployment currently sets). Operators tune the dollar grant per
+deployment.
 
 `evaluate`'s `system_auto_approved` short-circuit (top of the method) is
 untouched — it is an explicit "skip approval lookup" path for operator-direct

@@ -51,7 +51,16 @@ export function applySpendApprovalThreshold(
   if (amount <= ctx.threshold) {
     // Autonomy grant: a reversible financial approval at/under threshold executes
     // without a human. Irreversible stays parked; an execute stays an execute.
-    if (decision.outcome === "require_approval" && isReversible) {
+    //
+    // Only the ROUTINE "standard" approval is relaxed. "elevated" (high risk
+    // category) and "mandatory" (system-critical posture or a manual-approval
+    // gate) are stronger, non-spend safety signals the autonomy *spend* lever must
+    // never override — they stay parked even under threshold.
+    if (
+      decision.outcome === "require_approval" &&
+      decision.approvalLevel === "standard" &&
+      isReversible
+    ) {
       return {
         outcome: "execute",
         riskScore: decision.riskScore,
