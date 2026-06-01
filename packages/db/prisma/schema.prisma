@@ -2026,6 +2026,39 @@ model PendingLeadRetry {
 }
 
 // ---------------------------------------------------------------------------
+// ScheduledFollowUp — Alex-scheduled re-engagement nudges, fired by the
+// scheduled-follow-up-dispatch cron through PlatformIngress.submit. Modeled on
+// PendingLeadRetry. See docs/superpowers/specs/2026-06-01-alex-governed-followup-design.md
+// ---------------------------------------------------------------------------
+
+model ScheduledFollowUp {
+  id                   String    @id @default(uuid())
+  organizationId       String
+  contactId            String
+  conversationThreadId String?
+  sessionId            String?
+  deploymentId         String?
+  workUnitId           String?
+  channel              String
+  jurisdiction         String?
+  reason               String
+  templateIntentClass  String
+  dueAt                DateTime
+  status               String    @default("pending")
+  attempts             Int       @default(0)
+  dedupeKey            String    @unique
+  skipReason           String?
+  lastError            String?
+  nextRetryAt          DateTime?
+  sentAt               DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status, dueAt])
+  @@index([organizationId, contactId])
+}
+
+// ---------------------------------------------------------------------------
 // PCD Identity Registry (SP1)
 // ---------------------------------------------------------------------------
 
