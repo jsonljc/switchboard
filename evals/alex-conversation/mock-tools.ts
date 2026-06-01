@@ -24,7 +24,7 @@ export interface RecordedToolCall {
  * array that records every operation invocation in order.
  *
  * The tool ids, operation names, effect categories, and input schemas mirror the
- * real Alex tools (crm-query / crm-write / calendar-book / escalate) so the LLM
+ * real Alex tools (crm-query / crm-write / calendar-book / escalate / follow-up) so the LLM
  * sees the same tool definitions production registers — but every `execute`
  * returns a benign `ok(...)` and performs no side effects. Because the eval
  * executor runs with NO governance hooks, write/external_mutation operations are
@@ -249,11 +249,57 @@ export function createMockTools(): MockTools {
     },
   };
 
+  // Mirrors the real `follow-up` tool (skills/alex/SKILL.md + core
+  // skill-runtime/tools/schedule-follow-up.ts): id, operation name, effect
+  // category, and input schema match so the executor offers the same definition
+  // production registers. The mock only records the call (no scheduling).
+  const followUp: SkillTool = {
+    id: "follow-up",
+    operations: {
+      "followup.schedule": recordingOp(
+        "follow-up",
+        "followup.schedule",
+        "Schedule a single WhatsApp re-engagement follow-up for this lead, to be sent automatically later (only if consent, the messaging window, and an approved template all allow). Use when a qualified lead has gone quiet or hesitant. Do not schedule more than one follow-up per conversation.",
+        "write",
+        {
+          type: "object",
+          properties: {
+            reason: {
+              type: "string",
+              enum: [
+                "hesitation",
+                "price_concern",
+                "timing_not_now",
+                "awaiting_info",
+                "went_quiet",
+              ],
+            },
+            delay: {
+              type: "string",
+              enum: ["in_1_day", "in_3_days", "in_1_week"],
+            },
+            note: {
+              type: "string",
+              description: "Optional short context for the team (not sent to the customer).",
+            },
+          },
+          required: ["reason", "delay"],
+        },
+        () => ({
+          followUpId: "mock-followup",
+          scheduledFor: "2026-06-04T00:00:00.000Z",
+          status: "scheduled",
+        }),
+      ),
+    },
+  };
+
   const tools = new Map<string, SkillTool>([
     ["crm-query", crmQuery],
     ["crm-write", crmWrite],
     ["calendar-book", calendarBook],
     ["escalate", escalate],
+    ["follow-up", followUp],
   ]);
 
   return { tools, calls };
