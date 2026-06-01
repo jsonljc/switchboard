@@ -2,6 +2,14 @@ import type { Effort } from "./context-budget.js";
 
 export type ModelSlot = "default" | "premium" | "critical" | "embedding";
 
+/**
+ * Coarse dialogue stage for the current turn, derived from the LLM-free
+ * emotional classifier. Consumed by `resolveTier` to raise the model tier on
+ * high-stakes moments. Absence means "no escalating signal — let the
+ * previous-turn rules decide".
+ */
+export type DialogueStage = "objection" | "closing" | "fear";
+
 export interface ModelConfig {
   slot: ModelSlot;
   modelId: string;
@@ -25,6 +33,11 @@ export interface TierContext {
   previousTurnUsedTools: boolean;
   previousTurnEscalated: boolean;
   modelFloor?: ModelSlot;
+  /**
+   * Coarse dialogue stage for the current turn. Only ever raises the resolved
+   * tier (never lowers it).
+   */
+  currentStage?: DialogueStage;
 }
 
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -105,7 +118,31 @@ export class ModelRouter {
     else if (context.hasHighRiskTools)
       slot = "premium"; // Rule 5: high risk
     else slot = "default"; // Rule 6: default
+
+    // Stage-aware escalation: take the higher of the rule slot and the stage
+    // slot so a high-stakes turn (objection/closing/fear) is never under-served.
+    // The merge is a rank-max, so this can only ever raise the tier — never lower
+    // it — and is a no-op when no stage is present.
+    const stageSlot = this.stageToSlot(context.currentStage);
+    if (stageSlot) slot = this.maxSlot(slot, stageSlot);
+
     return this.applyFloor(slot, context.modelFloor);
+  }
+
+  private stageToSlot(stage?: DialogueStage): ModelSlot | undefined {
+    switch (stage) {
+      case "fear":
+        return "critical";
+      case "objection":
+      case "closing":
+        return "premium";
+      default:
+        return undefined;
+    }
+  }
+
+  private maxSlot(a: ModelSlot, b: ModelSlot): ModelSlot {
+    return (SLOT_RANK[a] ?? 0) >= (SLOT_RANK[b] ?? 0) ? a : b;
   }
 
   private applyFloor(slot: ModelSlot, floor?: ModelSlot): ModelSlot {
