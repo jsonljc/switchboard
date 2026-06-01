@@ -268,3 +268,34 @@ describe("runRecommendationSink", () => {
     expect(fix.declineToast).toBe("Acknowledged — back to scanning the pixel.");
   });
 });
+
+describe("runRecommendationSink — structured spend amount", () => {
+  const run = async (rec: RecommendationOutput) => {
+    const emit = vi.fn(async () => ({ surface: "queue" }) as EmitOutcome);
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "run-1",
+      recommendations: [rec],
+      emit,
+      emissionContext: { cronId: "c1" },
+    });
+    return (emit.mock.calls[0]![0] as RecommendationInput).parameters as Record<string, unknown>;
+  };
+
+  it("populates parameters.spendAmount from dollarsAtRisk for a financialEffect action", async () => {
+    // pause is financialEffect:true; "saves $40/day" ⇒ dollarsAtRisk 40.
+    const params = await run(baseRec({ action: "pause", estimatedImpact: "saves $40/day" }));
+    expect(params["spendAmount"]).toBe(40);
+  });
+
+  it("omits spendAmount when no dollar figure is present (fail-safe: stays parked)", async () => {
+    const params = await run(baseRec({ action: "scale", estimatedImpact: "better reach" }));
+    expect(params["spendAmount"]).toBeUndefined();
+  });
+
+  it("omits spendAmount for a non-financial (informational) action", async () => {
+    // hold is financialEffect:false even with a dollar figure in the impact.
+    const params = await run(baseRec({ action: "hold", estimatedImpact: "~$50 at stake" }));
+    expect(params["spendAmount"]).toBeUndefined();
+  });
+});

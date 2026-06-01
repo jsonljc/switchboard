@@ -310,6 +310,7 @@ export async function runRecommendationSink(
   for (const rec of args.recommendations) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
     const { financialEffect, externalEffect } = ACTION_RISK_CONTRACT[rec.action];
+    const dollarsAtRisk = estimateRisk(rec);
     const result = await args.emit(
       {
         orgId: args.orgId,
@@ -318,13 +319,20 @@ export async function runRecommendationSink(
         action: rec.action,
         humanSummary: humanizeRecommendation(rec),
         confidence: rec.confidence,
-        dollarsAtRisk: estimateRisk(rec),
+        dollarsAtRisk,
         riskLevel: URGENCY_TO_RISK[rec.urgency],
         financialEffect,
         externalEffect,
         clientFacing: false,
         requiresConfirmation: false,
-        parameters: { ...((rec as { params?: Record<string, unknown> }).params ?? {}) },
+        parameters: {
+          ...((rec as { params?: Record<string, unknown> }).params ?? {}),
+          // Surface the dollar figure as STRUCTURED data so the governance gate's
+          // extractSpendAmount (and the spend-approval threshold) can read it.
+          // Only for financial actions with a known figure — an unknown amount
+          // must fail safe (stay parked), so we omit spendAmount when it's 0.
+          ...(financialEffect && dollarsAtRisk > 0 ? { spendAmount: dollarsAtRisk } : {}),
+        },
         presentation: buildPresentation(rec),
         targetEntities: { campaignId: rec.campaignId, campaignName: rec.campaignName },
         expiresAt,
