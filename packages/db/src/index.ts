@@ -136,6 +136,7 @@ export { PrismaReEngagementVerdictReader } from "./prisma-re-engagement-verdict-
 export { createPrismaApprovedComplianceClaimStore } from "./prisma-approved-compliance-claim-store.js";
 export { createPrismaConsentStore } from "./prisma-consent-store.js";
 export { createPrismaContactConsentReader } from "./prisma-contact-consent-reader.js";
+export { PrismaScheduledFollowUpStore } from "./stores/prisma-scheduled-follow-up-store.js";
 export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
 export { seedMiraPilotOrgs } from "./seed/seed-mira-pilot-orgs.js";
 export {
