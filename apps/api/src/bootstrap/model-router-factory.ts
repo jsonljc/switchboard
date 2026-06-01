@@ -10,8 +10,8 @@ import { ModelRouter } from "@switchboard/core";
  *
  * The flag-value parameter defaults from the literal
  * `process.env.ALEX_MODEL_ROUTER_ENABLED` so `scripts/check-env-completeness.ts`
- * (which greps `process.env.FOO`) detects the variable, while unit tests stay
- * pure by injecting the string directly.
+ * (which greps for direct `process.env` property reads) detects the variable,
+ * while unit tests stay pure by injecting the string directly.
  */
 export function resolveModelRouter(
   flagValue: string | undefined = process.env.ALEX_MODEL_ROUTER_ENABLED,
