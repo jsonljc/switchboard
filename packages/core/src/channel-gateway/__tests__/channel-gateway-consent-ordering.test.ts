@@ -72,6 +72,7 @@ describe("ChannelGateway — consent-before-escalation ordering", () => {
       save: vi.fn().mockResolvedValue({}),
       listByConversation: vi.fn(),
       listByDeployment: vi.fn(),
+      countByDeploymentAndClaim: vi.fn(),
     };
 
     // The escalation trigger loader — if called, the test fails (ordering broken).

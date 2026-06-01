@@ -113,4 +113,21 @@ export class PrismaGovernanceVerdictStore implements GovernanceVerdictStore {
     });
     return (rows as Row[]).map(toRecord);
   }
+
+  async countByDeploymentAndClaim(input: {
+    deploymentId: string;
+    claimType: string;
+    action?: string;
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    return this.prisma.governanceVerdict.count({
+      where: {
+        deploymentId: input.deploymentId,
+        sourceGuard: input.claimType,
+        ...(input.action ? { action: input.action } : {}),
+        decidedAt: { gte: input.from, lt: input.to },
+      },
+    });
+  }
 }
