@@ -72,4 +72,24 @@ describe("resolveAuthoritativeDeployment", () => {
     expect(ctx.trustLevel).toBe("supervised");
     expect(ctx.trustLevelOverride).toBeUndefined();
   });
+
+  it("forwards policyOverrides (spendApprovalThreshold) to the context", async () => {
+    const authoritative = resolveAuthoritativeDeployment(
+      makeResolver(makeResult({ policyOverrides: { spendApprovalThreshold: 250 } })),
+    );
+
+    const ctx = await authoritative.resolve(REQUEST);
+
+    // Seam: if policyOverrides is dropped here, GovernanceGate never sees the
+    // spend threshold and the autonomy lever is inert in production (#644).
+    expect(ctx.policyOverrides?.spendApprovalThreshold).toBe(250);
+  });
+
+  it("leaves policyOverrides undefined when the deployment has none", async () => {
+    const authoritative = resolveAuthoritativeDeployment(makeResolver(makeResult()));
+
+    const ctx = await authoritative.resolve(REQUEST);
+
+    expect(ctx.policyOverrides).toBeUndefined();
+  });
 });
