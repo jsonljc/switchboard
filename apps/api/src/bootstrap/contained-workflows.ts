@@ -83,6 +83,8 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/meta-lead-intake-workflow.js");
   const { buildMetaLeadGreetingWorkflow } =
     await import("../services/workflows/meta-lead-greeting-workflow.js");
+  const { buildConversationFollowUpSendWorkflow } =
+    await import("../services/workflows/conversation-followup-send-workflow.js");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
@@ -151,6 +153,46 @@ export async function bootstrapContainedWorkflows(
     ),
   });
 
+  const followUpSendHandler = buildConversationFollowUpSendWorkflow({
+    getSendContext: async (orgId, contactId, threadId) => {
+      const prisma = prismaClient as import("@switchboard/db").PrismaClient;
+      const contact = await prisma.contact.findFirst({
+        where: { id: contactId, organizationId: orgId },
+        select: {
+          name: true,
+          phone: true,
+          messagingOptIn: true,
+          pdpaJurisdiction: true,
+          consentGrantedAt: true,
+          consentRevokedAt: true,
+        },
+      });
+      const org = await prisma.organizationConfig.findUnique({
+        where: { id: orgId },
+        select: { name: true },
+      });
+      const thread =
+        threadId !== null
+          ? await prisma.conversationThread.findUnique({
+              where: { id: threadId },
+              select: { lastWhatsAppInboundAt: true },
+            })
+          : null;
+      return {
+        consentGrantedAt: contact?.consentGrantedAt ?? null,
+        consentRevokedAt: contact?.consentRevokedAt ?? null,
+        pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+        messagingOptIn: contact?.messagingOptIn ?? false,
+        lastWhatsAppInboundAt: thread?.lastWhatsAppInboundAt ?? null,
+        jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+        leadName: contact?.name ?? "there",
+        businessName: org?.name ?? "our clinic",
+        phone: contact?.phone ?? null,
+      };
+    },
+    allowMarketingTemplate: process.env["FOLLOWUP_ALLOW_MARKETING_TEMPLATE"] === "true",
+  });
+
   const handlers = new Map<string, WorkflowHandler>([
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
     ["creative.concept.draft", creativeConceptDraftWorkflow],
@@ -160,6 +202,7 @@ export async function bootstrapContainedWorkflows(
     ["meta.lead.intake", buildMetaLeadIntakeWorkflow({ prisma: prismaClient, instantFormAdapter })],
     ["meta.lead.greeting.send", buildMetaLeadGreetingWorkflow()],
     ["meta.lead.inquiry.record", buildMetaLeadRecordInquiryWorkflow(prismaClient)],
+    ["conversation.followup.send", followUpSendHandler],
   ]);
 
   modeRegistry.register(new WorkflowMode({ handlers, services }));
@@ -238,6 +281,13 @@ export async function bootstrapContainedWorkflows(
       budgetClass: "standard",
       approvalPolicy: "none",
       allowedTriggers: ["internal"],
+    },
+    {
+      intent: "conversation.followup.send",
+      workflowId: "conversation.followup.send",
+      budgetClass: "standard",
+      approvalPolicy: "none",
+      allowedTriggers: ["schedule"],
     },
   ];
 

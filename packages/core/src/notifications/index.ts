@@ -31,3 +31,4 @@ export type {
   ProactiveSendEligibility,
   ProactiveEligibilityInput,
 } from "./proactive-eligibility.js";
+export type { WhatsAppTemplate } from "../skill-runtime/templates/whatsapp-registry.js";
