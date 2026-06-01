@@ -46,6 +46,7 @@ export interface AdsClientInterface {
   getAdSetInsights(params: {
     dateRange: { since: string; until: string };
     fields: string[];
+    campaignId?: string;
   }): Promise<unknown[]>;
   getAccountSummary(): Promise<AccountSummary>;
   /**
@@ -58,7 +59,7 @@ export interface AdsClientInterface {
 }
 ```
 
-`AdSetLearningInput` is already imported at `audit-runner.ts:12`. No other change in this file.
+`AdSetLearningInput` is already imported at `audit-runner.ts:12`. `campaignId?` on `getAdSetInsights` matches the concrete `MetaAdsClient.getAdSetInsights` (`meta-ads-client.ts:96`), which already accepts it — adding it to the interface removes latent drift (so a future call through the interface type isn't a footgun). No other change in this file.
 
 - [ ] **Step 2: Verify it compiles (no behavior change yet).**
 
@@ -353,6 +354,34 @@ it("treats a day with spend but zero conversions as above target", async () => {
   });
   expect(r.periodsAboveTarget).toBe(1); // spend>0,conv=0 counts; zero-spend day ignored
 });
+
+it("falls back to weekly snapshot count when no daily rows are returned", async () => {
+  const adsClient = {
+    getCampaignInsights: vi.fn(async () => []), // Meta returned nothing for the daily pull
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+  };
+  const provider = new MetaCampaignInsightsProvider(adsClient as never);
+  const snap = (cpa: number) => ({
+    campaignId: "c_1",
+    startDate: new Date("2026-05-18"),
+    endDate: new Date("2026-05-25"),
+    spend: cpa,
+    conversions: 1,
+    cpa,
+  });
+  const r = await provider.getTargetBreachStatus({
+    orgId: "o",
+    accountId: "a",
+    campaignId: "c_1",
+    targetCPA: 50,
+    startDate: new Date("2026-05-25"),
+    endDate: new Date("2026-06-01"),
+    snapshots: [snap(600), snap(10)], // one above target, one below
+  });
+  expect(r.granularity).toBe("weekly");
+  expect(r.periodsAboveTarget).toBe(1);
+});
 ```
 
 - [ ] **Step 2: Run to verify fail.**
@@ -379,18 +408,33 @@ async getTargetBreachStatus(input: {
   });
 
   const campaignDays = rows.filter((r) => r.campaignId === input.campaignId);
+
+  // Fallback: if the daily Graph pull returned no rows for this campaign (Meta
+  // partial failure / dev run / no spend in window) but the caller supplied weekly
+  // snapshots, preserve the old weekly-snapshot breach count rather than silently
+  // reporting 0 (spec §4·PR1: "the existing snapshot-array path stays as a fallback").
+  if (campaignDays.length === 0 && input.snapshots && input.snapshots.length > 0) {
+    let weekly = 0;
+    for (const snap of input.snapshots) {
+      if (snap.cpa != null && snap.cpa > input.targetCPA) weekly++;
+    }
+    return { periodsAboveTarget: weekly, granularity: "weekly", isApproximate: true };
+  }
+
   let periodsAboveTarget = 0;
   for (const day of campaignDays) {
     if (day.spend <= 0) continue; // no spend → not a breach day
-    const dayCpa = day.conversions > 0 ? day.spend / day.conversions : Infinity;
-    if (dayCpa > input.targetCPA) periodsAboveTarget++;
+    // Local boolean — never carry Infinity into rationale/logs/evidence downstream.
+    const breached =
+      day.conversions > 0 ? day.spend / day.conversions > input.targetCPA : day.spend > 0;
+    if (breached) periodsAboveTarget++;
   }
 
   return { periodsAboveTarget, granularity: "daily", isApproximate: false };
 }
 ```
 
-(The `snapshots` param stays in the signature for back-compat but is no longer the data source.)
+(The `snapshots` param is now a **fallback**: used only when the daily Graph pull returns no rows — see the guard above. Daily rows are the primary source.)
 
 - [ ] **Step 4: Run to verify pass.**
 
@@ -457,6 +501,12 @@ it("learningPhase=false when all material children SUCCESS and coverage ok", asy
   const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
   expect(out.learningPhase).toBe(false);
   expect(out.optimizationEvents).toBe(7); // still read from insights
+});
+
+it("learningPhase=false when only an immaterial (5% spend) ad set is UNKNOWN", async () => {
+  const p = providerWithAdSets([adset("a", "UNKNOWN", 50), adset("b", "SUCCESS", 950)]); // 95% known
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(false); // a tiny unknown ad set must not overprotect the account
 });
 
 it("learningPhase=false when client lacks getAdSetLearningInputs (graceful)", async () => {
@@ -651,9 +701,14 @@ it("fires a pause recommendation on a durable daily breach (real provider, no st
 });
 
 it("downgrades to watch when a material child ad set is LEARNING", async () => {
-  // same shape, but getAdSetLearningInputs returns a LEARNING material child ⇒
-  // learningPhase=true ⇒ LearningPhaseGuard converts pause → watch
-  // assert: report.recommendations has NO 'pause' and report.watches is non-empty
+  // Same shape as the pause test, but getAdSetLearningInputs returns a LEARNING
+  // material child ⇒ learningPhase=true ⇒ LearningPhaseGuard.gate() converts the
+  // pause to a watch. VERIFIED against audit-runner.ts:412-419: a gated watch is
+  // pushed to the separate `report.watches` array, NOT into `recommendations` with
+  // an action "watch" — and WatchOutputSchema (ad-optimizer.ts:158-165) has no
+  // `action` field. So assert the watch *surface*, not an action string:
+  //   expect(report.recommendations.every((r) => r.action !== "pause")).toBe(true);
+  //   expect(report.watches.length).toBeGreaterThan(0);
 });
 ```
 
@@ -715,7 +770,7 @@ Decide A vs B by checking whether `RealCrmDataProvider.getFunnelData` correctly 
 **Tasks (to detail):**
 
 - **Promote orphaned analyzers into `audit-runner.ts`:** the audit already imports `detectTrends` and `analyzeBudgetDistribution`; additionally wire `analyzeCreative` (`creative-analyzer.ts` — dedup/spend-concentration/CPA-outlier) and `detectSaturation` (`saturation-detector.ts`) into the run, emitting their findings as `insight`/`watch`/recommendation outputs. (These have existing tests — `saturation-detector.test.ts`, etc. — confirm their exact exported signatures when planning.)
-- **Action the budget imbalance:** today `analyzeBudgetDistribution` (audit-runner.ts:489-507) produces `budgetDistribution` but emits no recommendation. Convert a detected over-funded-loser / under-funded-winner pair into a `shift_budget_to_source` recommendation **reusing the existing action enum** (no new `AdRecommendationAction` value — keeps the no-fallback switches in `recommendation-sink.ts` exhaustive). **Materiality guardrails** (spec §4·PR3): source spend share ≥ 10%, CPA/ROAS delta above a minimum, source not in learning, destination passes the evidence gate — else `watch`.
+- **Action the budget imbalance:** today `analyzeBudgetDistribution` (audit-runner.ts:489-507) produces `budgetDistribution` but emits no recommendation. Convert a detected over-funded-loser / under-funded-winner pair into a `shift_budget_to_source` recommendation **reusing the existing action enum** (no new `AdRecommendationAction` value — keeps the no-fallback switches in `recommendation-sink.ts` exhaustive). `shift_budget_to_source` genuinely names a budget reallocation, so reuse is not semantic lying; the structured `candidateAction.kind: "budget_reallocation"` (spec §6) carries the precise reversible move. If a future imbalance type can't be named by an existing enum value, prefer adding it to `candidateAction.kind` over an inexpressive enum reuse. **Materiality guardrails** (spec §4·PR3): source spend share ≥ 10%, CPA/ROAS delta above a minimum, source not in learning, destination passes the evidence gate — else `watch`.
 - **Transcribe guard thresholds** from `claude-ads` into named constants in `recommendation-engine.ts` (already has `KILL_DAYS_THRESHOLD = 7`): add a min-clicks guard (≥20) to the pause/add-creative rules; keep the ≤20% scale step (already `MAX_BUDGET_INCREASE_PERCENT = 20`); add the creative-fatigue CTR-drop>20%/14d framing where the diagnostician keys it.
 
 **Acceptance:** the audit's recommendation set includes creative-dedup/saturation/forecast findings; a material imbalance now yields a `shift_budget_to_source` rec (and a non-material one does not); pause requires ≥20 clicks AND the durable breach.
