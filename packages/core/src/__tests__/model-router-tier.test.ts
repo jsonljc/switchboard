@@ -57,4 +57,44 @@ describe("ModelRouter.resolveTier", () => {
     expect(config.maxTokens).toBe(4096);
     expect(config.temperature).toBe(0.3);
   });
+
+  it("Stage: objection raises a no-tools turn to premium", () => {
+    expect(router.resolveTier(ctx({ toolCount: 0, currentStage: "objection" }))).toBe("premium");
+  });
+
+  it("Stage: closing raises a no-tools turn to premium", () => {
+    expect(router.resolveTier(ctx({ toolCount: 0, currentStage: "closing" }))).toBe("premium");
+  });
+
+  it("Stage: fear raises to critical", () => {
+    expect(router.resolveTier(ctx({ toolCount: 0, currentStage: "fear" }))).toBe("critical");
+  });
+
+  it("Stage: fear raises even the first-message greeting to critical", () => {
+    expect(router.resolveTier(ctx({ messageIndex: 0, currentStage: "fear" }))).toBe("critical");
+  });
+
+  it("Stage never lowers: escalated + objection stays critical", () => {
+    expect(
+      router.resolveTier(ctx({ previousTurnEscalated: true, currentStage: "objection" })),
+    ).toBe("critical");
+  });
+
+  it("Stage + floor: premium floor + fear → critical", () => {
+    expect(router.resolveTier(ctx({ modelFloor: "premium", currentStage: "fear" }))).toBe(
+      "critical",
+    );
+  });
+
+  it("Stage raises a premium rule slot: tool-followup (Rule 4) + fear → critical", () => {
+    expect(router.resolveTier(ctx({ previousTurnUsedTools: true, currentStage: "fear" }))).toBe(
+      "critical",
+    );
+  });
+
+  it("Stage no-op on equal rank: high-risk (Rule 5) premium + objection stays premium", () => {
+    expect(router.resolveTier(ctx({ hasHighRiskTools: true, currentStage: "objection" }))).toBe(
+      "premium",
+    );
+  });
 });

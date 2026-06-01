@@ -132,6 +132,7 @@ export type {
 
 // Dialogue (emotional classification, naturalness, bilingual, post-validation)
 export { classifyEmotionalSignal } from "./dialogue/emotional-classifier.js";
+export { emotionalSignalToStage } from "./dialogue/dialogue-stage.js";
 export { NaturalnessPacketAssembler } from "./dialogue/naturalness-assembler.js";
 export { buildLocalisedSystemPrompt } from "./dialogue/system-prompt-builder.js";
 export { VariationPool } from "./dialogue/variation-pool.js";
@@ -210,7 +211,13 @@ export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from ".
 
 // Model Router (slot-based model selection)
 export { ModelRouter } from "./model-router.js";
-export type { ModelSlot, ModelConfig, ResolveOptions, TierContext } from "./model-router.js";
+export type {
+  ModelSlot,
+  ModelConfig,
+  ResolveOptions,
+  TierContext,
+  DialogueStage,
+} from "./model-router.js";
 
 // Sessions (session runtime)
 export * from "./sessions/index.js";

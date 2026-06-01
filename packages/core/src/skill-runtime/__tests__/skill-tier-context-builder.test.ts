@@ -152,4 +152,29 @@ describe("buildTierContext", () => {
 
     expect(result.toolCount).toBe(2);
   });
+
+  it("threads currentStage through to the TierContext", () => {
+    const result = buildTierContext({
+      turnCount: 3,
+      declaredToolIds: [],
+      tools: new Map(),
+      previousTurnHadToolUse: false,
+      previousTurnEscalated: false,
+      currentStage: "fear",
+    });
+
+    expect(result.currentStage).toBe("fear");
+  });
+
+  it("leaves currentStage undefined when not provided", () => {
+    const result = buildTierContext({
+      turnCount: 3,
+      declaredToolIds: [],
+      tools: new Map(),
+      previousTurnHadToolUse: false,
+      previousTurnEscalated: false,
+    });
+
+    expect(result.currentStage).toBeUndefined();
+  });
 });

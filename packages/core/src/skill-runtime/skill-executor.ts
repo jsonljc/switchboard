@@ -28,8 +28,10 @@ import type {
   LLMToolResultBlock,
   ToolCallingLLMAdapter,
 } from "./llm-types.js";
-import type { ModelRouter } from "../model-router.js";
+import type { ModelRouter, DialogueStage } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
+import { classifyEmotionalSignal } from "../dialogue/emotional-classifier.js";
+import { emotionalSignalToStage } from "../dialogue/dialogue-stage.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
 import {
   runBeforeLlmCallHooks,
@@ -138,6 +140,7 @@ export class SkillExecutorImpl implements SkillExecutor {
     params: SkillExecutionParams,
     turnCount: number,
     toolCallRecords: ToolCallRecord[],
+    currentStage: DialogueStage | undefined,
     governanceHook?: GovernanceHook,
   ): ResolvedModelProfile | undefined {
     if (!this.router) return undefined;
@@ -152,6 +155,7 @@ export class SkillExecutorImpl implements SkillExecutor {
         (log) => log.decision === "require-approval" || log.decision === "deny",
       ),
       minimumModelTier: params.skill.minimumModelTier,
+      currentStage,
     });
     const slot = this.router.resolveTier(tierCtx);
     const modelConfig = this.router.resolve(slot);
@@ -161,6 +165,23 @@ export class SkillExecutorImpl implements SkillExecutor {
       temperature: modelConfig.temperature,
       timeoutMs: modelConfig.timeoutMs,
     };
+  }
+
+  /**
+   * Derive the coarse dialogue stage from the latest user message using the
+   * LLM-free emotional classifier (pure/sync regex). Defensive: returns
+   * `undefined` when there is no user message or its text is empty, so tiering
+   * silently falls back to the previous-turn rules. Called once per `execute()`
+   * (guarded by `this.router`), since the stage is a property of the customer's
+   * current message and is constant across the internal tool-loop turns.
+   */
+  private deriveCurrentStage(
+    messages: SkillExecutionParams["messages"],
+  ): DialogueStage | undefined {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    const text = lastUser?.content.trim();
+    if (!text) return undefined;
+    return emotionalSignalToStage(classifyEmotionalSignal({ message: text }));
   }
 
   async execute(params: SkillExecutionParams): Promise<SkillExecutionResult> {
@@ -191,10 +212,21 @@ export class SkillExecutorImpl implements SkillExecutor {
     let turnCount = 0;
     const startTime = Date.now();
 
+    // The dialogue stage is a property of the customer's latest message, which is
+    // constant across this execution's internal tool-loop turns — derive it once.
+    // Guarded by `this.router` so there is zero overhead when routing is disabled.
+    const currentStage = this.router ? this.deriveCurrentStage(params.messages) : undefined;
+
     while (turnCount < this.policy.maxLlmTurns) {
       turnCount++;
 
-      const profile = this.resolveProfile(params, turnCount, toolCallRecords, governanceHook);
+      const profile = this.resolveProfile(
+        params,
+        turnCount,
+        toolCallRecords,
+        currentStage,
+        governanceHook,
+      );
 
       const llmCtx = {
         turnCount,

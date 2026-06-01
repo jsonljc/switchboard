@@ -1,4 +1,4 @@
-import type { TierContext, ModelSlot } from "../model-router.js";
+import type { TierContext, ModelSlot, DialogueStage } from "../model-router.js";
 import type { SkillTool } from "./types.js";
 
 export interface TierContextInput {
@@ -8,6 +8,8 @@ export interface TierContextInput {
   previousTurnHadToolUse: boolean;
   previousTurnEscalated: boolean;
   minimumModelTier?: ModelSlot;
+  /** Coarse dialogue stage for the current turn; raises the tier when present. */
+  currentStage?: DialogueStage;
 }
 
 export function buildTierContext(input: TierContextInput): TierContext {
@@ -29,5 +31,6 @@ export function buildTierContext(input: TierContextInput): TierContext {
     previousTurnUsedTools: input.previousTurnHadToolUse,
     previousTurnEscalated: input.previousTurnEscalated,
     modelFloor: input.minimumModelTier,
+    currentStage: input.currentStage,
   };
 }
