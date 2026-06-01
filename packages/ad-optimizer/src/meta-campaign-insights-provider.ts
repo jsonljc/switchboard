@@ -52,6 +52,13 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     if (!this.adsClient.getAdSetLearningInputs) return false;
     const adSets = await this.adsClient.getAdSetLearningInputs(campaignId);
     const totalSpend = adSets.reduce((s, a) => s + a.spend, 0);
+    // No ad-set spend signal (zero spend, or no ad sets) ⇒ false (not "in learning").
+    // Deliberate and currently safe: a zero-spend campaign yields no breach days
+    // (getTargetBreachStatus skips spend<=0 days) and no actionable recommendation, so
+    // this never exposes such a campaign to a destructive action. It also matches the
+    // no-data graceful stance (the getAdSetLearningInputs-absent path returns false too).
+    // NOTE for future consumers of `learningPhase`: if a recommendation is ever added
+    // that acts on zero-spend campaigns, revisit this to "protect when in doubt".
     if (totalSpend <= 0 || adSets.length === 0) return false;
 
     const knownSpend = adSets

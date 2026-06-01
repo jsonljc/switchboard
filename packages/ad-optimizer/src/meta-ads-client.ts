@@ -117,9 +117,12 @@ export class MetaAdsClient {
     ]);
     // NOTE: reads Graph page 1 only (no paging.next follow). limit=200 covers typical
     // accounts; revisit for campaigns with >200 ad sets before broad enablement.
-    const entityResp = await this.get(
-      `/${this.accountId}/adsets?fields=id,name,campaign_id,learning_stage_info&filtering=${encodeURIComponent(filtering)}&limit=200`,
-    );
+    const qp = new URLSearchParams({
+      fields: "id,name,campaign_id,learning_stage_info",
+      filtering,
+      limit: "200",
+    });
+    const entityResp = await this.get(`/${this.accountId}/adsets?${qp.toString()}`);
     const entities = (entityResp.data as Record<string, unknown>[]) ?? [];
 
     const insights = await this.getAdSetInsights({
