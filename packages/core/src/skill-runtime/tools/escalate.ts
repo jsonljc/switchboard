@@ -25,7 +25,7 @@ export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateT
     operations: {
       "handoff.create": {
         description:
-          "Escalate the conversation to a human team member. Use when the customer's question is outside your scope, when business knowledge is missing, or when the customer is frustrated.",
+          "Escalate the conversation to a human team member. Use when the customer's question is outside your scope, when business knowledge is missing, when the customer is frustrated, or when a medical red flag is present (reason `medical_safety`).",
         effectCategory: "write" as const,
         idempotent: false,
         inputSchema: {
@@ -39,6 +39,7 @@ export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateT
                 "complex_objection",
                 "negative_sentiment",
                 "compliance_concern",
+                "medical_safety",
                 "booking_failure",
                 "max_turns_exceeded",
               ],

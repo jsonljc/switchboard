@@ -132,4 +132,25 @@ describe("escalate tool factory", () => {
       }),
     );
   });
+
+  it("offers medical_safety as an escalation reason", () => {
+    const factory = createEscalateToolFactory(baseDeps);
+    const tool = factory(TEST_CONTEXT);
+    const schema = tool.operations["handoff.create"]!.inputSchema as {
+      properties: { reason: { enum: string[] } };
+    };
+    expect(schema.properties.reason.enum).toContain("medical_safety");
+  });
+
+  it("passes a medical_safety reason through to the assembler", async () => {
+    const factory = createEscalateToolFactory(baseDeps);
+    const tool = factory(TEST_CONTEXT);
+    await tool.operations["handoff.create"]!.execute({
+      reason: "medical_safety",
+      summary: "Lead reports a changing mole and wants it lasered",
+    });
+    expect(baseDeps.assembler.assemble).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "medical_safety" }),
+    );
+  });
 });
