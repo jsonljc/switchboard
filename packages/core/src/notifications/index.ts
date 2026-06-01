@@ -20,3 +20,9 @@ export type {
 } from "./notification-classifier.js";
 export { NotificationBatcher } from "./notification-batcher.js";
 export type { NotificationBatcherConfig } from "./notification-batcher.js";
+export {
+  WHATSAPP_WINDOW_MS,
+  isWithinWhatsAppWindow,
+  canSendWhatsAppTemplate,
+} from "./whatsapp-window.js";
+export type { WhatsAppTemplateConsentReason } from "./whatsapp-window.js";

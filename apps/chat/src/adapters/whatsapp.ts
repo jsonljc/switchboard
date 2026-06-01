@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
 import { withRetry } from "@switchboard/core";
+export type { WhatsAppTemplateConsentReason } from "@switchboard/core";
+export { isWithinWhatsAppWindow, canSendWhatsAppTemplate } from "@switchboard/core";
 import {
   MEDIA_TYPES,
   extractWhatsAppValue,
@@ -54,41 +56,6 @@ class WhatsAppApiError extends Error {
     super(message);
     this.name = "WhatsAppApiError";
   }
-}
-
-/** WhatsApp 24-hour conversation window duration in milliseconds. */
-const WHATSAPP_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Check whether we are inside the WhatsApp 24-hour conversation window.
- * Outside the window, only pre-approved template messages may be sent.
- */
-export function isWithinWhatsAppWindow(lastInboundAt: Date | null): boolean {
-  if (!lastInboundAt) return false;
-  return Date.now() - lastInboundAt.getTime() < WHATSAPP_WINDOW_MS;
-}
-
-export type WhatsAppTemplateConsentReason = "outside_window_no_consent";
-
-/**
- * Determine whether a proactive WhatsApp template can be sent to a contact.
- *
- * Inside the 24-hour conversation window, any template send is allowed —
- * the inbound itself is implicit consent. Outside the window, the contact
- * must have explicit `messagingOptIn = true` (e.g., from prior inbound,
- * CTWA click, or web form). Without explicit opt-in, sending is refused.
- */
-export function canSendWhatsAppTemplate(args: {
-  contact: { messagingOptIn: boolean };
-  lastInboundAt: Date | null;
-}): { allowed: true } | { allowed: false; reason: WhatsAppTemplateConsentReason } {
-  if (isWithinWhatsAppWindow(args.lastInboundAt)) {
-    return { allowed: true };
-  }
-  if (args.contact.messagingOptIn) {
-    return { allowed: true };
-  }
-  return { allowed: false, reason: "outside_window_no_consent" };
 }
 
 export class WhatsAppAdapter implements ChannelAdapter {
