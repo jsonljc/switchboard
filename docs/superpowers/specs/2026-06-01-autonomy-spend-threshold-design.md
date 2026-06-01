@@ -73,9 +73,17 @@ spendAmount → amount → budgetChange → newBudget
 `spendAmount` is the new canonical key; the others are producer aliases.
 Returns `null` when none is a finite number. One extractor, used by **both**
 the existing spend-_limit_ check (step 6) and the new threshold logic — so they
-can never disagree about what "the amount" is. (This also fixes a latent bug:
-Alex budget actions that use `newBudget` were invisible to the spend-limit check
-before.)
+can never disagree about what "the amount" is.
+
+**Cross-cutting side effect (safe direction, applies to ALL deployments):**
+because this same extractor feeds the spend-_limit_ DENY check
+(`policy-engine.ts` step 6), widening it means actions that key their amount under
+`spendAmount`/`newBudget` are now subject to the per-action/daily/weekly/monthly
+spend-limit deny too (previously they read as `null` and escaped it). This is a
+tightening (fixes a latent gap where e.g. Alex `newBudget` actions bypassed spend
+limits) and is independent of the opt-in lever — it applies wherever an
+`effectiveSpendLimits` identity is loaded. The `Number.isFinite` guard also
+hardens the limit path against `NaN`/`Infinity`.
 
 ### 3.2 Thread `spendApprovalThreshold` + an explicit opt-in to the gate (#644 fix)
 

@@ -99,6 +99,14 @@ describe("applySpendApprovalThreshold", () => {
       "execute",
     );
   });
+  it("a $0 threshold still auto-approves a $0 reversible standard spend, but parks any positive spend", () => {
+    expect(
+      applySpendApprovalThreshold(approve(), { ...base, threshold: 0, spendAmount: 0 }).outcome,
+    ).toBe("execute");
+    expect(
+      applySpendApprovalThreshold(exec(), { ...base, threshold: 0, spendAmount: 1 }).outcome,
+    ).toBe("require_approval");
+  });
   it("does not escalate an already-parked over-threshold approval (stays require_approval, no double-mark)", () => {
     const r = applySpendApprovalThreshold(approve(), { ...base, spendAmount: 150 });
     expect(r.outcome).toBe("require_approval");
