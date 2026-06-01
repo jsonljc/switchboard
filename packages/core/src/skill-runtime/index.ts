@@ -35,6 +35,7 @@ export {
   createWebScannerTool,
   createEscalateToolFactory,
   createDelegateToolFactory,
+  createScheduleFollowUpToolFactory,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,
@@ -43,6 +44,7 @@ export type {
   CalendarBookToolFactory,
   CrmWriteToolFactory,
   CalendarProviderFactory,
+  ScheduleFollowUpToolFactory,
 } from "./tools/index.js";
 export type {
   ChildWorkSubmitter,

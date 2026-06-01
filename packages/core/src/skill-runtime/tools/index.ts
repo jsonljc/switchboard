@@ -8,3 +8,5 @@ export { createEscalateToolFactory } from "./escalate.js";
 export type { EscalateToolFactory } from "./escalate.js";
 export { createDelegateToolFactory } from "./delegate.js";
 export type { DelegateToolFactory, DelegateToolDeps } from "./delegate.js";
+export { createScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
+export type { ScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
