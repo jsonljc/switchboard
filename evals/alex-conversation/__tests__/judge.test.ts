@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { judgeTurn, JUDGE_RUBRIC_VERSION, JUDGE_RUBRIC_HASH, JUDGE_TOOL } from "../judge.js";
+import {
+  judgeTurn,
+  JUDGE_RUBRIC_VERSION,
+  JUDGE_RUBRIC_HASH,
+  JUDGE_TOOL,
+  JUDGE_MAX_TOKENS,
+} from "../judge.js";
 import type { JudgeTurnDeps, JudgeTurnInput, AnthropicClientLike } from "../judge.js";
 
 // ---------------------------------------------------------------------------
@@ -115,6 +121,12 @@ describe("judgeTurn — happy path (tool_use structured output)", () => {
     expect(call.tool_choice).toEqual({ type: "tool", name: "judge_turn" });
     expect(call.tools).toHaveLength(1);
     expect((call.tools[0] as { name: string }).name).toBe("judge_turn");
+    // Regression guard: the verdict's max_tokens must be high enough that the
+    // judge_turn tool JSON (esp. the free-form `notes` field) is never truncated.
+    // At 512 the response hit stop_reason:max_tokens mid-`notes`, dropping the
+    // required field and fail-closing ~44% of scenarios. See JUDGE_MAX_TOKENS.
+    expect(call.max_tokens).toBe(JUDGE_MAX_TOKENS);
+    expect(call.max_tokens).toBeGreaterThanOrEqual(1024);
   });
 
   it("clamps softScore to 0–5 range (e.g. 7 → 5)", async () => {
@@ -274,9 +286,13 @@ describe("JUDGE_RUBRIC_VERSION and JUDGE_RUBRIC_HASH exports", () => {
 // softScore sanity: valid tool_use with softScore 4 must NOT be zeroed out
 // ---------------------------------------------------------------------------
 //
-// A live run scored a reasonable reply 0. This test verifies the parse/clamp
+// Live runs scored reasonable replies 0. This test verifies the parse/clamp
 // path cannot zero out a valid score from a well-formed tool_use block.
-// The 0 in the live run was a genuine model verdict; the code path is correct.
+// NOTE: those live 0s were NOT genuine verdicts — they were judge_turn tool JSON
+// truncated at max_tokens:512 (the required `notes` field got cut off →
+// Zod parse failure → fail-closed softScore 0). Root-caused via a live probe and
+// fixed by raising the cap to JUDGE_MAX_TOKENS; this test still guards the
+// clamp/parse path for well-formed verdicts.
 
 describe("judgeTurn — softScore 4 from valid tool_use is preserved (not clamped to 0)", () => {
   it("a valid tool_use returning softScore 4 yields verdict.softScore === 4", async () => {
