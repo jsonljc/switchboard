@@ -57,7 +57,7 @@ describe("follow-up fail-closed integration", () => {
             {
               id: "wu_1",
               organizationId: input.organizationId,
-              actor: { id: "system:scheduled-follow-up", type: "system" },
+              actor: { id: "system", type: "system" },
               intent: "conversation.followup.send",
               parameters: input,
               deployment: {

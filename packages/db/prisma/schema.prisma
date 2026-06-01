@@ -2042,6 +2042,7 @@ model ScheduledFollowUp {
   channel              String
   jurisdiction         String?
   reason               String
+  note                 String?
   templateIntentClass  String
   dueAt                DateTime
   status               String    @default("pending")

@@ -10,6 +10,7 @@ CREATE TABLE "ScheduledFollowUp" (
     "channel" TEXT NOT NULL,
     "jurisdiction" TEXT,
     "reason" TEXT NOT NULL,
+    "note" TEXT,
     "templateIntentClass" TEXT NOT NULL,
     "dueAt" TIMESTAMP(3) NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',

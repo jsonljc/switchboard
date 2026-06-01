@@ -98,6 +98,7 @@ export function createScheduleFollowUpToolFactory(
             channel: "whatsapp",
             jurisdiction: null,
             reason: input.reason,
+            note: input.note ?? null,
             templateIntentClass: "re-engagement-offer",
             dueAt,
             dedupeKey,

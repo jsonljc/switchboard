@@ -67,6 +67,7 @@ describe("schedule-follow-up tool", () => {
         workUnitId: "wu_1",
         channel: "whatsapp",
         reason: "price_concern",
+        note: "wants pricing on weekend",
         templateIntentClass: "re-engagement-offer",
         dueAt: new Date("2026-06-04T00:00:00.000Z"),
         dedupeKey: "followup:org_1:contact_1:2026-06-04",

@@ -22,6 +22,7 @@ export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
         channel: input.channel,
         jurisdiction: input.jurisdiction,
         reason: input.reason,
+        note: input.note,
         templateIntentClass: input.templateIntentClass,
         dueAt: input.dueAt,
         dedupeKey: input.dedupeKey,

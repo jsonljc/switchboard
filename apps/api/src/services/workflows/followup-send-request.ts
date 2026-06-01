@@ -2,10 +2,13 @@ import type { CanonicalSubmitRequest } from "@switchboard/core/platform";
 import type { FollowUpSendSubmitInput } from "../cron/scheduled-follow-up-dispatch.js";
 
 /**
- * Build the canonical submit request for a scheduled follow-up send. The actor
- * is the SEEDED "system" principal (ensureSystemIdentity → "default" IdentitySpec)
- * — NOT a bespoke "system:..." id, which would have no IdentitySpec and hard-deny
- * at the governance gate. Cron-initiated work is a trace root (no parentWorkUnitId).
+ * Build the canonical submit request for a scheduled follow-up send.
+ *
+ * Cron-initiated work is a TRACE ROOT (no parentWorkUnitId), so it must carry a
+ * resolvable seeded actor itself — unlike child work (e.g. meta.lead.greeting.send)
+ * which inherits the parent's identity via submitChildWork. A bespoke `system:<x>`
+ * id has no seeded IdentitySpec → GovernanceGate.loadIdentitySpec throws → hard-deny.
+ * Use the seeded `system` principal (ensureSystemIdentity → "default" IdentitySpec).
  */
 export function buildFollowUpSendSubmitRequest(
   input: FollowUpSendSubmitInput,
@@ -14,7 +17,7 @@ export function buildFollowUpSendSubmitRequest(
   return {
     organizationId: input.organizationId,
     // principal "system" → seeded "default" IdentitySpec (ensureSystemIdentity)
-    actor: { id: "system", type: "service" },
+    actor: { id: "system", type: "system" },
     intent: "conversation.followup.send",
     parameters: {
       contactId: input.contactId,

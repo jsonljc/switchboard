@@ -9,6 +9,7 @@ export interface CreateScheduledFollowUpInput {
   channel: string;
   jurisdiction: string | null;
   reason: string;
+  note: string | null;
   templateIntentClass: string;
   dueAt: Date;
   dedupeKey: string;

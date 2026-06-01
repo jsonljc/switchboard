@@ -14,7 +14,7 @@ const input = {
 describe("buildFollowUpSendSubmitRequest", () => {
   it("uses the seeded 'system' principal so governance can resolve identity (not a bespoke system:* id)", () => {
     const req = buildFollowUpSendSubmitRequest(input, { deploymentId: "dep_1", skillSlug: "alex" });
-    expect(req.actor).toEqual({ id: "system", type: "service" });
+    expect(req.actor).toEqual({ id: "system", type: "system" });
     expect(req.intent).toBe("conversation.followup.send");
     expect(req.trigger).toBe("schedule");
     expect(req.idempotencyKey).toBe("followup-send:fu_1");
