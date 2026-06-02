@@ -8,6 +8,7 @@ import {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,
   creativeAllowPolicyId,
+  creativePublishApprovalPolicyId,
 } from "./creative-governance.js";
 
 interface FindUniqueArgs {
@@ -141,9 +142,13 @@ describe("seedMiraCreativeDeployment", () => {
 
   it("upserts an org-scoped allow policy so creative.job.* is governed-not-denied", async () => {
     await seedMiraCreativeDeployment(prisma, "org_dev");
-    expect(prisma._policyUpserts).toHaveLength(1);
-    const call = prisma._policyUpserts[0]!;
-    expect(call.where.id).toBe(creativeAllowPolicyId("org_dev"));
+    // Two policies are seeded together: the allow policy AND the publish
+    // mandatory-approval policy (an org allowed but ungated would auto-publish).
+    expect(prisma._policyUpserts).toHaveLength(2);
+    const call = prisma._policyUpserts.find(
+      (c) => c.where.id === creativeAllowPolicyId("org_dev"),
+    )!;
+    expect(call).toBeDefined();
     expect(call.create).toMatchObject({ organizationId: "org_dev", effect: "allow", active: true });
     // The rule must match the creative pipeline intents, else the policy engine
     // default-denies them (no other policy matches a workflow intent).
@@ -152,7 +157,24 @@ describe("seedMiraCreativeDeployment", () => {
 
   it("scopes the allow policy id to the org (distinct rows per org)", async () => {
     await seedMiraCreativeDeployment(prisma, "org_other");
-    expect(prisma._policyUpserts[0]!.where.id).toBe(creativeAllowPolicyId("org_other"));
+    const allow = prisma._policyUpserts.find(
+      (c) => c.where.id === creativeAllowPolicyId("org_other"),
+    );
+    expect(allow).toBeDefined();
+  });
+
+  it("upserts the publish mandatory-approval policy alongside the allow policy", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    const publish = prisma._policyUpserts.find(
+      (c) => c.where.id === creativePublishApprovalPolicyId("org_dev"),
+    );
+    expect(publish).toBeDefined();
+    expect(publish!.create).toMatchObject({
+      organizationId: "org_dev",
+      effect: "require_approval",
+      approvalRequirement: "mandatory",
+      active: true,
+    });
   });
 
   it("throws a clear error when the creative listing is missing", async () => {

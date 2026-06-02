@@ -3,6 +3,7 @@ import {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,
   buildCreativeAllowPolicyInput,
+  buildCreativePublishApprovalPolicyInput,
 } from "./creative-governance.js";
 
 /**
@@ -78,5 +79,18 @@ export async function seedMiraCreativeDeployment(
     where: { id: policyId },
     create: { id: policyId, ...policyData },
     update: policyData,
+  });
+
+  // The publish intent (creative.job.publish) is allowed by the creative.job.*
+  // allow policy above, but publishing a creative to Meta is a claim-bearing
+  // external action that MUST always park for human approval — so an org-scoped
+  // mandatory-approval policy is seeded TOGETHER with the allow policy. Without it,
+  // publish would be allowed-but-ungated and auto-execute. Idempotent.
+  const { id: publishPolicyId, ...publishPolicyData } =
+    buildCreativePublishApprovalPolicyInput(orgId);
+  await prisma.policy.upsert({
+    where: { id: publishPolicyId },
+    create: { id: publishPolicyId, ...publishPolicyData },
+    update: publishPolicyData,
   });
 }
