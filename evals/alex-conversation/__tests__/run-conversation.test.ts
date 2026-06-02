@@ -29,6 +29,7 @@ const TWO_TURN_FIXTURE: ConversationFixture = {
   vertical: "medspa",
   locale: "sg",
   scenario: "two alex turns",
+  businessFacts: "operator",
   turns: [
     { role: "lead", content: "hi, do you do laser?" },
     { role: "alex", grade: EMPTY_GRADE },
