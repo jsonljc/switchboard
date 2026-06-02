@@ -147,8 +147,7 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   // truth; the read-model owns the CAC math). Show only when a real value AND target
   // exist — never gate on roi.degraded (Riley marks all ROI degraded), and never render
   // a blank "— · target" line.
-  const hasRoiProof =
-    !!roi && "comparator" in roi && roi.comparator.value !== "—" && roi.comparator.target !== "—";
+  const hasRoiProof = !!roi && roi.comparator.value !== "—" && roi.comparator.target !== "—";
   const rileyRoiLine =
     agentKey === "riley" && hero.kind === "ad-leads" && hasRoiProof
       ? `${roi.comparator.value} · ${roi.comparator.target}`

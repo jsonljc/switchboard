@@ -217,6 +217,21 @@ describe("KeyResult slot — launch-blocker tests", () => {
     expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
   });
 
+  it("6c. Riley roi real CAC but no target ('—') → renders NO comparator line", () => {
+    allData = makeMetricsVM({
+      kind: "ad-leads",
+      value: 32,
+      roi: {
+        degraded: true,
+        degradedHint: "No target set",
+        label: "cost per booked",
+        comparator: { value: "$44 per booked", target: "—" },
+      },
+    });
+    render(<KeyResult agentKey="riley" />);
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
+  });
+
   // Blocker 7: halted + core-setup-incomplete (mission setup has { primary: true, done: false }) + week value 12 → paused composition wins (shows 12 + paused note + a small setup note), and the activation block is NOT rendered.
   it("7. halted + core-setup-incomplete + week value 12 → paused wins; no activation block", () => {
     haltedValue = true;
