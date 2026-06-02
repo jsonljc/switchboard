@@ -35,8 +35,17 @@ export const RileyCaseSchema = z.object({
    * conversion-denominator step-change for this case, demoting cost-driven /
    * learning-resetting recs to watches. Omitted ⇒ measurement is trusted (true). */
   measurementTrusted: z.boolean().optional(),
-  /** Reduced expected label: an action name, `watch`, or `insight`. */
+  /** Reduced expected label (primary/back-compat assertion): an action name,
+   * `watch`, `insight`, or `none`. */
   expectedOutcome: z.string().min(1),
+  /** Optional set-membership assertion: every action listed here MUST appear among
+   * the recommendation actions the engine produces. Pins multi-rec outcomes the
+   * single `expectedOutcome` label can't — e.g. a durable breach emitting BOTH
+   * `add_creative` AND `pause`, so a dropped `pause` fails the eval. */
+  expectedActions: z.array(z.string().min(1)).optional(),
+  /** Optional set-membership assertion: every watch pattern listed here MUST appear
+   * among the watches the engine produces (e.g. `measurement_untrusted`). */
+  expectedWatchPatterns: z.array(z.string().min(1)).optional(),
   notes: z.string().optional(),
 });
 export type RileyCase = z.infer<typeof RileyCaseSchema>;
