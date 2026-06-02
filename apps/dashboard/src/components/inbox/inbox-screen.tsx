@@ -17,11 +17,15 @@ import { InboxFilterRow } from "@/components/inbox/inbox-filter-row";
 import { InboxEmptyState } from "@/components/inbox/inbox-empty-state";
 import { InboxErrorState } from "@/components/inbox/inbox-error-state";
 import { InboxDecisionItem } from "@/components/inbox/inbox-decision-item";
-import { ApprovalDetailSheet } from "@/components/inbox/approval-detail-sheet";
+import {
+  ApprovalDetailSheet,
+  type AlreadyHandledState,
+} from "@/components/inbox/approval-detail-sheet";
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
 import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
 import { HandoffDetailSheet } from "@/components/inbox/handoff-detail-sheet";
 import type { Decision, DecisionKind } from "@/lib/decisions/types";
+import { relativeTime } from "@/lib/decisions/time";
 import "./inbox-design-base.css";
 import "./inbox.css";
 
@@ -34,18 +38,48 @@ interface ApprovalDetailItemProps {
   onClose: () => void;
 }
 
+/**
+ * A 409 from an action means the item was actioned or expired out from under us
+ * (a teammate beat us to it, or it lapsed). Turn the 409 body into a banner state.
+ */
+function toAlreadyHandled(result: unknown): AlreadyHandledState | null {
+  if (!result || typeof result !== "object" || !("silent" in result)) return null;
+  const body = (
+    result as { body?: { error?: string; recommendation?: { actedAt?: string | null } } }
+  ).body;
+  const kind = body?.error ?? "already_terminal";
+  if (kind === "expired") return { kind, label: "This request expired before it was actioned." };
+  const actedAt = body?.recommendation?.actedAt ?? null;
+  const when = actedAt ? ` · ${relativeTime(actedAt, Date.now())}` : "";
+  return { kind, label: `Already handled by your teammate${when}` };
+}
+
 function ApprovalDetailItem({ decision, onClose }: ApprovalDetailItemProps) {
   const { toast } = useToast();
   const action = useRecommendationAction(decision.sourceRef.sourceId);
+  const [alreadyHandled, setAlreadyHandled] = useState<AlreadyHandledState | null>(null);
 
-  const handleCommit = (note?: string) => {
+  // Run an action; on a 409 surface the already-handled banner IN PLACE (don't close
+  // silently), otherwise run the success path.
+  const run = (op: () => Promise<unknown>, onOk: () => void) => {
     if (action.isPending) return;
-    void action
-      .primary(note)
+    void op()
       .then((result: unknown) => {
+        const handled = toAlreadyHandled(result);
+        if (handled) {
+          setAlreadyHandled(handled);
+          return;
+        }
+        onOk();
+      })
+      .catch(() => {}); // swallow so the success path never fires on rejection
+  };
+
+  const handleCommit = (note?: string) =>
+    run(
+      () => action.primary(note),
+      () => {
         onClose();
-        // 409 → silent path, no toast
-        if (result && typeof result === "object" && "silent" in result) return;
         toast({
           title: "Approved",
           description: decision.meta.contactName
@@ -57,29 +91,16 @@ function ApprovalDetailItem({ decision, onClose }: ApprovalDetailItemProps) {
             </ToastAction>
           ),
         });
-      })
-      .catch(() => {}); // swallow so success toast never fires on rejection
-  };
+      },
+    );
 
-  const handleSecondary = () => {
-    if (action.isPending) return;
-    void action
-      .secondary()
-      .then(onClose)
-      .catch(() => {});
-  };
-
-  const handleDismiss = () => {
-    if (action.isPending) return;
-    void action
-      .dismiss()
-      .then(onClose)
-      .catch(() => {});
-  };
+  const handleSecondary = () => run(() => action.secondary(), onClose);
+  const handleDismiss = () => run(() => action.dismiss(), onClose);
 
   return (
     <ApprovalDetailSheet
       decision={decision}
+      alreadyHandled={alreadyHandled}
       onClose={onClose}
       onCommit={handleCommit}
       onSecondary={handleSecondary}

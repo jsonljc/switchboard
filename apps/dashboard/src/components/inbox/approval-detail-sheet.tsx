@@ -204,40 +204,6 @@ export function ApprovalDetailSheet({
           )}
         </section>
 
-        <section className="ds-section ds-pending">
-          <div className="ds-eyebrow ds-eyebrow-pending">
-            <span>What this changes</span>
-            <span className="ds-pending-tag">preview not yet wired</span>
-          </div>
-          <div className="ds-pending-grid">
-            <div className="ds-pending-cell">
-              <span className="ds-pending-label">Before</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-            <div className="ds-pending-arrow" aria-hidden="true">
-              →
-            </div>
-            <div className="ds-pending-cell">
-              <span className="ds-pending-label">After</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-          </div>
-          <div className="ds-pending-row">
-            <div className="ds-pending-row-cell">
-              <span className="ds-pending-label">Confidence</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-            <div className="ds-pending-row-cell">
-              <span className="ds-pending-label">Money at risk</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-          </div>
-          <p className="ds-pending-caption">
-            We&apos;re saving a slot here for live before-and-after numbers — wiring it up next
-            week.
-          </p>
-        </section>
-
         <section className="ds-section ds-risk">
           <div className="ds-eyebrow">Risk</div>
           {!contract ? (

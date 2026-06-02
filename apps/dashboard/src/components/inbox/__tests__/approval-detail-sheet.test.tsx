@@ -127,6 +127,16 @@ describe("<ApprovalDetailSheet>", () => {
       fireEvent.click(screen.getByRole("button", { name: /close detail/i }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
+
+    // Truth-at-commit: the "preview not yet wired / Money at risk —" placeholder grid
+    // must not ship. Render only real data (proposal, risk chips) — omit, never placeholder.
+    it("does not render the 'preview not yet wired' placeholder grid", () => {
+      const { container } = renderSheet(makeDecision());
+      expect(screen.queryByText(/preview not yet wired/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/money at risk/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/wiring it up next week/i)).not.toBeInTheDocument();
+      expect(container.querySelector(".ds-pending")).not.toBeInTheDocument();
+    });
   });
 
   // (b) dataLines as string[][] — flatten joined with " · "

@@ -19,9 +19,10 @@ vi.mock("@/hooks/use-decision-feed", () => ({
   useDecisionFeed: (agentKey: string | null) => feedByKey(agentKey),
 }));
 
+const recMock = vi.hoisted(() => ({ primaryResult: {} as unknown }));
 vi.mock("@/hooks/use-recommendation-action", () => ({
   useRecommendationAction: () => ({
-    primary: vi.fn(() => Promise.resolve({})),
+    primary: vi.fn(() => Promise.resolve(recMock.primaryResult)),
     secondary: vi.fn(() => Promise.resolve({})),
     dismiss: vi.fn(() => Promise.resolve({})),
     confirm: vi.fn(() => Promise.resolve({})),
@@ -218,6 +219,7 @@ describe("<InboxScreen>", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     pushMock.mockClear();
+    recMock.primaryResult = {}; // default: a plain success result
     // Default: populated success state for both filtered and unfiltered feeds
     feedByKey = (_agentKey) => successFeed(allDecisions);
   });
@@ -565,6 +567,31 @@ describe("<InboxScreen>", () => {
       render(<InboxScreen />);
 
       expect(sink).not.toHaveBeenCalledWith("queue_clear_ms", expect.anything());
+    });
+  });
+
+  // Test 12: stale 409 → already-handled banner (don't close silently)
+  describe("(12) stale 409 surfaces the already-handled banner", () => {
+    it("shows the banner and disables actions instead of closing silently when commit 409s", async () => {
+      recMock.primaryResult = {
+        silent: true,
+        body: {
+          error: "already_terminal",
+          recommendation: { actedAt: new Date(Date.now() - 4 * 60_000).toISOString() },
+        },
+      };
+      feedByKey = (_agentKey) => successFeed([alexDecision]);
+
+      const { container } = render(<InboxScreen />);
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      // Commit → the mocked 409. The sheet must NOT close silently.
+      fireEvent.click(screen.getByRole("button", { name: "Yes, send it" }));
+
+      expect(await screen.findByText(/already handled by your teammate/i)).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Yes, send it" })).toBeDisabled();
     });
   });
 });
