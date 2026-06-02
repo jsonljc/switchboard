@@ -16,6 +16,10 @@ vi.mock("@prisma/client", () => ({
     organizationConfig: { findUnique: organizationConfigFindUnique },
     dashboardUser: { findUnique: dashboardUserFindUnique },
   })),
+  // The KnowledgeKind enum is read at module-load by @switchboard/db's
+  // seed-alex-skill-pack, which auth.ts pulls in transitively. Mirror the
+  // schema enum (playbook|policy|knowledge) so the mocked module is complete.
+  KnowledgeKind: { playbook: "playbook", policy: "policy", knowledge: "knowledge" },
 }));
 
 vi.mock("next-auth", () => ({
