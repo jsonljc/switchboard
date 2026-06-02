@@ -17,7 +17,16 @@ import { describe, it, expect } from "vitest";
 import { GovernanceGate, type GovernanceGateDeps } from "@switchboard/core/platform";
 import type { WorkUnit, IntentRegistration } from "@switchboard/core/platform";
 import { evaluate, resolveIdentity } from "@switchboard/core";
-import type { IdentitySpec, Policy } from "@switchboard/schemas";
+import {
+  resolveTrustLevelOverride,
+  resolveSpendAutonomyEnabled,
+  type IdentitySpec,
+  type Policy,
+} from "@switchboard/schemas";
+// Drive the gate from the SAME governance config the seed installs (run through the
+// REAL resolvers production uses), so a governanceSettings rename can't leave this
+// test a false green. See feedback_safety_gate_needs_producer_population.
+import { CREATIVE_GOVERNANCE_SETTINGS, CREATIVE_ALLOW_POLICY_RULE } from "@switchboard/db";
 
 const ORG = "org-acme";
 const ACTOR = "user-zoe";
@@ -57,11 +66,7 @@ function creativeAllowPolicy(): Policy {
     cartridgeId: null,
     priority: 50,
     active: true,
-    rule: {
-      composition: "AND",
-      conditions: [{ field: "actionType", operator: "matches", value: "creative.job.*" }],
-      children: [],
-    },
+    rule: CREATIVE_ALLOW_POLICY_RULE,
     effect: "allow",
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
@@ -131,10 +136,14 @@ function buildGate(policies: Policy[]): GovernanceGate {
 }
 
 describe("creative spend gate (real GovernanceGate)", () => {
-  // Posture the seed will configure: autonomous + spend-autonomy + a creative threshold.
+  // Posture the seed configures — derived from the seed's governanceSettings via
+  // the REAL resolvers (not hand-typed), so this stays honest if the seed changes.
+  // Threshold $50 is the spendApprovalThreshold column default the seed leaves in
+  // place; the assertions only rely on 12 < threshold < 120, so the exact value is
+  // not load-bearing.
   const SEEDED: DeploymentPosture = {
-    trustLevelOverride: "autonomous",
-    spendAutonomyEnabled: true,
+    trustLevelOverride: resolveTrustLevelOverride(CREATIVE_GOVERNANCE_SETTINGS),
+    spendAutonomyEnabled: resolveSpendAutonomyEnabled(CREATIVE_GOVERNANCE_SETTINGS),
     spendApprovalThreshold: 50,
   };
 

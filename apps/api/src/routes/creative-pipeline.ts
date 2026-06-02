@@ -10,6 +10,7 @@ import { z } from "zod";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
 import { requireOrgForMutation } from "../decorators/org.js";
+import { computeRenderSpend } from "../services/creative-render-spend.js";
 
 const SubmitBriefInput = z.object({
   deploymentId: z.string().min(1),
@@ -165,10 +166,24 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const intent = parsed.data.action === "stop" ? "creative.job.stop" : "creative.job.continue";
-      const parameters =
+      const parameters: Record<string, unknown> =
         parsed.data.action === "stop"
           ? { jobId: id }
           : { jobId: id, productionTier: parsed.data.productionTier };
+
+      // P2a-iii — surface the render cost as the governance spend signal so an
+      // over-threshold render parks for approval instead of silently rendering.
+      // Computed SERVER-SIDE from the persisted storyboard: the operator chooses
+      // the tier but cannot understate the cost. Best-effort — the workflow stays
+      // the authoritative owner of not-found / wrong-org / not-awaiting-approval,
+      // so a missing job or pre-storyboard continue just omits the signal.
+      if (parsed.data.action === "continue" && app.prisma) {
+        const job = await new PrismaCreativeJobStore(app.prisma).findById(id);
+        if (job && job.organizationId === request.orgId) {
+          const spendAmount = await computeRenderSpend(job, parsed.data.productionTier);
+          if (spendAmount !== null) parameters.spendAmount = spendAmount;
+        }
+      }
 
       const response = await app.platformIngress.submit({
         intent,

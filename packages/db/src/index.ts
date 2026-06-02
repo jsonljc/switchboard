@@ -141,6 +141,12 @@ export { PrismaScheduledReminderStore } from "./stores/prisma-scheduled-reminder
 export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
 export { seedMiraPilotOrgs } from "./seed/seed-mira-pilot-orgs.js";
 export {
+  CREATIVE_GOVERNANCE_SETTINGS,
+  CREATIVE_ALLOW_POLICY_RULE,
+  creativeAllowPolicyId,
+  buildCreativeAllowPolicyInput,
+} from "./seed/creative-governance.js";
+export {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,
   ALEX_SKILL_PACK_SCOPES,

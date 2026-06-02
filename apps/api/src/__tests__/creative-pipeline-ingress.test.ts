@@ -23,10 +23,20 @@ import type { FastifyInstance, FastifyError } from "fastify";
 // The route module imports `@switchboard/creative-pipeline` (inngestClient +
 // estimateCost). After the reroute the POST handlers must NOT touch inngest —
 // we spy it so a regression that fires a direct event is caught.
-const { inngestSend } = vi.hoisted(() => ({ inngestSend: vi.fn().mockResolvedValue(undefined) }));
+const { inngestSend, findById } = vi.hoisted(() => ({
+  inngestSend: vi.fn().mockResolvedValue(undefined),
+  findById: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("@switchboard/creative-pipeline", () => ({
   inngestClient: { send: inngestSend },
   estimateCost: vi.fn().mockReturnValue({ basic: { cost: 5 }, pro: { cost: 12 } }),
+}));
+// The continue route loads the job to compute the render-cost spend signal; stub
+// the store so it returns a controllable job (default: none → no spend signal).
+vi.mock("@switchboard/db", () => ({
+  PrismaCreativeJobStore: class {
+    findById = findById;
+  },
 }));
 
 const { creativePipelineRoutes } = await import("../routes/creative-pipeline.js");
@@ -109,6 +119,8 @@ describe("creative-pipeline routes → PlatformIngress (P2a-ii)", () => {
 
   beforeEach(async () => {
     inngestSend.mockClear();
+    findById.mockReset();
+    findById.mockResolvedValue(null);
     ctx = await buildApp();
   });
 
@@ -271,6 +283,71 @@ describe("creative-pipeline routes → PlatformIngress (P2a-ii)", () => {
         organizationId: ORG,
         trigger: "api",
       });
+    });
+
+    it("continue surfaces the server-computed render cost as spendAmount once the storyboard exists", async () => {
+      // The job carries a storyboard, so the route can estimate the paid render
+      // and surface it as the governance spend signal (estimateCost mock → pro = 12).
+      findById.mockResolvedValue(
+        makeJob({ stageOutputs: { storyboard: { storyboards: [{ scenes: [{ duration: 5 }] }] } } }),
+      );
+      ctx.submit.mockResolvedValue({
+        ok: true,
+        result: { outcome: "queued", outputs: { job: makeJob(), action: "approved" } },
+      });
+
+      await ctx.app.inject({
+        method: "POST",
+        url: `/api/marketplace/creative-jobs/${JOB_ID}/approve`,
+        headers: HEADERS,
+        payload: { action: "continue", productionTier: "pro" },
+      });
+
+      const arg = ctx.submit.mock.calls[0]![0];
+      expect(arg.parameters).toMatchObject({
+        jobId: JOB_ID,
+        productionTier: "pro",
+        spendAmount: 12,
+      });
+    });
+
+    it("continue omits spendAmount before the storyboard exists (no paid render imminent)", async () => {
+      findById.mockResolvedValue(makeJob({ stageOutputs: {} }));
+      ctx.submit.mockResolvedValue({
+        ok: true,
+        result: { outcome: "queued", outputs: { job: makeJob(), action: "approved" } },
+      });
+
+      await ctx.app.inject({
+        method: "POST",
+        url: `/api/marketplace/creative-jobs/${JOB_ID}/approve`,
+        headers: HEADERS,
+        payload: { action: "continue", productionTier: "pro" },
+      });
+
+      expect(ctx.submit.mock.calls[0]![0].parameters).not.toHaveProperty("spendAmount");
+    });
+
+    it("does not surface cost for a cross-org job id (the workflow still 404s)", async () => {
+      findById.mockResolvedValue(
+        makeJob({
+          organizationId: "org-other",
+          stageOutputs: { storyboard: { storyboards: [{ scenes: [{ duration: 5 }] }] } },
+        }),
+      );
+      ctx.submit.mockResolvedValue({
+        ok: true,
+        result: { outcome: "queued", outputs: { job: makeJob(), action: "approved" } },
+      });
+
+      await ctx.app.inject({
+        method: "POST",
+        url: `/api/marketplace/creative-jobs/${JOB_ID}/approve`,
+        headers: HEADERS,
+        payload: { action: "continue", productionTier: "pro" },
+      });
+
+      expect(ctx.submit.mock.calls[0]![0].parameters).not.toHaveProperty("spendAmount");
     });
 
     it("stop → submits creative.job.stop {jobId} and maps 200 {job, action}", async () => {
