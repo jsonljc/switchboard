@@ -10,7 +10,7 @@ import { z } from "zod";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
 import { requireOrgForMutation } from "../decorators/org.js";
-import { computeRenderSpend } from "../services/creative-render-spend.js";
+import { computeRenderSpend, computeCreativeEstimates } from "../services/creative-render-spend.js";
 
 const SubmitBriefInput = z.object({
   deploymentId: z.string().min(1),
@@ -238,20 +238,12 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Creative job not found", statusCode: 404 });
     }
 
-    const stageOutputs = (job.stageOutputs ?? {}) as Record<string, unknown>;
-    const storyboard = stageOutputs["storyboard"];
-    const scripts = stageOutputs["scripts"] as { scripts?: unknown[] } | undefined;
-
-    if (!storyboard) {
+    // Shares computeCreativeEstimates with the spend-signal producer so the readback
+    // and the governed amount can never disagree.
+    const estimates = await computeCreativeEstimates(job);
+    if (!estimates) {
       return reply.send({ estimates: null, reason: "Storyboard not yet complete" });
     }
-
-    const { estimateCost } = await import("@switchboard/creative-pipeline");
-    const scriptCount = scripts?.scripts?.length ?? 1;
-    const estimates = estimateCost(
-      storyboard as { storyboards: Array<{ scenes: Array<{ duration: number }> }> },
-      scriptCount,
-    );
 
     return reply.send({ estimates });
   });

@@ -49,44 +49,57 @@ silently executes.
 **Reuse the #788 autonomy lever** (chosen over a posture-independent "safety floor"
 that would modify shipped governance). The cap engages because the creative
 deployment is explicitly autonomous + spend-autonomy-opted-in — an honest,
-*enforced* posture statement aligned with the Mira "graduated autonomy + enforced
+_enforced_ posture statement aligned with the Mira "graduated autonomy + enforced
 spend caps" vision. No change to `applySpendApprovalThreshold`.
 
 ## Design
 
 ### A. Render-cost producer (the missing piece)
-At `creative.job.continue`, `apps/api/src/routes/creative-pipeline.ts` loads the job
-+ storyboard, computes `renderCost = estimateCost(storyboard, scriptCount)[tier].cost`
-**server-side**, and adds `spendAmount: renderCost` to the submit parameters. The
-operator chooses `productionTier` but cannot spoof the cost (derived from the
-persisted storyboard). `extractSpendAmount` then sees it.
 
-- Tier defaults to `"basic"` when omitted (mirrors the workflow's
+At `creative.job.continue`, `apps/api/src/routes/creative-pipeline.ts` loads the job
+
+- storyboard, computes `renderCost = estimateCost(storyboard, scriptCount)[tier].cost`
+  **server-side**, and adds `spendAmount: renderCost` to the submit parameters. The
+  operator chooses `productionTier` but cannot spoof the cost (derived from the
+  persisted storyboard). `extractSpendAmount` then sees it.
+
+* Tier defaults to `"basic"` when omitted (mirrors the workflow's
   `input.productionTier ?? "basic"`).
-- If the storyboard is absent (continue arriving before storyboard) or
+* If the storyboard is absent (continue arriving before storyboard) or
   `estimateCost` yields 0, `spendAmount` is omitted → lever no-op → unchanged
-  behavior (fail-open to *today's* behavior is acceptable: no storyboard ⇒ no paid
+  behavior (fail-open to _today's_ behavior is acceptable: no storyboard ⇒ no paid
   render is imminent at this exact call; the gate re-applies on the real
   storyboard→render continue).
 
 ### B. Deployment posture (activates the lever)
+
 `seed-mira-creative-deployment.ts` seeds `governanceSettings: { trustLevelOverride:
-"autonomous", spendAutonomy: true }` and a creative-scale `spendApprovalThreshold`.
-The default column value ($50) is above typical render costs, so the seed sets an
-explicit creative threshold so the gate is demonstrably live; the value stays
-per-deployment configurable.
+"autonomous", spendAutonomy: true }` AND an explicit `spendApprovalThreshold`
+(`CREATIVE_SPEND_APPROVAL_THRESHOLD = $15`, in `creative-governance.ts`). The
+non-nullable column default ($50) sits ABOVE realistic render costs (~$1–21, since
+estimateCost is Kling $0.35–0.70/scene × ≤6 scenes × ≤5 scripts), so leaving it would
+keep the gate dormant in practice — every render would auto-run. The creative-scaled
+$15 lets a large/long multi-script batch park while a small clip auto-runs; tunable
+per pilot. **Enablement caveat:** this is the per-org install function's config; the
+dev seed runs it for `org_dev`. Wiring it into the pilot opt-in path
+(`seedMiraPilotOrgs` only flips enablement today) is the separate, pending Mira
+pilot-enablement workstream — until then a pilot org needs
+`seedMiraCreativeDeployment(org)` run explicitly, or `creative.job.*` default-denies.
 
 ### C. Enforcement (unchanged #788 lever)
+
 `renderCost > threshold` → `execute → require_approval` → ingress returns
 `approvalRequired` → route returns `202 PENDING_APPROVAL` (already wired in #810).
 `renderCost ≤ threshold` → executes (renders).
 
 ### D. Dashboard consumes 202
+
 The dashboard creative-jobs proxies + `useApproveStage`/`submitCreativeBrief` +
 `use-creative-pipeline.ts` must treat a `202 {outcome:"PENDING_APPROVAL"}` as a
 distinct **pending-approval** state, not a generic error.
 
 ### E. In-scope cleanups
+
 - **Fold `mira-brief.ts` onto `creative.job.submit`** (it still fires
   `creative-pipeline/job.submitted` directly — a live spend bypass). Same pattern as
   P2a-ii: front door + authenticated actor + governed intent; remove from
@@ -110,18 +123,20 @@ distinct **pending-approval** state, not a generic error.
    `execute`. Driven from the **real seeded deployment defaults**, not a hand-built
    fixture (per `feedback_safety_gate_needs_producer_population`).
 4. **Route 202:** continue with an approval-required ingress response → `202
-   PENDING_APPROVAL`, never a phantom 200 (extends the existing #810 test).
+PENDING_APPROVAL`, never a phantom 200 (extends the existing #810 test).
 5. **Dashboard:** pending-approval rendering path.
 6. **Cleanups:** mira-brief reroute (front door + actor + no direct inngest);
    stop-path mode branch.
 
 ## PR plan
+
 - **PR 1 (core P2a-iii):** producer + seed posture + real-gate enforcement +
   dashboard 202 + decision-workflow stop-path branch.
 - **PR 2 (mira-brief fold):** reroute `mira-brief.ts` onto `creative.job.submit`,
   remove from route-allowlist.
 
 ## Risks / watchouts
+
 - Declaring the creative deployment `autonomous` must not leak into UI as an
   over-claim — verify no agent-panel/trust surface reads the `creative` deployment's
   `trustLevelOverride` and renders an unbounded "autonomous" claim. The enforced

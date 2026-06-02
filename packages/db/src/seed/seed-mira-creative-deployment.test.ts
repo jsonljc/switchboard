@@ -4,7 +4,11 @@ import {
   seedMiraCreativeDeployment,
   CREATIVE_LISTING_SLUG,
 } from "./seed-mira-creative-deployment.js";
-import { CREATIVE_GOVERNANCE_SETTINGS, creativeAllowPolicyId } from "./creative-governance.js";
+import {
+  CREATIVE_GOVERNANCE_SETTINGS,
+  CREATIVE_SPEND_APPROVAL_THRESHOLD,
+  creativeAllowPolicyId,
+} from "./creative-governance.js";
 
 interface FindUniqueArgs {
   where: { slug: string };
@@ -123,6 +127,16 @@ describe("seedMiraCreativeDeployment", () => {
     // GovernanceGate's spend-approval lever reads (the threshold column alone is inert).
     expect(call.create.governanceSettings).toEqual(CREATIVE_GOVERNANCE_SETTINGS);
     expect(call.update.governanceSettings).toEqual(CREATIVE_GOVERNANCE_SETTINGS);
+  });
+
+  it("sets a creative-scaled spend threshold (NOT the dormant $50 column default)", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    const call = prisma._deploymentUpserts[0]!;
+    // Realistic renders are ~$1–21; the column default ($50) would never park. The
+    // seed pins a creative-scaled cap so the gate is demonstrably live.
+    expect(call.create.spendApprovalThreshold).toBe(CREATIVE_SPEND_APPROVAL_THRESHOLD);
+    expect(call.update.spendApprovalThreshold).toBe(CREATIVE_SPEND_APPROVAL_THRESHOLD);
+    expect(CREATIVE_SPEND_APPROVAL_THRESHOLD).toBeLessThan(50);
   });
 
   it("upserts an org-scoped allow policy so creative.job.* is governed-not-denied", async () => {

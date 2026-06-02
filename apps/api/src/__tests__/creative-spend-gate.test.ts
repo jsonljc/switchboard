@@ -26,7 +26,14 @@ import {
 // Drive the gate from the SAME governance config the seed installs (run through the
 // REAL resolvers production uses), so a governanceSettings rename can't leave this
 // test a false green. See feedback_safety_gate_needs_producer_population.
-import { CREATIVE_GOVERNANCE_SETTINGS, CREATIVE_ALLOW_POLICY_RULE } from "@switchboard/db";
+import {
+  CREATIVE_GOVERNANCE_SETTINGS,
+  CREATIVE_ALLOW_POLICY_RULE,
+  CREATIVE_SPEND_APPROVAL_THRESHOLD,
+} from "@switchboard/db";
+// The REAL render-cost producer — so the over/under-threshold cases are proven from
+// amounts the producer can actually emit, not synthetic numbers it never would.
+import { computeRenderSpend } from "../services/creative-render-spend.js";
 
 const ORG = "org-acme";
 const ACTOR = "user-zoe";
@@ -135,16 +142,33 @@ function buildGate(policies: Policy[]): GovernanceGate {
   return new GovernanceGate(deps);
 }
 
-describe("creative spend gate (real GovernanceGate)", () => {
-  // Posture the seed configures — derived from the seed's governanceSettings via
-  // the REAL resolvers (not hand-typed), so this stays honest if the seed changes.
-  // Threshold $50 is the spendApprovalThreshold column default the seed leaves in
-  // place; the assertions only rely on 12 < threshold < 120, so the exact value is
-  // not load-bearing.
+// Realistic persisted storyboards the REAL producer (computeRenderSpend → estimateCost)
+// consumes. A small single-script clip lands well under the seeded threshold; a large
+// 5-script, 6-scene, 10s batch lands well over it — proving the producer straddles the
+// configured cap (not just that the lever's arithmetic works on a synthetic number).
+const SMALL_STORYBOARD_JOB = {
+  stageOutputs: {
+    storyboard: { storyboards: [{ scenes: [{ duration: 5 }, { duration: 5 }, { duration: 5 }] }] },
+    scripts: { scripts: [{}] },
+  },
+};
+const LARGE_STORYBOARD_JOB = {
+  stageOutputs: {
+    storyboard: {
+      storyboards: [{ scenes: Array.from({ length: 6 }, () => ({ duration: 10 })) }],
+    },
+    scripts: { scripts: Array.from({ length: 5 }, () => ({})) },
+  },
+};
+
+describe("creative spend gate (real GovernanceGate + real producer)", () => {
+  // Posture the seed configures — trust override + spend-autonomy derived from the
+  // seed's governanceSettings via the REAL resolvers, and the REAL seeded threshold,
+  // so a seed change (key rename OR threshold value) flows into this test.
   const SEEDED: DeploymentPosture = {
     trustLevelOverride: resolveTrustLevelOverride(CREATIVE_GOVERNANCE_SETTINGS),
     spendAutonomyEnabled: resolveSpendAutonomyEnabled(CREATIVE_GOVERNANCE_SETTINGS),
-    spendApprovalThreshold: 50,
+    spendApprovalThreshold: CREATIVE_SPEND_APPROVAL_THRESHOLD,
   };
 
   it("default-denies creative.job.continue when no allow policy matches (the #810 latent gap)", async () => {
@@ -156,31 +180,39 @@ describe("creative spend gate (real GovernanceGate)", () => {
     expect(decision.outcome).toBe("deny");
   });
 
-  it("executes an at/under-threshold render when an allow policy is present", async () => {
+  it("executes a real at/under-threshold render (producer cost < seeded threshold)", async () => {
+    const cost = await computeRenderSpend(SMALL_STORYBOARD_JOB, "basic");
+    expect(cost).not.toBeNull();
+    expect(cost!).toBeLessThan(CREATIVE_SPEND_APPROVAL_THRESHOLD);
     const gate = buildGate([creativeAllowPolicy()]);
     const decision = await gate.evaluate(
-      makeWorkUnit({ jobId: "j1", productionTier: "pro", spendAmount: 12 }, SEEDED),
+      makeWorkUnit({ jobId: "j1", productionTier: "basic", spendAmount: cost }, SEEDED),
       continueRegistration(),
     );
     expect(decision.outcome).toBe("execute");
   });
 
-  it("parks an over-threshold render for approval (the spend gate)", async () => {
+  it("parks a real over-threshold render for approval (producer cost > seeded threshold)", async () => {
+    const cost = await computeRenderSpend(LARGE_STORYBOARD_JOB, "pro");
+    expect(cost).not.toBeNull();
+    // The producer CAN emit an over-threshold amount — the seam this PR exists to close.
+    expect(cost!).toBeGreaterThan(CREATIVE_SPEND_APPROVAL_THRESHOLD);
     const gate = buildGate([creativeAllowPolicy()]);
     const decision = await gate.evaluate(
-      makeWorkUnit({ jobId: "j1", productionTier: "pro", spendAmount: 120 }, SEEDED),
+      makeWorkUnit({ jobId: "j1", productionTier: "pro", spendAmount: cost }, SEEDED),
       continueRegistration(),
     );
     expect(decision.outcome).toBe("require_approval");
     expect(decision.matchedPolicies).toContain("SPEND_APPROVAL_THRESHOLD");
   });
 
-  it("does NOT park an over-threshold render when the deployment is not autonomous (posture required)", async () => {
+  it("does NOT park a real over-threshold render when the deployment is not autonomous (posture required)", async () => {
+    const cost = await computeRenderSpend(LARGE_STORYBOARD_JOB, "pro");
     const gate = buildGate([creativeAllowPolicy()]);
     const decision = await gate.evaluate(
       makeWorkUnit(
-        { jobId: "j1", productionTier: "pro", spendAmount: 120 },
-        { spendApprovalThreshold: 50 }, // no trustLevelOverride/spendAutonomy
+        { jobId: "j1", productionTier: "pro", spendAmount: cost },
+        { spendApprovalThreshold: CREATIVE_SPEND_APPROVAL_THRESHOLD }, // no trustLevelOverride/spendAutonomy
       ),
       continueRegistration(),
     );

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import {
   CREATIVE_GOVERNANCE_SETTINGS,
+  CREATIVE_SPEND_APPROVAL_THRESHOLD,
   buildCreativeAllowPolicyInput,
 } from "./creative-governance.js";
 
@@ -53,15 +54,18 @@ export async function seedMiraCreativeDeployment(
       listingId: listing.id,
       status: "active",
       skillSlug: "creative",
-      // Opt the deployment into the GovernanceGate spend-approval lever so render
-      // cost above the spendApprovalThreshold column ($50 default, tunable) parks
-      // for approval instead of silently rendering. See creative-governance.ts.
+      // Opt the deployment into the GovernanceGate spend-approval lever AND pin a
+      // creative-scaled threshold so render cost above it parks for approval instead
+      // of silently rendering. The $50 column default sits above realistic render
+      // costs (~$1–21) and would leave the gate dormant. See creative-governance.ts.
       governanceSettings: CREATIVE_GOVERNANCE_SETTINGS,
+      spendApprovalThreshold: CREATIVE_SPEND_APPROVAL_THRESHOLD,
     },
     update: {
       status: "active",
       skillSlug: "creative",
       governanceSettings: CREATIVE_GOVERNANCE_SETTINGS,
+      spendApprovalThreshold: CREATIVE_SPEND_APPROVAL_THRESHOLD,
     },
   });
 

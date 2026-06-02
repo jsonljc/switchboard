@@ -142,6 +142,7 @@ export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
 export { seedMiraPilotOrgs } from "./seed/seed-mira-pilot-orgs.js";
 export {
   CREATIVE_GOVERNANCE_SETTINGS,
+  CREATIVE_SPEND_APPROVAL_THRESHOLD,
   CREATIVE_ALLOW_POLICY_RULE,
   creativeAllowPolicyId,
   buildCreativeAllowPolicyInput,
