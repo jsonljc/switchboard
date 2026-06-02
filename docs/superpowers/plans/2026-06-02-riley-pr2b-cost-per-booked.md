@@ -412,11 +412,10 @@ function makeMetricsVM(
         comparator: { value: "$44 per booked", target: "target $35" },
       },
     });
-    render(<KeyResult agentKey="riley" />);
+    const { container } = render(<KeyResult agentKey="riley" />);
 
     expect(screen.getByText("$44 per booked · target $35")).toBeInTheDocument();
 
-    const { container } = render(<KeyResult agentKey="riley" />);
     const allElements = container.querySelectorAll("[class]");
     allElements.forEach((el) => {
       const cls = el.className;
