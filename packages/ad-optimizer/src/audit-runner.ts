@@ -38,6 +38,12 @@ import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
+import {
+  selectEconomicTier,
+  calibrateTargetFromBooking,
+  applyTier,
+} from "./analyzers/economic-target.js";
+import type { MarginBasisSchema as MarginBasis } from "@switchboard/schemas";
 
 // ── Interfaces ──
 
@@ -334,6 +340,39 @@ export class AuditRunner {
     const previousMetrics = aggregateMetrics(previousInsights);
     const periodDeltas = comparePeriods(currentMetrics, previousMetrics);
 
+    // Step 4b: Calibrate the booking-grounded target and select the economic tier
+    // ONCE for this audit (account-level). INVARIANT: calibrate FIRST, then derive
+    // the tier from whether calibration produced a usable target — so a rec can
+    // never be stamped "booked_cac" while judged against the legacy targetCPA.
+    const accountBookings = crmData.bookings ?? 0;
+    const accountConversions = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
+    const configuredCpb =
+      typeof this.config.targetCostPerBooked === "number" && this.config.targetCostPerBooked > 0
+        ? this.config.targetCostPerBooked
+        : null;
+    const calibratedTarget =
+      configuredCpb !== null
+        ? calibrateTargetFromBooking({
+            targetCostPerBooked: configuredCpb,
+            accountBookings,
+            accountConversions,
+          })
+        : null;
+    const bookedCacAvailable = calibratedTarget !== null && calibratedTarget > 0;
+    const economicTier = selectEconomicTier({
+      bookings: accountBookings,
+      leads: accountConversions,
+      hasBookedTarget: bookedCacAvailable,
+    });
+    const effectiveTarget =
+      economicTier === "booked_cac" ? calibratedTarget! : this.config.targetCPA;
+    // PR2: no profit-margin / AOV source is plumbed into the audit, so margin
+    // awareness is reported unavailable, never silently satisfied (spec §3.4).
+    const marginBasis: MarginBasis = "unavailable";
+    const nextCycleDate =
+      new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
+      dateRange.until;
+
     // Step 5: Per-campaign loop
     const insights: InsightOutput[] = [];
     const watches: WatchOutput[] = [];
@@ -383,7 +422,7 @@ export class AuditRunner {
         roas: campaignCurrentMetrics.roas,
       };
       const performanceTargets = {
-        targetCPA: this.config.targetCPA,
+        targetCPA: effectiveTarget,
         targetROAS: this.config.targetROAS,
       };
 
@@ -407,7 +446,7 @@ export class AuditRunner {
         orgId: this.config.orgId,
         accountId: this.config.accountId,
         campaignId: insight.campaignId,
-        targetCPA: this.config.targetCPA,
+        targetCPA: effectiveTarget,
         startDate: new Date(dateRange.since),
         endDate: new Date(dateRange.until),
       });
@@ -418,15 +457,27 @@ export class AuditRunner {
         campaignName: insight.campaignName,
         diagnoses,
         deltas: campaignDeltas,
-        targetCPA: this.config.targetCPA,
+        targetCPA: effectiveTarget,
         targetROAS: this.config.targetROAS,
         currentSpend: insight.spend,
         targetBreach,
       });
 
-      // 5g: Gate recommendations through learning phase
+      // 5g: Apply the economic tier (confidence/urgency/action-family), THEN
+      // gate through the learning phase. Tier-3 withholds destructive actions
+      // as watches; everything else flows into the learning-phase gate.
       for (const rec of campaignRecs) {
-        const gated = this.learningGuard.gate(rec, learningStatus);
+        const tiered = applyTier({
+          recommendation: rec,
+          tier: economicTier,
+          marginBasis,
+          checkBackDate: nextCycleDate,
+        });
+        if (tiered.watch) {
+          watches.push(tiered.watch);
+          continue;
+        }
+        const gated = this.learningGuard.gate(tiered.recommendation!, learningStatus);
         if (gated.type === "watch") {
           watches.push(gated);
         } else {
