@@ -264,6 +264,8 @@ export class MetaAdsClient {
   }
 
   async createAdCreative(params: CreateAdCreativeParams): Promise<{ id: string }> {
+    // Video-only by design: the creative pipeline produces video. An image creative
+    // would use object_story_spec.link_data/image_data instead of video_data.
     const body = {
       name: params.name,
       object_story_spec: {

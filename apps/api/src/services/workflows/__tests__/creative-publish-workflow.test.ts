@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { StaleVersionError } from "@switchboard/core";
 import { buildCreativePublishWorkflow } from "../creative-publish-workflow.js";
 
 const ORG = "org_1";
@@ -143,5 +144,15 @@ describe("buildCreativePublishWorkflow", () => {
     expect(res.outcome).toBe("failed");
     expect(res.error?.code).toBe("CREATIVE_ASSET_NOT_DURABLE");
     expect(ads.createAd).not.toHaveBeenCalled();
+  });
+
+  it("returns CREATIVE_JOB_NOT_FOUND (not a Meta error) if the job vanishes mid-publish", async () => {
+    const store = makeStore(JOB_BASE);
+    // A delete-between-findById-and-checkpoint race → updatePublishFields throws.
+    store.updatePublishFields.mockRejectedValueOnce(new StaleVersionError("j1", -1, -1));
+    const { handler } = deps({ store });
+    const res = await handler.execute(workUnit(), {} as never);
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("CREATIVE_JOB_NOT_FOUND");
   });
 });

@@ -1,4 +1,5 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
+import { StaleVersionError } from "@switchboard/core";
 import type { MetaAdsClient } from "@switchboard/ad-optimizer";
 import type { CreativeJob } from "@switchboard/schemas";
 import type { PrismaCreativeJobStore } from "@switchboard/db";
@@ -136,6 +137,20 @@ export function buildCreativePublishWorkflow(deps: CreativePublishDeps): Workflo
           });
         }
       } catch (err) {
+        // A StaleVersionError from updatePublishFields means the job row was removed
+        // or changed out from under us mid-publish (a rare race; cross-org is already
+        // rejected up front). Report it as not-found, NOT a Meta error — a checkpoint
+        // write failed, no Meta call did.
+        if (err instanceof StaleVersionError) {
+          return {
+            outcome: "failed",
+            summary: "Creative job not found",
+            error: {
+              code: "CREATIVE_JOB_NOT_FOUND",
+              message: "Creative job was modified or removed during publish",
+            },
+          };
+        }
         return {
           outcome: "failed",
           summary: "Meta draft creation failed",
