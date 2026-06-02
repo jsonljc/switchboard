@@ -30,6 +30,7 @@
     --palette-violet-deep: 256 31% 45%;
     --palette-violet-tint: 255 33% 95%;
     --palette-editorial-accent: 20 90% 55%; /* bright editorial orange (Mercury/reports) — NOT the action amber */
+    --palette-editorial-accent-soft: 20 60% 50%; /* softened editorial orange */
     /* warm-neutral ink ramp — ONE canonical text/neutral scale (T5, by role) */
     --palette-ink-900: 20 10% 12%; /* primary text */
     --palette-ink-700: 20 8% 28%; /* secondary */
@@ -141,7 +142,7 @@
     --mercury-ink-3: var(--ink-3);
     --mercury-ink-4: var(--ink-4);
     --mercury-accent: hsl(var(--palette-editorial-accent)); /* editorial red-orange */
-    --mercury-accent-soft: hsl(20 60% 50%);
+    --mercury-accent-soft: hsl(var(--palette-editorial-accent-soft));
     --mercury-hairline: hsl(40 15% 86%);
     --mercury-hairline-soft: hsl(40 15% 90%);
     --mercury-row-hover: hsl(40 18% 90%);

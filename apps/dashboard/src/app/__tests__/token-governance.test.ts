@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { contrastRatio } from "@/lib/tokens/contrast";
 
@@ -189,5 +189,86 @@ describe("token governance — one neutral ink ramp by role (T5)", () => {
     ]) {
       expect(tokenValue(t)).toMatch(RAW_HSL_TRIPLE);
     }
+  });
+});
+
+// Recursive sweep over ALL governed source (spec §3.2 governed paths), excluding
+// tests (they hold legacy hexes as fixtures), sprite pixel data, node_modules, .next.
+function collectGovernedFiles(): Array<{ path: string; content: string }> {
+  const roots = ["src/app", "src/components", "src/lib", "src/styles"];
+  const out: Array<{ path: string; content: string }> = [];
+  const walk = (dir: string): void => {
+    if (!existsSync(dir)) return;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const full = `${dir}/${e.name}`;
+      if (e.isDirectory()) {
+        if (e.name === "node_modules" || e.name === ".next" || e.name === "__tests__") continue;
+        walk(full);
+      } else if (/\.(css|ts|tsx)$/.test(e.name) && !/\.test\.(ts|tsx)$/.test(e.name)) {
+        if (/-variants\.ts$/.test(e.name)) continue; // sprite pixel data (excluded)
+        // Strip the bare `.dark { … }` block — dark palette VALUES are Wave-3
+        // deferred (spec §0), not part of the light-mode governance contract.
+        const content = readFileSync(full, "utf8").replace(/\.dark\s*\{[^}]*\}/g, "");
+        out.push({ path: full, content });
+      }
+    }
+  };
+  for (const r of roots) walk(path.resolve(process.cwd(), r));
+  return out;
+}
+
+describe("token governance — governed-source drift sweep (generalized)", () => {
+  const files = collectGovernedFiles();
+  const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+
+  it("scans a meaningful slice of governed source", () => {
+    expect(files.length).toBeGreaterThan(20);
+  });
+
+  it("no legacy agent/cockpit hex value survives anywhere in governed source", () => {
+    const legacy = [
+      "#E07A53",
+      "#8C3E1E",
+      "#F4D5C5",
+      "#FBF0EA",
+      "#3F8C86",
+      "#215451",
+      "#C5DFDD",
+      "#EBF5F4",
+      "#4A3A66",
+      "#E7E1F0",
+      "#e07856",
+      "#2e8a87",
+      "#7e6bb2",
+      "#B8782E",
+      "#7C4F1C",
+      "#3F7A36",
+      "#A03A2E",
+    ];
+    const offenders: string[] = [];
+    for (const { path: p, content } of files) {
+      for (const hex of legacy) {
+        if (content.includes(hex)) offenders.push(`${hex} in ${rel(p)}`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("no brand token (action/agent) is re-forked with a literal in any governed file", () => {
+    // The spec's general contract: a known brand token defined with a hex/triple
+    // (not var()-based) anywhere outside the primitive block is drift. Catches
+    // re-forks the enumerated legacy list would miss (e.g. a brand-new hex).
+    const BRAND_DEF =
+      /--(action|operator|char-accent|agent-(?:alex|riley|mira)|coral|teal|violet|amber)(?:-(?:deep|tint|soft|paper|hover|foreground|subtle))?\s*:\s*([^;]+);/g;
+    const offenders: string[] = [];
+    for (const { path: p, content } of files) {
+      for (const m of content.matchAll(BRAND_DEF)) {
+        const value = m[2].trim();
+        if (!/var\(--/.test(value) && !/token-debt:/.test(content)) {
+          offenders.push(`${rel(p)}: ${m[0].trim()}`);
+        }
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });
