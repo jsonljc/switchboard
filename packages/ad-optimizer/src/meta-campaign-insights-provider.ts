@@ -91,7 +91,7 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
 
     const rows = await this.adsClient.getCampaignInsights({
       dateRange: { since: fmt(since), until: fmt(until) },
-      fields: ["campaign_id", "spend", "conversions"],
+      fields: ["campaign_id", "spend", "conversions", "inline_link_clicks"],
       timeIncrement: 1,
     });
 
@@ -108,12 +108,21 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
       return { periodsAboveTarget: weekly, granularity: "weekly", isApproximate: true };
     }
 
+    // Phase-A breach-counter fix: a zero-conversion day is only real "breach" signal when
+    // the campaign has enough total window volume for "zero conversions" to mean something.
+    // Below the click floor, a quiet low-traffic day is noise — counting it as a breach lets
+    // a near-zero-traffic campaign accrue durability and get paused on nothing. Days WITH
+    // conversions are unaffected (breach iff cpa > target).
+    const MIN_WINDOW_CLICKS_FOR_ZERO_DAY_BREACH = 20;
+    const windowClicks = campaignDays.reduce((s, d) => s + d.inlineLinkClicks, 0);
+    const zeroDayCounts = windowClicks >= MIN_WINDOW_CLICKS_FOR_ZERO_DAY_BREACH;
+
     let periodsAboveTarget = 0;
     for (const day of campaignDays) {
       if (day.spend <= 0) continue; // no spend → not a breach day
       // Local boolean — never carry Infinity into rationale/logs/evidence downstream.
       const breached =
-        day.conversions > 0 ? day.spend / day.conversions > input.targetCPA : day.spend > 0;
+        day.conversions > 0 ? day.spend / day.conversions > input.targetCPA : zeroDayCounts; // was `day.spend > 0` — the footgun
       if (breached) periodsAboveTarget++;
     }
 

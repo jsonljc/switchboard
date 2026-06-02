@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { MetaCampaignInsightsProvider } from "./meta-campaign-insights-provider.js";
 import type { AdsClientInterface } from "./audit-runner.js";
-import type { WeeklyCampaignSnapshot } from "@switchboard/schemas";
+import type {
+  WeeklyCampaignSnapshot,
+  CampaignInsightSchema as CampaignInsight,
+} from "@switchboard/schemas";
 
 function makeAdsClient(): AdsClientInterface {
   return {
@@ -333,4 +336,87 @@ it("learningPhase=false when client lacks getAdSetLearningInputs (graceful)", as
   const p = new MetaCampaignInsightsProvider(adsClient as never);
   const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
   expect(out.learningPhase).toBe(false);
+});
+
+// ── Phase-A breach-counter fix: zero-conversion days are volume-gated ─────────
+
+function fakeClient(rows: Partial<CampaignInsight>[]): AdsClientInterface {
+  const full = rows.map((r) => ({
+    campaignId: "c1",
+    campaignName: "C1",
+    status: "ACTIVE",
+    effectiveStatus: "ACTIVE",
+    impressions: 0,
+    inlineLinkClicks: 0,
+    spend: 0,
+    conversions: 0,
+    revenue: 0,
+    frequency: 0,
+    cpm: 0,
+    inlineLinkClickCtr: 0,
+    costPerInlineLinkClick: 0,
+    dateStart: "",
+    dateStop: "",
+    ...r,
+  })) as CampaignInsight[];
+  return {
+    getCampaignInsights: async () => full,
+    getAdSetInsights: async () => [],
+    getAccountSummary: async () => ({
+      accountId: "a",
+      accountName: "A",
+      currency: "USD",
+      totalSpend: 0,
+      totalImpressions: 0,
+      totalClicks: 0,
+      activeCampaigns: 1,
+    }),
+  };
+}
+
+const breachArgs = {
+  orgId: "o",
+  accountId: "a",
+  campaignId: "c1",
+  targetCPA: 100,
+  startDate: new Date("2026-05-01"),
+  endDate: new Date("2026-05-14"),
+};
+
+describe("getTargetBreachStatus — zero-conversion days are volume-gated", () => {
+  it("a low-volume all-zero-conversion campaign does NOT accrue breach days", async () => {
+    const rows = Array.from({ length: 14 }, () => ({
+      spend: 3,
+      conversions: 0,
+      inlineLinkClicks: 1,
+    }));
+    const r = await new MetaCampaignInsightsProvider(fakeClient(rows)).getTargetBreachStatus(
+      breachArgs,
+    );
+    expect(r.periodsAboveTarget).toBe(0); // 14 total clicks < 20 floor → zero-conv days don't count
+  });
+
+  it("a high-volume campaign with zero-conversion spend days DOES accrue breach days", async () => {
+    const rows = Array.from({ length: 14 }, () => ({
+      spend: 50,
+      conversions: 0,
+      inlineLinkClicks: 40,
+    }));
+    const r = await new MetaCampaignInsightsProvider(fakeClient(rows)).getTargetBreachStatus(
+      breachArgs,
+    );
+    expect(r.periodsAboveTarget).toBe(14); // 560 total clicks ≥ floor → sustained zero-conv spend is a real breach
+  });
+
+  it("days WITH conversions are unchanged (breach iff cpa > target)", async () => {
+    const rows = Array.from({ length: 14 }, () => ({
+      spend: 200,
+      conversions: 1,
+      inlineLinkClicks: 40,
+    }));
+    const r = await new MetaCampaignInsightsProvider(fakeClient(rows)).getTargetBreachStatus(
+      breachArgs,
+    );
+    expect(r.periodsAboveTarget).toBe(14); // cpa 200 > 100 every day
+  });
 });
