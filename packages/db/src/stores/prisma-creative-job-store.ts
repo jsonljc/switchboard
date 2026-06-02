@@ -142,6 +142,35 @@ export class PrismaCreativeJobStore {
     return row as unknown as CreativeJob;
   }
 
+  /**
+   * Persist Meta publish checkpoint fields. Org-scoped updateMany (doctrine #12);
+   * count===0 ⇒ missing/cross-org ⇒ throw. Called once per Meta object created so
+   * the publish handler is resumable (each id is a checkpoint).
+   */
+  async updatePublishFields(
+    organizationId: string,
+    id: string,
+    fields: Partial<
+      Pick<
+        CreativeJob,
+        | "metaVideoId"
+        | "metaCampaignId"
+        | "metaAdSetId"
+        | "metaCreativeId"
+        | "metaAdId"
+        | "metaPublishStatus"
+      >
+    >,
+  ): Promise<CreativeJob> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: fields,
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
+  }
+
   // ── UGC methods ──
 
   async createUgc(

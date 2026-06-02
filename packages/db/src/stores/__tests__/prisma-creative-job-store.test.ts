@@ -540,4 +540,29 @@ describe("PrismaCreativeJobStore", () => {
       ).rejects.toThrow(StaleVersionError);
     });
   });
+
+  describe("updatePublishFields", () => {
+    it("org-scopes the updateMany and returns the refreshed row", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue({ id: "j1", metaAdId: "ad_1" });
+
+      const row = await store.updatePublishFields("org_1", "j1", {
+        metaAdId: "ad_1",
+        metaPublishStatus: "parked_paused",
+      });
+
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "j1", organizationId: "org_1" },
+        data: { metaAdId: "ad_1", metaPublishStatus: "parked_paused" },
+      });
+      expect((row as { metaAdId?: string }).metaAdId).toBe("ad_1");
+    });
+
+    it("throws when no row matches (cross-org / missing)", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+      await expect(store.updatePublishFields("org_1", "j1", { metaVideoId: "v" })).rejects.toThrow(
+        StaleVersionError,
+      );
+    });
+  });
 });
