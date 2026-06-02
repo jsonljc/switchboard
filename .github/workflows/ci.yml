@@ -455,7 +455,10 @@ jobs:
         # suite, which imports @switchboard/ad-optimizer from dist — so every job
         # that runs that config must build ad-optimizer too (it depends only on
         # @switchboard/schemas, already built by the core chain above).
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
+        # The eval now also imports @switchboard/db (real PrismaBusinessFactsStore
+        # over a mock prisma) from dist, so build db too — its `build` runs
+        # `prisma generate` (no Postgres needed) + tsc.
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
