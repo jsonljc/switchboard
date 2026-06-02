@@ -120,6 +120,10 @@ describe("AuditRunner integration — real MetaCampaignInsightsProvider", () => 
 
   it("downgrades to watch when a material child ad set is LEARNING", async () => {
     const campaign = "c_learn";
+    // conversions >= MIN_LEADS_FOR_TIER2 (30) so the account reaches tier "cpl",
+    // meaning the pause passes tiering and the LEARNING guard is the actual mechanism
+    // that downgrades it to a watch. aggregate CPA = 6000/30 = 200 > 3×50 = 150 so
+    // the pause recommendation is generated before the learning guard gate.
     const aggInsight = {
       campaignId: campaign,
       campaignName: "Learning",
@@ -128,7 +132,7 @@ describe("AuditRunner integration — real MetaCampaignInsightsProvider", () => 
       impressions: 10000,
       inlineLinkClicks: 200,
       spend: 6000,
-      conversions: 10,
+      conversions: 30,
       revenue: 0,
       frequency: 1.3,
       cpm: 5,
@@ -166,8 +170,8 @@ describe("AuditRunner integration — real MetaCampaignInsightsProvider", () => 
           learningStageStatus: "LEARNING",
           frequency: 1,
           spend: 6000,
-          conversions: 10,
-          cpa: 600,
+          conversions: 30,
+          cpa: 200,
           roas: 0,
           inlineLinkClickCtr: 1,
         },

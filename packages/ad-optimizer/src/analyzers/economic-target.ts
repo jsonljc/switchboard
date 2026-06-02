@@ -105,6 +105,47 @@ export interface TieredResult {
  * Every surviving recommendation also gets a plain-language basis clause appended
  * to its rationale (spec §3.5) so the operator sees the basis, not just the field.
  */
+export interface ResolveEconomicTargetInput {
+  targetCostPerBooked?: number;
+  targetCPA: number;
+  accountBookings: number;
+  accountConversions: number;
+}
+
+export interface ResolvedEconomicTarget {
+  economicTier: EconomicTier;
+  effectiveTarget: number;
+}
+
+/**
+ * Resolve the account-level economic tier and the target the engine judges
+ * against, ONCE per audit. INVARIANT: calibrate FIRST, then derive the tier from
+ * calibration success — so a "booked_cac" tier always carries the calibrated
+ * target, never the legacy targetCPA.
+ */
+export function resolveEconomicTarget(input: ResolveEconomicTargetInput): ResolvedEconomicTarget {
+  const configuredCpb =
+    typeof input.targetCostPerBooked === "number" && input.targetCostPerBooked > 0
+      ? input.targetCostPerBooked
+      : null;
+  const calibratedTarget =
+    configuredCpb !== null
+      ? calibrateTargetFromBooking({
+          targetCostPerBooked: configuredCpb,
+          accountBookings: input.accountBookings,
+          accountConversions: input.accountConversions,
+        })
+      : null;
+  const bookedCacAvailable = calibratedTarget !== null && calibratedTarget > 0;
+  const economicTier = selectEconomicTier({
+    bookings: input.accountBookings,
+    leads: input.accountConversions,
+    hasBookedTarget: bookedCacAvailable,
+  });
+  const effectiveTarget = economicTier === "booked_cac" ? calibratedTarget! : input.targetCPA;
+  return { economicTier, effectiveTarget };
+}
+
 export function applyTier(input: ApplyTierInput): TieredResult {
   const { recommendation: rec, tier, marginBasis } = input;
   const penalty = input.confidencePenalty ?? TIER2_CONFIDENCE_PENALTY;

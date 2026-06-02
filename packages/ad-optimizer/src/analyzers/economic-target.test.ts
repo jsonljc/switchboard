@@ -3,6 +3,7 @@ import {
   selectEconomicTier,
   calibrateTargetFromBooking,
   applyTier,
+  resolveEconomicTarget,
   MIN_BOOKED_FOR_TIER1,
   MIN_LEADS_FOR_TIER2,
   TIER2_CONFIDENCE_PENALTY,
@@ -144,5 +145,37 @@ describe("applyTier", () => {
       confidencePenalty: 0.3,
     });
     expect(out.recommendation?.confidence).toBe(0.6); // 0.9 - 0.3
+  });
+});
+
+describe("resolveEconomicTarget", () => {
+  it("booked_cac carries the calibrated target, never the legacy targetCPA", () => {
+    const out = resolveEconomicTarget({
+      targetCostPerBooked: 100,
+      targetCPA: 50,
+      accountBookings: 20,
+      accountConversions: 100,
+    });
+    expect(out.economicTier).toBe("booked_cac");
+    expect(out.effectiveTarget).toBe(20); // 100 × 20/100 = 20, NOT targetCPA 50
+  });
+  it("does not select booked_cac when calibration cannot run (zero conversions)", () => {
+    const out = resolveEconomicTarget({
+      targetCostPerBooked: 100,
+      targetCPA: 50,
+      accountBookings: 15,
+      accountConversions: 0,
+    });
+    expect(out.economicTier).not.toBe("booked_cac");
+    expect(out.effectiveTarget).toBe(50);
+  });
+  it("uses targetCPA when no booked target is configured", () => {
+    const out = resolveEconomicTarget({
+      targetCPA: 50,
+      accountBookings: 100,
+      accountConversions: 200,
+    });
+    expect(out.economicTier).toBe("cpl");
+    expect(out.effectiveTarget).toBe(50);
   });
 });

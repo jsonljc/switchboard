@@ -6,6 +6,7 @@ import type {
   WatchOutputSchema as WatchOutput,
   RecommendationOutputSchema as RecommendationOutput,
   AccountSummarySchema as AccountSummary,
+  MarginBasisSchema as MarginBasis,
   CrmDataProvider,
   MediaBenchmarks,
   CampaignInsightsProvider,
@@ -19,8 +20,7 @@ import type {
 } from "@switchboard/schemas";
 import { analyzeFunnel } from "./funnel-analyzer.js";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
-import { LearningPhaseGuard } from "./learning-phase-guard.js";
-import { LearningPhaseGuardV2 } from "./learning-phase-guard.js";
+import { LearningPhaseGuard, LearningPhaseGuardV2 } from "./learning-phase-guard.js";
 import { detectFunnelShape } from "./funnel-detector.js";
 import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
@@ -38,12 +38,7 @@ import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
-import {
-  selectEconomicTier,
-  calibrateTargetFromBooking,
-  applyTier,
-} from "./analyzers/economic-target.js";
-import type { MarginBasisSchema as MarginBasis } from "@switchboard/schemas";
+import { resolveEconomicTarget, applyTier } from "./analyzers/economic-target.js";
 
 // ── Interfaces ──
 
@@ -59,12 +54,8 @@ export interface AdsClientInterface {
     campaignId?: string;
   }): Promise<unknown[]>;
   getAccountSummary(): Promise<AccountSummary>;
-  /**
-   * Optional: per-ad-set learning status + spend for a campaign, read from the
-   * Meta entity edge (`learning_stage_info`) joined with insights spend. Used by
-   * MetaCampaignInsightsProvider to derive campaign-level learning phase. Optional
-   * so existing fakes/clients that don't implement it degrade to learningPhase:false.
-   */
+  /** Optional: per-ad-set learning status from `learning_stage_info`. Used by
+   * MetaCampaignInsightsProvider to derive campaign-level learning phase; absent → false. */
   getAdSetLearningInputs?(campaignId: string): Promise<AdSetLearningInput[]>;
 }
 
@@ -73,20 +64,12 @@ export interface AuditConfig {
   orgId: string;
   targetCPA: number;
   targetROAS: number;
-  /**
-   * PR2 (Target): optional cost-per-booked-customer target (dollars). When set,
-   * and booking volume is sufficient, the audit judges against a booking-grounded
-   * effective target (economic tier "booked_cac"). When absent, the audit uses
-   * cost-per-lead against `targetCPA` exactly as before (tier "cpl").
-   */
+  /** PR2: cost-per-booked target (dollars). When set + booking volume sufficient,
+   * audit uses economic tier "booked_cac"; otherwise falls back to "cpl" vs targetCPA. */
   targetCostPerBooked?: number;
   mediaBenchmarks: MediaBenchmarks;
-  /**
-   * Optional Meta Pixel ID. When present alongside `signalHealthChecker`,
-   * the runner pulls a signal-health report at the start of each audit and
-   * short-circuits per-campaign diagnostics if the pixel is dead or
-   * server-to-browser ratio falls below 50%. Optional for back-compat.
-   */
+  /** Optional Meta Pixel ID. When present + signalHealthChecker wired, pulls a
+   * signal-health report and short-circuits per-campaign diagnostics on red score. */
   pixelId?: string;
 }
 
@@ -106,25 +89,16 @@ export interface AuditDependencies {
     weekly: MetricSnapshot[];
   } | null>;
   /**
-   * Optional. When provided, the audit-runner emits each generated
-   * RecommendationOutput through the v1 recommendations pipeline (queue /
-   * shadow_action / dropped) by calling this caller-injected emitter. When
-   * absent, the runner is a pure analyzer — back-compatible with all current
-   * callers. The emitter is injected (not a `RecommendationStore`) because
-   * ad-optimizer is Layer 2 and cannot import `emitRecommendation` from core
-   * (Layer 3). Wire-up lives in apps/api or apps/inngest, where both core and
-   * the store are accessible.
+   * Optional. Emits each generated RecommendationOutput through the v1 pipeline
+   * (queue / shadow_action / dropped). Injected rather than importing a Store because
+   * ad-optimizer is Layer 2; wire-up lives in apps/api or apps/inngest. When absent,
+   * the runner is a pure analyzer — back-compatible with all current callers.
    */
   recommendationEmitter?: RecommendationEmitter;
   /**
-   * Optional. Bound at runner-construction time so each audit run can stamp
-   * emitted recommendations with the originating cron id + deployment id. The
-   * sink threads this context to the emitter; the emitter forwards it to
-   * `emitRecommendation` so the WorkTrace mirror records provenance. Required
-   * when `recommendationEmitter` is provided — the audit runner asserts at
-   * `run()` time so misconfiguration surfaces loudly, not silently as orphan
-   * traces. Optional in the type so callers that omit the emitter don't need
-   * to provide ctx.
+   * Required when `recommendationEmitter` is provided. Stamps each emitted
+   * recommendation with cron + deployment provenance for the WorkTrace mirror.
+   * The runner asserts at `run()` time so misconfiguration surfaces loudly.
    */
   recommendationEmissionContext?: EmissionContext;
   /**
@@ -340,32 +314,15 @@ export class AuditRunner {
     const previousMetrics = aggregateMetrics(previousInsights);
     const periodDeltas = comparePeriods(currentMetrics, previousMetrics);
 
-    // Step 4b: Calibrate the booking-grounded target and select the economic tier
-    // ONCE for this audit (account-level). INVARIANT: calibrate FIRST, then derive
-    // the tier from whether calibration produced a usable target — so a rec can
-    // never be stamped "booked_cac" while judged against the legacy targetCPA.
-    const accountBookings = crmData.bookings ?? 0;
+    // Step 4b: Resolve the account-level economic tier + booking-calibrated target
+    // ONCE for this audit (calibrate-first invariant lives in resolveEconomicTarget).
     const accountConversions = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
-    const configuredCpb =
-      typeof this.config.targetCostPerBooked === "number" && this.config.targetCostPerBooked > 0
-        ? this.config.targetCostPerBooked
-        : null;
-    const calibratedTarget =
-      configuredCpb !== null
-        ? calibrateTargetFromBooking({
-            targetCostPerBooked: configuredCpb,
-            accountBookings,
-            accountConversions,
-          })
-        : null;
-    const bookedCacAvailable = calibratedTarget !== null && calibratedTarget > 0;
-    const economicTier = selectEconomicTier({
-      bookings: accountBookings,
-      leads: accountConversions,
-      hasBookedTarget: bookedCacAvailable,
+    const { economicTier, effectiveTarget } = resolveEconomicTarget({
+      targetCostPerBooked: this.config.targetCostPerBooked,
+      targetCPA: this.config.targetCPA,
+      accountBookings: crmData.bookings ?? 0,
+      accountConversions,
     });
-    const effectiveTarget =
-      economicTier === "booked_cac" ? calibratedTarget! : this.config.targetCPA;
     // PR2: no profit-margin / AOV source is plumbed into the audit, so margin
     // awareness is reported unavailable, never silently satisfied (spec §3.4).
     const marginBasis: MarginBasis = "unavailable";
