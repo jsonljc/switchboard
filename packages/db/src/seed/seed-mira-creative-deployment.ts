@@ -1,4 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
+import {
+  CREATIVE_GOVERNANCE_SETTINGS,
+  buildCreativeAllowPolicyInput,
+} from "./creative-governance.js";
 
 /**
  * The marketplace listing that backs the creative pipeline. Seeded by
@@ -49,10 +53,26 @@ export async function seedMiraCreativeDeployment(
       listingId: listing.id,
       status: "active",
       skillSlug: "creative",
+      // Opt the deployment into the GovernanceGate spend-approval lever so render
+      // cost above the spendApprovalThreshold column ($50 default, tunable) parks
+      // for approval instead of silently rendering. See creative-governance.ts.
+      governanceSettings: CREATIVE_GOVERNANCE_SETTINGS,
     },
     update: {
       status: "active",
       skillSlug: "creative",
+      governanceSettings: CREATIVE_GOVERNANCE_SETTINGS,
     },
+  });
+
+  // A workflow intent matches no other seeded policy, so the policy engine
+  // default-denies it. This org-scoped allow policy makes creative.job.* governed
+  // by the spend threshold (execute when cheap, park when over cap) rather than
+  // hard-denied. Idempotent on the deterministic per-org policy id.
+  const { id: policyId, ...policyData } = buildCreativeAllowPolicyInput(orgId);
+  await prisma.policy.upsert({
+    where: { id: policyId },
+    create: { id: policyId, ...policyData },
+    update: policyData,
   });
 }
