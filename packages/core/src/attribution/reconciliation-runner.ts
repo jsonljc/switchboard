@@ -1,9 +1,9 @@
-interface DateRange {
+export interface DateRange {
   from: Date;
   to: Date;
 }
 
-interface Check {
+export interface Check {
   name: string;
   status: string;
   expected: number;
@@ -11,7 +11,7 @@ interface Check {
   driftPercent: number;
 }
 
-interface ReconciliationReport {
+export interface ReconciliationReport {
   organizationId: string;
   dateRangeFrom: Date;
   dateRangeTo: Date;
@@ -19,7 +19,7 @@ interface ReconciliationReport {
   checks: Check[];
 }
 
-interface ReconciliationDeps {
+export interface ReconciliationDeps {
   bookingStore: { countConfirmed(orgId: string): Promise<number> };
   conversionRecordStore: {
     countByType(orgId: string, type: string, from: Date, to: Date): Promise<number>;
