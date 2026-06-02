@@ -114,6 +114,35 @@ export class PrismaBookingStore {
     }));
   }
 
+  // Intentionally cross-org: called by the reminder cron (a system-level scan, not an
+  // org-scoped request). The cron dispatches reminders for all orgs in a single pass.
+  async findUpcomingConfirmed(
+    windowStart: Date,
+    windowEnd: Date,
+  ): Promise<
+    Array<{
+      id: string;
+      organizationId: string;
+      contactId: string;
+      startsAt: Date;
+      timezone: string;
+      attendeeName: string | null;
+    }>
+  > {
+    const rows = await this.prisma.booking.findMany({
+      where: { status: "confirmed", startsAt: { gte: windowStart, lt: windowEnd } },
+      orderBy: { startsAt: "asc" },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      organizationId: r.organizationId,
+      contactId: r.contactId,
+      startsAt: r.startsAt,
+      timezone: r.timezone,
+      attendeeName: r.attendeeName,
+    }));
+  }
+
   async countExcludingStatuses(input: {
     orgId: string;
     excludeStatuses: readonly string[];
