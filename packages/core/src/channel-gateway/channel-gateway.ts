@@ -64,7 +64,7 @@ async function dispatchResponse(params: {
   if (response.ok) {
     if (response.result.outcome === "failed") {
       console.warn("[alex-counter] raw_error_fallback", {
-        sessionId,
+        deploymentId: resolved.deploymentId,
         code: response.result.error?.code,
       });
       try {

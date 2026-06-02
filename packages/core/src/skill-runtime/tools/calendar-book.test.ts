@@ -372,6 +372,22 @@ describe("createCalendarBookToolFactory", () => {
       expect((capturedQuery as { bufferMinutes: number }).bufferMinutes).toBe(15);
     });
 
+    it("returns a recoverable failure (does not throw, does not call provider) on a malformed slots.query", async () => {
+      const result = await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-06-02",
+        dateTo: "2026-06-05",
+        durationMinutes: 0,
+        service: "x",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("INVALID_SLOT_QUERY");
+      expect(result.error?.retryable).toBe(true);
+      expect(result.error?.modelRemediation).toMatch(/durationMinutes/);
+      expect(calendarProvider.listAvailableSlots).not.toHaveBeenCalled();
+    });
+
     it("emits [alex-counter] slot_query_zero_result warning when provider returns empty array", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       calendarProvider.listAvailableSlots.mockResolvedValue([]);

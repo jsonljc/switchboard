@@ -133,7 +133,18 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
         },
         execute: async (params: unknown) => {
-          const query = SlotQuerySchema.parse(params);
+          // safeParse (not parse): SlotQuerySchema is stricter than the coarse
+          // runtime input guard (int/positive/min-length), so malformed LLM input
+          // must degrade to a recoverable tool failure, not throw and kill the turn.
+          const parsed = SlotQuerySchema.safeParse(params);
+          if (!parsed.success) {
+            return fail("INVALID_SLOT_QUERY", "The slot query parameters were invalid.", {
+              retryable: true,
+              modelRemediation:
+                "Re-issue slots.query with a positive integer durationMinutes and a non-empty service.",
+            });
+          }
+          const query = parsed.data;
           const resolved = await resolveProviderOrFail(deps, ctx.orgId);
           if ("failure" in resolved) return resolved.failure;
           const slots = await resolved.provider.listAvailableSlots(query);

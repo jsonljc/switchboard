@@ -17,7 +17,7 @@ import { z } from "zod";
  *   (preserves the existing extractPersona contract — a deployment without
  *   a business name has no usable persona)
  * - defaults `tone` to "professional" when missing or non-string
- * - omits non-array criteria fields (does not coerce strings to arrays)
+ * - retains array OR object (record) criteria; drops primitive criteria (string/number/etc.)
  *
  * Byte-compatible with the legacy `extractPersona` in
  * `packages/core/src/platform/prisma-deployment-resolver.ts:13-35`.
