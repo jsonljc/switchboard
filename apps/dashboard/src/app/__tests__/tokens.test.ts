@@ -24,12 +24,17 @@ describe("canonical tokens — B1", () => {
 
   it("aliases the dead mercury register to canonical vars as VALID colors", () => {
     // --mercury-* tokens are consumed as complete color values (e.g.
-    // `background: var(--mercury-cream)`), so any alias to a raw canonical
-    // HSL triple MUST be hsl()-wrapped. Aliasing bare (`var(--canvas)`) emits
-    // `background: 40 25% 94%` — invalid CSS that silently breaks the
-    // contacts/activity/automations surfaces. Guard against that regression.
+    // `background: var(--mercury-cream)`). A raw-triple token (e.g. --canvas)
+    // MUST be hsl()-wrapped; an already-complete token (e.g. --ink, which is
+    // itself `hsl(...)`) may be referenced bare. Aliasing a triple bare emits
+    // `40 25% 94%` — invalid CSS that silently breaks contacts/activity.
     expect(css).toMatch(/--mercury-cream:\s*hsl\(var\(--canvas\)\)/);
-    expect(css).not.toMatch(/--mercury-[\w-]+:\s*var\(--/);
+    // Never bare-alias a raw-triple token.
+    expect(css).not.toMatch(
+      /--mercury-[\w-]+:\s*var\(--(canvas|action|agent-|background|surface|positive|destructive|operator|primary|secondary|accent|border|ring|muted|card)\b/,
+    );
+    // Ink ramp now aliases the already-complete editorial ink tokens (no drift).
+    expect(css).toMatch(/--mercury-ink:\s*var\(--ink\)/);
   });
 });
 
