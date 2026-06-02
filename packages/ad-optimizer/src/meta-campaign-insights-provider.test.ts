@@ -117,7 +117,7 @@ describe("MetaCampaignInsightsProvider", () => {
       expect(result.periodsAboveTarget).toBe(0);
     });
 
-    it("returns 0 periods when no snapshots provided", async () => {
+    it("returns 0 periods when no snapshots provided and no daily rows", async () => {
       const provider = new MetaCampaignInsightsProvider(makeAdsClient());
       const result = await provider.getTargetBreachStatus({
         orgId: "org_1",
@@ -129,8 +129,9 @@ describe("MetaCampaignInsightsProvider", () => {
       });
 
       expect(result.periodsAboveTarget).toBe(0);
-      expect(result.granularity).toBe("weekly");
-      expect(result.isApproximate).toBe(true);
+      // With no daily rows and no snapshots, we return daily with 0 breaches
+      expect(result.granularity).toBe("daily");
+      expect(result.isApproximate).toBe(false);
     });
   });
 
@@ -168,4 +169,168 @@ describe("MetaCampaignInsightsProvider", () => {
       expect(result.optimizationEvents).toBe(50);
     });
   });
+});
+
+// ── Task 3: real daily target-breach ─────────────────────────────────────────
+
+function dailyRow(campaignId: string, date: string, spend: number, conversions: number) {
+  return {
+    campaignId,
+    campaignName: "C",
+    status: "ACTIVE",
+    effectiveStatus: "ACTIVE",
+    impressions: 1000,
+    inlineLinkClicks: 50,
+    spend,
+    conversions,
+    revenue: 0,
+    frequency: 1.2,
+    cpm: 5,
+    inlineLinkClickCtr: 1,
+    costPerInlineLinkClick: 1,
+    dateStart: date,
+    dateStop: date,
+  };
+}
+
+it("counts daily periods above target from time_increment=1 rows", async () => {
+  // 9 of 14 days have cpa = spend/conversions > targetCPA(=50): 600/1 = 600 > 50; 40/4 = 10 <= 50
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const date = `2026-05-${String(18 + i).padStart(2, "0")}`;
+    return i < 9 ? dailyRow("c_1", date, 600, 1) : dailyRow("c_1", date, 40, 4);
+  });
+  const adsClient = {
+    getCampaignInsights: vi.fn(async (p: { timeIncrement?: number }) =>
+      p.timeIncrement === 1 ? days : [],
+    ),
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+  };
+  const provider = new MetaCampaignInsightsProvider(adsClient as never);
+  const result = await provider.getTargetBreachStatus({
+    orgId: "o",
+    accountId: "act_1",
+    campaignId: "c_1",
+    targetCPA: 50,
+    startDate: new Date("2026-05-25"),
+    endDate: new Date("2026-06-01"),
+  });
+  expect(result.granularity).toBe("daily");
+  expect(result.periodsAboveTarget).toBe(9);
+  expect(adsClient.getCampaignInsights).toHaveBeenCalledWith(
+    expect.objectContaining({ timeIncrement: 1 }),
+  );
+});
+
+it("treats a day with spend but zero conversions as above target", async () => {
+  const days = [dailyRow("c_1", "2026-05-31", 100, 0), dailyRow("c_1", "2026-06-01", 0, 0)];
+  const adsClient = {
+    getCampaignInsights: vi.fn(async () => days),
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+  };
+  const provider = new MetaCampaignInsightsProvider(adsClient as never);
+  const r = await provider.getTargetBreachStatus({
+    orgId: "o",
+    accountId: "a",
+    campaignId: "c_1",
+    targetCPA: 50,
+    startDate: new Date("2026-05-25"),
+    endDate: new Date("2026-06-01"),
+  });
+  expect(r.periodsAboveTarget).toBe(1); // spend>0,conv=0 counts; zero-spend day ignored
+});
+
+it("falls back to weekly snapshot count when no daily rows are returned", async () => {
+  const adsClient = {
+    getCampaignInsights: vi.fn(async () => []), // Meta returned nothing for the daily pull
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+  };
+  const provider = new MetaCampaignInsightsProvider(adsClient as never);
+  const snap = (cpa: number) => ({
+    campaignId: "c_1",
+    startDate: new Date("2026-05-18"),
+    endDate: new Date("2026-05-25"),
+    spend: cpa,
+    conversions: 1,
+    cpa,
+  });
+  const r = await provider.getTargetBreachStatus({
+    orgId: "o",
+    accountId: "a",
+    campaignId: "c_1",
+    targetCPA: 50,
+    startDate: new Date("2026-05-25"),
+    endDate: new Date("2026-06-01"),
+    snapshots: [snap(600), snap(10)], // one above target, one below
+  });
+  expect(r.granularity).toBe("weekly");
+  expect(r.periodsAboveTarget).toBe(1);
+});
+
+// ── Task 4: real learning phase from material child ad sets ──────────────────
+
+function adset(id: string, status: "LEARNING" | "SUCCESS" | "FAIL" | "UNKNOWN", spend: number) {
+  return {
+    adSetId: id,
+    adSetName: id,
+    campaignId: "c_1",
+    learningStageStatus: status,
+    frequency: 1,
+    spend,
+    conversions: 1,
+    cpa: spend,
+    roas: 0,
+    inlineLinkClickCtr: 1,
+  };
+}
+function providerWithAdSets(rows: ReturnType<typeof adset>[]) {
+  const adsClient = {
+    getCampaignInsights: vi.fn(async () => [
+      { campaignId: "c_1", effectiveStatus: "ACTIVE", conversions: 7 } as never,
+    ]),
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+    getAdSetLearningInputs: vi.fn(async () => rows),
+  };
+  return new MetaCampaignInsightsProvider(adsClient as never);
+}
+
+it("learningPhase=true when a material child ad set is LEARNING", async () => {
+  const p = providerWithAdSets([adset("a", "LEARNING", 300), adset("b", "SUCCESS", 700)]); // a=30%
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(true);
+});
+
+it("learningPhase=true when status coverage < 80% of spend", async () => {
+  const p = providerWithAdSets([adset("a", "UNKNOWN", 500), adset("b", "SUCCESS", 500)]); // 50% known
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(true);
+});
+
+it("learningPhase=false when all material children SUCCESS and coverage ok", async () => {
+  const p = providerWithAdSets([adset("a", "SUCCESS", 600), adset("b", "SUCCESS", 400)]);
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(false);
+  expect(out.optimizationEvents).toBe(7); // still read from insights
+});
+
+it("learningPhase=false when only an immaterial (5% spend) ad set is UNKNOWN", async () => {
+  const p = providerWithAdSets([adset("a", "UNKNOWN", 50), adset("b", "SUCCESS", 950)]); // 95% known
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(false); // a tiny unknown ad set must not overprotect the account
+});
+
+it("learningPhase=false when client lacks getAdSetLearningInputs (graceful)", async () => {
+  const adsClient = {
+    getCampaignInsights: vi.fn(async () => [
+      { campaignId: "c_1", effectiveStatus: "ACTIVE", conversions: 3 } as never,
+    ]),
+    getAdSetInsights: vi.fn(async () => []),
+    getAccountSummary: vi.fn(),
+  };
+  const p = new MetaCampaignInsightsProvider(adsClient as never);
+  const out = await p.getCampaignLearningData({ orgId: "o", accountId: "x", campaignId: "c_1" });
+  expect(out.learningPhase).toBe(false);
 });

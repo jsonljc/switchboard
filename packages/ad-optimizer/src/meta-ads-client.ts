@@ -3,6 +3,7 @@ import type {
   CampaignInsightSchema as CampaignInsight,
   AdSetInsightSchema as AdSetInsight,
   AccountSummarySchema as AccountSummary,
+  AdSetLearningInput,
 } from "@switchboard/schemas";
 
 const API_BASE = "https://graph.facebook.com/v21.0";
@@ -22,6 +23,7 @@ interface CampaignInsightsParams {
   dateRange: DateRange;
   fields: string[];
   breakdowns?: string[];
+  timeIncrement?: number;
 }
 
 interface AdSetInsightsParams {
@@ -81,6 +83,10 @@ export class MetaAdsClient {
       queryParams.set("breakdowns", params.breakdowns.join(","));
     }
 
+    if (params.timeIncrement !== undefined) {
+      queryParams.set("time_increment", String(params.timeIncrement));
+    }
+
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);
     const data = response.data as Record<string, string>[];
     return data.map((raw) => this.mapCampaignInsight(raw));
@@ -103,6 +109,62 @@ export class MetaAdsClient {
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);
     const data = response.data as Record<string, string>[];
     return data.map((raw) => this.mapAdSetInsight(raw));
+  }
+
+  async getAdSetLearningInputs(campaignId: string): Promise<AdSetLearningInput[]> {
+    const filtering = JSON.stringify([
+      { field: "campaign.id", operator: "EQUAL", value: campaignId },
+    ]);
+    // NOTE: reads Graph page 1 only (no paging.next follow). limit=200 covers typical
+    // accounts; revisit for campaigns with >200 ad sets before broad enablement.
+    const qp = new URLSearchParams({
+      fields: "id,name,campaign_id,learning_stage_info",
+      filtering,
+      limit: "200",
+    });
+    const entityResp = await this.get(`/${this.accountId}/adsets?${qp.toString()}`);
+    const entities = (entityResp.data as Record<string, unknown>[]) ?? [];
+
+    const insights = await this.getAdSetInsights({
+      dateRange: this.last7DayRange(),
+      fields: ["adset_id", "spend", "conversions", "frequency", "inline_link_click_ctr"],
+      campaignId,
+    });
+    const spendByAdSet = new Map<string, AdSetInsight>();
+    for (const ins of insights) spendByAdSet.set(ins.adSetId, ins);
+
+    return entities.map((e) => {
+      const id = String(e.id ?? "");
+      const ins = spendByAdSet.get(id);
+      const rawStatus = (
+        (e.learning_stage_info as { status?: string } | undefined)?.status ?? "UNKNOWN"
+      ).toUpperCase();
+      const learningStageStatus = (
+        ["LEARNING", "SUCCESS", "FAIL"].includes(rawStatus) ? rawStatus : "UNKNOWN"
+      ) as AdSetLearningInput["learningStageStatus"];
+      const spend = ins?.spend ?? 0;
+      const conversions = ins?.conversions ?? 0;
+      return {
+        adSetId: id,
+        adSetName: String(e.name ?? ""),
+        campaignId: String(e.campaign_id ?? campaignId),
+        learningStageStatus,
+        frequency: ins?.frequency ?? 0,
+        spend,
+        conversions,
+        cpa: conversions > 0 ? spend / conversions : 0,
+        roas: 0,
+        inlineLinkClickCtr: ins?.inlineLinkClickCtr ?? 0,
+      };
+    });
+  }
+
+  private last7DayRange(): { since: string; until: string } {
+    const now = new Date();
+    const since = new Date(now);
+    since.setDate(since.getDate() - 7);
+    const f = (d: Date) => d.toISOString().split("T")[0]!;
+    return { since: f(since), until: f(now) };
   }
 
   async getAccountSummary(): Promise<AccountSummary> {
@@ -262,7 +324,7 @@ export class MetaAdsClient {
       impressions: parseInt(raw.impressions ?? "0", 10),
       inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
       spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseInt(raw.conversions ?? "0", 10),
+      conversions: parseFloat(raw.conversions ?? "0"),
       revenue: parseFloat(raw.revenue ?? "0"),
       frequency: parseFloat(raw.frequency ?? "0"),
       cpm: parseFloat(raw.cpm ?? "0"),
@@ -281,7 +343,7 @@ export class MetaAdsClient {
       impressions: parseInt(raw.impressions ?? "0", 10),
       inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
       spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseInt(raw.conversions ?? "0", 10),
+      conversions: parseFloat(raw.conversions ?? "0"),
       frequency: parseFloat(raw.frequency ?? "0"),
       cpm: parseFloat(raw.cpm ?? "0"),
       inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),

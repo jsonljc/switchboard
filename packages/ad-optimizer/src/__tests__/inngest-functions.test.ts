@@ -194,12 +194,14 @@ describe("executeWeeklyAudit", () => {
 
     await executeWeeklyAudit(step as never, deps);
 
-    // The audit-runner only logs `[ad-optimizer] Nova reviewed N candidates` when
+    // The audit-runner only logs `[ad-optimizer] Riley reviewed N candidates` when
     // its recommendationEmitter dep is set (it's the bottom of the
     // runRecommendationSink branch). The default mocks produce 0 candidates so the
     // emitter spy itself is never called, but the log line firing proves
     // executeWeeklyAudit threaded the emitter through to the AuditRunner constructor.
-    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("Nova reviewed"))).toBe(true);
+    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("Riley reviewed"))).toBe(
+      true,
+    );
 
     warnSpy.mockRestore();
   });
@@ -210,7 +212,7 @@ describe("executeWeeklyAudit", () => {
 
     await executeWeeklyAudit(step as never, deps);
 
-    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("Nova reviewed"))).toBe(
+    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes("Riley reviewed"))).toBe(
       false,
     );
 
