@@ -42,6 +42,14 @@ describe("selectEconomicTier", () => {
   it("Tier 3 cpc when both bookings and leads are sparse", () => {
     expect(selectEconomicTier({ bookings: 2, leads: 10, hasBookedTarget: true })).toBe("cpc");
   });
+  it("respects custom minBooked / minLeads overrides", () => {
+    expect(
+      selectEconomicTier({ bookings: 10, leads: 5, hasBookedTarget: true, minBooked: 20 }),
+    ).toBe("cpc");
+    expect(selectEconomicTier({ bookings: 0, leads: 5, hasBookedTarget: false, minLeads: 5 })).toBe(
+      "cpl",
+    );
+  });
 });
 
 describe("calibrateTargetFromBooking", () => {
@@ -122,5 +130,19 @@ describe("applyTier", () => {
     expect(out.recommendation?.action).toBe("fix_signal_health");
     expect(out.recommendation?.economicTier).toBe("cpc");
     expect(out.watch).toBeUndefined();
+  });
+  it("Tier 1 names margin-awareness when marginBasis is configured", () => {
+    const out = applyTier({ recommendation: rec(), tier: "booked_cac", marginBasis: "configured" });
+    expect(out.recommendation?.marginBasis).toBe("configured");
+    expect(out.recommendation?.estimatedImpact).toContain("margin-aware");
+  });
+  it("respects a custom confidencePenalty override", () => {
+    const out = applyTier({
+      recommendation: rec({ confidence: 0.9 }),
+      tier: "cpl",
+      marginBasis: "unavailable",
+      confidencePenalty: 0.3,
+    });
+    expect(out.recommendation?.confidence).toBe(0.6); // 0.9 - 0.3
   });
 });

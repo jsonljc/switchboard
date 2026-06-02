@@ -20,6 +20,8 @@ const URGENCY_ORDER: Urgency[] = ["immediate", "this_week", "next_cycle"];
 
 function lowerUrgencyOneBand(u: Urgency): Urgency {
   const i = URGENCY_ORDER.indexOf(u);
+  // Math.min clamps to a valid index, so the lookup is always defined at runtime;
+  // the `?? u` only satisfies noUncheckedIndexedAccess.
   return URGENCY_ORDER[Math.min(i + 1, URGENCY_ORDER.length - 1)] ?? u;
 }
 
