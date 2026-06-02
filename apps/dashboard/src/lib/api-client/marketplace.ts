@@ -18,6 +18,14 @@ import type {
   ExecutionTraceSummary,
 } from "./marketplace-types";
 
+/** The 202 envelope returned when a governed action parks for approval. */
+export interface CreativePendingApprovalEnvelope {
+  outcome: "PENDING_APPROVAL";
+  workUnitId: string;
+  traceId: string;
+  approvalRequest?: { id: string; bindingHash?: string };
+}
+
 export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
   // ── Marketplace ──
 
@@ -325,13 +333,14 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
     action: "continue" | "stop",
     productionTier?: "basic" | "pro",
   ) {
-    return this.request<{ job: CreativeJobSummary; action: string }>(
-      `/api/marketplace/creative-jobs/${id}/approve`,
-      {
-        method: "POST",
-        body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
-      },
-    );
+    // A render over the deployment spend-approval threshold is parked by
+    // governance: the API answers with a PENDING_APPROVAL envelope, not the job.
+    return this.request<
+      { job: CreativeJobSummary; action: string } | CreativePendingApprovalEnvelope
+    >(`/api/marketplace/creative-jobs/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
+    });
   }
 
   async listTraces(deploymentId: string, opts?: { limit?: number; cursor?: string }) {

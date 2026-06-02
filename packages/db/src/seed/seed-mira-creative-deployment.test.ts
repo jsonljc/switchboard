@@ -4,6 +4,11 @@ import {
   seedMiraCreativeDeployment,
   CREATIVE_LISTING_SLUG,
 } from "./seed-mira-creative-deployment.js";
+import {
+  CREATIVE_GOVERNANCE_SETTINGS,
+  CREATIVE_SPEND_APPROVAL_THRESHOLD,
+  creativeAllowPolicyId,
+} from "./creative-governance.js";
 
 interface FindUniqueArgs {
   where: { slug: string };
@@ -18,14 +23,22 @@ interface DeploymentUpsertArgs {
   update: Record<string, unknown>;
 }
 
+interface PolicyUpsertArgs {
+  where: { id: string };
+  create: Record<string, unknown>;
+  update: Record<string, unknown>;
+}
+
 /**
  * Minimal in-memory prisma mock: agentListing.findUnique resolves the creative
- * listing by slug (unless `listingExists` is false), agentDeployment.upsert
- * records each call. Mirrors seed-alex-skill-pack.test.ts (CI has no Postgres).
+ * listing by slug (unless `listingExists` is false), agentDeployment.upsert and
+ * policy.upsert record each call. Mirrors seed-alex-skill-pack.test.ts (CI has no
+ * Postgres).
  */
 function buildMockPrisma(opts: { listingExists?: boolean; listingId?: string } = {}) {
   const { listingExists = true, listingId = "listing_creative_1" } = opts;
   const deploymentUpserts: DeploymentUpsertArgs[] = [];
+  const policyUpserts: PolicyUpsertArgs[] = [];
 
   const mock = {
     agentListing: {
@@ -39,9 +52,19 @@ function buildMockPrisma(opts: { listingExists?: boolean; listingId?: string } =
         return { id: "deploy_1" };
       }),
     },
+    policy: {
+      upsert: vi.fn(async (args: PolicyUpsertArgs) => {
+        policyUpserts.push(args);
+        return { id: args.where.id };
+      }),
+    },
     _deploymentUpserts: deploymentUpserts,
+    _policyUpserts: policyUpserts,
   };
-  return mock as unknown as PrismaClient & { _deploymentUpserts: DeploymentUpsertArgs[] };
+  return mock as unknown as PrismaClient & {
+    _deploymentUpserts: DeploymentUpsertArgs[];
+    _policyUpserts: PolicyUpsertArgs[];
+  };
 }
 
 describe("seedMiraCreativeDeployment", () => {
@@ -95,6 +118,41 @@ describe("seedMiraCreativeDeployment", () => {
     expect(prisma._deploymentUpserts[0]!.where.organizationId_listingId.organizationId).toBe(
       "org_other",
     );
+  });
+
+  it("configures the autonomous + spend-autonomy posture (activates the spend lever)", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    const call = prisma._deploymentUpserts[0]!;
+    // governanceSettings.trustLevelOverride + .spendAutonomy are what the
+    // GovernanceGate's spend-approval lever reads (the threshold column alone is inert).
+    expect(call.create.governanceSettings).toEqual(CREATIVE_GOVERNANCE_SETTINGS);
+    expect(call.update.governanceSettings).toEqual(CREATIVE_GOVERNANCE_SETTINGS);
+  });
+
+  it("sets a creative-scaled spend threshold (NOT the dormant $50 column default)", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    const call = prisma._deploymentUpserts[0]!;
+    // Realistic renders are ~$1–21; the column default ($50) would never park. The
+    // seed pins a creative-scaled cap so the gate is demonstrably live.
+    expect(call.create.spendApprovalThreshold).toBe(CREATIVE_SPEND_APPROVAL_THRESHOLD);
+    expect(call.update.spendApprovalThreshold).toBe(CREATIVE_SPEND_APPROVAL_THRESHOLD);
+    expect(CREATIVE_SPEND_APPROVAL_THRESHOLD).toBeLessThan(50);
+  });
+
+  it("upserts an org-scoped allow policy so creative.job.* is governed-not-denied", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    expect(prisma._policyUpserts).toHaveLength(1);
+    const call = prisma._policyUpserts[0]!;
+    expect(call.where.id).toBe(creativeAllowPolicyId("org_dev"));
+    expect(call.create).toMatchObject({ organizationId: "org_dev", effect: "allow", active: true });
+    // The rule must match the creative pipeline intents, else the policy engine
+    // default-denies them (no other policy matches a workflow intent).
+    expect(JSON.stringify(call.create.rule)).toContain("creative.job.*");
+  });
+
+  it("scopes the allow policy id to the org (distinct rows per org)", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_other");
+    expect(prisma._policyUpserts[0]!.where.id).toBe(creativeAllowPolicyId("org_other"));
   });
 
   it("throws a clear error when the creative listing is missing", async () => {
