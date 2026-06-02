@@ -199,6 +199,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
       expect(cls).not.toMatch(/\bgood\b/);
       expect(cls).not.toMatch(/\bgreen\b/);
       expect(cls).not.toMatch(/\bred\b/);
+      expect(cls).not.toMatch(/\bcritical\b/);
     });
   });
 
