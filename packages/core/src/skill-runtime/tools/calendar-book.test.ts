@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
 import type { SkillRequestContext } from "../types.js";
@@ -101,6 +101,12 @@ describe("createCalendarBookToolFactory", () => {
       contactStore: contactStore as never,
     });
     tool = factory({ ...TRUSTED_CTX, contactId: "ct_1" });
+  });
+
+  afterEach(() => {
+    // Reset the global metrics registry (exception-safe) — a metric test below
+    // points it at a spy; mirrors the outcomePatterns* test convention.
+    setMetrics(createInMemoryMetrics());
   });
 
   it("has id 'calendar-book'", () => {
@@ -404,7 +410,6 @@ describe("createCalendarBookToolFactory", () => {
       });
 
       expect(incSpy).toHaveBeenCalledWith({ orgId: "org_trusted", service: "botox" });
-      setMetrics(createInMemoryMetrics());
     });
   });
 
