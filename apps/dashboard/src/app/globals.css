@@ -49,15 +49,15 @@
     --negative-foreground: 0 0% 98%;
 
     /* ─── Operator amber accent ─── */
-    --operator: 30 55% 46%;
+    --operator: 30 58% 41%; /* white-on-amber 4.5:1 — passes WCAG AA (was 30 55% 46% = 3.76:1) */
     --operator-foreground: 0 0% 98%;
     --operator-subtle: 32 45% 94%;
 
     /* ─── Canonical: warm operational editorial (§9) ─── */
     --canvas: 40 25% 94%;          /* warm cream base — same value as --mercury-cream */
-    --action: 30 55% 46%;          /* the ONE action amber — alias of --operator */
+    --action: 30 58% 41%;          /* the ONE action amber — alias of --operator (AA 4.5:1 white-on-amber) */
     --action-foreground: 0 0% 98%;
-    --action-hover: 30 55% 40%;
+    --action-hover: 30 58% 35%;
     /* Per-agent IDENTITY ONLY — never on action buttons */
     --agent-alex: 14 70% 58%;      /* coral */
     --agent-riley: 180 33% 40%;    /* teal */
@@ -303,6 +303,13 @@
     color: hsl(var(--foreground));
     font-family: var(--font-sans);
     line-height: 1.65;
+  }
+
+  /* One global focus ring — replaces the per-component opt-in patchwork so every
+     interactive element is keyboard-visible by default. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 
   @media (prefers-reduced-motion: reduce) {
