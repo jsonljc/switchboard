@@ -105,6 +105,42 @@ export interface TieredResult {
  * Every surviving recommendation also gets a plain-language basis clause appended
  * to its rationale (spec §3.5) so the operator sees the basis, not just the field.
  */
+export function applyTier(input: ApplyTierInput): TieredResult {
+  const { recommendation: rec, tier, marginBasis } = input;
+  const penalty = input.confidencePenalty ?? TIER2_CONFIDENCE_PENALTY;
+
+  if (tier === "cpc" && !TIER3_ALLOWED_ACTIONS.has(rec.action)) {
+    return {
+      watch: {
+        type: "watch",
+        campaignId: rec.campaignId,
+        campaignName: rec.campaignName,
+        pattern: `economic-tier-cpc-withheld`,
+        message: `Withheld "${rec.action}": downstream booking/lead signal too thin to act (tier cpc). ${rec.estimatedImpact}`,
+        checkBackDate: input.checkBackDate ?? "",
+      },
+    };
+  }
+
+  let confidence = rec.confidence;
+  let urgency = rec.urgency;
+  if (tier === "cpl") {
+    confidence = Math.max(0, round2(rec.confidence - penalty));
+    urgency = lowerUrgencyOneBand(rec.urgency);
+  }
+
+  return {
+    recommendation: {
+      ...rec,
+      confidence,
+      urgency,
+      economicTier: tier,
+      marginBasis,
+      estimatedImpact: `${rec.estimatedImpact}. ${basisNote(tier, marginBasis)}`,
+    },
+  };
+}
+
 export interface ResolveEconomicTargetInput {
   targetCostPerBooked?: number;
   targetCPA: number;
@@ -144,40 +180,4 @@ export function resolveEconomicTarget(input: ResolveEconomicTargetInput): Resolv
   });
   const effectiveTarget = economicTier === "booked_cac" ? calibratedTarget! : input.targetCPA;
   return { economicTier, effectiveTarget };
-}
-
-export function applyTier(input: ApplyTierInput): TieredResult {
-  const { recommendation: rec, tier, marginBasis } = input;
-  const penalty = input.confidencePenalty ?? TIER2_CONFIDENCE_PENALTY;
-
-  if (tier === "cpc" && !TIER3_ALLOWED_ACTIONS.has(rec.action)) {
-    return {
-      watch: {
-        type: "watch",
-        campaignId: rec.campaignId,
-        campaignName: rec.campaignName,
-        pattern: `economic-tier-cpc-withheld`,
-        message: `Withheld "${rec.action}": downstream booking/lead signal too thin to act (tier cpc). ${rec.estimatedImpact}`,
-        checkBackDate: input.checkBackDate ?? "",
-      },
-    };
-  }
-
-  let confidence = rec.confidence;
-  let urgency = rec.urgency;
-  if (tier === "cpl") {
-    confidence = Math.max(0, round2(rec.confidence - penalty));
-    urgency = lowerUrgencyOneBand(rec.urgency);
-  }
-
-  return {
-    recommendation: {
-      ...rec,
-      confidence,
-      urgency,
-      economicTier: tier,
-      marginBasis,
-      estimatedImpact: `${rec.estimatedImpact}. ${basisNote(tier, marginBasis)}`,
-    },
-  };
 }
