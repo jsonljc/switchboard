@@ -117,6 +117,13 @@ export type {
 // Outbox Publisher (outbox → bus relay)
 export { OutboxPublisher } from "./events/outbox-publisher.js";
 
+// Reconciliation Runner (CRM↔Meta drift; consumed by the api reconciliation cron)
+export { ReconciliationRunner } from "./attribution/reconciliation-runner.js";
+export type {
+  ReconciliationDeps,
+  ReconciliationReport,
+} from "./attribution/reconciliation-runner.js";
+
 // LLM Client Interface + Adapters (Claude, Voyage)
 export * from "./llm/index.js";
 

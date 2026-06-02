@@ -176,12 +176,24 @@ describe("MetaCAPIDispatcher", () => {
 
   // ── Currency ──
 
-  it("includes custom_data when value and currency are present", async () => {
-    const event = makeEvent({ value: 500, currency: "SGD" });
+  it("normalizes custom_data.value from cents to major units", async () => {
+    const event = makeEvent({ value: 50000, currency: "SGD" }); // 50000 cents
     await dispatcher.dispatch(event);
 
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].custom_data).toEqual({ value: 500, currency: "SGD" });
+  });
+
+  it("hashes email and phone in user_data (never sends them raw)", async () => {
+    const event = makeEvent({ customer: { email: "Jane@Example.com", phone: "+65 9123 4567" } });
+    await dispatcher.dispatch(event);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
+    const userData = body.data[0].user_data;
+    expect(userData.em).toMatch(/^[a-f0-9]{64}$/);
+    expect(userData.ph).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(body)).not.toContain("Jane@Example.com");
+    expect(JSON.stringify(body)).not.toContain("9123");
   });
 
   it("omits custom_data when value exists but currency is missing", async () => {

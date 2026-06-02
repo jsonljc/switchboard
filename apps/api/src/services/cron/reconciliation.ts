@@ -1,5 +1,11 @@
 import { Inngest } from "inngest";
-import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
+import {
+  makeOnFailureHandler,
+  ReconciliationRunner,
+  type AsyncFailureContext,
+  type ReconciliationDeps,
+  type ReconciliationReport as RunnerReconciliationReport,
+} from "@switchboard/core";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 
@@ -23,6 +29,19 @@ export interface ReconciliationCronDeps {
   ) => Promise<ReconciliationReport>;
   logActivity?: (orgId: string, action: string, detail: Record<string, unknown>) => Promise<void>;
   logHeartbeat?: (cronId: string, result: Record<string, unknown>) => Promise<void>;
+}
+
+/**
+ * Builds the `runReconciliation` closure backed by the real ReconciliationRunner.
+ * Kept as a separate, store-agnostic seam so the wiring is unit-testable without
+ * booting Prisma or the full inngest bootstrap. The runner's richer report is
+ * structurally assignable to the narrower `ReconciliationCronDeps` return type.
+ */
+export function buildRunReconciliation(
+  deps: ReconciliationDeps,
+): (orgId: string, dateRange: { from: Date; to: Date }) => Promise<RunnerReconciliationReport> {
+  const runner = new ReconciliationRunner(deps);
+  return (orgId, dateRange) => runner.run(orgId, dateRange);
 }
 
 export interface StepTools {
