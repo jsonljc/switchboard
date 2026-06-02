@@ -6,6 +6,7 @@ import type {
   WatchOutputSchema as WatchOutput,
   RecommendationOutputSchema as RecommendationOutput,
   AccountSummarySchema as AccountSummary,
+  MarginBasisSchema as MarginBasis,
   CrmDataProvider,
   MediaBenchmarks,
   CampaignInsightsProvider,
@@ -19,8 +20,7 @@ import type {
 } from "@switchboard/schemas";
 import { analyzeFunnel } from "./funnel-analyzer.js";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
-import { LearningPhaseGuard } from "./learning-phase-guard.js";
-import { LearningPhaseGuardV2 } from "./learning-phase-guard.js";
+import { LearningPhaseGuard, LearningPhaseGuardV2 } from "./learning-phase-guard.js";
 import { detectFunnelShape } from "./funnel-detector.js";
 import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
@@ -38,6 +38,7 @@ import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
+import { resolveEconomicTarget, applyTier } from "./analyzers/economic-target.js";
 
 // ── Interfaces ──
 
@@ -53,12 +54,8 @@ export interface AdsClientInterface {
     campaignId?: string;
   }): Promise<unknown[]>;
   getAccountSummary(): Promise<AccountSummary>;
-  /**
-   * Optional: per-ad-set learning status + spend for a campaign, read from the
-   * Meta entity edge (`learning_stage_info`) joined with insights spend. Used by
-   * MetaCampaignInsightsProvider to derive campaign-level learning phase. Optional
-   * so existing fakes/clients that don't implement it degrade to learningPhase:false.
-   */
+  /** Optional: per-ad-set learning status from `learning_stage_info`. Used by
+   * MetaCampaignInsightsProvider to derive campaign-level learning phase; absent → false. */
   getAdSetLearningInputs?(campaignId: string): Promise<AdSetLearningInput[]>;
 }
 
@@ -67,13 +64,12 @@ export interface AuditConfig {
   orgId: string;
   targetCPA: number;
   targetROAS: number;
+  /** PR2: cost-per-booked target (dollars). When set + booking volume sufficient,
+   * audit uses economic tier "booked_cac"; otherwise falls back to "cpl" vs targetCPA. */
+  targetCostPerBooked?: number;
   mediaBenchmarks: MediaBenchmarks;
-  /**
-   * Optional Meta Pixel ID. When present alongside `signalHealthChecker`,
-   * the runner pulls a signal-health report at the start of each audit and
-   * short-circuits per-campaign diagnostics if the pixel is dead or
-   * server-to-browser ratio falls below 50%. Optional for back-compat.
-   */
+  /** Optional Meta Pixel ID. When present + signalHealthChecker wired, pulls a
+   * signal-health report and short-circuits per-campaign diagnostics on red score. */
   pixelId?: string;
 }
 
@@ -93,25 +89,16 @@ export interface AuditDependencies {
     weekly: MetricSnapshot[];
   } | null>;
   /**
-   * Optional. When provided, the audit-runner emits each generated
-   * RecommendationOutput through the v1 recommendations pipeline (queue /
-   * shadow_action / dropped) by calling this caller-injected emitter. When
-   * absent, the runner is a pure analyzer — back-compatible with all current
-   * callers. The emitter is injected (not a `RecommendationStore`) because
-   * ad-optimizer is Layer 2 and cannot import `emitRecommendation` from core
-   * (Layer 3). Wire-up lives in apps/api or apps/inngest, where both core and
-   * the store are accessible.
+   * Optional. Emits each generated RecommendationOutput through the v1 pipeline
+   * (queue / shadow_action / dropped). Injected rather than importing a Store because
+   * ad-optimizer is Layer 2; wire-up lives in apps/api or apps/inngest. When absent,
+   * the runner is a pure analyzer — back-compatible with all current callers.
    */
   recommendationEmitter?: RecommendationEmitter;
   /**
-   * Optional. Bound at runner-construction time so each audit run can stamp
-   * emitted recommendations with the originating cron id + deployment id. The
-   * sink threads this context to the emitter; the emitter forwards it to
-   * `emitRecommendation` so the WorkTrace mirror records provenance. Required
-   * when `recommendationEmitter` is provided — the audit runner asserts at
-   * `run()` time so misconfiguration surfaces loudly, not silently as orphan
-   * traces. Optional in the type so callers that omit the emitter don't need
-   * to provide ctx.
+   * Required when `recommendationEmitter` is provided. Stamps each emitted
+   * recommendation with cron + deployment provenance for the WorkTrace mirror.
+   * The runner asserts at `run()` time so misconfiguration surfaces loudly.
    */
   recommendationEmissionContext?: EmissionContext;
   /**
@@ -327,6 +314,22 @@ export class AuditRunner {
     const previousMetrics = aggregateMetrics(previousInsights);
     const periodDeltas = comparePeriods(currentMetrics, previousMetrics);
 
+    // Step 4b: Resolve the account-level economic tier + booking-calibrated target
+    // ONCE for this audit (calibrate-first invariant lives in resolveEconomicTarget).
+    const accountConversions = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
+    const { economicTier, effectiveTarget } = resolveEconomicTarget({
+      targetCostPerBooked: this.config.targetCostPerBooked,
+      targetCPA: this.config.targetCPA,
+      accountBookings: crmData.bookings ?? 0,
+      accountConversions,
+    });
+    // PR2: no profit-margin / AOV source is plumbed into the audit, so margin
+    // awareness is reported unavailable, never silently satisfied (spec §3.4).
+    const marginBasis: MarginBasis = "unavailable";
+    const nextCycleDate =
+      new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
+      dateRange.until;
+
     // Step 5: Per-campaign loop
     const insights: InsightOutput[] = [];
     const watches: WatchOutput[] = [];
@@ -376,7 +379,7 @@ export class AuditRunner {
         roas: campaignCurrentMetrics.roas,
       };
       const performanceTargets = {
-        targetCPA: this.config.targetCPA,
+        targetCPA: effectiveTarget,
         targetROAS: this.config.targetROAS,
       };
 
@@ -400,7 +403,7 @@ export class AuditRunner {
         orgId: this.config.orgId,
         accountId: this.config.accountId,
         campaignId: insight.campaignId,
-        targetCPA: this.config.targetCPA,
+        targetCPA: effectiveTarget,
         startDate: new Date(dateRange.since),
         endDate: new Date(dateRange.until),
       });
@@ -411,15 +414,27 @@ export class AuditRunner {
         campaignName: insight.campaignName,
         diagnoses,
         deltas: campaignDeltas,
-        targetCPA: this.config.targetCPA,
+        targetCPA: effectiveTarget,
         targetROAS: this.config.targetROAS,
         currentSpend: insight.spend,
         targetBreach,
       });
 
-      // 5g: Gate recommendations through learning phase
+      // 5g: Apply the economic tier (confidence/urgency/action-family), THEN
+      // gate through the learning phase. Tier-3 withholds destructive actions
+      // as watches; everything else flows into the learning-phase gate.
       for (const rec of campaignRecs) {
-        const gated = this.learningGuard.gate(rec, learningStatus);
+        const tiered = applyTier({
+          recommendation: rec,
+          tier: economicTier,
+          marginBasis,
+          checkBackDate: nextCycleDate,
+        });
+        if (tiered.watch) {
+          watches.push(tiered.watch);
+          continue;
+        }
+        const gated = this.learningGuard.gate(tiered.recommendation!, learningStatus);
         if (gated.type === "watch") {
           watches.push(gated);
         } else {
