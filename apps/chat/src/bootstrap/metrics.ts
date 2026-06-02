@@ -155,6 +155,16 @@ export function createPromMetrics(): SwitchboardMetrics {
       OUTCOME_PATTERN_LABELS,
       CONFIDENCE_BUCKETS,
     ),
+    slotQueryZeroResult: new PromCounter(
+      "switchboard_slot_query_zero_result_total",
+      "Alex slots.query calls that returned zero available slots",
+      ["orgId", "service"],
+    ),
+    rawErrorFallback: new PromCounter(
+      "switchboard_raw_error_fallback_total",
+      "Failed Alex turns where the raw error was suppressed and a neutral fallback sent",
+      ["deploymentId", "code"],
+    ),
   };
 }
 

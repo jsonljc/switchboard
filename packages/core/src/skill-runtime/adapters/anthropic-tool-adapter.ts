@@ -14,8 +14,12 @@ import {
 // tool definitions and outgoing message history (tool_use blocks).
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
-// conservative default for the live frontline agent when the router is off;
-// router sets per-tier temps when enabled
+// Live frontline default used ONLY when the model router is off
+// (ALEX_MODEL_ROUTER_ENABLED) so no profile is supplied. Intentionally just under
+// the router's premium/Sonnet slot (0.5, see model-router.ts) — DEFAULT_MODEL is
+// Sonnet — to curb unsubstantiated-claim variance on a compliance-sensitive agent.
+// TODO: once the router is enabled it supplies per-tier temps via params.profile;
+// the default then belongs with model policy (router/bootstrap), not this adapter.
 const DEFAULT_TEMPERATURE = 0.4;
 const PROVIDER = "anthropic";
 

@@ -29,8 +29,8 @@ export const alexBuilder = async (
     // (skill-mode.ts) via resolveOutcomePatternsConfig(). When true,
     // ContextBuilder surfaces patterns at the relaxed pilot bar.
     pilotMode?: boolean;
-    /** Optional fixed instant used for deterministic testing. Defaults to `new Date()`. */
-    now?: Date;
+    /** Optional clock for deterministic testing. Defaults to `() => new Date()`. */
+    now?: () => Date;
   },
   stores: SkillStores,
   services?: SkillServices,
@@ -106,7 +106,7 @@ export const alexBuilder = async (
 
   const FALLBACK_TZ = "Asia/Singapore";
   const rawTz = facts?.timezone ?? FALLBACK_TZ;
-  const now = config.now ?? new Date();
+  const now = config.now?.() ?? new Date();
 
   const formatDatetime = (timeZone: string): { parts: Intl.DateTimeFormatPart[]; tz: string } => {
     const parts = new Intl.DateTimeFormat("en-GB", {

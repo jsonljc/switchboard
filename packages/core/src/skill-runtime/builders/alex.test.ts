@@ -361,7 +361,7 @@ describe("alexBuilder", () => {
         }),
       } as never,
     });
-    const result = await alexBuilder(ctx, { ...config, now: fixedNow }, stores);
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
     const dt = result.parameters.CURRENT_DATETIME as string;
     expect(dt).toContain("2026-06-02");
     expect(dt).toContain("Asia/Singapore");
@@ -371,7 +371,7 @@ describe("alexBuilder", () => {
     const ctx = createMockCtx();
     const fixedNow = new Date("2026-06-02T07:45:00Z");
     const stores = createMockStores();
-    const result = await alexBuilder(ctx, { ...config, now: fixedNow }, stores);
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
     const dt = result.parameters.CURRENT_DATETIME as string;
     expect(dt).toContain("2026-06-02");
     expect(dt).toContain("Asia/Singapore");
@@ -396,7 +396,7 @@ describe("alexBuilder", () => {
         }),
       } as never,
     });
-    const result = await alexBuilder(ctx, { ...config, now: fixedNow }, stores);
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
     const dt = result.parameters.CURRENT_DATETIME as string;
     // Local New York date is still 2026-06-02 but hour is 03
     expect(dt).toContain("2026-06-02");
@@ -425,7 +425,7 @@ describe("alexBuilder", () => {
       } as never,
     });
     // Must not throw; must return a valid CURRENT_DATETIME with fallback timezone
-    const result = await alexBuilder(ctx, { ...config, now: fixedNow }, stores);
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
     const dt = result.parameters.CURRENT_DATETIME as string;
     expect(dt).toContain("2026-06-02");
     // Falls back to Asia/Singapore

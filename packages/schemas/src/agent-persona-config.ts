@@ -9,7 +9,7 @@ import { z } from "zod";
  * `./agent-persona.ts`, which models the full DB row (id, organizationId,
  * createdAt, …) and uses a tone enum + record-typed criteria. This schema
  * is the inputConfig-overlay variant — flatter, loose-typed criteria as
- * string arrays, plain-string tone — matching the runtime `AgentPersona`
+ * string arrays or object records, plain-string tone — matching the runtime `AgentPersona`
  * interface read by core skill builders (alex, sales-pipeline, etc.).
  *
  * The accessor `resolvePersona(inputConfig)` is intentionally lenient:
@@ -19,8 +19,10 @@ import { z } from "zod";
  * - defaults `tone` to "professional" when missing or non-string
  * - retains array OR object (record) criteria; drops primitive criteria (string/number/etc.)
  *
- * Byte-compatible with the legacy `extractPersona` in
- * `packages/core/src/platform/prisma-deployment-resolver.ts:13-35`.
+ * Mirrors the legacy `extractPersona` in
+ * `packages/core/src/platform/prisma-deployment-resolver.ts:13-35`, EXCEPT it
+ * intentionally preserves object/record criteria (the legacy dropped them to
+ * undefined, which crashed prompt interpolation for object-shaped deployments).
  */
 export const AgentPersonaConfigSchema = z.object({
   businessName: z.string(),

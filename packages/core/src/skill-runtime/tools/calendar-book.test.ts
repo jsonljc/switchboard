@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
 import type { SkillRequestContext } from "../types.js";
 
@@ -388,8 +389,10 @@ describe("createCalendarBookToolFactory", () => {
       expect(calendarProvider.listAvailableSlots).not.toHaveBeenCalled();
     });
 
-    it("emits [alex-counter] slot_query_zero_result warning when provider returns empty array", async () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    it("increments the slotQueryZeroResult metric when the provider returns an empty array", async () => {
+      const metrics = createInMemoryMetrics();
+      const incSpy = vi.spyOn(metrics.slotQueryZeroResult, "inc");
+      setMetrics(metrics);
       calendarProvider.listAvailableSlots.mockResolvedValue([]);
 
       await tool.operations["slots.query"]!.execute({
@@ -400,11 +403,8 @@ describe("createCalendarBookToolFactory", () => {
         timezone: "Asia/Singapore",
       });
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        "[alex-counter] slot_query_zero_result",
-        expect.objectContaining({ orgId: "org_trusted", service: "botox" }),
-      );
-      warnSpy.mockRestore();
+      expect(incSpy).toHaveBeenCalledWith({ orgId: "org_trusted", service: "botox" });
+      setMetrics(createInMemoryMetrics());
     });
   });
 
