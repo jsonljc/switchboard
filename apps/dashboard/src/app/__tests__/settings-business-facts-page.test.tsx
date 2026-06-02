@@ -40,4 +40,33 @@ describe("BusinessFactsPage", () => {
     render(<BusinessFactsPage />);
     expect(screen.getByText(/weren't loaded|re-enter/i)).toBeInTheDocument();
   });
+
+  it("populates the form with saved facts when status is present", () => {
+    useOrgDeploymentId.mockReturnValue({ deploymentId: "dep_1", isLoading: false, isError: false });
+    useBusinessFacts.mockReturnValue({
+      data: {
+        status: "present",
+        facts: {
+          businessName: "Saved Clinic",
+          timezone: "Asia/Singapore",
+          locations: [{ name: "Main Branch", address: "1 Orchard Rd" }],
+          openingHours: {
+            monday: { open: "10:00", close: "20:00", closed: false },
+            tuesday: { open: "10:00", close: "20:00", closed: false },
+            wednesday: { open: "10:00", close: "20:00", closed: false },
+            thursday: { open: "10:00", close: "20:00", closed: false },
+            friday: { open: "10:00", close: "20:00", closed: false },
+            saturday: { open: "10:00", close: "18:00", closed: false },
+            sunday: { open: "10:00", close: "18:00", closed: true },
+          },
+          services: [{ name: "Botox", description: "Anti-wrinkle treatment" }],
+          escalationContact: { name: "Front desk", channel: "whatsapp", address: "+6560000000" },
+          additionalFaqs: [],
+        },
+      },
+      error: null,
+    });
+    render(<BusinessFactsPage />);
+    expect(screen.getByDisplayValue("Saved Clinic")).toBeInTheDocument();
+  });
 });

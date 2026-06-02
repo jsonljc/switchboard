@@ -42,4 +42,26 @@ describe("BusinessFactsForm", () => {
     render(<BusinessFactsForm defaultValues={emptyBusinessFacts()} malformed onSubmit={vi.fn()} />);
     expect(screen.getByText(/weren't loaded|re-enter/i)).toBeInTheDocument();
   });
+
+  it("auto-expands FAQs section and shows answer error when a FAQ has an empty answer", async () => {
+    const onSubmit = vi.fn();
+    const defaults = {
+      ...emptyBusinessFacts(),
+      businessName: "Glow",
+      locations: [
+        { name: "Orchard", address: "391 Orchard Rd", parkingNotes: "", accessNotes: "" },
+      ],
+      services: [{ name: "Botox", description: "Anti-wrinkle", price: "$18", currency: "SGD" }],
+      escalationContact: {
+        name: "Front desk",
+        channel: "whatsapp" as const,
+        address: "+6560000000",
+      },
+      additionalFaqs: [{ question: "Q", answer: "" }],
+    };
+    render(<BusinessFactsForm defaultValues={defaults} onSubmit={onSubmit} />);
+    fireEvent.click(screen.getByRole("button", { name: /save business facts/i }));
+    await waitFor(() => expect(screen.getByText(/at least 1 character/i)).toBeInTheDocument());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 });

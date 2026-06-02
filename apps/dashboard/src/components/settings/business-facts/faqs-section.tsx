@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useFieldArray, type Control, type UseFormRegister } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useFieldArray, useFormContext, type Control, type UseFormRegister } from "react-hook-form";
 import { Plus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -16,8 +16,16 @@ interface FaqsSectionProps {
 }
 
 export function FaqsSection({ control, register }: FaqsSectionProps) {
+  const {
+    formState: { errors },
+  } = useFormContext<BusinessFactsForm>();
   const { fields, append, remove } = useFieldArray({ control, name: "additionalFaqs" });
   const [open, setOpen] = useState(false);
+
+  const hasFaqError = !!errors.additionalFaqs;
+  useEffect(() => {
+    if (hasFaqError) setOpen(true);
+  }, [hasFaqError]);
 
   return (
     <Card>
@@ -57,6 +65,11 @@ export function FaqsSection({ control, register }: FaqsSectionProps) {
                   placeholder="e.g. Is there a minimum age requirement?"
                   {...register(`additionalFaqs.${i}.question`)}
                 />
+                {errors.additionalFaqs?.[i]?.question && (
+                  <p className="text-xs text-destructive">
+                    {errors.additionalFaqs[i]?.question?.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -67,6 +80,11 @@ export function FaqsSection({ control, register }: FaqsSectionProps) {
                   rows={2}
                   {...register(`additionalFaqs.${i}.answer`)}
                 />
+                {errors.additionalFaqs?.[i]?.answer && (
+                  <p className="text-xs text-destructive">
+                    {errors.additionalFaqs[i]?.answer?.message}
+                  </p>
+                )}
               </div>
             </div>
           ))}

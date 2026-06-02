@@ -85,6 +85,7 @@ export default function BusinessFactsPage() {
           ...base,
           ...saved,
           openingHours: { ...base.openingHours, ...saved.openingHours },
+          bookingPolicies: { ...base.bookingPolicies, ...saved.bookingPolicies },
         } as BusinessFactsFormValues)
       : base;
 
