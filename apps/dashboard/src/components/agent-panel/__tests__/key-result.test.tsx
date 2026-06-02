@@ -169,8 +169,8 @@ describe("KeyResult slot — launch-blocker tests", () => {
     expect(screen.getByText("12")).toBeInTheDocument();
     // Paused note
     expect(screen.getByText("No new actions are going out while paused")).toBeInTheDocument();
-    // No CPL comparator text
-    expect(screen.queryByText(/per lead/i)).not.toBeInTheDocument();
+    // No ROI comparator text
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
     // No error message
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
   });
