@@ -46,7 +46,7 @@ export function compareSources(input: SourceComparisonInput): SourceComparisonRe
       costPerQualified: safeDiv(spend, funnel.qualified),
       costPerBooked: safeDiv(spend, funnel.booked),
       closeRate: safeDiv(funnel.paid, funnel.received),
-      trueRoas: safeDiv(funnel.revenue, spend),
+      trueRoas: trueRoasFromCents(funnel.revenue, spend),
     });
   }
   return { rows };

@@ -5,14 +5,15 @@ describe("compareSources", () => {
   it("computes per-source CPL, cost-per-booked, close rate, true ROAS", () => {
     const result = compareSources({
       bySource: {
-        ctwa: { received: 100, qualified: 30, booked: 12, showed: 10, paid: 8, revenue: 800 },
+        // revenue is stored in CENTS (LifecycleRevenueEvent.amount); trueRoas normalizes cents→dollars.
+        ctwa: { received: 100, qualified: 30, booked: 12, showed: 10, paid: 8, revenue: 80000 }, // $800
         instant_form: {
           received: 200,
           qualified: 16,
           booked: 4,
           showed: 3,
           paid: 1,
-          revenue: 80,
+          revenue: 8000,
         },
       },
       spendBySource: { ctwa: 410, instant_form: 380 },
