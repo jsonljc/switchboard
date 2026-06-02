@@ -9,7 +9,10 @@ import {
 import { join } from "path";
 import type { ValidatorWarning } from "./route-class-validator.js";
 
-const STORE_SRC_RX = /^packages\/db\/src\/(stores|storage)\//;
+// Matches the stores/ + storage/ subtrees AND top-level packages/db/src/*-store.ts
+// files. Audit L8-F4: top-level stores (recommendation-store.ts, prisma-consent-store.ts,
+// …) live at the src root, not under stores/, and were previously invisible here.
+const STORE_SRC_RX = /^packages\/db\/src\/(?:(?:stores|storage)\/|[^/]+-store\.ts$)/;
 const TESTS_RX = /\/__tests__\//;
 const MUTATION_METHODS = new Set(["update", "updateMany", "delete", "deleteMany"]);
 const SUPPRESS_DIRECTIVE_RX = /\/\/\s*route-governance:\s*store-mutation-(global|deferred)\b/;
@@ -23,12 +26,17 @@ export interface StoreMutationAdvisoryResult {
   exitCode: 0;
 }
 
+/** True when a touched file is a db store source file the mutation scanner should
+ *  inspect: under stores/ or storage/, OR a top-level packages/db/src/*-store.ts,
+ *  excluding __tests__ and non-.ts files. */
+export function isStoreFileInScope(path: string): boolean {
+  return STORE_SRC_RX.test(path) && !TESTS_RX.test(path) && path.endsWith(".ts");
+}
+
 export async function runStoreMutationAdvisory(
   opts: StoreMutationAdvisoryOptions,
 ): Promise<StoreMutationAdvisoryResult> {
-  const inScope = opts.touchedFiles.filter(
-    (f) => STORE_SRC_RX.test(f) && !TESTS_RX.test(f) && f.endsWith(".ts"),
-  );
+  const inScope = opts.touchedFiles.filter(isStoreFileInScope);
   if (inScope.length === 0) return { warnings: [], exitCode: 0 };
 
   const project = new Project({ useInMemoryFileSystem: false });

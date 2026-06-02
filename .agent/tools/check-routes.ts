@@ -238,6 +238,10 @@ export async function runErrorMode(opts: ErrorModeOptions): Promise<ErrorModeRes
   const storeFiles = await globRepoRelative(repoRoot, [
     "packages/db/src/stores/**/*.ts",
     "packages/db/src/storage/**/*.ts",
+    // Audit L8-F4: top-level db stores (recommendation-store.ts, prisma-consent-store.ts,
+    // …) live at the src root, not under stores/. Scope them so cross-tenant mutations
+    // there are caught (runStoreMutationAdvisory re-filters via isStoreFileInScope).
+    "packages/db/src/*-store.ts",
   ]);
   const appTypeFiles = await globRepoRelative(repoRoot, [
     "apps/api/src/**/*.ts",

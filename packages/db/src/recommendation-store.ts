@@ -210,13 +210,18 @@ export class PrismaRecommendationStore implements RecommendationStore {
 
   async applyAct(args: {
     id: string;
+    orgId: string;
     actor: { principalId: string; type: "operator" };
     fromStatus: RecommendationStatus;
     toStatus: RecommendationStatus;
     note: string | undefined;
   }): Promise<Recommendation> {
     return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.pendingActionRecord.findUnique({ where: { id: args.id } });
+      // Org-scoped existence read: a cross-tenant id resolves to "not found" here,
+      // before any mutation (findFirst — {id, organizationId} is not a unique key).
+      const existing = await tx.pendingActionRecord.findFirst({
+        where: { id: args.id, organizationId: args.orgId },
+      });
       if (!existing) throw new Error(`Recommendation not found: ${args.id}`);
       const params = (existing.parameters ?? {}) as RecommendationParams;
       const updatedMeta = {
@@ -226,7 +231,7 @@ export class PrismaRecommendationStore implements RecommendationStore {
       let updated;
       try {
         updated = await tx.pendingActionRecord.update({
-          where: { id: args.id, status: args.fromStatus },
+          where: { id: args.id, status: args.fromStatus, organizationId: args.orgId },
           data: {
             status: args.toStatus,
             resolvedAt: new Date(),
@@ -236,7 +241,9 @@ export class PrismaRecommendationStore implements RecommendationStore {
         });
       } catch (err: unknown) {
         if (err && typeof err === "object" && (err as { code?: string }).code === "P2025") {
-          const reread = await tx.pendingActionRecord.findUnique({ where: { id: args.id } });
+          const reread = await tx.pendingActionRecord.findFirst({
+            where: { id: args.id, organizationId: args.orgId },
+          });
           if (reread) throw new RecommendationStaleStatusError(rowToRecommendation(reread));
           throw new Error(`Recommendation not found: ${args.id}`);
         }
