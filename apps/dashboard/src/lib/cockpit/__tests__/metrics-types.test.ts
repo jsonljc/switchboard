@@ -7,8 +7,8 @@ describe("MetricsViewModelWire B.2b shape", () => {
     const roi: RoiBarWire = {
       degraded: true,
       degradedHint: "",
-      label: "cost per lead",
-      comparator: { value: "$4 per lead", target: "target $5" },
+      label: "cost per booked",
+      comparator: { value: "$4 per booked", target: "target $5" },
     };
     const wire: Partial<MetricsViewModelWire> = {
       tiles: [tile],

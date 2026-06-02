@@ -90,8 +90,8 @@ describe("<ROIBar>", () => {
         roi={{
           degraded: true,
           degradedHint: "",
-          label: "cost per lead",
-          comparator: { value: "$4 per lead", target: "target $5" },
+          label: "cost per booked",
+          comparator: { value: "$4 per booked", target: "target $5" },
         }}
       />,
     );
@@ -112,8 +112,8 @@ describe("<ROIBar>", () => {
         roi={{
           degraded: true,
           degradedHint: "",
-          label: "cost per lead",
-          comparator: { value: "$4 per lead", target: "target $5" },
+          label: "cost per booked",
+          comparator: { value: "$4 per booked", target: "target $5" },
         }}
         accent={RILEY_ACCENT}
       />,
