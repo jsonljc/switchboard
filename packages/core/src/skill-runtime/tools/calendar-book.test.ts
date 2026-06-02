@@ -352,6 +352,46 @@ describe("createCalendarBookToolFactory", () => {
     expect(bookingStore.create).not.toHaveBeenCalled();
   });
 
+  describe("slots.query schema parse", () => {
+    it("applies bufferMinutes default (15) when not supplied in params", async () => {
+      let capturedQuery: unknown;
+      calendarProvider.listAvailableSlots.mockImplementation(async (query: unknown) => {
+        capturedQuery = query;
+        return [];
+      });
+
+      await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "x",
+        timezone: "Asia/Singapore",
+        // bufferMinutes intentionally omitted
+      });
+
+      expect((capturedQuery as { bufferMinutes: number }).bufferMinutes).toBe(15);
+    });
+
+    it("emits [alex-counter] slot_query_zero_result warning when provider returns empty array", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      calendarProvider.listAvailableSlots.mockResolvedValue([]);
+
+      await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "botox",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[alex-counter] slot_query_zero_result",
+        expect.objectContaining({ orgId: "org_trusted", service: "botox" }),
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
   describe("slots.query failure paths", () => {
     it("fails CALENDAR_NOT_CONFIGURED when provider is unconfigured (no slots leak)", async () => {
       isCalendarProviderConfigured.mockReturnValue(false);

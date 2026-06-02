@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
-import type { CalendarProvider, SlotQuery } from "@switchboard/schemas";
+import { SlotQuerySchema } from "@switchboard/schemas";
+import type { CalendarProvider } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 
 interface BookingStoreSubset {
@@ -132,10 +133,16 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
         },
         execute: async (params: unknown) => {
-          const query = params as SlotQuery;
+          const query = SlotQuerySchema.parse(params);
           const resolved = await resolveProviderOrFail(deps, ctx.orgId);
           if ("failure" in resolved) return resolved.failure;
           const slots = await resolved.provider.listAvailableSlots(query);
+          if (slots.length === 0) {
+            console.warn("[alex-counter] slot_query_zero_result", {
+              orgId: ctx.orgId,
+              service: query.service,
+            });
+          }
           return ok({ slots } as Record<string, unknown>);
         },
       },
