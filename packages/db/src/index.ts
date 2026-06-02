@@ -104,7 +104,12 @@ export { PrismaConversionRecordStore } from "./stores/prisma-conversion-record-s
 export { PrismaDispatchLogStore } from "./stores/prisma-dispatch-log-store.js";
 export { PrismaReconciliationStore } from "./stores/prisma-reconciliation-store.js";
 export { PrismaLifecycleStore } from "./storage/prisma-lifecycle-store.js";
-export { PrismaBusinessFactsStore } from "./stores/prisma-business-facts-store.js";
+export {
+  PrismaBusinessFactsStore,
+  classifyBusinessFacts,
+  type BusinessFactsStatus,
+  type BusinessFactsResult,
+} from "./stores/prisma-business-facts-store.js";
 export { PrismaManagedChannelStore } from "./stores/prisma-managed-channel-store.js";
 export { PrismaCrmDataProvider } from "./stores/prisma-crm-data-provider.js";
 export { PrismaCrmFunnelStore } from "./stores/crm-funnel-store.js";

@@ -12,6 +12,7 @@ import {
   PrismaTrustScoreStore,
   PrismaDeploymentConnectionStore,
   PrismaExecutionTraceStore,
+  PrismaBusinessFactsStore,
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
@@ -19,7 +20,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { TrustScoreEngine, computeTrustProgression } from "@switchboard/core";
 import type { AgentListingStatus, AgentType, AgentTaskStatus } from "@switchboard/schemas";
 import { z } from "zod";
-import { AgentType as AgentTypeEnum } from "@switchboard/schemas";
+import { AgentType as AgentTypeEnum, BusinessFactsSchema } from "@switchboard/schemas";
 
 // ── Input Validation Schemas ──
 
@@ -315,6 +316,67 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     }
     return reply.send({ deployment: updated });
   });
+
+  // ── Business Facts (canonical per-org clinic knowledge) ──
+  // BusinessFacts are ORG-LEVEL clinic facts. The :id (deployment) is used ONLY
+  // to anchor org ownership through the existing marketplace auth model; the
+  // write is keyed to the authenticated org, never to caller-supplied input.
+  // On org mismatch this surface returns 404 (not 403 like the sibling
+  // /deployments/:id routes) so it never confirms another org's deployment exists.
+
+  app.get<{ Params: { id: string } }>("/deployments/:id/business-facts", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
+    }
+
+    const { id } = request.params;
+    const deploymentStore = new PrismaDeploymentStore(app.prisma);
+    const deployment = await deploymentStore.findById(id);
+    if (!deployment || deployment.organizationId !== orgId) {
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+    }
+
+    const factsStore = new PrismaBusinessFactsStore(app.prisma);
+    const { facts, status } = await factsStore.getWithStatus(orgId);
+    return reply.send({ config: facts, status });
+  });
+
+  app.put<{ Params: { id: string }; Body: unknown }>(
+    "/deployments/:id/business-facts",
+    async (request, reply) => {
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      const orgId = request.organizationIdFromAuth;
+      if (!orgId) {
+        return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
+      }
+
+      const { id } = request.params;
+      const deploymentStore = new PrismaDeploymentStore(app.prisma);
+      const deployment = await deploymentStore.findById(id);
+      if (!deployment || deployment.organizationId !== orgId) {
+        return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+      }
+
+      const parsed = BusinessFactsSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "Invalid business facts", issues: parsed.error.issues, statusCode: 400 });
+      }
+
+      const factsStore = new PrismaBusinessFactsStore(app.prisma);
+      await factsStore.upsert(orgId, parsed.data);
+      return reply.send({ ok: true });
+    },
+  );
 
   // ── Tasks ──
 

@@ -55,6 +55,10 @@ export function renderBusinessFacts(facts: BusinessFacts): string {
     if (bp.cancellationPolicy) lines.push(`Cancellation: ${bp.cancellationPolicy}`);
     if (bp.reschedulePolicy) lines.push(`Reschedule: ${bp.reschedulePolicy}`);
     if (bp.noShowPolicy) lines.push(`No-show: ${bp.noShowPolicy}`);
+    if (bp.advanceBookingDays)
+      lines.push(
+        `Advance booking: up to ${bp.advanceBookingDays} days ahead (subject to availability)`,
+      );
     if (bp.prepInstructions) lines.push(`Prep: ${bp.prepInstructions}`);
   }
 

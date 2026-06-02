@@ -1,8 +1,86 @@
 /* eslint-disable no-console */
 /* eslint-disable max-lines */
 import type { PrismaClient } from "@prisma/client";
+import { BusinessFactsSchema } from "@switchboard/schemas";
 import { DEMO_CONVERSATIONS } from "./fixtures/demo-conversations.js";
 import { seedDemoKnowledge } from "./fixtures/demo-knowledge.js";
+
+const GLOW_BUSINESS_FACTS = BusinessFactsSchema.parse({
+  businessName: "Glow Aesthetics",
+  timezone: "Asia/Singapore",
+  locations: [
+    {
+      name: "Glow Aesthetics — Orchard",
+      address: "391 Orchard Road, #14-05 Ngee Ann City, Singapore 238872",
+      parkingNotes:
+        "Paid parking at Ngee Ann City basement; 2 hours complimentary with validation at reception.",
+      accessNotes: "Take the Tower B lift to level 14; we are immediately on the right.",
+    },
+  ],
+  openingHours: {
+    monday: { open: "10:00", close: "20:00", closed: false },
+    tuesday: { open: "10:00", close: "20:00", closed: false },
+    wednesday: { open: "10:00", close: "20:00", closed: false },
+    thursday: { open: "10:00", close: "20:00", closed: false },
+    friday: { open: "10:00", close: "21:00", closed: false },
+    saturday: { open: "10:00", close: "18:00", closed: false },
+    sunday: { open: "00:00", close: "00:00", closed: true },
+  },
+  services: [
+    {
+      name: "Anti-wrinkle injections (Botox)",
+      description: "Softens forehead lines, frown lines and crow's feet.",
+      durationMinutes: 30,
+      price: "from $18/unit (typically 20–40 units)",
+      currency: "SGD",
+      bookingBehavior: "consultation_only",
+      consultationRequired: true,
+      idealFor: "Dynamic wrinkles from facial expression.",
+      prepInstructions: "Avoid alcohol and blood thinners for 24 hours beforehand.",
+      aftercareNotes: "Stay upright for 4 hours; no strenuous exercise for 24 hours.",
+    },
+    {
+      name: "HydraFacial",
+      description: "Medical-grade cleanse, exfoliation and hydration.",
+      durationMinutes: 45,
+      price: "$280",
+      currency: "SGD",
+      bookingBehavior: "book_directly",
+      idealFor: "Dull or congested skin; great for first-time visitors.",
+    },
+    {
+      name: "Dermal fillers",
+      description: "Restores volume to cheeks, lips and nasolabial folds.",
+      durationMinutes: 45,
+      price: "from $700/syringe",
+      currency: "SGD",
+      bookingBehavior: "consultation_only",
+      consultationRequired: true,
+    },
+  ],
+  bookingPolicies: {
+    cancellationPolicy: "Cancel or reschedule at least 24 hours ahead to avoid a charge.",
+    reschedulePolicy: "One complimentary reschedule with 24 hours notice.",
+    noShowPolicy: "No-shows are charged 50% of the treatment price.",
+    advanceBookingDays: 60,
+    prepInstructions: "Arrive 10 minutes early to complete a short medical-history form.",
+  },
+  escalationContact: {
+    name: "Glow Aesthetics front desk",
+    channel: "whatsapp",
+    address: "+65 6555 0123",
+  },
+  additionalFaqs: [
+    {
+      question: "Do you offer first-visit consultations?",
+      answer: "Yes — complimentary 15-minute consultations for new clients.",
+    },
+    {
+      question: "Are treatments performed by licensed doctors?",
+      answer: "All injectable treatments are performed by MOH-licensed doctors.",
+    },
+  ],
+});
 
 const SALES_PIPELINE_AGENTS = [
   {
@@ -695,6 +773,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       listingId: alexListing.id,
     });
     console.warn(`  Created deployment: ${ALEX_CONVERSION_AGENT.name} (${alexDeployment.id})`);
+    await prisma.businessConfig.upsert({
+      where: { organizationId: ORG_ID },
+      update: { config: GLOW_BUSINESS_FACTS as object },
+      create: { organizationId: ORG_ID, config: GLOW_BUSINESS_FACTS as object },
+    });
+    console.warn(`  Seeded BusinessConfig facts for ${ORG_ID}`);
   }
 
   // 5. Create website profiler deployment

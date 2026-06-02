@@ -1,10 +1,16 @@
 // @route-class: read-only
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // Readiness endpoint — structured pre-launch readiness report
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import { assertAlexSkillPackSeeded, type KnowledgeEntryReader } from "@switchboard/db";
+import {
+  assertAlexSkillPackSeeded,
+  classifyBusinessFacts,
+  type BusinessFactsStatus,
+  type KnowledgeEntryReader,
+} from "@switchboard/db";
 import { describeCalendarReadiness } from "../lib/calendar-readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
@@ -69,6 +75,7 @@ export interface ReadinessContext {
   // Internal-only: the guard's missing-(kind,scope) text (pack is system-owned, not
   // customer-fixable). For the console.warn + no-leak test; read by no check, never serialized.
   alexSkillPackDiagnostic: string | null;
+  businessFactsStatus: BusinessFactsStatus;
 }
 
 // ── PrismaLike — narrow type for readiness queries ─────────────────────────
@@ -127,6 +134,9 @@ export interface PrismaLike {
       runtimeConfig: unknown;
       businessHours: unknown;
     } | null>;
+  };
+  businessConfig: {
+    findUnique(args: { where: { organizationId: string } }): Promise<{ config: unknown } | null>;
   };
   deploymentConnection: {
     findMany(args: {
@@ -244,6 +254,16 @@ export async function buildReadinessContext(
     );
   }
 
+  let businessFactsStatus: BusinessFactsStatus = "missing";
+  try {
+    const bcRow = await prisma.businessConfig.findUnique({ where: { organizationId: orgId } });
+    businessFactsStatus = classifyBusinessFacts(bcRow?.config ?? null).status;
+  } catch (err) {
+    console.warn(
+      `[readiness] business-facts check failed org=${orgId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   return {
     managedChannels,
     connections: mappedConnections,
@@ -260,6 +280,7 @@ export async function buildReadinessContext(
     },
     alexSkillPackSeeded,
     alexSkillPackDiagnostic,
+    businessFactsStatus,
   };
 }
 
@@ -303,6 +324,9 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
 
   // 11. alex-skill-pack-seeded (blocking)
   checks.push(checkAlexSkillPackSeeded(ctx));
+
+  // 12. business-facts-present (advisory)
+  checks.push(checkBusinessFactsPresent(ctx));
 
   const ready = checks.filter((c) => c.blocking).every((c) => c.status === "pass");
 
@@ -565,6 +589,40 @@ function checkAlexSkillPackSeeded(ctx: ReadinessContext): ReadinessCheck {
     message: ctx.alexSkillPackSeeded
       ? "Alex's medspa knowledge pack is seeded"
       : "Alex's knowledge pack is still finalizing. Please try again shortly or contact support if this persists.",
+  };
+}
+
+function checkBusinessFactsPresent(ctx: ReadinessContext): ReadinessCheck {
+  const id = "business-facts-present";
+  const label = "Business facts entered";
+  // Non-blocking: there is no live operator editor yet, so a hard gate would
+  // deadlock go-live. Surfaces the gap without blocking activation/resume.
+  const blocking = false;
+  if (ctx.businessFactsStatus === "present") {
+    return {
+      id,
+      label,
+      blocking,
+      status: "pass",
+      message: "Business facts (hours, pricing, services) are set",
+    };
+  }
+  if (ctx.businessFactsStatus === "malformed") {
+    return {
+      id,
+      label,
+      blocking,
+      status: "fail",
+      message:
+        "Business facts are saved but invalid — re-enter hours, services, and contact details",
+    };
+  }
+  return {
+    id,
+    label,
+    blocking,
+    status: "fail",
+    message: "Business facts not set yet — Alex will escalate hours/pricing questions until added",
   };
 }
 

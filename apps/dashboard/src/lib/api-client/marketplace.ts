@@ -73,19 +73,18 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
   }
 
   async getBusinessFacts(deploymentId: string) {
-    const { deployment } = await this.request<{ deployment: MarketplaceDeployment }>(
-      `/api/marketplace/deployments/${deploymentId}`,
-    );
-    const config = deployment?.inputConfig as Record<string, unknown> | undefined;
-    return { config: config?.businessFacts ?? null };
+    return this.request<{
+      config: Record<string, unknown> | null;
+      status: "present" | "missing" | "malformed";
+    }>(`/api/marketplace/deployments/${deploymentId}/business-facts`);
   }
 
   async upsertBusinessFacts(deploymentId: string, facts: Record<string, unknown>) {
-    return this.request<{ deployment: MarketplaceDeployment }>(
-      `/api/marketplace/deployments/${deploymentId}`,
+    return this.request<{ ok: true }>(
+      `/api/marketplace/deployments/${deploymentId}/business-facts`,
       {
-        method: "PATCH",
-        body: JSON.stringify({ inputConfig: { businessFacts: facts } }),
+        method: "PUT",
+        body: JSON.stringify(facts),
       },
     );
   }

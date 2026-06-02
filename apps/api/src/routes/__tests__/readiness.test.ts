@@ -64,6 +64,7 @@ function makeContext(overrides: Partial<ReadinessContext> = {}): ReadinessContex
     },
     alexSkillPackSeeded: true,
     alexSkillPackDiagnostic: null,
+    businessFactsStatus: "present",
     ...overrides,
   };
 }
@@ -73,7 +74,7 @@ describe("checkReadiness", () => {
     const report = checkReadiness(makeContext());
     expect(report.ready).toBe(true);
     expect(report.checks.every((c) => c.status === "pass")).toBe(true);
-    expect(report.checks).toHaveLength(12);
+    expect(report.checks).toHaveLength(13);
   });
 
   // ── email-verified ──────────────────────────────────────────────────────
@@ -345,6 +346,7 @@ describe("checkReadiness", () => {
       "meta-ads-token",
       "calendar",
       "alex-skill-pack-seeded",
+      "business-facts-present",
     ]);
   });
 
@@ -398,6 +400,33 @@ describe("checkReadiness", () => {
     const check = report.checks.find((c) => c.id === "meta-ads-token")!;
     expect(check.status).toBe("pass");
     expect(check.message).toBe("Meta Ads token is valid");
+  });
+
+  // ── business-facts-present (advisory) ────────────────────────────────────────
+
+  it("business-facts-present passes (non-blocking) when facts present", () => {
+    const report = checkReadiness(makeContext({ businessFactsStatus: "present" }));
+    const check = report.checks.find((c) => c.id === "business-facts-present")!;
+    expect(check.status).toBe("pass");
+    expect(check.blocking).toBe(false);
+  });
+
+  it("business-facts-present fails NON-blocking when missing (report stays ready)", () => {
+    const report = checkReadiness(makeContext({ businessFactsStatus: "missing" }));
+    const check = report.checks.find((c) => c.id === "business-facts-present")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(false);
+    expect(check.message).toContain("not set yet");
+    expect(report.ready).toBe(true);
+  });
+
+  it("business-facts-present distinguishes malformed from missing", () => {
+    const report = checkReadiness(makeContext({ businessFactsStatus: "malformed" }));
+    const check = report.checks.find((c) => c.id === "business-facts-present")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(false);
+    expect(check.message).toContain("invalid");
+    expect(report.ready).toBe(true);
   });
 
   // ── calendar (advisory) ───────────────────────────────────────────────────────
@@ -464,6 +493,7 @@ function makePrismaMock(opts: { knowledgeRow?: { content: string } | null } = {}
     connection: { findMany: async () => [] },
     agentDeployment: { findFirst: async () => null },
     organizationConfig: { findUnique: async () => null },
+    businessConfig: { findUnique: async () => null },
     deploymentConnection: { findMany: async () => [] },
     dashboardUser: { findFirst: async () => null },
     knowledgeEntry: { findFirst: async () => row },

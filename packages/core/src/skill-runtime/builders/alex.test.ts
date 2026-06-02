@@ -406,6 +406,31 @@ describe("alexBuilder", () => {
     expect(dt).not.toContain("Asia/Singapore");
   });
 
+  it("BUSINESS_FACTS is rendered from businessFactsStore facts (hours, price, advance booking)", async () => {
+    const ctx = createMockCtx();
+    const stores = createMockStores({
+      businessFactsStore: {
+        get: vi.fn().mockResolvedValue({
+          businessName: "Glow Aesthetics",
+          timezone: "Asia/Singapore",
+          locations: [{ name: "Orchard", address: "391 Orchard Rd" }],
+          openingHours: { monday: { open: "10:00", close: "20:00", closed: false } },
+          services: [
+            { name: "Botox", description: "Anti-wrinkle", price: "from $18/unit", currency: "SGD" },
+          ],
+          bookingPolicies: { advanceBookingDays: 60 },
+          escalationContact: { name: "Front desk", channel: "whatsapp", address: "+6560000000" },
+          additionalFaqs: [],
+        }),
+      } as never,
+    });
+    const result = await alexBuilder(ctx, config, stores);
+    const bf = result.parameters.BUSINESS_FACTS as string;
+    expect(bf).toContain("10:00");
+    expect(bf).toContain("from $18/unit");
+    expect(bf).toContain("Advance booking: up to 60 days ahead (subject to availability)");
+  });
+
   it("CURRENT_DATETIME degrades gracefully when facts.timezone is an invalid IANA string", async () => {
     // Invalid timezone strings like 'GMT+8', 'SGT', 'Singapore' cause Intl to throw
     // RangeError. The builder must catch and fall back to 'Asia/Singapore' (fail-open).
