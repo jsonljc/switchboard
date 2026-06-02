@@ -1,11 +1,11 @@
-// packages/core/src/creative-pipeline/ugc/phases/production.ts
+// packages/creative-pipeline/src/ugc/phases/production.ts
 import type { ProviderCapabilityProfile, RealismScore } from "@switchboard/schemas";
 import {
   rankProviders,
   getDefaultProviderRegistry,
   type RankedProvider,
 } from "../provider-router.js";
-import { evaluateRealism } from "../realism-scorer.js";
+import { deriveApprovalState, evaluateRealism } from "../realism-scorer.js";
 import { createVideoProvider, type ProviderClients } from "../video-provider.js";
 import type { ProviderPerformanceHistory } from "../provider-performance.js";
 
@@ -96,16 +96,6 @@ async function processSpec(
   for (const provider of rankedProviders) {
     for (let attempt = 0; attempt < retryConfig.maxAttempts; attempt++) {
       totalAttempts++;
-
-      // Circuit breaker: stop after 3+ attempts with 80%+ failure rate
-      const failCount = qaHistory.filter((h) => h.score.overallDecision === "fail").length;
-      if (qaHistory.length >= 3 && failCount / qaHistory.length > 0.8) {
-        return {
-          qaHistory,
-          failed: { specId: spec.specId, reason: "circuit breaker: repeated QA failures" },
-        };
-      }
-
       const startMs = Date.now();
 
       try {
@@ -143,12 +133,10 @@ async function processSpec(
           outputs: { videoUrl: result.videoUrl, checksums: {} },
           qaMetrics: qaScore as unknown as Record<string, unknown>,
           qaHistory: qaHistory as unknown as Array<Record<string, unknown>>,
-          approvalState:
-            qaScore.overallDecision === "pass"
-              ? "approved"
-              : qaScore.overallDecision === "review"
-                ? "pending"
-                : "rejected",
+          // Safety: an un-evaluated/fabricated QA score can never auto-approve.
+          // `deriveApprovalState` routes freshly generated assets to human review
+          // until real frame-based QA sets qaStatus:"evaluated".
+          approvalState: deriveApprovalState(qaScore),
           latencyMs,
           costEstimate: provider.estimatedCost,
         };
@@ -158,12 +146,9 @@ async function processSpec(
           ...assetData,
         });
 
-        if (qaScore.overallDecision === "fail") {
-          if (attempt < retryConfig.maxAttempts - 1) continue; // retry same provider
-          break; // move to next provider
-        }
-
-        // Pass or review → done
+        // QA does not (yet) inspect the video, so it cannot fail or auto-approve
+        // it — the asset is persisted for human review. Retry/fallback below
+        // handles generation *errors* only, not quality verdicts.
         return { asset: assetData, qaHistory };
       } catch {
         // Generation error — try next attempt/provider
