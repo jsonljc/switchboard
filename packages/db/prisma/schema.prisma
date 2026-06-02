@@ -1344,6 +1344,17 @@ model CreativeJob {
   reviewDecision  String?
   reviewDecidedAt DateTime?
 
+  // Meta publish (P2 parked draft package). Nullable — set by creative.job.publish.
+  // durableAssetUrl is the PR A contract (durable assembled-creative URL); publish
+  // fails loud CREATIVE_ASSET_NOT_DURABLE until it is populated.
+  metaVideoId       String?
+  metaCampaignId    String?
+  metaAdSetId       String?
+  metaCreativeId    String?
+  metaAdId          String?
+  metaPublishStatus String?
+  durableAssetUrl   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
