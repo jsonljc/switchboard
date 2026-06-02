@@ -17,6 +17,12 @@ export function OperatorChatWidget() {
   const hidden =
     pathname != null && HIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
+  // The operator command console is a dev/internal tool — OFF by default so its
+  // bottom-right bubble (developer-console blue) doesn't collide with operator
+  // content on every authed screen. Enable per-environment with
+  // NEXT_PUBLIC_OPERATOR_CHAT_ENABLED=true.
+  const enabled = process.env.NEXT_PUBLIC_OPERATOR_CHAT_ENABLED === "true";
+
   useEffect(() => {
     if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === "function") {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -31,7 +37,7 @@ export function OperatorChatWidget() {
     sendCommand(trimmed);
   };
 
-  if (hidden) return null;
+  if (!enabled || hidden) return null;
 
   return (
     <>
