@@ -41,20 +41,21 @@ describe("Home warm-operational-editorial tokens — P1-A", () => {
     expect(css).toMatch(/--canvas-3:\s*hsl\(/);
   });
 
-  it("declares per-agent deep + tint identity raw-triples", () => {
-    // Raw triples (consumed via `hsl(var(--x))`) — must NOT be hsl-wrapped here.
-    expect(css).toMatch(/--agent-alex-deep:\s+\d/);
-    expect(css).not.toMatch(/--agent-alex-deep:\s*hsl\(/);
-    expect(css).toMatch(/--agent-alex-tint:\s+\d/);
-    expect(css).not.toMatch(/--agent-alex-tint:\s*hsl\(/);
-    expect(css).toMatch(/--agent-riley-deep:\s+\d/);
-    expect(css).not.toMatch(/--agent-riley-deep:\s*hsl\(/);
-    expect(css).toMatch(/--agent-riley-tint:\s+\d/);
-    expect(css).not.toMatch(/--agent-riley-tint:\s*hsl\(/);
-    expect(css).toMatch(/--agent-mira-deep:\s+\d/);
-    expect(css).not.toMatch(/--agent-mira-deep:\s*hsl\(/);
-    expect(css).toMatch(/--agent-mira-tint:\s+\d/);
-    expect(css).not.toMatch(/--agent-mira-tint:\s*hsl\(/);
+  it("per-agent deep + tint identity reference --palette-* primitives", () => {
+    // After token unification (T1) these alias --palette-* primitives; the raw
+    // triple lives only in the primitive block. Must NOT be hsl-wrapped here, or
+    // `hsl(var(--agent-alex-deep))` would double-wrap to hsl(hsl(...)).
+    for (const t of [
+      "agent-alex-deep",
+      "agent-alex-tint",
+      "agent-riley-deep",
+      "agent-riley-tint",
+      "agent-mira-deep",
+      "agent-mira-tint",
+    ]) {
+      expect(css).toMatch(new RegExp(`--${t}:\\s*var\\(--palette-`));
+      expect(css).not.toMatch(new RegExp(`--${t}:\\s*hsl\\(`));
+    }
   });
 
   it("declares the Home shadow + easing scale", () => {

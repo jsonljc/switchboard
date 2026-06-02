@@ -10,6 +10,26 @@
 
 @layer base {
   :root {
+    /* ═══ Tier 1: PRIMITIVES — single source of truth (spec §3.1).
+       Raw color values live ONLY in this block. Semantic tokens below
+       reference these via var(); .dark overrides primitives so semantics
+       follow automatically (Wave 3 completes the dark palette). ═══ */
+    --palette-action: 30 58% 41%;        /* AA action amber — white text ≥ 4.5:1 */
+    --palette-action-hover: 30 58% 35%;  /* darker pressed/hover step */
+    --palette-action-fg: 0 0% 100%;      /* pure white — required for AA on amber */
+    --palette-action-subtle: 32 45% 94%; /* light action tint (chips, soft fills) */
+    --palette-action-tint: 38 52% 90%;   /* warmer action surface tint */
+    --palette-action-bright: 30 55% 46%; /* NON-TEXT fills/stripes/pip ONLY — spec §4.5 */
+    --palette-coral: 14 70% 58%;         /* Alex identity */
+    --palette-coral-deep: 14 50% 45%;
+    --palette-coral-tint: 24 60% 95%;
+    --palette-teal: 180 33% 40%;         /* Riley identity */
+    --palette-teal-deep: 178 53% 26%;
+    --palette-teal-tint: 172 34% 93%;
+    --palette-violet: 270 45% 58%;       /* Mira identity */
+    --palette-violet-deep: 256 31% 45%;
+    --palette-violet-tint: 255 33% 95%;
+
     /* ─── Surfaces ─── */
     --background: 45 25% 98%;
     --foreground: 30 8% 10%;
@@ -48,20 +68,22 @@
     --negative: 0 38% 40%;
     --negative-foreground: 0 0% 98%;
 
-    /* ─── Operator amber accent ─── */
-    --operator: 30 55% 46%;
-    --operator-foreground: 0 0% 98%;
-    --operator-subtle: 32 45% 94%;
+    /* ─── Operator amber accent (→ action primitive) ─── */
+    --operator: var(--palette-action);
+    --operator-foreground: var(--palette-action-fg);
+    --operator-subtle: var(--palette-action-subtle);
 
     /* ─── Canonical: warm operational editorial (§9) ─── */
     --canvas: 40 25% 94%;          /* warm cream base — same value as --mercury-cream */
-    --action: 30 55% 46%;          /* the ONE action amber — alias of --operator */
-    --action-foreground: 0 0% 98%;
-    --action-hover: 30 55% 40%;
+    --action: var(--palette-action);          /* the ONE action amber (AA, single-source) */
+    --action-foreground: var(--palette-action-fg);
+    --action-hover: var(--palette-action-hover);
+    --action-subtle: var(--palette-action-subtle);
+    --action-tint: var(--palette-action-tint);
     /* Per-agent IDENTITY ONLY — never on action buttons */
-    --agent-alex: 14 70% 58%;      /* coral */
-    --agent-riley: 180 33% 40%;    /* teal */
-    --agent-mira: 270 45% 58%;     /* violet (coming soon) */
+    --agent-alex: var(--palette-coral);
+    --agent-riley: var(--palette-teal);
+    --agent-mira: var(--palette-violet);
 
     /* ─── Cards ─── */
     --card: 0 0% 100%;
@@ -149,7 +171,7 @@
     /* ─── Character color system ─── */
     --char-body: hsl(30 8% 42%);
     --char-aura: hsl(30 8% 55%);
-    --char-accent: hsl(30 55% 46%);
+    --char-accent: hsl(var(--action));
 
     /* Role: Leads */
     --char-leads-body: hsl(238 28% 52%);
@@ -207,13 +229,13 @@
     /* --agent-*-deep/-tint, --shadow-lift, --shadow-sheet, and --canvas-3 are landed here ahead of their first consumers in P1-B / Phase-2 (risk-tiered card, sheet overlays, etc.). They are not consumed in P1-A. */
     --canvas-2: hsl(42 33% 97%); /* lighter inset zone */
     --canvas-3: hsl(40 24% 90%); /* deeper divider / sheet handle */
-    /* agent deep/tint as raw-triples (match --agent-* base; consume via hsl(var(--x))) */
-    --agent-alex-deep: 14 50% 45%;
-    --agent-alex-tint: 24 60% 95%;
-    --agent-riley-deep: 178 53% 26%;
-    --agent-riley-tint: 172 34% 93%;
-    --agent-mira-deep: 256 31% 45%;
-    --agent-mira-tint: 255 33% 95%;
+    /* agent deep/tint → primitives (consume via hsl(var(--x))) */
+    --agent-alex-deep: var(--palette-coral-deep);
+    --agent-alex-tint: var(--palette-coral-tint);
+    --agent-riley-deep: var(--palette-teal-deep);
+    --agent-riley-tint: var(--palette-teal-tint);
+    --agent-mira-deep: var(--palette-violet-deep);
+    --agent-mira-tint: var(--palette-violet-tint);
     /* shadows (complete values, consumed bare) */
     --shadow-card: 0 1px 0 rgba(40, 30, 20, 0.04), 0 1px 2px rgba(40, 30, 20, 0.05);
     --shadow-lift: 0 12px 28px rgba(40, 30, 20, 0.1), 0 2px 6px rgba(40, 30, 20, 0.06);
@@ -267,8 +289,9 @@
     --negative: 0 32% 45%;
     --negative-foreground: 0 0% 98%;
 
-    /* Operator amber */
-    --operator: 30 50% 52%;
+    /* Operator amber → override the action PRIMITIVE so --action + --operator
+       both follow in dark (Wave 3 completes the dark palette). */
+    --palette-action: 30 50% 52%;
     --operator-foreground: 0 0% 98%;
     --operator-subtle: 32 40% 16%;
 
@@ -285,7 +308,7 @@
     /* Character */
     --char-body: hsl(30 8% 58%);
     --char-aura: hsl(30 8% 42%);
-    --char-accent: hsl(30 50% 52%);
+    /* --char-accent inherits hsl(var(--action)) → dark amber via --palette-action */
   }
 }
 
