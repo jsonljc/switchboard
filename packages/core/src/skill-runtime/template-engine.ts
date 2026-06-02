@@ -46,7 +46,7 @@ function resolveValue(
     }
     const nested = (value as Record<string, unknown>)[field];
     if (nested === undefined) {
-      throw new SkillParameterError(`Missing field "${field}" in parameter ${paramName}`);
+      return "";
     }
     if (typeof nested === "object" && nested !== null && !Array.isArray(nested)) {
       return sortedYaml(nested as Record<string, unknown>);

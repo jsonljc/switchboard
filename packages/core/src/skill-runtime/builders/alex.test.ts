@@ -344,4 +344,91 @@ describe("alexBuilder", () => {
     expect(result.parameters.LEAD_PROFILE).toBeNull();
     expect(findByIdMock).not.toHaveBeenCalled();
   });
+
+  it("CURRENT_DATETIME contains the date and timezone when facts.timezone is set", async () => {
+    const ctx = createMockCtx();
+    const fixedNow = new Date("2026-06-02T07:45:00Z");
+    const stores = createMockStores({
+      businessFactsStore: {
+        get: vi.fn().mockResolvedValue({
+          timezone: "Asia/Singapore",
+          businessName: "Glow Aesthetics",
+          locations: [{ name: "Main", address: "1 Orchard Rd" }],
+          openingHours: {},
+          services: [{ id: "s1", name: "Facial", description: "desc", durationMinutes: 30 }],
+          escalationContact: { name: "Team", channel: "whatsapp", address: "+65..." },
+          additionalFaqs: [],
+        }),
+      } as never,
+    });
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
+    const dt = result.parameters.CURRENT_DATETIME as string;
+    expect(dt).toContain("2026-06-02");
+    expect(dt).toContain("Asia/Singapore");
+  });
+
+  it("CURRENT_DATETIME falls back to Asia/Singapore timezone when no facts", async () => {
+    const ctx = createMockCtx();
+    const fixedNow = new Date("2026-06-02T07:45:00Z");
+    const stores = createMockStores();
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
+    const dt = result.parameters.CURRENT_DATETIME as string;
+    expect(dt).toContain("2026-06-02");
+    expect(dt).toContain("Asia/Singapore");
+  });
+
+  it("CURRENT_DATETIME uses facts.timezone and shows shifted local date/hour for a distinct zone", async () => {
+    // 2026-06-02T07:45:00Z is 2026-06-02 03:45 in America/New_York (UTC-4 in EDT)
+    // which differs from both UTC (07:45) and Asia/Singapore (15:45).
+    // This guards that the builder actually reads facts.timezone, not just defaults it.
+    const ctx = createMockCtx();
+    const fixedNow = new Date("2026-06-02T07:45:00Z");
+    const stores = createMockStores({
+      businessFactsStore: {
+        get: vi.fn().mockResolvedValue({
+          timezone: "America/New_York",
+          businessName: "Glow Aesthetics",
+          locations: [{ name: "Main", address: "1 Orchard Rd" }],
+          openingHours: {},
+          services: [{ id: "s1", name: "Facial", description: "desc", durationMinutes: 30 }],
+          escalationContact: { name: "Team", channel: "whatsapp", address: "+65..." },
+          additionalFaqs: [],
+        }),
+      } as never,
+    });
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
+    const dt = result.parameters.CURRENT_DATETIME as string;
+    // Local New York date is still 2026-06-02 but hour is 03
+    expect(dt).toContain("2026-06-02");
+    expect(dt).toContain("03:45");
+    expect(dt).toContain("America/New_York");
+    // Must NOT contain Singapore timezone
+    expect(dt).not.toContain("Asia/Singapore");
+  });
+
+  it("CURRENT_DATETIME degrades gracefully when facts.timezone is an invalid IANA string", async () => {
+    // Invalid timezone strings like 'GMT+8', 'SGT', 'Singapore' cause Intl to throw
+    // RangeError. The builder must catch and fall back to 'Asia/Singapore' (fail-open).
+    const ctx = createMockCtx();
+    const fixedNow = new Date("2026-06-02T07:45:00Z");
+    const stores = createMockStores({
+      businessFactsStore: {
+        get: vi.fn().mockResolvedValue({
+          timezone: "SGT", // invalid IANA string
+          businessName: "Glow Aesthetics",
+          locations: [],
+          openingHours: {},
+          services: [],
+          escalationContact: { name: "Team", channel: "whatsapp", address: "+65..." },
+          additionalFaqs: [],
+        }),
+      } as never,
+    });
+    // Must not throw; must return a valid CURRENT_DATETIME with fallback timezone
+    const result = await alexBuilder(ctx, { ...config, now: () => fixedNow }, stores);
+    const dt = result.parameters.CURRENT_DATETIME as string;
+    expect(dt).toContain("2026-06-02");
+    // Falls back to Asia/Singapore
+    expect(dt).toContain("Asia/Singapore");
+  });
 });

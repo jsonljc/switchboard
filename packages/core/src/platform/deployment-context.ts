@@ -3,9 +3,9 @@ import type { TrustLevel } from "../skill-runtime/governance.js";
 export interface AgentPersona {
   businessName: string;
   tone: string;
-  qualificationCriteria?: string[];
-  disqualificationCriteria?: string[];
-  escalationRules?: string[];
+  qualificationCriteria?: string[] | Record<string, unknown>;
+  disqualificationCriteria?: string[] | Record<string, unknown>;
+  escalationRules?: string[] | Record<string, unknown>;
   bookingLink?: string;
   customInstructions?: string;
 }

@@ -91,4 +91,44 @@ describe("generateAvailableSlots", () => {
       expect(gapMinutes).toBeGreaterThanOrEqual(15);
     }
   });
+
+  it("generates multiple slots per day when bufferMinutes is non-finite (undefined coerced)", () => {
+    // Simulates the case where SlotQuery.bufferMinutes default was not applied and
+    // the value arrives as undefined coerced to number → NaN → Invalid Date → inner while exits after 1 slot.
+    const slots = generateAvailableSlots({
+      dateFrom: "2026-04-20T00:00:00+08:00",
+      dateTo: "2026-04-20T23:59:59+08:00",
+      durationMinutes: 30,
+      bufferMinutes: undefined as unknown as number,
+      businessHours,
+      busyPeriods: [],
+      calendarId: "primary",
+    });
+
+    expect(slots.length).toBeGreaterThan(1);
+    for (const slot of slots) {
+      expect(new Date(slot.start).getTime()).not.toBeNaN();
+      expect(new Date(slot.end).getTime()).not.toBeNaN();
+    }
+  });
+
+  it("produces consecutive slot starts 45 minutes apart when bufferMinutes is 15 and durationMinutes is 30", () => {
+    const slots = generateAvailableSlots({
+      dateFrom: "2026-04-20T00:00:00+08:00",
+      dateTo: "2026-04-20T23:59:59+08:00",
+      durationMinutes: 30,
+      bufferMinutes: 15,
+      businessHours,
+      busyPeriods: [],
+      calendarId: "primary",
+    });
+
+    expect(slots.length).toBeGreaterThan(1);
+    for (let i = 1; i < slots.length; i++) {
+      const prevStart = new Date(slots[i - 1]!.start).getTime();
+      const currStart = new Date(slots[i]!.start).getTime();
+      const gapMinutes = (currStart - prevStart) / 60_000;
+      expect(gapMinutes).toBe(45);
+    }
+  });
 });

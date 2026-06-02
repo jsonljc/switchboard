@@ -78,7 +78,7 @@ describe("resolvePersona", () => {
     });
   });
 
-  it("omits non-array criteria fields", () => {
+  it("omits primitive (string/number) criteria fields but preserves objects", () => {
     const result = resolvePersona({
       businessName: "Acme",
       tone: "professional",
@@ -87,5 +87,16 @@ describe("resolvePersona", () => {
     });
     expect(result?.qualificationCriteria).toBeUndefined();
     expect(result?.bookingLink).toBeUndefined();
+  });
+
+  it("preserves object-shaped criteria (seed-marketplace shape)", () => {
+    const result = resolvePersona({
+      businessName: "X",
+      qualificationCriteria: { ageRequirement: "21+" },
+      escalationRules: { medicalQuestions: true },
+    });
+    expect(result?.qualificationCriteria).toEqual({ ageRequirement: "21+" });
+    expect(result?.escalationRules).toEqual({ medicalQuestions: true });
+    expect(result?.disqualificationCriteria).toBeUndefined();
   });
 });

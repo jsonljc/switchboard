@@ -322,6 +322,50 @@ describe("AnthropicToolAdapter", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Temperature defaults — live path (no profile) vs explicit profile
+// ---------------------------------------------------------------------------
+
+describe("AnthropicToolAdapter.chatWithTools — temperature defaults", () => {
+  it("sends temperature 0.4 when no profile is provided", async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "Hello" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create: createMock } } as never);
+    await adapter.chatWithTools({ system: "s", messages: [], tools: [] });
+
+    expect(createMock).toHaveBeenCalledOnce();
+    const callArgs = createMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(callArgs["temperature"]).toBe(0.4);
+  });
+
+  it("sends the profile temperature when profile.temperature is explicitly set", async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "Hello" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create: createMock } } as never);
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [],
+      tools: [],
+      profile: {
+        model: "claude-sonnet-4-6",
+        maxTokens: 512,
+        temperature: 0.7,
+        timeoutMs: 30000,
+      },
+    });
+
+    expect(createMock).toHaveBeenCalledOnce();
+    const callArgs = createMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(callArgs["temperature"]).toBe(0.7);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Prompt caching — cache_control breakpoints on the STATIC prefix only.
 // Render order is tools -> system -> messages, so a breakpoint on the last tool
 // caches the tools block and a breakpoint on the system block caches tools+system.

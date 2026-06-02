@@ -45,6 +45,14 @@ parameters:
       Advisory context from successful booking patterns. May be empty
       when no high-confidence patterns have surfaced yet.
 
+  - name: CURRENT_DATETIME
+    type: string
+    required: false
+    description: >
+      Current date and time in the business timezone, injected by the builder.
+      Format: YYYY-MM-DD (Weekday) HH:MM TZ. Use this as the reference for
+      "today" and all date math — never guess the current date.
+
 tools:
   - crm-query
   - crm-write
@@ -197,6 +205,8 @@ After qualification, handle any objections and move toward booking.
 ### Phase 4: Book
 
 When the lead expresses readiness to book or schedule:
+
+Today is {{CURRENT_DATETIME}}. Use this as the reference for "today" and all date math — never guess the current date.
 
 1. Call `calendar-book.slots.query` with:
    - dateFrom: today's date (ISO 8601)

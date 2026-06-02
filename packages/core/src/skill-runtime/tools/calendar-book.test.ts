@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
 import type { SkillRequestContext } from "../types.js";
 
@@ -100,6 +101,12 @@ describe("createCalendarBookToolFactory", () => {
       contactStore: contactStore as never,
     });
     tool = factory({ ...TRUSTED_CTX, contactId: "ct_1" });
+  });
+
+  afterEach(() => {
+    // Reset the global metrics registry (exception-safe) — a metric test below
+    // points it at a spy; mirrors the outcomePatterns* test convention.
+    setMetrics(createInMemoryMetrics());
   });
 
   it("has id 'calendar-book'", () => {
@@ -350,6 +357,60 @@ describe("createCalendarBookToolFactory", () => {
     });
     expect(result.status).not.toBe("success");
     expect(bookingStore.create).not.toHaveBeenCalled();
+  });
+
+  describe("slots.query schema parse", () => {
+    it("applies bufferMinutes default (15) when not supplied in params", async () => {
+      let capturedQuery: unknown;
+      calendarProvider.listAvailableSlots.mockImplementation(async (query: unknown) => {
+        capturedQuery = query;
+        return [];
+      });
+
+      await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "x",
+        timezone: "Asia/Singapore",
+        // bufferMinutes intentionally omitted
+      });
+
+      expect((capturedQuery as { bufferMinutes: number }).bufferMinutes).toBe(15);
+    });
+
+    it("returns a recoverable failure (does not throw, does not call provider) on a malformed slots.query", async () => {
+      const result = await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-06-02",
+        dateTo: "2026-06-05",
+        durationMinutes: 0,
+        service: "x",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("INVALID_SLOT_QUERY");
+      expect(result.error?.retryable).toBe(true);
+      expect(result.error?.modelRemediation).toMatch(/durationMinutes/);
+      expect(calendarProvider.listAvailableSlots).not.toHaveBeenCalled();
+    });
+
+    it("increments the slotQueryZeroResult metric when the provider returns an empty array", async () => {
+      const metrics = createInMemoryMetrics();
+      const incSpy = vi.spyOn(metrics.slotQueryZeroResult, "inc");
+      setMetrics(metrics);
+      calendarProvider.listAvailableSlots.mockResolvedValue([]);
+
+      await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "botox",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(incSpy).toHaveBeenCalledWith({ orgId: "org_trusted", service: "botox" });
+    });
   });
 
   describe("slots.query failure paths", () => {
