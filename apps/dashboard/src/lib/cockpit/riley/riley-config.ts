@@ -3,10 +3,10 @@ import { RILEY_VARIANTS } from "@/components/cockpit/sprite/riley-variants";
 import type { SpriteVariantKey } from "@/components/cockpit/sprite/types";
 
 export const RILEY_ACCENT = {
-  base: "#3F8C86" /* teal — identity only, matches --agent-riley hsl(180 33% 40%) */,
-  deep: "#215451",
-  soft: "#C5DFDD",
-  paper: "#EBF5F4",
+  base: "hsl(var(--agent-riley))" /* teal — identity only */,
+  deep: "hsl(var(--agent-riley-deep))",
+  soft: "hsl(var(--agent-riley) / 0.30)",
+  paper: "hsl(var(--agent-riley-tint))",
 } as const;
 
 export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";
@@ -19,18 +19,18 @@ export const RILEY_MISSION_SUBTITLE = "Optimizing Meta Ads";
 // without re-deriving the color/pulse rules. In B.1, Riley renders Alex's
 // pill colors at runtime — this is the documented B.1 visual limitation.
 export function statusColor(statusKey: CockpitStatus, halted: boolean): string {
-  if (halted) return "#A03A2E";
+  if (halted) return "hsl(var(--destructive))";
   switch (statusKey) {
     case "WATCHING":
-      return "#3F7A36";
+      return "hsl(var(--positive))";
     case "REVIEWING":
-      return "#B8782E";
+      return "hsl(var(--action))";
     case "WAITING":
-      return "#B8782E";
+      return "hsl(var(--action))";
     case "HALTED":
-      return "#A03A2E";
+      return "hsl(var(--destructive))";
     default:
-      return "#A39786";
+      return "var(--ink-4)";
   }
 }
 

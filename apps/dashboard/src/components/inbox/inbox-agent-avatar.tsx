@@ -2,13 +2,16 @@ import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
 import { SpriteChip } from "@/components/cockpit/sprite/sprite-chip";
 import type { SpriteVariantKey, VariantBundle } from "@/components/cockpit/sprite/types";
 import type { AccentTokens } from "@/components/cockpit/tokens";
-import { ALEX_VARIANTS, DEFAULT_ALEX_VARIANT } from "@/lib/cockpit/alex-config";
+import {
+  ALEX_VARIANTS,
+  DEFAULT_ALEX_VARIANT,
+  ALEX_APPROVAL_ACCENT,
+} from "@/lib/cockpit/alex-config";
 import {
   RILEY_ACCENT,
   RILEY_VARIANTS,
   DEFAULT_RILEY_VARIANT,
 } from "@/lib/cockpit/riley/riley-config";
-import { ALEX_APPROVAL_ACCENT } from "@/components/cockpit/approval-card";
 
 interface AgentSpriteConfig {
   /** Sprite bundle, or null for agents without a sprite (Mira → letter disc). */

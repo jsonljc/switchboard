@@ -1,26 +1,31 @@
+// Cockpit token family `T` — now fully themeable: every value resolves through
+// a globals.css CSS variable (T2 unification, spec §4.4). Triple-form globals
+// tokens (--action, --positive, …) are hsl()-wrapped here; already-wrapped
+// editorial tokens (--ink*, --hair*) are referenced bare. Consumed in inline
+// styles, e.g. `style={{ color: T.ink }}`.
 export const T = {
-  bg: "#FAF8F2",
-  paper: "#FFFFFF",
-  ink: "#0E0C0A",
-  ink2: "#3A332B",
-  ink3: "#6B6052",
-  ink4: "#A39786",
-  ink5: "#C8BEAE",
-  hair: "rgba(14, 12, 10, 0.08)",
-  hairSoft: "rgba(14, 12, 10, 0.04)",
-  amber: "#B8782E",
-  amberDeep: "#7C4F1C",
-  amberSoft: "#F1E2C2",
-  amberPaper: "#FBF1D6",
-  green: "#3F7A36",
-  red: "#A03A2E",
-  blue: "#3A5A80",
+  bg: "hsl(var(--canvas))",
+  paper: "hsl(var(--surface))",
+  ink: "var(--ink)",
+  ink2: "var(--ink-2)",
+  ink3: "var(--ink-3)",
+  ink4: "var(--ink-4)",
+  // token-debt: no 5th editorial ink tier yet — maps to --ink-4 until the T5
+  // neutral-ramp slice introduces the full --palette-ink-* ramp.
+  ink5: "var(--ink-4)",
+  hair: "var(--hair)",
+  hairSoft: "var(--hair-soft)",
+  amber: "hsl(var(--action))",
+  amberDeep: "hsl(var(--action-hover))",
+  amberSoft: "hsl(var(--action-subtle))",
+  amberPaper: "hsl(var(--action-tint))",
+  green: "hsl(var(--positive))",
+  red: "hsl(var(--destructive))",
 } as const;
 
 export type CockpitToken = keyof typeof T;
 
-// Shared accent shape for per-agent cockpit theming. Used by <ApprovalCard>
-// (B.3) and <ROIBar> / <KPIStrip> (B.2b). Each agent exports its own
+// Shared accent shape for per-agent cockpit theming. Each agent exports its own
 // `*_ACCENT` constant of this shape (e.g. ALEX_APPROVAL_ACCENT, RILEY_ACCENT).
 export interface AccentTokens {
   base: string;
