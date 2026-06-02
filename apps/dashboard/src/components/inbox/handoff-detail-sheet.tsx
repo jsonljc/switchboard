@@ -18,6 +18,7 @@ const REASON_LABELS: Record<HandoffReason, string> = {
   complex_objection: "Tricky objection",
   negative_sentiment: "Tone turned",
   compliance_concern: "Compliance question",
+  medical_safety: "Medical red flag",
   booking_failure: "Booking didn't go through",
   escalation_timeout: "Waiting too long",
   missing_knowledge: "Needs your knowledge",

@@ -6,6 +6,7 @@ export const HandoffReasonSchema = z.enum([
   "complex_objection",
   "negative_sentiment",
   "compliance_concern",
+  "medical_safety",
   "booking_failure",
   "escalation_timeout",
   "missing_knowledge",
