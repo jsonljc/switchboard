@@ -8,7 +8,7 @@ function Host() {
   const methods = useForm<BusinessFactsForm>({ defaultValues: emptyBusinessFacts() });
   return (
     <FormProvider {...methods}>
-      <ServicesSection control={methods.control} register={methods.register} />
+      <ServicesSection />
     </FormProvider>
   );
 }

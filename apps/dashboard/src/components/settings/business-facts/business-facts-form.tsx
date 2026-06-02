@@ -38,7 +38,6 @@ export function BusinessFactsForm({
   const {
     register,
     handleSubmit,
-    control,
     formState: { errors },
   } = methods;
 
@@ -83,11 +82,11 @@ export function BusinessFactsForm({
           </CardContent>
         </Card>
 
-        <HoursSection control={control} register={register} />
-        <LocationsSection control={control} register={register} />
-        <ServicesSection control={control} register={register} />
-        <ContactPoliciesSection control={control} register={register} />
-        <FaqsSection control={control} register={register} />
+        <HoursSection />
+        <LocationsSection />
+        <ServicesSection />
+        <ContactPoliciesSection />
+        <FaqsSection />
 
         <div className="sticky bottom-0 flex justify-end bg-background/80 backdrop-blur py-3">
           <Button type="submit" disabled={isSaving}>

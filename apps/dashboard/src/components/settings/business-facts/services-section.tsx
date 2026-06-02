@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  useFieldArray,
-  useFormContext,
-  Controller,
-  type Control,
-  type UseFormRegister,
-} from "react-hook-form";
+import { useFieldArray, useFormContext, Controller } from "react-hook-form";
 import { Plus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -24,13 +18,10 @@ import {
 } from "@/components/ui/select";
 import { type BusinessFactsForm, emptyService } from "./scaffold";
 
-interface ServicesSectionProps {
-  control: Control<BusinessFactsForm>;
-  register: UseFormRegister<BusinessFactsForm>;
-}
-
-export function ServicesSection({ control, register }: ServicesSectionProps) {
+export function ServicesSection() {
   const {
+    control,
+    register,
     formState: { errors },
   } = useFormContext<BusinessFactsForm>();
   const { fields, append, remove } = useFieldArray({ control, name: "services" });

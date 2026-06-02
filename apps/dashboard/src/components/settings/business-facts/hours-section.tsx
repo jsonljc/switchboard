@@ -1,19 +1,15 @@
 "use client";
 
-import { Controller, type Control, type UseFormRegister } from "react-hook-form";
+import { Controller, useFormContext } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { WEEKDAYS, type BusinessFactsForm } from "./scaffold";
 
-interface HoursSectionProps {
-  control: Control<BusinessFactsForm>;
-  register: UseFormRegister<BusinessFactsForm>;
-}
-
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function HoursSection({ control, register }: HoursSectionProps) {
+export function HoursSection() {
+  const { control, register } = useFormContext<BusinessFactsForm>();
   return (
     <Card>
       <CardHeader>

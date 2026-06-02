@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFormContext, Controller, type Control, type UseFormRegister } from "react-hook-form";
+import { useFormContext, Controller } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -16,13 +16,10 @@ import {
 } from "@/components/ui/select";
 import { type BusinessFactsForm } from "./scaffold";
 
-interface ContactPoliciesSectionProps {
-  control: Control<BusinessFactsForm>;
-  register: UseFormRegister<BusinessFactsForm>;
-}
-
-export function ContactPoliciesSection({ control, register }: ContactPoliciesSectionProps) {
+export function ContactPoliciesSection() {
   const {
+    control,
+    register,
     formState: { errors },
   } = useFormContext<BusinessFactsForm>();
   const [openPolicies, setOpenPolicies] = useState(false);

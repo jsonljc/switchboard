@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useFieldArray, useFormContext, type Control, type UseFormRegister } from "react-hook-form";
+import { useFieldArray, useFormContext } from "react-hook-form";
 import { Plus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -10,13 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { type BusinessFactsForm } from "./scaffold";
 
-interface FaqsSectionProps {
-  control: Control<BusinessFactsForm>;
-  register: UseFormRegister<BusinessFactsForm>;
-}
-
-export function FaqsSection({ control, register }: FaqsSectionProps) {
+export function FaqsSection() {
   const {
+    control,
+    register,
     formState: { errors },
   } = useFormContext<BusinessFactsForm>();
   const { fields, append, remove } = useFieldArray({ control, name: "additionalFaqs" });
