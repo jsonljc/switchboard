@@ -10,6 +10,11 @@ describe("BusinessFactsForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /save business facts/i }));
     await waitFor(() => expect(onSubmit).not.toHaveBeenCalled());
     expect(screen.getAllByText(/required|expected|at least/i).length).toBeGreaterThan(0);
+    // Section-level errors: location name/address + service name/description +
+    // escalation name/address + businessName = 7 "at least 1 character" errors
+    await waitFor(() =>
+      expect(screen.getAllByText(/at least 1 character/i).length).toBeGreaterThan(3),
+    );
   });
 
   it("submits serialized facts when required fields are filled", async () => {

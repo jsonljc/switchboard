@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useFieldArray, Controller, type Control, type UseFormRegister } from "react-hook-form";
+import {
+  useFieldArray,
+  useFormContext,
+  Controller,
+  type Control,
+  type UseFormRegister,
+} from "react-hook-form";
 import { Plus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -24,6 +30,9 @@ interface ServicesSectionProps {
 }
 
 export function ServicesSection({ control, register }: ServicesSectionProps) {
+  const {
+    formState: { errors },
+  } = useFormContext<BusinessFactsForm>();
   const { fields, append, remove } = useFieldArray({ control, name: "services" });
   const [openAdvanced, setOpenAdvanced] = useState<Record<number, boolean>>({});
 
@@ -57,6 +66,9 @@ export function ServicesSection({ control, register }: ServicesSectionProps) {
                 placeholder="e.g. Botox treatment"
                 {...register(`services.${i}.name`)}
               />
+              {errors.services?.[i]?.name && (
+                <p className="text-xs text-destructive">{errors.services[i]?.name?.message}</p>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -67,6 +79,11 @@ export function ServicesSection({ control, register }: ServicesSectionProps) {
                 rows={2}
                 {...register(`services.${i}.description`)}
               />
+              {errors.services?.[i]?.description && (
+                <p className="text-xs text-destructive">
+                  {errors.services[i]?.description?.message}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

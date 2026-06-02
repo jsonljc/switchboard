@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Controller, type Control, type UseFormRegister } from "react-hook-form";
+import { useFormContext, Controller, type Control, type UseFormRegister } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,9 @@ interface ContactPoliciesSectionProps {
 }
 
 export function ContactPoliciesSection({ control, register }: ContactPoliciesSectionProps) {
+  const {
+    formState: { errors },
+  } = useFormContext<BusinessFactsForm>();
   const [openPolicies, setOpenPolicies] = useState(false);
 
   return (
@@ -37,6 +40,9 @@ export function ContactPoliciesSection({ control, register }: ContactPoliciesSec
             placeholder="e.g. Front desk"
             {...register("escalationContact.name")}
           />
+          {errors.escalationContact?.name && (
+            <p className="text-xs text-destructive">{errors.escalationContact.name.message}</p>
+          )}
         </div>
 
         <div className="space-y-1">
@@ -67,6 +73,9 @@ export function ContactPoliciesSection({ control, register }: ContactPoliciesSec
             placeholder="Phone number, email, or username"
             {...register("escalationContact.address")}
           />
+          {errors.escalationContact?.address && (
+            <p className="text-xs text-destructive">{errors.escalationContact.address.message}</p>
+          )}
         </div>
 
         <Button

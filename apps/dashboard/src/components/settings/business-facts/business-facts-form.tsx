@@ -49,7 +49,7 @@ export function BusinessFactsForm({
         className="space-y-6"
       >
         {malformed && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-lg border border-caution/30 bg-caution-subtle px-4 py-3 text-sm text-caution">
             Your saved business facts were invalid and weren&apos;t loaded — please re-enter and
             save.
           </div>

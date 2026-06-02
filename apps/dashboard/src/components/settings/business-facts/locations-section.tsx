@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFieldArray, type Control, type UseFormRegister } from "react-hook-form";
+import { useFieldArray, useFormContext, type Control, type UseFormRegister } from "react-hook-form";
 import { Plus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -13,10 +13,12 @@ import { type BusinessFactsForm, emptyLocation } from "./scaffold";
 interface LocationsSectionProps {
   control: Control<BusinessFactsForm>;
   register: UseFormRegister<BusinessFactsForm>;
-  errors?: BusinessFactsForm["locations"];
 }
 
 export function LocationsSection({ control, register }: LocationsSectionProps) {
+  const {
+    formState: { errors },
+  } = useFormContext<BusinessFactsForm>();
   const { fields, append, remove } = useFieldArray({ control, name: "locations" });
   const [openAdvanced, setOpenAdvanced] = useState<Record<number, boolean>>({});
 
@@ -50,6 +52,9 @@ export function LocationsSection({ control, register }: LocationsSectionProps) {
                 placeholder="e.g. Orchard Branch"
                 {...register(`locations.${i}.name`)}
               />
+              {errors.locations?.[i]?.name && (
+                <p className="text-xs text-destructive">{errors.locations[i]?.name?.message}</p>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -60,6 +65,9 @@ export function LocationsSection({ control, register }: LocationsSectionProps) {
                 rows={2}
                 {...register(`locations.${i}.address`)}
               />
+              {errors.locations?.[i]?.address && (
+                <p className="text-xs text-destructive">{errors.locations[i]?.address?.message}</p>
+              )}
             </div>
 
             <Button
