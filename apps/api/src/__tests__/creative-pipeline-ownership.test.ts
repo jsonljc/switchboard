@@ -1,20 +1,22 @@
 /**
- * Cross-org isolation for the Mira draft-review path.
+ * Cross-org isolation for the Mira draft-review path — at the HTTP route boundary.
  *
- * The Mira `/mira/creatives/[id]` detail page reuses the existing creative-pipeline
+ * The Mira `/mira/creatives/[id]` detail page reuses the creative-pipeline
  * endpoints — GET `/creative-jobs/:id` (read the draft) and POST
- * `/creative-jobs/:id/approve` (continue/stop). Both already 404 on cross-org
- * access via the route-level `job.organizationId !== orgId` guard
- * (`creative-pipeline.ts`). These tests LOCK that contract for the Mira review
- * path so a later refactor cannot silently leak another org's draft or let one
- * org continue/stop another org's job.
+ * `/creative-jobs/:id/approve` (continue/stop).
  *
- * The single most important assertion here: a cross-org continue/stop returns
- * 404 AND leaves the row unmutated (no `updateMany`, no Inngest event fired).
+ * GET stays a direct, route-owned read: its `job.organizationId !== orgId`
+ * guard is the only thing between an intruder and the draft, so these tests lock
+ * it directly.
  *
- * No real Prisma in CI — we mount `creativePipelineRoutes` on a Fastify app with
- * a stateful mock `prisma.creativeJob` (keyed by id) and a spied Inngest client,
- * so we can prove the mutating store methods are never reached for an intruder.
+ * POST /approve now flows through PlatformIngress (P2a-ii) — the ownership check
+ * and any mutation live in the `creative.job.*` workflow (see
+ * `creative-job-decision-workflow.test.ts`, which locks "cross-org → no
+ * mutation, no event"). At the ROUTE boundary the security-relevant guarantees
+ * are: (1) the route forwards the AUTHENTICATED org to `submit` — never an
+ * attacker-influenced value, so an intruder can never act as the owner; and
+ * (2) the route performs NO direct DB write or Inngest send of its own (no
+ * mutating bypass path). These tests lock both.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify from "fastify";
@@ -82,10 +84,10 @@ function makeOwnedJob() {
 
 interface OwnershipTestApp {
   app: FastifyInstance;
-  /** Spy proving NO mutating write ever ran. */
+  /** Spy proving NO direct mutating write ever ran from the route. */
   updateMany: ReturnType<typeof vi.fn>;
-  /** The mutable row backing `findUnique` — assert it is byte-identical after intruder calls. */
-  row: ReturnType<typeof makeOwnedJob>;
+  /** Spy ingress: records what org/intent/params the route forwards. */
+  submit: ReturnType<typeof vi.fn>;
 }
 
 async function buildOwnershipApp(): Promise<OwnershipTestApp> {
@@ -97,26 +99,17 @@ async function buildOwnershipApp(): Promise<OwnershipTestApp> {
     return reply.code(statusCode).send({ error: message, statusCode });
   });
 
-  // Auth is simulated by an x-org-id header → organizationIdFromAuth, mirroring
-  // the dev-auth fallback used by the agent-home routes. No body-org affordance.
-  app.decorateRequest("organizationIdFromAuth", undefined);
-  app.addHook("preHandler", async (request, reply) => {
-    const org = request.headers["x-org-id"];
-    if (typeof org !== "string" || !org.trim()) {
-      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
-    }
-    request.organizationIdFromAuth = org.trim();
-  });
+  // Auth via x-org-id header → organizationIdFromAuth (the route plugin's own
+  // buildDevAuthFallback handles this when authDisabled is true).
+  app.decorate("authDisabled", true);
 
-  const row = makeOwnedJob();
-
-  // `findUnique` returns the row by id REGARDLESS of org — the route is solely
+  // `findUnique` returns the row by id REGARDLESS of org — the GET route is solely
   // responsible for the org check. This is exactly the shape that makes the
   // route-level guard the only thing standing between an intruder and the data.
+  const row = makeOwnedJob();
   const findUnique = vi.fn(
     async ({ where, select }: { where: { id: string }; select?: Record<string, boolean> }) => {
       if (where.id !== row.id) return null;
-      // assertMode() does a select:{mode:true} probe before UGC writes; honor it.
       if (select && Object.keys(select).length > 0) {
         const projected: Record<string, unknown> = {};
         for (const key of Object.keys(select))
@@ -127,39 +120,25 @@ async function buildOwnershipApp(): Promise<OwnershipTestApp> {
     },
   );
 
-  // The mutating path. If this is EVER called for an intruder, the test fails.
-  const updateMany = vi.fn(
-    async ({
-      where,
-      data,
-    }: {
-      where: { id: string; organizationId: string };
-      data: Record<string, unknown>;
-    }) => {
-      if (where.id === row.id && where.organizationId === row.organizationId) {
-        Object.assign(row, data);
-        return { count: 1 };
-      }
-      return { count: 0 };
-    },
-  );
+  // A direct mutating write. After P2a-ii the route must NEVER call this — all
+  // mutation flows through the governed workflow. If it is EVER called, a
+  // mutating bypass path has regressed.
+  const updateMany = vi.fn(async () => ({ count: 1 }));
 
-  const findFirstOrThrow = vi.fn(
-    async ({ where }: { where: { id: string; organizationId: string } }) => {
-      if (where.id === row.id && where.organizationId === row.organizationId) return { ...row };
-      throw new Error("Record not found");
-    },
-  );
-
-  const prisma = {
-    creativeJob: { findUnique, updateMany, findFirstOrThrow },
-  };
-
+  const prisma = { creativeJob: { findUnique, updateMany } };
   app.decorate("prisma", prisma as unknown as never);
+
+  // Spy ingress — records the submit payload so we can assert the route forwards
+  // the authenticated org. Default resolution: a successful queued decision.
+  const submit = vi.fn().mockResolvedValue({
+    ok: true,
+    result: { outcome: "queued", outputs: { job: { ...row }, action: "approved" } },
+  });
+  app.decorate("platformIngress", { submit } as never);
 
   await app.register(creativePipelineRoutes, { prefix: "/api/marketplace" });
 
-  return { app, updateMany, row };
+  return { app, updateMany, submit };
 }
 
 describe("creative-job ownership isolation (Mira review path)", () => {
@@ -174,6 +153,7 @@ describe("creative-job ownership isolation (Mira review path)", () => {
     await ctx.app.close();
   });
 
+  // ── GET: route-owned direct read, route-owned org guard ─────────────────────
   it("GET /creative-jobs/:id from a different org → 404 (no data leak)", async () => {
     const res = await ctx.app.inject({
       method: "GET",
@@ -181,40 +161,7 @@ describe("creative-job ownership isolation (Mira review path)", () => {
       headers: { "x-org-id": INTRUDER },
     });
     expect(res.statusCode).toBe(404);
-    // The intruder must not see the owner's draft contents.
     expect(JSON.stringify(res.json())).not.toContain("Owner's secret draft");
-  });
-
-  it("POST /approve {continue} from a different org → 404 and does NOT mutate or fire events", async () => {
-    const before = JSON.stringify(ctx.row);
-    const res = await ctx.app.inject({
-      method: "POST",
-      url: APPROVE_PATH,
-      headers: { "x-org-id": INTRUDER, "content-type": "application/json" },
-      payload: { action: "continue" },
-    });
-    expect(res.statusCode).toBe(404);
-    // No mutating write, no Inngest event — the job is untouched.
-    expect(ctx.updateMany).not.toHaveBeenCalled();
-    expect(inngestSend).not.toHaveBeenCalled();
-    expect(JSON.stringify(ctx.row)).toBe(before);
-    expect(ctx.row.stoppedAt).toBeNull();
-    expect(ctx.row.currentStage).toBe("hooks");
-  });
-
-  it("POST /approve {stop} from a different org → 404 and does NOT stop the job", async () => {
-    const before = JSON.stringify(ctx.row);
-    const res = await ctx.app.inject({
-      method: "POST",
-      url: APPROVE_PATH,
-      headers: { "x-org-id": INTRUDER, "content-type": "application/json" },
-      payload: { action: "stop" },
-    });
-    expect(res.statusCode).toBe(404);
-    expect(ctx.updateMany).not.toHaveBeenCalled();
-    expect(inngestSend).not.toHaveBeenCalled();
-    expect(ctx.row.stoppedAt).toBeNull();
-    expect(JSON.stringify(ctx.row)).toBe(before);
   });
 
   it("owner CAN read their own job", async () => {
@@ -228,19 +175,81 @@ describe("creative-job ownership isolation (Mira review path)", () => {
     expect(res.json().job.productDescription).toBe("Owner's secret draft");
   });
 
-  it("owner CAN stop their own job (and the row is mutated)", async () => {
+  // ── POST /approve: governed via ingress; org is never spoofable ─────────────
+  it("POST /approve {continue} from a different org → forwards the INTRUDER org to ingress (never the owner's), and never writes directly", async () => {
+    // The workflow rejects org mismatch; simulate that failed outcome here.
+    ctx.submit.mockResolvedValue({
+      ok: true,
+      result: {
+        outcome: "failed",
+        outputs: {},
+        error: { code: "CREATIVE_JOB_NOT_FOUND", message: "Creative job not found" },
+      },
+    });
+
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: APPROVE_PATH,
+      headers: { "x-org-id": INTRUDER, "content-type": "application/json" },
+      payload: { action: "continue" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    // The route forwarded the caller's authenticated org — NOT the owner's.
+    const arg = ctx.submit.mock.calls[0]![0];
+    expect(arg.organizationId).toBe(INTRUDER);
+    expect(arg.intent).toBe("creative.job.continue");
+    expect(arg.parameters).toMatchObject({ jobId: OWNED_JOB_ID });
+    // No direct mutating bypass path.
+    expect(ctx.updateMany).not.toHaveBeenCalled();
+    expect(inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("POST /approve {stop} from a different org → forwards INTRUDER org with the stop intent, no direct write", async () => {
+    ctx.submit.mockResolvedValue({
+      ok: true,
+      result: {
+        outcome: "failed",
+        outputs: {},
+        error: { code: "CREATIVE_JOB_NOT_FOUND", message: "Creative job not found" },
+      },
+    });
+
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: APPROVE_PATH,
+      headers: { "x-org-id": INTRUDER, "content-type": "application/json" },
+      payload: { action: "stop" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    const arg = ctx.submit.mock.calls[0]![0];
+    expect(arg.organizationId).toBe(INTRUDER);
+    expect(arg.intent).toBe("creative.job.stop");
+    expect(ctx.updateMany).not.toHaveBeenCalled();
+    expect(inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("owner stop → route forwards the OWNER org + stop intent and maps the governed result (no direct write)", async () => {
+    ctx.submit.mockResolvedValue({
+      ok: true,
+      result: { outcome: "queued", outputs: { job: makeOwnedJob(), action: "stopped" } },
+    });
+
     const res = await ctx.app.inject({
       method: "POST",
       url: APPROVE_PATH,
       headers: { "x-org-id": OWNER, "content-type": "application/json" },
       payload: { action: "stop" },
     });
+
     expect(res.statusCode).toBe(200);
     expect(res.json().action).toBe("stopped");
-    // Owner's write went through — proves the no-mutation result above is real
-    // isolation, not a globally-inert mock.
-    expect(ctx.updateMany).toHaveBeenCalledTimes(1);
-    expect(ctx.row.stoppedAt).not.toBeNull();
-    expect(inngestSend).toHaveBeenCalled();
+    const arg = ctx.submit.mock.calls[0]![0];
+    expect(arg.organizationId).toBe(OWNER);
+    expect(arg.intent).toBe("creative.job.stop");
+    // The route itself never wrote — the governed workflow owns the mutation.
+    expect(ctx.updateMany).not.toHaveBeenCalled();
+    expect(inngestSend).not.toHaveBeenCalled();
   });
 });
