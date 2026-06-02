@@ -38,6 +38,7 @@ export function TestCenter({
   const [expandedAnnotation, setExpandedAnnotation] = useState<string>();
   const [promptsCollapsed, setPromptsCollapsed] = useState(false);
   const [showZeroTestGate, setShowZeroTestGate] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   const testedIds = new Set(responses.map((r) => r.promptId));
   const testedCount = testedIds.size;
@@ -267,19 +268,32 @@ export function TestCenter({
         style={{ backgroundColor: "var(--sw-surface-raised)", borderColor: "var(--sw-border)" }}
       >
         {showZeroTestGate ? (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <p className="text-[14px]" style={{ color: "var(--sw-text-secondary)" }}>
-              You haven&apos;t tested Alex yet.
+              You haven&apos;t tested Alex yet — type <strong>go live</strong> to launch a
+              money-spending agent untested.
             </p>
             <button
-              onClick={() => setShowZeroTestGate(false)}
+              onClick={() => {
+                setShowZeroTestGate(false);
+                setConfirmText("");
+              }}
               className="text-[14px] font-medium"
               style={{ color: "var(--sw-accent)" }}
             >
               Test first
             </button>
+            <input
+              aria-label="Type go live to confirm launching without testing"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="go live"
+              className="h-[40px] rounded-lg border px-3 text-[14px]"
+              style={{ borderColor: "var(--sw-border)", backgroundColor: "var(--sw-surface)" }}
+            />
             <Button
               onClick={onAdvance}
+              disabled={confirmText.trim().toLowerCase() !== "go live"}
               className="h-[40px] rounded-lg px-4 text-[14px]"
               style={{ backgroundColor: "var(--sw-text-muted)", color: "white" }}
             >
