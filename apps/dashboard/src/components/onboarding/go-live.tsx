@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle2, XCircle, AlertCircle, Loader2, Zap } from "lucide-react";
 import { AgentMark } from "@/components/character/agent-mark";
 import { ChannelConnectCard } from "./channel-connect-card";
@@ -71,6 +72,15 @@ function AdvisoryCheckRow({ check }: { check: ReadinessCheck }) {
         <p className="ml-6 text-[13px]" style={{ color: "var(--sw-text-muted)" }}>
           {check.message}
         </p>
+      )}
+      {check.id === "business-facts-present" && check.status === "fail" && (
+        <Link
+          href="/settings/business-facts"
+          className="ml-6 mt-1 inline-block text-[13px]"
+          style={{ color: "var(--sw-accent)" }}
+        >
+          Add business facts →
+        </Link>
       )}
     </div>
   );

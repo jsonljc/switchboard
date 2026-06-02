@@ -595,8 +595,9 @@ function checkAlexSkillPackSeeded(ctx: ReadinessContext): ReadinessCheck {
 function checkBusinessFactsPresent(ctx: ReadinessContext): ReadinessCheck {
   const id = "business-facts-present";
   const label = "Business facts entered";
-  // Non-blocking: there is no live operator editor yet, so a hard gate would
-  // deadlock go-live. Surfaces the gap without blocking activation/resume.
+  // Advisory by design: the operator business-facts editor now exists
+  // (/settings/business-facts), but we keep this non-blocking until adoption is
+  // proven so a real org without facts is never hard-blocked at go-live.
   const blocking = false;
   if (ctx.businessFactsStatus === "present") {
     return {

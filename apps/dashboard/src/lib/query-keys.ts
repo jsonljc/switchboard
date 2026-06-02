@@ -108,6 +108,8 @@ export const scopedKeys = (orgId: string) => ({
     trust: (id: string) => [orgId, "marketplace", "trust", id] as const,
     trustProgression: (id: string) => [orgId, "marketplace", "trust-progression", id] as const,
     deployments: () => [orgId, "marketplace", "deployments"] as const,
+    businessFacts: (deploymentId: string) =>
+      [orgId, "marketplace", "business-facts", deploymentId] as const,
     deploymentForModule: (moduleId: string) =>
       [orgId, "marketplace", "deployment-for-module", moduleId] as const,
     faqDrafts: (deploymentId: string) =>

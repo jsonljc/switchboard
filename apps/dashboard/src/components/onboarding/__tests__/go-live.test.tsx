@@ -152,6 +152,28 @@ describe("GoLive", () => {
     expect(screen.getByText("Connection failed")).toBeTruthy();
   });
 
+  it("renders a link to the business-facts editor when the advisory check fails", () => {
+    mockReadiness.mockReturnValue({
+      data: {
+        ready: false,
+        checks: [
+          {
+            id: "business-facts-present",
+            label: "Business facts entered",
+            blocking: false,
+            status: "fail",
+            message:
+              "Business facts not set yet — Alex will escalate hours/pricing questions until added",
+          },
+        ],
+      },
+      isLoading: false,
+    });
+    render(<GoLive {...defaultProps()} />);
+    const link = screen.getByRole("link", { name: /add business facts/i });
+    expect(link).toHaveAttribute("href", "/settings/business-facts");
+  });
+
   describe("provision statusDetail surfacing (Task 11)", () => {
     // These tests assert that when the parent has translated a non-active
     // provision status into a friendly message via provisionStatusMessage(),
