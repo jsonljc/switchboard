@@ -14,8 +14,8 @@ describe("MetricsViewModel B.2b tiles + roi optional shape", () => {
     const roi: RoiBar = {
       degraded: true,
       degradedHint: "",
-      label: "cost per lead",
-      comparator: { value: "$4 per lead", target: "target $5" },
+      label: "cost per booked",
+      comparator: { value: "$4 per booked", target: "target $5" },
     };
     const partial: Partial<MetricsViewModel> = { roi };
     expect(partial.roi).toEqual(roi);
