@@ -20,9 +20,10 @@ import { join, relative, sep } from "node:path";
  *  1. Routes R: enumerate `app/api/dashboard/**\/route.ts`; the path between
  *     `app/api/dashboard/` and `/route.ts` is the route template, split into
  *     segments with `[seg]` dynamic segments normalized to the wildcard `:p`.
- *  2. Browser fetch paths F: scan browser source (hooks, components, app) —
- *     excluding the proxies themselves, the server-side api-client, tests, and
- *     middleware — for STRING/TEMPLATE LITERALS beginning `/api/dashboard/`.
+ *  2. Browser fetch paths F: scan browser source (hooks, components, app, lib) —
+ *     excluding the proxies themselves, the server-side api-client (lib/api-client,
+ *     which calls the backend, not the proxy), tests, and middleware — for
+ *     STRING/TEMPLATE LITERALS beginning `/api/dashboard/`.
  *     For each, take the STATIC PREFIX: the substring after `/api/dashboard/`
  *     up to (but not including) the first `${`, `?`, backtick, or quote, with a
  *     trailing `/` trimmed. (Conservative: a parametrized tail like
@@ -115,7 +116,10 @@ function extractStaticPrefixes(source: string): string[] {
         if (at !== -1 && at < end) end = at;
       }
       const prefix = rest.slice(0, end).replace(/\/$/, "");
-      if (prefix !== "") prefixes.push(prefix);
+      // Keep only well-formed path prefixes. Backtick-wrapped doc references such
+      // as `/api/dashboard/*` (markdown code spans in JSDoc) pass the quote-guard
+      // above, so reject any prefix carrying a non-path char (e.g. the `*` glob).
+      if (prefix !== "" && /^[\w:/.-]+$/.test(prefix)) prefixes.push(prefix);
     }
     idx = source.indexOf(MARKER, from);
   }
@@ -129,7 +133,7 @@ interface FetchPath {
 }
 
 function enumerateFetchPaths(): FetchPath[] {
-  const roots = ["hooks", "components", "app"].map((r) => join(SRC_DIR, r));
+  const roots = ["hooks", "components", "app", "lib"].map((r) => join(SRC_DIR, r));
   const files = roots.flatMap(walk);
   const byPrefix = new Map<string, string>();
   for (const file of files) {
