@@ -14,6 +14,9 @@ import {
 // tool definitions and outgoing message history (tool_use blocks).
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
+// conservative default for the live frontline agent when the router is off;
+// router sets per-tier temps when enabled
+const DEFAULT_TEMPERATURE = 0.4;
 const PROVIDER = "anthropic";
 
 // Anthropic tool names must match ^[a-zA-Z0-9_-]{1,128}$. Internally the
@@ -146,9 +149,7 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
       system: [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }],
       messages: anthropicMessages,
       tools: anthropicTools,
-      ...(params.profile?.temperature !== undefined && {
-        temperature: params.profile.temperature,
-      }),
+      temperature: params.profile?.temperature ?? DEFAULT_TEMPERATURE,
     });
 
     // Translate content blocks. Unknown block types MUST surface as a typed
