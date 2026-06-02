@@ -5,7 +5,7 @@ import type {
   DueScheduledFollowUp,
 } from "@switchboard/core";
 
-const MAX_ATTEMPTS = 3;
+const MAX_SEND_ATTEMPTS = 3;
 
 export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
   constructor(private readonly prisma: PrismaClient) {}
@@ -26,6 +26,8 @@ export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
         templateIntentClass: input.templateIntentClass,
         dueAt: input.dueAt,
         dedupeKey: input.dedupeKey,
+        touchNumber: input.touchNumber ?? 1,
+        cadenceId: input.cadenceId ?? null,
         status: "pending",
       },
       select: { id: true },
@@ -49,7 +51,7 @@ export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
         status: "pending",
         dueAt: { lte: now },
         OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }],
-        attempts: { lt: MAX_ATTEMPTS },
+        attempts: { lt: MAX_SEND_ATTEMPTS },
       },
       orderBy: { dueAt: "asc" },
       take: limit,
@@ -58,10 +60,18 @@ export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
         organizationId: true,
         contactId: true,
         conversationThreadId: true,
+        sessionId: true,
+        deploymentId: true,
+        workUnitId: true,
         channel: true,
-        templateIntentClass: true,
+        jurisdiction: true,
         reason: true,
+        note: true,
+        templateIntentClass: true,
         attempts: true,
+        dueAt: true,
+        touchNumber: true,
+        cadenceId: true,
       },
     });
   }
@@ -79,6 +89,14 @@ export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
     await this.prisma.scheduledFollowUp.update({
       where: { id },
       data: { status: "skipped", skipReason: reason },
+    });
+  }
+
+  async markDeferred(id: string, reason: string, nextRetryAt: Date): Promise<void> {
+    // route-governance: store-mutation-deferred — single-row id-scoped update; org-scoping tracked for #643.
+    await this.prisma.scheduledFollowUp.update({
+      where: { id },
+      data: { status: "pending", skipReason: reason, nextRetryAt },
     });
   }
 

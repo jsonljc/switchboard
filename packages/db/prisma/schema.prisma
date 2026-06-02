@@ -2051,6 +2051,8 @@ model ScheduledFollowUp {
   skipReason           String?
   lastError            String?
   nextRetryAt          DateTime?
+  touchNumber          Int       @default(1)
+  cadenceId            String?
   sentAt               DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
