@@ -99,6 +99,7 @@ describe("createCalendarBookToolFactory", () => {
       runTransaction: runTransaction as never,
       failureHandler: failureHandler as never,
       contactStore: contactStore as never,
+      defaultCurrency: "SGD",
     });
     tool = factory({ ...TRUSTED_CTX, contactId: "ct_1" });
   });
@@ -446,6 +447,109 @@ describe("createCalendarBookToolFactory", () => {
       expect(result.status).toBe("error");
       expect(result.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
       expect(calendarProvider.listAvailableSlots).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("booking.create conversion stamping", () => {
+    function buildToolWithCapture(setup: {
+      contact: Record<string, unknown> | null;
+      opportunity: { id: string; estimatedValue?: number | null } | null;
+    }) {
+      const captured: { payload?: Record<string, unknown> } = {};
+      const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          booking: { update: vi.fn().mockResolvedValue({}) },
+          outboxEvent: {
+            create: vi.fn(async (args: { data: { payload: Record<string, unknown> } }) => {
+              captured.payload = args.data.payload;
+              return { id: "ob_1" };
+            }),
+          },
+        }),
+      );
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+      const t = createCalendarBookToolFactory({
+        calendarProviderFactory: calendarProviderFactory as never,
+        isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+        bookingStore: bookingStore as never,
+        opportunityStore: {
+          findActiveByContact: vi.fn().mockResolvedValue(setup.opportunity),
+          create: vi.fn().mockResolvedValue({ id: "opp_new" }),
+        } as never,
+        runTransaction: runTx as never,
+        failureHandler: failureHandler as never,
+        contactStore: { findById: vi.fn().mockResolvedValue(setup.contact) } as never,
+        defaultCurrency: "SGD",
+      })({ ...TRUSTED_CTX, contactId: "ct_1" });
+      return { tool: t, captured };
+    }
+
+    it("stamps attribution, value, currency on the booked event", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: {
+          id: "ct_1",
+          name: "Jane Tan",
+          email: "jane@example.com",
+          phone: "+6591234567",
+          attribution: {
+            fbclid: "fb_abc",
+            sourceCampaignId: "camp_1",
+            sourceAdId: "ad_1",
+            leadgen_id: "lead_9",
+          },
+        },
+        opportunity: { id: "opp_1", estimatedValue: 320000 },
+      });
+
+      await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart: "2026-06-01T10:00:00Z",
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+
+      expect(captured.payload).toMatchObject({
+        type: "booked",
+        value: 320000, // cents, verbatim from estimatedValue
+        currency: "SGD",
+        sourceCampaignId: "camp_1",
+        sourceAdId: "ad_1",
+        customer: { email: "jane@example.com", phone: "+6591234567" },
+        attribution: { fbclid: "fb_abc", lead_id: "lead_9" },
+      });
+      // No PII leaks into metadata
+      expect(captured.payload?.metadata).not.toHaveProperty("email");
+      expect(captured.payload?.metadata).not.toHaveProperty("phone");
+    });
+
+    it("degrades to explicit nulls + value 0 for an organic contact", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: {
+          id: "ct_2",
+          name: "Walk In",
+          email: "walkin@example.com",
+          phone: null,
+          attribution: null,
+        },
+        opportunity: { id: "opp_2", estimatedValue: null },
+      });
+
+      await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart: "2026-06-01T10:00:00Z",
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+
+      expect(captured.payload).toMatchObject({
+        value: 0,
+        currency: "SGD",
+        sourceCampaignId: null,
+        sourceAdId: null,
+        customer: { email: "walkin@example.com", phone: null },
+        attribution: { fbclid: null, lead_id: null },
+      });
     });
   });
 

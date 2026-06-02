@@ -284,7 +284,9 @@ export async function bootstrapSkillMode(
     opportunityStore: {
       findActiveByContact: async (orgId: string, contactId: string) => {
         const active = await opportunityStore.findActiveByContact(orgId, contactId);
-        return active.length > 0 ? { id: active[0]!.id } : null;
+        return active.length > 0
+          ? { id: active[0]!.id, estimatedValue: active[0]!.estimatedValue ?? null }
+          : null;
       },
       create: async (input: { organizationId: string; contactId: string; service: string }) => {
         const created = await opportunityStore.create({
@@ -308,6 +310,7 @@ export async function bootstrapSkillMode(
     ) =>
       prismaClient.$transaction((tx) => fn({ booking: tx.booking, outboxEvent: tx.outboxEvent })),
     failureHandler,
+    defaultCurrency: "SGD",
   });
 
   const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);

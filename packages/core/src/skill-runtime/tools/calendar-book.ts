@@ -4,8 +4,9 @@ import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
 import { getMetrics } from "../../telemetry/metrics.js";
 import { SlotQuerySchema } from "@switchboard/schemas";
-import type { CalendarProvider } from "@switchboard/schemas";
+import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
+import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
 
 interface BookingStoreSubset {
   create(input: {
@@ -31,7 +32,10 @@ interface BookingStoreSubset {
 }
 
 interface OpportunityStoreSubset {
-  findActiveByContact(orgId: string, contactId: string): Promise<{ id: string } | null>;
+  findActiveByContact(
+    orgId: string,
+    contactId: string,
+  ): Promise<{ id: string; estimatedValue?: number | null } | null>;
   create(input: {
     organizationId: string;
     contactId: string;
@@ -73,8 +77,16 @@ interface CalendarBookToolDeps {
     findById(
       orgId: string,
       contactId: string,
-    ): Promise<{ name?: string | null; email?: string | null } | null>;
+    ): Promise<{
+      name?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      attribution?: AttributionChain | null;
+    } | null>;
   };
+  /** ISO-4217 default currency for booked-conversion value (cents). Temporary
+   *  injected dep until per-org currency is wired. */
+  defaultCurrency: string;
 }
 
 const NOT_CONFIGURED_REMEDIATION =
@@ -197,9 +209,11 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
 
           // Resolve or create opportunity
           let opportunityId: string | null = null;
+          let estimatedValue: number | null = null;
           const existing = await deps.opportunityStore.findActiveByContact(orgId, contactId);
           if (existing) {
             opportunityId = existing.id;
+            estimatedValue = existing.estimatedValue ?? null;
           } else {
             const created = await deps.opportunityStore.create({
               organizationId: orgId,
@@ -290,6 +304,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   calendarEventId: calendarResult.calendarEventId,
                 },
               });
+              const conversion = buildBookedConversionPayload(contactRecord);
               await tx.outboxEvent.create({
                 data: {
                   eventId,
@@ -299,7 +314,12 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                     type: "booked",
                     contactId,
                     organizationId: orgId,
-                    value: 0,
+                    value: estimatedValue ?? 0,
+                    currency: deps.defaultCurrency,
+                    sourceCampaignId: conversion.sourceCampaignId,
+                    sourceAdId: conversion.sourceAdId,
+                    customer: conversion.customer,
+                    attribution: conversion.attribution,
                     occurredAt: new Date().toISOString(),
                     source: "calendar-book",
                     metadata: {
