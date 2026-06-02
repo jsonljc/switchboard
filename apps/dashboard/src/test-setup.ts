@@ -15,6 +15,14 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
+// Mock ResizeObserver for Radix UI components (e.g. Select, Switch) that use useSize
+global.ResizeObserver = class ResizeObserver {
+  constructor(_callback: ResizeObserverCallback) {}
+  disconnect() {}
+  observe(_target: Element, _options?: ResizeObserverOptions) {}
+  unobserve(_target: Element) {}
+};
+
 // Mock IntersectionObserver for components using useScrollReveal
 global.IntersectionObserver = class IntersectionObserver {
   constructor() {}

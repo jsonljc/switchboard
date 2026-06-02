@@ -127,7 +127,12 @@ export function ContactPoliciesSection({ control, register }: ContactPoliciesSec
                 id="bookingPolicies.advanceBookingDays"
                 type="number"
                 placeholder="e.g. 60"
-                {...register("bookingPolicies.advanceBookingDays", { valueAsNumber: true })}
+                {...register("bookingPolicies.advanceBookingDays", {
+                  setValueAs: (v) => {
+                    const n = Number(v);
+                    return v === "" || v === undefined || isNaN(n) ? undefined : n;
+                  },
+                })}
               />
             </div>
           </div>

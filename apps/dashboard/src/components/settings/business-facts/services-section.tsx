@@ -94,7 +94,12 @@ export function ServicesSection({ control, register }: ServicesSectionProps) {
                 id={`services.${i}.durationMinutes`}
                 type="number"
                 placeholder="e.g. 60"
-                {...register(`services.${i}.durationMinutes`, { valueAsNumber: true })}
+                {...register(`services.${i}.durationMinutes`, {
+                  setValueAs: (v) => {
+                    const n = Number(v);
+                    return v === "" || v === undefined || isNaN(n) ? undefined : n;
+                  },
+                })}
               />
             </div>
 
