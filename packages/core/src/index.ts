@@ -312,3 +312,9 @@ export type { RouteTemplates } from "./lib/route-templates.js";
 
 // Deployment Resolver (Prisma-backed implementation — used by api routes for skill-slug lookups)
 export { PrismaDeploymentResolver } from "./platform/prisma-deployment-resolver.js";
+
+// Exposed for the apps/api production-path integration test that proves operator
+// BusinessFacts reach the live Alex prompt through the real store + real builder.
+// Intentional narrow export — do NOT `export *` the skill-runtime barrel here
+// (collision/bloat risk against the existing root exports).
+export { alexBuilder } from "./skill-runtime/builders/alex.js";
