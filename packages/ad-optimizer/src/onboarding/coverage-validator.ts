@@ -25,6 +25,14 @@ export interface CoverageReport {
   coveragePct: number;
 }
 
+export const MIN_COVERAGE_PCT = 0.5;
+
+/** Gate 0: is there enough tracked-source coverage to trust Riley's read of the
+ * account? Below this, Riley abstains rather than analyze on blind spots. */
+export function isCoverageSufficient(report: CoverageReport): boolean {
+  return report.coveragePct >= MIN_COVERAGE_PCT;
+}
+
 export interface CoverageValidatorDeps {
   adsClient: {
     listCampaigns(query: { orgId: string; accountId: string }): Promise<Campaign[]>;

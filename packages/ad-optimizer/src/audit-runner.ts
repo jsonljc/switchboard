@@ -38,6 +38,11 @@ import { resolveEconomicTarget } from "./analyzers/economic-target.js";
 import { resetsLearningFor } from "./action-reset-classification.js";
 import { decideForCampaign } from "./campaign-decision.js";
 import { detectDenominatorStepChange } from "./denominator-step-change.js";
+import {
+  isCoverageSufficient,
+  MIN_COVERAGE_PCT,
+  type CoverageReport,
+} from "./onboarding/coverage-validator.js";
 
 // ── Interfaces ──
 
@@ -119,6 +124,12 @@ export interface AuditDependencies {
    * creative changes when the conversion signal is broken.
    */
   signalHealthChecker?: SignalHealthReportProvider;
+  /** Optional Gate 0. When injected, the audit abstains (no recommendations, one
+   * explanatory insight) if tracked-source coverage is below the sufficiency floor.
+   * Back-compat: absent → no coverage gate (existing callers unaffected). */
+  coverageValidator?: {
+    validate(query: { orgId: string; accountId: string }): Promise<CoverageReport>;
+  };
 }
 
 // ── Helpers ──
@@ -196,6 +207,7 @@ export class AuditRunner {
   private readonly recommendationEmitter?: RecommendationEmitter;
   private readonly recommendationEmissionContext?: EmissionContext;
   private readonly signalHealthChecker?: SignalHealthReportProvider;
+  private readonly coverageValidator?: AuditDependencies["coverageValidator"];
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -209,6 +221,7 @@ export class AuditRunner {
     this.recommendationEmitter = deps.recommendationEmitter;
     this.recommendationEmissionContext = deps.recommendationEmissionContext;
     this.signalHealthChecker = deps.signalHealthChecker;
+    this.coverageValidator = deps.coverageValidator;
 
     if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
       throw new Error(
@@ -223,6 +236,50 @@ export class AuditRunner {
     previousDateRange: { since: string; until: string };
   }): Promise<AuditReport> {
     const { dateRange, previousDateRange } = params;
+
+    // Gate 0 (Phase-A): data-sufficiency abstention. When a coverage validator is
+    // injected and tracked-source coverage is below the sufficiency floor, Riley
+    // holds all recommendations rather than analyze on blind spots, returning an
+    // abstention report with one account-level explanatory insight. Opt-in: absent
+    // validator ⇒ no gate (existing callers unaffected).
+    if (this.coverageValidator) {
+      const coverage = await this.coverageValidator.validate({
+        orgId: this.config.orgId,
+        accountId: this.config.accountId,
+      });
+      if (!isCoverageSufficient(coverage)) {
+        const pct = Math.round(coverage.coveragePct * 100);
+        return {
+          accountId: this.config.accountId,
+          dateRange,
+          summary: {
+            totalSpend: 0,
+            totalLeads: 0,
+            totalRevenue: 0,
+            overallROAS: 0,
+            activeCampaigns: 0,
+            campaignsInLearning: 0,
+            adSetsInLearning: 0,
+            adSetsLearningLimited: 0,
+          },
+          funnel: [],
+          periodDeltas: [],
+          insights: [
+            {
+              type: "insight",
+              campaignId: "account",
+              campaignName: "Account-wide signal",
+              message: `Tracked-source coverage is ${pct}% (below the ${Math.round(
+                MIN_COVERAGE_PCT * 100,
+              )}% floor). Riley is holding recommendations until conversion tracking is verified across sources.`,
+              category: "coverage_insufficient",
+            },
+          ],
+          watches: [],
+          recommendations: [],
+        };
+      }
+    }
 
     // Step 0: Signal-health pre-check. Surfaces fix_signal_health recs and
     // (when score=red) short-circuits the downstream per-campaign analysis.

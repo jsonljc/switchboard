@@ -7,6 +7,7 @@ import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
 import type { RecommendationEmitter } from "./recommendation-sink.js";
+import type { CoverageReport } from "./onboarding/coverage-validator.js";
 
 interface DeploymentInfo {
   id: string;
@@ -57,6 +58,19 @@ export interface CronDependencies {
    * row + a paired WorkTrace row atomically (Wave B PR-1 substrate).
    */
   recommendationEmitter?: RecommendationEmitter;
+  /**
+   * Optional Gate 0. When provided, the weekly audit's AuditRunner gets a
+   * coverage validator and abstains (no recommendations, one explanatory insight)
+   * if tracked-source coverage is below the sufficiency floor. Default unset ⇒ no
+   * gate (production behavior unchanged until a real validator is wired in
+   * apps/api). NOTE: the real CoverageValidator needs `listCampaigns` + an intake
+   * store, neither of which is available on the current cron ads client — wiring a
+   * production validator is a follow-up.
+   */
+  createCoverageValidator?: (
+    deploymentId: string,
+    creds: DeploymentCredentials,
+  ) => { validate(q: { orgId: string; accountId: string }): Promise<CoverageReport> };
 }
 
 interface StepTools {
@@ -149,12 +163,18 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         pixelId && deps.createSignalHealthChecker
           ? deps.createSignalHealthChecker(creds)
           : undefined;
+      // Gate 0 (optional, back-compat). Unset ⇒ no coverage gate. A production
+      // validator is a follow-up (needs listCampaigns + intake store).
+      const coverageValidator = deps.createCoverageValidator
+        ? deps.createCoverageValidator(deployment.id, creds)
+        : undefined;
       const runner = new AuditRunner({
         adsClient,
         crmDataProvider: deps.createCrmProvider(deployment.id),
         insightsProvider: deps.createInsightsProvider(adsClient),
         config,
         ...(signalHealthChecker ? { signalHealthChecker } : {}),
+        ...(coverageValidator ? { coverageValidator } : {}),
         ...(deps.recommendationEmitter
           ? {
               recommendationEmitter: deps.recommendationEmitter,
