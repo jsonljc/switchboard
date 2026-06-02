@@ -150,6 +150,9 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           organizationId: workUnit.organizationId,
           actor: workUnit.actor,
           parentWorkUnitId: workUnit.id,
+          // Deterministic key: a redelivered webhook can't double-send this billable
+          // WhatsApp greeting — PlatformIngress's claim-first guard dedups on it.
+          idempotencyKey: `meta-greeting:${lead.leadId}`,
           parameters: {
             contactId: ingestResult.contactId,
             phone: greetingPhone,
@@ -170,6 +173,8 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           organizationId: workUnit.organizationId,
           actor: workUnit.actor,
           parentWorkUnitId: workUnit.id,
+          // Deterministic key so a redelivered webhook can't double-record the inquiry.
+          idempotencyKey: `meta-inquiry:${lead.leadId}`,
           parameters: {
             contactId: ingestResult.contactId,
             leadId: lead.leadId,

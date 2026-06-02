@@ -15,6 +15,7 @@ import { registerWidgetEmbedEndpoint } from "./endpoints/widget-embed.js";
 import { createGatewayBridge } from "./gateway/gateway-bridge.js";
 import { TelegramAdapter } from "./adapters/telegram.js";
 import { HttpPlatformIngressAdapter } from "./gateway/http-platform-ingress-adapter.js";
+import { buildCtwaIngressSubmitRequest } from "./gateway/ctwa-ingress-request.js";
 import { StaticDeploymentResolver } from "./single-tenant/static-deployment-resolver.js";
 import { InMemoryGatewayConversationStore } from "./single-tenant/memory-conversation-store.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
@@ -165,26 +166,14 @@ async function main() {
   // so a Contact gets created with sourceType="ctwa". The shim below adapts the
   // adapter's narrow `IngressLike` contract to the chat app's HTTP ingress
   // adapter, supplying the synthetic actor + chat surface metadata required by
-  // the canonical request envelope. Same pattern as
-  // apps/api/src/bootstrap/contained-workflows.ts:66-91.
+  // the canonical request envelope. Same pattern as the Instant-Form shim in
+  // apps/api/src/bootstrap/contained-workflows.ts.
   const ctwaAdapter = new CtwaAdapter({
     ingress: {
       submit: async (req) => {
-        const payload = req.payload as {
-          organizationId: string;
-          deploymentId: string;
-        };
-        const response = await platformIngressAdapter.submit({
-          organizationId: payload.organizationId,
-          actor: { id: "system:whatsapp-ctwa-inbound", type: "system" },
-          intent: req.intent,
-          parameters: req.payload as Record<string, unknown>,
-          trigger: "internal",
-          surface: { surface: "chat" },
-          idempotencyKey: req.idempotencyKey,
-          targetHint: { deploymentId: payload.deploymentId },
-          ...(req.parentWorkUnitId ? { parentWorkUnitId: req.parentWorkUnitId } : {}),
-        });
+        // Seeded `system` principal (not a bespoke system:* id) so governance can
+        // resolve the actor's IdentitySpec — see gateway/ctwa-ingress-request.ts.
+        const response = await platformIngressAdapter.submit(buildCtwaIngressSubmitRequest(req));
         if (!response.ok) {
           return { ok: false };
         }

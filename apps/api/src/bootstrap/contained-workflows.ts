@@ -10,6 +10,7 @@ import type { ChildWorkRequest } from "@switchboard/core/platform";
 import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 import { buildFollowUpSendSubmitRequest } from "../services/workflows/followup-send-request.js";
+import { buildLeadIntakeIngressSubmitRequest } from "../services/workflows/lead-intake-request.js";
 import type { FollowUpSendSubmitInput } from "../services/cron/scheduled-follow-up-dispatch.js";
 import { buildReminderSendSubmitRequest } from "../services/workflows/reminder-send-request.js";
 import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
@@ -129,21 +130,9 @@ export async function bootstrapContainedWorkflows(
   const instantFormAdapter = new InstantFormAdapter({
     ingress: {
       submit: async (req) => {
-        const payload = req.payload as {
-          organizationId: string;
-          deploymentId: string;
-        };
-        const response = await platformIngress.submit({
-          organizationId: payload.organizationId,
-          actor: { id: "system:meta-lead-intake", type: "system" },
-          intent: req.intent,
-          parameters: req.payload as Record<string, unknown>,
-          trigger: "internal",
-          surface: { surface: "api" },
-          idempotencyKey: req.idempotencyKey,
-          targetHint: { deploymentId: payload.deploymentId },
-          ...(req.parentWorkUnitId ? { parentWorkUnitId: req.parentWorkUnitId } : {}),
-        });
+        // Seeded `system` principal (not a bespoke system:* id) so governance can
+        // resolve the actor's IdentitySpec — see lead-intake-request.ts.
+        const response = await platformIngress.submit(buildLeadIntakeIngressSubmitRequest(req));
         if (!response.ok) {
           return { ok: false };
         }
