@@ -114,4 +114,60 @@ describe("RealCrmDataProvider", () => {
     expect(data.bySource.instant_form!.received).toBe(0);
     expect(data.leads).toBe(0);
   });
+
+  describe("byCampaign projection", () => {
+    it("groups funnel counts by campaign across source types (zero extra queries)", async () => {
+      const store = makeStore([
+        { sourceType: "ctwa", sourceCampaignId: "c1", stage: "lead", count: 100 },
+        { sourceType: "ctwa", sourceCampaignId: "c1", stage: "booked", count: 8 },
+        { sourceType: "instant_form", sourceCampaignId: "c1", stage: "booked", count: 4 },
+        { sourceType: "ctwa", sourceCampaignId: "c2", stage: "lead", count: 50 },
+        { sourceType: "ctwa", sourceCampaignId: "c2", stage: "booked", count: 2 },
+      ]);
+      const data = await new RealCrmDataProvider(store).getFunnelData({
+        orgId: "o1",
+        accountId: "a1",
+        campaignIds: ["c1", "c2"],
+        startDate: "2026-04-19",
+        endDate: "2026-04-26",
+      });
+      expect(data.byCampaign.c1!.booked).toBe(12); // 8 ctwa + 4 instant_form
+      expect(data.byCampaign.c1!.received).toBe(100);
+      expect(data.byCampaign.c2!.booked).toBe(2); // sparse campaign still present
+      expect(data.byCampaign.c2!.received).toBe(50);
+      expect(store.queryFunnelCounts).toHaveBeenCalledTimes(1);
+    });
+
+    it("carries per-campaign closed revenue (cents) but no spend/value economics", async () => {
+      const store = makeStore([
+        { sourceType: "ctwa", sourceCampaignId: "c1", stage: "booked", count: 5 },
+        { sourceType: "ctwa", sourceCampaignId: "c1", stage: "paid", count: 2, revenue: 80000 },
+      ]);
+      const data = await new RealCrmDataProvider(store).getFunnelData({
+        orgId: "o1",
+        accountId: "a1",
+        campaignIds: ["c1"],
+        startDate: "2026-04-19",
+        endDate: "2026-04-26",
+      });
+      expect(data.byCampaign.c1!.revenue).toBe(80000); // legacy closed cents (mirrors SourceFunnel)
+      const c1 = data.byCampaign.c1 as unknown as Record<string, unknown>;
+      expect(c1.costPerBooked).toBeUndefined();
+      expect(c1.trueRoas).toBeUndefined();
+    });
+
+    it("skips unknown source types in byCampaign too", async () => {
+      const store = makeStore([
+        { sourceType: "organic", sourceCampaignId: "c9", stage: "lead", count: 999 },
+      ]);
+      const data = await new RealCrmDataProvider(store).getFunnelData({
+        orgId: "o1",
+        accountId: "a1",
+        campaignIds: ["c9"],
+        startDate: "2026-04-19",
+        endDate: "2026-04-26",
+      });
+      expect(data.byCampaign.c9).toBeUndefined();
+    });
+  });
 });
