@@ -11,6 +11,7 @@ export default defineConfig({
       "claim-classifier/__tests__/**/*.test.ts",
       "alex-conversation/__tests__/**/*.test.ts",
       "governance-decision/__tests__/**/*.test.ts",
+      "riley-recommendation/__tests__/**/*.test.ts",
     ],
     environment: "node",
   },
