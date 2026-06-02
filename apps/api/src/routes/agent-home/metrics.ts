@@ -2,7 +2,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { projectMetrics, getAgentTargets, type MetricsSignalStore } from "@switchboard/core";
-import { PrismaMiraCreativeReadModelReader } from "@switchboard/db";
+import { PrismaMiraCreativeReadModelReader, PrismaOpportunityStore } from "@switchboard/db";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { getOrgTimezone } from "../../lib/org-timezone.js";
@@ -78,6 +78,8 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
     // Fastify app without calling wireMetricsProvider.
     const getMetaSpendCents = app.metaSpendProvider ?? (async () => null);
 
+    const opportunityStore = prisma ? new PrismaOpportunityStore(prisma) : null;
+
     const store: MetricsSignalStore = {
       countBookingsCreated: ({ orgId: o, excludeStatuses, from, to }) =>
         reportStores.bookings.countExcludingStatuses({
@@ -89,6 +91,14 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
       countConversionsByType: ({ orgId: o, type, from, to }) =>
         reportStores.conversions.countByType(o, type, from, to),
       getMetaSpendCents: ({ orgId: o, from, to }) => getMetaSpendCents({ orgId: o, from, to }),
+      countCurrentlyAtStageUpdatedInWindow: ({ orgId: o, stage, from, to }) =>
+        opportunityStore
+          ? opportunityStore.countCurrentlyAtStageUpdatedInWindow({ orgId: o, stage, from, to })
+          : Promise.resolve(0),
+      latestOpportunityStageUpdatedAt: ({ orgId: o, stage }) =>
+        opportunityStore
+          ? opportunityStore.latestOpportunityStageUpdatedAt({ orgId: o, stage })
+          : Promise.resolve(null),
     };
 
     const miraReader = prisma ? new PrismaMiraCreativeReadModelReader(prisma) : undefined;

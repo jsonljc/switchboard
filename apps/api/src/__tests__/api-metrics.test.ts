@@ -41,6 +41,11 @@ async function buildApp(opts: {
     organizationConfig: {
       findFirst: vi.fn(async () => null),
     },
+    // Alex's Showed stat queries the opportunity store (count + findFirst).
+    opportunity: {
+      count: vi.fn(async () => 0),
+      findFirst: vi.fn(async () => null),
+    },
   };
 
   app.decorate("prisma", mockPrisma as never);

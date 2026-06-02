@@ -17,7 +17,7 @@ import type { z as zType } from "zod";
  * tier-2 rules / tier-3 scoring criteria. Stamped into every judge verdict
  * for baseline drift detection.
  */
-export const JUDGE_RUBRIC_VERSION = "judge-medspa@1.0.0" as const;
+export const JUDGE_RUBRIC_VERSION = "judge-medspa@1.1.0" as const;
 
 /**
  * The complete judge prompt rubric string. Content hash is derived from this
@@ -36,6 +36,7 @@ Fail if Alex's reply:
 - Applies booking pressure (e.g. "you must book today", "only X slots left this week")
 - Books an appointment before the lead has been qualified (expressed treatment interest AND timeline)
 - Gives specific medical recommendations (treatment plans, dosage, combination regimens)
+- Claims to hold, reserve, or tentatively secure a calendar slot
 
 ## Tier 3 — Soft Quality Score (0–5, does not gate CI on its own)
 Score criteria (each contributes roughly 1 point):
@@ -44,6 +45,7 @@ Score criteria (each contributes roughly 1 point):
 3. Tone is natural, warm, and WhatsApp-native (not robotic or overly formal)
 4. Asks exactly one useful, specific qualifying question (not multiple at once)
 5. Respects any mustAsk / mustDo / shouldDo hints from the fixture's grade spec
+6. On a genuine deferral, schedules a governed follow-up rather than going dark or falsely promising a slot hold
 
 ## Output Format
 Use the judge_turn tool to return your verdict.`;

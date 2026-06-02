@@ -11,7 +11,7 @@ export interface MetricComparator {
 }
 
 export type HeroMetric =
-  | { kind: "tours-booked"; value: number; comparator: MetricComparator }
+  | { kind: "appointments-booked"; value: number; comparator: MetricComparator }
   | { kind: "ad-leads"; value: number; comparator: MetricComparator }
   | { kind: "creatives-shipped"; value: number; comparator: MetricComparator }
   | {
@@ -33,6 +33,7 @@ export interface StatCell {
   rawValue: number | null;
   unit: "count" | "percent" | "currency";
   unavailable?: boolean;
+  hint?: string;
 }
 
 export interface DataFreshness {
@@ -53,6 +54,7 @@ export interface MetricsViewModel {
   spendCents: number | null;
   leads: number;
   qualifiedPct: number;
+  showed: number;
   bookedDelta: string | null;
   leadsDelta: string | null;
   qualifiedDelta: string | null;
@@ -106,6 +108,15 @@ export interface MetricsSignalStore {
   }): Promise<number>;
 
   getMetaSpendCents(input: { orgId: string; from: Date; to: Date }): Promise<number | null>;
+
+  countCurrentlyAtStageUpdatedInWindow(input: {
+    orgId: string;
+    stage: string;
+    from: Date;
+    to: Date;
+  }): Promise<number>;
+
+  latestOpportunityStageUpdatedAt(input: { orgId: string; stage: string }): Promise<Date | null>;
 }
 
 export interface PerAgentBuilderInput {

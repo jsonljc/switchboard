@@ -100,6 +100,11 @@ function buildPrismaMock() {
       }),
       findUnique: async () => ({ config: { avgValueCents: 12000, targetCpbCents: 2500 } }),
     },
+    // Alex's Showed stat queries the opportunity store (count + findFirst).
+    opportunity: {
+      count: async () => 0,
+      findFirst: async () => null,
+    },
   };
 }
 

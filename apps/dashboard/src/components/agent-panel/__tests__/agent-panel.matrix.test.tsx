@@ -181,7 +181,7 @@ function makeState(agentRole = "responder", lastActionAt = "2026-05-28T11:50:00Z
 
 function makeMetricsVM(
   opts: {
-    kind?: "tours-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
+    kind?: "appointments-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
     value?: number;
     spendCents?: number | null;
     targetCpbCents?: number | null;
@@ -189,7 +189,7 @@ function makeMetricsVM(
 ) {
   return {
     hero: {
-      kind: opts.kind ?? "tours-booked",
+      kind: opts.kind ?? "appointments-booked",
       value: opts.value ?? 12,
       comparator: {},
     },
@@ -385,7 +385,7 @@ describe("AgentPanel state matrix", () => {
   it("3. Metrics window=all 400 → week hero under 'this week', not 'since you hired', not error", () => {
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 7 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 7 });
 
     renderAlexPanel();
 
@@ -431,14 +431,14 @@ describe("AgentPanel state matrix", () => {
   it("5. True zero — hero shows 0, not error/empty; health still renders", () => {
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 0 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 0 });
 
     renderAlexPanel();
 
     // "0" must appear — true zero must show, never coerced away
     expect(screen.getByText("0")).toBeInTheDocument();
-    // Label present ("consults booked")
-    expect(screen.getByText(/consults booked/i)).toBeInTheDocument();
+    // Label present ("appointments booked")
+    expect(screen.getByText(/appointments booked/i)).toBeInTheDocument();
     // No error message — zero is NOT a failed fetch
     expect(screen.queryByText(/couldn't load this week's number/i)).not.toBeInTheDocument();
     // Health line still present (fresh signal)
@@ -456,7 +456,7 @@ describe("AgentPanel state matrix", () => {
     // selectKeyResult with halted=true picks all.data ?? week.data.
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 12 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 12 });
 
     renderAlexPanel();
 

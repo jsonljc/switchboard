@@ -360,4 +360,48 @@ describe("PrismaOpportunityStore", () => {
       });
     });
   });
+
+  describe("countCurrentlyAtStageUpdatedInWindow", () => {
+    it("countCurrentlyAtStageUpdatedInWindow filters by stage + updatedAt window", async () => {
+      const count = vi.fn(async () => 4);
+      const store = new PrismaOpportunityStore({ opportunity: { count } } as never);
+      const from = new Date("2026-05-04T00:00:00Z");
+      const to = new Date("2026-05-11T00:00:00Z");
+      const n = await store.countCurrentlyAtStageUpdatedInWindow({
+        orgId: "org-1",
+        stage: "showed",
+        from,
+        to,
+      });
+      expect(n).toBe(4);
+      expect(count).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          stage: "showed",
+          updatedAt: { gte: from, lt: to },
+        },
+      });
+    });
+  });
+
+  describe("latestOpportunityStageUpdatedAt", () => {
+    it("latestOpportunityStageUpdatedAt returns newest updatedAt or null", async () => {
+      const findFirst = vi.fn(async () => ({ updatedAt: new Date("2026-05-06T00:00:00Z") }));
+      const store = new PrismaOpportunityStore({ opportunity: { findFirst } } as never);
+      const d = await store.latestOpportunityStageUpdatedAt({ orgId: "org-1", stage: "showed" });
+      expect(d).toEqual(new Date("2026-05-06T00:00:00Z"));
+      expect(findFirst).toHaveBeenCalledWith({
+        where: { organizationId: "org-1", stage: "showed" },
+        orderBy: { updatedAt: "desc" },
+        select: { updatedAt: true },
+      });
+    });
+
+    it("latestOpportunityStageUpdatedAt returns null when no matching row exists", async () => {
+      const findFirst = vi.fn(async () => null);
+      const store = new PrismaOpportunityStore({ opportunity: { findFirst } } as never);
+      const d = await store.latestOpportunityStageUpdatedAt({ orgId: "org-1", stage: "showed" });
+      expect(d).toBeNull();
+    });
+  });
 });

@@ -29,4 +29,11 @@ export interface GovernanceVerdictStore {
     deploymentId: string,
     options?: { since?: string; limit?: number },
   ): Promise<GovernanceVerdictRecord[]>;
+  countByDeploymentAndClaim(input: {
+    deploymentId: string;
+    claimType: string;
+    action?: string;
+    from: Date;
+    to: Date;
+  }): Promise<number>;
 }

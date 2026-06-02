@@ -49,7 +49,7 @@ import { KeyResult } from "../key-result";
 
 function makeMetricsVM(
   overrides: {
-    kind?: "tours-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
+    kind?: "appointments-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
     value?: number;
     spendCents?: number | null;
     targetCpbCents?: number | null;
@@ -57,7 +57,7 @@ function makeMetricsVM(
 ) {
   return {
     hero: {
-      kind: overrides.kind ?? "tours-booked",
+      kind: overrides.kind ?? "appointments-booked",
       value: overrides.value ?? 12,
       comparator: {},
     },
@@ -100,8 +100,8 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Blocker 1: window=all succeeds → hero under "since you hired …" (lifetime), shows the lifetime value.
   it("1. window=all succeeds → shows lifetime value under 'since you hired' eyebrow", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 214 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 5 });
+    allData = makeMetricsVM({ kind: "appointments-booked", value: 214 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 5 });
     render(<KeyResult agentKey="alex" />);
 
     // The big number shown should be the ALL-window value (214), not the week value (5)
@@ -116,7 +116,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
   it("2. window=all errors + week ok → shows week value under 'this week' label, not 'since you hired'", () => {
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 7 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 7 });
     render(<KeyResult agentKey="alex" />);
 
     // Week value shown
@@ -146,13 +146,13 @@ describe("KeyResult slot — launch-blocker tests", () => {
   it("4. true zero value=0 (setup complete, not paused) → renders '0', not error or empty", () => {
     allData = undefined;
     allIsError = true; // all fails; fall to week
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 0 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 0 });
     render(<KeyResult agentKey="alex" />);
 
     // "0" must be in the document
     expect(screen.getByText("0")).toBeInTheDocument();
     // Must have a label
-    expect(screen.getByText(/consults booked/i)).toBeInTheDocument();
+    expect(screen.getByText(/appointments booked/i)).toBeInTheDocument();
     // Error message must NOT appear
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
   });
@@ -160,7 +160,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
   // Blocker 5: halted + week value 12 → shows 12 (muted) + "No new actions are going out while paused", and NO health/comparator beat.
   it("5. halted + week value 12 → shows 12 (muted) + paused note; no CPL comparator", () => {
     haltedValue = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 12 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 12 });
     render(<KeyResult agentKey="alex" />);
 
     // Hero value shown (muted)
@@ -296,8 +296,8 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Gap 1 — non-core nudge present when proof + non-primary setup step incomplete
   it("gap1a. proof + non-core setup step incomplete → proof hero shows + non-core-nudge present + no activation-block", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 8 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 2 });
+    allData = makeMetricsVM({ kind: "appointments-booked", value: 8 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 2 });
     missionData = {
       agentKey: "alex",
       displayName: "Alex",
@@ -422,8 +422,8 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Gap 1 — all-complete proof renders NO nudge
   it("gap1c. proof + all setup complete → no non-core-nudge", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 20 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 4 });
+    allData = makeMetricsVM({ kind: "appointments-booked", value: 20 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 4 });
     missionData = {
       agentKey: "alex",
       displayName: "Alex",

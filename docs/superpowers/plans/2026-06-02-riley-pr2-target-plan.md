@@ -16,17 +16,17 @@
 
 These are the judgment calls baked into this plan. Push back on any before implementation starts.
 
-1. **Attribution fork → Option A (account-level calibration).** Verified: `PrismaCrmFunnelStore.queryFunnelCounts` *does* attribute per-campaign correctly (filters `attribution.sourceCampaignId ∈ campaignIds`, `crm-funnel-store.ts:104-156`) and surfaces real `booked` counts — so per-campaign (B) is feasible. But at medspa pilot volume per-campaign bookings sit below the §5 Tier-1 threshold (10), so B pays N CRM calls to mostly land in Tier 2/3 anyway. A pools bookings across the audited campaign set (one funnel call, already fetched), is statistically robust, and the §5 ladder makes it self-protecting. **Trade-off (accepted):** A applies one blended booking rate to every campaign — two campaigns with identical raw metrics get the same rec; booking differentiation acts through the account target moving. The strong per-campaign acceptance form is the documented **Hybrid** upgrade path (A floor + true per-campaign cost-per-booked for any campaign that itself clears ≥10 booked), deferred as a fast-follow when volume grows.
+1. **Attribution fork → Option A (account-level calibration).** Verified: `PrismaCrmFunnelStore.queryFunnelCounts` _does_ attribute per-campaign correctly (filters `attribution.sourceCampaignId ∈ campaignIds`, `crm-funnel-store.ts:104-156`) and surfaces real `booked` counts — so per-campaign (B) is feasible. But at medspa pilot volume per-campaign bookings sit below the §5 Tier-1 threshold (10), so B pays N CRM calls to mostly land in Tier 2/3 anyway. A pools bookings across the audited campaign set (one funnel call, already fetched), is statistically robust, and the §5 ladder makes it self-protecting. **Trade-off (accepted):** A applies one blended booking rate to every campaign — two campaigns with identical raw metrics get the same rec; booking differentiation acts through the account target moving. The strong per-campaign acceptance form is the documented **Hybrid** upgrade path (A floor + true per-campaign cost-per-booked for any campaign that itself clears ≥10 booked), deferred as a fast-follow when volume grows.
 
-2. **`targetCostPerBooked` must be added as optional config (the decisive new finding).** The audit has **no** target-cost-per-booked, margin, AOV, or break-even value anywhere in its reach — `targetCPA` (default 100, from `deployment.inputConfig`) is semantically cost-per-*lead* (`inngest-functions.ts:109-120`; confirmed across `AuditConfig`, `inputConfig`, the wizard, and the seed). Option A's `effectiveTargetCPL = targetCostPerBooked × bookingRate` therefore needs an input that does not exist. **Decision:** add an optional `targetCostPerBooked` to `AuditConfig` + `inputConfig`. When present *and* calibration yields a usable target → Tier 1 booked-CAC. When absent → Tier 2 CPL: the engine keeps the **same legacy `targetCPA` threshold**, then `applyTier` marks the recommendation as proxy-based by lowering confidence and urgency — the *threshold* is unchanged, the *output* is honestly flagged (**not** byte-identical). *Rejected:* reinterpreting the live `targetCPA` as cost-per-booked — it would silently tighten every existing deployment ~10× (flood of pauses).
+2. **`targetCostPerBooked` must be added as optional config (the decisive new finding).** The audit has **no** target-cost-per-booked, margin, AOV, or break-even value anywhere in its reach — `targetCPA` (default 100, from `deployment.inputConfig`) is semantically cost-per-_lead_ (`inngest-functions.ts:109-120`; confirmed across `AuditConfig`, `inputConfig`, the wizard, and the seed). Option A's `effectiveTargetCPL = targetCostPerBooked × bookingRate` therefore needs an input that does not exist. **Decision:** add an optional `targetCostPerBooked` to `AuditConfig` + `inputConfig`. When present _and_ calibration yields a usable target → Tier 1 booked-CAC. When absent → Tier 2 CPL: the engine keeps the **same legacy `targetCPA` threshold**, then `applyTier` marks the recommendation as proxy-based by lowering confidence and urgency — the _threshold_ is unchanged, the _output_ is honestly flagged (**not** byte-identical). _Rejected:_ reinterpreting the live `targetCPA` as cost-per-booked — it would silently tighten every existing deployment ~10× (flood of pauses).
 
-3. **`marginBasis` is always `"unavailable"` in PR2 — honest, not silent.** No margin/AOV/break-even source is plumbed into the audit, so margin-awareness is reported *unavailable*, never silently satisfied (spec §3.4). The field is threaded as a real value (seam to become `"configured"` when an AOV/margin source lands), not a hardcoded literal buried in logic. Note: `economicTier="booked_cac"` with `marginBasis="unavailable"` is a valid combination — a bare cost-per-booked target is not margin-derived.
+3. **`marginBasis` is always `"unavailable"` in PR2 — honest, not silent.** No margin/AOV/break-even source is plumbed into the audit, so margin-awareness is reported _unavailable_, never silently satisfied (spec §3.4). The field is threaded as a real value (seam to become `"configured"` when an AOV/margin source lands), not a hardcoded literal buried in logic. Note: `economicTier="booked_cac"` with `marginBasis="unavailable"` is a valid combination — a bare cost-per-booked target is not margin-derived.
 
 4. **`candidateAction` is NOT added in PR2.** It does not exist anywhere yet (verified) and has no consumer until the Phase-2 governed-execution sequel. The user's PR2 brief ("keep candidateAction inert") is satisfied by adding **no** mutating path and **no** spend scrape. The descriptor is naturally added in PR3/PR4 alongside the budget-reallocation recs that carry a `reversibleChange`. (Deviates from spec §6's "carried in Phase 1" — flagged; adding an always-null field now is low-value. Override if you want the empty seam in PR2.)
 
-5. **Producer population (the `[[feedback_safety_gate_needs_producer_population]]` scar).** Booked-CAC is inert in production until a deployment sets `targetCostPerBooked`. Because absence is reported *honestly* (`economicTier="cpl"` in the rec), this is principled abstention, not a silent safety hole — but to prove PR2 on real data, **Task 7 (optional, flagged)** seeds `targetCostPerBooked` on the dev Riley deployment so a live audit exercises Tier 1. The TDD tests exercise Tier 1 regardless via fixtures.
+5. **Producer population (the `[[feedback_safety_gate_needs_producer_population]]` scar).** Booked-CAC is inert in production until a deployment sets `targetCostPerBooked`. Because absence is reported _honestly_ (`economicTier="cpl"` in the rec), this is principled abstention, not a silent safety hole — but to prove PR2 on real data, **Task 7 (optional, flagged)** seeds `targetCostPerBooked` on the dev Riley deployment so a live audit exercises Tier 1. The TDD tests exercise Tier 1 regardless via fixtures.
 
-6. **metrics-riley + dashboard relabel is the separable tail (Task 6).** `MetricsSignalStore.countBookingsCreated` *is* available (`metrics-types.ts:94-99`), so Riley's home/agent-panel ROI can surface a real cost-per-booked-vs-target instead of cost-per-lead. This touches `packages/core` + hardcoded dashboard copy (`key-result.tsx`, `this-week.tsx`) — independent of the engine change. If it makes PR2 too wide, split it into PR2b. Note: its target (`targetCpbCents` from `AgentRoster.config`) is a *different* config surface from the audit's `targetCostPerBooked`; unifying them is out of scope.
+6. **metrics-riley + dashboard relabel is the separable tail (Task 6).** `MetricsSignalStore.countBookingsCreated` _is_ available (`metrics-types.ts:94-99`), so Riley's home/agent-panel ROI can surface a real cost-per-booked-vs-target instead of cost-per-lead. This touches `packages/core` + hardcoded dashboard copy (`key-result.tsx`, `this-week.tsx`) — independent of the engine change. If it makes PR2 too wide, split it into PR2b. Note: its target (`targetCpbCents` from `AgentRoster.config`) is a _different_ config surface from the audit's `targetCostPerBooked`; unifying them is out of scope.
 
 7. **Tiering scope.** `applyTier` is applied to the campaign **economic** recs (`generateRecommendations` output). Signal-health recs and Step-6 ad-set learning-limited recs are a different decision family (run before/without CRM economics) and do not carry `economicTier` in PR2 — the field stays optional. PR4's contract test asserts the tag on economic recs.
 
@@ -46,25 +46,26 @@ These are the judgment calls baked into this plan. Push back on any before imple
 
 ## File Structure
 
-| File | Responsibility | Change |
-| --- | --- | --- |
-| `packages/schemas/src/ad-optimizer.ts` | `EconomicTier`/`MarginBasis` enums + 2 optional fields on `RecommendationOutputSchema` | Modify |
-| `packages/schemas/src/ad-optimizer.test.ts` | parse round-trip incl. new fields | Create/extend |
-| `packages/ad-optimizer/src/analyzers/economic-target.ts` | **Pure** tier selection, booking calibration, `applyTier` | Create |
-| `packages/ad-optimizer/src/analyzers/economic-target.test.ts` | unit tests, all branches | Create |
-| `packages/ad-optimizer/src/audit-runner.ts` | `targetCostPerBooked` on `AuditConfig`; compute tier/effective-target once; thread into 3 sites; `applyTier` post-process | Modify |
-| `packages/ad-optimizer/src/inngest-functions.ts` | read `inputConfig.targetCostPerBooked` into `AuditConfig` | Modify |
-| `packages/ad-optimizer/src/__tests__/audit-runner.test.ts` | integration: Tier 1/2/3 + booking-outcome differentiation | Extend |
-| `packages/core/src/agent-home/metrics-riley.ts` | ROI relabel + real CAC-vs-target via `countBookingsCreated` | Modify (Task 6) |
-| `packages/core/src/agent-home/__tests__/metrics-riley.test.ts` | update 5 ROI assertions | Modify (Task 6) |
-| `apps/dashboard/src/components/agent-panel/key-result.tsx`, `home/this-week.tsx` | dashboard copy coherence | Modify (Task 6) |
-| `packages/db/prisma/seed-marketplace.ts` | seed dev `targetCostPerBooked` (producer pop) | Modify (Task 7, optional) |
+| File                                                                             | Responsibility                                                                                                            | Change                    |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `packages/schemas/src/ad-optimizer.ts`                                           | `EconomicTier`/`MarginBasis` enums + 2 optional fields on `RecommendationOutputSchema`                                    | Modify                    |
+| `packages/schemas/src/ad-optimizer.test.ts`                                      | parse round-trip incl. new fields                                                                                         | Create/extend             |
+| `packages/ad-optimizer/src/analyzers/economic-target.ts`                         | **Pure** tier selection, booking calibration, `applyTier`                                                                 | Create                    |
+| `packages/ad-optimizer/src/analyzers/economic-target.test.ts`                    | unit tests, all branches                                                                                                  | Create                    |
+| `packages/ad-optimizer/src/audit-runner.ts`                                      | `targetCostPerBooked` on `AuditConfig`; compute tier/effective-target once; thread into 3 sites; `applyTier` post-process | Modify                    |
+| `packages/ad-optimizer/src/inngest-functions.ts`                                 | read `inputConfig.targetCostPerBooked` into `AuditConfig`                                                                 | Modify                    |
+| `packages/ad-optimizer/src/__tests__/audit-runner.test.ts`                       | integration: Tier 1/2/3 + booking-outcome differentiation                                                                 | Extend                    |
+| `packages/core/src/agent-home/metrics-riley.ts`                                  | ROI relabel + real CAC-vs-target via `countBookingsCreated`                                                               | Modify (Task 6)           |
+| `packages/core/src/agent-home/__tests__/metrics-riley.test.ts`                   | update 5 ROI assertions                                                                                                   | Modify (Task 6)           |
+| `apps/dashboard/src/components/agent-panel/key-result.tsx`, `home/this-week.tsx` | dashboard copy coherence                                                                                                  | Modify (Task 6)           |
+| `packages/db/prisma/seed-marketplace.ts`                                         | seed dev `targetCostPerBooked` (producer pop)                                                                             | Modify (Task 7, optional) |
 
 ---
 
 ## Task 1: Schema — `economicTier` + `marginBasis` (back-compat, optional)
 
 **Files:**
+
 - Modify: `packages/schemas/src/ad-optimizer.ts:34` (after `UrgencySchema`), `:168-181` (`RecommendationOutputSchema`)
 - Test: `packages/schemas/src/ad-optimizer.test.ts`
 
@@ -72,7 +73,11 @@ These are the judgment calls baked into this plan. Push back on any before imple
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { RecommendationOutputSchema, EconomicTierSchema, MarginBasisSchema } from "./ad-optimizer.js";
+import {
+  RecommendationOutputSchema,
+  EconomicTierSchema,
+  MarginBasisSchema,
+} from "./ad-optimizer.js";
 
 const base = {
   type: "recommendation" as const,
@@ -158,6 +163,7 @@ git commit -m "feat(schemas): add economicTier + marginBasis to recommendation o
 ## Task 2: Pure module `economic-target.ts` — tier, calibration, applyTier
 
 **Files:**
+
 - Create: `packages/ad-optimizer/src/analyzers/economic-target.ts`
 - Test: `packages/ad-optimizer/src/analyzers/economic-target.test.ts`
 
@@ -201,9 +207,9 @@ describe("selectEconomicTier", () => {
     expect(selectEconomicTier({ bookings: 50, leads: 200, hasBookedTarget: false })).toBe("cpl");
   });
   it("Tier 2 cpl when bookings sparse but leads >= MIN_LEADS_FOR_TIER2", () => {
-    expect(selectEconomicTier({ bookings: 3, leads: MIN_LEADS_FOR_TIER2, hasBookedTarget: true })).toBe(
-      "cpl",
-    );
+    expect(
+      selectEconomicTier({ bookings: 3, leads: MIN_LEADS_FOR_TIER2, hasBookedTarget: true }),
+    ).toBe("cpl");
   });
   it("Tier 3 cpc when both bookings and leads are sparse", () => {
     expect(selectEconomicTier({ bookings: 2, leads: 10, hasBookedTarget: true })).toBe("cpc");
@@ -214,19 +220,31 @@ describe("calibrateTargetFromBooking", () => {
   it("converts cost-per-booked into the equivalent per-conversion target", () => {
     // $200/booked × (20 booked / 100 conversions = 0.2 booked/conv) = $40/conversion
     expect(
-      calibrateTargetFromBooking({ targetCostPerBooked: 200, accountBookings: 20, accountConversions: 100 }),
+      calibrateTargetFromBooking({
+        targetCostPerBooked: 200,
+        accountBookings: 20,
+        accountConversions: 100,
+      }),
     ).toBe(40);
   });
   it("returns null when there are no conversions (no rate)", () => {
     expect(
-      calibrateTargetFromBooking({ targetCostPerBooked: 200, accountBookings: 20, accountConversions: 0 }),
+      calibrateTargetFromBooking({
+        targetCostPerBooked: 200,
+        accountBookings: 20,
+        accountConversions: 0,
+      }),
     ).toBeNull();
   });
 });
 
 describe("applyTier", () => {
   it("Tier 1 keeps strength, stamps tier + marginBasis", () => {
-    const out = applyTier({ recommendation: rec(), tier: "booked_cac", marginBasis: "unavailable" });
+    const out = applyTier({
+      recommendation: rec(),
+      tier: "booked_cac",
+      marginBasis: "unavailable",
+    });
     expect(out.recommendation?.confidence).toBe(0.9);
     expect(out.recommendation?.urgency).toBe("immediate");
     expect(out.recommendation?.economicTier).toBe("booked_cac");
@@ -235,19 +253,32 @@ describe("applyTier", () => {
     expect(out.watch).toBeUndefined();
   });
   it("Tier 2 lowers confidence by the penalty and urgency one band", () => {
-    const out = applyTier({ recommendation: rec({ confidence: 0.8, urgency: "immediate" }), tier: "cpl", marginBasis: "unavailable" });
+    const out = applyTier({
+      recommendation: rec({ confidence: 0.8, urgency: "immediate" }),
+      tier: "cpl",
+      marginBasis: "unavailable",
+    });
     expect(out.recommendation?.confidence).toBe(0.8 - TIER2_CONFIDENCE_PENALTY); // 0.65, no float drift
     expect(out.recommendation?.urgency).toBe("this_week");
     expect(out.recommendation?.economicTier).toBe("cpl");
     expect(out.recommendation?.estimatedImpact).toContain("CPL proxy"); // rationale names the basis (#6)
   });
   it("Tier 2 floors urgency at next_cycle and confidence at 0", () => {
-    const out = applyTier({ recommendation: rec({ confidence: 0.1, urgency: "next_cycle" }), tier: "cpl", marginBasis: "unavailable" });
+    const out = applyTier({
+      recommendation: rec({ confidence: 0.1, urgency: "next_cycle" }),
+      tier: "cpl",
+      marginBasis: "unavailable",
+    });
     expect(out.recommendation?.urgency).toBe("next_cycle");
     expect(out.recommendation?.confidence).toBe(0);
   });
   it("Tier 3 converts a destructive recommendation into a watch", () => {
-    const out = applyTier({ recommendation: rec({ action: "pause" }), tier: "cpc", marginBasis: "unavailable", checkBackDate: "2026-06-09" });
+    const out = applyTier({
+      recommendation: rec({ action: "pause" }),
+      tier: "cpc",
+      marginBasis: "unavailable",
+      checkBackDate: "2026-06-09",
+    });
     expect(out.recommendation).toBeUndefined();
     expect(out.watch?.type).toBe("watch");
     expect(out.watch?.checkBackDate).toBe("2026-06-09");
@@ -255,7 +286,11 @@ describe("applyTier", () => {
     expect(() => WatchOutputSchema.parse(out.watch)).not.toThrow(); // #3: lock the watch shape vs schema
   });
   it("Tier 3 keeps fix_signal_health as a recommendation", () => {
-    const out = applyTier({ recommendation: rec({ action: "fix_signal_health" }), tier: "cpc", marginBasis: "unavailable" });
+    const out = applyTier({
+      recommendation: rec({ action: "fix_signal_health" }),
+      tier: "cpc",
+      marginBasis: "unavailable",
+    });
     expect(out.recommendation?.action).toBe("fix_signal_health");
     expect(out.recommendation?.economicTier).toBe("cpc");
     expect(out.watch).toBeUndefined();
@@ -430,6 +465,7 @@ git commit -m "feat(ad-optimizer): economic-target module — tier selection, bo
 ## Task 3: Config — optional `targetCostPerBooked`
 
 **Files:**
+
 - Modify: `packages/ad-optimizer/src/audit-runner.ts:56-69` (`AuditConfig`)
 - Modify: `packages/ad-optimizer/src/inngest-functions.ts:14-19` (inputConfig type), `:109-120` (`AuditConfig` build)
 
@@ -448,16 +484,16 @@ git commit -m "feat(ad-optimizer): economic-target module — tier selection, bo
 - [ ] **Step 2: Thread it through the cron** in `inngest-functions.ts`. Extend the `inputConfig` type (`:14-19`) with `targetCostPerBooked?: number;` (narrow — stored as a number; the seed in Task 7 writes a number), then in the `AuditConfig` build (`:109-120`) add it with a runtime `typeof number` guard that degrades safely (a malformed/string value omits the field → Tier 2 CPL, never NaN-poisons the target):
 
 ```ts
-  const cpb = deployment.inputConfig.targetCostPerBooked;
-  const config: AuditConfig = {
-    accountId: creds.accountId,
-    orgId: deployment.organizationId,
-    targetCPA: deployment.inputConfig.targetCPA ?? 100,
-    targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
-    ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
-    mediaBenchmarks: { inlineLinkClickCtr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 },
-    ...(pixelId ? { pixelId } : {}),
-  };
+const cpb = deployment.inputConfig.targetCostPerBooked;
+const config: AuditConfig = {
+  accountId: creds.accountId,
+  orgId: deployment.organizationId,
+  targetCPA: deployment.inputConfig.targetCPA ?? 100,
+  targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
+  ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
+  mediaBenchmarks: { inlineLinkClickCtr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 },
+  ...(pixelId ? { pixelId } : {}),
+};
 ```
 
 (Absent or malformed → field omitted → Tier 2 CPL: the engine keeps the unchanged `targetCPA` threshold and `applyTier` flags the proxy by lowering confidence/urgency — see decision #2 (threshold unchanged, output honestly marked, **not** byte-identical). If a future wizard writes string values, coerce at the wizard or widen the guard here.)
@@ -479,6 +515,7 @@ git commit -m "feat(ad-optimizer): optional targetCostPerBooked config for booke
 ## Task 4: Wire the tier into the audit (compute once, thread, post-process)
 
 **Files:**
+
 - Modify: `packages/ad-optimizer/src/audit-runner.ts` (imports; after Step 4 `:328`; sites `:379`, `:403`, `:414`; gate loop `:421-428`)
 - Test: `packages/ad-optimizer/src/__tests__/audit-runner.test.ts`
 
@@ -518,7 +555,9 @@ function runnerWith(opts: {
     targetCPA: 50,
     targetROAS: 2,
     mediaBenchmarks: makeMediaBenchmarks(),
-    ...(opts.targetCostPerBooked !== undefined ? { targetCostPerBooked: opts.targetCostPerBooked } : {}),
+    ...(opts.targetCostPerBooked !== undefined
+      ? { targetCostPerBooked: opts.targetCostPerBooked }
+      : {}),
   };
   return new AuditRunner({ ...deps, config });
 }
@@ -547,7 +586,12 @@ describe("PR2 economic tiering", () => {
   });
 
   it("identical campaign metrics yield different recs when the account booking rate changes (account-level acceptance)", async () => {
-    const common = { targetCostPerBooked: 100, conversions: 30, campaignSpend: 6000, breachDays: 9 };
+    const common = {
+      targetCostPerBooked: 100,
+      conversions: 30,
+      campaignSpend: 6000,
+      breachDays: 9,
+    };
     const poorBooking = await runnerWith({ ...common, bookings: 10 }).run(RANGE); // effTarget $33.3 → pause
     const healthyBooking = await runnerWith({ ...common, bookings: 30 }).run(RANGE); // rate 1.0 → effTarget $100, CPL $200 not > 3×100
     expect(poorBooking.recommendations.some((r) => r.action === "pause")).toBe(true);
@@ -598,66 +642,68 @@ import type { MarginBasisSchema as MarginBasis } from "@switchboard/schemas";
 - [ ] **Step 4: Compute the tier + effective target once** — insert immediately after Step 4 (`audit-runner.ts:328`, after `const periodDeltas = comparePeriods(...)`), before Step 5:
 
 ```ts
-    // Step 4b: Calibrate the booking-grounded target and select the economic tier
-    // ONCE for this audit (account-level — see the PR2 plan, decision #1). Account
-    // conversions = Σ Meta conversions (the engine's CPL denominator); account
-    // bookings come from the CRM funnel.
-    //
-    // INVARIANT (review must-fix #1): calibrate FIRST, then derive the tier from
-    // whether calibration actually produced a usable target. This makes it
-    // impossible to stamp a recommendation "booked_cac" while judging it against
-    // the legacy CPL target (e.g. bookings ≥ 10 but Meta conversions = 0).
-    // booked_cac ⟺ calibratedTarget is a positive number ⟹ effectiveTarget === calibratedTarget.
-    const accountBookings = crmData.bookings ?? 0;
-    const accountConversions = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
-    const configuredCpb =
-      typeof this.config.targetCostPerBooked === "number" && this.config.targetCostPerBooked > 0
-        ? this.config.targetCostPerBooked
-        : null;
-    const calibratedTarget =
-      configuredCpb !== null
-        ? calibrateTargetFromBooking({
-            targetCostPerBooked: configuredCpb,
-            accountBookings,
-            accountConversions,
-          })
-        : null;
-    const bookedCacAvailable = calibratedTarget !== null && calibratedTarget > 0;
-    const economicTier = selectEconomicTier({
-      bookings: accountBookings,
-      leads: accountConversions,
-      hasBookedTarget: bookedCacAvailable,
-    });
-    // booked_cac (only reachable when bookedCacAvailable) uses the calibrated
-    // target; cpl/cpc keep the legacy targetCPA threshold. applyTier then marks
-    // the cpl proxy by lowering confidence/urgency — the threshold is unchanged,
-    // the output is honestly flagged (not byte-identical).
-    const effectiveTarget =
-      economicTier === "booked_cac" ? calibratedTarget! : this.config.targetCPA;
-    // PR2: no profit-margin / AOV source is plumbed into the audit, so margin
-    // awareness is reported unavailable, never silently satisfied (spec §3.4).
-    const marginBasis: MarginBasis = "unavailable";
-    const nextCycleDate =
-      new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
-      dateRange.until;
+// Step 4b: Calibrate the booking-grounded target and select the economic tier
+// ONCE for this audit (account-level — see the PR2 plan, decision #1). Account
+// conversions = Σ Meta conversions (the engine's CPL denominator); account
+// bookings come from the CRM funnel.
+//
+// INVARIANT (review must-fix #1): calibrate FIRST, then derive the tier from
+// whether calibration actually produced a usable target. This makes it
+// impossible to stamp a recommendation "booked_cac" while judging it against
+// the legacy CPL target (e.g. bookings ≥ 10 but Meta conversions = 0).
+// booked_cac ⟺ calibratedTarget is a positive number ⟹ effectiveTarget === calibratedTarget.
+const accountBookings = crmData.bookings ?? 0;
+const accountConversions = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
+const configuredCpb =
+  typeof this.config.targetCostPerBooked === "number" && this.config.targetCostPerBooked > 0
+    ? this.config.targetCostPerBooked
+    : null;
+const calibratedTarget =
+  configuredCpb !== null
+    ? calibrateTargetFromBooking({
+        targetCostPerBooked: configuredCpb,
+        accountBookings,
+        accountConversions,
+      })
+    : null;
+const bookedCacAvailable = calibratedTarget !== null && calibratedTarget > 0;
+const economicTier = selectEconomicTier({
+  bookings: accountBookings,
+  leads: accountConversions,
+  hasBookedTarget: bookedCacAvailable,
+});
+// booked_cac (only reachable when bookedCacAvailable) uses the calibrated
+// target; cpl/cpc keep the legacy targetCPA threshold. applyTier then marks
+// the cpl proxy by lowering confidence/urgency — the threshold is unchanged,
+// the output is honestly flagged (not byte-identical).
+const effectiveTarget = economicTier === "booked_cac" ? calibratedTarget! : this.config.targetCPA;
+// PR2: no profit-margin / AOV source is plumbed into the audit, so margin
+// awareness is reported unavailable, never silently satisfied (spec §3.4).
+const marginBasis: MarginBasis = "unavailable";
+const nextCycleDate =
+  new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
+  dateRange.until;
 ```
 
 - [ ] **Step 5: Thread `effectiveTarget` into the three target sites.**
 
 `:379` — performance check:
+
 ```ts
-      const performanceTargets = {
-        targetCPA: effectiveTarget,
-        targetROAS: this.config.targetROAS,
-      };
+const performanceTargets = {
+  targetCPA: effectiveTarget,
+  targetROAS: this.config.targetROAS,
+};
 ```
 
 `:403` — breach status (so the durable-breach count is measured against the same target):
+
 ```ts
         targetCPA: effectiveTarget,
 ```
 
 `:414` — recommendation engine:
+
 ```ts
         targetCPA: effectiveTarget,
 ```
@@ -665,27 +711,27 @@ import type { MarginBasisSchema as MarginBasis } from "@switchboard/schemas";
 - [ ] **Step 6: Post-process recs with `applyTier`** — replace the gate loop (`:421-428`):
 
 ```ts
-      // 5g: Apply the economic tier (confidence/urgency/action-family), THEN
-      // gate through the learning phase. Tier-3 withholds destructive actions
-      // as watches; everything else flows into the learning-phase gate.
-      for (const rec of campaignRecs) {
-        const tiered = applyTier({
-          recommendation: rec,
-          tier: economicTier,
-          marginBasis,
-          checkBackDate: nextCycleDate,
-        });
-        if (tiered.watch) {
-          watches.push(tiered.watch);
-          continue;
-        }
-        const gated = this.learningGuard.gate(tiered.recommendation!, learningStatus);
-        if (gated.type === "watch") {
-          watches.push(gated);
-        } else {
-          recommendations.push(gated);
-        }
-      }
+// 5g: Apply the economic tier (confidence/urgency/action-family), THEN
+// gate through the learning phase. Tier-3 withholds destructive actions
+// as watches; everything else flows into the learning-phase gate.
+for (const rec of campaignRecs) {
+  const tiered = applyTier({
+    recommendation: rec,
+    tier: economicTier,
+    marginBasis,
+    checkBackDate: nextCycleDate,
+  });
+  if (tiered.watch) {
+    watches.push(tiered.watch);
+    continue;
+  }
+  const gated = this.learningGuard.gate(tiered.recommendation!, learningStatus);
+  if (gated.type === "watch") {
+    watches.push(gated);
+  } else {
+    recommendations.push(gated);
+  }
+}
 ```
 
 - [ ] **Step 7: Run to verify it passes.**
@@ -725,6 +771,7 @@ Expected: PASS — `targetCostPerBooked` is optional; the inngest build compiles
 > This surfaces a real cost-per-booked on Riley's home/agent-panel ROI bar. Independent of Tasks 1–5. If PR2 is getting wide, ship this as PR2b.
 
 **Files:**
+
 - Modify: `packages/core/src/agent-home/metrics-riley.ts:96-152`
 - Modify: `packages/core/src/agent-home/__tests__/metrics-riley.test.ts` (the 5 ROI assertions)
 - Modify: `apps/dashboard/src/components/agent-panel/key-result.tsx`, `apps/dashboard/src/components/home/this-week.tsx` (hardcoded "per lead" copy)
@@ -752,51 +799,50 @@ Expected: FAIL — still emits `"cost per lead"`.
 - [ ] **Step 3: Implement the CAC surface** in `metrics-riley.ts`. Add a booked-count fetch alongside the existing `Promise.all` (`:34`), mirroring Alex's use of `countBookingsCreated` (`metrics-alex.ts`):
 
 ```ts
-  const bookingsP = store.countBookingsCreated({
-    orgId,
-    excludeStatuses: ["cancelled", "no_show"],
-    from: week.weekStart,
-    to: week.weekEnd,
-  });
+const bookingsP = store.countBookingsCreated({
+  orgId,
+  excludeStatuses: ["cancelled", "no_show"],
+  from: week.weekStart,
+  to: week.weekEnd,
+});
 ```
 
 Add `bookings` to the destructured `await Promise.all([...])`. Then replace the CPL block (`:96-99`) and the ROI IIFE (`:123-152`) to compute cost-per-booked when bookings are present:
 
 ```ts
-  const cac =
-    spendCents !== null && bookings > 0 ? Math.round(spendCents / 100 / bookings) : null;
-  let cacDisplay = "—";
-  if (cac !== null) cacDisplay = cac === 0 ? "<$1 per booked" : `$${cac} per booked`;
-  // targetCpbCents is genuinely "target cost per booking" (shared with Alex);
-  // use it as such now that Riley reads the booked count.
-  const targetDollars =
-    targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
-  const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
+const cac = spendCents !== null && bookings > 0 ? Math.round(spendCents / 100 / bookings) : null;
+let cacDisplay = "—";
+if (cac !== null) cacDisplay = cac === 0 ? "<$1 per booked" : `$${cac} per booked`;
+// targetCpbCents is genuinely "target cost per booking" (shared with Alex);
+// use it as such now that Riley reads the booked count.
+const targetDollars =
+  targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
+const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
 
-  const roi: RoiBar = (() => {
-    if (spendCents === null) {
-      return {
-        degraded: true,
-        degradedHint: "Connect Meta Ads to see cost per booked",
-        label: "cost per booked",
-        comparator: { value: "—", target: targetLabel },
-      };
-    }
-    if (bookings <= 0) {
-      return {
-        degraded: true,
-        degradedHint: "",
-        label: "cost per booked",
-        comparator: { value: "—", target: targetLabel },
-      };
-    }
+const roi: RoiBar = (() => {
+  if (spendCents === null) {
+    return {
+      degraded: true,
+      degradedHint: "Connect Meta Ads to see cost per booked",
+      label: "cost per booked",
+      comparator: { value: "—", target: targetLabel },
+    };
+  }
+  if (bookings <= 0) {
     return {
       degraded: true,
       degradedHint: "",
       label: "cost per booked",
-      comparator: { value: cacDisplay, target: targetLabel },
+      comparator: { value: "—", target: targetLabel },
     };
-  })();
+  }
+  return {
+    degraded: true,
+    degradedHint: "",
+    label: "cost per booked",
+    comparator: { value: cacDisplay, target: targetLabel },
+  };
+})();
 ```
 
 Remove the now-unused `cpl`/`cplDisplay` locals and the stale "reinterprets targetCpbCents as target cost per lead" comment block (`:100-106`).
@@ -846,6 +892,7 @@ CI=true pnpm --filter @switchboard/core test
 pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/api typecheck
 pnpm lint && pnpm format:check
 ```
+
 Expected: all PASS. (`format:check` — CI runs prettier; local lint doesn't — CLAUDE.md.)
 
 - [ ] **Step 2: Prove zero mutating paths** (the PR2 non-negotiable):
@@ -855,6 +902,7 @@ grep -rn "updateCampaignStatus\|updateCampaignBudget\|createDraft\|uploadCreativ
   packages/ad-optimizer/src/audit-runner.ts packages/ad-optimizer/src/recommendation-engine.ts \
   packages/ad-optimizer/src/analyzers/economic-target.ts
 ```
+
 Expected: NO matches (other than doc-comments). Confirms no mutating method gained a caller.
 
 - [ ] **Step 3: Regression locks green** (the swipe-contract + SAFETY tests must not have moved):
@@ -863,6 +911,7 @@ Expected: NO matches (other than doc-comments). Confirms no mutating method gain
 CI=true pnpm --filter @switchboard/ad-optimizer test recommendation-sink
 CI=true pnpm --filter @switchboard/ad-optimizer test meta-ads-client
 ```
+
 Expected: PASS — `financialEffect`/`externalEffect` mapping and SAFETY/PAUSED guards intact.
 
 - [ ] **Step 4: Open PR** `feat/riley-pr2-target` → `main`. Title: `feat(ad-optimizer): aim Riley at booked customers — economic-tier ladder (Phase 1 PR2)`. Body: link the spec + this plan; note "no mutating paths; account-level booking calibration behind the §5 tier ladder; targetCostPerBooked opt-in, back-compat."
@@ -873,7 +922,7 @@ Expected: PASS — `financialEffect`/`externalEffect` mapping and SAFETY/PAUSED 
 
 - **§3.1 economically targeted** → Task 2 `selectEconomicTier` + Task 4 calibration (cost-per-booked when signal sufficient). ✓
 - **§3.2 evidence-gated** → unchanged engine durable-breach gates; `effectiveTarget` threads into `getTargetBreachStatus` (Task 4 Step 5) so the breach count tracks the active target. ✓
-- **§3.3 learning-phase protected** → learning gate still runs, now *after* `applyTier` (Task 4 Step 6). ✓
+- **§3.3 learning-phase protected** → learning gate still runs, now _after_ `applyTier` (Task 4 Step 6). ✓
 - **§3.4 margin-aware / marginBasis** → Task 1 field + Task 4 `marginBasis="unavailable"` (honest; no margin source). ✓
 - **§3.5 operator-explainable / names tier** → Task 1 `economicTier` field **plus** a plain-language basis clause appended to the rationale by `applyTier` (`basisNote`, Task 2), stamped in Task 4. ✓
 - **§3.6 non-mutating** → Task 8 Step 2 grep + Step 3 regression locks. ✓

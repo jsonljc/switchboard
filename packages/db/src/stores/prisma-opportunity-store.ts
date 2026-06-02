@@ -205,6 +205,33 @@ export class PrismaOpportunityStore implements OpportunityStore {
     });
   }
 
+  async countCurrentlyAtStageUpdatedInWindow(input: {
+    orgId: string;
+    stage: string;
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    return this.prisma.opportunity.count({
+      where: {
+        organizationId: input.orgId,
+        stage: input.stage,
+        updatedAt: { gte: input.from, lt: input.to },
+      },
+    });
+  }
+
+  async latestOpportunityStageUpdatedAt(input: {
+    orgId: string;
+    stage: string;
+  }): Promise<Date | null> {
+    const row = await this.prisma.opportunity.findFirst({
+      where: { organizationId: input.orgId, stage: input.stage },
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    });
+    return row?.updatedAt ?? null;
+  }
+
   // -------------------------------------------------------------------------
   // Pipeline board methods — production implementation ships in PR-C2 db task.
   // Stubs satisfy the OpportunityStore interface until then.

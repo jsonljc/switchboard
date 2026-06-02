@@ -11,6 +11,8 @@ function makeStore(): MetricsSignalStore {
     countBookingsCreated: vi.fn(async () => 0),
     countConversionsByType: vi.fn(async () => 0),
     getMetaSpendCents: vi.fn(async () => null),
+    countCurrentlyAtStageUpdatedInWindow: vi.fn(async () => 0),
+    latestOpportunityStageUpdatedAt: vi.fn(async () => null),
   };
 }
 
@@ -24,7 +26,7 @@ describe("projectMetrics orchestrator", () => {
       store: makeStore(),
       targets: DEFAULT_TARGETS,
     });
-    expect(vm.hero.kind).toBe("tours-booked");
+    expect(vm.hero.kind).toBe("appointments-booked");
   });
 
   it("dispatches to riley builder for agentKey='riley'", async () => {

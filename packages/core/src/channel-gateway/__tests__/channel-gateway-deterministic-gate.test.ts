@@ -81,6 +81,7 @@ interface VerdictStoreSpy {
   save: Spy;
   listByConversation: Spy;
   listByDeployment: Spy;
+  countByDeploymentAndClaim: Spy;
 }
 
 interface HandoffStoreSpy {
@@ -115,6 +116,7 @@ function makeVerdictStore(): VerdictStoreSpy {
     save: vi.fn().mockResolvedValue(VERDICT_RECORD),
     listByConversation: vi.fn(),
     listByDeployment: vi.fn(),
+    countByDeploymentAndClaim: vi.fn(),
   };
 }
 
@@ -606,6 +608,7 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
       save: vi.fn().mockRejectedValue(new Error("Verdict store connection lost")),
       listByConversation: vi.fn(),
       listByDeployment: vi.fn(),
+      countByDeploymentAndClaim: vi.fn(),
     };
 
     const config = makeGatewayConfig(
