@@ -1,5 +1,6 @@
 import type { AdsClientInterface } from "./audit-runner.js";
 import type {
+  CampaignInsightSchema as CampaignInsight,
   CampaignInsightsProvider,
   CampaignLearningInput,
   TargetBreachResult,
@@ -81,6 +82,15 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     startDate: Date;
     endDate: Date;
     snapshots?: WeeklyCampaignSnapshot[];
+    /**
+     * Phase-A Gate 1: when set, the conversions denominator for the breach test
+     * is the value of THIS Meta `actions` entry (e.g. "lead"/"purchase") under a
+     * pinned attribution window, not the unfiltered aggregate `conversions` field.
+     * Unset ⇒ aggregate `conversions` (unchanged back-compat behavior).
+     */
+    conversionActionType?: string;
+    /** Attribution windows to pin when `conversionActionType` is set. Default ["7d_click"]. */
+    attributionWindows?: string[];
   }): Promise<TargetBreachResult> {
     const BREACH_WINDOW_DAYS = 14;
     const until = input.endDate;
@@ -89,10 +99,20 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     // BREACH_WINDOW_DAYS daily buckets.
     since.setDate(since.getDate() - (BREACH_WINDOW_DAYS - 1));
 
+    // Denominator selection (Gate 1): an action-type denominator requires the
+    // `actions` breakdown and a PINNED attribution window so the per-day value is
+    // stable run-to-run. When unset we leave both off — exact back-compat: the
+    // aggregate `conversions` field under Meta's account-default windows.
+    const useActionDenominator = Boolean(input.conversionActionType);
     const rows = await this.adsClient.getCampaignInsights({
       dateRange: { since: fmt(since), until: fmt(until) },
-      fields: ["campaign_id", "spend", "conversions", "inline_link_clicks"],
+      fields: useActionDenominator
+        ? ["campaign_id", "spend", "conversions", "inline_link_clicks", "actions"]
+        : ["campaign_id", "spend", "conversions", "inline_link_clicks"],
       timeIncrement: 1,
+      ...(useActionDenominator
+        ? { actionAttributionWindows: input.attributionWindows ?? ["7d_click"] }
+        : {}),
     });
 
     const campaignDays = rows.filter((r) => r.campaignId === input.campaignId);
@@ -117,12 +137,21 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     const windowClicks = campaignDays.reduce((s, d) => s + d.inlineLinkClicks, 0);
     const zeroDayCounts = windowClicks >= MIN_WINDOW_CLICKS_FOR_ZERO_DAY_BREACH;
 
+    // Selected per-day conversions denominator (Gate 1): the configured action
+    // type's value when set, else the aggregate `conversions` field. This single
+    // value feeds BOTH the volume gate's notion of "zero conversions" and the
+    // cpa breach test below; the clicks-based gate itself is unchanged.
+    const dayConversions = (day: CampaignInsight): number =>
+      input.conversionActionType
+        ? Number(day.actions?.find((a) => a.action_type === input.conversionActionType)?.value ?? 0)
+        : day.conversions;
+
     let periodsAboveTarget = 0;
     for (const day of campaignDays) {
       if (day.spend <= 0) continue; // no spend → not a breach day
+      const conv = dayConversions(day);
       // Local boolean — never carry Infinity into rationale/logs/evidence downstream.
-      const breached =
-        day.conversions > 0 ? day.spend / day.conversions > input.targetCPA : zeroDayCounts; // was `day.spend > 0` — the footgun
+      const breached = conv > 0 ? day.spend / conv > input.targetCPA : zeroDayCounts; // was `day.spend > 0` — the footgun
       if (breached) periodsAboveTarget++;
     }
 

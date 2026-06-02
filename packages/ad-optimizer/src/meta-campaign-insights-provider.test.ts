@@ -420,3 +420,140 @@ describe("getTargetBreachStatus — zero-conversion days are volume-gated", () =
     expect(r.periodsAboveTarget).toBe(14); // cpa 200 > 100 every day
   });
 });
+
+// ── Phase-A Gate 1: action-type + pinned-window conversions denominator ───────
+
+describe("getTargetBreachStatus — conversions denominator selection", () => {
+  // Each day: aggregate conversions=10 (cpa 200/10=20 ≤ 100 → NOT a breach), but
+  // the action-type "lead" value=1 (cpa 200/1=200 > 100 → breach). The selected
+  // denominator must decide the breach.
+  const denomRows = () =>
+    Array.from({ length: 14 }, () => ({
+      spend: 200,
+      conversions: 10,
+      inlineLinkClicks: 40,
+      actions: [{ action_type: "lead", value: "1" }],
+    }));
+
+  it("uses the action-type value (not aggregate conversions) when conversionActionType is set", async () => {
+    const r = await new MetaCampaignInsightsProvider(fakeClient(denomRows())).getTargetBreachStatus(
+      { ...breachArgs, conversionActionType: "lead" },
+    );
+    expect(r.periodsAboveTarget).toBe(14); // lead-based cpa 200 > 100 every day
+  });
+
+  it("falls back to aggregate conversions when conversionActionType is unset (back-compat)", async () => {
+    const r = await new MetaCampaignInsightsProvider(fakeClient(denomRows())).getTargetBreachStatus(
+      breachArgs,
+    );
+    expect(r.periodsAboveTarget).toBe(0); // aggregate cpa 20 ≤ 100 → no breach
+  });
+
+  it("requests actions + a pinned attribution window when conversionActionType is set", async () => {
+    const getCampaignInsights = vi.fn(async () => denomRows() as never[]);
+    const client: AdsClientInterface = {
+      getCampaignInsights,
+      getAdSetInsights: async () => [],
+      getAccountSummary: async () => ({
+        accountId: "a",
+        accountName: "A",
+        currency: "USD",
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        activeCampaigns: 1,
+      }),
+    };
+    await new MetaCampaignInsightsProvider(client).getTargetBreachStatus({
+      ...breachArgs,
+      conversionActionType: "lead",
+      attributionWindows: ["7d_click"],
+    });
+    expect(getCampaignInsights).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: expect.arrayContaining(["actions", "inline_link_clicks"]),
+        actionAttributionWindows: ["7d_click"],
+      }),
+    );
+  });
+
+  it("defaults the attribution window to 7d_click when conversionActionType is set without one", async () => {
+    const getCampaignInsights = vi.fn(async () => denomRows() as never[]);
+    const client: AdsClientInterface = {
+      getCampaignInsights,
+      getAdSetInsights: async () => [],
+      getAccountSummary: async () => ({
+        accountId: "a",
+        accountName: "A",
+        currency: "USD",
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        activeCampaigns: 1,
+      }),
+    };
+    await new MetaCampaignInsightsProvider(client).getTargetBreachStatus({
+      ...breachArgs,
+      conversionActionType: "lead",
+    });
+    expect(getCampaignInsights).toHaveBeenCalledWith(
+      expect.objectContaining({ actionAttributionWindows: ["7d_click"] }),
+    );
+  });
+
+  it("does NOT pin an attribution window when conversionActionType is unset (back-compat)", async () => {
+    const getCampaignInsights = vi.fn(async () => denomRows() as never[]);
+    const client: AdsClientInterface = {
+      getCampaignInsights,
+      getAdSetInsights: async () => [],
+      getAccountSummary: async () => ({
+        accountId: "a",
+        accountName: "A",
+        currency: "USD",
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        activeCampaigns: 1,
+      }),
+    };
+    await new MetaCampaignInsightsProvider(client).getTargetBreachStatus(breachArgs);
+    // Back-compat: neither the `actions` field nor a pinned window is requested.
+    expect(getCampaignInsights).not.toHaveBeenCalledWith(
+      expect.objectContaining({ actionAttributionWindows: expect.anything() }),
+    );
+    expect(getCampaignInsights).not.toHaveBeenCalledWith(
+      expect.objectContaining({ fields: expect.arrayContaining(["actions"]) }),
+    );
+  });
+
+  it("treats a high-click zero-action-conversion day as a breach (volume gate uses the selected denominator)", async () => {
+    // No "lead" actions at all → action-type denominator = 0 for every day. With
+    // window clicks ≥ 20, zero-conversion days count (the clicks-based gate is
+    // unchanged), so all 14 days breach.
+    const rows = Array.from({ length: 14 }, () => ({
+      spend: 50,
+      conversions: 7, // aggregate would be non-zero; must be IGNORED under action-type
+      inlineLinkClicks: 40,
+      actions: [{ action_type: "purchase", value: "3" }], // no "lead" present
+    }));
+    const r = await new MetaCampaignInsightsProvider(fakeClient(rows)).getTargetBreachStatus({
+      ...breachArgs,
+      conversionActionType: "lead",
+    });
+    expect(r.periodsAboveTarget).toBe(14); // lead=0 every day + 560 clicks ≥ floor
+  });
+
+  it("does NOT count low-click zero-action-conversion days (clicks gate still governs)", async () => {
+    const rows = Array.from({ length: 14 }, () => ({
+      spend: 3,
+      conversions: 7,
+      inlineLinkClicks: 1, // 14 total clicks < 20 floor
+      actions: [{ action_type: "purchase", value: "3" }], // no "lead"
+    }));
+    const r = await new MetaCampaignInsightsProvider(fakeClient(rows)).getTargetBreachStatus({
+      ...breachArgs,
+      conversionActionType: "lead",
+    });
+    expect(r.periodsAboveTarget).toBe(0); // lead=0 but clicks below floor → not a breach
+  });
+});

@@ -73,6 +73,11 @@ export const CampaignInsightSchema = z.object({
   costPerInlineLinkClick: z.number(),
   dateStart: z.string(),
   dateStop: z.string(),
+  // Optional per-action breakdown from Meta's `actions` field. When a breach
+  // detector is configured with a `conversionActionType`, the matching action's
+  // value (under a pinned attribution window) becomes the conversions denominator;
+  // otherwise the aggregate `conversions` field is used (back-compat).
+  actions: z.array(z.object({ action_type: z.string(), value: z.string() })).optional(),
 });
 export type CampaignInsightSchema = z.infer<typeof CampaignInsightSchema>;
 

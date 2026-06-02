@@ -45,6 +45,8 @@ export interface AdsClientInterface {
     dateRange: { since: string; until: string };
     fields: string[];
     timeIncrement?: number;
+    /** Pins Meta `action_attribution_windows` for the `actions` breakdown. */
+    actionAttributionWindows?: string[];
   }): Promise<CampaignInsight[]>;
   getAdSetInsights(params: {
     dateRange: { since: string; until: string };
@@ -65,6 +67,15 @@ export interface AuditConfig {
   /** PR2: cost-per-booked target (dollars). When set + booking volume sufficient,
    * audit uses economic tier "booked_cac"; otherwise falls back to "cpl" vs targetCPA. */
   targetCostPerBooked?: number;
+  /**
+   * Phase-A Gate 1: the Meta `actions` action_type (e.g. "lead"/"purchase") to use
+   * as the per-day conversions denominator in the target-breach detector. When set,
+   * the detector reads that action's value under a pinned attribution window instead
+   * of Meta's unfiltered aggregate `conversions`. Unset ⇒ aggregate (back-compat).
+   */
+  conversionActionType?: string;
+  /** Attribution windows pinned for `conversionActionType`. Default ["7d_click"]. */
+  attributionWindows?: string[];
   mediaBenchmarks: MediaBenchmarks;
   /** Optional Meta Pixel ID. When present + signalHealthChecker wired, pulls a
    * signal-health report and short-circuits per-campaign diagnostics on red score. */
@@ -350,6 +361,12 @@ export class AuditRunner {
         targetCPA: effectiveTarget,
         startDate: new Date(dateRange.since),
         endDate: new Date(dateRange.until),
+        ...(this.config.conversionActionType
+          ? { conversionActionType: this.config.conversionActionType }
+          : {}),
+        ...(this.config.attributionWindows
+          ? { attributionWindows: this.config.attributionWindows }
+          : {}),
       });
       const decision = decideForCampaign({
         campaignId: insight.campaignId,

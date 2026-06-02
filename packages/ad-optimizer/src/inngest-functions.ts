@@ -16,6 +16,10 @@ interface DeploymentInfo {
     targetCPA?: number;
     targetROAS?: number;
     targetCostPerBooked?: number;
+    /** Phase-A Gate 1: Meta `actions` action_type for the breach denominator (e.g. "lead"). */
+    conversionActionType?: string;
+    /** Attribution windows pinned for `conversionActionType` (e.g. ["7d_click"]). */
+    attributionWindows?: string[];
   };
 }
 
@@ -117,12 +121,23 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
       // CPL, never booked_cac). When a real producer lands (wizard), route it through
       // resolveAdOptimizerConfig/AdOptimizerConfigSchema to coerce string→number.
       const cpb = deployment.inputConfig.targetCostPerBooked;
+      // Phase-A Gate 1: optional conversions-denominator config. Default unset =
+      // back-compat (aggregate `conversions`). Guarded like targetCostPerBooked so a
+      // missing/empty producer value never silently changes the denominator.
+      const conversionActionType = deployment.inputConfig.conversionActionType;
+      const attributionWindows = deployment.inputConfig.attributionWindows;
       const config: AuditConfig = {
         accountId: creds.accountId,
         orgId: deployment.organizationId,
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
         ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
+        ...(typeof conversionActionType === "string" && conversionActionType
+          ? { conversionActionType }
+          : {}),
+        ...(Array.isArray(attributionWindows) && attributionWindows.length > 0
+          ? { attributionWindows }
+          : {}),
         mediaBenchmarks: {
           inlineLinkClickCtr: 2.0,
           landingPageViewRate: 0.85,

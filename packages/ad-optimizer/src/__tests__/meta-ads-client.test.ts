@@ -600,3 +600,27 @@ describe("fractional conversions", () => {
     expect(rows[0]!.conversions).toBe(2.5);
   });
 });
+
+describe("action_attribution_windows + actions passthrough", () => {
+  it("forwards action_attribution_windows and surfaces parsed actions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { campaign_id: "c1", spend: "100", actions: [{ action_type: "lead", value: "4" }] },
+          ],
+        }),
+      ),
+    );
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    const rows = await client.getCampaignInsights({
+      dateRange: { since: "2026-05-01", until: "2026-05-07" },
+      fields: ["campaign_id", "spend", "actions"],
+      actionAttributionWindows: ["7d_click"],
+    });
+    const url = fetchMock.mock.calls[0]![0] as string;
+    expect(url).toContain("action_attribution_windows");
+    expect(rows[0]!.actions?.find((a) => a.action_type === "lead")?.value).toBe("4");
+    fetchMock.mockRestore();
+  });
+});
