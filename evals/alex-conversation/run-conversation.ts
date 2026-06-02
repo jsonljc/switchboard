@@ -151,6 +151,8 @@ export async function resolveParameters(
   const config = fixture.businessFacts === "absent" ? null : createStubBusinessFacts();
   const businessFactsStore = createBusinessFactsStore(config);
 
+  // Stub the builder's other stores. A pre-existing active opportunity is returned
+  // so the builder skips its auto-create branch (which needs a contactStore.create).
   const builderStores = {
     opportunityStore: {
       findActiveByContact: async (_orgId: string, _contactId: string) => [
