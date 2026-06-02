@@ -54,6 +54,9 @@ export interface SourceFunnel {
   revenue: number;
 }
 
+/** A per-campaign funnel projection. Structurally identical to {@link SourceFunnel}. */
+export type CampaignFunnel = SourceFunnel;
+
 const EMPTY: SourceFunnel = {
   received: 0,
   qualified: 0,
@@ -72,6 +75,7 @@ const EMPTY: SourceFunnel = {
  */
 export type CrmFunnelDataWithSources = CrmFunnelData & {
   bySource: Record<string, SourceFunnel>;
+  byCampaign: Record<string, CampaignFunnel>;
 };
 
 function safeRate(numerator: number, denominator: number): number | null {
@@ -117,18 +121,25 @@ export class RealCrmDataProvider implements CrmDataProvider {
       ctwa: { ...EMPTY },
       instant_form: { ...EMPTY },
     };
+    // Per-campaign projection over the SAME rows (zero new queries), lazily keyed
+    // by sourceCampaignId. Counts + the existing closed-revenue field only; booked
+    // value + spend economics are joined later by compareCampaigns.
+    const byCampaign: Record<string, CampaignFunnel> = {};
 
     for (const row of rows) {
       const bucket = bySource[row.sourceType];
-      if (!bucket) continue;
+      if (!bucket) continue; // unknown source type — excluded from both projections
       const stageKey = row.stage === "lead" ? "received" : row.stage;
-      if (stageKey in bucket) {
-        const indexable = bucket as unknown as Record<string, number>;
-        const current = indexable[stageKey] ?? 0;
-        indexable[stageKey] = current + row.count;
-      }
-      if (row.revenue) {
-        bucket.revenue += row.revenue;
+      const addStage = (target: SourceFunnel): void => {
+        if (stageKey in target) {
+          const indexable = target as unknown as Record<string, number>;
+          indexable[stageKey] = (indexable[stageKey] ?? 0) + row.count;
+        }
+        if (row.revenue) target.revenue += row.revenue;
+      };
+      addStage(bucket);
+      if (row.sourceCampaignId) {
+        addStage((byCampaign[row.sourceCampaignId] ??= { ...EMPTY }));
       }
     }
 
@@ -167,6 +178,7 @@ export class RealCrmDataProvider implements CrmDataProvider {
         contactsWithRevenueEvent: closed,
       },
       bySource,
+      byCampaign,
     };
   }
 
