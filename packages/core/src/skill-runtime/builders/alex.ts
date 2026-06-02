@@ -29,6 +29,8 @@ export const alexBuilder = async (
     // (skill-mode.ts) via resolveOutcomePatternsConfig(). When true,
     // ContextBuilder surfaces patterns at the relaxed pilot bar.
     pilotMode?: boolean;
+    /** Optional fixed instant used for deterministic testing. Defaults to `new Date()`. */
+    now?: Date;
   },
   stores: SkillStores,
   services?: SkillServices,
@@ -94,12 +96,28 @@ export const alexBuilder = async (
     : null;
 
   let BUSINESS_FACTS = "";
+  let facts: BusinessFacts | null = null;
   if (stores.businessFactsStore) {
-    const facts = (await stores.businessFactsStore.get(orgId)) as BusinessFacts | null;
+    facts = (await stores.businessFactsStore.get(orgId)) as BusinessFacts | null;
     if (facts) {
       BUSINESS_FACTS = renderBusinessFacts(facts);
     }
   }
+
+  const tz = facts?.timezone ?? "Asia/Singapore";
+  const now = config.now ?? new Date();
+  const dtParts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    weekday: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type: string): string => dtParts.find((p) => p.type === type)?.value ?? "";
+  const CURRENT_DATETIME = `${get("year")}-${get("month")}-${get("day")} (${get("weekday")}) ${get("hour")}:${get("minute")} ${tz}`;
 
   // Resolve outcome-informed patterns from ContextBuilder when available.
   // Empty string when no services or no high-confidence patterns have surfaced yet —
@@ -128,6 +146,7 @@ export const alexBuilder = async (
     LEAD_PROFILE: sanitizeContactForPrompt(leadProfile),
     BUSINESS_FACTS,
     OUTCOME_PATTERNS,
+    CURRENT_DATETIME,
     PERSONA_CONFIG: {
       tone: ctx.persona.tone,
       qualificationCriteria: ctx.persona.qualificationCriteria,

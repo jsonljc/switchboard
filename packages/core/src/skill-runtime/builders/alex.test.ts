@@ -344,4 +344,36 @@ describe("alexBuilder", () => {
     expect(result.parameters.LEAD_PROFILE).toBeNull();
     expect(findByIdMock).not.toHaveBeenCalled();
   });
+
+  it("CURRENT_DATETIME contains the date and timezone when facts.timezone is set", async () => {
+    const ctx = createMockCtx();
+    const fixedNow = new Date("2026-06-02T07:45:00Z");
+    const stores = createMockStores({
+      businessFactsStore: {
+        get: vi.fn().mockResolvedValue({
+          timezone: "Asia/Singapore",
+          businessName: "Glow Aesthetics",
+          locations: [{ name: "Main", address: "1 Orchard Rd" }],
+          openingHours: {},
+          services: [{ id: "s1", name: "Facial", description: "desc", durationMinutes: 30 }],
+          escalationContact: { name: "Team", channel: "whatsapp", address: "+65..." },
+          additionalFaqs: [],
+        }),
+      } as never,
+    });
+    const result = await alexBuilder(ctx, { ...config, now: fixedNow }, stores);
+    const dt = result.parameters.CURRENT_DATETIME as string;
+    expect(dt).toContain("2026-06-02");
+    expect(dt).toContain("Asia/Singapore");
+  });
+
+  it("CURRENT_DATETIME falls back to Asia/Singapore timezone when no facts", async () => {
+    const ctx = createMockCtx();
+    const fixedNow = new Date("2026-06-02T07:45:00Z");
+    const stores = createMockStores();
+    const result = await alexBuilder(ctx, { ...config, now: fixedNow }, stores);
+    const dt = result.parameters.CURRENT_DATETIME as string;
+    expect(dt).toContain("2026-06-02");
+    expect(dt).toContain("Asia/Singapore");
+  });
 });
