@@ -47,7 +47,7 @@
   --good-tint: hsl(var(--positive-subtle));
   --attention: hsl(var(--action));
   --critical: hsl(var(--destructive));
-  /* token-debt: no --destructive-subtle primitive yet — inbox semantic-tint follow-up */
+  /* token-debt: no --destructive-subtle primitive yet (inbox semantic tint) — #832 — expires wave-3 */
   --critical-tint: #f8e4e0;
 
   /* type */

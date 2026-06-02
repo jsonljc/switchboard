@@ -262,11 +262,18 @@ describe("token governance — governed-source drift sweep (generalized)", () =>
       /--(action|operator|char-accent|agent-(?:alex|riley|mira)|coral|teal|violet|amber)(?:-(?:deep|tint|soft|paper|hover|foreground|subtle))?\s*:\s*([^;]+);/g;
     const offenders: string[] = [];
     for (const { path: p, content } of files) {
+      const lines = content.split("\n");
       for (const m of content.matchAll(BRAND_DEF)) {
         const value = m[2].trim();
-        if (!/var\(--/.test(value) && !/token-debt:/.test(content)) {
-          offenders.push(`${rel(p)}: ${m[0].trim()}`);
-        }
+        if (/var\(--/.test(value)) continue;
+        // A token-debt exemption must sit on the declaration's own line or the
+        // line directly above it (NOT anywhere in the file) and carry an `expires`
+        // clause (spec §3.3) — a file-wide marker no longer disarms the check.
+        const lineNo = content.slice(0, m.index ?? 0).split("\n").length - 1;
+        const marked = [lines[lineNo], lines[lineNo - 1]].some(
+          (l) => l != null && /token-debt:.*expires/.test(l),
+        );
+        if (!marked) offenders.push(`${rel(p)}: ${m[0].trim()}`);
       }
     }
     expect(offenders, offenders.join("\n")).toEqual([]);
