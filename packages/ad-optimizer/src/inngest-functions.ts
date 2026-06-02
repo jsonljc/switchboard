@@ -15,6 +15,7 @@ interface DeploymentInfo {
     monthlyBudget?: number;
     targetCPA?: number;
     targetROAS?: number;
+    targetCostPerBooked?: number;
   };
 }
 
@@ -110,11 +111,13 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
 
     await step.run(`audit-${deployment.id}`, async () => {
       const adsClient = deps.createAdsClient(creds);
+      const cpb = deployment.inputConfig.targetCostPerBooked;
       const config: AuditConfig = {
         accountId: creds.accountId,
         orgId: deployment.organizationId,
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
+        ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
         mediaBenchmarks: {
           inlineLinkClickCtr: 2.0,
           landingPageViewRate: 0.85,

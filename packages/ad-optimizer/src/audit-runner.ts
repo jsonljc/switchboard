@@ -67,6 +67,13 @@ export interface AuditConfig {
   orgId: string;
   targetCPA: number;
   targetROAS: number;
+  /**
+   * PR2 (Target): optional cost-per-booked-customer target (dollars). When set,
+   * and booking volume is sufficient, the audit judges against a booking-grounded
+   * effective target (economic tier "booked_cac"). When absent, the audit uses
+   * cost-per-lead against `targetCPA` exactly as before (tier "cpl").
+   */
+  targetCostPerBooked?: number;
   mediaBenchmarks: MediaBenchmarks;
   /**
    * Optional Meta Pixel ID. When present alongside `signalHealthChecker`,
