@@ -268,6 +268,27 @@ describe("<InboxScreen>", () => {
       expect(screen.queryByText(/that's everything/i)).toBeNull();
       expect(screen.queryByText(/couldn't load/i)).toBeNull();
     });
+
+    // (2b) keys-pending disabled query — the false-inbox-zero regression guard.
+    // useDecisionFeed has `enabled: !!keys`, so before the org keys resolve the
+    // query is DISABLED: isLoading is FALSE, data undefined, isError false.
+    // Gating the loading affordance on `isLoading` falls through this state and
+    // flashes a false inbox-zero ("That's everything") with items still pending.
+    // The gate must be `!data && !error`. See feedback_react_query_enabled_false_isloading.
+    it("renders loading, NOT a false inbox-zero, when the query is keys-pending (data undefined, isLoading false)", () => {
+      feedByKey = (_agentKey) => ({
+        data: undefined,
+        isLoading: false,
+        isError: false,
+        refetch: refetchMock,
+      });
+
+      render(<InboxScreen />);
+
+      expect(screen.getByText(/loading/i)).toBeInTheDocument();
+      // The empty-state heading must be absent — no false "all clear".
+      expect(screen.queryByRole("heading", { name: /that's everything/i })).toBeNull();
+    });
   });
 
   // Test 3: empty unfiltered
