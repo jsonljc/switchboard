@@ -196,4 +196,56 @@ describe("AuditRunner integration — real MetaCampaignInsightsProvider", () => 
     expect(report.recommendations.every((r) => r.action !== "pause")).toBe(true);
     expect(report.watches.length).toBeGreaterThan(0);
   });
+
+  it("abstains (no recs/watches, one coverage insight) when injected coverage is below the floor", async () => {
+    // Gate 0: when a coverageValidator is injected and reports coverage below the
+    // sufficiency floor, the audit returns an abstention report and never reaches
+    // per-campaign analysis. The ads client should not be called for insights.
+    const adsClient = {
+      getCampaignInsights: vi.fn(async () => []),
+      getAdSetInsights: vi.fn(async () => []),
+      getAccountSummary: vi.fn(async () => ({
+        accountId: "a",
+        accountName: "n",
+        currency: "USD",
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        activeCampaigns: 0,
+      })),
+    };
+    const coverageValidator = {
+      validate: vi.fn(async () => ({
+        bySource: {} as never,
+        coveragePct: 0.2,
+      })),
+    };
+    const runner = new AuditRunner({
+      adsClient: adsClient as never,
+      crmDataProvider: fakeCrm(),
+      insightsProvider: new MetaCampaignInsightsProvider(adsClient as never),
+      config: {
+        accountId: "a",
+        orgId: "o",
+        targetCPA: 50,
+        targetROAS: 2,
+        mediaBenchmarks: { inlineLinkClickCtr: 1, landingPageViewRate: 0.5 },
+      },
+      coverageValidator,
+    });
+    const report = await runner.run({
+      dateRange: { since: "2026-05-25", until: "2026-06-01" },
+      previousDateRange: { since: "2026-05-18", until: "2026-05-25" },
+    });
+
+    expect(coverageValidator.validate).toHaveBeenCalledWith({ orgId: "o", accountId: "a" });
+    expect(report.recommendations).toEqual([]);
+    expect(report.watches).toEqual([]);
+    expect(report.insights).toHaveLength(1);
+    expect(report.insights[0]?.campaignId).toBe("account");
+    expect(report.insights[0]?.category).toBe("coverage_insufficient");
+    expect(report.insights[0]?.message.toLowerCase()).toContain("coverage");
+    // Abstention short-circuits before any insights pull.
+    expect(adsClient.getCampaignInsights).not.toHaveBeenCalled();
+  });
 });

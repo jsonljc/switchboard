@@ -7,6 +7,7 @@ import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
 import type { RecommendationEmitter } from "./recommendation-sink.js";
+import type { CoverageReport } from "./onboarding/coverage-validator.js";
 
 interface DeploymentInfo {
   id: string;
@@ -16,6 +17,10 @@ interface DeploymentInfo {
     targetCPA?: number;
     targetROAS?: number;
     targetCostPerBooked?: number;
+    /** Phase-A Gate 1: Meta `actions` action_type for the breach denominator (e.g. "lead"). */
+    conversionActionType?: string;
+    /** Attribution windows pinned for `conversionActionType` (e.g. ["7d_click"]). */
+    attributionWindows?: string[];
   };
 }
 
@@ -53,6 +58,19 @@ export interface CronDependencies {
    * row + a paired WorkTrace row atomically (Wave B PR-1 substrate).
    */
   recommendationEmitter?: RecommendationEmitter;
+  /**
+   * Optional Gate 0. When provided, the weekly audit's AuditRunner gets a
+   * coverage validator and abstains (no recommendations, one explanatory insight)
+   * if tracked-source coverage is below the sufficiency floor. Default unset ⇒ no
+   * gate (production behavior unchanged until a real validator is wired in
+   * apps/api). NOTE: the real CoverageValidator needs `listCampaigns` + an intake
+   * store, neither of which is available on the current cron ads client — wiring a
+   * production validator is a follow-up.
+   */
+  createCoverageValidator?: (
+    deploymentId: string,
+    creds: DeploymentCredentials,
+  ) => { validate(q: { orgId: string; accountId: string }): Promise<CoverageReport> };
 }
 
 interface StepTools {
@@ -117,12 +135,23 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
       // CPL, never booked_cac). When a real producer lands (wizard), route it through
       // resolveAdOptimizerConfig/AdOptimizerConfigSchema to coerce string→number.
       const cpb = deployment.inputConfig.targetCostPerBooked;
+      // Phase-A Gate 1: optional conversions-denominator config. Default unset =
+      // back-compat (aggregate `conversions`). Guarded like targetCostPerBooked so a
+      // missing/empty producer value never silently changes the denominator.
+      const conversionActionType = deployment.inputConfig.conversionActionType;
+      const attributionWindows = deployment.inputConfig.attributionWindows;
       const config: AuditConfig = {
         accountId: creds.accountId,
         orgId: deployment.organizationId,
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
         ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
+        ...(typeof conversionActionType === "string" && conversionActionType
+          ? { conversionActionType }
+          : {}),
+        ...(Array.isArray(attributionWindows) && attributionWindows.length > 0
+          ? { attributionWindows }
+          : {}),
         mediaBenchmarks: {
           inlineLinkClickCtr: 2.0,
           landingPageViewRate: 0.85,
@@ -134,12 +163,18 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         pixelId && deps.createSignalHealthChecker
           ? deps.createSignalHealthChecker(creds)
           : undefined;
+      // Gate 0 (optional, back-compat). Unset ⇒ no coverage gate. A production
+      // validator is a follow-up (needs listCampaigns + intake store).
+      const coverageValidator = deps.createCoverageValidator
+        ? deps.createCoverageValidator(deployment.id, creds)
+        : undefined;
       const runner = new AuditRunner({
         adsClient,
         crmDataProvider: deps.createCrmProvider(deployment.id),
         insightsProvider: deps.createInsightsProvider(adsClient),
         config,
         ...(signalHealthChecker ? { signalHealthChecker } : {}),
+        ...(coverageValidator ? { coverageValidator } : {}),
         ...(deps.recommendationEmitter
           ? {
               recommendationEmitter: deps.recommendationEmitter,

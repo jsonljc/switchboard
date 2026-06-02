@@ -24,6 +24,13 @@ interface CampaignInsightsParams {
   fields: string[];
   breakdowns?: string[];
   timeIncrement?: number;
+  /**
+   * Pins the Meta `action_attribution_windows` for the `actions` breakdown (e.g.
+   * `["7d_click"]`). When set, action values are reported under exactly these
+   * windows instead of the account default. Used by the breach detector so the
+   * conversions denominator (per `conversionActionType`) is stable across runs.
+   */
+  actionAttributionWindows?: string[];
 }
 
 interface AdSetInsightsParams {
@@ -87,8 +94,15 @@ export class MetaAdsClient {
       queryParams.set("time_increment", String(params.timeIncrement));
     }
 
+    if (params.actionAttributionWindows) {
+      queryParams.set(
+        "action_attribution_windows",
+        JSON.stringify(params.actionAttributionWindows),
+      );
+    }
+
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);
-    const data = response.data as Record<string, string>[];
+    const data = response.data as Record<string, unknown>[];
     return data.map((raw) => this.mapCampaignInsight(raw));
   }
 
@@ -315,23 +329,28 @@ export class MetaAdsClient {
     this.lastCallAt = Date.now();
   }
 
-  private mapCampaignInsight(raw: Record<string, string>): CampaignInsight {
+  private mapCampaignInsight(raw: Record<string, unknown>): CampaignInsight {
     return {
-      campaignId: raw.campaign_id ?? "",
-      campaignName: raw.campaign_name ?? "",
-      status: raw.status ?? "",
-      effectiveStatus: raw.effective_status ?? "",
-      impressions: parseInt(raw.impressions ?? "0", 10),
-      inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
-      spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseFloat(raw.conversions ?? "0"),
-      revenue: parseFloat(raw.revenue ?? "0"),
-      frequency: parseFloat(raw.frequency ?? "0"),
-      cpm: parseFloat(raw.cpm ?? "0"),
-      inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),
-      costPerInlineLinkClick: parseFloat(raw.cost_per_inline_link_click ?? "0"),
-      dateStart: raw.date_start ?? "",
-      dateStop: raw.date_stop ?? "",
+      campaignId: String(raw.campaign_id ?? ""),
+      campaignName: String(raw.campaign_name ?? ""),
+      status: String(raw.status ?? ""),
+      effectiveStatus: String(raw.effective_status ?? ""),
+      impressions: parseInt(String(raw.impressions ?? "0"), 10),
+      inlineLinkClicks: parseInt(String(raw.inline_link_clicks ?? "0"), 10),
+      spend: parseFloat(String(raw.spend ?? "0")),
+      conversions: parseFloat(String(raw.conversions ?? "0")),
+      revenue: parseFloat(String(raw.revenue ?? "0")),
+      frequency: parseFloat(String(raw.frequency ?? "0")),
+      cpm: parseFloat(String(raw.cpm ?? "0")),
+      inlineLinkClickCtr: parseFloat(String(raw.inline_link_click_ctr ?? "0")),
+      costPerInlineLinkClick: parseFloat(String(raw.cost_per_inline_link_click ?? "0")),
+      dateStart: String(raw.date_start ?? ""),
+      dateStop: String(raw.date_stop ?? ""),
+      // Meta returns `actions` as an array of { action_type, value }. Surface it
+      // verbatim when present so action-type-scoped denominators can read it.
+      ...(Array.isArray(raw.actions)
+        ? { actions: raw.actions as { action_type: string; value: string }[] }
+        : {}),
     };
   }
 

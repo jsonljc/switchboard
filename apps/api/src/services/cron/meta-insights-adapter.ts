@@ -57,7 +57,7 @@ export function createMetaInsightsProviderForOrg(
           "date_start",
           "date_stop",
         ],
-        breakdowns: ["day"],
+        timeIncrement: 1,
       });
 
       // Filter to the requested campaign

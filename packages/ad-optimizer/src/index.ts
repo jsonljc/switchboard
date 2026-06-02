@@ -14,6 +14,8 @@ export { diagnose } from "./metric-diagnostician.js";
 export type { Diagnosis } from "./metric-diagnostician.js";
 export { generateRecommendations } from "./recommendation-engine.js";
 export type { RecommendationInput } from "./recommendation-engine.js";
+export { decideForCampaign, insightToMetrics } from "./campaign-decision.js";
+export type { CampaignDecisionInput, CampaignDecisionResult } from "./campaign-decision.js";
 export { AuditRunner } from "./audit-runner.js";
 export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
 export {

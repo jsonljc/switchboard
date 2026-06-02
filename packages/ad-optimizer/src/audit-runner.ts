@@ -24,11 +24,7 @@ import { LearningPhaseGuard, LearningPhaseGuardV2 } from "./learning-phase-guard
 import { detectFunnelShape } from "./funnel-detector.js";
 import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
-import { diagnose } from "./metric-diagnostician.js";
-import {
-  generateRecommendations,
-  generateSignalHealthRecommendations,
-} from "./recommendation-engine.js";
+import { generateSignalHealthRecommendations } from "./recommendation-engine.js";
 import {
   runRecommendationSink,
   type EmissionContext,
@@ -38,7 +34,19 @@ import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
-import { resolveEconomicTarget, applyTier } from "./analyzers/economic-target.js";
+import { resolveEconomicTarget } from "./analyzers/economic-target.js";
+import { resetsLearningFor } from "./action-reset-classification.js";
+import { decideForCampaign } from "./campaign-decision.js";
+import {
+  isCoverageSufficient,
+  MIN_COVERAGE_PCT,
+  type CoverageReport,
+} from "./onboarding/coverage-validator.js";
+import {
+  buildCoverageAbstentionReport,
+  buildSignalHealthCriticalReport,
+  evaluateDenominatorStepChange,
+} from "./audit-report-builders.js";
 
 // ── Interfaces ──
 
@@ -47,6 +55,8 @@ export interface AdsClientInterface {
     dateRange: { since: string; until: string };
     fields: string[];
     timeIncrement?: number;
+    /** Pins Meta `action_attribution_windows` for the `actions` breakdown. */
+    actionAttributionWindows?: string[];
   }): Promise<CampaignInsight[]>;
   getAdSetInsights(params: {
     dateRange: { since: string; until: string };
@@ -67,6 +77,15 @@ export interface AuditConfig {
   /** PR2: cost-per-booked target (dollars). When set + booking volume sufficient,
    * audit uses economic tier "booked_cac"; otherwise falls back to "cpl" vs targetCPA. */
   targetCostPerBooked?: number;
+  /**
+   * Phase-A Gate 1: the Meta `actions` action_type (e.g. "lead"/"purchase") to use
+   * as the per-day conversions denominator in the target-breach detector. When set,
+   * the detector reads that action's value under a pinned attribution window instead
+   * of Meta's unfiltered aggregate `conversions`. Unset ⇒ aggregate (back-compat).
+   */
+  conversionActionType?: string;
+  /** Attribution windows pinned for `conversionActionType`. Default ["7d_click"]. */
+  attributionWindows?: string[];
   mediaBenchmarks: MediaBenchmarks;
   /** Optional Meta Pixel ID. When present + signalHealthChecker wired, pulls a
    * signal-health report and short-circuits per-campaign diagnostics on red score. */
@@ -109,6 +128,12 @@ export interface AuditDependencies {
    * creative changes when the conversion signal is broken.
    */
   signalHealthChecker?: SignalHealthReportProvider;
+  /** Optional Gate 0. When injected, the audit abstains (no recommendations, one
+   * explanatory insight) if tracked-source coverage is below the sufficiency floor.
+   * Back-compat: absent → no coverage gate (existing callers unaffected). */
+  coverageValidator?: {
+    validate(query: { orgId: string; accountId: string }): Promise<CoverageReport>;
+  };
 }
 
 // ── Helpers ──
@@ -130,19 +155,6 @@ const INSIGHT_FIELDS = [
 
 function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
-}
-
-function insightToMetrics(insight: CampaignInsight): MetricSet {
-  const { spend, impressions, inlineLinkClicks, conversions, revenue, frequency } = insight;
-  return {
-    cpm: safeDivide(spend, impressions) * 1000,
-    inlineLinkClickCtr: safeDivide(inlineLinkClicks, impressions) * 100,
-    costPerInlineLinkClick: safeDivide(spend, inlineLinkClicks),
-    cpl: safeDivide(spend, conversions),
-    cpa: safeDivide(spend, conversions),
-    roas: safeDivide(revenue, spend),
-    frequency,
-  };
 }
 
 function aggregateMetrics(insights: CampaignInsight[]): MetricSet {
@@ -199,6 +211,7 @@ export class AuditRunner {
   private readonly recommendationEmitter?: RecommendationEmitter;
   private readonly recommendationEmissionContext?: EmissionContext;
   private readonly signalHealthChecker?: SignalHealthReportProvider;
+  private readonly coverageValidator?: AuditDependencies["coverageValidator"];
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -212,6 +225,7 @@ export class AuditRunner {
     this.recommendationEmitter = deps.recommendationEmitter;
     this.recommendationEmissionContext = deps.recommendationEmissionContext;
     this.signalHealthChecker = deps.signalHealthChecker;
+    this.coverageValidator = deps.coverageValidator;
 
     if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
       throw new Error(
@@ -226,6 +240,34 @@ export class AuditRunner {
     previousDateRange: { since: string; until: string };
   }): Promise<AuditReport> {
     const { dateRange, previousDateRange } = params;
+
+    // Gate 0 (Phase-A): data-sufficiency abstention. When a coverage validator is
+    // injected and tracked-source coverage is below the sufficiency floor, Riley
+    // holds all recommendations rather than analyze on blind spots, returning an
+    // abstention report with one account-level explanatory insight. Opt-in: absent
+    // validator ⇒ no gate (existing callers unaffected).
+    if (this.coverageValidator) {
+      const coverage = await this.coverageValidator.validate({
+        orgId: this.config.orgId,
+        accountId: this.config.accountId,
+      });
+      if (!isCoverageSufficient(coverage)) {
+        const pct = Math.round(coverage.coveragePct * 100);
+        return buildCoverageAbstentionReport({
+          accountId: this.config.accountId,
+          dateRange,
+          coverageInsight: {
+            type: "insight",
+            campaignId: "account",
+            campaignName: "Account-wide signal",
+            message: `Tracked-source coverage is ${pct}% (below the ${Math.round(
+              MIN_COVERAGE_PCT * 100,
+            )}% floor). Riley is holding recommendations until conversion tracking is verified across sources.`,
+            category: "coverage_insufficient",
+          },
+        });
+      }
+    }
 
     // Step 0: Signal-health pre-check. Surfaces fix_signal_health recs and
     // (when score=red) short-circuits the downstream per-campaign analysis.
@@ -250,28 +292,17 @@ export class AuditRunner {
     ]);
 
     if (signalHealthCritical) {
-      const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
-      const totalLeads = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
-      const totalRevenue = currentInsights.reduce((sum, i) => sum + i.revenue, 0);
-      return {
+      return buildSignalHealthCriticalReport({
         accountId: this.config.accountId,
         dateRange,
-        summary: {
-          totalSpend,
-          totalLeads,
-          totalRevenue,
-          overallROAS: safeDivide(totalRevenue, totalSpend),
+        totals: {
+          totalSpend: currentInsights.reduce((sum, i) => sum + i.spend, 0),
+          totalLeads: currentInsights.reduce((sum, i) => sum + i.conversions, 0),
+          totalRevenue: currentInsights.reduce((sum, i) => sum + i.revenue, 0),
           activeCampaigns: currentInsights.length,
-          campaignsInLearning: 0,
-          adSetsInLearning: 0,
-          adSetsLearningLimited: 0,
         },
-        funnel: [],
-        periodDeltas: [],
-        insights: [],
-        watches: [],
-        recommendations: signalHealthRecs,
-      };
+        signalHealthRecs,
+      });
     }
 
     // Step 2: Pull CRM funnel data + benchmarks (parallel)
@@ -314,6 +345,21 @@ export class AuditRunner {
     const previousMetrics = aggregateMetrics(previousInsights);
     const periodDeltas = comparePeriods(currentMetrics, previousMetrics);
 
+    const nextCycleDate =
+      new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
+      dateRange.until;
+
+    // Step 4a (Phase-A Gate 1): account-wide conversion-DENOMINATOR step-change.
+    // measurementTrusted=false ⇒ each per-campaign decision abstains on cost-driven
+    // and learning-resetting actions; accountWatch (when present) is the single
+    // account-level signal watch to surface. fix_signal_health recs (appended
+    // later) are not gated by this — the user is still pointed at the fix.
+    const { measurementTrusted, accountWatch } = evaluateDenominatorStepChange({
+      currentInsights,
+      previousInsights,
+      nextCycleDate,
+    });
+
     // Step 4b: Resolve the account-level economic tier + booking-calibrated target
     // ONCE for this audit (calibrate-first invariant lives in resolveEconomicTarget).
     const accountConversions = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
@@ -326,15 +372,16 @@ export class AuditRunner {
     // PR2: no profit-margin / AOV source is plumbed into the audit, so margin
     // awareness is reported unavailable, never silently satisfied (spec §3.4).
     const marginBasis: MarginBasis = "unavailable";
-    const nextCycleDate =
-      new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
-      dateRange.until;
 
     // Step 5: Per-campaign loop
     const insights: InsightOutput[] = [];
     const watches: WatchOutput[] = [];
     const recommendations: RecommendationOutput[] = [];
     let campaignsInLearning = 0;
+
+    if (accountWatch) {
+      watches.push(accountWatch);
+    }
 
     // Build a lookup map for previous insights by campaignId
     const previousMap = new Map<string, CampaignInsight>();
@@ -354,51 +401,10 @@ export class AuditRunner {
         campaignsInLearning++;
       }
 
-      // 5b: Compute per-campaign deltas
-      const prevInsight = previousMap.get(insight.campaignId);
-      const campaignCurrentMetrics = insightToMetrics(insight);
-      const campaignPreviousMetrics = prevInsight
-        ? insightToMetrics(prevInsight)
-        : {
-            cpm: 0,
-            inlineLinkClickCtr: 0,
-            costPerInlineLinkClick: 0,
-            cpl: 0,
-            cpa: 0,
-            roas: 0,
-            frequency: 0,
-          };
-      const campaignDeltas = comparePeriods(campaignCurrentMetrics, campaignPreviousMetrics);
-
-      // 5c: Diagnose
-      const diagnoses = diagnose(campaignDeltas);
-
-      // 5d: Check if performing well — if yes AND no diagnoses, skip with insight
-      const performanceMetrics = {
-        cpa: campaignCurrentMetrics.cpa,
-        roas: campaignCurrentMetrics.roas,
-      };
-      const performanceTargets = {
-        targetCPA: effectiveTarget,
-        targetROAS: this.config.targetROAS,
-      };
-
-      if (
-        this.learningGuard.isPerformingWell(performanceMetrics, performanceTargets) &&
-        diagnoses.length === 0
-      ) {
-        const roasFormatted = campaignCurrentMetrics.roas.toFixed(1);
-        insights.push({
-          type: "insight",
-          campaignId: insight.campaignId,
-          campaignName: insight.campaignName,
-          message: `Campaign has maintained ${roasFormatted}x ROAS. No changes recommended.`,
-          category: "stable_performance",
-        });
-        continue;
-      }
-
-      // 5e: Get target breach status
+      // 5b–5g: Pure per-campaign decision. The provider call for target-breach
+      // status is the only side effect; everything downstream is deterministic
+      // and lives in decideForCampaign (the model-free eval seam).
+      const prevInsight = previousMap.get(insight.campaignId) ?? null;
       const targetBreach = await this.insightsProvider.getTargetBreachStatus({
         orgId: this.config.orgId,
         accountId: this.config.accountId,
@@ -406,41 +412,30 @@ export class AuditRunner {
         targetCPA: effectiveTarget,
         startDate: new Date(dateRange.since),
         endDate: new Date(dateRange.until),
+        ...(this.config.conversionActionType
+          ? { conversionActionType: this.config.conversionActionType }
+          : {}),
+        ...(this.config.attributionWindows
+          ? { attributionWindows: this.config.attributionWindows }
+          : {}),
       });
-
-      // 5f: Generate recommendations
-      const campaignRecs = generateRecommendations({
+      const decision = decideForCampaign({
         campaignId: insight.campaignId,
         campaignName: insight.campaignName,
-        diagnoses,
-        deltas: campaignDeltas,
-        targetCPA: effectiveTarget,
-        targetROAS: this.config.targetROAS,
-        currentSpend: insight.spend,
+        currentInsight: insight,
+        previousInsight: prevInsight,
         targetBreach,
+        learningStatus,
+        economicTier,
+        effectiveTarget,
+        marginBasis,
+        targetROAS: this.config.targetROAS,
+        nextCycleDate,
+        measurementTrusted,
       });
-
-      // 5g: Apply the economic tier (confidence/urgency/action-family), THEN
-      // gate through the learning phase. Tier-3 withholds destructive actions
-      // as watches; everything else flows into the learning-phase gate.
-      for (const rec of campaignRecs) {
-        const tiered = applyTier({
-          recommendation: rec,
-          tier: economicTier,
-          marginBasis,
-          checkBackDate: nextCycleDate,
-        });
-        if (tiered.watch) {
-          watches.push(tiered.watch);
-          continue;
-        }
-        const gated = this.learningGuard.gate(tiered.recommendation!, learningStatus);
-        if (gated.type === "watch") {
-          watches.push(gated);
-        } else {
-          recommendations.push(gated);
-        }
-      }
+      insights.push(...decision.insights);
+      watches.push(...decision.watches);
+      recommendations.push(...decision.recommendations);
     }
 
     // Step 6: V2 — Ad set level learning + details
@@ -475,6 +470,9 @@ export class AuditRunner {
             steps: [msg],
             learningPhaseImpact:
               diagnosis.recommendation === "expand_targeting" ? "will reset learning" : "no impact",
+            resetsLearning: resetsLearningFor(
+              diagnosis.recommendation as RecommendationOutput["action"],
+            ),
           });
         }
 

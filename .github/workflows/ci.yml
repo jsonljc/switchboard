@@ -395,7 +395,11 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+        # The shared evals/vitest.config.ts now also runs the riley-recommendation
+        # suite, which imports @switchboard/ad-optimizer from dist — so every job
+        # that runs that config must build ad-optimizer too (it depends only on
+        # @switchboard/schemas, already built by the core chain above).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
@@ -447,7 +451,11 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+        # The shared evals/vitest.config.ts now also runs the riley-recommendation
+        # suite, which imports @switchboard/ad-optimizer from dist — so every job
+        # that runs that config must build ad-optimizer too (it depends only on
+        # @switchboard/schemas, already built by the core chain above).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
@@ -507,7 +515,11 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+        # The shared evals/vitest.config.ts now also runs the riley-recommendation
+        # suite, which imports @switchboard/ad-optimizer from dist — so every job
+        # that runs that config must build ad-optimizer too (it depends only on
+        # @switchboard/schemas, already built by the core chain above).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
@@ -517,3 +529,70 @@ jobs:
       - name: Run governance-decision eval
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
         run: pnpm eval:governance
+
+  eval-riley-recommendation:
+    name: Eval — Riley Recommendation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter riley-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
+          # Scope = exactly what the eval exercises. decideForCampaign reduces
+          # campaign metrics + learning status + economic tier into a label, so its
+          # inputs are the campaign-decision pipeline, the learning-phase guard it
+          # composes, and the ad-optimizer schemas the fixtures express.
+          filters: |
+            riley:
+              - '.github/workflows/ci.yml'
+              - 'evals/riley-recommendation/**'
+              - 'evals/vitest.config.ts'
+              - 'packages/ad-optimizer/src/campaign-decision.ts'
+              - 'packages/ad-optimizer/src/learning-phase-guard.ts'
+              - 'packages/ad-optimizer/src/recommendation-engine.ts'
+              - 'packages/ad-optimizer/src/metric-diagnostician.ts'
+              - 'packages/ad-optimizer/src/period-comparator.ts'
+              - 'packages/ad-optimizer/src/analyzers/economic-target.ts'
+              - 'packages/ad-optimizer/src/index.ts'
+              - 'packages/schemas/src/ad-optimizer.ts'
+              - 'packages/schemas/src/ad-optimizer-shared.ts'
+              - 'packages/schemas/src/crm-outcome.ts'
+
+      - name: Skip notice (no riley-relevant changes)
+        if: steps.filter.outputs.riley != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Riley Recommendation skipped: no riley-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        # core (+ its @switchboard/schemas dep) for the alex/classifier/governance
+        # suites in the shared evals/vitest.config.ts; ad-optimizer (also depends
+        # only on schemas, built by the core chain) for the riley suite.
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
+
+      - name: Run eval unit tests
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
+      # Deterministic, model-free, DB-free — no ANTHROPIC_API_KEY needed. Blocking.
+      - name: Run riley-recommendation eval
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm eval:riley

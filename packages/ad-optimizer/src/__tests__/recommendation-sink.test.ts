@@ -2,20 +2,26 @@ import { describe, expect, it, vi } from "vitest";
 import { runRecommendationSink } from "../recommendation-sink.js";
 import type { EmitOutcome, RecommendationEmitter } from "../recommendation-sink.js";
 import type { RecommendationOutput } from "../recommendation-engine.js";
+import { resetsLearningFor } from "../action-reset-classification.js";
+import { AdRecommendationActionSchema } from "@switchboard/schemas";
 import type { RecommendationInput } from "@switchboard/schemas";
 
-const baseRec = (overrides: Partial<RecommendationOutput> = {}): RecommendationOutput => ({
-  type: "recommendation",
-  campaignId: "c-1",
-  campaignName: "Whitening Set B",
-  action: "pause",
-  confidence: 0.9,
-  urgency: "immediate",
-  estimatedImpact: "saves $40/day",
-  steps: ["Pause"],
-  learningPhaseImpact: "no impact",
-  ...overrides,
-});
+const baseRec = (overrides: Partial<RecommendationOutput> = {}): RecommendationOutput => {
+  const action = overrides.action ?? "pause";
+  return {
+    type: "recommendation",
+    campaignId: "c-1",
+    campaignName: "Whitening Set B",
+    action,
+    confidence: 0.9,
+    urgency: "immediate",
+    estimatedImpact: "saves $40/day",
+    steps: ["Pause"],
+    learningPhaseImpact: "no impact",
+    resetsLearning: resetsLearningFor(action),
+    ...overrides,
+  };
+};
 
 /**
  * Mirror the v1 router's surface decision (router.ts in @switchboard/core).
@@ -156,12 +162,13 @@ describe("runRecommendationSink", () => {
 
   it("informational actions emit financialEffect:false and externalEffect:false", async () => {
     // These actions queue internal work or open external links without mutating
-    // live campaign state — they are legitimately swipe-approvable.
+    // live campaign state AND do not reset Meta's learning phase — they are
+    // legitimately swipe-approvable. (refresh_creative / add_creative are NOT in
+    // this set: they reset learning, so the sink invariant forces externalEffect:true
+    // even though no dollars move — see the "resetsLearning:'yes'" describe block.)
     const informationalActions: RecommendationOutput["action"][] = [
       "hold",
       "test",
-      "refresh_creative",
-      "add_creative",
       "harden_capi_attribution",
       "fix_signal_health",
     ];
@@ -289,4 +296,25 @@ describe("runRecommendationSink — spend amount is NOT scraped into the gate", 
     const params = await run(baseRec({ action: "pause", estimatedImpact: "saves $40/day" }));
     expect(params["spendAmount"]).toBeUndefined();
   });
+});
+
+describe("sink invariant: resetsLearning:'yes' is never swipe-approvable", () => {
+  it.each(AdRecommendationActionSchema.options.filter((a) => resetsLearningFor(a) === "yes"))(
+    "%s emits with financial/external effect set (blocks swipe)",
+    async (action) => {
+      const emit = vi.fn().mockResolvedValue({ surface: "queue" });
+      await runRecommendationSink({
+        orgId: "o1",
+        auditRunId: "a1",
+        recommendations: [baseRec({ action })],
+        emit,
+        emissionContext: { cronId: "test" },
+      });
+      const payload = emit.mock.calls[0]![0] as {
+        financialEffect: boolean;
+        externalEffect: boolean;
+      };
+      expect(payload.externalEffect || payload.financialEffect).toBe(true);
+    },
+  );
 });

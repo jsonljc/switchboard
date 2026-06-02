@@ -3,11 +3,14 @@ import type { Diagnosis } from "./metric-diagnostician.js";
 import type { SourceComparisonRow } from "./analyzers/source-comparator.js";
 import type {
   RecommendationOutputSchema as RecommendationOutput,
+  WatchOutputSchema as WatchOutput,
   MetricDeltaSchema as MetricDelta,
   UrgencySchema as Urgency,
   TargetBreachResult,
 } from "@switchboard/schemas";
 import type { SignalHealthReport, Breach } from "./signal-health-checker.js";
+import { resetsLearningFor, learningPhaseImpactText } from "./action-reset-classification.js";
+import { meetsEvidenceFloor } from "./evidence-floor.js";
 
 // ── Re-export types ──
 
@@ -32,6 +35,14 @@ export interface RecommendationInput {
   targetROAS: number;
   currentSpend: number;
   targetBreach: TargetBreachResult;
+  /**
+   * Evidence available for THIS campaign in the analysis window. Required so
+   * the engine can enforce action-family-specific evidence floors (Phase-A
+   * spec Gate 2) — a destructive/scale rec on thin data is demoted to an
+   * abstention watch rather than acted on. Measurement-family fixes
+   * (signal/CAPI) carry a 0/0/0 floor and pass regardless.
+   */
+  evidence: { clicks: number; conversions: number; days: number };
   sourceComparison?: { rows: SourceComparisonRow[] };
   /**
    * Optional flag set externally (e.g. by CAPI dispatch tracker) when no
@@ -59,7 +70,6 @@ function makeRec(
   urgency: Urgency,
   estimatedImpact: string,
   steps: string[],
-  learningPhaseImpact: string,
   params?: Record<string, string>,
 ): RecommendationOutput {
   return {
@@ -71,7 +81,8 @@ function makeRec(
     urgency,
     estimatedImpact,
     steps,
-    learningPhaseImpact,
+    learningPhaseImpact: learningPhaseImpactText(action),
+    resetsLearning: resetsLearningFor(action),
     ...(params ? { params } : {}),
   };
 }
@@ -122,7 +133,6 @@ function addCreativeRecommendation(
         "Reduce budget on underperforming ads once replacements are delivering",
         `CPA has been ${multiplier}x target for ${periods} days`,
       ],
-      "will reset learning",
     ),
   );
 }
@@ -145,7 +155,6 @@ function addPauseRecommendation(
         "Pause campaign in Ads Manager immediately",
         `CPA is ${multiplier}x target — active financial loss`,
       ],
-      "no impact",
     ),
   );
 }
@@ -168,14 +177,38 @@ function addReviewBudgetRecommendation(
         "Review campaign performance in Ads Manager",
         "Based on weekly snapshot data, not daily trend — exercise caution",
       ],
-      "no impact",
     ),
   );
 }
 
+// ── Evidence-floor abstention ──
+
+/**
+ * Build an abstention watch for a recommendation whose action family lacks the
+ * evidence to act (Phase-A spec Gate 2). Riley re-checks next cycle rather than
+ * acting on noise. `checkBackDate` is left blank here — the downstream tier
+ * post-processor stamps the real next-cycle date.
+ */
+function insufficientEvidenceWatch(
+  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
+  action: RecommendationOutput["action"],
+  e: { clicks: number; conversions: number },
+): WatchOutput {
+  return {
+    type: "watch",
+    campaignId: base.campaignId,
+    campaignName: base.campaignName,
+    pattern: "insufficient_evidence",
+    message: `Not enough evidence to ${action}: ${e.clicks} clicks / ${e.conversions} conversions in window — re-checking next cycle.`,
+    checkBackDate: "",
+  };
+}
+
 // ── Main export ──
 
-export function generateRecommendations(input: RecommendationInput): RecommendationOutput[] {
+export function generateRecommendations(
+  input: RecommendationInput,
+): (RecommendationOutput | WatchOutput)[] {
   const { campaignId, campaignName, diagnoses, deltas, targetCPA, targetBreach } = input;
   const cpa = getCPA(deltas);
   const results: RecommendationOutput[] = [];
@@ -227,7 +260,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           `Approve draft with ${MAX_BUDGET_INCREASE_PERCENT}% higher budget`,
           `Budget increase capped at ${MAX_BUDGET_INCREASE_PERCENT}%`,
         ],
-        "will reset learning",
       ),
     );
   }
@@ -242,7 +274,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Fatigued creatives are reducing engagement — new creative will restore performance",
         ["Trigger PCD for fresh creative", "Replace fatigued creatives", "Approve new draft"],
-        "will reset learning",
       ),
     );
   }
@@ -260,7 +291,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Saturated audience needs fresh creative to re-engage",
         ["Trigger PCD for fresh creative", "Replace fatigued creatives", "Approve new draft"],
-        "will reset learning",
       ),
     );
   }
@@ -275,7 +305,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "next_cycle",
         "Audience is saturated — expanding targeting will find new reach",
         ["Create new ad set with expanded targeting", "Approve new ad set draft"],
-        "will reset learning",
       ),
     );
   }
@@ -297,7 +326,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
             `Increase budget on ${candidate.to.source} (trueRoas ${candidate.to.trueRoas?.toFixed(2)})`,
             "Source attribution is heuristic — operator should validate before large reallocations",
           ],
-          "no impact",
           { from: candidate.from.source, to: candidate.to.source },
         ),
       );
@@ -318,7 +346,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           "Ensure CAPI is sending Schedule events reliably before switching",
           "Allow 3–5 days for re-learning",
         ],
-        "will reset learning",
         { from: "Lead", to: "Schedule" },
       ),
     );
@@ -338,7 +365,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           "Re-run a Schedule test event from the booking system",
           "Confirm event_id deduplication matches browser pixel",
         ],
-        "no impact",
       ),
     );
   }
@@ -353,12 +379,19 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Landing page issues are driving up costs — fix before increasing spend",
         ["Check landing page load speed", "Verify tracking pixel", "Hold budget changes"],
-        "no impact",
       ),
     );
   }
 
-  return results;
+  // Gate 2 (Phase-A spec): action-family-specific evidence floors. Any rec whose
+  // action family lacks the clicks/conversions/days to act is demoted to an
+  // abstention watch. Measurement-family fixes (0/0/0 floor) and most diagnostics
+  // pass; destructive (pause/add_creative) and scale recs get gated on thin data.
+  return results.map((rec) =>
+    meetsEvidenceFloor(rec.action, input.evidence)
+      ? rec
+      : insufficientEvidenceWatch(base, rec.action, input.evidence),
+  );
 }
 
 // ── Signal Health Recommendations ──
@@ -437,7 +470,6 @@ function makeFixSignalHealthRec(
     urgency,
     remediation.estimatedImpact,
     remediation.steps,
-    "no impact",
     { breach: breach.signal, pixelId },
   );
 }

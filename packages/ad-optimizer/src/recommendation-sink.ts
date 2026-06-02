@@ -309,7 +309,12 @@ export async function runRecommendationSink(
 
   for (const rec of args.recommendations) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
-    const { financialEffect, externalEffect } = ACTION_RISK_CONTRACT[rec.action];
+    const contract = ACTION_RISK_CONTRACT[rec.action];
+    const financialEffect = contract.financialEffect;
+    // INVARIANT (Phase-A spec §5/§7): a learning-resetting action is a material,
+    // hard-to-undo change even when no dollars move — never swipe-approvable. The
+    // router treats externalEffect=true as "not swipe-approvable".
+    const externalEffect = contract.externalEffect || rec.resetsLearning === "yes";
     const result = await args.emit(
       {
         orgId: args.orgId,
