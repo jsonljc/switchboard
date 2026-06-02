@@ -6,7 +6,6 @@ import { useHalt } from "@/components/layout/halt/halt-context";
 import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
 import { selectKeyResult, coreSetupIncomplete } from "./lib/key-result-state";
 import { labelForHeroKind } from "./lib/agent-display";
-import { formatCents } from "./lib/format";
 import type {
   MissionAggregatorResponse,
   MissionSetupRow,
@@ -140,18 +139,19 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
 
   // ── Proof (lifetime or week) ───────────────────────────────────────────────
   // result.kind === "proof"
-  const { hero, scope, spendCents, targets } = result;
+  const { hero, scope, roi } = result;
   const isZero = hero.value === 0;
   const missionDataForProof = mission.data;
 
-  // CPL beat for Riley when ad-leads + spend + target all present
-  const cplBeat =
-    agentKey === "riley" &&
-    hero.kind === "ad-leads" &&
-    spendCents != null &&
-    hero.value > 0 &&
-    targets?.targetCpbCents != null
-      ? buildCplBeat(spendCents, hero.value, targets.targetCpbCents)
+  // Riley's ROI proof = server-computed cost-per-booked comparator (single source of
+  // truth; the read-model owns the CAC math). Show only when a real value AND target
+  // exist — never gate on roi.degraded (Riley marks all ROI degraded), and never render
+  // a blank "— · target" line.
+  const hasRoiProof =
+    !!roi && "comparator" in roi && roi.comparator.value !== "—" && roi.comparator.target !== "—";
+  const rileyRoiLine =
+    agentKey === "riley" && hero.kind === "ad-leads" && hasRoiProof
+      ? `${roi.comparator.value} · ${roi.comparator.target}`
       : null;
 
   // Non-core nudge: shown when core is done (proof) but a secondary step/channel is still off
@@ -172,8 +172,8 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
           {labelForHeroKind(hero.kind)}
         </span>
       </div>
-      {/* CPL comparator — neutral ink only, never green/red */}
-      {cplBeat && <p className={styles.heroComp}>{cplBeat}</p>}
+      {/* ROI comparator — neutral ink only, never green/red */}
+      {rileyRoiLine && <p className={styles.heroComp}>{rileyRoiLine}</p>}
       {/* Non-core nudge — muted inline hint; never amber, never replaces proof hero */}
       {nudge && (
         <p className={styles.nonCoreNudge} data-testid="non-core-nudge">
@@ -248,24 +248,4 @@ function nonCoreChannelNudgeCopy(
     return `Connect your calendar so ${displayName} can book consults.`;
   }
   return `Finish setup to get more from ${displayName}.`;
-}
-
-/**
- * Compose the CPL comparator line for Riley's ad-leads hero.
- * Neutral words only: "over" / "under" — no green/red sentiment.
- *
- * @param spendCents  Total spend in cents
- * @param leads       Number of leads (> 0)
- * @param targetCents Target cost-per-lead in cents
- */
-function buildCplBeat(spendCents: number, leads: number, targetCents: number): string {
-  const cpl = spendCents / leads; // in cents
-  const diff = Math.abs(cpl - targetCents); // in cents
-  const direction = cpl > targetCents ? "over" : "under";
-
-  const cplStr = formatCents(Math.round(cpl)) ?? "";
-  const diffStr = formatCents(Math.round(diff)) ?? "";
-  const targetStr = formatCents(targetCents) ?? "";
-
-  return `${cplStr} per lead · ${diffStr} ${direction} your ${targetStr} target`;
 }
