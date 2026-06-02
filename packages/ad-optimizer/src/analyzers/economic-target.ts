@@ -181,3 +181,44 @@ export function resolveEconomicTarget(input: ResolveEconomicTargetInput): Resolv
   const effectiveTarget = economicTier === "booked_cac" ? calibratedTarget! : input.targetCPA;
   return { economicTier, effectiveTarget };
 }
+
+export interface PerCampaignEconomicTargetInput {
+  campaignBookings: number; // CRM booked count for this campaign (the Tier-1 floor input)
+  campaignConversions: number; // Meta-reported conversions for this campaign
+  targetCostPerBooked?: number; // dollars
+  minBooked?: number; // defaults to MIN_BOOKED_FOR_TIER1
+  accountTarget: ResolvedEconomicTarget; // #798 account-level resolution = Tier-2 fallback
+}
+
+export interface PerCampaignEconomicTarget extends ResolvedEconomicTarget {
+  targetSource: "campaign" | "account";
+}
+
+/**
+ * Hybrid ladder (spec §3.4): use the CAMPAIGN's own booking-calibrated target
+ * (Tier-1) when it clears the booking floor and calibration succeeds; otherwise
+ * delegate to the already-resolved account-level target (Tier-2), returned
+ * verbatim with `targetSource:"account"`. Tier-1 needs only bookings +
+ * conversions — never the booked VALUE (trueROAS may be null while CAC qualifies).
+ */
+export function resolveEconomicTargetForCampaign(
+  input: PerCampaignEconomicTargetInput,
+): PerCampaignEconomicTarget {
+  const minBooked = input.minBooked ?? MIN_BOOKED_FOR_TIER1;
+  const configuredCpb =
+    typeof input.targetCostPerBooked === "number" && input.targetCostPerBooked > 0
+      ? input.targetCostPerBooked
+      : null;
+
+  if (configuredCpb !== null && input.campaignBookings >= minBooked) {
+    const calibrated = calibrateTargetFromBooking({
+      targetCostPerBooked: configuredCpb,
+      accountBookings: input.campaignBookings, // reused as a per-entity bookings/conversion rate
+      accountConversions: input.campaignConversions,
+    });
+    if (calibrated !== null && calibrated > 0) {
+      return { economicTier: "booked_cac", effectiveTarget: calibrated, targetSource: "campaign" };
+    }
+  }
+  return { ...input.accountTarget, targetSource: "account" };
+}

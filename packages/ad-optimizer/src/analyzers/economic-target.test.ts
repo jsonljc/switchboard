@@ -4,10 +4,12 @@ import {
   calibrateTargetFromBooking,
   applyTier,
   resolveEconomicTarget,
+  resolveEconomicTargetForCampaign,
   MIN_BOOKED_FOR_TIER1,
   MIN_LEADS_FOR_TIER2,
   TIER2_CONFIDENCE_PENALTY,
 } from "./economic-target.js";
+import type { ResolvedEconomicTarget } from "./economic-target.js";
 import type { RecommendationOutputSchema as RecommendationOutput } from "@switchboard/schemas";
 import { WatchOutputSchema } from "@switchboard/schemas";
 import { resetsLearningFor } from "../action-reset-classification.js";
@@ -179,6 +181,66 @@ describe("resolveEconomicTarget", () => {
       accountConversions: 200,
     });
     expect(out.economicTier).toBe("cpl");
+    expect(out.effectiveTarget).toBe(50);
+  });
+});
+
+describe("resolveEconomicTargetForCampaign (Hybrid ladder)", () => {
+  const accountTarget: ResolvedEconomicTarget = { economicTier: "cpl", effectiveTarget: 50 };
+
+  it("Tier-1: campaign clears the booking floor → campaign-specific calibrated target", () => {
+    const out = resolveEconomicTargetForCampaign({
+      campaignBookings: MIN_BOOKED_FOR_TIER1, // 10
+      campaignConversions: 50,
+      targetCostPerBooked: 200,
+      accountTarget,
+    });
+    expect(out.targetSource).toBe("campaign");
+    expect(out.economicTier).toBe("booked_cac");
+    expect(out.effectiveTarget).toBe(40); // 200 × (10/50)
+  });
+
+  it("Tier-2: thin campaign (booked < floor) → account fallback, verbatim, tagged 'account'", () => {
+    const out = resolveEconomicTargetForCampaign({
+      campaignBookings: 3,
+      campaignConversions: 50,
+      targetCostPerBooked: 200,
+      accountTarget,
+    });
+    expect(out.targetSource).toBe("account");
+    expect(out.economicTier).toBe("cpl"); // delegated from accountTarget
+    expect(out.effectiveTarget).toBe(50);
+  });
+
+  it("Tier-1 still resolves a CAC target with no booked value (resolver ignores trueROAS)", () => {
+    const out = resolveEconomicTargetForCampaign({
+      campaignBookings: 12,
+      campaignConversions: 40,
+      targetCostPerBooked: 100,
+      accountTarget,
+    });
+    expect(out.targetSource).toBe("campaign");
+    expect(out.effectiveTarget).toBe(30); // 100 × (12/40)
+  });
+
+  it("falls back to account when calibration cannot run (zero campaign conversions)", () => {
+    const out = resolveEconomicTargetForCampaign({
+      campaignBookings: 15,
+      campaignConversions: 0,
+      targetCostPerBooked: 100,
+      accountTarget,
+    });
+    expect(out.targetSource).toBe("account");
+    expect(out).toMatchObject(accountTarget);
+  });
+
+  it("falls back to account when no targetCostPerBooked is configured", () => {
+    const out = resolveEconomicTargetForCampaign({
+      campaignBookings: 20,
+      campaignConversions: 40,
+      accountTarget,
+    });
+    expect(out.targetSource).toBe("account");
     expect(out.effectiveTarget).toBe(50);
   });
 });
