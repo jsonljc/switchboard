@@ -5,7 +5,12 @@ import type { MiraCreativeJobSummary } from "@switchboard/core";
 const mockCreative = vi.fn();
 const mockMutate = vi.fn();
 const mockEstimate = vi.fn();
-const mockApprove = { mutate: mockMutate, isPending: false, isError: false };
+const mockApprove: {
+  mutate: typeof mockMutate;
+  isPending: boolean;
+  isError: boolean;
+  data?: { pendingApproval: boolean };
+} = { mutate: mockMutate, isPending: false, isError: false, data: undefined };
 vi.mock("@/hooks/use-mira-creative", () => ({ useMiraCreative: () => mockCreative() }));
 vi.mock("@/hooks/use-creative-pipeline", () => ({
   useApproveStage: () => mockApprove,
@@ -34,6 +39,7 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     mockMutate.mockReset();
     mockEstimate.mockReset();
     mockEstimate.mockReturnValue({ data: null });
+    mockApprove.data = undefined;
   });
 
   it("renders a UGC draft clip (no 'No draft clip yet')", () => {
@@ -134,6 +140,22 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     // and the confirm panel's button is shown instead.
     fireEvent.click(screen.getByRole("button", { name: "Stop draft" }));
     expect(mockMutate).toHaveBeenCalledWith({ jobId: "j", action: "stop" });
+  });
+
+  it("shows a pending-approval notice (not a completion) when a render is parked over the spend limit", () => {
+    mockApprove.data = { pendingApproval: true };
+    mockCreative.mockReturnValue({
+      data: summary({
+        reviewAction: { canContinue: true, canStop: true, label: "review_draft" },
+        draft: { videoUrl: "https://x/p.mp4" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText(/needs your sign-off|Queued for your approval/i)).toBeTruthy();
+    // Not framed as a failure.
+    expect(screen.queryByText(/try again/i)).toBeNull();
   });
 
   it("shows 'Draft not found' (not load-error) when data is undefined and no error", () => {

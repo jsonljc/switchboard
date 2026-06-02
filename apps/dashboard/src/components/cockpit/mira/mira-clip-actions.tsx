@@ -28,13 +28,17 @@ export function MiraClipActions({
     approve.mutate(
       { jobId, action },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           setConfirm(null);
-          onResolve(jobId);
+          // A render parked over the spend threshold is NOT a resolution — keep the
+          // clip in the feed (a pending notice shows) instead of dismissing it.
+          if (!data?.pendingApproval) onResolve(jobId);
         },
       },
     );
   }
+
+  const pendingApproval = approve.data?.pendingApproval === true;
 
   const btn = {
     padding: "8px 12px",
@@ -162,6 +166,11 @@ export function MiraClipActions({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
+      {pendingApproval && (
+        <span style={{ color: "#fff", fontSize: 11, maxWidth: 220, textAlign: "right" }}>
+          Queued for your approval — over the auto-spend limit. Nothing ran.
+        </span>
+      )}
       {reviewAction.canContinue &&
         (halted ? (
           <button

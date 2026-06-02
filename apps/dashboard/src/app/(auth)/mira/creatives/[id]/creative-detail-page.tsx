@@ -266,6 +266,13 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               Couldn&apos;t update the draft — try again.
             </span>
           )}
+
+          {approve.data?.pendingApproval && (
+            <span style={{ color: T.ink2, fontSize: 12 }}>
+              Queued for your approval — this render is over the auto-spend limit, so it needs your
+              sign-off. Nothing ran or was charged.
+            </span>
+          )}
         </div>
       ) : null}
     </div>
