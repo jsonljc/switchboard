@@ -26,6 +26,9 @@ import {
   PrismaScheduledFollowUpStore,
   PrismaScheduledReminderStore,
   PrismaBookingStore,
+  PrismaConversionRecordStore,
+  PrismaOpportunityStore,
+  PrismaReconciliationStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -72,6 +75,7 @@ import type {
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
+  buildRunReconciliation,
   createReconciliationCron,
   createStripeReconciliationCron,
 } from "../services/cron/reconciliation.js";
@@ -405,17 +409,12 @@ export async function registerInngest(
       });
       return orgs;
     },
-    runReconciliation: async (orgId, dateRange) => {
-      // Stub — full wiring requires booking/conversion/opportunity stores
-      // Returns healthy by default; real implementation connects ReconciliationRunner
-      return {
-        organizationId: orgId,
-        overallStatus: "healthy",
-        checks: [],
-        dateRangeFrom: dateRange.from,
-        dateRangeTo: dateRange.to,
-      };
-    },
+    runReconciliation: buildRunReconciliation({
+      bookingStore: new PrismaBookingStore(app.prisma!),
+      conversionRecordStore: new PrismaConversionRecordStore(app.prisma!),
+      opportunityStore: new PrismaOpportunityStore(app.prisma!),
+      reconciliationStore: new PrismaReconciliationStore(app.prisma!),
+    }),
   };
 
   // Stripe reconciliation cron dependencies
