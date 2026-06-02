@@ -54,6 +54,10 @@ function SheetShell({
       data-open="true"
       role="dialog"
       aria-modal="true"
+      // Static accessible name: SheetShell wraps the skeleton/error/loaded states,
+      // and the skeleton + error states render no title to reference — so a
+      // constant aria-label (the dialog's purpose) names every state.
+      aria-label="Handoff detail"
     >
       <span className="sheet-handle" />
       <button type="button" className="sheet-close" onClick={onClose} aria-label="Close detail">

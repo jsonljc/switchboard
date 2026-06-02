@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import { relativeTime, undoableFor } from "@/lib/decisions/time";
 import { riskChips } from "@/lib/decisions/risk-chips";
@@ -110,6 +110,9 @@ export function ApprovalDetailSheet({
   onDismiss,
 }: ApprovalDetailSheetProps) {
   const contract = decision.meta.riskContract;
+  // Accessible name for the aria-modal dialog: point at the visible title line
+  // ("<agent> needs your okay") so screen readers announce what the dialog is.
+  const titleId = useId();
   const mustConfirm = needsConfirm(contract);
   const chips = riskChips(contract);
   const undoableLabel = undoableFor(decision.meta.undoableUntil, nowMs);
@@ -144,6 +147,7 @@ export function ApprovalDetailSheet({
       data-open="true"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
     >
       <span className="sheet-handle" />
       <button type="button" className="sheet-close" onClick={onClose} aria-label="Close detail">
@@ -155,7 +159,7 @@ export function ApprovalDetailSheet({
           <div className="ds-head-id">
             <InboxAgentAvatar agentKey={decision.agentKey} size={36} />
             <div className="ds-head-id-text">
-              <div className="ds-head-line">
+              <div className="ds-head-line" id={titleId}>
                 <span className="ds-head-name" data-agent={decision.agentKey}>
                   {agentName}
                 </span>
