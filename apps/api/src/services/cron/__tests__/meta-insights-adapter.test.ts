@@ -3,7 +3,7 @@ import type { PrismaClient } from "@switchboard/db";
 import type { InsightsWindowQuery } from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
-// Regression guard: commit 333519c6 fixed the Meta Insights daily-series call
+// Regression guard: PR #812 fixed the Meta Insights daily-series call
 // from `breakdowns: ["day"]` (invalid — Graph API 400) to `timeIncrement: 1`
 // (the correct parameter for a per-day breakdown). This test ensures the fix
 // is never reverted. It would fail against the old `breakdowns: ["day"]` shape.
@@ -62,7 +62,7 @@ describe("createMetaInsightsProviderForOrg — getCampaignInsights call shape", 
   });
 
   it("calls getCampaignInsights with timeIncrement:1 (daily series)", async () => {
-    // Regression guard for commit 333519c6:
+    // Regression guard for the PR #812 daily-series fix:
     // The OLD code sent breakdowns:["day"] which the Graph API rejects with 400.
     // The FIXED code sends timeIncrement:1 which is the correct daily-series param.
     const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
