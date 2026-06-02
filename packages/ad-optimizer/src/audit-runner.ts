@@ -24,11 +24,7 @@ import { LearningPhaseGuard, LearningPhaseGuardV2 } from "./learning-phase-guard
 import { detectFunnelShape } from "./funnel-detector.js";
 import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
-import { diagnose } from "./metric-diagnostician.js";
-import {
-  generateRecommendations,
-  generateSignalHealthRecommendations,
-} from "./recommendation-engine.js";
+import { generateSignalHealthRecommendations } from "./recommendation-engine.js";
 import {
   runRecommendationSink,
   type EmissionContext,
@@ -38,8 +34,9 @@ import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
-import { resolveEconomicTarget, applyTier } from "./analyzers/economic-target.js";
+import { resolveEconomicTarget } from "./analyzers/economic-target.js";
 import { resetsLearningFor } from "./action-reset-classification.js";
+import { decideForCampaign } from "./campaign-decision.js";
 
 // ── Interfaces ──
 
@@ -131,19 +128,6 @@ const INSIGHT_FIELDS = [
 
 function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
-}
-
-function insightToMetrics(insight: CampaignInsight): MetricSet {
-  const { spend, impressions, inlineLinkClicks, conversions, revenue, frequency } = insight;
-  return {
-    cpm: safeDivide(spend, impressions) * 1000,
-    inlineLinkClickCtr: safeDivide(inlineLinkClicks, impressions) * 100,
-    costPerInlineLinkClick: safeDivide(spend, inlineLinkClicks),
-    cpl: safeDivide(spend, conversions),
-    cpa: safeDivide(spend, conversions),
-    roas: safeDivide(revenue, spend),
-    frequency,
-  };
 }
 
 function aggregateMetrics(insights: CampaignInsight[]): MetricSet {
@@ -355,51 +339,10 @@ export class AuditRunner {
         campaignsInLearning++;
       }
 
-      // 5b: Compute per-campaign deltas
-      const prevInsight = previousMap.get(insight.campaignId);
-      const campaignCurrentMetrics = insightToMetrics(insight);
-      const campaignPreviousMetrics = prevInsight
-        ? insightToMetrics(prevInsight)
-        : {
-            cpm: 0,
-            inlineLinkClickCtr: 0,
-            costPerInlineLinkClick: 0,
-            cpl: 0,
-            cpa: 0,
-            roas: 0,
-            frequency: 0,
-          };
-      const campaignDeltas = comparePeriods(campaignCurrentMetrics, campaignPreviousMetrics);
-
-      // 5c: Diagnose
-      const diagnoses = diagnose(campaignDeltas);
-
-      // 5d: Check if performing well — if yes AND no diagnoses, skip with insight
-      const performanceMetrics = {
-        cpa: campaignCurrentMetrics.cpa,
-        roas: campaignCurrentMetrics.roas,
-      };
-      const performanceTargets = {
-        targetCPA: effectiveTarget,
-        targetROAS: this.config.targetROAS,
-      };
-
-      if (
-        this.learningGuard.isPerformingWell(performanceMetrics, performanceTargets) &&
-        diagnoses.length === 0
-      ) {
-        const roasFormatted = campaignCurrentMetrics.roas.toFixed(1);
-        insights.push({
-          type: "insight",
-          campaignId: insight.campaignId,
-          campaignName: insight.campaignName,
-          message: `Campaign has maintained ${roasFormatted}x ROAS. No changes recommended.`,
-          category: "stable_performance",
-        });
-        continue;
-      }
-
-      // 5e: Get target breach status
+      // 5b–5g: Pure per-campaign decision. The provider call for target-breach
+      // status is the only side effect; everything downstream is deterministic
+      // and lives in decideForCampaign (the model-free eval seam).
+      const prevInsight = previousMap.get(insight.campaignId) ?? null;
       const targetBreach = await this.insightsProvider.getTargetBreachStatus({
         orgId: this.config.orgId,
         accountId: this.config.accountId,
@@ -408,40 +351,22 @@ export class AuditRunner {
         startDate: new Date(dateRange.since),
         endDate: new Date(dateRange.until),
       });
-
-      // 5f: Generate recommendations
-      const campaignRecs = generateRecommendations({
+      const decision = decideForCampaign({
         campaignId: insight.campaignId,
         campaignName: insight.campaignName,
-        diagnoses,
-        deltas: campaignDeltas,
-        targetCPA: effectiveTarget,
-        targetROAS: this.config.targetROAS,
-        currentSpend: insight.spend,
+        currentInsight: insight,
+        previousInsight: prevInsight,
         targetBreach,
+        learningStatus,
+        economicTier,
+        effectiveTarget,
+        marginBasis,
+        targetROAS: this.config.targetROAS,
+        nextCycleDate,
       });
-
-      // 5g: Apply the economic tier (confidence/urgency/action-family), THEN
-      // gate through the learning phase. Tier-3 withholds destructive actions
-      // as watches; everything else flows into the learning-phase gate.
-      for (const rec of campaignRecs) {
-        const tiered = applyTier({
-          recommendation: rec,
-          tier: economicTier,
-          marginBasis,
-          checkBackDate: nextCycleDate,
-        });
-        if (tiered.watch) {
-          watches.push(tiered.watch);
-          continue;
-        }
-        const gated = this.learningGuard.gate(tiered.recommendation!, learningStatus);
-        if (gated.type === "watch") {
-          watches.push(gated);
-        } else {
-          recommendations.push(gated);
-        }
-      }
+      insights.push(...decision.insights);
+      watches.push(...decision.watches);
+      recommendations.push(...decision.recommendations);
     }
 
     // Step 6: V2 — Ad set level learning + details
