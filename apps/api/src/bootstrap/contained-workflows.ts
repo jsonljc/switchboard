@@ -108,6 +108,9 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/conversation-reminder-send-workflow.js");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
+  const { buildCreativePublishWorkflow } =
+    await import("../services/workflows/creative-publish-workflow.js");
+  const { assertPublishable } = await import("../services/creative-publish-preconditions.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
   const {
     PrismaLeadIntakeStore,
@@ -115,8 +118,9 @@ export async function bootstrapContainedWorkflows(
     PrismaCreativeJobStore,
     PrismaDeploymentStore,
     PrismaOrgAgentEnablementStore,
+    decryptCredentials,
   } = await import("@switchboard/db");
-  const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
+  const { InstantFormAdapter, MetaAdsClient } = await import("@switchboard/ad-optimizer");
 
   // Single source of truth for Contact creation from leads (CTWA + Instant Form).
   // The meta.lead.intake workflow orchestrates the IF webhook (Graph fetch +
@@ -248,11 +252,39 @@ export async function bootstrapContainedWorkflows(
     allowMarketingTemplate: false,
   });
 
+  // creative.job.publish — create a self-contained PAUSED Meta draft package on
+  // mandatory human approval. assertPublishable is the shared pre-flight (also run
+  // by the route); makeAdsClient/fetchAsset are injected so the handler is testable
+  // and respects layering (MetaAdsClient stays in ad-optimizer).
+  const prismaForPublish = prismaClient as import("@switchboard/db").PrismaClient;
+  const creativePublishWorkflow = buildCreativePublishWorkflow({
+    jobStore: new PrismaCreativeJobStore(
+      prismaClient as ConstructorParameters<typeof PrismaCreativeJobStore>[0],
+    ),
+    assertPublishable: (organizationId, jobId) =>
+      assertPublishable(
+        { prisma: prismaForPublish, decrypt: (e) => decryptCredentials(e as string) },
+        organizationId,
+        jobId,
+      ),
+    makeAdsClient: (cfg) => new MetaAdsClient(cfg),
+    fetchAsset: async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`asset fetch failed: ${res.status}`);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const type = (res.headers.get("content-type") ?? "").startsWith("image/")
+        ? ("image" as const)
+        : ("video" as const);
+      return { buffer, type };
+    },
+  });
+
   const handlers = new Map<string, WorkflowHandler>([
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
     ["creative.concept.draft", creativeConceptDraftWorkflow],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
+    ["creative.job.publish", creativePublishWorkflow],
     ["lead.intake", buildLeadIntakeWorkflow(leadIntakeHandler)],
     ["meta.lead.intake", buildMetaLeadIntakeWorkflow({ prisma: prismaClient, instantFormAdapter })],
     ["meta.lead.greeting.send", buildMetaLeadGreetingWorkflow()],
@@ -290,6 +322,20 @@ export async function bootstrapContainedWorkflows(
       workflowId: "creative.job.stop",
       budgetClass: "standard",
       approvalPolicy: "threshold",
+      allowedTriggers: ["api"],
+    },
+    {
+      // Publish a kept creative as a self-contained PAUSED Meta draft package.
+      // approvalPolicy is DECORATIVE (the policy engine never reads it) — the real
+      // claim-safety gate is the seeded org-scoped require_approval(mandatory)
+      // policy for `creative.job.publish` (see db seed creative-governance.ts). We
+      // keep "always" here only as documented intent + the safe value if anything
+      // ever reads it. Spend-bearing/publish targets do NOT use
+      // system_auto_approved (that is the draft-only handoff below).
+      intent: "creative.job.publish",
+      workflowId: "creative.job.publish",
+      budgetClass: "standard",
+      approvalPolicy: "always",
       allowedTriggers: ["api"],
     },
     {

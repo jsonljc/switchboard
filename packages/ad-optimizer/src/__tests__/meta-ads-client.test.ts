@@ -331,6 +331,62 @@ describe("MetaAdsClient", () => {
     });
   });
 
+  describe("createAdCreative", () => {
+    it("posts an object_story_spec with page_id + video_data and returns the id", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "cr_new_1" }),
+      });
+
+      const result = await client.createAdCreative({
+        name: "Mira draft creative",
+        pageId: "page_123",
+        videoId: "vid_999",
+        message: "Lunchtime refresh",
+        linkUrl: "https://clinic.example/book",
+        callToActionType: "BOOK_TRAVEL",
+      });
+
+      expect(result).toEqual({ id: "cr_new_1" });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(callUrl).toContain("act_123456/adcreatives");
+
+      const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+      expect(body.object_story_spec.page_id).toBe("page_123");
+      expect(body.object_story_spec.video_data.video_id).toBe("vid_999");
+      expect(body.object_story_spec.video_data.call_to_action.type).toBe("BOOK_TRAVEL");
+      expect(body.object_story_spec.video_data.call_to_action.value.link).toBe(
+        "https://clinic.example/book",
+      );
+    });
+  });
+
+  describe("createAd", () => {
+    it("always sends status PAUSED and links the creative + ad set", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "ad_new_1" }),
+      });
+
+      const result = await client.createAd({
+        name: "Mira draft ad",
+        adSetId: "set_1",
+        creativeId: "cr_1",
+      });
+
+      expect(result).toEqual({ id: "ad_new_1" });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(callUrl).toContain("act_123456/ads");
+
+      const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+      expect(body.status).toBe("PAUSED");
+      expect(body.adset_id).toBe("set_1");
+      expect(body.creative.creative_id).toBe("cr_1");
+    });
+  });
+
   describe("rate limiting", () => {
     it("enforces minimum interval between calls", async () => {
       fetchSpy.mockResolvedValue({

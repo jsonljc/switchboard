@@ -151,6 +151,9 @@ export {
   CREATIVE_ALLOW_POLICY_RULE,
   creativeAllowPolicyId,
   buildCreativeAllowPolicyInput,
+  CREATIVE_PUBLISH_APPROVAL_POLICY_RULE,
+  creativePublishApprovalPolicyId,
+  buildCreativePublishApprovalPolicyInput,
 } from "./seed/creative-governance.js";
 export {
   seedAlexSkillPack,

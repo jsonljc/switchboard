@@ -58,6 +58,22 @@ interface UploadCreativeAssetParams {
   type: "image" | "video";
 }
 
+interface CreateAdCreativeParams {
+  name: string;
+  pageId: string;
+  videoId: string;
+  message: string;
+  linkUrl: string;
+  callToActionType?: string;
+  imageHash?: string;
+}
+
+interface CreateAdParams {
+  name: string;
+  adSetId: string;
+  creativeId: string;
+}
+
 type CampaignStatus = "ACTIVE" | "PAUSED" | "DELETED" | "ARCHIVED";
 
 interface MetaApiError {
@@ -245,6 +261,44 @@ export class MetaAdsClient {
     });
 
     return { id: response.id as string, url: response.url as string };
+  }
+
+  async createAdCreative(params: CreateAdCreativeParams): Promise<{ id: string }> {
+    // Video-only by design: the creative pipeline produces video. An image creative
+    // would use object_story_spec.link_data/image_data instead of video_data.
+    const body = {
+      name: params.name,
+      object_story_spec: {
+        page_id: params.pageId,
+        video_data: {
+          video_id: params.videoId,
+          message: params.message,
+          ...(params.imageHash ? { image_hash: params.imageHash } : {}),
+          call_to_action: {
+            type: params.callToActionType ?? "LEARN_MORE",
+            value: { link: params.linkUrl },
+          },
+        },
+      },
+    };
+
+    const response = await this.post(`/${this.accountId}/adcreatives`, body);
+    return { id: response.id as string };
+  }
+
+  async createAd(params: CreateAdParams): Promise<{ id: string }> {
+    // status is hardcoded PAUSED and intentionally NOT a parameter — there is no
+    // path through this client to create a live ad. Activation is a human action
+    // in Ads Manager (see updateCampaignStatus, which throws on "ACTIVE").
+    const body = {
+      name: params.name,
+      adset_id: params.adSetId,
+      creative: { creative_id: params.creativeId },
+      status: "PAUSED",
+    };
+
+    const response = await this.post(`/${this.accountId}/ads`, body);
+    return { id: response.id as string };
   }
 
   async updateCampaignStatus(campaignId: string, status: CampaignStatus): Promise<void> {

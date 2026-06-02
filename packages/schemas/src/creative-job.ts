@@ -220,6 +220,15 @@ export const CreativeJobSchema = z.object({
   ugcFailure: z.record(z.unknown()).nullable().optional(),
   reviewDecision: z.enum(["kept", "passed"]).nullable().optional(),
   reviewDecidedAt: z.coerce.date().nullable().optional(),
+  // Meta publish (P2 parked draft package). All nullable/optional — populated only
+  // by the creative.job.publish handler (and durableAssetUrl by PR A).
+  metaVideoId: z.string().nullable().optional(),
+  metaCampaignId: z.string().nullable().optional(),
+  metaAdSetId: z.string().nullable().optional(),
+  metaCreativeId: z.string().nullable().optional(),
+  metaAdId: z.string().nullable().optional(),
+  metaPublishStatus: z.string().nullable().optional(),
+  durableAssetUrl: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
