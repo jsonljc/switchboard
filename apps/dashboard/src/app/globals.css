@@ -30,6 +30,12 @@
     --palette-violet-deep: 256 31% 45%;
     --palette-violet-tint: 255 33% 95%;
     --palette-editorial-accent: 20 90% 55%; /* bright editorial orange (Mercury/reports) — NOT the action amber */
+    /* warm-neutral ink ramp — ONE canonical text/neutral scale (T5, by role) */
+    --palette-ink-900: 20 10% 12%; /* primary text */
+    --palette-ink-700: 20 8% 28%; /* secondary */
+    --palette-ink-500: 20 6% 46%; /* tertiary */
+    --palette-ink-400: 20 6% 62%; /* faint */
+    --palette-ink-300: 38 22% 73%; /* quinary — disabled fills / off pills */
 
     /* ─── Surfaces ─── */
     --background: 45 25% 98%;
@@ -195,10 +201,11 @@
        (Source Serif 4 prose, JetBrains Mono folios). Do not consume from the
        Mercury / Tools tier. */
     --cream: hsl(40 25% 94%);
-    --ink: hsl(20 10% 12%);
-    --ink-2: hsl(20 8% 28%);
-    --ink-3: hsl(20 6% 46%);
-    --ink-4: hsl(20 6% 62%);
+    --ink: hsl(var(--palette-ink-900));
+    --ink-2: hsl(var(--palette-ink-700));
+    --ink-3: hsl(var(--palette-ink-500));
+    --ink-4: hsl(var(--palette-ink-400));
+    --ink-5: hsl(var(--palette-ink-300));
     --hairline: hsl(40 15% 86%);
 
     /* Editorial font stacks. --font-serif and --font-mono-editorial are wired

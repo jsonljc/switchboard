@@ -162,3 +162,32 @@ describe("token governance — finalized drift guard (TG)", () => {
     expect(tokenValue("agent-mira")).toBe("var(--palette-violet)");
   });
 });
+
+describe("token governance — one neutral ink ramp by role (T5)", () => {
+  it("editorial ink tiers reference the --palette-ink-* ramp", () => {
+    expect(tokenValue("ink")).toBe("hsl(var(--palette-ink-900))");
+    expect(tokenValue("ink-2")).toBe("hsl(var(--palette-ink-700))");
+    expect(tokenValue("ink-3")).toBe("hsl(var(--palette-ink-500))");
+    expect(tokenValue("ink-4")).toBe("hsl(var(--palette-ink-400))");
+    expect(tokenValue("ink-5")).toBe("hsl(var(--palette-ink-300))");
+  });
+
+  it("inbox ink tiers reference the same ramp (no forked inks)", () => {
+    expect(inboxToken("ink-1")).toBe("hsl(var(--palette-ink-900))");
+    expect(inboxToken("ink-2")).toBe("hsl(var(--palette-ink-700))");
+    expect(inboxToken("ink-3")).toBe("hsl(var(--palette-ink-500))");
+    expect(inboxToken("ink-4")).toBe("hsl(var(--palette-ink-400))");
+  });
+
+  it("the ink-ramp primitives are raw triples (dark-overridable)", () => {
+    for (const t of [
+      "palette-ink-900",
+      "palette-ink-700",
+      "palette-ink-500",
+      "palette-ink-400",
+      "palette-ink-300",
+    ]) {
+      expect(tokenValue(t)).toMatch(RAW_HSL_TRIPLE);
+    }
+  });
+});

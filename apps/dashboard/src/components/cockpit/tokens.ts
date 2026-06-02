@@ -10,9 +10,7 @@ export const T = {
   ink2: "var(--ink-2)",
   ink3: "var(--ink-3)",
   ink4: "var(--ink-4)",
-  // token-debt: no 5th editorial ink tier yet — maps to --ink-4 until the T5
-  // neutral-ramp slice introduces the full --palette-ink-* ramp.
-  ink5: "var(--ink-4)",
+  ink5: "var(--ink-5)",
   hair: "var(--hair)",
   hairSoft: "var(--hair-soft)",
   amber: "hsl(var(--action))",
