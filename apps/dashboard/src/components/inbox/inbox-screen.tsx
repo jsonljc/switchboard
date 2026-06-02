@@ -178,7 +178,12 @@ export function InboxScreen() {
     return <InboxErrorState onRetry={filtered.refetch} />;
   }
 
-  if (filtered.isLoading) {
+  // Gate on (!data && !error), NOT isLoading. useDecisionFeed has `enabled: !!keys`,
+  // so a keys-pending query is DISABLED — isLoading is false, data undefined,
+  // isError false — and gating on isLoading would fall through and flash a false
+  // inbox-zero ("That's everything") with items still pending. Mirrors the proven
+  // fix at mira-desk-page.tsx. See feedback_react_query_enabled_false_isloading.
+  if (!filtered.data && !filtered.isError) {
     return <div className="inbox-loading">Loading…</div>;
   }
 
