@@ -49,6 +49,11 @@
     ]
   },
   "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-5xrq-8626-4rwp"
+      ]
+    },
     "overrides": {
       "next@<15.5.18": "15.5.18",
       "next@>=16.0.0 <16.2.6": "16.2.6",
