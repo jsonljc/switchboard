@@ -139,4 +139,28 @@ describe("decideForCampaign (characterization)", () => {
       expect(r.watches.some((w) => w.pattern === "in_learning_phase")).toBe(false);
     });
   });
+
+  it("stamps checkBackDate on engine-emitted insufficient_evidence watch from nextCycleDate", () => {
+    // Sub-floor evidence (2 clicks, 0 conversions) means the destructive-family
+    // add_creative recommendation is demoted by Gate 2 to an insufficient_evidence
+    // watch inside the engine. Campaign decision's passthrough branch must fill
+    // checkBackDate from input.nextCycleDate (was always empty string "").
+    const r = decideForCampaign({
+      campaignId: "c1",
+      campaignName: "C1",
+      // CPA = 2100/7 = 300 = 3x target → above add_creative 2x threshold + 9 breach days ≥ 7
+      currentInsight: insight({ spend: 2100, conversions: 7, inlineLinkClicks: 2 }),
+      previousInsight: insight({ spend: 2100, conversions: 7, inlineLinkClicks: 2 }),
+      targetBreach: { periodsAboveTarget: 9, granularity: "daily" as const, isApproximate: false },
+      learningStatus: successStatus,
+      economicTier: "cpl",
+      effectiveTarget: 100,
+      marginBasis: "unavailable",
+      targetROAS: 3,
+      nextCycleDate: "2026-05-21",
+    });
+    const w = r.watches.find((x) => x.pattern === "insufficient_evidence");
+    expect(w).toBeDefined();
+    expect(w?.checkBackDate).toBe("2026-05-21");
+  });
 });

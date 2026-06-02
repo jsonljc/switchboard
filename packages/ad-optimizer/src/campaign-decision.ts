@@ -152,8 +152,9 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
 
   for (const item of campaignRecs) {
     // Gate 2 abstentions arrive as watches straight from the engine.
+    // Fill checkBackDate here (not in the engine, which has no nextCycleDate).
     if (item.type === "watch") {
-      watches.push(item);
+      watches.push({ ...item, checkBackDate: item.checkBackDate || input.nextCycleDate });
       continue;
     }
     // Gate 1 abstention: when an account-wide conversion-denominator step-change

@@ -567,4 +567,43 @@ describe("generateRecommendations", () => {
     expect(restructure).toBeDefined();
     expect(restructure?.learningPhaseImpact).toBe("will reset learning");
   });
+
+  describe("Gate-2 evidence-floor abstention (direct engine coverage)", () => {
+    // CPA = 3x target + 9 daily breach days → the engine WOULD emit add_creative +
+    // pause if evidence were sufficient. With only 8 clicks / 0 conversions (well
+    // below destructive floor: 50 clicks / 5 conversions), Gate 2 demotes both to
+    // insufficient_evidence watches. This test would vacuously pass if the floor
+    // gating were removed — the assertion `not a destructive recommendation` is the
+    // guard (it would flip to a real add_creative/pause, breaking the test).
+    const subFloorInput: RecommendationInput = {
+      campaignId: "camp-sub-floor",
+      campaignName: "Thin Evidence Campaign",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 300, 100, "up", true)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 2400,
+      targetBreach: { periodsAboveTarget: 9, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 8, conversions: 0, days: 7 }, // sub-floor: clicks<50, conversions<5
+    };
+
+    it("emits an insufficient_evidence watch instead of destructive recs when evidence is below floor", () => {
+      const result = generateRecommendations(subFloorInput);
+
+      const watches = result.filter((r): r is WatchOutput => r.type === "watch");
+      const insufficientEvidenceWatch = watches.find((w) => w.pattern === "insufficient_evidence");
+      expect(insufficientEvidenceWatch).toBeDefined();
+    });
+
+    it("does NOT emit the destructive recommendation when evidence is below floor", () => {
+      const result = generateRecommendations(subFloorInput);
+
+      // If floor gating were removed, add_creative/pause would appear here —
+      // that's the failure mode this test catches.
+      const destructiveRec = recs(result).find(
+        (r) => r.action === "add_creative" || r.action === "pause",
+      );
+      expect(destructiveRec).toBeUndefined();
+    });
+  });
 });
