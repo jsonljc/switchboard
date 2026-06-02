@@ -671,6 +671,11 @@ export async function buildServer() {
   let submitScheduledFollowUp:
     | import("./services/cron/scheduled-follow-up-dispatch.js").SubmitScheduledFollowUp
     | undefined;
+  let submitScheduledReminder:
+    | ((
+        input: import("./services/workflows/reminder-send-request.js").ReminderSendSubmitInput,
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
     const result = await bootstrapContainedWorkflows({
@@ -683,6 +688,7 @@ export async function buildServer() {
     });
     instantFormAdapter = result.instantFormAdapter;
     submitScheduledFollowUp = result.submitScheduledFollowUp;
+    submitScheduledReminder = result.submitScheduledReminder;
   }
 
   // --- Phase 3b: lifecycle disqualification hook + store decoration (Wave 2 Phase 1b.3) ---
@@ -868,7 +874,12 @@ export async function buildServer() {
   app.get("/metrics", metricsRoute);
 
   // --- Inngest serve handler (creative pipeline orchestration) ---
-  await registerInngest(app, { instantFormAdapter, operatorAlerter, submitScheduledFollowUp });
+  await registerInngest(app, {
+    instantFormAdapter,
+    operatorAlerter,
+    submitScheduledFollowUp,
+    submitScheduledReminder,
+  });
 
   // --- Phase 3b: lifecycle disqualification route deps ---
   // The lifecycle hook was already bootstrapped and decorated on app earlier

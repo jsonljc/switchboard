@@ -141,6 +141,34 @@ describe("PrismaBookingStore", () => {
     expect(prisma.booking.findFirstOrThrow).not.toHaveBeenCalled();
   });
 
+  it("findUpcomingConfirmed: confirmed-only, cross-org, [start,end) window", async () => {
+    (prisma.booking.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "bk_1",
+        organizationId: "org_1",
+        contactId: "c_1",
+        startsAt: new Date("2026-05-13T02:00:00.000Z"),
+        timezone: "Asia/Singapore",
+        attendeeName: "Mei",
+      },
+    ]);
+    const start = new Date("2026-05-12T00:00:00.000Z");
+    const end = new Date("2026-05-12T02:00:00.000Z");
+    const rows = await store.findUpcomingConfirmed(start, end);
+    const call = (prisma.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(call.where).toEqual({ status: "confirmed", startsAt: { gte: start, lt: end } });
+    expect(call.where.organizationId).toBeUndefined(); // cross-org
+    expect(call.take).toBe(1000); // bounded scan (no unbounded fan-out)
+    expect(rows[0]).toEqual({
+      id: "bk_1",
+      organizationId: "org_1",
+      contactId: "c_1",
+      startsAt: new Date("2026-05-13T02:00:00.000Z"),
+      timezone: "Asia/Singapore",
+      attendeeName: "Mei",
+    });
+  });
+
   describe("listByDate", () => {
     it("returns bookings for a specific date excluding cancelled", async () => {
       const bookings = [

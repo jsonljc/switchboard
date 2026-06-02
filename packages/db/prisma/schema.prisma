@@ -2051,12 +2051,43 @@ model ScheduledFollowUp {
   skipReason           String?
   lastError            String?
   nextRetryAt          DateTime?
+  touchNumber          Int       @default(1)
+  cadenceId            String?
   sentAt               DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   @@index([status, dueAt])
   @@index([organizationId, contactId])
+}
+
+// ---------------------------------------------------------------------------
+// ScheduledReminder — booking-driven appointment reminders (~24h pre-booking).
+// Delivery state lives here, not on Booking. Single-attempt: no
+// attempts/nextRetryAt. Dispatched by the reminder cron through
+// PlatformIngress.submit.
+// ---------------------------------------------------------------------------
+
+/// Idempotent queue for appointment reminders (~24h pre-booking). Delivery state
+/// lives here, not on Booking. Single-attempt: no attempts/nextRetryAt.
+model ScheduledReminder {
+  id                  String    @id @default(uuid())
+  organizationId      String
+  contactId           String
+  bookingId           String
+  startsAt            DateTime
+  timezone            String
+  channel             String    @default("whatsapp")
+  templateIntentClass String
+  status              String    @default("pending")
+  skipReason          String?
+  lastError           String?
+  sentAt              DateTime?
+  dedupeKey           String    @unique
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([bookingId])
 }
 
 // ---------------------------------------------------------------------------

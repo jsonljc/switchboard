@@ -177,6 +177,9 @@ export * from "./whatsapp-template-create.js";
 // Canonical-key enum + Zod refinement (PR-3.2a — outcome-pattern bucketing)
 export * from "./canonical-keys.js";
 
+// Scheduled reminder status + dedupe key (PR-4 — appointment reminders)
+export * from "./scheduled-reminder.js";
+
 // Outcome-pattern surfacing config (PR-3.2e — per-deployment pilotMode flag)
 export * from "./outcome-patterns-config.js";
 

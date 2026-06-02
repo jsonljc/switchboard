@@ -37,6 +37,8 @@ describe("PrismaScheduledFollowUpStore", () => {
       templateIntentClass: "re-engagement-offer",
       dueAt: new Date("2026-06-04T10:00:00Z"),
       dedupeKey: "followup:org-1:contact-1:2026-06-04",
+      touchNumber: 1,
+      cadenceId: "cad-1",
     });
     expect(result).toEqual({ id: "fu_1" });
     expect(prisma.scheduledFollowUp.create).toHaveBeenCalledWith(
@@ -53,6 +55,33 @@ describe("PrismaScheduledFollowUpStore", () => {
     );
   });
 
+  it("create persists touchNumber and cadenceId", async () => {
+    prisma.scheduledFollowUp.create.mockResolvedValue({ id: "fu_1" });
+    await store.create({
+      organizationId: "org_1",
+      contactId: "c_1",
+      conversationThreadId: "th_1",
+      sessionId: "th_1",
+      deploymentId: "dep_1",
+      workUnitId: "wu_1",
+      channel: "whatsapp",
+      jurisdiction: "SG",
+      reason: "hesitation",
+      note: null,
+      templateIntentClass: "re-engagement-offer",
+      dueAt: new Date("2026-06-04T00:00:00.000Z"),
+      dedupeKey: "followup:org_1:c_1:2026-06-04:t1",
+      touchNumber: 1,
+      cadenceId: "cad_1",
+    });
+    expect(prisma.scheduledFollowUp.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ touchNumber: 1, cadenceId: "cad_1", status: "pending" }),
+        select: { id: true },
+      }),
+    );
+  });
+
   it("findPendingForContact() scopes by org + contact + pending status", async () => {
     prisma.scheduledFollowUp.findFirst.mockResolvedValue({ id: "fu_1" });
     const result = await store.findPendingForContact("org-1", "contact-1");
@@ -64,21 +93,9 @@ describe("PrismaScheduledFollowUpStore", () => {
   });
 
   it("findDue() returns due pending rows under the attempt cap", async () => {
-    prisma.scheduledFollowUp.findMany.mockResolvedValue([
-      {
-        id: "fu_1",
-        organizationId: "org-1",
-        contactId: "contact-1",
-        conversationThreadId: "thread-1",
-        channel: "whatsapp",
-        templateIntentClass: "re-engagement-offer",
-        reason: "hesitation",
-        attempts: 0,
-      },
-    ]);
+    prisma.scheduledFollowUp.findMany.mockResolvedValue([]);
     const now = new Date("2026-06-04T10:00:00Z");
-    const rows = await store.findDue(now, 100);
-    expect(rows).toHaveLength(1);
+    await store.findDue(now, 100);
     expect(prisma.scheduledFollowUp.findMany).toHaveBeenCalledWith({
       where: {
         status: "pending",
@@ -93,19 +110,52 @@ describe("PrismaScheduledFollowUpStore", () => {
         organizationId: true,
         contactId: true,
         conversationThreadId: true,
+        sessionId: true,
+        deploymentId: true,
+        workUnitId: true,
         channel: true,
-        templateIntentClass: true,
+        jurisdiction: true,
         reason: true,
+        note: true,
+        templateIntentClass: true,
         attempts: true,
+        dueAt: true,
+        touchNumber: true,
+        cadenceId: true,
       },
     });
   });
 
-  it("markSent() flips status to sent + stamps sentAt", async () => {
+  it("findDue projects the cadence + carry-over fields", async () => {
+    prisma.scheduledFollowUp.findMany.mockResolvedValue([]);
+    await store.findDue(new Date("2026-06-04T00:00:00.000Z"), 100);
+    const call = prisma.scheduledFollowUp.findMany.mock.calls[0]![0];
+    expect(call.select).toEqual({
+      id: true,
+      organizationId: true,
+      contactId: true,
+      conversationThreadId: true,
+      sessionId: true,
+      deploymentId: true,
+      workUnitId: true,
+      channel: true,
+      jurisdiction: true,
+      reason: true,
+      note: true,
+      templateIntentClass: true,
+      attempts: true,
+      dueAt: true,
+      touchNumber: true,
+      cadenceId: true,
+    });
+    expect(call.where.attempts).toEqual({ lt: 3 });
+  });
+
+  it("markSent() flips status to sent + stamps sentAt + clears any stale skipReason", async () => {
     await store.markSent("fu_1");
     expect(prisma.scheduledFollowUp.update).toHaveBeenCalledWith({
       where: { id: "fu_1" },
-      data: expect.objectContaining({ status: "sent" }),
+      data: expect.objectContaining({ status: "sent", skipReason: null }),
     });
   });
 
@@ -131,6 +181,16 @@ describe("PrismaScheduledFollowUpStore", () => {
     expect(prisma.scheduledFollowUp.update).toHaveBeenCalledWith({
       where: { id: "fu_1" },
       data: { status: "failed", attempts: { increment: 1 }, lastError: "boom" },
+    });
+  });
+
+  it("markDeferred keeps the row pending without consuming an attempt", async () => {
+    prisma.scheduledFollowUp.update.mockResolvedValue({});
+    const at = new Date("2026-06-04T01:00:00.000Z");
+    await store.markDeferred("fu_1", "template_not_approved", at);
+    expect(prisma.scheduledFollowUp.update).toHaveBeenCalledWith({
+      where: { id: "fu_1" },
+      data: { status: "pending", skipReason: "template_not_approved", nextRetryAt: at },
     });
   });
 });

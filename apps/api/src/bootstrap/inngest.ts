@@ -24,6 +24,8 @@ import {
   PrismaRecommendationOutcomeStore,
   PrismaAttributableRecommendationStore,
   PrismaScheduledFollowUpStore,
+  PrismaScheduledReminderStore,
+  PrismaBookingStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -43,6 +45,7 @@ import {
   type RecommendationInput,
   type StepTools as PatternDecayStepTools,
 } from "@switchboard/core";
+import type { SubmitWorkResponse } from "@switchboard/core/platform";
 import { bootstrapLifecycle } from "./lifecycle.js";
 import {
   inngestClient,
@@ -83,6 +86,9 @@ import type {
   ScheduledFollowUpDispatchDeps,
   SubmitScheduledFollowUp,
 } from "../services/cron/scheduled-follow-up-dispatch.js";
+import { createAppointmentReminderDispatchCron } from "../services/cron/appointment-reminder-dispatch.js";
+import type { AppointmentReminderDispatchDeps } from "../services/cron/appointment-reminder-dispatch.js";
+import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
@@ -121,6 +127,13 @@ export interface RegisterInngestOptions {
    * governed work. No parentWorkUnitId — cron work units are trace roots.
    */
   submitScheduledFollowUp?: SubmitScheduledFollowUp;
+  /**
+   * Top-level submit closure for the appointment-reminder dispatch cron.
+   * Built in bootstrapContainedWorkflows and threaded here so the cron
+   * submits through the same PlatformIngress front door as all other
+   * governed work. No parentWorkUnitId — cron work units are trace roots.
+   */
+  submitScheduledReminder?: (input: ReminderSendSubmitInput) => Promise<SubmitWorkResponse>;
 }
 
 export async function registerInngest(
@@ -546,9 +559,30 @@ export async function registerInngest(
       }
       return options.submitScheduledFollowUp(input);
     },
+    createFollowUp: (input) => followUpStore.create(input),
     markSent: (id) => followUpStore.markSent(id),
     markSkipped: (id, reason) => followUpStore.markSkipped(id, reason),
     markFailed: (id, error, nextRetryAt) => followUpStore.markFailed(id, error, nextRetryAt),
+    markDeferred: (id, reason, nextRetryAt) => followUpStore.markDeferred(id, reason, nextRetryAt),
+  };
+
+  // Appointment reminder dispatch cron dependencies
+  const scheduledReminderStore = new PrismaScheduledReminderStore(app.prisma);
+  const bookingStore = new PrismaBookingStore(app.prisma);
+  const appointmentReminderDispatchDeps: AppointmentReminderDispatchDeps = {
+    failure: asyncFailure,
+    findUpcomingConfirmed: (start, end) => bookingStore.findUpcomingConfirmed(start, end),
+    findReminderByDedupeKey: (k) => scheduledReminderStore.findByDedupeKey(k),
+    createReminder: (input) => scheduledReminderStore.create(input),
+    submitReminderSend: (input) => {
+      if (!options.submitScheduledReminder) {
+        throw new Error("submitScheduledReminder not wired");
+      }
+      return options.submitScheduledReminder(input);
+    },
+    markSent: (id) => scheduledReminderStore.markSent(id),
+    markSkipped: (id, reason) => scheduledReminderStore.markSkipped(id, reason),
+    markFailed: (id, error) => scheduledReminderStore.markFailed(id, error),
   };
 
   // PCD Registry backfill cron dependencies
@@ -817,6 +851,7 @@ export async function registerInngest(
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
       createScheduledFollowUpDispatchCron(scheduledFollowUpDispatchDeps),
+      createAppointmentReminderDispatchCron(appointmentReminderDispatchDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
       createLifecycleStalledSweepCron({
         failure: asyncFailure,
