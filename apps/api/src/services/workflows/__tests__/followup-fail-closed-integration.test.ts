@@ -31,6 +31,7 @@ describe("follow-up fail-closed integration", () => {
 
     const markSkipped = vi.fn();
     const markSent = vi.fn();
+    const markDeferred = vi.fn();
     const result = await executeScheduledFollowUpDispatch(
       { run: async <T>(_n: string, fn: () => T | Promise<T>): Promise<T> => fn() },
       {
@@ -45,10 +46,18 @@ describe("follow-up fail-closed integration", () => {
             organizationId: "org_1",
             contactId: "contact_1",
             conversationThreadId: "thread_1",
+            sessionId: null,
+            deploymentId: null,
+            workUnitId: null,
             channel: "whatsapp",
+            jurisdiction: null,
             templateIntentClass: "re-engagement-offer",
             reason: "went_quiet",
+            note: null,
             attempts: 0,
+            dueAt: new Date(),
+            touchNumber: 1,
+            cadenceId: null,
           },
         ]),
         // Route the submit through the REAL handler (no ingress) to prove the gate.
@@ -75,16 +84,20 @@ describe("follow-up fail-closed integration", () => {
           );
           return { ok: true, result: r as never, workUnit: {} as never };
         },
+        createFollowUp: vi.fn().mockResolvedValue({ id: "fu_2" }),
         markSent,
         markSkipped,
         markFailed: vi.fn(),
+        markDeferred,
       },
     );
 
     expect(result.sent).toBe(0);
     expect(result.skipped).toBe(1);
     expect(markSent).not.toHaveBeenCalled();
-    expect(markSkipped).toHaveBeenCalledWith("fu_1", "template_not_approved");
+    // template_not_approved is an activation skip → markDeferred (re-evaluable, not terminal)
+    expect(markDeferred).toHaveBeenCalledWith("fu_1", "template_not_approved", expect.any(Date));
+    expect(markSkipped).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled(); // never reached the Graph API
   });
 });

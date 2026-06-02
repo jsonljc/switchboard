@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { Tool, ToolChoiceTool } from "@anthropic-ai/sdk/resources/messages/messages.js";
+import type {
+  TextBlockParam,
+  Tool,
+  ToolChoiceTool,
+} from "@anthropic-ai/sdk/resources/messages/messages.js";
 import type { GradeSpecSchema } from "./schema.js";
 import type { z as zType } from "zod";
 
@@ -153,15 +157,17 @@ export interface JudgeTurnDeps {
  * Minimal Anthropic client interface that the judge uses. Keeping this narrow
  * makes it easy to stub in tests.
  *
- * Uses SDK-typed Tool[] and ToolChoiceTool so the real Anthropic client satisfies
- * this interface without casting.
+ * Uses SDK-typed TextBlockParam[], Tool[], and ToolChoiceTool so the real Anthropic
+ * client satisfies this interface without casting. `system` accepts the structured
+ * text-block form (in addition to a bare string) so the rubric can carry a
+ * cache_control breakpoint.
  */
 export interface AnthropicClientLike {
   messages: {
     create(params: {
       model: string;
       max_tokens: number;
-      system: string;
+      system: string | TextBlockParam[];
       tools: Tool[];
       tool_choice: ToolChoiceTool;
       messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -231,8 +237,17 @@ export async function judgeTurn(input: JudgeTurnInput, deps: JudgeTurnDeps): Pro
     const response = await deps.client.messages.create({
       model: deps.model,
       max_tokens: JUDGE_MAX_TOKENS,
-      system: JUDGE_RUBRIC,
-      tools: [JUDGE_TOOL],
+      // Prompt caching: the rubric (system) + tool schema are byte-identical on every
+      // judge call; only `messages` varies per turn. A cache_control breakpoint on the
+      // system block caches tools+system together, and one on the last tool caches the
+      // tools block — so every call after the first reads the static prefix from cache
+      // (~0.1x input price) instead of re-billing it on each of the ~146 judge calls.
+      // Mirrors AnthropicToolAdapter (skill-runtime/adapters/anthropic-tool-adapter.ts).
+      // Output-neutral: the model sees identical bytes, so verdicts are unchanged and
+      // the committed baseline stays valid. (Anthropic caches a prefix only above a
+      // model-dependent minimum; below it the markers are a harmless no-op.)
+      system: [{ type: "text", text: JUDGE_RUBRIC, cache_control: { type: "ephemeral" } }],
+      tools: [{ ...JUDGE_TOOL, cache_control: { type: "ephemeral" } }],
       tool_choice: { type: "tool", name: "judge_turn" },
       messages: [{ role: "user", content: userMessage }],
     });

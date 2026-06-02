@@ -54,6 +54,10 @@ describe("alex-conversation golden-scenario matrix coverage", () => {
   });
 
   it("exercises escalation and do-not-book oracles", () => {
+    // 6 escalation scenarios: 4 medical red flags (mole/pregnancy/blood-thinner/
+    // recent-surgery) + 1 explicit human request + 1 tool-error/system-down. The
+    // 2026-06-01 calibration moved controlled-thyroid + lupus to consult-redirects
+    // (do-not-book only); the floor stays at 6 (thyroid moved out, the rest remain).
     expect(countWhere((f) => f.oracle?.expectsEscalation === true)).toBeGreaterThanOrEqual(6);
     expect(countWhere((f) => f.oracle?.expectsBooking === false)).toBeGreaterThanOrEqual(10);
     expect(countWhere((f) => f.oracle?.expectsBooking === true)).toBeGreaterThanOrEqual(4);

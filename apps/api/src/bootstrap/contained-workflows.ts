@@ -11,6 +11,8 @@ import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 import { buildFollowUpSendSubmitRequest } from "../services/workflows/followup-send-request.js";
 import type { FollowUpSendSubmitInput } from "../services/cron/scheduled-follow-up-dispatch.js";
+import { buildReminderSendSubmitRequest } from "../services/workflows/reminder-send-request.js";
+import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
 
 interface ContainedWorkflowBootstrapDeps {
   prismaClient: unknown;
@@ -35,6 +37,13 @@ export interface ContainedWorkflowBootstrapResult {
    * PlatformIngress with trigger:"schedule".
    */
   submitScheduledFollowUp: (input: FollowUpSendSubmitInput) => Promise<SubmitWorkResponse>;
+  /**
+   * Top-level submit closure for the appointment-reminder dispatch cron. No
+   * parentWorkUnitId — cron-initiated work units are legitimate trace roots.
+   * Resolves the conversation deployment by intent and submits through
+   * PlatformIngress with trigger:"schedule".
+   */
+  submitScheduledReminder: (input: ReminderSendSubmitInput) => Promise<SubmitWorkResponse>;
 }
 
 /**
@@ -94,6 +103,8 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/meta-lead-greeting-workflow.js");
   const { buildConversationFollowUpSendWorkflow } =
     await import("../services/workflows/conversation-followup-send-workflow.js");
+  const { buildConversationReminderSendWorkflow } =
+    await import("../services/workflows/conversation-reminder-send-workflow.js");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
@@ -162,24 +173,58 @@ export async function bootstrapContainedWorkflows(
     ),
   });
 
+  // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
+  // difference between callers is how the WhatsApp 24h-window timestamp is resolved
+  // (follow-up: by threadId; reminder: by the contactId+org compound key), so each caller
+  // looks that up and passes it in.
+  type WhatsAppSendContext = {
+    consentGrantedAt: Date | string | null;
+    consentRevokedAt: Date | string | null;
+    pdpaJurisdiction: "SG" | "MY" | null;
+    messagingOptIn: boolean;
+    lastWhatsAppInboundAt: Date | null;
+    jurisdiction: "SG" | "MY" | null;
+    leadName: string;
+    businessName: string;
+    phone: string | null;
+  };
+  const buildWhatsAppSendContext = async (
+    prisma: import("@switchboard/db").PrismaClient,
+    orgId: string,
+    contactId: string,
+    lastWhatsAppInboundAt: Date | null,
+  ): Promise<WhatsAppSendContext> => {
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, organizationId: orgId },
+      select: {
+        name: true,
+        phone: true,
+        messagingOptIn: true,
+        pdpaJurisdiction: true,
+        consentGrantedAt: true,
+        consentRevokedAt: true,
+      },
+    });
+    const org = await prisma.organizationConfig.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
+    return {
+      consentGrantedAt: contact?.consentGrantedAt ?? null,
+      consentRevokedAt: contact?.consentRevokedAt ?? null,
+      pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+      messagingOptIn: contact?.messagingOptIn ?? false,
+      lastWhatsAppInboundAt,
+      jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+      leadName: contact?.name ?? "there",
+      businessName: org?.name ?? "our clinic",
+      phone: contact?.phone ?? null,
+    };
+  };
+
   const followUpSendHandler = buildConversationFollowUpSendWorkflow({
     getSendContext: async (orgId, contactId, threadId) => {
       const prisma = prismaClient as import("@switchboard/db").PrismaClient;
-      const contact = await prisma.contact.findFirst({
-        where: { id: contactId, organizationId: orgId },
-        select: {
-          name: true,
-          phone: true,
-          messagingOptIn: true,
-          pdpaJurisdiction: true,
-          consentGrantedAt: true,
-          consentRevokedAt: true,
-        },
-      });
-      const org = await prisma.organizationConfig.findUnique({
-        where: { id: orgId },
-        select: { name: true },
-      });
       const thread =
         threadId !== null
           ? await prisma.conversationThread.findUnique({
@@ -187,19 +232,31 @@ export async function bootstrapContainedWorkflows(
               select: { lastWhatsAppInboundAt: true },
             })
           : null;
-      return {
-        consentGrantedAt: contact?.consentGrantedAt ?? null,
-        consentRevokedAt: contact?.consentRevokedAt ?? null,
-        pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-        messagingOptIn: contact?.messagingOptIn ?? false,
-        lastWhatsAppInboundAt: thread?.lastWhatsAppInboundAt ?? null,
-        jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-        leadName: contact?.name ?? "there",
-        businessName: org?.name ?? "our clinic",
-        phone: contact?.phone ?? null,
-      };
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
     },
     allowMarketingTemplate: process.env["FOLLOWUP_ALLOW_MARKETING_TEMPLATE"] === "true",
+  });
+
+  const reminderSendHandler = buildConversationReminderSendWorkflow({
+    getSendContext: async (orgId, contactId) => {
+      const prisma = prismaClient as import("@switchboard/db").PrismaClient;
+      const thread = await prisma.conversationThread.findUnique({
+        where: { contactId_organizationId: { contactId, organizationId: orgId } },
+        select: { lastWhatsAppInboundAt: true },
+      });
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
+    },
+    allowMarketingTemplate: false,
   });
 
   const handlers = new Map<string, WorkflowHandler>([
@@ -212,6 +269,7 @@ export async function bootstrapContainedWorkflows(
     ["meta.lead.greeting.send", buildMetaLeadGreetingWorkflow()],
     ["meta.lead.inquiry.record", buildMetaLeadRecordInquiryWorkflow(prismaClient)],
     ["conversation.followup.send", followUpSendHandler],
+    ["conversation.reminder.send", reminderSendHandler],
   ]);
 
   modeRegistry.register(new WorkflowMode({ handlers, services }));
@@ -298,6 +356,13 @@ export async function bootstrapContainedWorkflows(
       approvalPolicy: "none",
       allowedTriggers: ["schedule"],
     },
+    {
+      intent: "conversation.reminder.send",
+      workflowId: "conversation.reminder.send",
+      budgetClass: "standard",
+      approvalPolicy: "none",
+      allowedTriggers: ["schedule"],
+    },
   ];
 
   for (const reg of workflowIntents) {
@@ -331,5 +396,16 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(buildFollowUpSendSubmitRequest(input, deployment));
   };
 
-  return { instantFormAdapter, submitScheduledFollowUp };
+  const submitScheduledReminder = async (
+    input: ReminderSendSubmitInput,
+  ): Promise<SubmitWorkResponse> => {
+    const deployment = await resolveDeploymentForIntent(
+      deploymentResolver,
+      input.organizationId,
+      "conversation.reminder.send",
+    );
+    return platformIngress.submit(buildReminderSendSubmitRequest(input, deployment));
+  };
+
+  return { instantFormAdapter, submitScheduledFollowUp, submitScheduledReminder };
 }

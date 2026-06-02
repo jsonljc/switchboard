@@ -17,6 +17,7 @@ describe("HandoffReasonSchema", () => {
     "escalation_timeout",
     "missing_knowledge",
     "outside_whatsapp_window",
+    "medical_safety",
   ])("accepts %s", (reason) => {
     expect(HandoffReasonSchema.safeParse(reason).success).toBe(true);
   });

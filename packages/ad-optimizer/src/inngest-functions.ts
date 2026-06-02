@@ -15,6 +15,7 @@ interface DeploymentInfo {
     monthlyBudget?: number;
     targetCPA?: number;
     targetROAS?: number;
+    targetCostPerBooked?: number;
   };
 }
 
@@ -84,9 +85,13 @@ function fmt(d: Date): string {
 
 // TODO(scale): Both weekly-audit and daily-signal-health crons loop
 // deployments serially. Each deployment runs ~4–6 Graph API calls inside a
-// single Inngest step, so wall time scales O(N). Acceptable up to ~25
-// deployments; revisit (parallelize via Promise.all of step.run) if launch
-// tenancy crosses that threshold.
+// single Inngest step, so wall time scales O(N). With the real
+// MetaCampaignInsightsProvider wired in, cost is now per-campaign (not just
+// per-deployment): each campaign adds ~4 serialized Graph calls (learning
+// inputs + daily breach window) behind the 60s RATE_LIMIT_MS, so total wall
+// time ≈ N_deployments × N_campaigns × 60s. Acceptable at current tenancy;
+// revisit (parallelize via Promise.all of step.run) if launch
+// tenancy crosses ~25 deployments or average campaign count > 5.
 
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
@@ -106,11 +111,18 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
 
     await step.run(`audit-${deployment.id}`, async () => {
       const adsClient = deps.createAdsClient(creds);
+      // NOTE (PR2): read as a strict number. Sibling inputConfig fields (targetCPA/
+      // targetROAS) are stored as strings by the seed/wizard; a future producer that
+      // writes targetCostPerBooked as a string would be silently dropped here (→ Tier 2
+      // CPL, never booked_cac). When a real producer lands (wizard), route it through
+      // resolveAdOptimizerConfig/AdOptimizerConfigSchema to coerce string→number.
+      const cpb = deployment.inputConfig.targetCostPerBooked;
       const config: AuditConfig = {
         accountId: creds.accountId,
         orgId: deployment.organizationId,
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
+        ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
         mediaBenchmarks: {
           inlineLinkClickCtr: 2.0,
           landingPageViewRate: 0.85,

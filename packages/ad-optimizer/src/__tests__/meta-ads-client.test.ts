@@ -481,3 +481,122 @@ describe("MetaAdsClient", () => {
     });
   });
 });
+
+describe("getCampaignInsights time_increment", () => {
+  it("adds time_increment to the query when provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    await client.getCampaignInsights({
+      dateRange: { since: "2026-05-18", until: "2026-06-01" },
+      fields: ["campaign_id", "spend", "conversions"],
+      timeIncrement: 1,
+    });
+    const calledUrl = String(fetchMock.mock.calls[0]![0]);
+    expect(calledUrl).toContain("time_increment=1");
+  });
+
+  it("omits time_increment when not provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    await client.getCampaignInsights({
+      dateRange: { since: "2026-05-25", until: "2026-06-01" },
+      fields: ["campaign_id"],
+    });
+    expect(String(fetchMock.mock.calls[0]![0])).not.toContain("time_increment");
+  });
+});
+
+describe("getAdSetLearningInputs", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("maps entity learning_stage_info + insights spend into AdSetLearningInput[]", async () => {
+    const fetchMock = vi
+      .fn()
+      // 1st call: adsets entity edge (learning_stage_info)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              id: "as_1",
+              name: "AdSet 1",
+              campaign_id: "c_1",
+              learning_stage_info: { status: "LEARNING" },
+            },
+            {
+              id: "as_2",
+              name: "AdSet 2",
+              campaign_id: "c_1",
+              learning_stage_info: { status: "SUCCESS" },
+            },
+          ],
+        }),
+      })
+      // 2nd call: adset insights (spend etc.)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              adset_id: "as_1",
+              spend: "300",
+              conversions: "2",
+              frequency: "1.5",
+              inline_link_click_ctr: "1.0",
+            },
+            {
+              adset_id: "as_2",
+              spend: "100",
+              conversions: "5",
+              frequency: "1.2",
+              inline_link_click_ctr: "1.4",
+            },
+          ],
+        }),
+      });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+
+    const rowsPromise = client.getAdSetLearningInputs("c_1");
+
+    // Advance past rate limit for the second internal call (getAdSetInsights)
+    await vi.advanceTimersByTimeAsync(61000);
+
+    const rows = await rowsPromise;
+
+    expect(rows).toHaveLength(2);
+    const as1 = rows.find((r) => r.adSetId === "as_1")!;
+    expect(as1.learningStageStatus).toBe("LEARNING");
+    expect(as1.spend).toBe(300);
+    expect(as1.campaignId).toBe("c_1");
+    expect(rows.find((r) => r.adSetId === "as_2")!.learningStageStatus).toBe("SUCCESS");
+  });
+});
+
+describe("fractional conversions", () => {
+  it("preserves fractional conversions (parseFloat, not parseInt)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ campaign_id: "c_1", spend: "100", conversions: "2.5" }] }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    const rows = await client.getCampaignInsights({
+      dateRange: { since: "2026-05-25", until: "2026-06-01" },
+      fields: ["campaign_id", "spend", "conversions"],
+    });
+    expect(rows[0]!.conversions).toBe(2.5);
+  });
+});

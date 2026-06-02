@@ -1,8 +1,9 @@
 import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
-import { FOLLOW_UP_DELAY_MS } from "@switchboard/schemas";
+import { CADENCE_TOUCH1_DELAY_MS, buildFollowUpDedupeKey } from "@switchboard/schemas";
 import type { FollowUpReason, FollowUpDelay } from "@switchboard/schemas";
+import { randomUUID } from "node:crypto";
 import type { CreateScheduledFollowUpInput } from "../../scheduled-follow-up/scheduled-follow-up-store.js";
 
 interface ScheduleFollowUpDeps {
@@ -12,6 +13,8 @@ interface ScheduleFollowUpDeps {
   };
   /** Injectable clock for deterministic dueAt; defaults to wall clock. */
   now?: () => Date;
+  /** Injectable id generator for cadenceId; defaults to randomUUID. */
+  genId?: () => string;
 }
 
 interface ScheduleFollowUpInput {
@@ -33,6 +36,7 @@ export function createScheduleFollowUpToolFactory(
   deps: ScheduleFollowUpDeps,
 ): ScheduleFollowUpToolFactory {
   const now = deps.now ?? (() => new Date());
+  const genId = deps.genId ?? (() => randomUUID());
   return (ctx: SkillRequestContext): SkillTool => ({
     id: "follow-up",
     operations: {
@@ -79,14 +83,17 @@ export function createScheduleFollowUpToolFactory(
           }
 
           const input = params as ScheduleFollowUpInput;
-          const dueAt = new Date(now().getTime() + FOLLOW_UP_DELAY_MS[input.delay]);
-          const dayBucket = dueAt.toISOString().slice(0, 10);
-          const dedupeKey = `followup:${ctx.orgId}:${contactId}:${dayBucket}`;
 
           const existing = await deps.followUpStore.findPendingForContact(ctx.orgId, contactId);
           if (existing) {
             return ok({ followUpId: existing.id, status: "already_scheduled" });
           }
+
+          // `delay` stays a required, validated input for back-compat, but timing is now
+          // fixed by the cadence schedule: touch 1 always fires at +2d.
+          const cadenceId = genId();
+          const dueAt = new Date(now().getTime() + CADENCE_TOUCH1_DELAY_MS);
+          const dedupeKey = buildFollowUpDedupeKey(ctx.orgId, contactId, dueAt, 1);
 
           const created = await deps.followUpStore.create({
             organizationId: ctx.orgId,
@@ -100,6 +107,8 @@ export function createScheduleFollowUpToolFactory(
             reason: input.reason,
             note: input.note ?? null,
             templateIntentClass: "re-engagement-offer",
+            touchNumber: 1,
+            cadenceId,
             dueAt,
             dedupeKey,
           });

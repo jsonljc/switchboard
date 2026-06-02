@@ -42,3 +42,42 @@ export const ProactiveSkipReasonSchema = z.enum([
   "unsupported_channel",
 ]);
 export type ProactiveSkipReason = z.infer<typeof ProactiveSkipReasonSchema>;
+
+/** Touch 1 fires +2d after the lead defers (the "+2" in +2/+5/+12). */
+export const CADENCE_TOUCH1_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+/** Send-relative gap to the NEXT touch, keyed by the just-sent touchNumber. */
+export const NEXT_TOUCH_GAP_DAYS: Record<number, number> = { 1: 3, 2: 7 };
+/** Stop after 3 touches. */
+export const MAX_CADENCE_TOUCHES = 3;
+/** Never schedule the next touch sooner than 48h out (compression floor). */
+export const MIN_NEXT_TOUCH_GAP_MS = 48 * 60 * 60 * 1000;
+/** Relaxed re-eval interval for an activation skip (template not yet approved). */
+export const ACTIVATION_RETRY_INTERVAL_MS = 60 * 60 * 1000;
+/** Past this much overdue, an unsent activation-skipped touch terminates as stale. */
+export const ACTIVATION_MAX_OVERDUE_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Stable, day-bucketed dedupe key for a cadence touch. The `:t${touchNumber}`
+ * suffix makes touches collision-proof even when two land on the same calendar
+ * day; the day bucket keeps it idempotent across cron retries within a day.
+ */
+export function buildFollowUpDedupeKey(
+  organizationId: string,
+  contactId: string,
+  dueAt: Date,
+  touchNumber: number,
+): string {
+  const dayBucket = dueAt.toISOString().slice(0, 10);
+  return `followup:${organizationId}:${contactId}:${dayBucket}:t${touchNumber}`;
+}
+
+const ACTIVATION_SKIP_REASONS = new Set<string>(["template_not_approved", "no_template"]);
+
+/**
+ * Cadence skip taxonomy. Only activation skips (template pending Meta approval)
+ * keep a row re-evaluable; everything else — durable ineligibility AND any
+ * unrecognised reason — terminates the cadence (fail-closed; never loops).
+ */
+export function classifyCadenceSkip(reason: string): "durable" | "activation" {
+  return ACTIVATION_SKIP_REASONS.has(reason) ? "activation" : "durable";
+}

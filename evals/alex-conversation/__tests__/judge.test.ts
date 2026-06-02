@@ -338,6 +338,67 @@ describe("judgeTurn — softScore 4 from valid tool_use is preserved (not clampe
 // Grade spec hints are included in the user message
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Prompt caching — cache_control breakpoints on the static system + tool prefix
+// ---------------------------------------------------------------------------
+//
+// Every judge call re-sends an IDENTICAL static prefix — the JUDGE_RUBRIC system
+// prompt + the JUDGE_TOOL schema — and only the per-turn user message varies. Over
+// a full run that prefix is billed at full input price on each of the ~146 judge
+// calls. Marking it with cache_control lets Anthropic serve it from cache (~0.1x
+// input price) on every call after the first. Mirrors AnthropicToolAdapter's
+// strategy (skill-runtime/adapters/anthropic-tool-adapter.ts): a breakpoint on the
+// system block caches tools+system together; a breakpoint on the last tool caches
+// the tools block; the dynamic user-message tail stays unmarked. Caching is
+// output-neutral, so the committed baseline stays valid.
+//
+// Unit scope asserts the REQUEST carries the breakpoints (real cache hits require a
+// live call — see the live probe in the PR notes).
+
+describe("judgeTurn — prompt caching on the static prefix", () => {
+  it("sends JUDGE_RUBRIC as a cached system text block (cache_control: ephemeral)", async () => {
+    const fakeClient = makeToolUseClient(GOOD_TOOL_INPUT);
+    await judgeTurn(CLEAN_TURN_INPUT, makeDeps(fakeClient));
+
+    const call = vi.mocked(fakeClient.messages.create).mock.calls[0]![0];
+    const system = call.system as unknown as Array<{
+      type: string;
+      text: string;
+      cache_control?: { type: string };
+    }>;
+    expect(Array.isArray(system)).toBe(true);
+    const lastBlock = system[system.length - 1]!;
+    expect(lastBlock.type).toBe("text");
+    expect(lastBlock.cache_control).toEqual({ type: "ephemeral" });
+    // The cached block must carry the verbatim rubric — caching changes nothing
+    // about the content the model sees (output-neutral).
+    expect(lastBlock.text).toContain("You are a conversation quality judge");
+  });
+
+  it("marks the last (only) tool definition with cache_control: ephemeral", async () => {
+    const fakeClient = makeToolUseClient(GOOD_TOOL_INPUT);
+    await judgeTurn(CLEAN_TURN_INPUT, makeDeps(fakeClient));
+
+    const call = vi.mocked(fakeClient.messages.create).mock.calls[0]![0];
+    const tools = call.tools as Array<{ name: string; cache_control?: { type: string } }>;
+    const lastTool = tools[tools.length - 1]!;
+    expect(lastTool.cache_control).toEqual({ type: "ephemeral" });
+    // Caching must not alter the tool's identity — still the judge_turn schema.
+    expect(lastTool.name).toBe("judge_turn");
+  });
+
+  it("does not mark the dynamic user-message tail with cache_control", async () => {
+    const fakeClient = makeToolUseClient(GOOD_TOOL_INPUT);
+    await judgeTurn(CLEAN_TURN_INPUT, makeDeps(fakeClient));
+
+    const call = vi.mocked(fakeClient.messages.create).mock.calls[0]![0];
+    const messages = call.messages as Array<{ cache_control?: unknown }>;
+    for (const message of messages) {
+      expect(message.cache_control).toBeUndefined();
+    }
+  });
+});
+
 describe("judgeTurn — grade spec forwarding", () => {
   it("sends a request containing the alexResponse text", async () => {
     const fakeClient = makeToolUseClient(GOOD_TOOL_INPUT);

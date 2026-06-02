@@ -34,6 +34,12 @@ export type AdRecommendationActionSchema = z.infer<typeof AdRecommendationAction
 export const UrgencySchema = z.enum(["immediate", "this_week", "next_cycle"]);
 export type UrgencySchema = z.infer<typeof UrgencySchema>;
 
+export const EconomicTierSchema = z.enum(["booked_cac", "cpl", "cpc"]);
+export type EconomicTierSchema = z.infer<typeof EconomicTierSchema>;
+
+export const MarginBasisSchema = z.enum(["configured", "unavailable"]);
+export type MarginBasisSchema = z.infer<typeof MarginBasisSchema>;
+
 export const MetricDirectionSchema = z.enum(["up", "down", "stable"]);
 export type MetricDirectionSchema = z.infer<typeof MetricDirectionSchema>;
 
@@ -177,6 +183,11 @@ export const RecommendationOutputSchema = z.object({
   learningPhaseImpact: z.string(),
   draftId: z.string().nullable().optional(),
   params: z.record(z.string(), z.string()).optional(),
+  // PR2 (Target): the economic basis this recommendation was judged against, and
+  // whether the target was margin-derived. Optional for back-compat; populated
+  // by the audit's applyTier post-processor going forward.
+  economicTier: EconomicTierSchema.optional(),
+  marginBasis: MarginBasisSchema.optional(),
 });
 export type RecommendationOutputSchema = z.infer<typeof RecommendationOutputSchema>;
 
