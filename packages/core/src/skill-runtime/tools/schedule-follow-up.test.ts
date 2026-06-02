@@ -9,6 +9,7 @@ function makeDeps() {
       findPendingForContact: vi.fn().mockResolvedValue(null),
     },
     now: () => new Date("2026-06-01T00:00:00.000Z"),
+    genId: () => "cad_1",
   };
 }
 
@@ -44,33 +45,25 @@ describe("schedule-follow-up tool", () => {
     expect(deps.followUpStore.create).not.toHaveBeenCalled();
   });
 
-  it("schedules a follow-up using trusted ctx ids, computing dueAt + dedupeKey from delay", async () => {
+  it("schedules cadence touch 1 at now+2d with a fresh cadenceId", async () => {
     const tool = createScheduleFollowUpToolFactory(deps)(CTX);
     const r = await tool.operations["followup.schedule"]!.execute({
-      reason: "price_concern",
-      delay: "in_3_days",
-      note: "wants pricing on weekend",
+      reason: "hesitation",
+      delay: "in_1_week",
     });
     expect(r.status).toBe("success");
     expect(r.data).toEqual({
       followUpId: "fu_1",
-      scheduledFor: "2026-06-04T00:00:00.000Z",
+      scheduledFor: "2026-06-03T00:00:00.000Z",
       status: "scheduled",
     });
     expect(deps.followUpStore.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        organizationId: "org_1",
-        contactId: "contact_1",
-        conversationThreadId: "thread_1",
-        sessionId: "thread_1",
-        deploymentId: "dep_1",
-        workUnitId: "wu_1",
-        channel: "whatsapp",
-        reason: "price_concern",
-        note: "wants pricing on weekend",
+        touchNumber: 1,
+        cadenceId: "cad_1",
+        dueAt: new Date("2026-06-03T00:00:00.000Z"),
+        dedupeKey: "followup:org_1:contact_1:2026-06-03:t1",
         templateIntentClass: "re-engagement-offer",
-        dueAt: new Date("2026-06-04T00:00:00.000Z"),
-        dedupeKey: "followup:org_1:contact_1:2026-06-04",
       }),
     );
   });
