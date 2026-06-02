@@ -1,7 +1,7 @@
 "use client";
 
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
-import { ToastAction } from "@/components/ui/toast";
+import { undoToastProps } from "@/components/ui/undo-toast";
 import { useToast } from "@/components/ui/use-toast";
 import { InboxDecisionCard } from "@/components/inbox/inbox-decision-card";
 import type { Decision } from "@/lib/decisions/types";
@@ -39,17 +39,13 @@ export function InboxDecisionItem({ decision, onOpenDetail, onOpenAgent }: Inbox
       .then((result: unknown) => {
         // 409 (already-terminal) returns { silent: true } — skip the undo offer.
         if (result && typeof result === "object" && "silent" in result) return;
-        toast({
-          title: "Approved",
-          description: decision.meta.contactName
-            ? `Sent for ${decision.meta.contactName}.`
-            : undefined,
-          action: (
-            <ToastAction altText="Undo" onClick={() => void action.undo().catch(() => {})}>
-              Undo
-            </ToastAction>
-          ),
-        });
+        toast(
+          undoToastProps({
+            contactName: decision.meta.contactName,
+            undoableUntil: decision.meta.undoableUntil,
+            onUndo: () => void action.undo().catch(() => {}),
+          }),
+        );
       })
       // Error surfaces via action.error; swallow so the success toast never fires on rejection.
       .catch(() => {});

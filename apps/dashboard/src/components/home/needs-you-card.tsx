@@ -6,7 +6,7 @@ import { SwipeDecisionCard } from "@/components/decisions/swipe-decision-card";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
-import { ToastAction } from "@/components/ui/toast";
+import { undoToastProps } from "@/components/ui/undo-toast";
 import { useToast } from "@/components/ui/use-toast";
 import type { Decision } from "@/lib/decisions/types";
 
@@ -60,17 +60,13 @@ export function NeedsYouCard({ decision, index }: NeedsYouCardProps) {
       .then((result: unknown) => {
         // 409 (already-terminal) returns { silent: true } — skip the undo offer.
         if (result && typeof result === "object" && "silent" in result) return;
-        toast({
-          title: "Approved",
-          description: decision.meta.contactName
-            ? `Sent for ${decision.meta.contactName}.`
-            : undefined,
-          action: (
-            <ToastAction altText="Undo" onClick={() => void action.undo().catch(() => {})}>
-              Undo
-            </ToastAction>
-          ),
-        });
+        toast(
+          undoToastProps({
+            contactName: decision.meta.contactName,
+            undoableUntil: decision.meta.undoableUntil,
+            onUndo: () => void action.undo().catch(() => {}),
+          }),
+        );
       })
       // Error surfaces via TanStack Query (`action.error`); swallow here so the
       // success-only toast never fires on rejection.

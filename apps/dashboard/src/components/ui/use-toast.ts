@@ -5,8 +5,13 @@ import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
-const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+// Queue several undo toasts instead of evicting the prior one — every item in a
+// queue-clearing run keeps its own Undo (the safety net). REMOVE_DELAY is the
+// post-close prune, NOT the auto-dismiss window (that's the Radix `duration` bound
+// to undoableUntil at the call site); keep it short so closed toasts don't linger
+// as ghost entries for ~16 minutes.
+const TOAST_LIMIT = 3;
+const TOAST_REMOVE_DELAY = 5000;
 
 type ToasterToast = ToastProps & {
   id: string;

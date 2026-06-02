@@ -12,7 +12,7 @@ import { useEscalationResolve } from "@/hooks/use-escalation-resolve";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { useQueueClearMetric } from "@/hooks/use-queue-clear-metric";
 import { useToast } from "@/components/ui/use-toast";
-import { ToastAction } from "@/components/ui/toast";
+import { undoToastProps } from "@/components/ui/undo-toast";
 import { InboxFilterRow } from "@/components/inbox/inbox-filter-row";
 import { InboxEmptyState } from "@/components/inbox/inbox-empty-state";
 import { InboxErrorState } from "@/components/inbox/inbox-error-state";
@@ -80,17 +80,13 @@ function ApprovalDetailItem({ decision, onClose }: ApprovalDetailItemProps) {
       () => action.primary(note),
       () => {
         onClose();
-        toast({
-          title: "Approved",
-          description: decision.meta.contactName
-            ? `Sent for ${decision.meta.contactName}.`
-            : undefined,
-          action: (
-            <ToastAction altText="Undo" onClick={() => void action.undo().catch(() => {})}>
-              Undo
-            </ToastAction>
-          ),
-        });
+        toast(
+          undoToastProps({
+            contactName: decision.meta.contactName,
+            undoableUntil: decision.meta.undoableUntil,
+            onUndo: () => void action.undo().catch(() => {}),
+          }),
+        );
       },
     );
 
