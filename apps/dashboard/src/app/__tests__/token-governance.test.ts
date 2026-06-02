@@ -89,3 +89,76 @@ describe("token governance — inbox agent hues single-source (T3)", () => {
     expect(inboxAvatar).toMatch(/hsl\(var\(--agent-mira-deep\)\)/);
   });
 });
+
+const alexConfig = readFileSync(
+  path.resolve(process.cwd(), "src/lib/cockpit/alex-config.ts"),
+  "utf8",
+);
+const rileyConfig = readFileSync(
+  path.resolve(process.cwd(), "src/lib/cockpit/riley/riley-config.ts"),
+  "utf8",
+);
+const cockpitTokens = readFileSync(
+  path.resolve(process.cwd(), "src/components/cockpit/tokens.ts"),
+  "utf8",
+);
+
+const HEX = /#[0-9a-fA-F]{3,8}\b/;
+
+describe("token governance — finalized drift guard (TG)", () => {
+  const governed: Record<string, string> = {
+    "alex-config.ts": alexConfig,
+    "riley-config.ts": rileyConfig,
+    "inbox-agent-avatar.tsx": inboxAvatar,
+    "cockpit/tokens.ts": cockpitTokens,
+    "inbox-design-base.css": inboxBase,
+  };
+
+  it("no legacy agent-hue / cockpit hex survives in governed source", () => {
+    const legacy = [
+      "#E07A53",
+      "#8C3E1E",
+      "#F4D5C5",
+      "#FBF0EA", // Alex coral family
+      "#3F8C86",
+      "#215451",
+      "#C5DFDD",
+      "#EBF5F4", // Riley teal family
+      "#4A3A66",
+      "#E7E1F0", // Mira avatar override
+      "#e07856",
+      "#2e8a87",
+      "#7e6bb2", // inbox identity hexes
+      "#B8782E",
+      "#7C4F1C",
+      "#3F7A36",
+      "#A03A2E", // cockpit amber/green/red
+    ];
+    for (const [fname, content] of Object.entries(governed)) {
+      for (const hex of legacy) {
+        expect(content.includes(hex), `${hex} still present in ${fname}`).toBe(false);
+      }
+    }
+  });
+
+  it("the cockpit token family + agent configs carry zero hex color literals", () => {
+    expect(cockpitTokens).not.toMatch(HEX);
+    expect(alexConfig).not.toMatch(HEX);
+    expect(rileyConfig).not.toMatch(HEX);
+  });
+
+  it("--palette-action-bright is reserved for non-text fills (never a text color)", () => {
+    // spec §4.5: stripes/pip/low-info fills only — never backs text/glyph/label.
+    expect(css).not.toMatch(/[^-]color:\s*hsl\(var\(--palette-action-bright\)\)/);
+    expect(css).not.toMatch(/-foreground:\s*[^;]*--palette-action-bright/);
+  });
+
+  it("each agent hue has exactly one primitive definition", () => {
+    expect(tokenValue("palette-coral")).toMatch(RAW_HSL_TRIPLE);
+    expect(tokenValue("palette-teal")).toMatch(RAW_HSL_TRIPLE);
+    expect(tokenValue("palette-violet")).toMatch(RAW_HSL_TRIPLE);
+    expect(tokenValue("agent-alex")).toBe("var(--palette-coral)");
+    expect(tokenValue("agent-riley")).toBe("var(--palette-teal)");
+    expect(tokenValue("agent-mira")).toBe("var(--palette-violet)");
+  });
+});
