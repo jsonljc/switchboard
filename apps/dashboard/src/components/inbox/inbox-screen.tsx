@@ -10,6 +10,7 @@ import { useRecommendationAction } from "@/hooks/use-recommendation-action";
 import { useEscalationReply } from "@/hooks/use-escalation-reply";
 import { useEscalationResolve } from "@/hooks/use-escalation-resolve";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { useQueueClearMetric } from "@/hooks/use-queue-clear-metric";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { InboxFilterRow } from "@/components/inbox/inbox-filter-row";
@@ -172,6 +173,9 @@ export function InboxScreen() {
   for (const d of unfiltered) {
     counts[d.agentKey] = (counts[d.agentKey] ?? 0) + 1;
   }
+
+  // queue-clear timing (§2 metric): time to clear a morning queue.
+  useQueueClearMetric(counts.total);
 
   // Render order: isError BEFORE empty (regression guard — must hold)
   if (filtered.isError) {

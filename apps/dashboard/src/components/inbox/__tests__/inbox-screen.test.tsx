@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
+import { setEmitter } from "@/lib/feel-metrics";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -533,6 +534,37 @@ describe("<InboxScreen>", () => {
 
       fireEvent.keyDown(document.body, { key: "Escape" });
       expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  // Test 11: queue-clear feel metric (§2 — time-to-clear a morning queue)
+  describe("(11) queue-clear metric", () => {
+    afterEach(() => setEmitter(null));
+
+    it("emits queue_clear_ms when the unfiltered queue goes from populated to empty", () => {
+      const sink = vi.fn();
+      setEmitter({ emit: sink });
+
+      feedByKey = (_agentKey) => successFeed(allDecisions); // 3 pending
+      const { rerender } = render(<InboxScreen />);
+
+      feedByKey = (_agentKey) => successFeed([]); // cleared
+      rerender(<InboxScreen />);
+
+      expect(sink).toHaveBeenCalledWith(
+        "queue_clear_ms",
+        expect.objectContaining({ durationMs: expect.any(Number), itemsCleared: 3 }),
+      );
+    });
+
+    it("does not emit on a queue that loads empty (never had items)", () => {
+      const sink = vi.fn();
+      setEmitter({ emit: sink });
+
+      feedByKey = (_agentKey) => successFeed([]); // empty from the start
+      render(<InboxScreen />);
+
+      expect(sink).not.toHaveBeenCalledWith("queue_clear_ms", expect.anything());
     });
   });
 });
