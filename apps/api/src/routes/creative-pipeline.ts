@@ -4,13 +4,14 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
-import { PrismaCreativeJobStore } from "@switchboard/db";
+import { PrismaCreativeJobStore, decryptCredentials } from "@switchboard/db";
 import { CreativeBriefInput } from "@switchboard/schemas";
 import { z } from "zod";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
 import { requireOrgForMutation } from "../decorators/org.js";
 import { computeRenderSpend, computeCreativeEstimates } from "../services/creative-render-spend.js";
+import { assertPublishable } from "../services/creative-publish-preconditions.js";
 
 const SubmitBriefInput = z.object({
   deploymentId: z.string().min(1),
@@ -50,6 +51,15 @@ function pendingApprovalReply(
       : {}),
   });
 }
+
+/** Map a publish pre-flight failure code to its HTTP status. */
+const PUBLISH_FAILURE_STATUS: Record<string, number> = {
+  CREATIVE_JOB_NOT_FOUND: 404,
+  CREATIVE_NOT_PUBLISHABLE: 409,
+  CREATIVE_ASSET_NOT_DURABLE: 422,
+  META_CONNECTION_NOT_FOUND: 422,
+  META_PAGE_NOT_CONFIGURED: 422,
+};
 
 export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
   // Dev/test mode (authDisabled): populate organizationIdFromAuth +
@@ -247,4 +257,60 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
 
     return reply.send({ estimates });
   });
+
+  // POST /creative-jobs/:id/publish — create a self-contained PAUSED Meta draft
+  // package for a kept creative. Pre-flights (immediate 4xx so we never park a
+  // doomed publish), then submits the governed `creative.job.publish` intent. The
+  // seeded require_approval(mandatory) policy ALWAYS parks it → 202 is the happy
+  // path (reuses pendingApprovalReply). This creates a paused DRAFT only;
+  // activation is a human action in Ads Manager.
+  app.post(
+    "/creative-jobs/:id/publish",
+    { preHandler: requireOrgForMutation },
+    async (request, reply) => {
+      if (!app.platformIngress || !app.prisma) {
+        return reply.code(503).send({ error: "Platform not available", statusCode: 503 });
+      }
+      const { id } = request.params as { id: string };
+
+      const pre = await assertPublishable(
+        { prisma: app.prisma, decrypt: (e) => decryptCredentials(e as string) },
+        request.orgId,
+        id,
+      );
+      if (!pre.ok) {
+        const status = PUBLISH_FAILURE_STATUS[pre.code] ?? 422;
+        return reply.code(status).send({ code: pre.code, error: pre.message, statusCode: status });
+      }
+
+      const response = await app.platformIngress.submit({
+        intent: "creative.job.publish",
+        parameters: { jobId: id },
+        actor: { id: request.actorId, type: "user" },
+        organizationId: request.orgId,
+        trigger: "api",
+        surface: { surface: "api" },
+      });
+
+      if (!response.ok) {
+        return ingressErrorToReply(response.error, reply);
+      }
+      if ("approvalRequired" in response && response.approvalRequired) {
+        return pendingApprovalReply(response, reply);
+      }
+      if (response.result.outcome === "failed") {
+        // Publish only runs post-approval; a failed outcome here is a genuine
+        // handler failure (e.g. CREATIVE_PUBLISH_META_ERROR). Surface its code.
+        const err = response.result.error;
+        return reply.code(422).send({
+          code: err?.code ?? "CREATIVE_PUBLISH_FAILED",
+          error: err?.message ?? "Publish failed",
+          statusCode: 422,
+        });
+      }
+      // The mandatory policy means we should always have parked above; treat a
+      // straight-through success defensively as a completed parked draft.
+      return reply.code(202).send({ outcome: "PENDING_APPROVAL", ...response.result.outputs });
+    },
+  );
 };
