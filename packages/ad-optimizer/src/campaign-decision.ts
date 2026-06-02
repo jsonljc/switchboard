@@ -90,8 +90,11 @@ export interface CampaignDecisionResult {
  * for the reset-class lockout — its learning state is `learning` or `learning_limited`.
  * Pure; lives here (with the lockout it feeds) so the live `audit-runner` seam derives
  * `learningPhaseActive` from the already-fetched `learningStatus.state` (no extra Graph
- * call). `getCampaignLearningData → deriveLearningPhase` already folds material-child
- * ad-set learning into that state, so this is genuinely ad-set-granular.
+ * call). `getCampaignLearningData → deriveLearningPhase` already folds a material-child
+ * ad-set in LEARNING into that state, so the `learning` arm is genuinely ad-set-granular.
+ * NOTE: the live V1 `LearningPhaseGuard.check` only emits `learning`/`success`, so the
+ * `learning_limited` arm is reachable today only via the eval's V2 classifier; it goes
+ * live when the per-campaign path adopts V2 ad-set classification (Phase B+).
  */
 export function deriveLearningPhaseActive(state: LearningPhaseStatus["state"]): boolean {
   return state === "learning" || state === "learning_limited";
