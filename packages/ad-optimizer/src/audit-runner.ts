@@ -37,12 +37,16 @@ import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-he
 import { resolveEconomicTarget } from "./analyzers/economic-target.js";
 import { resetsLearningFor } from "./action-reset-classification.js";
 import { decideForCampaign } from "./campaign-decision.js";
-import { detectDenominatorStepChange } from "./denominator-step-change.js";
 import {
   isCoverageSufficient,
   MIN_COVERAGE_PCT,
   type CoverageReport,
 } from "./onboarding/coverage-validator.js";
+import {
+  buildCoverageAbstentionReport,
+  buildSignalHealthCriticalReport,
+  evaluateDenominatorStepChange,
+} from "./audit-report-builders.js";
 
 // ── Interfaces ──
 
@@ -249,35 +253,19 @@ export class AuditRunner {
       });
       if (!isCoverageSufficient(coverage)) {
         const pct = Math.round(coverage.coveragePct * 100);
-        return {
+        return buildCoverageAbstentionReport({
           accountId: this.config.accountId,
           dateRange,
-          summary: {
-            totalSpend: 0,
-            totalLeads: 0,
-            totalRevenue: 0,
-            overallROAS: 0,
-            activeCampaigns: 0,
-            campaignsInLearning: 0,
-            adSetsInLearning: 0,
-            adSetsLearningLimited: 0,
+          coverageInsight: {
+            type: "insight",
+            campaignId: "account",
+            campaignName: "Account-wide signal",
+            message: `Tracked-source coverage is ${pct}% (below the ${Math.round(
+              MIN_COVERAGE_PCT * 100,
+            )}% floor). Riley is holding recommendations until conversion tracking is verified across sources.`,
+            category: "coverage_insufficient",
           },
-          funnel: [],
-          periodDeltas: [],
-          insights: [
-            {
-              type: "insight",
-              campaignId: "account",
-              campaignName: "Account-wide signal",
-              message: `Tracked-source coverage is ${pct}% (below the ${Math.round(
-                MIN_COVERAGE_PCT * 100,
-              )}% floor). Riley is holding recommendations until conversion tracking is verified across sources.`,
-              category: "coverage_insufficient",
-            },
-          ],
-          watches: [],
-          recommendations: [],
-        };
+        });
       }
     }
 
@@ -304,28 +292,17 @@ export class AuditRunner {
     ]);
 
     if (signalHealthCritical) {
-      const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
-      const totalLeads = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
-      const totalRevenue = currentInsights.reduce((sum, i) => sum + i.revenue, 0);
-      return {
+      return buildSignalHealthCriticalReport({
         accountId: this.config.accountId,
         dateRange,
-        summary: {
-          totalSpend,
-          totalLeads,
-          totalRevenue,
-          overallROAS: safeDivide(totalRevenue, totalSpend),
+        totals: {
+          totalSpend: currentInsights.reduce((sum, i) => sum + i.spend, 0),
+          totalLeads: currentInsights.reduce((sum, i) => sum + i.conversions, 0),
+          totalRevenue: currentInsights.reduce((sum, i) => sum + i.revenue, 0),
           activeCampaigns: currentInsights.length,
-          campaignsInLearning: 0,
-          adSetsInLearning: 0,
-          adSetsLearningLimited: 0,
         },
-        funnel: [],
-        periodDeltas: [],
-        insights: [],
-        watches: [],
-        recommendations: signalHealthRecs,
-      };
+        signalHealthRecs,
+      });
     }
 
     // Step 2: Pull CRM funnel data + benchmarks (parallel)
@@ -368,22 +345,20 @@ export class AuditRunner {
     const previousMetrics = aggregateMetrics(previousInsights);
     const periodDeltas = comparePeriods(currentMetrics, previousMetrics);
 
+    const nextCycleDate =
+      new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
+      dateRange.until;
+
     // Step 4a (Phase-A Gate 1): account-wide conversion-DENOMINATOR step-change.
-    // If the conversion rate (conv/clicks) collapsed while clicks/spend stayed
-    // flat, the cost signal is untrustworthy this cycle (a suspected attribution-
-    // window/action-type reporting shift, not a real drop). When suspected, we set
-    // measurementTrusted=false so each per-campaign decision abstains on cost-driven
-    // and learning-resetting actions, and we surface one account-level signal watch.
-    const sumTotals = (rows: CampaignInsight[]) => ({
-      clicks: rows.reduce((s, r) => s + r.inlineLinkClicks, 0),
-      conversions: rows.reduce((s, r) => s + r.conversions, 0),
-      spend: rows.reduce((s, r) => s + r.spend, 0),
+    // measurementTrusted=false ⇒ each per-campaign decision abstains on cost-driven
+    // and learning-resetting actions; accountWatch (when present) is the single
+    // account-level signal watch to surface. fix_signal_health recs (appended
+    // later) are not gated by this — the user is still pointed at the fix.
+    const { measurementTrusted, accountWatch } = evaluateDenominatorStepChange({
+      currentInsights,
+      previousInsights,
+      nextCycleDate,
     });
-    const stepChange = detectDenominatorStepChange({
-      current: sumTotals(currentInsights),
-      previous: sumTotals(previousInsights),
-    });
-    const measurementTrusted = !stepChange.suspected;
 
     // Step 4b: Resolve the account-level economic tier + booking-calibrated target
     // ONCE for this audit (calibrate-first invariant lives in resolveEconomicTarget).
@@ -397,9 +372,6 @@ export class AuditRunner {
     // PR2: no profit-margin / AOV source is plumbed into the audit, so margin
     // awareness is reported unavailable, never silently satisfied (spec §3.4).
     const marginBasis: MarginBasis = "unavailable";
-    const nextCycleDate =
-      new Date(new Date(dateRange.until).getTime() + 7 * 86_400_000).toISOString().split("T")[0] ??
-      dateRange.until;
 
     // Step 5: Per-campaign loop
     const insights: InsightOutput[] = [];
@@ -407,18 +379,8 @@ export class AuditRunner {
     const recommendations: RecommendationOutput[] = [];
     let campaignsInLearning = 0;
 
-    // Surface ONE account-level signal watch when a denominator step-change is
-    // suspected. fix_signal_health recs (appended later) are not gated by this —
-    // the user should still be pointed at the pixel/attribution fix.
-    if (stepChange.suspected) {
-      watches.push({
-        type: "watch",
-        campaignId: "account",
-        campaignName: "Account-wide signal",
-        pattern: "conversion_denominator_step_change",
-        message: `Suspected account-wide conversion-reporting shift: ${stepChange.reason}. Budget actions are held this cycle; verify the pixel/attribution window.`,
-        checkBackDate: nextCycleDate,
-      });
+    if (accountWatch) {
+      watches.push(accountWatch);
     }
 
     // Build a lookup map for previous insights by campaignId

@@ -119,6 +119,8 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
     evidence: {
       clicks: input.currentInsight.inlineLinkClicks,
       conversions: input.currentInsight.conversions,
+      // Placeholder pending real per-entity active-day tenure (Phase B); today
+      // only `clicks`/`conversions` actually gate the evidence floor.
       days: 7,
     },
     ...(input.sourceComparison ? { sourceComparison: input.sourceComparison } : {}),
