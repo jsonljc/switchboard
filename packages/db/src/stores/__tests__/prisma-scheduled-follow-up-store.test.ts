@@ -37,6 +37,8 @@ describe("PrismaScheduledFollowUpStore", () => {
       templateIntentClass: "re-engagement-offer",
       dueAt: new Date("2026-06-04T10:00:00Z"),
       dedupeKey: "followup:org-1:contact-1:2026-06-04",
+      touchNumber: 1,
+      cadenceId: "cad-1",
     });
     expect(result).toEqual({ id: "fu_1" });
     expect(prisma.scheduledFollowUp.create).toHaveBeenCalledWith(
@@ -149,11 +151,11 @@ describe("PrismaScheduledFollowUpStore", () => {
     expect(call.where.attempts).toEqual({ lt: 3 });
   });
 
-  it("markSent() flips status to sent + stamps sentAt", async () => {
+  it("markSent() flips status to sent + stamps sentAt + clears any stale skipReason", async () => {
     await store.markSent("fu_1");
     expect(prisma.scheduledFollowUp.update).toHaveBeenCalledWith({
       where: { id: "fu_1" },
-      data: expect.objectContaining({ status: "sent" }),
+      data: expect.objectContaining({ status: "sent", skipReason: null }),
     });
   });
 

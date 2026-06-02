@@ -13,8 +13,10 @@ export interface CreateScheduledFollowUpInput {
   templateIntentClass: string;
   dueAt: Date;
   dedupeKey: string;
-  touchNumber?: number;
-  cadenceId?: string | null;
+  /** Cadence position (touch 1 = the producer-scheduled first touch). */
+  touchNumber: number;
+  /** Episode id shared by all touches of one cadence; null = legacy one-and-done (never advanced). */
+  cadenceId: string | null;
 }
 
 /** Minimal projection the firing cron needs per due row. */

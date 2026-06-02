@@ -173,24 +173,58 @@ export async function bootstrapContainedWorkflows(
     ),
   });
 
+  // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
+  // difference between callers is how the WhatsApp 24h-window timestamp is resolved
+  // (follow-up: by threadId; reminder: by the contactId+org compound key), so each caller
+  // looks that up and passes it in.
+  type WhatsAppSendContext = {
+    consentGrantedAt: Date | string | null;
+    consentRevokedAt: Date | string | null;
+    pdpaJurisdiction: "SG" | "MY" | null;
+    messagingOptIn: boolean;
+    lastWhatsAppInboundAt: Date | null;
+    jurisdiction: "SG" | "MY" | null;
+    leadName: string;
+    businessName: string;
+    phone: string | null;
+  };
+  const buildWhatsAppSendContext = async (
+    prisma: import("@switchboard/db").PrismaClient,
+    orgId: string,
+    contactId: string,
+    lastWhatsAppInboundAt: Date | null,
+  ): Promise<WhatsAppSendContext> => {
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, organizationId: orgId },
+      select: {
+        name: true,
+        phone: true,
+        messagingOptIn: true,
+        pdpaJurisdiction: true,
+        consentGrantedAt: true,
+        consentRevokedAt: true,
+      },
+    });
+    const org = await prisma.organizationConfig.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
+    return {
+      consentGrantedAt: contact?.consentGrantedAt ?? null,
+      consentRevokedAt: contact?.consentRevokedAt ?? null,
+      pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+      messagingOptIn: contact?.messagingOptIn ?? false,
+      lastWhatsAppInboundAt,
+      jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+      leadName: contact?.name ?? "there",
+      businessName: org?.name ?? "our clinic",
+      phone: contact?.phone ?? null,
+    };
+  };
+
   const followUpSendHandler = buildConversationFollowUpSendWorkflow({
     getSendContext: async (orgId, contactId, threadId) => {
       const prisma = prismaClient as import("@switchboard/db").PrismaClient;
-      const contact = await prisma.contact.findFirst({
-        where: { id: contactId, organizationId: orgId },
-        select: {
-          name: true,
-          phone: true,
-          messagingOptIn: true,
-          pdpaJurisdiction: true,
-          consentGrantedAt: true,
-          consentRevokedAt: true,
-        },
-      });
-      const org = await prisma.organizationConfig.findUnique({
-        where: { id: orgId },
-        select: { name: true },
-      });
       const thread =
         threadId !== null
           ? await prisma.conversationThread.findUnique({
@@ -198,17 +232,12 @@ export async function bootstrapContainedWorkflows(
               select: { lastWhatsAppInboundAt: true },
             })
           : null;
-      return {
-        consentGrantedAt: contact?.consentGrantedAt ?? null,
-        consentRevokedAt: contact?.consentRevokedAt ?? null,
-        pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-        messagingOptIn: contact?.messagingOptIn ?? false,
-        lastWhatsAppInboundAt: thread?.lastWhatsAppInboundAt ?? null,
-        jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-        leadName: contact?.name ?? "there",
-        businessName: org?.name ?? "our clinic",
-        phone: contact?.phone ?? null,
-      };
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
     },
     allowMarketingTemplate: process.env["FOLLOWUP_ALLOW_MARKETING_TEMPLATE"] === "true",
   });
@@ -216,36 +245,16 @@ export async function bootstrapContainedWorkflows(
   const reminderSendHandler = buildConversationReminderSendWorkflow({
     getSendContext: async (orgId, contactId) => {
       const prisma = prismaClient as import("@switchboard/db").PrismaClient;
-      const contact = await prisma.contact.findFirst({
-        where: { id: contactId, organizationId: orgId },
-        select: {
-          name: true,
-          phone: true,
-          messagingOptIn: true,
-          pdpaJurisdiction: true,
-          consentGrantedAt: true,
-          consentRevokedAt: true,
-        },
-      });
-      const org = await prisma.organizationConfig.findUnique({
-        where: { id: orgId },
-        select: { name: true },
-      });
       const thread = await prisma.conversationThread.findUnique({
         where: { contactId_organizationId: { contactId, organizationId: orgId } },
         select: { lastWhatsAppInboundAt: true },
       });
-      return {
-        consentGrantedAt: contact?.consentGrantedAt ?? null,
-        consentRevokedAt: contact?.consentRevokedAt ?? null,
-        pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-        messagingOptIn: contact?.messagingOptIn ?? false,
-        lastWhatsAppInboundAt: thread?.lastWhatsAppInboundAt ?? null,
-        jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-        leadName: contact?.name ?? "there",
-        businessName: org?.name ?? "our clinic",
-        phone: contact?.phone ?? null,
-      };
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
     },
     allowMarketingTemplate: false,
   });

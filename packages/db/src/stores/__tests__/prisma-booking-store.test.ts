@@ -158,6 +158,7 @@ describe("PrismaBookingStore", () => {
     const call = (prisma.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(call.where).toEqual({ status: "confirmed", startsAt: { gte: start, lt: end } });
     expect(call.where.organizationId).toBeUndefined(); // cross-org
+    expect(call.take).toBe(1000); // bounded scan (no unbounded fan-out)
     expect(rows[0]).toEqual({
       id: "bk_1",
       organizationId: "org_1",

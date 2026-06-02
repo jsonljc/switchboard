@@ -26,8 +26,8 @@ export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
         templateIntentClass: input.templateIntentClass,
         dueAt: input.dueAt,
         dedupeKey: input.dedupeKey,
-        touchNumber: input.touchNumber ?? 1,
-        cadenceId: input.cadenceId ?? null,
+        touchNumber: input.touchNumber,
+        cadenceId: input.cadenceId,
         status: "pending",
       },
       select: { id: true },
@@ -78,9 +78,10 @@ export class PrismaScheduledFollowUpStore implements ScheduledFollowUpStore {
 
   async markSent(id: string): Promise<void> {
     // route-governance: store-mutation-deferred — single-row id-scoped update; org-scoping tracked for #643.
+    // Clear any skipReason left by a prior markDeferred so a sent row doesn't carry a stale reason.
     await this.prisma.scheduledFollowUp.update({
       where: { id },
-      data: { status: "sent", sentAt: new Date() },
+      data: { status: "sent", sentAt: new Date(), skipReason: null },
     });
   }
 

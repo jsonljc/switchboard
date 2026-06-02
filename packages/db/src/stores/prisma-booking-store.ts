@@ -129,9 +129,14 @@ export class PrismaBookingStore {
       attendeeName: string | null;
     }>
   > {
+    // Bound the cross-org scan (mirrors lifecycle-stalled-sweep's take:1000) so a backlog
+    // can't blow up the result set or the per-row Inngest step fan-out in the dispatch cron.
+    // A 2h window of confirmed bookings across all pilot orgs is far below this.
+    const SCAN_LIMIT = 1000;
     const rows = await this.prisma.booking.findMany({
       where: { status: "confirmed", startsAt: { gte: windowStart, lt: windowEnd } },
       orderBy: { startsAt: "asc" },
+      take: SCAN_LIMIT,
     });
     return rows.map((r) => ({
       id: r.id,
