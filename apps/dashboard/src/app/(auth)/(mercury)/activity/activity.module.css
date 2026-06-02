@@ -47,10 +47,10 @@
   --hair:        rgba(14, 12, 10, 0.08);
   --hair-soft:   rgba(14, 12, 10, 0.04);
   --hair-strong: rgba(14, 12, 10, 0.16);
-  --amber:        hsl(30 55% 46%);
-  --amber-deep:   hsl(30 60% 32%);
-  --amber-soft:   hsl(38 70% 86%);
-  --amber-paper:  hsl(42 70% 92%);
+  --amber:        hsl(var(--action));
+  --amber-deep:   hsl(var(--action-hover));
+  --amber-soft:   hsl(var(--action-subtle));
+  --amber-paper:  hsl(var(--action-tint));
 
   background: var(--paper);
   color: var(--ink);
