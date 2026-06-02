@@ -1,4 +1,5 @@
 // @route-class: read-only
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // Readiness endpoint — structured pre-launch readiness report
 // ---------------------------------------------------------------------------
