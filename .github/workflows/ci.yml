@@ -395,11 +395,11 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
-        # The shared evals/vitest.config.ts now also runs the riley-recommendation
-        # suite, which imports @switchboard/ad-optimizer from dist — so every job
-        # that runs that config must build ad-optimizer too (it depends only on
-        # @switchboard/schemas, already built by the core chain above).
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
+        # The shared evals/vitest.config.ts runs ALL eval suites' unit tests — incl.
+        # riley-recommendation (imports @switchboard/ad-optimizer) and alex-conversation
+        # (imports @switchboard/db) from dist — so every job running that config must
+        # build both (each depends only on already-built @switchboard/schemas/core).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
@@ -518,11 +518,11 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
-        # The shared evals/vitest.config.ts now also runs the riley-recommendation
-        # suite, which imports @switchboard/ad-optimizer from dist — so every job
-        # that runs that config must build ad-optimizer too (it depends only on
-        # @switchboard/schemas, already built by the core chain above).
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
+        # The shared evals/vitest.config.ts runs ALL eval suites' unit tests — incl.
+        # riley-recommendation (imports @switchboard/ad-optimizer) and alex-conversation
+        # (imports @switchboard/db) from dist — so every job running that config must
+        # build both (each depends only on already-built @switchboard/schemas/core).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
@@ -587,9 +587,9 @@ jobs:
       - name: Build packages required by the harness
         if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
         # core (+ its @switchboard/schemas dep) for the alex/classifier/governance
-        # suites in the shared evals/vitest.config.ts; ad-optimizer (also depends
-        # only on schemas, built by the core chain) for the riley suite.
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build
+        # suites in the shared evals/vitest.config.ts; ad-optimizer for the riley suite;
+        # @switchboard/db for the alex-conversation suite (real PrismaBusinessFactsStore).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
