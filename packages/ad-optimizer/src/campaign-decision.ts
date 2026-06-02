@@ -65,12 +65,36 @@ export interface CampaignDecisionInput {
    * harden_capi_attribution, hold) keep flowing. `undefined` is treated as `true`.
    */
   measurementTrusted?: boolean;
+  /**
+   * Phase-A Task 8 (ad-set-granular learning lockout): when `true`, this campaign
+   * has at least one material ad set in Meta's LEARNING / learning-limited state, so
+   * any learning-RESETTING action (`resetsLearningFor === "yes"` — e.g. add_creative,
+   * refresh_creative, expand_targeting, restructure) is held as an `in_learning_phase`
+   * watch, because Meta re-enters learning on a significant edit and the per-ad-set
+   * signal is finer than the V1 campaign-level guard. This is the V2 reset-class
+   * lockout on the live per-campaign path; the V1 `learningGuard.gate` stays as the
+   * campaign-level backstop for everything else. `undefined` is treated as `false`
+   * (back-compat with existing callers/tests).
+   */
+  learningPhaseActive?: boolean;
 }
 
 export interface CampaignDecisionResult {
   insights: InsightOutput[];
   watches: WatchOutput[];
   recommendations: RecommendationOutput[];
+}
+
+/**
+ * Task 8 Step 4: the single rule for whether a campaign's learning phase is "active"
+ * for the reset-class lockout — its learning state is `learning` or `learning_limited`.
+ * Pure; lives here (with the lockout it feeds) so the live `audit-runner` seam derives
+ * `learningPhaseActive` from the already-fetched `learningStatus.state` (no extra Graph
+ * call). `getCampaignLearningData → deriveLearningPhase` already folds material-child
+ * ad-set learning into that state, so this is genuinely ad-set-granular.
+ */
+export function deriveLearningPhaseActive(state: LearningPhaseStatus["state"]): boolean {
+  return state === "learning" || state === "learning_limited";
 }
 
 const learningGuard = new LearningPhaseGuard();
@@ -164,7 +188,25 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
       watches.push(tiered.watch);
       continue;
     }
-    const gated = learningGuard.gate(tiered.recommendation!, input.learningStatus);
+    // V2 reset-class lockout (Task 8 Step 4): when this campaign has a material ad set
+    // in learning, hold any learning-RESETTING action — Meta re-enters learning on a
+    // significant edit, so a "yes"-class action would discard the in-progress learning.
+    // This is finer than the V1 campaign-level gate below, which never holds a
+    // resetsLearning:"no" action (e.g. pause) but also does not target the "yes" class
+    // specifically. V1 stays as the campaign-level backstop for everything else.
+    const tieredRec = tiered.recommendation!;
+    if (input.learningPhaseActive && resetsLearningFor(tieredRec.action) === "yes") {
+      watches.push({
+        type: "watch",
+        campaignId: tieredRec.campaignId,
+        campaignName: tieredRec.campaignName,
+        pattern: "in_learning_phase",
+        message: `Holding "${tieredRec.action}": a material ad set in this campaign is still in learning, and this change would reset Meta's learning phase. Re-checking next cycle.`,
+        checkBackDate: input.nextCycleDate,
+      });
+      continue;
+    }
+    const gated = learningGuard.gate(tieredRec, input.learningStatus);
     if (gated.type === "watch") watches.push(gated);
     else recommendations.push(gated);
   }

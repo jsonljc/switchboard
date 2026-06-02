@@ -36,7 +36,7 @@ import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
 import { resolveEconomicTarget } from "./analyzers/economic-target.js";
 import { resetsLearningFor } from "./action-reset-classification.js";
-import { decideForCampaign } from "./campaign-decision.js";
+import { decideForCampaign, deriveLearningPhaseActive } from "./campaign-decision.js";
 import {
   isCoverageSufficient,
   MIN_COVERAGE_PCT,
@@ -397,9 +397,9 @@ export class AuditRunner {
         campaignId: insight.campaignId,
       });
       const learningStatus = this.learningGuard.check(insight.campaignId, learningInput);
-      if (learningStatus.state === "learning" || learningStatus.state === "learning_limited") {
-        campaignsInLearning++;
-      }
+      // Task 8 Step 4: derived from the already-fetched `learningStatus` — no extra Graph call.
+      const learningPhaseActive = deriveLearningPhaseActive(learningStatus.state);
+      if (learningPhaseActive) campaignsInLearning++;
 
       // 5b–5g: Pure per-campaign decision. The provider call for target-breach
       // status is the only side effect; everything downstream is deterministic
@@ -432,6 +432,7 @@ export class AuditRunner {
         targetROAS: this.config.targetROAS,
         nextCycleDate,
         measurementTrusted,
+        learningPhaseActive,
       });
       insights.push(...decision.insights);
       watches.push(...decision.watches);

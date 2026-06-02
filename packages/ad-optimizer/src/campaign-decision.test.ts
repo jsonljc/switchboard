@@ -93,4 +93,50 @@ describe("decideForCampaign (characterization)", () => {
     expect(r.recommendations.some((x) => x.action === "pause")).toBe(false);
     expect(r.watches.some((w) => w.pattern === "measurement_untrusted")).toBe(true);
   });
+
+  describe("V2 reset-class lockout (learningPhaseActive)", () => {
+    // CPA = 2100/7 = 300 = 3x the 100 target, daily breach >= KILL_DAYS_THRESHOLD (7),
+    // and evidence floor met (200 clicks / 7 conversions) → the engine emits a
+    // reset-class `add_creative` recommendation (and a `pause`). Learning status is a
+    // SUCCESS state so the V1 campaign-level gate would NOT hold anything — isolating
+    // the V2 ad-set-granular reset-class lockout, which keys off `learningPhaseActive`.
+    const resetClassInputs = {
+      campaignId: "c1",
+      campaignName: "C1",
+      currentInsight: insight({ spend: 2100, conversions: 7 }),
+      previousInsight: insight({ spend: 2100, conversions: 7 }),
+      targetBreach: { periodsAboveTarget: 9, granularity: "daily" as const, isApproximate: false },
+      learningStatus: successStatus,
+      economicTier: "cpl" as const,
+      effectiveTarget: 100,
+      marginBasis: "unavailable" as const,
+      targetROAS: 3,
+      nextCycleDate: "2026-05-14",
+    };
+
+    it("converts a resetsLearning:'yes' action to an in_learning_phase watch when learningPhaseActive (V1 not holding)", () => {
+      const r = decideForCampaign({ ...resetClassInputs, learningPhaseActive: true });
+      // The reset-class action is held by V2 as an in_learning_phase watch...
+      expect(r.recommendations.some((x) => x.action === "add_creative")).toBe(false);
+      const watch = r.watches.find((w) => w.pattern === "in_learning_phase");
+      expect(watch).toBeDefined();
+      expect(watch?.message).toContain("add_creative");
+      expect(watch?.checkBackDate).toBe("2026-05-14");
+    });
+
+    it("does NOT convert the action when learningPhaseActive is false (flows past V2 to recommendation/V1)", () => {
+      const r = decideForCampaign({ ...resetClassInputs, learningPhaseActive: false });
+      // With learning inactive AND a SUCCESS learning status, V2 does not fire and V1
+      // does not hold: the reset-class action reaches a recommendation, and there is no
+      // in_learning_phase watch from this seam.
+      expect(r.recommendations.some((x) => x.action === "add_creative")).toBe(true);
+      expect(r.watches.some((w) => w.pattern === "in_learning_phase")).toBe(false);
+    });
+
+    it("treats undefined learningPhaseActive as false (back-compat with existing callers)", () => {
+      const r = decideForCampaign(resetClassInputs);
+      expect(r.recommendations.some((x) => x.action === "add_creative")).toBe(true);
+      expect(r.watches.some((w) => w.pattern === "in_learning_phase")).toBe(false);
+    });
+  });
 });

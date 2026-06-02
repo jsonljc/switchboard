@@ -62,6 +62,9 @@ export function decideForCase(c: RileyCase): string {
     targetROAS: c.targetROAS,
     nextCycleDate: "2026-05-14",
     measurementTrusted: c.measurementTrusted ?? true,
+    // Task 8 Step 4: exercise the V2 reset-class lockout — the live runner derives this
+    // from the same learning state (deriveLearningPhaseActive), so model it identically.
+    learningPhaseActive: c.learningState === "learning" || c.learningState === "learning_limited",
   });
   if (r.recommendations.length > 0) return r.recommendations[0]!.action;
   if (r.watches.length > 0) return "watch";
