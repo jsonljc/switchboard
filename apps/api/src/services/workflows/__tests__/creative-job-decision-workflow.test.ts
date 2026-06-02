@@ -11,10 +11,11 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { findById, updateProductionTier, stop, inngestSend } = vi.hoisted(() => ({
+const { findById, updateProductionTier, stop, stopUgc, inngestSend } = vi.hoisted(() => ({
   findById: vi.fn(),
   updateProductionTier: vi.fn().mockResolvedValue(undefined),
   stop: vi.fn().mockResolvedValue(undefined),
+  stopUgc: vi.fn().mockResolvedValue(undefined),
   inngestSend: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -23,6 +24,7 @@ vi.mock("@switchboard/db", () => ({
     findById = findById;
     updateProductionTier = updateProductionTier;
     stop = stop;
+    stopUgc = stopUgc;
   },
 }));
 
@@ -75,6 +77,7 @@ describe("creative.job.continue / stop workflow", () => {
     findById.mockReset();
     updateProductionTier.mockClear();
     stop.mockClear();
+    stopUgc.mockClear();
     inngestSend.mockClear();
   });
 
@@ -172,6 +175,7 @@ describe("creative.job.continue / stop workflow", () => {
     );
 
     expect(stop).toHaveBeenCalledWith(ORG, JOB_ID, "hooks");
+    expect(stopUgc).not.toHaveBeenCalled();
     expect(inngestSend).toHaveBeenCalledWith({
       name: "creative-pipeline/stage.approved",
       data: { jobId: JOB_ID, action: "stop" },
@@ -194,13 +198,16 @@ describe("creative.job.continue / stop workflow", () => {
     });
   });
 
-  it("ugc stop → fires ugc-phase.approved stop", async () => {
+  it("ugc stop → calls stopUgc (NOT polished stop) and fires ugc-phase.approved stop", async () => {
     findById.mockResolvedValue(makeJob({ mode: "ugc", ugcPhase: "concept" }));
     await buildCreativeJobDecisionWorkflow({}, "stop").execute(
       workUnit({ jobId: JOB_ID }),
       services,
     );
-    expect(stop).toHaveBeenCalled();
+    // A ugc job stops via stopUgc(phase), not the polished stop(currentStage) — else a
+    // polished-stage value lands in the ugc phase column until the worker self-corrects.
+    expect(stopUgc).toHaveBeenCalledWith(ORG, JOB_ID, "concept");
+    expect(stop).not.toHaveBeenCalled();
     expect(inngestSend).toHaveBeenCalledWith({
       name: "creative-pipeline/ugc-phase.approved",
       data: { jobId: JOB_ID, phase: "concept", action: "stop" },

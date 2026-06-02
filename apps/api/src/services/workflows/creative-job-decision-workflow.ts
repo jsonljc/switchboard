@@ -45,7 +45,15 @@ export function buildCreativeJobDecisionWorkflow(
       }
 
       if (action === "stop") {
-        await jobStore.stop(job.organizationId, input.jobId, job.currentStage);
+        // Branch the stop by mode, mirroring the Inngest event below: a UGC job
+        // stops via stopUgc(ugcPhase), a polished job via stop(currentStage). The
+        // store columns differ, so calling the polished stop for a UGC job writes a
+        // stage value into the ugc phase column.
+        if (job.mode === "ugc") {
+          await jobStore.stopUgc(job.organizationId, input.jobId, job.ugcPhase ?? "");
+        } else {
+          await jobStore.stop(job.organizationId, input.jobId, job.currentStage);
+        }
       }
 
       const { inngestClient } = await import("@switchboard/creative-pipeline");
