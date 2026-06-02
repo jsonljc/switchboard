@@ -1320,3 +1320,17 @@
     box-shadow: 0 8px 24px hsl(20 10% 12% / 0.08);
   }
 }
+
+@layer utilities {
+  /* Real tabular figures — fixes the [data-tabular] no-op (TY1). [data-tabular]
+     keeps each consumer's own face; .num is the canonical metric utility on the
+     JetBrains-Mono instrument face (var(--mono)). */
+  [data-tabular],
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+  .num {
+    font-family: var(--mono);
+  }
+}
