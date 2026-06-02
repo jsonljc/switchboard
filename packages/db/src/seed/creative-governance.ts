@@ -65,3 +65,43 @@ export function buildCreativeAllowPolicyInput(organizationId: string) {
     effect: "allow",
   };
 }
+
+/**
+ * Rule matching ONLY the publish intent. Anchored + escaped: the rule-evaluator
+ * does an unanchored `new RegExp(value).test(actionType)`, so anchoring guarantees
+ * this fires on "creative.job.publish" exactly and never on submit/continue/stop
+ * (which the allow policy above governs by spend threshold instead).
+ */
+export const CREATIVE_PUBLISH_APPROVAL_POLICY_RULE = {
+  conditions: [
+    { field: "actionType", operator: "matches" as const, value: "^creative\\.job\\.publish$" },
+  ],
+};
+
+export function creativePublishApprovalPolicyId(organizationId: string): string {
+  return `policy_require_approval_creative_publish_${organizationId}`;
+}
+
+/**
+ * Org-scoped mandatory-approval policy for `creative.job.publish` — the REAL
+ * claim-safety gate. `approvalPolicy` on the intent registration is decorative
+ * (the policy engine never reads it); this policy sets `policyApprovalOverride`,
+ * which the engine DOES enforce. "mandatory" is also immune to the #788
+ * spend-approval downgrade (which only relaxes "standard"). Must be seeded
+ * together with the allow policy (see seed-mira-creative-deployment.ts) — an org
+ * allowed but not gated would auto-publish.
+ */
+export function buildCreativePublishApprovalPolicyInput(organizationId: string) {
+  return {
+    id: creativePublishApprovalPolicyId(organizationId),
+    name: "Require human approval to publish a creative as a paused Meta draft",
+    description:
+      "Publishing a creative as a paused Meta draft package always requires mandatory human approval (medspa claim safety).",
+    organizationId,
+    priority: 40,
+    active: true,
+    rule: CREATIVE_PUBLISH_APPROVAL_POLICY_RULE,
+    effect: "require_approval",
+    approvalRequirement: "mandatory",
+  };
+}
