@@ -35,12 +35,17 @@ export class OutboxPublisher {
         contactId: row.payload.contactId as string,
         organizationId: row.payload.organizationId as string,
         value: (row.payload.value as number) ?? 0,
+        currency: row.payload.currency as string | undefined,
         sourceAdId: row.payload.sourceAdId as string | undefined,
         sourceCampaignId: row.payload.sourceCampaignId as string | undefined,
         occurredAt: new Date(row.payload.occurredAt as string),
         source: (row.payload.source as string) ?? "outbox",
         causationId: row.payload.causationId as string | undefined,
         workTraceId: row.payload.workTraceId as string | undefined,
+        accountId: row.payload.accountId as string | undefined,
+        actionSource: row.payload.actionSource as ConversionEvent["actionSource"],
+        customer: row.payload.customer as ConversionEvent["customer"],
+        attribution: row.payload.attribution as ConversionEvent["attribution"],
         metadata: (row.payload.metadata as Record<string, unknown>) ?? {},
       };
 
