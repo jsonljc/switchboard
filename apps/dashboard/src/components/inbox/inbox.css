@@ -221,7 +221,7 @@
 }
 .decision-zone.approve {
   right: 0;
-  background: linear-gradient(270deg, var(--good), #3d9258);
+  background: linear-gradient(270deg, var(--good), hsl(var(--positive)));
   justify-content: flex-end;
   padding-left: 28px;
 }

@@ -53,3 +53,39 @@ describe("token governance — action amber single-source (T1)", () => {
     expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+const inboxBase = readFileSync(
+  path.resolve(process.cwd(), "src/components/inbox/inbox-design-base.css"),
+  "utf8",
+);
+const inboxAvatar = readFileSync(
+  path.resolve(process.cwd(), "src/components/inbox/inbox-agent-avatar.tsx"),
+  "utf8",
+);
+
+function inboxToken(name: string): string {
+  const m = inboxBase.match(new RegExp(`--${name}\\s*:\\s*([^;]+);`));
+  if (!m) throw new Error(`inbox token --${name} not defined`);
+  return m[1].trim();
+}
+
+describe("token governance — inbox agent hues single-source (T3)", () => {
+  it("inbox identity tokens reference the canonical agent vars", () => {
+    expect(inboxToken("coral")).toBe("hsl(var(--agent-alex))");
+    expect(inboxToken("teal")).toBe("hsl(var(--agent-riley))");
+    expect(inboxToken("violet")).toBe("hsl(var(--agent-mira))");
+    expect(inboxToken("coral-deep")).toBe("hsl(var(--agent-alex-deep))");
+    expect(inboxToken("violet-deep")).toBe("hsl(var(--agent-mira-deep))");
+  });
+
+  it("inbox action amber references the canonical action vars", () => {
+    expect(inboxToken("amber")).toBe("hsl(var(--action))");
+    expect(inboxToken("amber-deep")).toBe("hsl(var(--action-hover))");
+  });
+
+  it("the inbox avatar no longer hand-rolls a Mira hex", () => {
+    expect(inboxAvatar).not.toMatch(/#4A3A66/i);
+    expect(inboxAvatar).not.toMatch(/#E7E1F0/i);
+    expect(inboxAvatar).toMatch(/hsl\(var\(--agent-mira-deep\)\)/);
+  });
+});

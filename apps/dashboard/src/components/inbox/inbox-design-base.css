@@ -26,27 +26,28 @@
   --hair: rgba(40, 30, 20, 0.1);
   --hair-soft: rgba(40, 30, 20, 0.05);
 
-  /* identity colors */
-  --coral: #e07856;
-  --coral-deep: #b85b3d;
-  --coral-tint: #fbeee6;
-  --teal: #2e8a87;
-  --teal-deep: #1f6663;
-  --teal-tint: #e4f1ef;
-  --violet: #7e6bb2;
-  --violet-deep: #5f4f95;
-  --violet-tint: #ede9f4;
+  /* identity colors → canonical agent vars (single-source; T3) */
+  --coral: hsl(var(--agent-alex));
+  --coral-deep: hsl(var(--agent-alex-deep));
+  --coral-tint: hsl(var(--agent-alex-tint));
+  --teal: hsl(var(--agent-riley));
+  --teal-deep: hsl(var(--agent-riley-deep));
+  --teal-tint: hsl(var(--agent-riley-tint));
+  --violet: hsl(var(--agent-mira));
+  --violet-deep: hsl(var(--agent-mira-deep));
+  --violet-tint: hsl(var(--agent-mira-tint));
 
-  /* action color */
-  --amber: #c97b1a;
-  --amber-deep: #a8650f;
-  --amber-tint: #fbf1dd;
+  /* action color → canonical action vars */
+  --amber: hsl(var(--action));
+  --amber-deep: hsl(var(--action-hover));
+  --amber-tint: hsl(var(--action-tint));
 
-  /* semantic */
-  --good: #2e7d4a;
-  --good-tint: #e2efe6;
-  --attention: #c97b1a;
-  --critical: #c24a3e;
+  /* semantic → canonical status vars */
+  --good: hsl(var(--positive));
+  --good-tint: hsl(var(--positive-subtle));
+  --attention: hsl(var(--action));
+  --critical: hsl(var(--destructive));
+  /* token-debt: no --destructive-subtle primitive yet — inbox semantic-tint follow-up */
   --critical-tint: #f8e4e0;
 
   /* type */

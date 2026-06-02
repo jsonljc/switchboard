@@ -25,8 +25,8 @@ interface AgentSpriteConfig {
  * pair locally from her registry accent for the initial-disc fallback. Identity-only.
  */
 const MIRA_ACCENT: Pick<AccentTokens, "soft" | "deep"> = {
-  soft: "#E7E1F0",
-  deep: "#4A3A66",
+  soft: "hsl(var(--agent-mira-tint))",
+  deep: "hsl(var(--agent-mira-deep))",
 };
 
 const AGENT_SPRITES: Record<AgentKey, AgentSpriteConfig> = {
