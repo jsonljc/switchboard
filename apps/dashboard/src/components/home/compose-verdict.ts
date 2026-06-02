@@ -48,10 +48,19 @@ function numberWord(n: number): string {
   return String(n);
 }
 
+/** Humanize a raw minute count: "6975" -> "~5 days", "90" -> "~2 hours", "8" -> "8 min". */
+function humanizeWaitMin(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `~${h} hour${h === 1 ? "" : "s"}`;
+  const d = Math.round(h / 24);
+  return `~${d} day${d === 1 ? "" : "s"}`;
+}
+
 function buildActiveProof(signals: VerdictSignals): string {
   const { openLeadCount, oldestWaitMin, workingCount, setUpCount } = signals;
   const base = `${openLeadCount} open leads`;
-  const oldest = oldestWaitMin != null ? ` · oldest waiting ${oldestWaitMin} min` : "";
+  const oldest = oldestWaitMin != null ? ` · oldest waiting ${humanizeWaitMin(oldestWaitMin)}` : "";
   const working =
     workingCount !== undefined && setUpCount !== undefined
       ? ` · ${workingCount} of ${setUpCount} working`
@@ -62,7 +71,7 @@ function buildActiveProof(signals: VerdictSignals): string {
 function buildCalmProof(signals: VerdictSignals): string {
   const { openLeadCount, oldestWaitMin, workingCount, setUpCount } = signals;
   const base = `${openLeadCount} open enquiries`;
-  const oldest = oldestWaitMin != null ? ` · oldest waiting ${oldestWaitMin} min` : "";
+  const oldest = oldestWaitMin != null ? ` · oldest waiting ${humanizeWaitMin(oldestWaitMin)}` : "";
   const working =
     workingCount !== undefined && setUpCount !== undefined
       ? ` · ${workingCount} of ${setUpCount} working`
