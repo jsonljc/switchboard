@@ -62,6 +62,23 @@ async function dispatchResponse(params: {
   }
 
   if (response.ok) {
+    if (response.result.outcome === "failed") {
+      console.warn("[alex-counter] raw_error_fallback", {
+        sessionId,
+        code: response.result.error?.code,
+      });
+      try {
+        await conversationStore.addMessage(
+          conversationId,
+          "assistant",
+          "[suppressed:execution_failed]",
+        );
+      } catch (err) {
+        console.error("[channel-gateway] execution-failure marker persist failed", err);
+      }
+      await replySink.send("I'm having trouble right now. Let me connect you with the team.");
+      return;
+    }
     const text =
       typeof response.result.outputs.response === "string"
         ? response.result.outputs.response
