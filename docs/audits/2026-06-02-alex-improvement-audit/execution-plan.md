@@ -83,6 +83,24 @@ Trust-score ramp (wire end-to-end *or delete the dead ledger*) · learning-loop 
 - **New fixtures** to close coverage gaps the matrix exposed: factual Q&A (the assumed-highest-frequency, currently under-tested), reschedule/cancel, self-disclosed-minor, governed booking-close.
 - **Frequency claim tempered:** "BusinessFacts = highest-frequency inbound" is a high-confidence *assumption*, to be confirmed against the first week of pilot logs — the eval is hard-case-weighted, not frequency-weighted.
 
+## Coordination with in-flight work (verified 2026-06-02)
+
+Two active Alex worktrees exist; their exact file sets were checked against this plan.
+
+**`feat/alex-cadence-reminders` (Phase B: follow-up cadence + appointment reminders) — NO clash.** Touches only the proactive-send/scheduling subsystem (`packages/schemas/src/scheduled-follow-up.ts`; cadence primitives so far). Disjoint from the inbound live-turn + booking path this plan fixes. One-way dependency: appointment reminders need bookings recorded correctly → **PR-B's booking→stage fix (T0.6) + the booking outbox unblock the reminder leg.** Synergy, not conflict.
+
+**`docs/alex-conversion-polish` (PR #794, OPEN, reviewed) — one real overlap: the eval harness.**
+- Collision files: `evals/alex-conversation/{judge,mock-tools,grade}.ts` — both #794's "eval sync" and this plan's PR-0 edit them. Semantically they compose; same-file → sequence, don't parallelize.
+- **Sequencing:** #794 merges first; **PR-0 rebases on top** (its additions — judge `temp:0`, a faithful mock, and `resolvePersona` routing which #794 does *not* touch — layer cleanly onto #794's eval-sync).
+- PR-A and PR-B are otherwise **disjoint** from #794 except `skills/alex/SKILL.md` (different sections: #794's objection tweak vs PR-A's Phase-4 date anchor / PR-B's Phase-5 reschedule — coordinate by section, low risk) and `prisma-opportunity-store.ts` (additive).
+- **Do not duplicate/revert #794's branch work:** follow-up-into-deferral wiring, the honest "Showed" metric, the compliant objection-closing playbook. PR-A/B build around these.
+
+**Staleness corrections (main advanced past the audit's read):**
+- The eval finding "judge capped at `max_tokens:512` on main" is **already fixed** — current main uses `JUDGE_MAX_TOKENS` (#787 merged). The judge-`temp:0` and judge-context-blind findings remain valid.
+- **#788 merged** (spendApprovalThreshold enforced, opt-in) — partially addresses the autonomy-not-enforced theme. The trust-ramp (T1.7) and starting-autonomy (T1.8) findings are distinct mechanisms; re-verify they're still open when scoping governance work.
+
+**Revised first-move:** start with **PR-A (live-turn correctness)** — disjoint from both in-flight branches, unblocked, and where the "one bet" lives, each fix self-verified by a production-path test — then **PR-0** right after #794 merges, then **PR-B**.
+
 ## Open decisions (need a human call before coding the relevant PR)
 
 1. **BusinessFacts canonical table + backfill direction.** Which table wins (`BusinessConfig.config` vs `AgentDeployment.inputConfig.businessFacts`), does the dashboard writer change, and do we backfill existing orgs? This ripples to the seed, the readiness check, and the operator UI — it's the one Tier-0 item that isn't purely mechanical.
