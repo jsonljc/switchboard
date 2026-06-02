@@ -40,7 +40,14 @@ export interface ConversionEvent {
   organizationId: string;
   accountId?: string;
 
+  /**
+   * Economic value in MINOR currency units (cents), consistent with
+   * Opportunity.estimatedValue, LifecycleRevenueEvent.amount, and the
+   * funnel revenue sums (funnelByOrg `_sum: { value }`). Converted to MAJOR
+   * units ONLY at the Meta CAPI boundary via `normalizeConversionValue`.
+   */
   value?: number;
+  /** ISO-4217 currency code (e.g. "SGD"). Pairs with `value` for CAPI custom_data. */
   currency?: string;
 
   sourceAdId?: string;
