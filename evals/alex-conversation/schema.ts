@@ -35,6 +35,13 @@ export const ConversationFixtureSchema = z
     vertical: z.literal("medspa"),
     locale: z.enum(["sg", "my"]),
     scenario: z.string().min(1),
+    /**
+     * Which BusinessFacts state to drive the (real) store with for this fixture.
+     * "operator" (default) = operator-approved facts present; "absent" = no
+     * BusinessConfig row → BUSINESS_FACTS renders empty → Alex must escalate, not
+     * fabricate. See run-conversation.ts resolveParameters.
+     */
+    businessFacts: z.enum(["operator", "absent"]).default("operator"),
     turns: z.array(z.union([LeadTurnSchema, AlexTurnSchema])).min(2),
     /** Optional funnel/agent stage (matrix coverage). Backward compatible. */
     stage: ConversationStageSchema.optional(),
