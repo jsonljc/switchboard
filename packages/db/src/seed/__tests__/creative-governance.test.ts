@@ -15,7 +15,7 @@ describe("buildCreativePublishApprovalPolicyInput", () => {
 
     const cond = (
       p.rule as { conditions: Array<{ field: string; operator: string; value: string }> }
-    ).conditions[0];
+    ).conditions[0]!;
     expect(cond.field).toBe("actionType");
     expect(cond.operator).toBe("matches");
     // anchored + escaped: matches publish exactly, never submit/continue/stop
