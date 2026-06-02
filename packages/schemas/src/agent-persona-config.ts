@@ -25,9 +25,13 @@ import { z } from "zod";
 export const AgentPersonaConfigSchema = z.object({
   businessName: z.string(),
   tone: z.string(),
-  qualificationCriteria: z.array(z.string()).optional(),
-  disqualificationCriteria: z.array(z.string()).optional(),
-  escalationRules: z.array(z.string()).optional(),
+  qualificationCriteria: z
+    .union([z.array(z.string()), z.record(z.string(), z.unknown())])
+    .optional(),
+  disqualificationCriteria: z
+    .union([z.array(z.string()), z.record(z.string(), z.unknown())])
+    .optional(),
+  escalationRules: z.union([z.array(z.string()), z.record(z.string(), z.unknown())]).optional(),
   bookingLink: z.string().optional(),
   customInstructions: z.string().optional(),
 });
@@ -41,18 +45,17 @@ export function resolvePersona(
   const businessName = inputConfig.businessName;
   if (typeof businessName !== "string") return undefined;
 
+  const keepCriteria = (v: unknown): string[] | Record<string, unknown> | undefined =>
+    Array.isArray(v) || (v !== null && typeof v === "object")
+      ? (v as string[] | Record<string, unknown>)
+      : undefined;
+
   return {
     businessName,
     tone: typeof inputConfig.tone === "string" ? inputConfig.tone : "professional",
-    qualificationCriteria: Array.isArray(inputConfig.qualificationCriteria)
-      ? (inputConfig.qualificationCriteria as string[])
-      : undefined,
-    disqualificationCriteria: Array.isArray(inputConfig.disqualificationCriteria)
-      ? (inputConfig.disqualificationCriteria as string[])
-      : undefined,
-    escalationRules: Array.isArray(inputConfig.escalationRules)
-      ? (inputConfig.escalationRules as string[])
-      : undefined,
+    qualificationCriteria: keepCriteria(inputConfig.qualificationCriteria),
+    disqualificationCriteria: keepCriteria(inputConfig.disqualificationCriteria),
+    escalationRules: keepCriteria(inputConfig.escalationRules),
     bookingLink: typeof inputConfig.bookingLink === "string" ? inputConfig.bookingLink : undefined,
     customInstructions:
       typeof inputConfig.customInstructions === "string"
