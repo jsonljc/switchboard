@@ -16,6 +16,7 @@ import {
 } from "./allowlist.js";
 import {
   validateRouteClass,
+  validateControlPlaneOrgGuard,
   resolveRouteClass,
   type ValidatorWarning,
 } from "./route-class-validator.js";
@@ -153,6 +154,42 @@ export async function runRouteClassAdvisory(opts: AdvisoryOptions): Promise<Advi
   return { warnings, exitCode: 0 };
 }
 
+/**
+ * WARN-ONLY control-plane org-guard advisory (Route Governance §12).
+ *
+ * Maps `validateControlPlaneOrgGuard` over the in-scope route files. Returns
+ * advisory warnings ONLY — callers print these as `::warning::` and must NOT
+ * fold them into `violations` or the exitCode. This catches NEW unguarded
+ * mutating control-plane routes without blocking CI on the existing un-migrated
+ * ones (full enforcement staged behind #654; see route-class-validator.ts).
+ *
+ * `exitCode` is fixed at 0 to make the non-blocking contract explicit.
+ */
+export async function runControlPlaneOrgGuardAdvisory(
+  opts: AdvisoryOptions,
+): Promise<AdvisoryResult> {
+  const touched = opts.touchedFiles ?? detectTouchedFiles();
+  const routeFiles = touched.filter((f) => ROUTE_GLOBS.some((rx) => rx.test(f)));
+
+  if (routeFiles.length === 0) {
+    return { warnings: [], exitCode: 0 };
+  }
+
+  const project = new Project({ useInMemoryFileSystem: false });
+  const warnings: ValidatorWarning[] = [];
+  for (const repoPath of routeFiles) {
+    const abs = join(opts.repoRoot, repoPath);
+    try {
+      const sf = project.addSourceFileAtPath(abs);
+      warnings.push(...validateControlPlaneOrgGuard(sf, repoPath));
+    } catch {
+      // File missing or unreadable — skip.
+    }
+  }
+
+  return { warnings, exitCode: 0 };
+}
+
 function detectTouchedFiles(): string[] {
   try {
     const out = execSync("git diff --name-only origin/main...HEAD", { encoding: "utf8" });
@@ -172,6 +209,12 @@ export interface ErrorModeOptions {
 
 export interface ErrorModeResult {
   violations: ValidatorWarning[];
+  /**
+   * WARN-ONLY control-plane org-guard advisories (Route Governance §12).
+   * Printed as `::warning::` and deliberately EXCLUDED from `violations` and
+   * the exitCode — they must never fail error-mode. See #654.
+   */
+  controlPlaneAdvisories: ValidatorWarning[];
   missingHeaders: string[];
   schemaEnumEmpty: boolean;
   exitCode: 0 | 1;
@@ -286,19 +329,23 @@ export async function runErrorMode(opts: ErrorModeOptions): Promise<ErrorModeRes
     schemaEnumEmpty = true;
   }
 
-  // (d) Run the three advisories repo-wide.
-  const [routeClass, crossAppTypes, storeMutation] = await Promise.all([
+  // (d) Run the three BLOCKING advisories + the WARN-ONLY control-plane advisory
+  // repo-wide. The control-plane org-guard advisory is intentionally kept
+  // OUT of `violations` (and out of the exitCode below) — it is non-blocking.
+  const [routeClass, crossAppTypes, storeMutation, controlPlaneOrgGuard] = await Promise.all([
     runRouteClassAdvisory({ repoRoot, touchedFiles: routeFiles }),
     runCrossAppTypesAdvisory({ repoRoot, touchedFiles: appTypeFiles }),
     runStoreMutationAdvisory({ repoRoot, touchedFiles: storeFiles }),
+    runControlPlaneOrgGuardAdvisory({ repoRoot, touchedFiles: routeFiles }),
   ]);
   const violations = [...routeClass.warnings, ...crossAppTypes.warnings, ...storeMutation.warnings];
+  const controlPlaneAdvisories = controlPlaneOrgGuard.warnings;
 
-  // (e) exitCode.
+  // (e) exitCode — controlPlaneAdvisories deliberately NOT included (warn-only).
   const exitCode: 0 | 1 =
     violations.length > 0 || missingHeaders.length > 0 || schemaEnumEmpty ? 1 : 0;
 
-  return { violations, missingHeaders, schemaEnumEmpty, exitCode };
+  return { violations, controlPlaneAdvisories, missingHeaders, schemaEnumEmpty, exitCode };
 }
 
 // CLI entry point — only executed when run directly, not when imported by tests.
@@ -317,18 +364,24 @@ if (isMain) {
   const mode = process.argv.find((arg) => arg.startsWith("--mode="))?.split("=")[1];
   if (mode === "warn-touched") {
     const touched = detectTouchedFiles();
-    const [routeClass, crossAppTypes, storeMutation] = await Promise.all([
+    const [routeClass, crossAppTypes, storeMutation, controlPlaneOrgGuard] = await Promise.all([
       runRouteClassAdvisory({ repoRoot, touchedFiles: touched }),
       runCrossAppTypesAdvisory({ repoRoot, touchedFiles: touched }),
       runStoreMutationAdvisory({ repoRoot, touchedFiles: touched }),
+      runControlPlaneOrgGuardAdvisory({ repoRoot, touchedFiles: touched }),
     ]);
-    const merged = [...routeClass.warnings, ...crossAppTypes.warnings, ...storeMutation.warnings];
+    const merged = [
+      ...routeClass.warnings,
+      ...crossAppTypes.warnings,
+      ...storeMutation.warnings,
+      ...controlPlaneOrgGuard.warnings,
+    ];
     for (const w of merged) {
       console.warn(`::warning file=${w.path}::${w.message}`);
     }
     if (merged.length > 0) {
       console.warn(
-        `\n${merged.length} advisory warning(s) — ${routeClass.warnings.length} route-class, ${crossAppTypes.warnings.length} cross-app-types, ${storeMutation.warnings.length} store-mutation.`,
+        `\n${merged.length} advisory warning(s) — ${routeClass.warnings.length} route-class, ${crossAppTypes.warnings.length} cross-app-types, ${storeMutation.warnings.length} store-mutation, ${controlPlaneOrgGuard.warnings.length} control-plane-org-guard.`,
       );
     }
     process.exit(0);
@@ -349,9 +402,19 @@ if (isMain) {
     for (const w of r.violations) {
       console.error(`::error file=${w.path}::${w.message}`);
     }
+    // WARN-ONLY: control-plane org-guard advisories print as ::warning:: and do
+    // NOT affect r.exitCode (Route Governance §12; tracked: #654).
+    for (const w of r.controlPlaneAdvisories) {
+      console.warn(`::warning file=${w.path}::${w.message}`);
+    }
     if (r.violations.length > 0 || r.missingHeaders.length > 0 || r.schemaEnumEmpty) {
       console.error(
         `\n${r.violations.length} matrix/type/store violation(s) + ${r.missingHeaders.length} missing header(s)${r.schemaEnumEmpty ? " + schema-enum malfunction" : ""}.`,
+      );
+    }
+    if (r.controlPlaneAdvisories.length > 0) {
+      console.warn(
+        `\n${r.controlPlaneAdvisories.length} control-plane org-guard advisory warning(s) (non-blocking; Route Governance §12, tracked: #654).`,
       );
     }
     process.exit(r.exitCode);
