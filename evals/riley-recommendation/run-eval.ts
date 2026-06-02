@@ -24,13 +24,24 @@ function main(): void {
 
   const mismatches: string[] = [];
   for (const c of cases) {
-    const actual = decideForCase(c);
-    const status = actual === c.expectedOutcome ? "ok" : "MISMATCH";
-    if (status === "MISMATCH") {
-      mismatches.push(
-        `${c.id}: expected ${c.expectedOutcome}, got ${actual} ` +
-          `(${c.economicTier} tier @ ${c.learningState}, ${c.targetBreach.periodsAboveTarget} over target)`,
-      );
+    const decision = decideForCase(c);
+    const ctx = `(${c.economicTier} tier @ ${c.learningState}, ${c.targetBreach.periodsAboveTarget} over target)`;
+    if (decision.primary !== c.expectedOutcome) {
+      mismatches.push(`${c.id}: expected ${c.expectedOutcome}, got ${decision.primary} ${ctx}`);
+    }
+    for (const action of c.expectedActions ?? []) {
+      if (!decision.actions.includes(action)) {
+        mismatches.push(
+          `${c.id}: expected action "${action}" among [${decision.actions.join(", ")}] ${ctx}`,
+        );
+      }
+    }
+    for (const pattern of c.expectedWatchPatterns ?? []) {
+      if (!decision.watchPatterns.includes(pattern)) {
+        mismatches.push(
+          `${c.id}: expected watch pattern "${pattern}" among [${decision.watchPatterns.join(", ")}] ${ctx}`,
+        );
+      }
     }
   }
 

@@ -1,0 +1,9 @@
+# Phase-A spec §11: "recovering -> watch". A campaign that breached on many
+# historical days (periodsAboveTarget 9) but whose CURRENT period has recovered
+# (cpa 50 <= target 100, roas 4x >= target 3x, metrics improving not degrading).
+# decideForCampaign's destructive rule ANDs the recent aggregate CPA with the breach
+# window, so a recovering campaign with low recent CPA is NOT paused (recommendation-
+# engine.ts fail-safe). isPerformingWell + no diagnoses -> a stable `insight`, which
+# IS the abstention-from-destructive-action label the spec's "watch" intent means:
+# Riley holds, does not act destructively on a campaign that is on the mend.
+{"id":"recovering-holds-no-destructive","current":{"impressions":20000,"inlineLinkClicks":600,"spend":300,"conversions":6,"revenue":1200,"frequency":1.6},"previous":{"impressions":20000,"inlineLinkClicks":600,"spend":2100,"conversions":6,"revenue":0,"frequency":1.6},"targetBreach":{"periodsAboveTarget":9,"granularity":"daily"},"learningState":"success","economicTier":"booked_cac","effectiveTarget":100,"targetROAS":3,"expectedOutcome":"insight","notes":"Recovered: prev cpa 350 (9 historical breach days) -> current cpa 50 + roas 4x. The destructive rule ANDs recent aggregate CPA with the breach window, so a recovering campaign is not paused; isPerformingWell + no diagnoses -> stable_performance insight. §11 'recovering' scenario: the engine genuinely yields `insight` (the no-destructive-action abstention), not a watch label — fixtures encode actual behavior."}

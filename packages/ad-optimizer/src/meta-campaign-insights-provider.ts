@@ -141,10 +141,13 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     // type's value when set, else the aggregate `conversions` field. This single
     // value feeds BOTH the volume gate's notion of "zero conversions" and the
     // cpa breach test below; the clicks-based gate itself is unchanged.
-    const dayConversions = (day: CampaignInsight): number =>
-      input.conversionActionType
-        ? Number(day.actions?.find((a) => a.action_type === input.conversionActionType)?.value ?? 0)
-        : day.conversions;
+    const dayConversions = (day: CampaignInsight): number => {
+      if (!input.conversionActionType) return day.conversions;
+      const raw = Number(
+        day.actions?.find((a) => a.action_type === input.conversionActionType)?.value ?? 0,
+      );
+      return Number.isFinite(raw) ? raw : 0;
+    };
 
     let periodsAboveTarget = 0;
     for (const day of campaignDays) {

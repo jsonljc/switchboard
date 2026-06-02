@@ -186,8 +186,9 @@ function addReviewBudgetRecommendation(
 /**
  * Build an abstention watch for a recommendation whose action family lacks the
  * evidence to act (Phase-A spec Gate 2). Riley re-checks next cycle rather than
- * acting on noise. `checkBackDate` is left blank here — the downstream tier
- * post-processor stamps the real next-cycle date.
+ * acting on noise. `checkBackDate` is left blank here — the caller
+ * (campaign-decision.ts) fills it from `input.nextCycleDate` since the engine
+ * has no access to that value.
  */
 function insufficientEvidenceWatch(
   base: Pick<RecommendationInput, "campaignId" | "campaignName">,

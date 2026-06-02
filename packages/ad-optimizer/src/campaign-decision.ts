@@ -65,12 +65,39 @@ export interface CampaignDecisionInput {
    * harden_capi_attribution, hold) keep flowing. `undefined` is treated as `true`.
    */
   measurementTrusted?: boolean;
+  /**
+   * Phase-A Task 8 (ad-set-granular learning lockout): when `true`, this campaign
+   * has at least one material ad set in Meta's LEARNING / learning-limited state, so
+   * any learning-RESETTING action (`resetsLearningFor === "yes"` — e.g. add_creative,
+   * refresh_creative, expand_targeting, restructure) is held as an `in_learning_phase`
+   * watch, because Meta re-enters learning on a significant edit and the per-ad-set
+   * signal is finer than the V1 campaign-level guard. This is the V2 reset-class
+   * lockout on the live per-campaign path; the V1 `learningGuard.gate` stays as the
+   * campaign-level backstop for everything else. `undefined` is treated as `false`
+   * (back-compat with existing callers/tests).
+   */
+  learningPhaseActive?: boolean;
 }
 
 export interface CampaignDecisionResult {
   insights: InsightOutput[];
   watches: WatchOutput[];
   recommendations: RecommendationOutput[];
+}
+
+/**
+ * Task 8 Step 4: the single rule for whether a campaign's learning phase is "active"
+ * for the reset-class lockout — its learning state is `learning` or `learning_limited`.
+ * Pure; lives here (with the lockout it feeds) so the live `audit-runner` seam derives
+ * `learningPhaseActive` from the already-fetched `learningStatus.state` (no extra Graph
+ * call). `getCampaignLearningData → deriveLearningPhase` already folds a material-child
+ * ad-set in LEARNING into that state, so the `learning` arm is genuinely ad-set-granular.
+ * NOTE: the live V1 `LearningPhaseGuard.check` only emits `learning`/`success`, so the
+ * `learning_limited` arm is reachable today only via the eval's V2 classifier; it goes
+ * live when the per-campaign path adopts V2 ad-set classification (Phase B+).
+ */
+export function deriveLearningPhaseActive(state: LearningPhaseStatus["state"]): boolean {
+  return state === "learning" || state === "learning_limited";
 }
 
 const learningGuard = new LearningPhaseGuard();
@@ -128,8 +155,9 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
 
   for (const item of campaignRecs) {
     // Gate 2 abstentions arrive as watches straight from the engine.
+    // Fill checkBackDate here (not in the engine, which has no nextCycleDate).
     if (item.type === "watch") {
-      watches.push(item);
+      watches.push({ ...item, checkBackDate: item.checkBackDate || input.nextCycleDate });
       continue;
     }
     // Gate 1 abstention: when an account-wide conversion-denominator step-change
@@ -164,7 +192,25 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
       watches.push(tiered.watch);
       continue;
     }
-    const gated = learningGuard.gate(tiered.recommendation!, input.learningStatus);
+    // V2 reset-class lockout (Task 8 Step 4): `learningPhaseActive` is true when a
+    // material ad set in this campaign is in learning or learning-limited. In that case,
+    // hold any learning-RESETTING ("yes"-class) action — Meta re-enters learning on a
+    // significant edit, which would discard the in-progress learning. This targets the
+    // reset class specifically; the V1 `learningGuard.gate` below is a state-based hold
+    // (it holds while `learningStatus.state === "learning"`) and stays as the backstop.
+    const tieredRec = tiered.recommendation!;
+    if (input.learningPhaseActive && resetsLearningFor(tieredRec.action) === "yes") {
+      watches.push({
+        type: "watch",
+        campaignId: tieredRec.campaignId,
+        campaignName: tieredRec.campaignName,
+        pattern: "in_learning_phase",
+        message: `Holding "${tieredRec.action}": a material ad set in this campaign is still in learning, and this change would reset Meta's learning phase. Re-checking next cycle.`,
+        checkBackDate: input.nextCycleDate,
+      });
+      continue;
+    }
+    const gated = learningGuard.gate(tieredRec, input.learningStatus);
     if (gated.type === "watch") watches.push(gated);
     else recommendations.push(gated);
   }

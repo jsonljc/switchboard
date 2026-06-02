@@ -197,6 +197,97 @@ describe("AuditRunner integration — real MetaCampaignInsightsProvider", () => 
     expect(report.watches.length).toBeGreaterThan(0);
   });
 
+  it("holds a reset-class rec (add_creative) as an in_learning_phase watch when a material child ad set is LEARNING", async () => {
+    // Task 8 Step 4 live-path proof: a campaign whose aggregate CPA is between 2x and 3x
+    // the target emits a reset-class `add_creative` (resetsLearning:"yes") but NOT a pause
+    // (which needs >3x). A material child ad set is LEARNING, so the V2 reset-class lockout
+    // — wired off the real provider's `learningStatus` (deriveLearningPhase, no extra fetch)
+    // — must convert add_creative to an `in_learning_phase` watch. aggregate CPA = 3600/30 =
+    // 120 = 2.4x the 50 target; conversions 30 >= tier-2 floor so it isn't a tier-3 watch.
+    const campaign = "c_reset_learn";
+    const aggInsight = {
+      campaignId: campaign,
+      campaignName: "ResetLearn",
+      status: "ACTIVE",
+      effectiveStatus: "ACTIVE",
+      impressions: 10000,
+      inlineLinkClicks: 200,
+      spend: 3600,
+      conversions: 30,
+      revenue: 0,
+      frequency: 1.3,
+      cpm: 5,
+      inlineLinkClickCtr: 1,
+      costPerInlineLinkClick: 1,
+      dateStart: "2026-05-25",
+      dateStop: "2026-06-01",
+    };
+    // 8 of 14 days breach the 50 target (300/3 = 100 > 50); the rest are quiet.
+    const dailyRows = Array.from({ length: 14 }, (_, i) => ({
+      ...aggInsight,
+      spend: i < 8 ? 300 : 30,
+      conversions: i < 8 ? 3 : 1,
+      dateStart: `2026-05-${String(18 + i).padStart(2, "0")}`,
+      dateStop: `2026-05-${String(18 + i).padStart(2, "0")}`,
+    }));
+    const adsClient = {
+      getCampaignInsights: vi.fn(async (p: { timeIncrement?: number }) =>
+        p.timeIncrement === 1 ? dailyRows : [aggInsight],
+      ),
+      getAdSetInsights: vi.fn(async () => []),
+      getAccountSummary: vi.fn(async () => ({
+        accountId: "a",
+        accountName: "n",
+        currency: "USD",
+        totalSpend: 3600,
+        totalImpressions: 10000,
+        totalClicks: 200,
+        activeCampaigns: 1,
+      })),
+      getAdSetLearningInputs: vi.fn(async () => [
+        {
+          adSetId: "as",
+          adSetName: "as",
+          campaignId: campaign,
+          learningStageStatus: "LEARNING",
+          frequency: 1,
+          spend: 3600,
+          conversions: 30,
+          cpa: 120,
+          roas: 0,
+          inlineLinkClickCtr: 1,
+        },
+      ]),
+    };
+    const runner = new AuditRunner({
+      adsClient: adsClient as never,
+      crmDataProvider: fakeCrm(),
+      insightsProvider: new MetaCampaignInsightsProvider(adsClient as never),
+      config: {
+        accountId: "a",
+        orgId: "o",
+        targetCPA: 50,
+        targetROAS: 2,
+        mediaBenchmarks: { inlineLinkClickCtr: 1, landingPageViewRate: 0.5 },
+      },
+    });
+    const report = await runner.run({
+      dateRange: { since: "2026-05-25", until: "2026-06-01" },
+      previousDateRange: { since: "2026-05-18", until: "2026-05-25" },
+    });
+    // The reset-class action is held, not recommended...
+    expect(report.recommendations.every((r) => r.action !== "add_creative")).toBe(true);
+    // ...as an in_learning_phase watch. NOTE: on the live seam V1 and V2 share one
+    // `learningStatus`, so when state==="learning" V1 would ALSO convert this watch — but
+    // V2 runs first (with `continue`), so the V2-specific message proves the Step-4 wiring
+    // executed (the reset-class lockout), not the V1 campaign-level backstop. The strict
+    // V1-vs-V2 isolation (SUCCESS status + learningPhaseActive:true) lives in the unit test.
+    const watch = report.watches.find((w) => w.pattern === "in_learning_phase");
+    expect(watch).toBeDefined();
+    expect(watch?.message).toContain("add_creative");
+    expect(watch?.message).toContain("reset Meta's learning phase");
+  });
+
   it("abstains (no recs/watches, one coverage insight) when injected coverage is below the floor", async () => {
     // Gate 0: when a coverageValidator is injected and reports coverage below the
     // sufficiency floor, the audit returns an abstention report and never reaches
