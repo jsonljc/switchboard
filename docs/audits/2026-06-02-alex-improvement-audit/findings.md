@@ -4,6 +4,8 @@
 **Scope:** "What can we do to further improve Alex?" — a full, precision codebase audit.
 **Branch / worktree:** `worktree-alex-improvement-audit` (off `main`)
 
+> **Read order:** this is the raw audit synthesis. The "what we'll do" decision — after a critical review of this audit — lives in [`execution-plan.md`](./execution-plan.md), grounded by [`intent-coverage-matrix.md`](./intent-coverage-matrix.md). The "Tier 0 as one PR" framing in the recommendation below is **superseded** by the execution plan's PR-stack sequencing.
+
 ---
 
 ## How this was produced
