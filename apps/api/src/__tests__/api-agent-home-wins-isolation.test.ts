@@ -35,6 +35,7 @@ describe("GET /api/dashboard/agents/:agentId/wins — cross-tenant isolation", (
     }
     await ctx.app.recommendationStore!.applyAct({
       id: rec.id,
+      orgId: "org-A",
       actor: { principalId: "u-A", type: "operator" },
       fromStatus: "pending",
       toStatus: "acted",
