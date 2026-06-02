@@ -1,11 +1,17 @@
 import { Inngest } from "inngest";
 import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
+import { buildNextCadenceTouch, type CreateScheduledFollowUpInput } from "@switchboard/core";
 import type { SubmitWorkResponse } from "@switchboard/core/platform";
 import type { DueScheduledFollowUp } from "@switchboard/core";
+import {
+  classifyCadenceSkip,
+  ACTIVATION_RETRY_INTERVAL_MS,
+  ACTIVATION_MAX_OVERDUE_MS,
+} from "@switchboard/schemas";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 
-const MAX_ATTEMPTS = 3;
+const MAX_SEND_ATTEMPTS = 3;
 const MAX_BACKOFF_MS = 24 * 60 * 60 * 1000; // 24h
 const BASE_INTERVAL_MS = 15 * 60 * 1000; // 15m
 
@@ -27,14 +33,20 @@ export interface ScheduledFollowUpDispatchDeps {
   failure: AsyncFailureContext;
   findDueFollowUps: () => Promise<DueScheduledFollowUp[]>;
   submitFollowUpSend: (input: FollowUpSendSubmitInput) => Promise<SubmitWorkResponse>;
+  createFollowUp: (input: CreateScheduledFollowUpInput) => Promise<{ id: string }>;
   markSent: (id: string) => Promise<void>;
   markSkipped: (id: string, reason: string) => Promise<void>;
   markFailed: (id: string, error: string, nextRetryAt: Date | null) => Promise<void>;
+  markDeferred: (id: string, reason: string, nextRetryAt: Date) => Promise<void>;
   now?: () => Date;
 }
 
 export interface StepTools {
   run: <T>(name: string, fn: () => T | Promise<T>) => Promise<T>;
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
 }
 
 export async function executeScheduledFollowUpDispatch(
@@ -71,10 +83,33 @@ export async function executeScheduledFollowUpDispatch(
       if (outputs.sent === true) {
         await deps.markSent(followUp.id);
         sent++;
+        const next = buildNextCadenceTouch(followUp, now());
+        if (next) {
+          try {
+            await deps.createFollowUp(next);
+          } catch (err) {
+            // Same-day-bucket next touch already exists (cron-retry idempotency).
+            if (!isUniqueConstraintError(err)) throw err;
+          }
+        }
         return;
       }
       if (outputs.sent === false) {
-        await deps.markSkipped(followUp.id, outputs.skipReason ?? "unknown");
+        const reason = outputs.skipReason ?? "unknown";
+        if (classifyCadenceSkip(reason) === "activation") {
+          const overdueMs = now().getTime() - followUp.dueAt.getTime();
+          if (overdueMs > ACTIVATION_MAX_OVERDUE_MS) {
+            await deps.markSkipped(followUp.id, "stale_unsent");
+          } else {
+            await deps.markDeferred(
+              followUp.id,
+              reason,
+              new Date(now().getTime() + ACTIVATION_RETRY_INTERVAL_MS),
+            );
+          }
+        } else {
+          await deps.markSkipped(followUp.id, reason);
+        }
         skipped++;
         return;
       }
@@ -90,7 +125,7 @@ export async function executeScheduledFollowUpDispatch(
 }
 
 function computeNextRetry(currentAttempts: number, now: () => Date): Date | null {
-  if (currentAttempts + 1 >= MAX_ATTEMPTS) return null; // terminal
+  if (currentAttempts + 1 >= MAX_SEND_ATTEMPTS) return null; // terminal
   const backoffMs = Math.min(BASE_INTERVAL_MS * Math.pow(2, currentAttempts), MAX_BACKOFF_MS);
   return new Date(now().getTime() + backoffMs);
 }

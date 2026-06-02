@@ -546,9 +546,11 @@ export async function registerInngest(
       }
       return options.submitScheduledFollowUp(input);
     },
+    createFollowUp: (input) => followUpStore.create(input),
     markSent: (id) => followUpStore.markSent(id),
     markSkipped: (id, reason) => followUpStore.markSkipped(id, reason),
     markFailed: (id, error, nextRetryAt) => followUpStore.markFailed(id, error, nextRetryAt),
+    markDeferred: (id, reason, nextRetryAt) => followUpStore.markDeferred(id, reason, nextRetryAt),
   };
 
   // PCD Registry backfill cron dependencies
