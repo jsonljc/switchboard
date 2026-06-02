@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compareSources } from "./source-comparator.js";
+import { compareSources, compareCampaigns, trueRoasFromCents } from "./source-comparator.js";
 
 describe("compareSources", () => {
   it("computes per-source CPL, cost-per-booked, close rate, true ROAS", () => {
@@ -34,5 +34,68 @@ describe("compareSources", () => {
       spendBySource: { ctwa: 100, instant_form: 0 },
     });
     expect(result.rows.find((r) => r.source === "instant_form")?.cpl).toBeNull();
+  });
+});
+
+describe("trueRoasFromCents", () => {
+  it("normalizes cents→dollars exactly once (the #819 cents trap)", () => {
+    // 12345 cents = $123.45; ÷ $100 spend = 1.2345 — NOT 123.45
+    expect(trueRoasFromCents(12345, 100)).toBeCloseTo(1.2345, 4);
+  });
+  it("returns null for unknown value or non-positive spend (never a fabricated 0)", () => {
+    expect(trueRoasFromCents(null, 100)).toBeNull();
+    expect(trueRoasFromCents(5000, 0)).toBeNull();
+  });
+});
+
+describe("compareCampaigns", () => {
+  const byCampaign = {
+    c1: { received: 100, qualified: 30, booked: 10, showed: 0, paid: 2, revenue: 5000 },
+    c2: { received: 40, qualified: 8, booked: 0, showed: 0, paid: 0, revenue: 0 },
+  };
+
+  it("booked-CAC from CRM booked count; trueROAS from booked value cents (normalized)", () => {
+    const { rows } = compareCampaigns({
+      byCampaign,
+      spendByCampaign: { c1: 500, c2: 200 },
+      bookedValueCentsByCampaign: new Map([["c1", 123450]]), // $1234.50
+    });
+    const c1 = rows.find((r) => r.campaignId === "c1")!;
+    expect(c1.costPerBooked).toBeCloseTo(50, 2); // $500 / 10 booked
+    expect(c1.bookedValueCents).toBe(123450);
+    expect(c1.trueRoas).toBeCloseTo(2.469, 3); // $1234.50 / $500
+  });
+
+  it("honest null: bookings but no booked value → trueRoas null, costPerBooked present", () => {
+    const { rows } = compareCampaigns({
+      byCampaign,
+      spendByCampaign: { c1: 500 },
+      bookedValueCentsByCampaign: new Map(), // c1 absent
+    });
+    const c1 = rows.find((r) => r.campaignId === "c1")!;
+    expect(c1.bookedValueCents).toBeNull();
+    expect(c1.trueRoas).toBeNull();
+    expect(c1.costPerBooked).toBeCloseTo(50, 2);
+  });
+
+  it("costPerBooked null when zero bookings", () => {
+    const { rows } = compareCampaigns({
+      byCampaign,
+      spendByCampaign: { c2: 200 },
+      bookedValueCentsByCampaign: new Map(),
+    });
+    expect(rows.find((r) => r.campaignId === "c2")!.costPerBooked).toBeNull();
+  });
+
+  it("preserves sparse campaign rows and drops value-only orphans", () => {
+    const { rows } = compareCampaigns({
+      byCampaign, // c1, c2
+      spendByCampaign: { c1: 500 },
+      bookedValueCentsByCampaign: new Map([
+        ["c1", 1000],
+        ["c_orphan", 9999], // absent from byCampaign → dropped
+      ]),
+    });
+    expect(rows.map((r) => r.campaignId).sort()).toEqual(["c1", "c2"]);
   });
 });
