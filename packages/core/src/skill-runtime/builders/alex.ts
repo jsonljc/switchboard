@@ -104,20 +104,36 @@ export const alexBuilder = async (
     }
   }
 
-  const tz = facts?.timezone ?? "Asia/Singapore";
+  const FALLBACK_TZ = "Asia/Singapore";
+  const rawTz = facts?.timezone ?? FALLBACK_TZ;
   const now = config.now ?? new Date();
-  const dtParts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: tz,
-    weekday: "long",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const get = (type: string): string => dtParts.find((p) => p.type === type)?.value ?? "";
-  const CURRENT_DATETIME = `${get("year")}-${get("month")}-${get("day")} (${get("weekday")}) ${get("hour")}:${get("minute")} ${tz}`;
+
+  const formatDatetime = (timeZone: string): { parts: Intl.DateTimeFormatPart[]; tz: string } => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      weekday: "long",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    return { parts, tz: timeZone };
+  };
+
+  let dtResult: { parts: Intl.DateTimeFormatPart[]; tz: string };
+  try {
+    dtResult = formatDatetime(rawTz);
+  } catch {
+    // Invalid IANA timezone (e.g. 'SGT', 'GMT+8', 'Singapore') — degrade gracefully
+    // rather than propagating a RangeError that kills the live conversation turn.
+    console.warn(`[alexBuilder] Invalid timezone "${rawTz}", falling back to ${FALLBACK_TZ}`);
+    dtResult = formatDatetime(FALLBACK_TZ);
+  }
+
+  const get = (type: string): string => dtResult.parts.find((p) => p.type === type)?.value ?? "";
+  const CURRENT_DATETIME = `${get("year")}-${get("month")}-${get("day")} (${get("weekday")}) ${get("hour")}:${get("minute")} ${dtResult.tz}`;
 
   // Resolve outcome-informed patterns from ContextBuilder when available.
   // Empty string when no services or no high-confidence patterns have surfaced yet —
