@@ -2,6 +2,24 @@ import { describe, it, expect } from "vitest";
 import { ConversationFixtureSchema } from "../schema.js";
 
 describe("ConversationFixtureSchema", () => {
+  it("defaults businessFacts to 'operator' and accepts 'absent'", () => {
+    const base = {
+      id: "bf-default",
+      vertical: "medspa",
+      locale: "sg",
+      scenario: "x",
+      turns: [
+        { role: "lead", content: "hi" },
+        { role: "alex", grade: { mustAsk: [], mustDo: [], mustNot: [], shouldDo: [] } },
+      ],
+    };
+    expect(ConversationFixtureSchema.parse(base).businessFacts).toBe("operator");
+    expect(
+      ConversationFixtureSchema.parse({ ...base, businessFacts: "absent" }).businessFacts,
+    ).toBe("absent");
+    expect(() => ConversationFixtureSchema.parse({ ...base, businessFacts: "nope" })).toThrow();
+  });
+
   it("accepts a scripted fixture with fixed lead turns + alex grade blocks", () => {
     const row = {
       id: "medspa_price_shopper_001",

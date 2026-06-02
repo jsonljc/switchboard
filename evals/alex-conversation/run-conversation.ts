@@ -11,13 +11,17 @@ import type {
   SkillExecutionResult,
   SkillTool,
 } from "@switchboard/core/skill-runtime";
-import type { AgentPersona } from "@switchboard/schemas";
+import { resolvePersona } from "@switchboard/schemas";
 import { dirname, join, parse } from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { ConversationFixture } from "./schema.js";
 import { createMockTools, type RecordedToolCall } from "./mock-tools.js";
-import { createStubBusinessFactsStore, createStubContextStore } from "./stub-context-store.js";
+import {
+  createBusinessFactsStore,
+  createStubBusinessFacts,
+  createStubContextStore,
+} from "./stub-context-store.js";
 import { createTemp0Adapter } from "./temp0-adapter.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
@@ -85,25 +89,21 @@ function findRepoRoot(start: string): string {
   );
 }
 
-function defaultSkillsDir(): string {
+export function defaultSkillsDir(): string {
   return join(findRepoRoot(dirname(fileURLToPath(import.meta.url))), "skills");
 }
 
 /**
- * Build the minimal valid persona Alex requires. Only `persona` is read by
- * `alexBuilder` (businessName + tone + the qualification/disqualification/
- * escalation criteria + bookingLink + customInstructions). Locale tunes the
- * value proposition copy; nothing here is jurisdiction-enforcing — governance
- * lives in the (deliberately unwired) hook chain.
+ * Build the raw inputConfig an operator/seed stores on
+ * `AgentDeployment.inputConfig`. Resolving it through the PRODUCTION
+ * `resolvePersona` (the same path skill-mode.ts uses) is behavior-equivalent to
+ * the previous hand-built persona: alexBuilder reads only businessName / tone /
+ * the three criteria / bookingLink / customInstructions, and `resolvePersona`
+ * preserves the record-shaped criteria verbatim.
  */
-function buildPersona(fixture: ConversationFixture): AgentPersona {
+function buildInputConfig(fixture: ConversationFixture): Record<string, unknown> {
   return {
-    id: "eval-persona",
-    organizationId: ORG_ID,
     businessName: "Acme Medspa",
-    businessType: "Medical spa / aesthetic clinic",
-    productService: "Aesthetic treatments and consultations",
-    valueProposition: "Licensed practitioners, transparent pricing, results-focused care.",
     tone: "consultative",
     qualificationCriteria: {
       treatmentInterest: "Which treatment or concern brought them in",
@@ -118,30 +118,41 @@ function buildPersona(fixture: ConversationFixture): AgentPersona {
     },
     bookingLink: "https://example.com/book",
     customInstructions: `Locale: ${fixture.locale}. Keep replies short and WhatsApp-native.`,
-    createdAt: new Date("2026-05-24T00:00:00.000Z"),
-    updatedAt: new Date("2026-05-24T00:00:00.000Z"),
   };
 }
 
 /**
- * Resolve Alex's runtime parameters deterministically (no network, no DB):
- *   1. `alexBuilder` -> BUSINESS_NAME / OPPORTUNITY_ID / LEAD_PROFILE /
- *      PERSONA_CONFIG / OUTCOME_PATTERNS (empty — no ContextBuilder wired).
- *   2. `ContextResolverImpl.resolve` -> PLAYBOOK_CONTEXT / QUALIFICATION_CONTEXT /
- *      CLAIM_BOUNDARIES (real medspa markdown) + POLICY_CONTEXT (stub) +
- *      BUSINESS_FACTS (stub facts via the resolver's BusinessFactsStore path).
- *   3. merge `{ ...builderParams, ...contextVars }` — mirrors BatchSkillHandler.
+ * Resolve Alex's runtime parameters deterministically (no network, no DB),
+ * faithfully mirroring the production live path (apps/api/src/bootstrap/skill-mode.ts):
+ *   1. `resolvePersona(inputConfig)` -> ctx.persona (the real schemas function).
+ *   2. `alexBuilder` (with the REAL PrismaBusinessFactsStore over a mock Prisma)
+ *      OWNS BUSINESS_FACTS: present facts render; absent/malformed -> "".
+ *   3. `ContextResolverImpl` gets the knowledge store ONLY and resolves the
+ *      business-facts-FILTERED requirements (LOAD-BEARING mirror of
+ *      packages/core/src/platform/modes/skill-mode.ts:150-153) -> PLAYBOOK /
+ *      QUALIFICATION / CLAIM_BOUNDARIES / POLICY.
+ *   4. merge `{ ...builderParams, ...contextVars }` (no BUSINESS_FACTS collision).
+ *
+ * Exported so the faithfulness gate (live-path-faithfulness.test.ts) can drive the
+ * real seam with operator / absent facts.
  */
-async function resolveParameters(
+export async function resolveParameters(
   skill: SkillDefinition,
   fixture: ConversationFixture,
   refsDir?: string,
 ): Promise<Record<string, unknown>> {
-  const persona = buildPersona(fixture);
-  const businessFactsStore = createStubBusinessFactsStore();
+  const persona = resolvePersona(buildInputConfig(fixture));
+  if (!persona) {
+    throw new Error(
+      "run-conversation: resolvePersona returned undefined (businessName missing or inputConfig invalid)",
+    );
+  }
 
-  // Stub stores for the builder. The opportunity already "exists" so the builder
-  // skips its auto-create branch (which needs a contactStore.create).
+  const config = fixture.businessFacts === "absent" ? null : createStubBusinessFacts();
+  const businessFactsStore = createBusinessFactsStore(config);
+
+  // Stub the builder's other stores. A pre-existing active opportunity is returned
+  // so the builder skips its auto-create branch (which needs a contactStore.create).
   const builderStores = {
     opportunityStore: {
       findActiveByContact: async (_orgId: string, _contactId: string) => [
@@ -169,8 +180,6 @@ async function resolveParameters(
     businessFactsStore,
   };
 
-  // `alexBuilder` reads only `ctx.persona`; cast to its param type (sdk's
-  // AgentContext is not a dependency here — same pattern as skill-mode.ts).
   const ctx = { persona } as unknown as Parameters<typeof alexBuilder>[0];
 
   const builderResult = await alexBuilder(
@@ -184,9 +193,13 @@ async function resolveParameters(
     builderStores,
   );
 
+  // Mirror production: the BUILDER owns BUSINESS_FACTS; the resolver must NEVER
+  // resolve business-facts (avoids a double-source AND the required-business-facts
+  // throw on absent facts). LOAD-BEARING — see skill-mode.ts:150-153.
+  const knowledgeReqs = skill.context.filter((r) => r.kind !== "business-facts");
   const contextStore = createStubContextStore(refsDir);
-  const resolver = new ContextResolverImpl(contextStore, businessFactsStore);
-  const resolved = await resolver.resolve(ORG_ID, skill.context);
+  const resolver = new ContextResolverImpl(contextStore);
+  const resolved = await resolver.resolve(ORG_ID, knowledgeReqs);
 
   return { ...builderResult.parameters, ...resolved.variables };
 }
