@@ -39,6 +39,7 @@ import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
 import { resolveEconomicTarget, applyTier } from "./analyzers/economic-target.js";
+import { resetsLearningFor } from "./action-reset-classification.js";
 
 // ── Interfaces ──
 
@@ -475,6 +476,9 @@ export class AuditRunner {
             steps: [msg],
             learningPhaseImpact:
               diagnosis.recommendation === "expand_targeting" ? "will reset learning" : "no impact",
+            resetsLearning: resetsLearningFor(
+              diagnosis.recommendation as RecommendationOutput["action"],
+            ),
           });
         }
 

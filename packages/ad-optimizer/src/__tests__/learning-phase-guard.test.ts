@@ -12,6 +12,7 @@ import type {
   WatchOutputSchema as WatchOutput,
   AdSetLearningInput,
 } from "@switchboard/schemas";
+import { resetsLearningFor } from "../action-reset-classification.js";
 
 const CAMPAIGN_ID = "camp_001";
 
@@ -26,9 +27,10 @@ function makeInput(overrides: Partial<CampaignLearningInput> = {}): CampaignLear
 }
 
 function makeRecommendation(overrides: Partial<RecommendationOutput> = {}): RecommendationOutput {
+  const action = overrides.action ?? "scale";
   return {
     type: "recommendation",
-    action: "scale",
+    action,
     campaignId: CAMPAIGN_ID,
     campaignName: "Test Campaign",
     confidence: 0.85,
@@ -36,6 +38,7 @@ function makeRecommendation(overrides: Partial<RecommendationOutput> = {}): Reco
     estimatedImpact: "+20% conversions",
     steps: ["Increase budget by 20%"],
     learningPhaseImpact: "none",
+    resetsLearning: resetsLearningFor(action),
     ...overrides,
   };
 }
@@ -156,9 +159,10 @@ function makeAdSetInput(overrides: Partial<AdSetLearningInput> = {}): AdSetLearn
 }
 
 function makeV2Recommendation(overrides: Partial<RecommendationOutput> = {}): RecommendationOutput {
+  const action = overrides.action ?? "pause";
   return {
     type: "recommendation",
-    action: "pause",
+    action,
     campaignId: CAMPAIGN_ID,
     campaignName: "Test Campaign",
     confidence: 0.85,
@@ -166,6 +170,7 @@ function makeV2Recommendation(overrides: Partial<RecommendationOutput> = {}): Re
     estimatedImpact: "+20% conversions",
     steps: ["Pause the ad set"],
     learningPhaseImpact: "high",
+    resetsLearning: resetsLearningFor(action),
     ...overrides,
   };
 }

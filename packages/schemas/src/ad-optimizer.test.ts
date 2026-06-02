@@ -15,6 +15,7 @@ const base = {
   estimatedImpact: "x",
   steps: ["a"],
   learningPhaseImpact: "no impact",
+  resetsLearning: "no" as const,
 };
 
 describe("RecommendationOutputSchema economic fields", () => {
@@ -36,5 +37,23 @@ describe("RecommendationOutputSchema economic fields", () => {
   it("exposes the enums", () => {
     expect(EconomicTierSchema.options).toEqual(["booked_cac", "cpl", "cpc"]);
     expect(MarginBasisSchema.options).toEqual(["configured", "unavailable"]);
+  });
+
+  it("RecommendationOutput requires a resetsLearning class", () => {
+    const withoutResets = {
+      type: "recommendation" as const,
+      action: "scale" as const,
+      campaignId: "c",
+      campaignName: "C",
+      confidence: 0.7,
+      urgency: "this_week" as const,
+      estimatedImpact: "x",
+      steps: ["x"],
+      learningPhaseImpact: "no impact",
+    };
+    expect(RecommendationOutputSchema.safeParse(withoutResets).success).toBe(false);
+    expect(
+      RecommendationOutputSchema.safeParse({ ...withoutResets, resetsLearning: "no" }).success,
+    ).toBe(true);
   });
 });

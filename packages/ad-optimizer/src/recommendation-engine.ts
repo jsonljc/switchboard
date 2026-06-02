@@ -8,6 +8,7 @@ import type {
   TargetBreachResult,
 } from "@switchboard/schemas";
 import type { SignalHealthReport, Breach } from "./signal-health-checker.js";
+import { resetsLearningFor, learningPhaseImpactText } from "./action-reset-classification.js";
 
 // ── Re-export types ──
 
@@ -59,7 +60,6 @@ function makeRec(
   urgency: Urgency,
   estimatedImpact: string,
   steps: string[],
-  learningPhaseImpact: string,
   params?: Record<string, string>,
 ): RecommendationOutput {
   return {
@@ -71,7 +71,8 @@ function makeRec(
     urgency,
     estimatedImpact,
     steps,
-    learningPhaseImpact,
+    learningPhaseImpact: learningPhaseImpactText(action),
+    resetsLearning: resetsLearningFor(action),
     ...(params ? { params } : {}),
   };
 }
@@ -122,7 +123,6 @@ function addCreativeRecommendation(
         "Reduce budget on underperforming ads once replacements are delivering",
         `CPA has been ${multiplier}x target for ${periods} days`,
       ],
-      "will reset learning",
     ),
   );
 }
@@ -145,7 +145,6 @@ function addPauseRecommendation(
         "Pause campaign in Ads Manager immediately",
         `CPA is ${multiplier}x target — active financial loss`,
       ],
-      "no impact",
     ),
   );
 }
@@ -168,7 +167,6 @@ function addReviewBudgetRecommendation(
         "Review campaign performance in Ads Manager",
         "Based on weekly snapshot data, not daily trend — exercise caution",
       ],
-      "no impact",
     ),
   );
 }
@@ -227,7 +225,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           `Approve draft with ${MAX_BUDGET_INCREASE_PERCENT}% higher budget`,
           `Budget increase capped at ${MAX_BUDGET_INCREASE_PERCENT}%`,
         ],
-        "will reset learning",
       ),
     );
   }
@@ -242,7 +239,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Fatigued creatives are reducing engagement — new creative will restore performance",
         ["Trigger PCD for fresh creative", "Replace fatigued creatives", "Approve new draft"],
-        "will reset learning",
       ),
     );
   }
@@ -260,7 +256,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Saturated audience needs fresh creative to re-engage",
         ["Trigger PCD for fresh creative", "Replace fatigued creatives", "Approve new draft"],
-        "will reset learning",
       ),
     );
   }
@@ -275,7 +270,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "next_cycle",
         "Audience is saturated — expanding targeting will find new reach",
         ["Create new ad set with expanded targeting", "Approve new ad set draft"],
-        "will reset learning",
       ),
     );
   }
@@ -297,7 +291,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
             `Increase budget on ${candidate.to.source} (trueRoas ${candidate.to.trueRoas?.toFixed(2)})`,
             "Source attribution is heuristic — operator should validate before large reallocations",
           ],
-          "no impact",
           { from: candidate.from.source, to: candidate.to.source },
         ),
       );
@@ -318,7 +311,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           "Ensure CAPI is sending Schedule events reliably before switching",
           "Allow 3–5 days for re-learning",
         ],
-        "will reset learning",
         { from: "Lead", to: "Schedule" },
       ),
     );
@@ -338,7 +330,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           "Re-run a Schedule test event from the booking system",
           "Confirm event_id deduplication matches browser pixel",
         ],
-        "no impact",
       ),
     );
   }
@@ -353,7 +344,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Landing page issues are driving up costs — fix before increasing spend",
         ["Check landing page load speed", "Verify tracking pixel", "Hold budget changes"],
-        "no impact",
       ),
     );
   }
@@ -437,7 +427,6 @@ function makeFixSignalHealthRec(
     urgency,
     remediation.estimatedImpact,
     remediation.steps,
-    "no impact",
     { breach: breach.signal, pixelId },
   );
 }

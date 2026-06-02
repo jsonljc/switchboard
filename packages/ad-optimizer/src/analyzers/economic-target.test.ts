@@ -10,11 +10,13 @@ import {
 } from "./economic-target.js";
 import type { RecommendationOutputSchema as RecommendationOutput } from "@switchboard/schemas";
 import { WatchOutputSchema } from "@switchboard/schemas";
+import { resetsLearningFor } from "../action-reset-classification.js";
 
 function rec(overrides: Partial<RecommendationOutput> = {}): RecommendationOutput {
+  const action = overrides.action ?? "pause";
   return {
     type: "recommendation",
-    action: "pause",
+    action,
     campaignId: "c1",
     campaignName: "C1",
     confidence: 0.9,
@@ -22,6 +24,7 @@ function rec(overrides: Partial<RecommendationOutput> = {}): RecommendationOutpu
     estimatedImpact: "over target",
     steps: ["pause it"],
     learningPhaseImpact: "no impact",
+    resetsLearning: resetsLearningFor(action),
     ...overrides,
   };
 }

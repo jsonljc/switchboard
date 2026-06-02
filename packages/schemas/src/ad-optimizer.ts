@@ -40,6 +40,12 @@ export type EconomicTierSchema = z.infer<typeof EconomicTierSchema>;
 export const MarginBasisSchema = z.enum(["configured", "unavailable"]);
 export type MarginBasisSchema = z.infer<typeof MarginBasisSchema>;
 
+// Structured, single-source-of-truth learning-reset class for a recommendation's
+// action (Phase-A spec §5). Derived from ACTION_RESETS_LEARNING in @switchboard/
+// ad-optimizer; replaces the free-text `learningPhaseImpact` as the governing field.
+export const ResetsLearningSchema = z.enum(["yes", "no", "conditional"]);
+export type ResetsLearningSchema = z.infer<typeof ResetsLearningSchema>;
+
 export const MetricDirectionSchema = z.enum(["up", "down", "stable"]);
 export type MetricDirectionSchema = z.infer<typeof MetricDirectionSchema>;
 
@@ -181,6 +187,10 @@ export const RecommendationOutputSchema = z.object({
   estimatedImpact: z.string(),
   steps: z.array(z.string()),
   learningPhaseImpact: z.string(),
+  // Phase A: structured, single-source-of-truth learning-reset class (derived from
+  // the action via ACTION_RESETS_LEARNING). `learningPhaseImpact` is now a human
+  // string derived FROM this, not an independent free-text field.
+  resetsLearning: ResetsLearningSchema,
   draftId: z.string().nullable().optional(),
   params: z.record(z.string(), z.string()).optional(),
   // PR2 (Target): the economic basis this recommendation was judged against, and
