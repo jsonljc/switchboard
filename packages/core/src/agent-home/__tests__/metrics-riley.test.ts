@@ -14,9 +14,15 @@ function makeStore(opts: {
   leadsLastWeek?: number;
   leadsPerWeeklyBucket?: number[];
   leadsPerDailyBucket?: number[];
+  bookingsThisWeek?: number;
 }): MetricsSignalStore {
   return {
-    countBookingsCreated: vi.fn(async () => 0),
+    countBookingsCreated: vi.fn(async ({ from, to }) => {
+      const week = buildWeekContext(WED_NOW, TZ);
+      if (from.getTime() === week.weekStart.getTime() && to.getTime() === week.weekEnd.getTime())
+        return opts.bookingsThisWeek ?? 0;
+      return 0;
+    }),
     countConversionsByType: vi.fn(async ({ from, to }) => {
       const week = buildWeekContext(WED_NOW, TZ);
       // Patch 1: discriminate hero (weekStart..weekEnd) from daily Mon bucket (weekStart..weekStart+DAY)
@@ -261,9 +267,9 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     });
   });
 
-  it("roi rule 1: spendCents === null → 'Connect Meta Ads to see cost per lead'", async () => {
+  it("roi rule 1: spendCents === null → 'Connect Meta Ads to see cost per booked'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 27, leadsLastWeek: 22 });
+    const store = makeStore({ leadsThisWeek: 27, bookingsThisWeek: 4 });
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
       week,
@@ -272,15 +278,33 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     });
     expect(vm.roi).toEqual({
       degraded: true,
-      degradedHint: "Connect Meta Ads to see cost per lead",
-      label: "cost per lead",
+      degradedHint: "Connect Meta Ads to see cost per booked",
+      label: "cost per booked",
       comparator: { value: "—", target: "target $5" },
     });
   });
 
-  it("roi rule 2: spendCents > 0 && leads === 0 → empty hint, comparator '—'", async () => {
+  it("roi rule 2: spend present + zero bookings → 'No bookings attributed yet', comparator '—'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 0, leadsLastWeek: 0 });
+    const store = makeStore({ leadsThisWeek: 27, bookingsThisWeek: 0 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: 4000 },
+    });
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "No bookings attributed yet",
+      label: "cost per booked",
+      comparator: { value: "—", target: "target $40" },
+    });
+  });
+
+  it("roi rule 3: spend > 0 && bookings > 0 && targetCpbCents === null → '$N per booked', target '—'", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 50, bookingsThisWeek: 10 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -291,32 +315,14 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     expect(vm.roi).toEqual({
       degraded: true,
       degradedHint: "",
-      label: "cost per lead",
-      comparator: { value: "—", target: "—" },
+      label: "cost per booked",
+      comparator: { value: "$20 per booked", target: "—" },
     });
   });
 
-  it("roi rule 3: spendCents > 0 && leads > 0 && targetCpbCents === null → comparator '$N per lead', target '—'", async () => {
+  it("roi sub-dollar guard: cac rounds to 0 → '<$1 per booked', not '$0 per booked'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 10, leadsLastWeek: 0 });
-    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
-    const vm = await buildRileyMetricsViewModel({
-      orgId: "org-1",
-      week,
-      store,
-      targets: { avgValueCents: null, targetCpbCents: null },
-    });
-    expect(vm.roi).toEqual({
-      degraded: true,
-      degradedHint: "",
-      label: "cost per lead",
-      comparator: { value: "$20 per lead", target: "—" },
-    });
-  });
-
-  it("roi sub-dollar guard: cpl rounds to 0 → '<$1 per lead', not '$0 per lead'", async () => {
-    const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 100, leadsLastWeek: 0 });
+    const store = makeStore({ leadsThisWeek: 100, bookingsThisWeek: 100 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(99);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -327,14 +333,14 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     expect(vm.roi).toEqual({
       degraded: true,
       degradedHint: "",
-      label: "cost per lead",
-      comparator: { value: "<$1 per lead", target: "target $5" },
+      label: "cost per booked",
+      comparator: { value: "<$1 per booked", target: "target $5" },
     });
   });
 
-  it("roi rule 4: spendCents > 0 && leads > 0 && targetCpbCents > 0 → live comparator + target", async () => {
+  it("roi rule 4 + units: spend > 0 && bookings > 0 && targetCpbCents=1000 → '$25 per booked' / 'target $10'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 5, leadsLastWeek: 0 });
+    const store = makeStore({ leadsThisWeek: 80, bookingsThisWeek: 5 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(12345);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -342,11 +348,13 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
       store,
       targets: { avgValueCents: null, targetCpbCents: 1000 },
     });
+    // 1000 cents → "target $10" (NOT the audit's dollar-valued targetCostPerBooked).
+    // CAC = round(12345 / 100 / 5) = round(24.69) = 25.
     expect(vm.roi).toEqual({
       degraded: true,
       degradedHint: "",
-      label: "cost per lead",
-      comparator: { value: "$25 per lead", target: "target $10" },
+      label: "cost per booked",
+      comparator: { value: "$25 per booked", target: "target $10" },
     });
   });
 

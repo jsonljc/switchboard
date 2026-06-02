@@ -10,6 +10,12 @@ const vm = (over = {}) =>
     hero: { kind: "ad-leads", value: 32, comparator: {} },
     spendCents: 142000,
     targets: { targetCpbCents: 3500, avgValueCents: 38000 },
+    roi: {
+      degraded: true,
+      degradedHint: "",
+      label: "cost per booked",
+      comparator: { value: "$44 per booked", target: "target $35" },
+    },
     ...over,
   }) as any;
 const slot = (data: any, isError = false) => ({ data, isError });
@@ -123,5 +129,30 @@ describe("selectKeyResult", () => {
       week: slot(vm({ hero: { kind: "appointments-booked", value: 0, comparator: {} } })),
     });
     expect(r.kind === "proof" && r.hero.value).toBe(0);
+  });
+
+  it("threads roi into proof state (lifetime)", () => {
+    const r = selectKeyResult({
+      agentKey: "riley",
+      halted: false,
+      mission: undefined,
+      all: slot(vm()),
+      week: slot(vm()),
+    });
+    expect(r.kind === "proof" && r.roi?.comparator).toEqual({
+      value: "$44 per booked",
+      target: "target $35",
+    });
+  });
+
+  it("threads roi into paused state", () => {
+    const r = selectKeyResult({
+      agentKey: "riley",
+      halted: true,
+      mission: undefined,
+      all: slot(vm()),
+      week: slot(vm()),
+    });
+    expect(r.kind === "paused" && r.roi?.label).toBe("cost per booked");
   });
 });

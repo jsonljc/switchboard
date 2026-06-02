@@ -53,6 +53,7 @@ function makeMetricsVM(
     value?: number;
     spendCents?: number | null;
     targetCpbCents?: number | null;
+    roi?: unknown;
   } = {},
 ) {
   return {
@@ -80,6 +81,7 @@ function makeMetricsVM(
     bookedDelta: null,
     leadsDelta: null,
     qualifiedDelta: null,
+    roi: overrides.roi,
   };
 }
 
@@ -167,28 +169,28 @@ describe("KeyResult slot — launch-blocker tests", () => {
     expect(screen.getByText("12")).toBeInTheDocument();
     // Paused note
     expect(screen.getByText("No new actions are going out while paused")).toBeInTheDocument();
-    // No CPL comparator text
-    expect(screen.queryByText(/per lead/i)).not.toBeInTheDocument();
+    // No ROI comparator text
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
     // No error message
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
   });
 
-  // Blocker 6: Riley CPL beat: spendCents 142000, hero ad-leads value 32, targetCpbCents 3500 → renders "$44.38 per lead · $9.38 over your $35 target" (neutral text; assert NO element has a green/up or red/down class).
-  it("6. Riley CPL beat — correct neutral text, no green/red classes", () => {
+  // Riley ROI proof now comes from the server-computed roi.comparator (cost per booked).
+  it("6. Riley roi proof — renders 'cost per booked' comparator, neutral, no green/red classes", () => {
     allData = makeMetricsVM({
       kind: "ad-leads",
       value: 32,
-      spendCents: 142000,
-      targetCpbCents: 3500,
+      roi: {
+        degraded: true,
+        degradedHint: "",
+        label: "cost per booked",
+        comparator: { value: "$44 per booked", target: "target $35" },
+      },
     });
-    render(<KeyResult agentKey="riley" />);
-
-    // Must show the CPL beat text
-    expect(screen.getByText(/\$44\.38 per lead/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$9\.38 over your \$35 target/i)).toBeInTheDocument();
-
-    // Assert NO element has a green/up or red/down class
     const { container } = render(<KeyResult agentKey="riley" />);
+
+    expect(screen.getByText("$44 per booked · target $35")).toBeInTheDocument();
+
     const allElements = container.querySelectorAll("[class]");
     allElements.forEach((el) => {
       const cls = el.className;
@@ -199,6 +201,36 @@ describe("KeyResult slot — launch-blocker tests", () => {
       expect(cls).not.toMatch(/\bred\b/);
       expect(cls).not.toMatch(/\bcritical\b/);
     });
+  });
+
+  it("6b. Riley roi blank CAC (value '—') → renders NO comparator line", () => {
+    allData = makeMetricsVM({
+      kind: "ad-leads",
+      value: 32,
+      roi: {
+        degraded: true,
+        degradedHint: "No bookings attributed yet",
+        label: "cost per booked",
+        comparator: { value: "—", target: "target $35" },
+      },
+    });
+    render(<KeyResult agentKey="riley" />);
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
+  });
+
+  it("6c. Riley roi real CAC but no target ('—') → renders NO comparator line", () => {
+    allData = makeMetricsVM({
+      kind: "ad-leads",
+      value: 32,
+      roi: {
+        degraded: true,
+        degradedHint: "No target set",
+        label: "cost per booked",
+        comparator: { value: "$44 per booked", target: "—" },
+      },
+    });
+    render(<KeyResult agentKey="riley" />);
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
   });
 
   // Blocker 7: halted + core-setup-incomplete (mission setup has { primary: true, done: false }) + week value 12 → paused composition wins (shows 12 + paused note + a small setup note), and the activation block is NOT rendered.

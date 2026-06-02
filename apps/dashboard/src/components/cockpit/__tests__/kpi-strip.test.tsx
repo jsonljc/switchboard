@@ -100,8 +100,8 @@ describe("<KPIStrip>", () => {
           roi: {
             degraded: true,
             degradedHint: "",
-            label: "cost per lead",
-            comparator: { value: "$7 per lead", target: "target $5" },
+            label: "cost per booked",
+            comparator: { value: "$7 per booked", target: "target $5" },
           },
         }}
         accent={RILEY_ACCENT}
@@ -123,7 +123,7 @@ describe("<KPIStrip>", () => {
           roi: {
             degraded: true,
             degradedHint: "",
-            label: "cost per lead",
+            label: "cost per booked",
             comparator: { value: "—", target: "—" },
           },
         }}
@@ -142,7 +142,7 @@ describe("<KPIStrip>", () => {
           roi: {
             degraded: true,
             degradedHint: "",
-            label: "cost per lead",
+            label: "cost per booked",
             comparator: { value: "—", target: "—" },
           },
         }}
