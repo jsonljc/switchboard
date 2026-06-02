@@ -31,6 +31,10 @@ export const RileyCaseSchema = z.object({
   economicTier: z.enum(["booked_cac", "cpl", "cpc"]),
   effectiveTarget: z.number(),
   targetROAS: z.number(),
+  /** Phase-A Gate 1: when false, the harness models a suspected account-wide
+   * conversion-denominator step-change for this case, demoting cost-driven /
+   * learning-resetting recs to watches. Omitted ⇒ measurement is trusted (true). */
+  measurementTrusted: z.boolean().optional(),
   /** Reduced expected label: an action name, `watch`, or `insight`. */
   expectedOutcome: z.string().min(1),
   notes: z.string().optional(),

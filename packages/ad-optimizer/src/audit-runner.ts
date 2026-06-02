@@ -37,6 +37,7 @@ import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-he
 import { resolveEconomicTarget } from "./analyzers/economic-target.js";
 import { resetsLearningFor } from "./action-reset-classification.js";
 import { decideForCampaign } from "./campaign-decision.js";
+import { detectDenominatorStepChange } from "./denominator-step-change.js";
 
 // ── Interfaces ──
 
@@ -310,6 +311,23 @@ export class AuditRunner {
     const previousMetrics = aggregateMetrics(previousInsights);
     const periodDeltas = comparePeriods(currentMetrics, previousMetrics);
 
+    // Step 4a (Phase-A Gate 1): account-wide conversion-DENOMINATOR step-change.
+    // If the conversion rate (conv/clicks) collapsed while clicks/spend stayed
+    // flat, the cost signal is untrustworthy this cycle (a suspected attribution-
+    // window/action-type reporting shift, not a real drop). When suspected, we set
+    // measurementTrusted=false so each per-campaign decision abstains on cost-driven
+    // and learning-resetting actions, and we surface one account-level signal watch.
+    const sumTotals = (rows: CampaignInsight[]) => ({
+      clicks: rows.reduce((s, r) => s + r.inlineLinkClicks, 0),
+      conversions: rows.reduce((s, r) => s + r.conversions, 0),
+      spend: rows.reduce((s, r) => s + r.spend, 0),
+    });
+    const stepChange = detectDenominatorStepChange({
+      current: sumTotals(currentInsights),
+      previous: sumTotals(previousInsights),
+    });
+    const measurementTrusted = !stepChange.suspected;
+
     // Step 4b: Resolve the account-level economic tier + booking-calibrated target
     // ONCE for this audit (calibrate-first invariant lives in resolveEconomicTarget).
     const accountConversions = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
@@ -331,6 +349,20 @@ export class AuditRunner {
     const watches: WatchOutput[] = [];
     const recommendations: RecommendationOutput[] = [];
     let campaignsInLearning = 0;
+
+    // Surface ONE account-level signal watch when a denominator step-change is
+    // suspected. fix_signal_health recs (appended later) are not gated by this —
+    // the user should still be pointed at the pixel/attribution fix.
+    if (stepChange.suspected) {
+      watches.push({
+        type: "watch",
+        campaignId: "account",
+        campaignName: "Account-wide signal",
+        pattern: "conversion_denominator_step_change",
+        message: `Suspected account-wide conversion-reporting shift: ${stepChange.reason}. Budget actions are held this cycle; verify the pixel/attribution window.`,
+        checkBackDate: nextCycleDate,
+      });
+    }
 
     // Build a lookup map for previous insights by campaignId
     const previousMap = new Map<string, CampaignInsight>();
@@ -380,6 +412,7 @@ export class AuditRunner {
         marginBasis,
         targetROAS: this.config.targetROAS,
         nextCycleDate,
+        measurementTrusted,
       });
       insights.push(...decision.insights);
       watches.push(...decision.watches);

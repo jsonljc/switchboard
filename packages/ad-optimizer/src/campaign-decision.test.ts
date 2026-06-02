@@ -70,4 +70,27 @@ describe("decideForCampaign (characterization)", () => {
     });
     expect(r.recommendations.some((x) => x.action === "pause")).toBe(true);
   });
+
+  it("holds the same pause-worthy campaign as a watch when measurementTrusted is false", () => {
+    // Identical to the pause case above (sufficient evidence, durable breach,
+    // success learning) — the ONLY change is measurementTrusted:false, which
+    // makes the account-wide cost signal untrustworthy this cycle. The pause is
+    // demoted to a measurement_untrusted watch instead of being recommended.
+    const r = decideForCampaign({
+      campaignId: "c1",
+      campaignName: "C1",
+      currentInsight: insight({ spend: 2800, conversions: 8 }),
+      previousInsight: insight({ spend: 2800, conversions: 8 }),
+      targetBreach: { periodsAboveTarget: 8, granularity: "daily", isApproximate: false },
+      learningStatus: successStatus,
+      economicTier: "booked_cac",
+      effectiveTarget: 100,
+      marginBasis: "unavailable",
+      targetROAS: 3,
+      nextCycleDate: "2026-05-14",
+      measurementTrusted: false,
+    });
+    expect(r.recommendations.some((x) => x.action === "pause")).toBe(false);
+    expect(r.watches.some((w) => w.pattern === "measurement_untrusted")).toBe(true);
+  });
 });

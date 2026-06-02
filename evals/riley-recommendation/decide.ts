@@ -61,6 +61,7 @@ export function decideForCase(c: RileyCase): string {
     marginBasis: "unavailable",
     targetROAS: c.targetROAS,
     nextCycleDate: "2026-05-14",
+    measurementTrusted: c.measurementTrusted ?? true,
   });
   if (r.recommendations.length > 0) return r.recommendations[0]!.action;
   if (r.watches.length > 0) return "watch";
