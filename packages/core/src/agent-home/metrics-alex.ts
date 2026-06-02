@@ -76,15 +76,14 @@ export async function buildAlexMetricsViewModel(
   const qualifiedPct = leads > 0 ? Math.round((heroValue / leads) * 100) : 0;
   const qualifiedPrev = leadsPrev > 0 ? Math.round((heroPrev / leadsPrev) * 100) : null;
 
-  const showCoverage = heroValue > 0 ? showed / heroValue : 0;
   const showedUnavailable = boardLastUpdated === null;
   const showedCell: StatCell = showedUnavailable
-    ? { label: "Showed", display: "—", rawValue: null, unit: "percent", unavailable: true }
+    ? { label: "Showed", display: "—", rawValue: null, unit: "count", unavailable: true }
     : {
         label: "Showed",
-        display: `${showed} (${Math.round(showCoverage * 100)}%)`,
-        rawValue: showCoverage,
-        unit: "percent",
+        display: String(showed),
+        rawValue: showed,
+        unit: "count",
         unavailable: false,
         hint: `Operator-confirmed · board updated ${boardLastUpdated.toISOString().slice(0, 10)}`,
       };
@@ -138,7 +137,6 @@ export async function buildAlexMetricsViewModel(
     leads,
     qualifiedPct,
     showed,
-    showCoverage,
     bookedDelta: formatNumericDelta(heroValue, heroPrev),
     leadsDelta: formatNumericDelta(leads, leadsPrev),
     qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),

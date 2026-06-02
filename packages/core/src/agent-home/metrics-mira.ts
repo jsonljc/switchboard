@@ -55,7 +55,6 @@ export function buildMiraMetricsViewModel(input: BuildMiraMetricsInput): Metrics
     leads: 0,
     qualifiedPct: 0,
     showed: 0,
-    showCoverage: 0,
     bookedDelta: null,
     leadsDelta: null,
     qualifiedDelta: null,

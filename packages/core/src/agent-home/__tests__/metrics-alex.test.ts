@@ -206,7 +206,7 @@ describe("buildAlexMetricsViewModel", () => {
     });
   });
 
-  it("stats[1] Showed = operator-confirmed showed count + coverage% of booked", async () => {
+  it("stats[1] Showed = operator-confirmed showed count (raw)", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const store = makeStore({
       bookingsByRange: (from, to) =>
@@ -223,8 +223,9 @@ describe("buildAlexMetricsViewModel", () => {
       targets: DEFAULT_TARGETS,
     });
     expect(vm.stats[1].label).toBe("Showed");
-    expect(vm.stats[1].display).toBe("7 (70%)");
-    expect(vm.stats[1].rawValue).toBe(0.7);
+    expect(vm.stats[1].display).toBe("7");
+    expect(vm.stats[1].rawValue).toBe(7);
+    expect(vm.stats[1].unit).toBe("count");
     expect(vm.stats[1].unavailable).toBe(false);
     expect(vm.stats[1].hint).toBe("Operator-confirmed · board updated 2026-05-06");
   });
@@ -239,6 +240,7 @@ describe("buildAlexMetricsViewModel", () => {
     expect(vm.stats[1].display).toBe("—");
     expect(vm.stats[1].unavailable).toBe(true);
     expect(vm.stats[1].rawValue).toBeNull();
+    expect(vm.stats[1].unit).toBe("count");
   });
 
   it("stats[2] Spend is unavailable: display='—', rawValue=null, unavailable=true", async () => {
@@ -349,7 +351,7 @@ describe("buildAlexMetricsViewModel", () => {
       expect(vm.qualifiedPct).toBe(Math.round((9 / 47) * 100));
     });
 
-    it("echoes showed and showCoverage as top-level fields", async () => {
+    it("echoes showed as a top-level field", async () => {
       const week = buildWeekContext(WED_NOW, TZ);
       const store = makeStore({
         bookingsByRange: (from, to) =>
@@ -366,7 +368,6 @@ describe("buildAlexMetricsViewModel", () => {
         targets: DEFAULT_TARGETS,
       });
       expect(vm.showed).toBe(7);
-      expect(vm.showCoverage).toBe(0.7);
     });
 
     it("qualifiedDelta returns null when prior leads = 0 (no comparator)", async () => {

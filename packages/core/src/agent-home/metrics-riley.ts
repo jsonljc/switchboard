@@ -172,7 +172,6 @@ export async function buildRileyMetricsViewModel(
     leads,
     qualifiedPct,
     showed: 0,
-    showCoverage: 0,
     bookedDelta: bookedDeltaStr,
     leadsDelta: bookedDeltaStr,
     qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),

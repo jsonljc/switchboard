@@ -55,7 +55,6 @@ export interface MetricsViewModel {
   leads: number;
   qualifiedPct: number;
   showed: number;
-  showCoverage: number;
   bookedDelta: string | null;
   leadsDelta: string | null;
   qualifiedDelta: string | null;
