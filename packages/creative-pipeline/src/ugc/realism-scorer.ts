@@ -1,10 +1,13 @@
-// packages/core/src/creative-pipeline/ugc/realism-scorer.ts
-// SP6: Full hybrid realism scorer — replaces SP5's minimal-qa.ts.
-// Uses Claude Vision for both hard checks and soft scores.
-// SP9 upgrades hard checks to specialized models (ArcFace, SyncNet, etc.).
+// packages/creative-pipeline/src/ugc/realism-scorer.ts
+// Realism QA for generated UGC video.
+//
+// Frame-based realism QA is NOT yet implemented: the model cannot see the
+// generated video, so `evaluateRealism` does not fabricate scores from a URL.
+// It returns `qaStatus: "requires_human_review"`, so an un-evaluated asset can
+// never be auto-approved for spend. The pure helpers below (computeDecision /
+// computeWeightedSoftScore / deriveApprovalState) are the decision logic for
+// when a real frame-sampling evaluator lands and sets `qaStatus: "evaluated"`.
 
-import { callClaude } from "../stages/call-claude.js";
-import { z } from "zod";
 import type { RealismScore, RealismSoftScores } from "@switchboard/schemas";
 
 // ── Threshold Config ──
@@ -49,6 +52,8 @@ export const DEFAULT_QA_THRESHOLDS: QaThresholdConfig = {
 
 // ── Input ──
 
+// `creatorReferenceUrl`, `apiKey`, and `thresholds` are reserved for the future
+// frame-based evaluator (see `evaluateRealism`); the current honest stub ignores them.
 export interface RealismScorerInput {
   videoUrl: string;
   creatorReferenceUrl?: string;
@@ -56,18 +61,6 @@ export interface RealismScorerInput {
   apiKey: string;
   thresholds?: QaThresholdConfig;
 }
-
-// ── Claude output schema ──
-
-const ClaudeRealismOutputSchema = z.object({
-  faceSimilarity: z.number().min(0).max(1).optional(),
-  ocrAccuracy: z.number().min(0).max(1).optional(),
-  artifactFlags: z.array(z.string()),
-  visualRealism: z.number().min(0).max(1),
-  behavioralRealism: z.number().min(0).max(1),
-  ugcAuthenticity: z.number().min(0).max(1),
-  audioNaturalness: z.number().min(0).max(1),
-});
 
 // ── Weighted soft score ──
 
@@ -83,7 +76,7 @@ export function computeWeightedSoftScore(
   );
 }
 
-// ── Decision logic ──
+// ── Decision logic (applies once a real evaluator has produced scores) ──
 
 export function computeDecision(
   score: RealismScore,
@@ -123,87 +116,44 @@ export function computeDecision(
   return "pass";
 }
 
-// ── Prompt ──
+// ── QA result → persisted approval state ──
 
-function buildRealismPrompt(input: RealismScorerInput): {
-  systemPrompt: string;
-  userMessage: string;
-} {
-  const systemPrompt = `You are a UGC ad quality scorer. Evaluate the generated video across multiple dimensions.
-
-Score each dimension from 0.0 to 1.0:
-
-## Hard Checks
-- **faceSimilarity**: How closely does the face match the creator reference? (0 = completely different, 1 = identical). If no reference provided or no face visible, omit this field.
-- **ocrAccuracy**: If product text/logos are shown, how legible and accurate are they? (0 = illegible, 1 = perfect). If no text/logos shown, omit this field.
-- **artifactFlags**: List any visual artifacts detected. Valid flags: "face_drift", "hand_warp", "product_warp", "text_illegible", "uncanny_valley", "sync_mismatch", "lighting_inconsistency". Empty array if none.
-
-## Soft Scores (always score all 4)
-- **visualRealism**: Skin texture, lighting consistency, camera feel (0 = obviously CG, 1 = photorealistic)
-- **behavioralRealism**: Natural blink, mouth movement, head motion, gestures (0 = robotic, 1 = human)
-- **ugcAuthenticity**: Does this feel like a real person filmed this on their phone? (0 = studio production, 1 = authentic UGC)
-- **audioNaturalness**: Natural speech patterns, breath sounds, room tone, pauses (0 = synthetic, 1 = natural). Score 0.5 if no audio.
-
-Return a JSON object:
-{
-  "faceSimilarity": 0.85,
-  "ocrAccuracy": 0.9,
-  "artifactFlags": [],
-  "visualRealism": 0.8,
-  "behavioralRealism": 0.75,
-  "ugcAuthenticity": 0.9,
-  "audioNaturalness": 0.7
-}
-
-Respond ONLY with the JSON object.`;
-
-  let userMessage = `Score this UGC video for realism:
-
-**Video URL:** ${input.videoUrl}
-**Creative brief:** ${input.specDescription}`;
-
-  if (input.creatorReferenceUrl) {
-    userMessage += `\n**Creator reference image:** ${input.creatorReferenceUrl}`;
-  }
-
-  return { systemPrompt, userMessage };
+/**
+ * Map a QA result to the asset's persisted approval state.
+ *
+ * SAFETY INVARIANT: a creative may be auto-`approved` ONLY when the video was
+ * actually evaluated (`qaStatus === "evaluated"`) AND passed. Until real
+ * frame-based QA exists, scorers return `qaStatus: "requires_human_review"`, so
+ * this function routes everything to human review — an un-evaluated or fabricated
+ * score can never approve a creative for spend.
+ */
+export function deriveApprovalState(
+  score: RealismScore,
+): "approved" | "rejected" | "requires_human_review" {
+  if (score.qaStatus !== "evaluated") return "requires_human_review";
+  if (score.overallDecision === "pass") return "approved";
+  if (score.overallDecision === "fail") return "rejected";
+  return "requires_human_review";
 }
 
 // ── Main scorer ──
 
 /**
- * Full hybrid realism scorer (SP6).
- * Calls Claude Vision for both hard checks and soft scores in a single pass.
- * Applies configurable thresholds to produce pass/review/fail decision.
+ * Realism QA entry point.
+ *
+ * Frame-based evaluation is not yet implemented, so this NEVER inspects the
+ * actual video and NEVER fabricates a score from a URL. It returns
+ * `qaStatus: "requires_human_review"` so the asset is routed to a human and can
+ * never be auto-approved for spend. When a real frame-sampling evaluator is
+ * added it should set `qaStatus: "evaluated"`, populate the hard/soft checks,
+ * and call `computeDecision`; `deriveApprovalState` then gates approval on the
+ * real result. `_input` is accepted now for forward-compatibility.
  */
-export async function evaluateRealism(input: RealismScorerInput): Promise<RealismScore> {
-  const thresholds = input.thresholds ?? DEFAULT_QA_THRESHOLDS;
-  const { systemPrompt, userMessage } = buildRealismPrompt(input);
-
-  const result = await callClaude({
-    apiKey: input.apiKey,
-    systemPrompt,
-    userMessage,
-    schema: ClaudeRealismOutputSchema,
-    maxTokens: 1024,
-  });
-
-  const score: RealismScore = {
-    hardChecks: {
-      faceSimilarity: result.faceSimilarity,
-      ocrAccuracy: result.ocrAccuracy,
-      artifactFlags: result.artifactFlags,
-    },
-    softScores: {
-      visualRealism: result.visualRealism,
-      behavioralRealism: result.behavioralRealism,
-      ugcAuthenticity: result.ugcAuthenticity,
-      audioNaturalness: result.audioNaturalness,
-    },
-    overallDecision: "pass", // placeholder, computed below
+export async function evaluateRealism(_input: RealismScorerInput): Promise<RealismScore> {
+  return {
+    hardChecks: { artifactFlags: [] },
+    softScores: {},
+    overallDecision: "review",
+    qaStatus: "requires_human_review",
   };
-
-  score.overallDecision = computeDecision(score, thresholds);
-
-  return score;
 }

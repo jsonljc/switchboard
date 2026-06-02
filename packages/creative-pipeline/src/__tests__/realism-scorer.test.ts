@@ -3,10 +3,11 @@ import {
   evaluateRealism,
   computeDecision,
   computeWeightedSoftScore,
+  deriveApprovalState,
   DEFAULT_QA_THRESHOLDS,
   type QaThresholdConfig,
 } from "../ugc/realism-scorer.js";
-import type { RealismScore } from "@switchboard/schemas";
+import { AssetApprovalState, type RealismScore } from "@switchboard/schemas";
 
 // Mock Claude for the LLM-based scorer
 vi.mock("../stages/call-claude.js", () => ({
@@ -58,6 +59,7 @@ describe("computeDecision", () => {
         audioNaturalness: 0.9,
       },
       overallDecision: "pass", // will be overridden
+      qaStatus: "evaluated",
     };
     expect(computeDecision(score, thresholds)).toBe("fail");
   });
@@ -72,6 +74,7 @@ describe("computeDecision", () => {
         audioNaturalness: 0.9,
       },
       overallDecision: "pass",
+      qaStatus: "evaluated",
     };
     expect(computeDecision(score, thresholds)).toBe("fail");
   });
@@ -86,6 +89,7 @@ describe("computeDecision", () => {
         audioNaturalness: 0.9,
       },
       overallDecision: "pass",
+      qaStatus: "evaluated",
     };
     expect(computeDecision(score, thresholds)).toBe("fail");
   });
@@ -100,6 +104,7 @@ describe("computeDecision", () => {
         audioNaturalness: 0.3,
       },
       overallDecision: "pass",
+      qaStatus: "evaluated",
     };
     expect(computeDecision(score, thresholds)).toBe("review");
   });
@@ -114,6 +119,7 @@ describe("computeDecision", () => {
         audioNaturalness: 0.8,
       },
       overallDecision: "pass",
+      qaStatus: "evaluated",
     };
     expect(computeDecision(score, thresholds)).toBe("pass");
   });
@@ -128,6 +134,7 @@ describe("computeDecision", () => {
         audioNaturalness: 0.8,
       },
       overallDecision: "pass",
+      qaStatus: "evaluated",
     };
     expect(computeDecision(score, thresholds)).toBe("pass");
   });
@@ -146,6 +153,7 @@ describe("computeDecision", () => {
         audioNaturalness: 0.9,
       },
       overallDecision: "pass",
+      qaStatus: "evaluated",
     };
     // 0.9 < 0.95 threshold → fail
     expect(computeDecision(score, strict)).toBe("fail");
@@ -153,18 +161,69 @@ describe("computeDecision", () => {
 });
 
 describe("evaluateRealism", () => {
-  it("calls Claude and returns a complete RealismScore", async () => {
-    const result = await evaluateRealism({
+  it("does NOT call the LLM to 'score' a video it cannot see", async () => {
+    const { callClaude } = await import("../stages/call-claude.js");
+    (callClaude as ReturnType<typeof vi.fn>).mockClear();
+    await evaluateRealism({
       videoUrl: "https://cdn.example.com/video.mp4",
       creatorReferenceUrl: "https://cdn.example.com/ref.jpg",
       specDescription: "Talking head confession ad",
       apiKey: "test-key",
     });
-    expect(result.hardChecks.faceSimilarity).toBeDefined();
-    expect(result.hardChecks.artifactFlags).toBeDefined();
-    expect(result.softScores.visualRealism).toBeDefined();
-    expect(result.softScores.ugcAuthenticity).toBeDefined();
-    expect(result.overallDecision).toBeDefined();
-    expect(["pass", "review", "fail"]).toContain(result.overallDecision);
+    expect(callClaude).not.toHaveBeenCalled();
+  });
+
+  it("reports requires_human_review and never auto-passes (no real evaluation yet)", async () => {
+    const result = await evaluateRealism({
+      videoUrl: "https://cdn.example.com/video.mp4",
+      specDescription: "Talking head confession ad",
+      apiKey: "test-key",
+    });
+    expect(result.qaStatus).toBe("requires_human_review");
+    expect(result.overallDecision).not.toBe("pass");
+  });
+});
+
+describe("deriveApprovalState", () => {
+  const base = { hardChecks: { artifactFlags: [] }, softScores: {} };
+
+  it("approves ONLY when the video was actually evaluated and passed", () => {
+    expect(deriveApprovalState({ ...base, overallDecision: "pass", qaStatus: "evaluated" })).toBe(
+      "approved",
+    );
+  });
+
+  it("rejects when actually evaluated and failed", () => {
+    expect(deriveApprovalState({ ...base, overallDecision: "fail", qaStatus: "evaluated" })).toBe(
+      "rejected",
+    );
+  });
+
+  it("requires human review when evaluated but indecisive", () => {
+    expect(deriveApprovalState({ ...base, overallDecision: "review", qaStatus: "evaluated" })).toBe(
+      "requires_human_review",
+    );
+  });
+
+  it("NEVER auto-approves an unseen video, even if the decision field says 'pass'", () => {
+    expect(
+      deriveApprovalState({ ...base, overallDecision: "pass", qaStatus: "requires_human_review" }),
+    ).toBe("requires_human_review");
+    expect(
+      deriveApprovalState({ ...base, overallDecision: "pass", qaStatus: "not_evaluated" }),
+    ).toBe("requires_human_review");
+  });
+
+  it("only ever returns values that are valid AssetApprovalState members (schemas stay in sync)", () => {
+    const cases: RealismScore[] = [
+      { ...base, overallDecision: "pass", qaStatus: "evaluated" },
+      { ...base, overallDecision: "fail", qaStatus: "evaluated" },
+      { ...base, overallDecision: "review", qaStatus: "evaluated" },
+      { ...base, overallDecision: "pass", qaStatus: "requires_human_review" },
+      { ...base, overallDecision: "pass", qaStatus: "not_evaluated" },
+    ];
+    for (const score of cases) {
+      expect(AssetApprovalState.safeParse(deriveApprovalState(score)).success).toBe(true);
+    }
   });
 });

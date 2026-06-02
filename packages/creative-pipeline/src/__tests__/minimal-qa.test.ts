@@ -2,39 +2,28 @@ import { describe, it, expect, vi } from "vitest";
 import { evaluateMinimalQa } from "../ugc/minimal-qa.js";
 
 vi.mock("../stages/call-claude.js", () => ({
-  callClaude: vi.fn().mockResolvedValue({
-    decision: "pass",
-    reasoning: "Video looks natural and authentic",
-    artifactFlags: [],
-  }),
+  callClaude: vi.fn(),
 }));
 
 describe("evaluateMinimalQa", () => {
-  it("returns a realism score with overall decision", async () => {
-    const result = await evaluateMinimalQa({
+  it("does NOT call the LLM to 'score' a video it cannot see", async () => {
+    const { callClaude } = await import("../stages/call-claude.js");
+    (callClaude as ReturnType<typeof vi.fn>).mockClear();
+    await evaluateMinimalQa({
       videoUrl: "https://cdn.example.com/video.mp4",
       specDescription: "Talking head confession ad",
       apiKey: "test-key",
     });
-    expect(result.overallDecision).toBe("pass");
-    expect(result.hardChecks).toBeDefined();
-    expect(result.softScores).toBeDefined();
+    expect(callClaude).not.toHaveBeenCalled();
   });
 
-  it("passes through artifact flags from Claude", async () => {
-    const { callClaude } = await import("../stages/call-claude.js");
-    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      decision: "fail",
-      reasoning: "Face looks distorted",
-      artifactFlags: ["face_drift", "hand_warp"],
-    });
-
+  it("reports requires_human_review and never auto-passes (no real evaluation)", async () => {
     const result = await evaluateMinimalQa({
       videoUrl: "https://cdn.example.com/video.mp4",
       specDescription: "Talking head ad",
       apiKey: "test-key",
     });
-    expect(result.overallDecision).toBe("fail");
-    expect(result.hardChecks.artifactFlags).toContain("face_drift");
+    expect(result.qaStatus).toBe("requires_human_review");
+    expect(result.overallDecision).not.toBe("pass");
   });
 });

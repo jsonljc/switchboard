@@ -21,9 +21,19 @@ export type RealismSoftScores = z.infer<typeof RealismSoftScores>;
 export const RealismDecision = z.enum(["pass", "review", "fail"]);
 export type RealismDecision = z.infer<typeof RealismDecision>;
 
+/**
+ * Provenance of a realism score — was the video actually evaluated, or not?
+ * `overallDecision` is only trustworthy when `qaStatus === "evaluated"`.
+ * Until frame-based QA exists, scorers return `requires_human_review` so that
+ * an un-evaluated (or fabricated) score can never gate a creative as approved.
+ */
+export const QaStatus = z.enum(["not_evaluated", "requires_human_review", "evaluated"]);
+export type QaStatus = z.infer<typeof QaStatus>;
+
 export const RealismScoreSchema = z.object({
   hardChecks: RealismHardChecks,
   softScores: RealismSoftScores,
   overallDecision: RealismDecision,
+  qaStatus: QaStatus,
 });
 export type RealismScore = z.infer<typeof RealismScoreSchema>;
