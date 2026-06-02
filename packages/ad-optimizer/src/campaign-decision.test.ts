@@ -52,11 +52,14 @@ describe("decideForCampaign (characterization)", () => {
   });
 
   it("a 3x-over campaign with a durable breach yields a pause recommendation", () => {
+    // CPA = 2800/8 = 350 = 3.5x the 100 target. conversions 8 >= destructive
+    // floor 5 and inlineLinkClicks 200 (default) >= 50, so the evidence floor
+    // (Gate 2) is met and the pause is NOT demoted to an abstention watch.
     const r = decideForCampaign({
       campaignId: "c1",
       campaignName: "C1",
-      currentInsight: insight({ spend: 350, conversions: 1 }),
-      previousInsight: insight({ spend: 350, conversions: 1 }),
+      currentInsight: insight({ spend: 2800, conversions: 8 }),
+      previousInsight: insight({ spend: 2800, conversions: 8 }),
       targetBreach: { periodsAboveTarget: 8, granularity: "daily", isApproximate: false },
       learningStatus: successStatus,
       economicTier: "booked_cac",

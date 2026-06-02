@@ -105,12 +105,22 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
     targetROAS: input.targetROAS,
     currentSpend: input.currentInsight.spend,
     targetBreach: input.targetBreach,
+    evidence: {
+      clicks: input.currentInsight.inlineLinkClicks,
+      conversions: input.currentInsight.conversions,
+      days: 7,
+    },
     ...(input.sourceComparison ? { sourceComparison: input.sourceComparison } : {}),
   });
 
-  for (const rec of campaignRecs) {
+  for (const item of campaignRecs) {
+    // Gate 2 abstentions arrive as watches straight from the engine.
+    if (item.type === "watch") {
+      watches.push(item);
+      continue;
+    }
     const tiered = applyTier({
-      recommendation: rec,
+      recommendation: item,
       tier: input.economicTier,
       marginBasis: input.marginBasis,
       checkBackDate: input.nextCycleDate,
