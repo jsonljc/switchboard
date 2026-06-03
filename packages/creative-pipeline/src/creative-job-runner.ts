@@ -1,9 +1,10 @@
 // packages/core/src/creative-pipeline/creative-job-runner.ts
 import { inngestClient } from "./inngest-client.js";
 import { runStage, getNextStage, STAGE_ORDER } from "./stages/run-stage.js";
-import type { CreativeJob } from "@switchboard/schemas";
+import type { CreativeJob, VideoProducerOutput } from "@switchboard/schemas";
 import { DalleImageGenerator } from "./stages/image-generator.js";
 import type { ImageGenerator } from "./stages/image-generator.js";
+import type { AssetStorageClient } from "./stages/video-producer.js";
 
 // 24-hour timeout for buyer approval between stages
 const APPROVAL_TIMEOUT = "24h";
@@ -25,6 +26,7 @@ interface JobStore {
     stageOutputs: Record<string, unknown>,
   ): Promise<CreativeJob>;
   stop(organizationId: string, id: string, stoppedAt: string): Promise<CreativeJob>;
+  setDurableAsset(organizationId: string, id: string, url: string): Promise<CreativeJob>;
 }
 
 interface StepTools {
@@ -53,6 +55,7 @@ export async function executeCreativePipeline(
   jobStore: JobStore,
   llmConfig: LLMConfig,
   imageConfig?: ImageConfig,
+  assetStorage?: AssetStorageClient,
 ): Promise<void> {
   const job = await step.run("load-job", () => jobStore.findById(eventData.jobId));
 
@@ -86,6 +89,7 @@ export async function executeCreativePipeline(
         generateReferenceImages: job.generateReferenceImages,
         imageGenerator,
         productionTier: job.productionTier ?? "basic",
+        assetStorage,
       }),
     );
 
@@ -96,6 +100,17 @@ export async function executeCreativePipeline(
     await step.run(`save-${stage}`, () =>
       jobStore.updateStage(eventData.organizationId, job.id, nextStage, stageOutputs),
     );
+
+    // Once production has assembled + uploaded, persist the durable URL so the
+    // creative.job.publish precondition (assertPublishable) can find it.
+    if (stage === "production") {
+      const durableAssetUrl = (output as VideoProducerOutput).durableAssetUrl;
+      if (durableAssetUrl) {
+        await step.run("save-durable-asset", () =>
+          jobStore.setDurableAsset(eventData.organizationId, job.id, durableAssetUrl),
+        );
+      }
+    }
 
     // After the last stage, no approval needed
     if (nextStage === "complete") break;
@@ -125,6 +140,7 @@ export function createCreativeJobRunner(
   jobStore: JobStore,
   llmConfig: LLMConfig,
   imageConfig?: ImageConfig,
+  assetStorage?: AssetStorageClient,
   onFailure?: (arg: unknown) => Promise<void>,
 ) {
   return inngestClient.createFunction(
@@ -136,7 +152,14 @@ export function createCreativeJobRunner(
       ...(onFailure ? { onFailure } : {}),
     },
     async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
-      await executeCreativePipeline(event.data, step, jobStore, llmConfig, imageConfig);
+      await executeCreativePipeline(
+        event.data,
+        step,
+        jobStore,
+        llmConfig,
+        imageConfig,
+        assetStorage,
+      );
     },
   );
 }
