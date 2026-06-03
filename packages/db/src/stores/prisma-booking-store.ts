@@ -32,6 +32,8 @@ export class PrismaBookingStore {
     // LIVE write path.
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${input.organizationId}))`;
+      // Single-resource-per-org capacity assumption: overlap is org-wide (not per
+      // calendarId/room/practitioner), mirroring the original Local-provider guard.
       const overlap = await tx.booking.findFirst({
         where: {
           organizationId: input.organizationId,
@@ -118,18 +120,36 @@ export class PrismaBookingStore {
   }
 
   async reschedule(orgId: string, bookingId: string, slot: { startsAt: Date; endsAt: Date }) {
-    const result = await this.prisma.booking.updateMany({
-      where: { id: bookingId, organizationId: orgId },
-      data: {
-        startsAt: slot.startsAt,
-        endsAt: slot.endsAt,
-        rescheduleCount: { increment: 1 },
-        rescheduledAt: new Date(),
-      },
-    });
-    if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
-    return this.prisma.booking.findFirstOrThrow({
-      where: { id: bookingId, organizationId: orgId },
+    // Serialize check-then-move per org (mirrors create()) so a reschedule cannot
+    // land on a slot another LIVE booking already holds. Advisory lock held until
+    // commit; overlap is half-open and excludes the booking being moved.
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${orgId}))`;
+      // Single-resource-per-org capacity assumption: overlap is org-wide (not per
+      // calendarId/room/practitioner), mirroring the original Local-provider guard.
+      // Exclude the booking being moved so a no-op/shrink reschedule doesn't self-conflict.
+      const overlap = await tx.booking.findFirst({
+        where: {
+          organizationId: orgId,
+          id: { not: bookingId },
+          status: { notIn: ["failed", "cancelled"] },
+          startsAt: { lt: slot.endsAt },
+          endsAt: { gt: slot.startsAt },
+        },
+        select: { id: true },
+      });
+      if (overlap) throw new BookingSlotConflictError(overlap.id);
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, organizationId: orgId },
+        data: {
+          startsAt: slot.startsAt,
+          endsAt: slot.endsAt,
+          rescheduleCount: { increment: 1 },
+          rescheduledAt: new Date(),
+        },
+      });
+      if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
+      return tx.booking.findFirstOrThrow({ where: { id: bookingId, organizationId: orgId } });
     });
   }
 

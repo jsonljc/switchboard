@@ -122,7 +122,7 @@ interface CalendarBookToolDeps {
 const NOT_CONFIGURED_REMEDIATION =
   "Do not tell the customer there are no available slots. Escalate to the operator because calendar booking is not configured.";
 
-async function resolveProviderOrFail(
+export async function resolveProviderOrFail(
   deps: Pick<CalendarBookToolDeps, "calendarProviderFactory" | "isCalendarProviderConfigured">,
   orgId: string,
 ): Promise<{ provider: CalendarProvider } | { failure: ToolResult }> {

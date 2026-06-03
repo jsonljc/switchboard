@@ -1,4 +1,5 @@
 import { it, expect, vi } from "vitest";
+import { BookingSlotConflictError } from "@switchboard/schemas";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
 
 const ctx = { orgId: "org-1", contactId: "c-1" } as never;
@@ -76,4 +77,44 @@ it("reschedule increments via store after the provider patch", async () => {
     "b1",
     expect.objectContaining({ startsAt: expect.any(Date), endsAt: expect.any(Date) }),
   );
+});
+
+it("reschedule onto a held slot surfaces SLOT_TAKEN (retryable) not a raw failure", async () => {
+  const d = deps({
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(upcoming),
+      reschedule: vi.fn().mockRejectedValue(new BookingSlotConflictError("x")),
+      cancel: vi.fn(),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-13T02:00:00Z",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+  });
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("SLOT_TAKEN");
+  expect(res.error?.retryable).toBe(true);
+});
+
+it("reschedule fails gracefully when the provider factory throws", async () => {
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockRejectedValue(new Error("provider boom")),
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-13T02:00:00Z",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+  });
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
+});
+
+it("cancel fails gracefully when the provider factory throws", async () => {
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockRejectedValue(new Error("provider boom")),
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
 });

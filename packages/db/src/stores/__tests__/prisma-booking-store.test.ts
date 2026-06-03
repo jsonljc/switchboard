@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StaleVersionError } from "@switchboard/core";
-import { isBookingSlotConflictError } from "@switchboard/schemas";
+import { BookingSlotConflictError, isBookingSlotConflictError } from "@switchboard/schemas";
 import { PrismaBookingStore } from "../prisma-booking-store.js";
 
 function makePrisma() {
@@ -294,29 +294,79 @@ describe("PrismaBookingStore reschedule/cancel/find", () => {
     );
   });
 
-  it("reschedule updates slot + increments rescheduleCount + sets rescheduledAt; throws if no row", async () => {
-    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
-    const findFirstOrThrow = vi.fn().mockResolvedValue({ id: "b1", rescheduleCount: 1 });
-    const store = new PrismaBookingStore({
-      booking: { updateMany, findFirstOrThrow },
-    } as never);
-    const s = new Date("2026-06-11T02:00:00Z");
-    const e = new Date("2026-06-11T03:00:00Z");
-    await store.reschedule("org-1", "b1", { startsAt: s, endsAt: e });
-    expect(updateMany).toHaveBeenCalledWith(
+  // reschedule now serializes via $transaction + advisory lock + overlap guard
+  // (excluding the booking being moved), mirroring create().
+  function makeRescheduleTx(opts: {
+    overlapRow?: { id: string } | null;
+    updateCount?: number;
+    row?: Record<string, unknown>;
+  }) {
+    const tx = {
+      $executeRaw: vi.fn().mockResolvedValue(0),
+      booking: {
+        findFirst: vi.fn().mockResolvedValue(opts.overlapRow ?? null),
+        updateMany: vi.fn().mockResolvedValue({ count: opts.updateCount ?? 1 }),
+        findFirstOrThrow: vi.fn().mockResolvedValue(opts.row ?? { id: "b1", rescheduleCount: 1 }),
+      },
+    };
+    const prisma = { $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)) };
+    return { prisma, tx };
+  }
+
+  const sNew = new Date("2026-06-11T02:00:00Z");
+  const eNew = new Date("2026-06-11T03:00:00Z");
+
+  it("reschedule (no overlap): locks, updates slot + increments + sets rescheduledAt, excludes self from overlap", async () => {
+    const { prisma: p, tx } = makeRescheduleTx({ overlapRow: null });
+    const store = new PrismaBookingStore(p as never);
+    const row = await store.reschedule("org-1", "b1", { startsAt: sNew, endsAt: eNew });
+    expect(tx.$executeRaw).toHaveBeenCalled();
+    // overlap guard excludes the booking being moved via { not: bookingId }
+    expect(tx.booking.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          id: { not: "b1" },
+          status: { notIn: ["failed", "cancelled"] },
+          startsAt: { lt: eNew },
+          endsAt: { gt: sNew },
+        }),
+      }),
+    );
+    expect(tx.booking.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "b1", organizationId: "org-1" },
         data: expect.objectContaining({
-          startsAt: s,
-          endsAt: e,
+          startsAt: sNew,
+          endsAt: eNew,
           rescheduleCount: { increment: 1 },
         }),
       }),
     );
-    const miss = new PrismaBookingStore({
-      booking: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    } as never);
-    await expect(miss.reschedule("org-1", "x", { startsAt: s, endsAt: e })).rejects.toThrow();
+    expect(row).toEqual({ id: "b1", rescheduleCount: 1 });
+  });
+
+  it("reschedule throws BookingSlotConflictError (not updateMany) when another live booking overlaps", async () => {
+    const { prisma: p, tx } = makeRescheduleTx({ overlapRow: { id: "other-bk" } });
+    const store = new PrismaBookingStore(p as never);
+    await expect(
+      store.reschedule("org-1", "b1", { startsAt: sNew, endsAt: eNew }),
+    ).rejects.toSatisfy(isBookingSlotConflictError);
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("reschedule throws StaleVersionError when the booking row is not found (count:0)", async () => {
+    const { prisma: p, tx } = makeRescheduleTx({ overlapRow: null, updateCount: 0 });
+    const store = new PrismaBookingStore(p as never);
+    await expect(
+      store.reschedule("org-1", "missing", { startsAt: sNew, endsAt: eNew }),
+    ).rejects.toBeInstanceOf(StaleVersionError);
+    expect(tx.booking.findFirstOrThrow).not.toHaveBeenCalled();
+  });
+
+  // Keep BookingSlotConflictError referenced so the import is exercised directly.
+  it("BookingSlotConflictError carries the conflicting id", () => {
+    expect(new BookingSlotConflictError("zz").conflictingBookingId).toBe("zz");
   });
 
   it("cancel sets status cancelled; throws if no row", async () => {

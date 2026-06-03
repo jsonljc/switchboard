@@ -2,7 +2,9 @@ import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
 import { getMetrics } from "../../telemetry/metrics.js";
+import { isBookingSlotConflictError } from "@switchboard/schemas";
 import type { CalendarProvider } from "@switchboard/schemas";
+import { resolveProviderOrFail } from "./calendar-book.js";
 
 type UpcomingBooking = {
   id: string;
@@ -85,12 +87,9 @@ export function buildRescheduleOperations(
               "Tell the lead you don't see an upcoming booking and offer to book a new appointment.",
           });
         }
-        const provider = await deps.calendarProviderFactory(orgId);
-        if (!deps.isCalendarProviderConfigured(provider)) {
-          return fail("CALENDAR_NOT_CONFIGURED", "Calendar is not configured.", {
-            retryable: false,
-          });
-        }
+        const resolved = await resolveProviderOrFail(deps, orgId);
+        if ("failure" in resolved) return resolved.failure;
+        const provider = resolved.provider;
         const newSlot = {
           start: input.slotStart,
           end: input.slotEnd,
@@ -105,6 +104,18 @@ export function buildRescheduleOperations(
             endsAt: new Date(input.slotEnd),
           });
         } catch (err) {
+          // The store's overlap guard rejected the move: another LIVE booking
+          // already holds the new slot. Recoverable — re-offer alternatives
+          // instead of claiming the move failed for an unknown reason.
+          if (isBookingSlotConflictError(err)) {
+            getMetrics().bookingSlotConflict.inc({ orgId });
+            return fail("SLOT_TAKEN", "That new time was just taken.", {
+              retryable: true,
+              data: { failureType: "slot_conflict" },
+              modelRemediation:
+                "Re-run calendar-book.slots.query and offer the lead the next available times for the reschedule.",
+            });
+          }
           console.warn("[calendar-reschedule] reschedule failed", err);
           return fail("RESCHEDULE_FAILURE", "I couldn't move that appointment just now.", {
             retryable: false,
@@ -149,12 +160,9 @@ export function buildRescheduleOperations(
             modelRemediation: "Tell the lead you don't see an upcoming booking to cancel.",
           });
         }
-        const provider = await deps.calendarProviderFactory(orgId);
-        if (!deps.isCalendarProviderConfigured(provider)) {
-          return fail("CALENDAR_NOT_CONFIGURED", "Calendar is not configured.", {
-            retryable: false,
-          });
-        }
+        const resolved = await resolveProviderOrFail(deps, orgId);
+        if ("failure" in resolved) return resolved.failure;
+        const provider = resolved.provider;
         try {
           if (target.calendarEventId) await provider.cancelBooking(target.calendarEventId);
           await deps.bookingStore.cancel(orgId, target.id);
