@@ -60,7 +60,7 @@ export { detectSaturation } from "./saturation-detector.js";
 export * from "./lead-intake/index.js";
 export * from "./outcome-dispatcher.js";
 export { RealCrmDataProvider } from "./crm-data-provider/real-provider.js";
-export { compareSources } from "./analyzers/source-comparator.js";
+export { compareSources, compareCampaigns } from "./analyzers/source-comparator.js";
 export {
   resolveEconomicTarget,
   resolveEconomicTargetForCampaign,
@@ -75,6 +75,8 @@ export type {
   SourceComparisonRow,
   SourceComparisonInput,
   SourceComparisonResult,
+  CampaignEconomicsRow,
+  CampaignComparisonInput,
 } from "./analyzers/source-comparator.js";
 export type {
   CrmFunnelStore,

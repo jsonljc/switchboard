@@ -24,7 +24,8 @@ import {
   type EmissionContext,
   type RecommendationEmitter,
 } from "./recommendation-sink.js";
-import { compareSources } from "./analyzers/source-comparator.js";
+import { compareSources, compareCampaigns } from "./analyzers/source-comparator.js";
+import type { CampaignEconomicsRow } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel, CampaignFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
@@ -88,6 +89,23 @@ export interface AuditConfig {
   pixelId?: string;
 }
 
+/**
+ * PR2 Gate-4: per-campaign booked-VALUE provider (the trueROAS numerator).
+ * Injected because the implementation (PrismaConversionRecordStore
+ * .queryBookedValueCentsByCampaign) lives in @switchboard/db (Layer 4) and
+ * ad-optimizer (Layer 2) must not import it. Values are CENTS, keyed by
+ * campaignId; an absent campaign means "no attributed booked value" (→ trueROAS
+ * null), never 0.
+ */
+export interface BookedValueByCampaignProvider {
+  queryBookedValueCentsByCampaign(query: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    campaignIds?: string[];
+  }): Promise<Map<string, number>>;
+}
+
 export interface AuditDependencies {
   adsClient: AdsClientInterface;
   crmDataProvider: CrmDataProvider;
@@ -130,6 +148,10 @@ export interface AuditDependencies {
   coverageValidator?: {
     validate(query: { orgId: string; accountId: string }): Promise<CoverageReport>;
   };
+  /** Optional. Supplies per-campaign booked-VALUE (cents) for trueROAS reporting
+   * in `campaignEconomics`. Absent → trueROAS reported null (graceful). Does NOT
+   * affect the Gate-4 breach basis, which uses booking COUNTS from byCampaign. */
+  bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
 }
 
 // ── Helpers ──
@@ -208,6 +230,7 @@ export class AuditRunner {
   private readonly recommendationEmissionContext?: EmissionContext;
   private readonly signalHealthChecker?: SignalHealthReportProvider;
   private readonly coverageValidator?: AuditDependencies["coverageValidator"];
+  private readonly bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -222,6 +245,7 @@ export class AuditRunner {
     this.recommendationEmissionContext = deps.recommendationEmissionContext;
     this.signalHealthChecker = deps.signalHealthChecker;
     this.coverageValidator = deps.coverageValidator;
+    this.bookedValueByCampaignProvider = deps.bookedValueByCampaignProvider;
 
     if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
       throw new Error(
@@ -478,6 +502,29 @@ export class AuditRunner {
       sourceComparison = compareSources({ bySource, spendBySource });
     }
 
+    // Per-campaign economics (PR2 Gate-4): CPL, cost-per-booked, and trueROAS.
+    // Mirrors sourceComparison; only when the provider gave a per-campaign funnel.
+    // Booked-VALUE (cents) comes from the injected port; absent → empty map →
+    // bookedValueCents/trueRoas null (graceful degradation, never a fabricated 0).
+    let campaignEconomics: { rows: CampaignEconomicsRow[] } | undefined;
+    if (byCampaign && Object.keys(byCampaign).length > 0) {
+      const spendByCampaign: Record<string, number> = {};
+      for (const i of currentInsights) spendByCampaign[i.campaignId] = i.spend;
+      const bookedValueCentsByCampaign = this.bookedValueByCampaignProvider
+        ? await this.bookedValueByCampaignProvider.queryBookedValueCentsByCampaign({
+            orgId: this.config.orgId,
+            from: new Date(dateRange.since),
+            to: new Date(dateRange.until),
+            campaignIds: currentInsights.map((i) => i.campaignId),
+          })
+        : new Map<string, number>();
+      campaignEconomics = compareCampaigns({
+        byCampaign,
+        spendByCampaign,
+        bookedValueCentsByCampaign,
+      });
+    }
+
     // Step 8c: Append signal-health recommendations (non-critical breaches —
     // critical case short-circuited above before per-campaign work began).
     if (signalHealthRecs.length > 0) {
@@ -533,6 +580,7 @@ export class AuditRunner {
       ...(budgetDistribution ? { budgetDistribution } : {}),
       ...(adSetDetails ? { adSetDetails } : {}),
       ...(sourceComparison ? { sourceComparison } : {}),
+      ...(campaignEconomics ? { campaignEconomics } : {}),
     };
   }
 }

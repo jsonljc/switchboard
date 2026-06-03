@@ -231,3 +231,70 @@ describe("AuditRunner PR2 Gate-4 per-campaign target", () => {
     );
   });
 });
+
+describe("AuditRunner PR2 Gate-4 campaignEconomics", () => {
+  function depsWithByCampaign(): AuditDependencies {
+    const insight = makeCampaignInsight({
+      campaignId: "c1",
+      spend: 400,
+      conversions: 20,
+      revenue: 0,
+    });
+    const deps = buildMockDeps({ currentInsights: [insight], previousInsights: [insight] });
+    (deps.crmDataProvider.getFunnelData as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...makeFunnelData(),
+      campaignIds: ["c1"],
+      leads: 20,
+      bookings: 4,
+      byCampaign: { c1: { received: 20, qualified: 8, booked: 4, showed: 0, paid: 0, revenue: 0 } },
+    });
+    return deps;
+  }
+  const baseConfig = (): AuditConfig => ({
+    accountId: "act-1",
+    orgId: "org-1",
+    targetCPA: 50,
+    targetROAS: 2,
+    mediaBenchmarks: makeMediaBenchmarks(),
+  });
+
+  it("surfaces per-campaign trueROAS (cents→major normalized once) when the booked-value port is wired", async () => {
+    const deps = depsWithByCampaign();
+    const port = {
+      queryBookedValueCentsByCampaign: vi.fn().mockResolvedValue(new Map([["c1", 90000]])),
+    };
+    const report = await new AuditRunner({
+      ...deps,
+      config: baseConfig(),
+      bookedValueByCampaignProvider: port,
+    }).run(RANGE);
+    const row = report.campaignEconomics?.rows.find((r) => r.campaignId === "c1");
+    expect(row?.costPerBooked).toBe(100); // spend 400 / booked 4
+    expect(row?.bookedValueCents).toBe(90000);
+    expect(row?.trueRoas).toBe(2.25); // ($900) / $400 — cents normalized only here
+    expect(port.queryBookedValueCentsByCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org-1", campaignIds: ["c1"] }),
+    );
+  });
+
+  it("degrades gracefully when the booked-value port is absent (trueROAS null, no throw)", async () => {
+    const deps = depsWithByCampaign();
+    const report = await new AuditRunner({ ...deps, config: baseConfig() }).run(RANGE);
+    const row = report.campaignEconomics?.rows.find((r) => r.campaignId === "c1");
+    expect(row?.costPerBooked).toBe(100);
+    expect(row?.bookedValueCents).toBeNull();
+    expect(row?.trueRoas).toBeNull();
+  });
+
+  it("omits campaignEconomics when the CRM provider returns no per-campaign funnel", async () => {
+    const insight = makeCampaignInsight({
+      campaignId: "c1",
+      spend: 400,
+      conversions: 20,
+      revenue: 0,
+    });
+    const deps = buildMockDeps({ currentInsights: [insight], previousInsights: [insight] });
+    const report = await new AuditRunner({ ...deps, config: baseConfig() }).run(RANGE);
+    expect(report.campaignEconomics).toBeUndefined();
+  });
+});
