@@ -478,7 +478,11 @@ describe("SkillExecutorImpl", () => {
     ).rejects.toThrow(SkillExecutionBudgetError);
   });
 
-  it("enforces runtime timeout", async () => {
+  it("enforces the per-call deadline via the race backstop (non-cooperative adapter)", async () => {
+    // This mock ignores the abort signal (it just resolves after a delay that
+    // outlasts the per-call deadline). It proves the Promise.race BACKSTOP still
+    // unblocks execute() with SkillExecutionBudgetError even when the adapter does
+    // not honor abort. A short policy keeps the suite fast (was a 35s mock).
     const slowAdapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockImplementation(
         () =>
@@ -490,13 +494,14 @@ describe("SkillExecutorImpl", () => {
                   stopReason: "end_turn",
                   usage: { inputTokens: 100, outputTokens: 50 },
                 }),
-              35_000,
+              500,
             ),
           ),
       ),
     };
 
-    const executor = new SkillExecutorImpl(slowAdapter, new Map());
+    const policy = { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmCallMs: 30, maxRuntimeMs: 60 };
+    const executor = new SkillExecutorImpl(slowAdapter, new Map(), undefined, [], policy);
 
     await expect(
       executor.execute({
@@ -509,7 +514,7 @@ describe("SkillExecutorImpl", () => {
         trustLevel: "guided",
       }),
     ).rejects.toThrow(SkillExecutionBudgetError);
-  }, 40_000);
+  });
 
   it("returns trace data with execution metadata", async () => {
     const adapter = createMockAdapter([
@@ -725,6 +730,42 @@ describe("SkillExecutorImpl", () => {
     await expect(exec.execute(traceBaseParams())).rejects.toThrow(SkillExecutionBudgetError);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toBeInstanceOf(SkillExecutionBudgetError);
+  });
+
+  // --- C3: abort the in-flight LLM call on the per-call deadline ---
+
+  it("aborts the in-flight LLM call when the per-call deadline fires", async () => {
+    // The fake adapter NEVER resolves on its own; only the executor's per-call
+    // deadline (AbortController) can end the turn. This proves the in-flight call
+    // is actually aborted — not merely that the outer race resolves.
+    let receivedSignal: AbortSignal | undefined;
+    const adapter: ToolCallingLLMAdapter = {
+      chatWithTools: (p: { signal?: AbortSignal }) => {
+        receivedSignal = p.signal;
+        return new Promise((_res, rej) => {
+          p.signal?.addEventListener("abort", () =>
+            rej(Object.assign(new Error("aborted"), { name: "AbortError" })),
+          );
+        });
+      },
+    };
+    // Short policy so the deadline fires in milliseconds (suite stays fast).
+    const policy = { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmCallMs: 30, maxRuntimeMs: 60 };
+    const exec = new SkillExecutorImpl(adapter, new Map(), undefined, [], policy);
+    await expect(
+      exec.execute({
+        skill: mockSkill,
+        parameters: { NAME: "X" },
+        messages: [{ role: "user", content: "hi" }],
+        deploymentId: "d1",
+        orgId: "org1",
+        trustScore: 50,
+        trustLevel: "guided",
+      }),
+    ).rejects.toThrow(SkillExecutionBudgetError);
+    // The load-bearing assertion: the signal handed to the adapter was aborted.
+    expect(receivedSignal).toBeDefined();
+    expect(receivedSignal?.aborted).toBe(true);
   });
 
   // --- B2: conversation-depth tiering (router ON) ---
