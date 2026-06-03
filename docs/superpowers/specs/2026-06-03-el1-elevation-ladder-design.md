@@ -128,7 +128,8 @@ Extend `apps/dashboard/src/app/__tests__/token-governance.test.ts` with an `elev
 2. `--shadow-1` through `--shadow-5` are defined in `globals.css` and contain NO literal color (only `hsl(var(--shadow-color) / a)`).
 3. The semantic tokens repoint at the ladder: `--shadow-card` equals `var(--shadow-1)`, `--shadow-lift` equals `var(--shadow-3)`; `--shadow-sheet` references `var(--shadow-color)` (no literal rgba).
 4. Single source: no `--shadow*` custom property is DEFINED outside `globals.css`.
-5. Governed-source sweep: every `box-shadow:` / `boxShadow:` USAGE in governed source (the existing `collectGovernedFiles()` roots: `src/app`, `src/components`, `src/lib`, `src/styles`; tests, `-variants.ts`, and the stripped `.dark` block excluded) has NO literal color in its value.
+5. Governed-source sweep: every `box-shadow:` (CSS) and `boxShadow:` / `boxShadow =` (JSX prop or imperative assignment, in quotes or backticks) USAGE in governed source (the existing `collectGovernedFiles()` roots: `src/app`, `src/components`, `src/lib`, `src/styles`; tests, `-variants.ts`, and the stripped `.dark` block excluded) has NO literal color in its value.
+6. Tailwind shadow utilities: no governed `.tsx`/`.ts` outside a documented residual allowlist uses a built-in `shadow-{sm,md,lg,xl,2xl}` or an arbitrary `shadow-[...]` carrying a literal color. Only `shadow-none` and `shadow-[var(--shadow-N)]` are allowed on in-scope surfaces. This closes the Tailwind-class literal-color vector the CSS sweep cannot see.
 
 ### 4.2 What counts as a violation
 
@@ -138,7 +139,9 @@ A box-shadow USAGE value containing a literal color: `rgba?(` followed by a digi
 
 - `none`, `inherit`, `unset`, and any value that is only `var(...)` references.
 - Spread-only rings: a single-shadow value shaped `0 0 0 Npx <color>`. These are focus rings, status-dot halos, and pulse keyframes, which are NOT elevation (Principle: focus rings are not shadows; the global `:focus-visible` outline stays). This structural exemption covers the login input focus rings and the home status-dot halos without an allowlist.
-- A genuine one-off effect marked with a `/* shadow-allow: <reason> */` comment on the `box-shadow:` line or the line directly above it (mirrors the existing `token-debt: ... expires` mechanism). The only planned use is the animated amber `armPulse` keyframe on the swipe card, a bespoke decorative effect that is not elevation and not worth a token.
+- The Tailwind built-in residual allowlist (marketing `landing/`, the flag-hidden `operator-chat/` widget [#825], `settings/` [#826], the dev-only `dev/` panel, and the small non-overlay `ui/switch.tsx` + `ui/tabs.tsx`). These keep their built-in Tailwind shadows as a documented EL1 residual; new authed surfaces must use the ladder.
+
+There is no `shadow-allow` escape hatch: the one animated one-off (the amber `armPulse` keyframe) is composed from a token (`--shadow-arm-base`) plus a var ring, so it carries no literal color and needs no bypass.
 
 CSS `/* ... */` comments are stripped before scanning so commented-out shadows never false-positive.
 
@@ -146,10 +149,10 @@ CSS `/* ... */` comments are stripped before scanning so commented-out shadows n
 
 In scope (migrated this PR):
 
-- `globals.css`: add base + ladder + gloss tokens; repoint `--shadow-card`/`--shadow-lift`; rebase `--shadow-sheet`; migrate the line-1329 status-pill inline shadow to `var(--shadow-3)`; add the `.dark` base override.
+- `globals.css`: add base + ladder + gloss + `--shadow-arm-base` tokens; repoint `--shadow-card`/`--shadow-lift`; rebase `--shadow-sheet`; migrate the status-pill inline shadow to `var(--shadow-3)`; add the `.dark` base override.
 - `inbox-design-base.css`: delete the three scoped `--shadow*` redefs; rebase the right-drawer leftward shadow onto `hsl(var(--shadow-color) / 0.10)`.
 - `home.module.css`, `swipe-decision-card.module.css`, `inbox.css`: point the amber primary button at `var(--shadow-action-gloss)`.
-- `swipe-decision-card.module.css`: mark the `armPulse` keyframe with `shadow-allow`.
+- `swipe-decision-card.module.css`: compose the `armPulse` keyframe from `var(--shadow-arm-base)` plus the var ring (no literal color, no allowlist).
 - `results.module.css`: window-toggle `rgba(0,0,0)` to `var(--shadow-1)`.
 - `activity.module.css`: stale pill and menu to `var(--shadow-3)`.
 - `contacts/pipeline.module.css`: `.card:hover` to `var(--shadow-2)`, toast to `var(--shadow-3)`; the drag-over inset ring uses `var(--mercury-accent)` already (a var color, not flagged), left as-is.
@@ -160,7 +163,7 @@ In scope (migrated this PR):
 
 Out of scope (documented residual, NOT migrated):
 
-- Small / non-overlay Tailwind `shadow-sm` / `shadow-lg` on the switch thumb, tabs active state, settings selected tiles, onboarding pills, and the dev-only panel. These are not elevation-role surfaces; their cool-black at small size is negligible, and changing them risks unrelated visual regressions. The drift guard does not police Tailwind utility classes, so there is no conflict. A follow-up may fold them in.
+- Small / non-overlay Tailwind `shadow-sm` / `shadow-lg` on the switch thumb, tabs active state, settings selected tiles, onboarding pills, and the dev-only panel. These are not elevation-role surfaces; their cool-black at small size is negligible, and changing them risks unrelated visual regressions. The drift guard grandfathers these specific files in a documented allowlist (so they pass) while failing any NEW built-in Tailwind shadow on an in-scope surface. A follow-up may fold them onto the ladder.
 - The marketing landing (`landing-v6.css` and `components/landing/v6/*`) uses hand-tuned arbitrary `shadow-[...]` values; out of the authed-app EL1 scope.
 - The login input focus rings (exempt as `0 0 0` rings; login uses the public stone design system; leave untouched to avoid auth-page risk).
 - The green "live" pulse keyframes in `tailwind.config.ts` (outside the governed-source roots; not elevation).
