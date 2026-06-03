@@ -29,6 +29,7 @@ export type {
 } from "./audit-runner.js";
 export {
   createWeeklyAuditCron,
+  executeWeeklyAudit,
   createDailyCheckCron,
   createDailySignalHealthCron,
   executeDailySignalHealthCheck,
