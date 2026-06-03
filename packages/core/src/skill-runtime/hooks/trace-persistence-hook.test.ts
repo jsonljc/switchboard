@@ -80,6 +80,18 @@ describe("TracePersistenceHook", () => {
     expect(counter.get?.() ?? 1).toBeGreaterThan(0);
   });
 
+  it("emits the per-model cost counter on afterSkill", async () => {
+    const metrics = createInMemoryMetrics();
+    setMetrics(metrics);
+    const hook = new TracePersistenceHook({ create: async () => {} }, { trigger: "chat_message" });
+    await hook.afterSkill(
+      baseCtx({}),
+      resultWith({ input: 100, output: 20, cacheRead: 5000, model: "claude-sonnet-4-6" }),
+    );
+    const costCounter = metrics.skillLlmCostUsdTotal as unknown as { get?: () => number };
+    expect(costCounter.get?.() ?? 0).toBeGreaterThan(0);
+  });
+
   it("persists an error trace with the budget_exceeded status onError", async () => {
     const created: SkillExecutionTrace[] = [];
     const hook = new TracePersistenceHook(

@@ -93,6 +93,7 @@ export class TracePersistenceHook
       createdAt: new Date(),
     };
     this.emitTokenCounters(model ?? "unknown", trace.tokenUsage);
+    getMetrics().skillLlmCostUsdTotal.inc({ model: model ?? "unknown" }, totalCost);
     try {
       await this.traceStore.create(trace);
     } catch (err) {
