@@ -21,7 +21,12 @@ export {
 } from "./campaign-decision.js";
 export type { CampaignDecisionInput, CampaignDecisionResult } from "./campaign-decision.js";
 export { AuditRunner } from "./audit-runner.js";
-export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
+export type {
+  AuditDependencies,
+  AuditConfig,
+  AdsClientInterface,
+  BookedValueByCampaignProvider,
+} from "./audit-runner.js";
 export {
   createWeeklyAuditCron,
   createDailyCheckCron,
@@ -60,12 +65,23 @@ export { detectSaturation } from "./saturation-detector.js";
 export * from "./lead-intake/index.js";
 export * from "./outcome-dispatcher.js";
 export { RealCrmDataProvider } from "./crm-data-provider/real-provider.js";
-export { compareSources } from "./analyzers/source-comparator.js";
+export { compareSources, compareCampaigns } from "./analyzers/source-comparator.js";
+export {
+  resolveEconomicTarget,
+  resolveEconomicTargetForCampaign,
+} from "./analyzers/economic-target.js";
+export type {
+  ResolvedEconomicTarget,
+  PerCampaignEconomicTarget,
+  PerCampaignEconomicTargetInput,
+} from "./analyzers/economic-target.js";
 export * from "./onboarding/coverage-validator.js";
 export type {
   SourceComparisonRow,
   SourceComparisonInput,
   SourceComparisonResult,
+  CampaignEconomicsRow,
+  CampaignComparisonInput,
 } from "./analyzers/source-comparator.js";
 export type {
   CrmFunnelStore,

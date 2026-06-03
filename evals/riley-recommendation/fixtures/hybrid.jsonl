@@ -1,0 +1,12 @@
+# PR2 Gate-4 hybrid per-campaign target fixtures. Each `hybrid` block is resolved
+# through the REAL resolveEconomicTargetForCampaign (the live audit-runner seam) and
+# the result is fed into decideForCampaign. expectedTargetSource pins Tier-1 vs Tier-2.
+#
+# (a) Tier-1: campaign clears the booking floor (12 booked >= 10) with $100/booked +
+# 30 conv -> own calibrated target $40 (= 100 x 12/30). CPL 6000/30 = $200 > 3x40 ->
+# durable breach pauses on the campaign's OWN target. targetSource = campaign.
+{"id":"hybrid-tier1-campaign-breach","current":{"impressions":20000,"inlineLinkClicks":600,"spend":6000,"conversions":30,"revenue":0,"frequency":1.4},"previous":{"impressions":20000,"inlineLinkClicks":600,"spend":6000,"conversions":30,"revenue":0,"frequency":1.4},"targetBreach":{"periodsAboveTarget":9,"granularity":"daily"},"learningState":"success","economicTier":"booked_cac","effectiveTarget":40,"targetROAS":3,"hybrid":{"campaignBookings":12,"campaignConversions":30,"targetCostPerBooked":100,"accountTarget":{"economicTier":"cpl","effectiveTarget":50}},"expectedTargetSource":"campaign","expectedOutcome":"add_creative","expectedActions":["add_creative","pause"],"notes":"12 booked >=10 + $100/booked, 30 conv -> per-campaign Tier-1 target $40. Judged on the campaign's own target, not the account fallback."}
+# (b) Tier-2: campaign below the booking floor (3 booked < 10) -> per-campaign Tier-1
+# unavailable -> delegates to the account target (cpl @ $50). CPL 8000/40 = $200 >
+# 3x50 -> durable breach pauses on the ACCOUNT target. targetSource = account.
+{"id":"hybrid-tier2-account-fallback","current":{"impressions":20000,"inlineLinkClicks":600,"spend":8000,"conversions":40,"revenue":0,"frequency":1.4},"previous":{"impressions":20000,"inlineLinkClicks":600,"spend":8000,"conversions":40,"revenue":0,"frequency":1.4},"targetBreach":{"periodsAboveTarget":9,"granularity":"daily"},"learningState":"success","economicTier":"cpl","effectiveTarget":50,"targetROAS":3,"hybrid":{"campaignBookings":3,"campaignConversions":40,"targetCostPerBooked":100,"accountTarget":{"economicTier":"cpl","effectiveTarget":50}},"expectedTargetSource":"account","expectedOutcome":"add_creative","expectedActions":["add_creative","pause"],"notes":"3 booked <10 -> per-campaign Tier-1 unavailable -> account fallback cpl@50. Judged on the account target."}
