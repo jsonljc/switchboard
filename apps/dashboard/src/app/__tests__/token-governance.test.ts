@@ -453,4 +453,19 @@ describe("token governance — paper grain (GR1)", () => {
       /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*body:has\(\.app-header\)\s*\{\s*background-image:\s*none/,
     );
   });
+
+  it("Results money cards are opaque so grain never sits behind money data", () => {
+    const resultsCss = readFileSync(
+      path.resolve(process.cwd(), "src/components/results/results.module.css"),
+      "utf8",
+    );
+    for (const sel of ["campaignCard", "agentCard"]) {
+      const rule = resultsCss.match(new RegExp(`\\.${sel}\\s*\\{([^}]*)\\}`));
+      expect(rule, `.${sel} rule must exist`).not.toBeNull();
+      expect(rule![1], `.${sel} must not be transparent`).not.toMatch(/background:\s*transparent/);
+      expect(rule![1], `.${sel} must carry an opaque ground`).toMatch(
+        /background:\s*var\(--canvas-2\)/,
+      );
+    }
+  });
 });
