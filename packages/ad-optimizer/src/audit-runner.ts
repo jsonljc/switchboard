@@ -26,9 +26,12 @@ import {
 } from "./recommendation-sink.js";
 import { compareSources } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
-import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
+import type { SourceFunnel, CampaignFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
-import { resolveEconomicTarget } from "./analyzers/economic-target.js";
+import {
+  resolveEconomicTarget,
+  resolveEconomicTargetForCampaign,
+} from "./analyzers/economic-target.js";
 import { decideForCampaign, deriveLearningPhaseActive } from "./campaign-decision.js";
 import {
   isCoverageSufficient,
@@ -366,6 +369,10 @@ export class AuditRunner {
     // awareness is reported unavailable, never silently satisfied (spec §3.4).
     const marginBasis: MarginBasis = "unavailable";
 
+    // PR2 Gate-4: per-campaign booking funnel (CRM real-provider only). Absent
+    // for non-real providers → every campaign falls back to the account target.
+    const byCampaign = (crmData as { byCampaign?: Record<string, CampaignFunnel> }).byCampaign;
+
     // Step 5: Per-campaign loop
     const insights: InsightOutput[] = [];
     const watches: WatchOutput[] = [];
@@ -394,6 +401,20 @@ export class AuditRunner {
       const learningPhaseActive = deriveLearningPhaseActive(learningStatus.state);
       if (learningPhaseActive) campaignsInLearning++;
 
+      // 5a-bis (PR2 Gate-4): judge THIS campaign against its own booking-
+      // calibrated CAC (Tier-1) when it clears the booking floor; otherwise the
+      // account-level target (Tier-2). The account {economicTier, effectiveTarget}
+      // resolved once above is the Tier-2 fallback. byCampaign absent → bookings 0
+      // → account fallback (graceful degradation).
+      const campaignTarget = resolveEconomicTargetForCampaign({
+        campaignBookings: byCampaign?.[insight.campaignId]?.booked ?? 0,
+        campaignConversions: insight.conversions,
+        ...(this.config.targetCostPerBooked !== undefined
+          ? { targetCostPerBooked: this.config.targetCostPerBooked }
+          : {}),
+        accountTarget: { economicTier, effectiveTarget },
+      });
+
       // 5b–5g: Pure per-campaign decision. The provider call for target-breach
       // status is the only side effect; everything downstream is deterministic
       // and lives in decideForCampaign (the model-free eval seam).
@@ -402,7 +423,7 @@ export class AuditRunner {
         orgId: this.config.orgId,
         accountId: this.config.accountId,
         campaignId: insight.campaignId,
-        targetCPA: effectiveTarget,
+        targetCPA: campaignTarget.effectiveTarget,
         startDate: new Date(dateRange.since),
         endDate: new Date(dateRange.until),
         ...(this.config.conversionActionType
@@ -419,13 +440,14 @@ export class AuditRunner {
         previousInsight: prevInsight,
         targetBreach,
         learningStatus,
-        economicTier,
-        effectiveTarget,
+        economicTier: campaignTarget.economicTier,
+        effectiveTarget: campaignTarget.effectiveTarget,
         marginBasis,
         targetROAS: this.config.targetROAS,
         nextCycleDate,
         measurementTrusted,
         learningPhaseActive,
+        targetSource: campaignTarget.targetSource,
       });
       insights.push(...decision.insights);
       watches.push(...decision.watches);
