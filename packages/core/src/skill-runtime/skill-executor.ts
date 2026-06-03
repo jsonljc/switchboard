@@ -209,6 +209,9 @@ export class SkillExecutorImpl implements SkillExecutor {
     const toolCallRecords: ToolCallRecord[] = [];
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let totalCacheReadTokens = 0;
+    let totalCacheCreationTokens = 0;
+    let lastModel: string | undefined;
     let turnCount = 0;
     const startTime = Date.now();
 
@@ -276,10 +279,17 @@ export class SkillExecutorImpl implements SkillExecutor {
 
       totalInputTokens += response.usage.inputTokens;
       totalOutputTokens += response.usage.outputTokens;
+      totalCacheReadTokens += response.usage.cacheReadTokens ?? 0;
+      totalCacheCreationTokens += response.usage.cacheCreationTokens ?? 0;
+      if (response.model) lastModel = response.model;
 
-      if (totalInputTokens + totalOutputTokens > this.policy.maxTotalTokens) {
+      // Hard budget gates on full-price (uncached) tokens only. Anthropic reports
+      // cache reads/creations separately from input_tokens, so a large cached prefix
+      // re-read every turn is near-free and must NOT exhaust the token budget.
+      const billableTokens = totalInputTokens + totalOutputTokens;
+      if (billableTokens > this.policy.maxTotalTokens) {
         throw new SkillExecutionBudgetError(
-          `Exceeded token budget (${totalInputTokens + totalOutputTokens} > ${this.policy.maxTotalTokens})`,
+          `Exceeded token budget (${billableTokens} > ${this.policy.maxTotalTokens})`,
         );
       }
 
@@ -330,7 +340,12 @@ export class SkillExecutorImpl implements SkillExecutor {
         return {
           response: responseText,
           toolCalls: toolCallRecords,
-          tokenUsage: { input: totalInputTokens, output: totalOutputTokens },
+          tokenUsage: {
+            input: totalInputTokens,
+            output: totalOutputTokens,
+            cacheRead: totalCacheReadTokens,
+            cacheCreation: totalCacheCreationTokens,
+          },
           trace: {
             durationMs: Date.now() - startTime,
             turnCount,
@@ -347,6 +362,7 @@ export class SkillExecutorImpl implements SkillExecutor {
             }).length,
             governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
             qualificationSignals: sidecar.persisted,
+            ...(lastModel ? { model: lastModel } : {}),
           },
           ...(intentClass ? { intentClass } : {}),
           ...(sidecar.persisted?.validationStatus === "ok"

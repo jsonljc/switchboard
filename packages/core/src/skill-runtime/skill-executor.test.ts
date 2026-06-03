@@ -569,6 +569,41 @@ describe("SkillExecutorImpl", () => {
     expect(result.trace.governanceDecisions).toHaveLength(1);
     expect(result.trace.governanceDecisions[0]!.tier).toBe("write");
   });
+
+  it("accumulates cache tokens + model and keeps the budget on full-price tokens", async () => {
+    // A large cache_read (5000) plus tiny full-price input+output (120) must NOT
+    // trip the 64k budget — the budget gates on billable (uncached) tokens only.
+    const adapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "Hi there" }],
+        stopReason: "end_turn",
+        model: "claude-sonnet-4-6",
+        usage: {
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 5000,
+          cacheCreationTokens: 0,
+        },
+      }),
+    };
+
+    const executor = new SkillExecutorImpl(adapter, new Map());
+    const result = await executor.execute({
+      skill: mockSkill,
+      parameters: { NAME: "Alice" },
+      messages: [{ role: "user", content: "hello" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+
+    expect(result.tokenUsage.cacheRead).toBe(5000);
+    expect(result.tokenUsage.cacheCreation).toBe(0);
+    expect(result.trace.model).toBe("claude-sonnet-4-6");
+    // large cache_read must NOT trip the 64k budget (full-price input+output is only 120):
+    expect(result.trace.status).toBe("success");
+  });
 });
 
 describe("parseIntentTag", () => {

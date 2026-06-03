@@ -104,7 +104,12 @@ export interface SkillExecutionParams {
 export interface SkillExecutionResult {
   response: string;
   toolCalls: ToolCallRecord[];
-  tokenUsage: { input: number; output: number };
+  tokenUsage: {
+    input: number;
+    output: number;
+    cacheRead?: number;
+    cacheCreation?: number;
+  };
   trace: SkillExecutionTraceData;
   /**
    * OPTIONAL. When set, indicates the LLM declared this outbound serves a specific
@@ -152,6 +157,9 @@ export interface SkillExecutionTraceData {
    * config — parsing and stripping is always-on (spec §7.1).
    */
   qualificationSignals: WorkTraceQualificationSignals | null;
+  /** Concrete model that produced the final response (for telemetry). The recorder
+   *  derives costUsd from this + the token breakdown — the executor does not compute cost. */
+  model?: string;
 }
 
 export interface SkillExecutionTrace {
