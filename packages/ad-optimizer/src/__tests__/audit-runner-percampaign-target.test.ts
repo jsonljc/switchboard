@@ -5,6 +5,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { AuditRunner } from "../audit-runner.js";
 import type { AuditDependencies, AdsClientInterface, AuditConfig } from "../audit-runner.js";
+import type { RecommendationEmitter } from "../recommendation-sink.js";
+import type { RecommendationInput } from "@switchboard/schemas";
 import type {
   CampaignInsightSchema as CampaignInsight,
   AccountSummarySchema as AccountSummary,
@@ -303,5 +305,70 @@ describe("AuditRunner PR2 Gate-4 campaignEconomics", () => {
     const deps = buildMockDeps({ currentInsights: [insight], previousInsights: [insight] });
     const report = await new AuditRunner({ ...deps, config: baseConfig() }).run(RANGE);
     expect(report.campaignEconomics).toBeUndefined();
+  });
+});
+
+describe("AuditRunner PR2 Gate-4 — economic basis + per-campaign economics reach the emitted presentation", () => {
+  it("threads campaignEconomics + targetSource through the sink into each rec's approval dataLines", async () => {
+    // c1 strong booker: spend 6000, conv 30, booked 12, targetCostPerBooked 100
+    // → per-campaign target $40 (Tier-1, booked_cac, targetSource=campaign), with a
+    // breach (periodsAboveTarget 9) producing a pause rec. Booked-value port wired so
+    // trueROAS is non-null. This locks the full audit-runner → sink → presentation
+    // thread (the "computed-then-discarded" trap: the field is dropped unless the
+    // audit-runner passes campaignEconomics into runRecommendationSink).
+    const c1 = makeCampaignInsight({ campaignId: "c1", spend: 6000, conversions: 30, revenue: 0 });
+    const deps = buildMockDeps({ currentInsights: [c1], previousInsights: [c1] });
+    (deps.crmDataProvider.getFunnelData as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...makeFunnelData(),
+      campaignIds: ["c1"],
+      leads: 30,
+      bookings: 12,
+      byCampaign: {
+        c1: { received: 30, qualified: 20, booked: 12, showed: 0, paid: 0, revenue: 0 },
+      },
+    });
+    (deps.insightsProvider.getTargetBreachStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      periodsAboveTarget: 9,
+      granularity: "daily",
+      isApproximate: false,
+    });
+    const captured: RecommendationInput[] = [];
+    const emit: RecommendationEmitter = vi.fn(async (input) => {
+      captured.push(input);
+      return { surface: "queue" as const };
+    });
+    const config: AuditConfig = {
+      accountId: "act-1",
+      orgId: "org-1",
+      targetCPA: 50,
+      targetROAS: 2,
+      targetCostPerBooked: 100,
+      mediaBenchmarks: makeMediaBenchmarks(),
+    };
+
+    await new AuditRunner({
+      ...deps,
+      config,
+      bookedValueByCampaignProvider: {
+        // 1_200_000 cents = $12,000 booked value; trueROAS = 12000 / 6000 = 2.0
+        queryBookedValueCentsByCampaign: vi.fn().mockResolvedValue(new Map([["c1", 1_200_000]])),
+      },
+      recommendationEmitter: emit,
+      recommendationEmissionContext: { cronId: "cron-econ", deploymentId: "dep-1" },
+    }).run(RANGE);
+
+    const c1Pause = captured.find(
+      (i) =>
+        (i.targetEntities as { campaignId?: string } | null)?.campaignId === "c1" &&
+        i.action === "pause",
+    );
+    expect(c1Pause, "expected a c1 pause recommendation to be emitted").toBeDefined();
+    const flat = (c1Pause!.presentation.dataLines as unknown as string[][]).map((l) =>
+      l.join(" · "),
+    );
+    // (a) basis: the campaign's own target judged it (Tier-1)
+    expect(flat).toContain("Judged against this campaign's own booked-CAC target.");
+    // (b) per-campaign economics: CPL 6000/30, cost-per-booked 6000/12, trueROAS 2.0
+    expect(flat).toContain("CPL $200 · $500/booked · 2.0x true ROAS");
   });
 });

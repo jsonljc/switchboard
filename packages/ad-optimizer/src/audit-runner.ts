@@ -544,6 +544,10 @@ export class AuditRunner {
         recommendations,
         emit: this.recommendationEmitter,
         emissionContext: this.recommendationEmissionContext!,
+        // PR2 Gate-4: per-campaign economics (built above) so each rec's approval
+        // card surfaces its own CPL / cost-per-booked / true ROAS. Omitted when the
+        // provider returned no per-campaign funnel (graceful — no economics line).
+        ...(campaignEconomics ? { campaignEconomics } : {}),
       });
       // v1: log the rollup. v1.5 will write a first-class activity-trail event
       // (deferred — AgentEvent requires deploymentId not yet in AuditConfig).
