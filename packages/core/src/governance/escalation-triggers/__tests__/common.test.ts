@@ -21,6 +21,10 @@ describe("COMMON_ESCALATION_TRIGGERS — T1.2a bare anxiety narrowing", () => {
     expect(matchedIds("I get panic attacks")).toContain("sensitive_keyword_mental_health");
     expect(matchedIds("I feel suicidal")).toContain("sensitive_keyword_mental_health");
     expect(matchedIds("I struggle with depression")).toContain("sensitive_keyword_mental_health");
+    expect(matchedIds("I have a history of anxiety")).toContain("sensitive_keyword_mental_health");
+    expect(matchedIds("I've been dealing with anxiety every day")).toContain(
+      "sensitive_keyword_mental_health",
+    );
   });
 });
 
@@ -76,6 +80,11 @@ describe("COMMON_ESCALATION_TRIGGERS — T1.5 self-disclosed minor", () => {
     expect(matchedIds("im 14 is that ok")).toContain("sensitive_keyword_minor");
     expect(matchedIds("I'm a minor")).toContain("sensitive_keyword_minor");
     expect(matchedIds("I'm 16yo")).toContain("sensitive_keyword_minor");
+    // curly apostrophe (mobile autocorrect) must still match
+    expect(matchedIds("I’m 16, can I get fillers?")).toContain("sensitive_keyword_minor");
+    // recent birthday => currently a minor
+    expect(matchedIds("I turned 17 last week")).toContain("sensitive_keyword_minor");
+    expect(matchedIds("I just turned 16")).toContain("sensitive_keyword_minor");
   });
 
   it("still escalates the existing third-party minor phrasing", () => {
@@ -93,5 +102,6 @@ describe("COMMON_ESCALATION_TRIGGERS — T1.5 self-disclosed minor", () => {
     expect(matchedIds("I was 16 when I started coming here")).not.toContain(
       "sensitive_keyword_minor",
     );
+    expect(matchedIds("I just turned 18 yesterday")).not.toContain("sensitive_keyword_minor");
   });
 });

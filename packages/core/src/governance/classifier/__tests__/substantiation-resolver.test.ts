@@ -253,4 +253,22 @@ describe("createSubstantiationResolver", () => {
     });
     expect(res.status).toBe("missing");
   });
+
+  it("does NOT paraphrase-match a claim that reduces to a single significant token", async () => {
+    const resolver = createSubstantiationResolver({
+      approvedClaimStore: makeStore([freshClaim({ claimText: "works for you" })]),
+      regulatoryLoader: () => [],
+      cache: createInMemoryLRU(),
+      clock: () => NOW,
+    });
+    const res = await resolver.resolve({
+      // contains "works" but is not the approved claim; the >=2-token floor stops
+      // the single content word "works" from trivially substantiating the claim.
+      sentence: "Our approach works in many different ways.",
+      claimType: "efficacy",
+      jurisdiction: "SG",
+      deploymentId: "dep_1",
+    });
+    expect(res.status).toBe("missing");
+  });
 });

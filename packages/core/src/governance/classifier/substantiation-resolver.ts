@@ -96,12 +96,19 @@ function significantTokens(textLower: string): string[] {
  * paraphrases without ever matching a sentence that omits a key claim term — the
  * failure mode of a fuzzy matcher is a false positive (an unsubstantiated claim
  * allowed), so containment is required at 1.0 plus a negation guard. Numbers are
- * kept as significant tokens so "50%" never substantiates "80%".
+ * kept as significant tokens so "50%" never substantiates "80%". A >=2 significant
+ * token floor prevents a claim that reduces to one content word (e.g. "safe for
+ * you" -> ["safe"]) from being trivially satisfied by any sentence containing that
+ * word; such claims fall back to exact-substring only. Known bound: for a 2-token
+ * claim an unrelated sentence that happens to contain both words is still matched
+ * (acceptable — it is the under-escalation direction, runs only after the
+ * classifier flags a claim above the confidence floor, and only against the org's
+ * own approved list).
  */
 function paraphraseMatches(sentenceLower: string, claimLower: string): boolean {
   if (NEGATION_RE.test(sentenceLower)) return false;
   const claimTokens = significantTokens(claimLower);
-  if (claimTokens.length === 0) return false;
+  if (claimTokens.length < 2) return false;
   const sentenceTokens = new Set(significantTokens(sentenceLower));
   return claimTokens.every((t) => sentenceTokens.has(t));
 }

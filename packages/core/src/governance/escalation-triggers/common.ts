@@ -56,14 +56,17 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
     patterns: [
       /\b(my (daughter|son)|teenage|under ?\s?(16|18))\b/i,
       // T1.5: self-disclosed age 10-17 (numeric or spelled). Present-tense only
-      // ("I'm"/"I am"); past-tense "I was 16" is adult reminiscence, not a minor.
-      // The unit lookahead rejects duration/measure phrasings ("16 years of
-      // experience", "16 weeks", "160cm"); \b after 1[0-7] rejects "160"; 18 is
-      // excluded (can consent).
-      /\bi(?:'?m| am)\s+(?:only\s+|just\s+|almost\s+|nearly\s+|turning\s+)?(1[0-7]|thirteen|fourteen|fifteen|sixteen|seventeen)\b(?!\s*(?:years?\s+of|weeks?|months?|days?|hours?|min(?:ute)?s?|kg|kgs|lbs?|pounds?|stone|cm|%|percent|sessions?|times?|grand|dollars?))/i,
+      // ("I'm"/"I am"/"I (just) turned"); past-tense "I was 16" is adult
+      // reminiscence, not a minor. The unit lookahead rejects duration/measure
+      // phrasings ("16 years of experience", "16 weeks", "160cm"); \b after 1[0-7]
+      // rejects "160"; 18 is excluded (can consent). ['’] accepts a curly
+      // apostrophe (mobile autocorrect) as well as a straight one.
+      /\bi(?:['’]?m| am)\s+(?:only\s+|just\s+|almost\s+|nearly\s+|turning\s+)?(1[0-7]|thirteen|fourteen|fifteen|sixteen|seventeen)\b(?!\s*(?:years?\s+of|weeks?|months?|days?|hours?|min(?:ute)?s?|kg|kgs|lbs?|pounds?|stone|cm|%|percent|sessions?|times?|grand|dollars?))/i,
+      // "I (just) turned 16" — a recent birthday, so currently a minor.
+      /\bi\s+(?:just\s+|recently\s+)?turned\s+(1[0-7])\b(?!\s*years?\s+(?:of|into|ago))/i,
       // glued age-unit shorthand the \b above misses: "16yo", "16 y/o", "16yrs".
-      /\bi(?:'?m| am)\s+(?:only\s+|just\s+)?(1[0-7])\s*(?:yo|y\/o|yrs?)\b/i,
-      /\bi(?:'?m| am)\s+(?:a\s+)?(minor|underage|under ?18|not (?:yet )?18|below 18)\b/i,
+      /\bi(?:['’]?m| am)\s+(?:only\s+|just\s+)?(1[0-7])\s*(?:yo|y\/o|yrs?)\b/i,
+      /\bi(?:['’]?m| am)\s+(?:a\s+)?(minor|underage|under ?18|not (?:yet )?18|below 18)\b/i,
     ],
   },
   {
@@ -81,18 +84,20 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
     ],
   },
   // §2.5 conservative seed addition — mental health keywords.
-  // T1.2a: bare "anxious"/"anxiety" removed (it is the designed aesthetic-anxiety
-  // objection Alex handles); only clinical forms escalate. Suicidal ideation,
+  // T1.2a: bare "anxious"/"anxiety" no longer escalates (it is the designed
+  // aesthetic-anxiety objection Alex handles, e.g. "anxious about my results").
+  // Clinical / condition / history forms still escalate: suicidal ideation,
   // self-harm, eating disorders, clinical depression, panic attacks, and anxiety
-  // disorder require immediate human review.
+  // framed as a disorder/condition ("anxiety disorder", "history of anxiety",
+  // "diagnosed with / dealing with anxiety", etc.) require immediate human review.
   {
     id: "sensitive_keyword_mental_health",
     category: "sensitive_keyword",
     patterns: [
-      /\b(depress(ed|ion)|suicidal|self.harm|eating disorder|anorexia|bulimia|panic attacks?|anxiety disorder)\b/i,
+      /\b(depress(ed|ion)|suicidal|self.harm|eating disorder|anorexia|bulimia|panic (attacks?|disorder)|anxiety (disorder|attacks?)|(generali[sz]ed|social|chronic|severe) anxiety|(history of|suffer(s|ing)? from|diagnosed with|struggl(e|es|ing) with|dealing with|battl(e|es|ing) with) anxiety|anxiety (medication|meds|pills))\b/i,
     ],
     negations: [
-      /\b(?:not|never|don'?t|doesn'?t|do not|does not|isn'?t|aren'?t)\b[^.!?]{0,12}\b(?:depress(?:ed|ion)|suicidal|self.harm|eating disorder|anorexia|bulimia|panic attacks?|anxiety disorder)\b/i,
+      /\b(?:not|never|don'?t|doesn'?t|do not|does not|isn'?t|aren'?t)\b[^.!?]{0,12}\b(?:depress(?:ed|ion)|suicidal|self.harm|eating disorder|anorexia|bulimia|panic (?:attacks?|disorder)|anxiety)\b/i,
     ],
   },
 ];
