@@ -3,7 +3,11 @@ import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
 import { getMetrics } from "../../telemetry/metrics.js";
-import { SlotQuerySchema, STAGES_AT_OR_BEYOND_BOOKED } from "@switchboard/schemas";
+import {
+  SlotQuerySchema,
+  STAGES_AT_OR_BEYOND_BOOKED,
+  isBookingSlotConflictError,
+} from "@switchboard/schemas";
 import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
@@ -243,6 +247,17 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               attendeeEmail,
             });
           } catch (err) {
+            // Concurrent booking won the overlap race (store guard). Recoverable:
+            // re-offer the next slots instead of falsely claiming it's booked.
+            if (isBookingSlotConflictError(err)) {
+              getMetrics().bookingSlotConflict.inc({ orgId });
+              return fail("SLOT_TAKEN", "That time was just taken.", {
+                retryable: true,
+                data: { failureType: "slot_conflict" },
+                modelRemediation:
+                  "Re-run calendar-book.slots.query and offer the lead the next available times. Do not claim the slot is booked.",
+              });
+            }
             if (isPrismaUniqueConstraintError(err)) {
               const existingBooking = await deps.bookingStore.findBySlot(
                 orgId,
@@ -250,6 +265,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                 input.service,
                 new Date(input.slotStart),
               );
+              getMetrics().bookingFailed.inc({ orgId, reason: "duplicate" });
               return fail(
                 "DUPLICATE_BOOKING",
                 "This time slot is already booked for this contact.",
@@ -294,6 +310,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               failureType: "provider_error",
               retryable: false,
             });
+            getMetrics().bookingFailed.inc({ orgId, reason: "provider_error" });
             return fail("BOOKING_FAILURE", failResult.message, {
               data: failResult as unknown as Record<string, unknown>,
             });
@@ -339,11 +356,10 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   },
                 },
               });
-              // Monotonic stage advance inside the same durable tx as the
-              // confirm + outbox write: a confirmed booking always implies a
-              // booked opportunity. updateMany never throws on count:0, and the
-              // `notIn` guard skips an already-booked/showed/won/lost opp, so a
-              // stage no-op can never fail the booking.
+              // Monotonic stage advance in the same durable tx: a confirmed
+              // booking always implies a booked opp. updateMany never throws on
+              // count:0 and the `notIn` guard skips an already-advanced opp, so a
+              // stage no-op never fails the booking.
               if (opportunityId) {
                 const adv = await tx.opportunity.updateMany({
                   where: {
@@ -357,6 +373,15 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               }
             });
           } catch (error) {
+            // Provider event created but durable confirm failed: best-effort
+            // cancel the orphan so no live, untracked slot blocks the calendar.
+            if (calendarResult.calendarEventId) {
+              try {
+                await provider.cancelBooking(calendarResult.calendarEventId);
+              } catch (cancelErr) {
+                console.warn("[calendar-book] orphan-event compensation failed", cancelErr);
+              }
+            }
             const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
               orgId,
@@ -367,6 +392,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               failureType: "confirmation_failed",
               retryable: true,
             });
+            getMetrics().bookingFailed.inc({ orgId, reason: "confirmation_failed" });
             return fail("BOOKING_FAILURE", failResult.message, {
               data: failResult as unknown as Record<string, unknown>,
             });
