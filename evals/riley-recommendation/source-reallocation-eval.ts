@@ -174,11 +174,16 @@ export async function decideSourceReallocationForCase(
   const spendBySource: Record<string, number> = {};
   for (const s of c.sources) spendBySource[s.source] = s.spend;
   const sourceComparison = compareSources({ bySource, spendBySource });
+  // Legacy boolean → per-source coverage: trusted ⇒ every source clears the floor (1.0),
+  // untrusted ⇒ none (0). Activated fixtures (campaigns + adSetData) take the orchestrator path.
+  const trusted = c.spendAttributionTrusted ?? true;
+  const spendAttributionCoverageBySource: Record<string, number> = {};
+  for (const s of c.sources) spendAttributionCoverageBySource[s.source] = trusted ? 1 : 0;
   const result = decideSourceReallocation({
     sourceComparison,
     bySource,
     accountEvidence: c.accountEvidence,
-    spendAttributionTrusted: c.spendAttributionTrusted ?? true,
+    spendAttributionCoverageBySource,
     measurementTrusted: c.measurementTrusted ?? true,
     nextCycleDate: "2026-05-14",
   });

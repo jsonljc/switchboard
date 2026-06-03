@@ -61,8 +61,9 @@ describe("computeSpendBySource", () => {
     );
     expect(result.spendBySource.ctwa).toBeCloseTo(300, 6);
     expect(result.spendBySource.instant_form).toBeCloseTo(400, 6);
-    // Both campaigns fully attributed via ad-set destinations → all spend is real.
-    expect(result.attributedFraction).toBeCloseTo(1, 6);
+    // Both sources fully attributed via ad-set destinations → per-source coverage 1.0.
+    expect(result.coverageBySource.ctwa).toBeCloseTo(1, 6);
+    expect(result.coverageBySource.instant_form).toBeCloseTo(1, 6);
   });
 
   it("lead-share fallback: no ad-set data, proportional distribution (coverage 0)", () => {
@@ -75,12 +76,15 @@ describe("computeSpendBySource", () => {
     );
     expect(result.spendBySource.ctwa).toBeCloseTo(100, 6);
     expect(result.spendBySource.instant_form).toBeCloseTo(200, 6);
-    // No ad-set data → entirely synthetic lead-share → zero coverage.
-    expect(result.attributedFraction).toBe(0);
+    // No ad-set data → entirely synthetic lead-share → zero coverage on both sources.
+    expect(result.coverageBySource.ctwa).toBe(0);
+    expect(result.coverageBySource.instant_form).toBe(0);
   });
 
-  it("partial coverage: one of two equal-spend campaigns attributed (coverage 0.5)", () => {
-    // c1 ($100) fully attributed via a WHATSAPP ad set; c2 ($100) has no ad set → lead-share.
+  it("per-source asymmetry: one source real, the other entirely lead-share (synthetic)", () => {
+    // c1 ($100) fully attributed to ctwa via a WHATSAPP ad set; c2 ($100) has no ad set, so its
+    // spend is lead-shared across BOTH sources. instant_form ends up entirely synthetic even
+    // though ctwa is well-attributed — the case an account-wide gate would wrongly bless.
     const insights = [insight("c1", 100), insight("c2", 100)];
     const adSetData = [adSet("c1", "as1", "WHATSAPP", 100)];
     const result = computeSpendBySource(
@@ -88,10 +92,13 @@ describe("computeSpendBySource", () => {
       { ctwa: ctwaFunnel, instant_form: ifFunnel },
       adSetData,
     );
-    expect(result.attributedFraction).toBeCloseTo(0.5, 6);
+    // ctwa: real 100 / total (100 + c2 lead-share 100*100/300) → 100 / 133.33 = 0.75.
+    expect(result.coverageBySource.ctwa).toBeCloseTo(0.75, 6);
+    // instant_form: real 0 / lead-share only → 0.
+    expect(result.coverageBySource.instant_form).toBe(0);
   });
 
-  it("mixed campaign: matched + unmatched ad sets — no spend dropped, counts as 0 attributed", () => {
+  it("mixed campaign: matched + unmatched ad sets — no spend dropped, 0 coverage", () => {
     // Campaign c1 spend = 500. Ad sets: WHATSAPP (200) matched, WEBSITE (300) unmatched.
     // Pre-fix bug: 200 attributed to ctwa, 300 silently lost.
     // Post-fix: campaign is NOT fully attributed → fall back to lead-share for full 500.
@@ -108,9 +115,9 @@ describe("computeSpendBySource", () => {
     // Lead-share split: ctwa 100/300 = 1/3, if 200/300 = 2/3.
     expect(result.spendBySource.ctwa).toBeCloseTo(500 / 3, 6);
     expect(result.spendBySource.instant_form).toBeCloseTo((500 * 2) / 3, 6);
-    // A mixed (tracked + untracked) campaign contributes 0 to the numerator
-    // (whole-campaign fallback) — coverage is conservative by construction.
-    expect(result.attributedFraction).toBe(0);
+    // A mixed (tracked + untracked) campaign is whole-campaign fallback → 0 real for both.
+    expect(result.coverageBySource.ctwa).toBe(0);
+    expect(result.coverageBySource.instant_form).toBe(0);
   });
 
   it("orphan ad set: campaignId absent from insights does not inflate coverage", () => {
@@ -123,7 +130,8 @@ describe("computeSpendBySource", () => {
       { ctwa: ctwaFunnel, instant_form: ifFunnel },
       adSetData,
     );
-    expect(result.attributedFraction).toBe(0);
+    expect(result.coverageBySource.ctwa).toBe(0);
+    expect(result.coverageBySource.instant_form).toBe(0);
   });
 
   it("zero total spend: no divide-by-zero, coverage 0", () => {
@@ -134,7 +142,8 @@ describe("computeSpendBySource", () => {
       { ctwa: ctwaFunnel, instant_form: ifFunnel },
       adSetData,
     );
-    expect(result.attributedFraction).toBe(0);
+    expect(result.coverageBySource.ctwa).toBe(0);
+    expect(result.coverageBySource.instant_form).toBe(0);
   });
 
   it("total-leads-zero short-circuit: leaves spend unattributed", () => {
@@ -147,7 +156,8 @@ describe("computeSpendBySource", () => {
     );
     expect(result.spendBySource.ctwa).toBe(0);
     expect(result.spendBySource.instant_form).toBe(0);
-    expect(result.attributedFraction).toBe(0);
+    expect(result.coverageBySource.ctwa).toBe(0);
+    expect(result.coverageBySource.instant_form).toBe(0);
   });
 
   it("source not in bySource: handles gracefully (skipped, no crash)", () => {
@@ -161,6 +171,6 @@ describe("computeSpendBySource", () => {
     expect(result.spendBySource.ctwa).toBeCloseTo(500, 6);
     // No extra keys appear in result.
     expect(Object.keys(result.spendBySource)).toEqual(["ctwa"]);
-    expect(result.attributedFraction).toBe(0);
+    expect(result.coverageBySource.ctwa).toBe(0);
   });
 });

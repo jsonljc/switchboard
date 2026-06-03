@@ -81,11 +81,12 @@ export interface SourceReallocationInput {
   /** Account-wide window evidence for the scale-family floor. */
   accountEvidence: { clicks: number; conversions: number; days: number };
   /**
-   * False ⇒ per-source spend came from the lead-share fallback (no ad-set destination
-   * attribution), so the trueROAS comparison rests on synthetic spend and is too
-   * approximate to drive a budget decision. Derived by the orchestrator from `adSetData`.
+   * Per-source fraction of spend that is REAL ad-set attribution (vs the synthetic lead-share
+   * fallback), keyed by source. The gate requires BOTH the chosen `from` and `to` sources to
+   * clear `SPEND_ATTRIBUTION_COVERAGE_FLOOR`; a missing/low source means its trueROAS rests on
+   * synthetic spend, so the comparison is too approximate to move budget. From `computeSpendBySource`.
    */
-  spendAttributionTrusted: boolean;
+  spendAttributionCoverageBySource: Record<string, number>;
   /** Phase-A Gate 1: false ⇒ a suspected account-wide conversion-denominator step-change. */
   measurementTrusted: boolean;
   nextCycleDate: string;
@@ -142,10 +143,18 @@ export function decideSourceReallocation(
   // Absolute winner-profitability floor — the relative 2x ratio is not enough alone.
   if (toRoas < SHIFT_MIN_WINNER_TRUE_ROAS) return null;
 
-  // Per-source spend must come from ad-set destination attribution, not the lead-share
-  // fallback (synthetic). Without it the trueROAS comparison is too approximate to drive a
-  // budget decision -> no signal (the economics still reach the report's display).
-  if (!input.spendAttributionTrusted) return null;
+  // BOTH compared sources' spend must come (mostly) from ad-set destination attribution, not
+  // the lead-share fallback (synthetic). Gating per CANDIDATE (not account-wide) prevents an
+  // overall-coverage pass from blessing a comparison whose `from` or `to` denominator is all
+  // fallback. Below the floor → no signal (the economics still reach the report's display).
+  const fromCoverage = input.spendAttributionCoverageBySource[from.source] ?? 0;
+  const toCoverage = input.spendAttributionCoverageBySource[to.source] ?? 0;
+  if (
+    fromCoverage < SPEND_ATTRIBUTION_COVERAGE_FLOOR ||
+    toCoverage < SPEND_ATTRIBUTION_COVERAGE_FLOOR
+  ) {
+    return null;
+  }
 
   if (input.measurementTrusted === false) {
     return abstain(
@@ -246,23 +255,21 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
   let reallocation: RecommendationOutput | WatchOutput | null = null;
   const { bySource } = input;
   if (bySource && Object.keys(bySource).length > 0) {
-    const { spendBySource, attributedFraction } = computeSpendBySource(
+    const { spendBySource, coverageBySource } = computeSpendBySource(
       input.currentInsights,
       bySource,
       input.adSetData,
     );
     sourceComparison = compareSources({ bySource, spendBySource });
-    // Per-source spend is trustworthy only when a sufficient FRACTION of total spend is
-    // ad-set-attributed (coverage), not on mere ad-set presence; below the floor the
-    // trueROAS comparison rests too heavily on the synthetic lead-share fallback to move
-    // budget. Gate the DECISION on coverage (the comparison still feeds the report's
-    // display). With ad-set attribution now wired into the weekly cron, this fires in
-    // production when coverage clears the floor and abstains (honest-null) when it does not.
-    const spendAttributionTrusted = attributedFraction >= SPEND_ATTRIBUTION_COVERAGE_FLOOR;
+    // Gate the DECISION on per-source attribution coverage: each compared source's spend must
+    // be (mostly) real ad-set attribution, not the synthetic lead-share fallback (the
+    // comparison still feeds the report's display). With ad-set attribution wired into the
+    // weekly cron, this fires in production when both candidates clear the floor and abstains
+    // (honest-null) when either does not.
     reallocation = decideSourceReallocation({
       sourceComparison,
       bySource,
-      spendAttributionTrusted,
+      spendAttributionCoverageBySource: coverageBySource,
       accountEvidence: {
         clicks: input.currentInsights.reduce((s, i) => s + i.inlineLinkClicks, 0),
         conversions: input.currentInsights.reduce((s, i) => s + i.conversions, 0),
