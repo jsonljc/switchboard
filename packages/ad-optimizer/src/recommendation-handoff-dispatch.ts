@@ -18,6 +18,26 @@ export interface HandoffCampaignContext {
 }
 
 /**
+ * Build a per-campaign handoff context from the campaign's window insight. Maps the
+ * insight's link clicks + conversions (over `windowDays`) into the Evidence the
+ * abstention re-checks. Pure; the single home for the insight -> evidence field map.
+ */
+export function handoffContextFromInsight(
+  insight: { inlineLinkClicks: number; conversions: number },
+  windowDays: number,
+  learningPhaseActive: boolean,
+): HandoffCampaignContext {
+  return {
+    evidence: {
+      clicks: insight.inlineLinkClicks,
+      conversions: insight.conversions,
+      days: windowDays,
+    },
+    learningPhaseActive,
+  };
+}
+
+/**
  * A ready-to-route Riley -> agent handoff, MINUS the brief and the resolved
  * deployment slug. The bootstrap layer (apps/api) resolves a creative brief and
  * builds the canonical submit request from this; ad-optimizer (Layer 2) never

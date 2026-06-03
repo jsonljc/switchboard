@@ -24,9 +24,10 @@ import {
   type EmissionContext,
   type RecommendationEmitter,
 } from "./recommendation-sink.js";
-import type {
-  HandoffCampaignContext,
-  RecommendationHandoffSubmitter,
+import {
+  handoffContextFromInsight,
+  type HandoffCampaignContext,
+  type RecommendationHandoffSubmitter,
 } from "./recommendation-handoff-dispatch.js";
 import { computeAuditEconomicsSections } from "./analyzers/source-reallocation.js";
 import type {
@@ -157,9 +158,7 @@ export interface AuditDependencies {
    * in `campaignEconomics`. Absent → trueROAS reported null (graceful). Does NOT
    * affect the Gate-4 breach basis, which uses booking COUNTS from byCampaign. */
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
-  /** Optional bootstrap callback: routes each EMITTED creative recommendation that
-   * clears the handoff abstention to a governed Mira draft (mandatory human
-   * approval). Absent ⇒ the audit produces no Riley -> agent handoffs. */
+  /** Optional bootstrap callback: routes each emitted creative rec (post-abstention) to a governed Mira draft. */
   recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
 }
 
@@ -271,8 +270,7 @@ export class AuditRunner {
     previousDateRange: { since: string; until: string };
   }): Promise<AuditReport> {
     const { dateRange, previousDateRange } = params;
-    // Inclusive window length (production weekly window is since = until - 6 ⇒ 7 days),
-    // stamped as the handoff evidence `days`. Built only when a handoff submitter is wired.
+    // Inclusive window length (weekly window since = until - 6 ⇒ 7 days) for handoff evidence.
     const windowDays =
       Math.round((Date.parse(dateRange.until) - Date.parse(dateRange.since)) / 86_400_000) + 1;
     const handoffContextByCampaign = this.recommendationHandoffSubmitter
@@ -442,16 +440,10 @@ export class AuditRunner {
       // Task 8 Step 4: derived from the already-fetched `learningStatus` — no extra Graph call.
       const learningPhaseActive = deriveLearningPhaseActive(learningStatus.state);
       if (learningPhaseActive) campaignsInLearning++;
-      // Capture the per-campaign evidence + learning state the handoff abstention
-      // re-checks (same inputs the engine judged), keyed by campaignId.
-      handoffContextByCampaign?.set(insight.campaignId, {
-        evidence: {
-          clicks: insight.inlineLinkClicks,
-          conversions: insight.conversions,
-          days: windowDays,
-        },
-        learningPhaseActive,
-      });
+      handoffContextByCampaign?.set(
+        insight.campaignId,
+        handoffContextFromInsight(insight, windowDays, learningPhaseActive),
+      );
 
       // 5a-bis (PR2 Gate-4): judge THIS campaign against its own booking-
       // calibrated CAC (Tier-1) when it clears the booking floor; otherwise the

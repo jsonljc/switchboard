@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildHandoffCandidate,
+  handoffContextFromInsight,
   type HandoffCampaignContext,
 } from "./recommendation-handoff-dispatch.js";
 
@@ -94,6 +95,12 @@ describe("buildHandoffCandidate", () => {
       deploymentId: DEP,
     });
     expect(candidate).toBeNull();
+  });
+
+  it("handoffContextFromInsight maps the insight click/conversion fields + window days", () => {
+    expect(handoffContextFromInsight({ inlineLinkClicks: 320, conversions: 50 }, 7, false)).toEqual(
+      { evidence: { clicks: 320, conversions: 50, days: 7 }, learningPhaseActive: false },
+    );
   });
 
   it("builds an add_creative candidate when its (higher, destructive) evidence floor is met", () => {
