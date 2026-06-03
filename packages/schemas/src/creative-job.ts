@@ -194,6 +194,20 @@ export const CreativeBriefInput = z.object({
 });
 export type CreativeBriefInput = z.infer<typeof CreativeBriefInput>;
 
+// ── Publish handoff input (Seam 2: Mira -> Ads) ──
+
+/**
+ * Seam 2 (Mira -> Ads) publish handoff payload. Deliberately minimal: the
+ * creative-publish workflow re-derives platforms, the durable asset, the Meta
+ * connection, and the page id from the persisted CreativeJob + connection.
+ * Keeping the input at { jobId } is what makes the publish seam idempotent and
+ * replay-safe (Governed Handoff Contract Freeze §4.2).
+ */
+export const CreativeJobPublishInput = z.object({
+  jobId: z.string().min(1),
+});
+export type CreativeJobPublishInput = z.infer<typeof CreativeJobPublishInput>;
+
 // ── Creative Job (full record) ──
 
 export const CreativeJobSchema = z.object({

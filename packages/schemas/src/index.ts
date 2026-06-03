@@ -81,6 +81,8 @@ export * from "./agent-persona.js";
 
 // Creative Pipeline (Performance Creative Director)
 export * from "./creative-job.js";
+// Agent-synergy handoff seams (Governed Handoff Contract Freeze)
+export * from "./creative-concept-draft.js";
 
 // UGC v2 — Creative Pipeline
 export * from "./ugc-job.js";

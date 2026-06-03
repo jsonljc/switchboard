@@ -109,3 +109,12 @@ export type {
   RecommendationEmitter,
   EmitOutcome,
 } from "./recommendation-sink.js";
+
+// Abstention helpers (consumed by the Riley->agent recommendation-handoff seam).
+export { meetsEvidenceFloor, evidenceFamilyFor, EVIDENCE_FLOORS } from "./evidence-floor.js";
+export type { Evidence, EvidenceFamily } from "./evidence-floor.js";
+export {
+  resetsLearningFor,
+  learningPhaseImpactText,
+  ACTION_RESETS_LEARNING,
+} from "./action-reset-classification.js";
