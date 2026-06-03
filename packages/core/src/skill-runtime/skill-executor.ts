@@ -6,6 +6,7 @@ import type {
   SkillTool,
   SkillToolFactory,
   SkillHook,
+  SkillHookContext,
   ResolvedModelProfile,
   SkillRuntimePolicy,
   SkillRequestContext,
@@ -95,6 +96,19 @@ function escapeSentinel(value: string): string {
   return value.replaceAll("<|", "⟨|").replaceAll("|>", "|⟩");
 }
 
+/**
+ * Stable, non-cryptographic hash (djb2) of the invocation's input parameters,
+ * stamped onto the execution trace for telemetry de-duplication / grouping. Not
+ * a security primitive — just a compact, deterministic fingerprint of the param
+ * bag. Returns an 8-char lowercase hex string.
+ */
+function stableParamsHash(parameters: unknown): string {
+  const s = JSON.stringify(parameters ?? {});
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16);
+}
+
 export class SkillExecutorImpl implements SkillExecutor {
   constructor(
     private adapter: ToolCallingLLMAdapter,
@@ -117,6 +131,13 @@ export class SkillExecutorImpl implements SkillExecutor {
      * break the response path. When omitted the executor skips the hook call.
      */
     private qualificationEvaluationHook?: QualificationEvaluationHook,
+    /**
+     * Optional execution-trace recorder, invoked at the success-return and on a
+     * thrown turn. Mirrors `qualificationEvaluationHook`: a SEPARATE arg (not in
+     * the `hooks` array) so it cannot activate the governance afterSkill gates.
+     * Failures are log-and-swallow — telemetry must never change the response.
+     */
+    private executionTraceHook?: Pick<SkillHook, "afterSkill" | "onError">,
   ) {}
 
   /**
@@ -201,6 +222,20 @@ export class SkillExecutorImpl implements SkillExecutor {
     const requestCtx = this.buildRequestContext(params);
     const runtimeTools = this.materializeRuntimeTools(requestCtx);
 
+    // Hook context for the isolated execution-trace recorder (built once; the
+    // recorder is invoked directly at the success-return / on a thrown turn —
+    // never via runAfterSkillHooks, so the governance afterSkill gates stay dormant).
+    const hookCtx: SkillHookContext = {
+      deploymentId: params.deploymentId,
+      orgId: params.orgId,
+      skillSlug: params.skill.slug,
+      skillVersion: params.skill.version,
+      sessionId: requestCtx.sessionId,
+      trustLevel: params.trustLevel,
+      trustScore: params.trustScore,
+      inputParametersHash: stableParamsHash(params.parameters),
+    };
+
     const messages: LLMMessage[] = params.messages.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
@@ -220,287 +255,320 @@ export class SkillExecutorImpl implements SkillExecutor {
     // Guarded by `this.router` so there is zero overhead when routing is disabled.
     const currentStage = this.router ? this.deriveCurrentStage(params.messages) : undefined;
 
-    while (turnCount < this.policy.maxLlmTurns) {
-      turnCount++;
+    try {
+      while (turnCount < this.policy.maxLlmTurns) {
+        turnCount++;
 
-      const profile = this.resolveProfile(
-        params,
-        turnCount,
-        toolCallRecords,
-        currentStage,
-        governanceHook,
-      );
-
-      const llmCtx = {
-        turnCount,
-        totalInputTokens,
-        totalOutputTokens,
-        elapsedMs: Date.now() - startTime,
-        profile,
-      };
-      const hookResult = await runBeforeLlmCallHooks(this.hooks, llmCtx);
-      if (!hookResult.proceed) {
-        throw new SkillExecutionBudgetError(hookResult.reason ?? "Aborted by hook");
-      }
-      const resolvedCtx = hookResult.ctx ?? llmCtx;
-
-      // BudgetEnforcementHook checks elapsed time *before* the LLM call starts.
-      // This inline check guards the gap: if time expired between hook check and here,
-      // or during a long tool execution in the previous turn, catch it before starting
-      // the LLM call. The Promise.race timeout below catches calls that run too long.
-      const remainingMs = this.policy.maxRuntimeMs - (Date.now() - startTime);
-      if (remainingMs <= 0) {
-        throw new SkillExecutionBudgetError(
-          `Exceeded ${this.policy.maxRuntimeMs / 1000}s runtime limit`,
+        const profile = this.resolveProfile(
+          params,
+          turnCount,
+          toolCallRecords,
+          currentStage,
+          governanceHook,
         );
-      }
-      let timeoutId: ReturnType<typeof setTimeout>;
-      const response = await Promise.race([
-        this.adapter.chatWithTools({
-          system,
-          messages,
-          tools: toolDefinitions,
+
+        const llmCtx = {
+          turnCount,
+          totalInputTokens,
+          totalOutputTokens,
+          elapsedMs: Date.now() - startTime,
           profile,
-        }),
-        new Promise<never>((_resolve, reject) => {
-          timeoutId = setTimeout(
-            () =>
-              reject(
-                new SkillExecutionBudgetError(
-                  `Exceeded ${this.policy.maxRuntimeMs / 1000}s runtime limit`,
-                ),
-              ),
-            remainingMs,
+        };
+        const hookResult = await runBeforeLlmCallHooks(this.hooks, llmCtx);
+        if (!hookResult.proceed) {
+          throw new SkillExecutionBudgetError(hookResult.reason ?? "Aborted by hook");
+        }
+        const resolvedCtx = hookResult.ctx ?? llmCtx;
+
+        // BudgetEnforcementHook checks elapsed time *before* the LLM call starts.
+        // This inline check guards the gap: if time expired between hook check and here,
+        // or during a long tool execution in the previous turn, catch it before starting
+        // the LLM call. The Promise.race timeout below catches calls that run too long.
+        const remainingMs = this.policy.maxRuntimeMs - (Date.now() - startTime);
+        if (remainingMs <= 0) {
+          throw new SkillExecutionBudgetError(
+            `Exceeded ${this.policy.maxRuntimeMs / 1000}s runtime limit`,
           );
-        }),
-      ]).finally(() => {
-        clearTimeout(timeoutId);
-      });
+        }
+        let timeoutId: ReturnType<typeof setTimeout>;
+        const response = await Promise.race([
+          this.adapter.chatWithTools({
+            system,
+            messages,
+            tools: toolDefinitions,
+            profile,
+          }),
+          new Promise<never>((_resolve, reject) => {
+            timeoutId = setTimeout(
+              () =>
+                reject(
+                  new SkillExecutionBudgetError(
+                    `Exceeded ${this.policy.maxRuntimeMs / 1000}s runtime limit`,
+                  ),
+                ),
+              remainingMs,
+            );
+          }),
+        ]).finally(() => {
+          clearTimeout(timeoutId);
+        });
 
-      totalInputTokens += response.usage.inputTokens;
-      totalOutputTokens += response.usage.outputTokens;
-      totalCacheReadTokens += response.usage.cacheReadTokens ?? 0;
-      totalCacheCreationTokens += response.usage.cacheCreationTokens ?? 0;
-      if (response.model) lastModel = response.model;
+        totalInputTokens += response.usage.inputTokens;
+        totalOutputTokens += response.usage.outputTokens;
+        totalCacheReadTokens += response.usage.cacheReadTokens ?? 0;
+        totalCacheCreationTokens += response.usage.cacheCreationTokens ?? 0;
+        if (response.model) lastModel = response.model;
 
-      // Hard budget gates on full-price (uncached) tokens only. Anthropic reports
-      // cache reads/creations separately from input_tokens, so a large cached prefix
-      // re-read every turn is near-free and must NOT exhaust the token budget.
-      const billableTokens = totalInputTokens + totalOutputTokens;
-      if (billableTokens > this.policy.maxTotalTokens) {
-        throw new SkillExecutionBudgetError(
-          `Exceeded token budget (${billableTokens} > ${this.policy.maxTotalTokens})`,
-        );
-      }
+        // Hard budget gates on full-price (uncached) tokens only. Anthropic reports
+        // cache reads/creations separately from input_tokens, so a large cached prefix
+        // re-read every turn is near-free and must NOT exhaust the token budget.
+        const billableTokens = totalInputTokens + totalOutputTokens;
+        if (billableTokens > this.policy.maxTotalTokens) {
+          throw new SkillExecutionBudgetError(
+            `Exceeded token budget (${billableTokens} > ${this.policy.maxTotalTokens})`,
+          );
+        }
 
-      await runAfterLlmCallHooks(this.hooks, resolvedCtx, {
-        content: response.content,
-        stopReason: response.stopReason,
-        usage: response.usage,
-      });
+        await runAfterLlmCallHooks(this.hooks, resolvedCtx, {
+          content: response.content,
+          stopReason: response.stopReason,
+          usage: response.usage,
+        });
 
-      if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
-        const rawResponseText = response.content
-          .filter((b): b is LLMTextBlock => b.type === "text")
-          .map((b) => b.text)
-          .join("");
+        if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
+          const rawResponseText = response.content
+            .filter((b): b is LLMTextBlock => b.type === "text")
+            .map((b) => b.text)
+            .join("");
 
-        // Phase 3b: parse + strip qualification sidecar. Always-on — no flag check.
-        // visibleResponse replaces rawResponseText for ALL downstream consumers.
-        const sidecar = parseQualificationSidecar(rawResponseText);
-        const visibleResponse = sidecar.visibleResponse;
+          // Phase 3b: parse + strip qualification sidecar. Always-on — no flag check.
+          // visibleResponse replaces rawResponseText for ALL downstream consumers.
+          const sidecar = parseQualificationSidecar(rawResponseText);
+          const visibleResponse = sidecar.visibleResponse;
 
-        // Phase 3b: fire qualification evaluation hook when a valid sidecar is present.
-        // Hook failures are log-and-swallow — must not interrupt the response path.
-        if (
-          this.qualificationEvaluationHook !== undefined &&
-          sidecar.persisted?.validationStatus === "ok"
-        ) {
-          this.qualificationEvaluationHook
-            .onSidecarEmitted({
-              organizationId: params.orgId,
-              conversationThreadId: requestCtx.sessionId,
-              signals: sidecar.persisted.payload,
-              // TODO(3c): plumb the real WorkTrace.id here. The WorkTrace row is
-              // persisted by PlatformIngress after execute() returns, so its id is
-              // not available inside the executor. Passing null is better than
-              // passing sessionId (which is a chat session identifier, not a trace row id).
-              workTraceId: null,
-            })
-            .catch((err: unknown) => {
+          // Phase 3b: fire qualification evaluation hook when a valid sidecar is present.
+          // Hook failures are log-and-swallow — must not interrupt the response path.
+          if (
+            this.qualificationEvaluationHook !== undefined &&
+            sidecar.persisted?.validationStatus === "ok"
+          ) {
+            this.qualificationEvaluationHook
+              .onSidecarEmitted({
+                organizationId: params.orgId,
+                conversationThreadId: requestCtx.sessionId,
+                signals: sidecar.persisted.payload,
+                // TODO(3c): plumb the real WorkTrace.id here. The WorkTrace row is
+                // persisted by PlatformIngress after execute() returns, so its id is
+                // not available inside the executor. Passing null is better than
+                // passing sessionId (which is a chat session identifier, not a trace row id).
+                workTraceId: null,
+              })
+              .catch((err: unknown) => {
+                console.warn(
+                  "[SkillExecutor] qualification-evaluation-hook failed (swallowed):",
+                  err instanceof Error ? err.message : String(err),
+                );
+              });
+          }
+
+          const { text: responseText, intentClass } = parseIntentTag(visibleResponse);
+
+          const result: SkillExecutionResult = {
+            response: responseText,
+            toolCalls: toolCallRecords,
+            tokenUsage: {
+              input: totalInputTokens,
+              output: totalOutputTokens,
+              cacheRead: totalCacheReadTokens,
+              cacheCreation: totalCacheCreationTokens,
+            },
+            trace: {
+              durationMs: Date.now() - startTime,
+              turnCount,
+              status: "success" as const,
+              responseSummary: responseText.slice(0, 500),
+              writeCount: toolCallRecords.filter((tc) => {
+                const tool = runtimeTools.get(tc.toolId);
+                const opDef = tool?.operations[tc.operation];
+                return (
+                  opDef?.effectCategory === "write" ||
+                  opDef?.effectCategory === "external_send" ||
+                  opDef?.effectCategory === "external_mutation"
+                );
+              }).length,
+              governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
+              qualificationSignals: sidecar.persisted,
+              ...(lastModel ? { model: lastModel } : {}),
+            },
+            ...(intentClass ? { intentClass } : {}),
+            ...(sidecar.persisted?.validationStatus === "ok"
+              ? { qualificationSignals: sidecar.persisted.payload }
+              : {}),
+          };
+
+          // Isolated telemetry recorder — invoked directly (NOT via runAfterSkillHooks),
+          // so the governance afterSkill gates stay dormant. Log-and-swallow: a failing
+          // recorder must never change the lead-visible response.
+          if (this.executionTraceHook?.afterSkill) {
+            await this.executionTraceHook.afterSkill(hookCtx, result).catch((e: unknown) => {
               console.warn(
-                "[SkillExecutor] qualification-evaluation-hook failed (swallowed):",
-                err instanceof Error ? err.message : String(err),
+                "[SkillExecutor] trace hook afterSkill failed (swallowed):",
+                e instanceof Error ? e.message : String(e),
               );
             });
+          }
+
+          return result;
         }
 
-        const { text: responseText, intentClass } = parseIntentTag(visibleResponse);
+        const toolUseBlocks = response.content.filter(
+          (b): b is LLMToolUseBlock => b.type === "tool_use",
+        );
 
-        return {
-          response: responseText,
-          toolCalls: toolCallRecords,
-          tokenUsage: {
-            input: totalInputTokens,
-            output: totalOutputTokens,
-            cacheRead: totalCacheReadTokens,
-            cacheCreation: totalCacheCreationTokens,
-          },
-          trace: {
-            durationMs: Date.now() - startTime,
-            turnCount,
-            status: "success" as const,
-            responseSummary: responseText.slice(0, 500),
-            writeCount: toolCallRecords.filter((tc) => {
-              const tool = runtimeTools.get(tc.toolId);
-              const opDef = tool?.operations[tc.operation];
-              return (
-                opDef?.effectCategory === "write" ||
-                opDef?.effectCategory === "external_send" ||
-                opDef?.effectCategory === "external_mutation"
-              );
-            }).length,
-            governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
-            qualificationSignals: sidecar.persisted,
-            ...(lastModel ? { model: lastModel } : {}),
-          },
-          ...(intentClass ? { intentClass } : {}),
-          ...(sidecar.persisted?.validationStatus === "ok"
-            ? { qualificationSignals: sidecar.persisted.payload }
-            : {}),
-        };
-      }
+        messages.push({ role: "assistant", content: response.content });
 
-      const toolUseBlocks = response.content.filter(
-        (b): b is LLMToolUseBlock => b.type === "tool_use",
-      );
+        const toolResults: LLMToolResultBlock[] = [];
 
-      messages.push({ role: "assistant", content: response.content });
+        for (const toolUse of toolUseBlocks) {
+          if (toolCallRecords.length >= this.policy.maxToolCalls) {
+            throw new SkillExecutionBudgetError(
+              `Exceeded maximum tool calls (${this.policy.maxToolCalls})`,
+            );
+          }
 
-      const toolResults: LLMToolResultBlock[] = [];
-
-      for (const toolUse of toolUseBlocks) {
-        if (toolCallRecords.length >= this.policy.maxToolCalls) {
-          throw new SkillExecutionBudgetError(
-            `Exceeded maximum tool calls (${this.policy.maxToolCalls})`,
+          console.warn(
+            `[SkillExecutor] tool_call: ${toolUse.name} args=${JSON.stringify(toolUse.input).slice(0, 200)}`,
           );
-        }
 
-        console.warn(
-          `[SkillExecutor] tool_call: ${toolUse.name} args=${JSON.stringify(toolUse.input).slice(0, 200)}`,
-        );
+          const start = Date.now();
+          const [toolId, ...opParts] = toolUse.name.split(".");
+          const operation = opParts.join(".");
+          const tool = runtimeTools.get(toolId!);
+          const op = tool?.operations[operation];
 
-        const start = Date.now();
-        const [toolId, ...opParts] = toolUse.name.split(".");
-        const operation = opParts.join(".");
-        const tool = runtimeTools.get(toolId!);
-        const op = tool?.operations[operation];
+          const toolCtx = {
+            toolId: toolId!,
+            operation,
+            params: toolUse.input,
+            effectCategory: op?.effectCategory ?? ("read" as const),
+            trustLevel: params.trustLevel,
+          };
+          const toolHookResult = await runBeforeToolCallHooks(this.hooks, toolCtx);
 
-        const toolCtx = {
-          toolId: toolId!,
-          operation,
-          params: toolUse.input,
-          effectCategory: op?.effectCategory ?? ("read" as const),
-          trustLevel: params.trustLevel,
-        };
-        const toolHookResult = await runBeforeToolCallHooks(this.hooks, toolCtx);
+          let result: ToolResult;
+          let governanceOutcome: string;
 
-        let result: ToolResult;
-        let governanceOutcome: string;
-
-        if (!toolHookResult.proceed) {
-          if (toolHookResult.substituteResult) {
-            if (toolHookResult.decision) {
-              throw new Error(
-                `Hook invariant violated: substituteResult and decision are mutually exclusive (got decision=${toolHookResult.decision})`,
+          if (!toolHookResult.proceed) {
+            if (toolHookResult.substituteResult) {
+              if (toolHookResult.decision) {
+                throw new Error(
+                  `Hook invariant violated: substituteResult and decision are mutually exclusive (got decision=${toolHookResult.decision})`,
+                );
+              }
+              result = toolHookResult.substituteResult;
+              governanceOutcome = "simulated";
+            } else if (toolHookResult.decision === "pending_approval") {
+              result = pendingApproval(
+                toolHookResult.reason ?? "Requires approval",
+                toolHookResult.payload,
               );
+              governanceOutcome = "require-approval";
+            } else {
+              result = denied(toolHookResult.reason ?? "Denied by policy");
+              governanceOutcome = "denied";
             }
-            result = toolHookResult.substituteResult;
-            governanceOutcome = "simulated";
-          } else if (toolHookResult.decision === "pending_approval") {
-            result = pendingApproval(
-              toolHookResult.reason ?? "Requires approval",
-              toolHookResult.payload,
-            );
-            governanceOutcome = "require-approval";
+          } else if (op) {
+            // Defense-in-depth: validate LLM-supplied input against the tool's
+            // declared inputSchema BEFORE invoking execute(). If validation fails
+            // we surface a structured INVALID_TOOL_INPUT result and skip the
+            // tool. The factory-with-context pattern is the primary safeguard;
+            // this guard catches accidental schema drift / leftover fields.
+            const validation = validateToolInput(op.inputSchema, toolUse.input);
+            if (!validation.ok) {
+              console.warn(
+                `[SkillExecutor] tool_input_invalid: ${toolUse.name} issues=${validation.issues
+                  .join("; ")
+                  .slice(0, 200)} redacted=${redactInputForLog(toolUse.input)}`,
+              );
+              result = fail(
+                "execution",
+                "INVALID_TOOL_INPUT",
+                `Tool input did not match declared schema: ${validation.issues.join("; ")}`,
+                {
+                  modelRemediation:
+                    "Re-issue the tool call with input matching the declared inputSchema. Do not include trust-bound identifiers (orgId, deploymentId, contactId) — those are injected by the runtime.",
+                  retryable: false,
+                },
+              );
+              governanceOutcome = "auto-approved";
+            } else {
+              result = await op.execute(toolUse.input);
+              governanceOutcome = "auto-approved";
+            }
           } else {
-            result = denied(toolHookResult.reason ?? "Denied by policy");
-            governanceOutcome = "denied";
-          }
-        } else if (op) {
-          // Defense-in-depth: validate LLM-supplied input against the tool's
-          // declared inputSchema BEFORE invoking execute(). If validation fails
-          // we surface a structured INVALID_TOOL_INPUT result and skip the
-          // tool. The factory-with-context pattern is the primary safeguard;
-          // this guard catches accidental schema drift / leftover fields.
-          const validation = validateToolInput(op.inputSchema, toolUse.input);
-          if (!validation.ok) {
-            console.warn(
-              `[SkillExecutor] tool_input_invalid: ${toolUse.name} issues=${validation.issues
-                .join("; ")
-                .slice(0, 200)} redacted=${redactInputForLog(toolUse.input)}`,
-            );
-            result = fail(
-              "execution",
-              "INVALID_TOOL_INPUT",
-              `Tool input did not match declared schema: ${validation.issues.join("; ")}`,
-              {
-                modelRemediation:
-                  "Re-issue the tool call with input matching the declared inputSchema. Do not include trust-bound identifiers (orgId, deploymentId, contactId) — those are injected by the runtime.",
-                retryable: false,
-              },
-            );
-            governanceOutcome = "auto-approved";
-          } else {
-            result = await op.execute(toolUse.input);
+            const availableTools = params.skill.tools
+              .flatMap((tid) => {
+                const t = runtimeTools.get(tid);
+                return t ? Object.keys(t.operations).map((opN) => `${tid}.${opN}`) : [];
+              })
+              .join(", ");
+            result = fail("execution", "TOOL_NOT_FOUND", `Unknown tool: ${toolUse.name}`, {
+              modelRemediation: `Available tools for this skill: ${availableTools}`,
+              retryable: false,
+            });
             governanceOutcome = "auto-approved";
           }
-        } else {
-          const availableTools = params.skill.tools
-            .flatMap((tid) => {
-              const t = runtimeTools.get(tid);
-              return t ? Object.keys(t.operations).map((opN) => `${tid}.${opN}`) : [];
-            })
-            .join(", ");
-          result = fail("execution", "TOOL_NOT_FOUND", `Unknown tool: ${toolUse.name}`, {
-            modelRemediation: `Available tools for this skill: ${availableTools}`,
-            retryable: false,
+
+          await runAfterToolCallHooks(this.hooks, toolCtx, result);
+
+          toolCallRecords.push({
+            toolId: toolId!,
+            operation,
+            params: toolUse.input,
+            result,
+            durationMs: Date.now() - start,
+            governanceDecision: governanceOutcome as ToolCallRecord["governanceDecision"],
           });
-          governanceOutcome = "auto-approved";
+
+          const decision = filterForReinjection(
+            result,
+            op ?? FALLBACK_READ_OP,
+            DEFAULT_REINJECTION_POLICY,
+          );
+          // Defense-in-depth: wrap re-injected tool output in sentinels so the
+          // model treats untrusted tool content as data, not instructions.
+          // Escape sentinel-confusable substrings inside the payload so
+          // attacker-controlled tool content can't close the wrapper early.
+          const wrappedContent = `<|tool-output|>\n${escapeSentinel(decision.content)}\n<|/tool-output|>`;
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: wrappedContent,
+          });
         }
 
-        await runAfterToolCallHooks(this.hooks, toolCtx, result);
-
-        toolCallRecords.push({
-          toolId: toolId!,
-          operation,
-          params: toolUse.input,
-          result,
-          durationMs: Date.now() - start,
-          governanceDecision: governanceOutcome as ToolCallRecord["governanceDecision"],
-        });
-
-        const decision = filterForReinjection(
-          result,
-          op ?? FALLBACK_READ_OP,
-          DEFAULT_REINJECTION_POLICY,
-        );
-        // Defense-in-depth: wrap re-injected tool output in sentinels so the
-        // model treats untrusted tool content as data, not instructions.
-        // Escape sentinel-confusable substrings inside the payload so
-        // attacker-controlled tool content can't close the wrapper early.
-        const wrappedContent = `<|tool-output|>\n${escapeSentinel(decision.content)}\n<|/tool-output|>`;
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: toolUse.id,
-          content: wrappedContent,
-        });
+        messages.push({ role: "user", content: toolResults });
       }
 
-      messages.push({ role: "user", content: toolResults });
+      throw new SkillExecutionBudgetError(
+        `Exceeded maximum LLM turns (${this.policy.maxLlmTurns})`,
+      );
+    } catch (err) {
+      // Isolated telemetry recorder for the error path — log-and-swallow, then
+      // re-throw the original error unchanged. Mirrors the success-path afterSkill;
+      // never via runAfterSkillHooks, so the governance afterSkill gates stay dormant.
+      if (this.executionTraceHook?.onError) {
+        await this.executionTraceHook
+          .onError(hookCtx, err instanceof Error ? err : new Error(String(err)))
+          .catch((e: unknown) => {
+            console.warn(
+              "[SkillExecutor] trace hook onError failed (swallowed):",
+              e instanceof Error ? e.message : String(e),
+            );
+          });
+      }
+      throw err;
     }
-
-    throw new SkillExecutionBudgetError(`Exceeded maximum LLM turns (${this.policy.maxLlmTurns})`);
   }
 
   private buildToolDefinitions(toolIds: string[]): LLMToolDefinition[] {

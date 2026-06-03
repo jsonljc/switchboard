@@ -1,8 +1,23 @@
+/* eslint-disable max-lines */
+// Legacy-debt marker: this consolidated SkillExecutorImpl suite (interpolation,
+// governance, budget/timeout, cache-token accounting, and the A5 isolated
+// execution-trace recorder) exceeds 600 lines. Splitting would fragment the
+// shared mock-adapter/mock-skill scaffold across files; the codebase convention
+// is the eslint-disable marker over an awkward split (see calendar-book.test.ts).
 import { describe, it, expect, vi } from "vitest";
 import { SkillExecutorImpl, parseIntentTag } from "./skill-executor.js";
 import type { ToolCallingLLMAdapter } from "./llm-types.js";
-import type { SkillDefinition, SkillTool } from "./types.js";
-import { SkillParameterError, SkillExecutionBudgetError } from "./types.js";
+import type {
+  SkillDefinition,
+  SkillTool,
+  SkillHookContext,
+  SkillExecutionResult,
+} from "./types.js";
+import {
+  SkillParameterError,
+  SkillExecutionBudgetError,
+  DEFAULT_SKILL_RUNTIME_POLICY,
+} from "./types.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
 import { ok } from "./tool-result.js";
 
@@ -603,6 +618,103 @@ describe("SkillExecutorImpl", () => {
     expect(result.trace.model).toBe("claude-sonnet-4-6");
     // large cache_read must NOT trip the 64k budget (full-price input+output is only 120):
     expect(result.trace.status).toBe("success");
+  });
+
+  // --- A5: isolated execution-trace recorder (8th constructor arg) ---
+
+  const traceBaseParams = () => ({
+    skill: mockSkill,
+    parameters: { NAME: "Alice" },
+    messages: [{ role: "user" as const, content: "hello" }],
+    deploymentId: "d1",
+    orgId: "org1",
+    trustScore: 50,
+    trustLevel: "guided" as const,
+  });
+
+  const okTraceAdapter = (): ToolCallingLLMAdapter => ({
+    chatWithTools: vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "Hi there" }],
+      stopReason: "end_turn",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    }),
+  });
+
+  it("invokes the execution trace hook with the result on success", async () => {
+    const calls: SkillExecutionResult[] = [];
+    const traceHook = {
+      afterSkill: async (_c: SkillHookContext, r: SkillExecutionResult) => {
+        calls.push(r);
+      },
+      onError: async () => {},
+    };
+    const exec = new SkillExecutorImpl(
+      okTraceAdapter(),
+      new Map(),
+      undefined,
+      [],
+      undefined,
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    const result = await exec.execute(traceBaseParams());
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toBe(result);
+    expect(calls[0]!.tokenUsage.input).toBe(10);
+  });
+
+  it("a throwing trace hook does NOT break the response", async () => {
+    const traceHook = {
+      afterSkill: async () => {
+        throw new Error("telemetry down");
+      },
+      onError: async () => {},
+    };
+    const exec = new SkillExecutorImpl(
+      okTraceAdapter(),
+      new Map(),
+      undefined,
+      [],
+      undefined,
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    const result = await exec.execute(traceBaseParams());
+    expect(result.response).toBe("Hi there");
+  });
+
+  it("invokes onError when the turn throws", async () => {
+    const errors: Error[] = [];
+    const traceHook = {
+      afterSkill: async () => {},
+      onError: async (_c: SkillHookContext, e: Error) => {
+        errors.push(e);
+      },
+    };
+    // Adapter returns large token usage; the maxTotalTokens:1 budget throws
+    // SkillExecutionBudgetError on the first turn.
+    const budgetBustingAdapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "over" }],
+        stopReason: "end_turn",
+        usage: { inputTokens: 1000, outputTokens: 1000 },
+      }),
+    };
+    const exec = new SkillExecutorImpl(
+      budgetBustingAdapter,
+      new Map(),
+      undefined,
+      [],
+      { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmTurns: 1, maxTotalTokens: 1 },
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    await expect(exec.execute(traceBaseParams())).rejects.toThrow(SkillExecutionBudgetError);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBeInstanceOf(SkillExecutionBudgetError);
   });
 });
 
