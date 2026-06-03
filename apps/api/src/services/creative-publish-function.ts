@@ -80,10 +80,19 @@ async function resolvePublishContext(
 }
 
 /**
- * The Meta publish call chain, isolated per object as a step.run checkpoint. Resumable:
- * each step reuses a metaId already persisted on the job (cross-run resume), so a retry
- * or a fresh re-dispatch never orphans or duplicates paused Meta objects. Activation is
- * unreachable (createAd is PAUSED-only; updateCampaignStatus is never called here).
+ * The Meta publish call chain, isolated per object as a step.run checkpoint. Each step
+ * reuses a metaId already persisted on the job, so the common retry / re-dispatch path
+ * (checkpoint already written) creates no duplicate. One residual window remains: a crash
+ * or DB-write failure BETWEEN a successful Meta create and its checkpoint write can orphan
+ * a PAUSED object that a retry then recreates. Every object is PAUSED (no spend), so this
+ * is benign; the operator deletes any stray draft in Ads Manager. Activation is unreachable
+ * (createAd is PAUSED-only; updateCampaignStatus is never called here).
+ *
+ * Retry policy: a precondition failure throws NonRetriableError (no retries, immediate
+ * dead-letter); a Meta-call failure propagates as a plain Error and is retried then
+ * dead-lettered (transient-optimized for rate limits / 5xx / network). A permanent Meta
+ * 4xx also consumes the retry budget, which is acceptable for a paused, no-spend draft;
+ * failing those fast would need typed errors from MetaAdsClient (future).
  */
 export async function executeCreativePublish(
   data: CreativePublishEventData,

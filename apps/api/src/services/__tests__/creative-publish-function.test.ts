@@ -118,7 +118,9 @@ describe("executeCreativePublish", () => {
 
   it("propagates a Meta error (retryable) and keeps the checkpoints written so far", async () => {
     const ads = makeAds();
-    ads.createDraftAdSet.mockRejectedValueOnce(new Error("Meta API error (400): bad targeting"));
+    // A transient Meta failure (rate limit / 5xx / network) propagates as a plain Error so
+    // Inngest retries it (vs a precondition failure, which throws NonRetriableError).
+    ads.createDraftAdSet.mockRejectedValueOnce(new Error("Meta API error (429): rate limited"));
     const store = makeStore(JOB_BASE);
     const { d } = deps({ ads, store });
     await expect(
