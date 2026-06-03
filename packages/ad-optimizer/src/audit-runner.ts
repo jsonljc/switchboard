@@ -24,10 +24,11 @@ import {
   type EmissionContext,
   type RecommendationEmitter,
 } from "./recommendation-sink.js";
-import { compareSources, compareCampaigns } from "./analyzers/source-comparator.js";
-import type { CampaignEconomicsRow } from "./analyzers/source-comparator.js";
-import { computeSpendBySource } from "./analyzers/spend-attributor.js";
-import type { SourceFunnel, CampaignFunnel } from "./crm-data-provider/real-provider.js";
+import { computeAuditEconomicsSections } from "./analyzers/source-reallocation.js";
+import type {
+  CampaignFunnel,
+  CrmFunnelDataWithSources,
+} from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
 import {
   resolveEconomicTarget,
@@ -493,37 +494,24 @@ export class AuditRunner {
     const adSetsLearningLimited = v2Sections.adSetsLearningLimited;
     recommendations.push(...v2Sections.learningLimitedRecs);
 
-    // Step 8b: Cross-source comparison (CTWA vs Instant Form on equal footing).
-    // Only computed when the CRM data provider returned a per-source funnel.
-    let sourceComparison: { rows: ReturnType<typeof compareSources>["rows"] } | undefined;
-    const bySource = (crmData as { bySource?: Record<string, SourceFunnel> }).bySource;
-    if (bySource && Object.keys(bySource).length > 0) {
-      const spendBySource = computeSpendBySource(currentInsights, bySource, adSetData);
-      sourceComparison = compareSources({ bySource, spendBySource });
-    }
-
-    // Per-campaign economics (PR2 Gate-4): CPL, cost-per-booked, and trueROAS.
-    // Mirrors sourceComparison; only when the provider gave a per-campaign funnel.
-    // Booked-VALUE (cents) comes from the injected port; absent → empty map →
-    // bookedValueCents/trueRoas null (graceful degradation, never a fabricated 0).
-    let campaignEconomics: { rows: CampaignEconomicsRow[] } | undefined;
-    if (byCampaign && Object.keys(byCampaign).length > 0) {
-      const spendByCampaign: Record<string, number> = {};
-      for (const i of currentInsights) spendByCampaign[i.campaignId] = i.spend;
-      const bookedValueCentsByCampaign = this.bookedValueByCampaignProvider
-        ? await this.bookedValueByCampaignProvider.queryBookedValueCentsByCampaign({
-            orgId: this.config.orgId,
-            from: new Date(dateRange.since),
-            to: new Date(dateRange.until),
-            campaignIds: currentInsights.map((i) => i.campaignId),
-          })
-        : new Map<string, number>();
-      campaignEconomics = compareCampaigns({
+    // Step 8b: per-source + per-campaign economics and the account-level reallocation
+    // advisory, computed in a focused module to keep this file under the 600-line cap.
+    // The per-source economics (previously computed-then-discarded) now drive one
+    // advisory shift_budget_to_source rec; campaignEconomics is unchanged.
+    const { sourceComparison, campaignEconomics, reallocation } =
+      await computeAuditEconomicsSections({
+        bySource: (crmData as CrmFunnelDataWithSources).bySource,
         byCampaign,
-        spendByCampaign,
-        bookedValueCentsByCampaign,
+        currentInsights,
+        adSetData,
+        measurementTrusted,
+        nextCycleDate,
+        orgId: this.config.orgId,
+        dateRange,
+        bookedValueProvider: this.bookedValueByCampaignProvider,
       });
-    }
+    if (reallocation?.type === "recommendation") recommendations.push(reallocation);
+    else if (reallocation?.type === "watch") watches.push(reallocation);
 
     // Step 8c: Append signal-health recommendations (non-critical breaches —
     // critical case short-circuited above before per-campaign work began).

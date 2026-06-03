@@ -67,6 +67,17 @@ export * from "./outcome-dispatcher.js";
 export { RealCrmDataProvider } from "./crm-data-provider/real-provider.js";
 export { compareSources, compareCampaigns } from "./analyzers/source-comparator.js";
 export {
+  decideSourceReallocation,
+  computeAuditEconomicsSections,
+  findShiftCandidates,
+  MIN_SOURCE_LEADS,
+  MIN_SOURCE_BOOKINGS,
+} from "./analyzers/source-reallocation.js";
+export type {
+  SourceReallocationInput,
+  AuditEconomicsSectionsInput,
+} from "./analyzers/source-reallocation.js";
+export {
   resolveEconomicTarget,
   resolveEconomicTargetForCampaign,
 } from "./analyzers/economic-target.js";

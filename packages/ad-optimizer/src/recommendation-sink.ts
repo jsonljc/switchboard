@@ -240,6 +240,24 @@ export function economicsCells(row: CampaignEconomicsRow | undefined): string[] 
 }
 
 /**
+ * Cross-source reallocation basis cells for the approval-moment dataLines. Surfaces
+ * each side's trueROAS (winner first) from a `shift_budget_to_source` rec's `params`
+ * (set by `decideSourceReallocation`) so the operator sees WHY the reallocation is
+ * recommended. Honest-null: returns [] when `params` is absent or carries no parseable
+ * source economics. Units: trueRoas is already a major ratio — formatted via
+ * `.toFixed(1)`, never re-divided.
+ */
+export function sourceReallocationCells(params: Record<string, string> | undefined): string[] {
+  if (!params) return [];
+  const { from, to, fromTrueRoas, toTrueRoas } = params;
+  if (!from || !to || fromTrueRoas === undefined || toTrueRoas === undefined) return [];
+  const fromRoas = Number(fromTrueRoas);
+  const toRoas = Number(toTrueRoas);
+  if (!Number.isFinite(fromRoas) || !Number.isFinite(toRoas)) return [];
+  return [`${to} ${toRoas.toFixed(1)}x true ROAS`, `${from} ${fromRoas.toFixed(1)}x true ROAS`];
+}
+
+/**
  * Surface-agnostic presentation. Defines the canonical button labels, data
  * lines, and optional first-person toast copy that any surface (queue card,
  * /riley page, inbox drawer) can render. The router sets `surface`; this
@@ -355,6 +373,8 @@ function buildPresentation(
   const found = labels[rec.action];
   const basis = economicBasisLine(rec);
   const economics = economicsCells(economicsRow);
+  const sourceCells =
+    rec.action === "shift_budget_to_source" ? sourceReallocationCells(rec.params) : [];
   return {
     primaryLabel: found.primary,
     secondaryLabel: found.secondary,
@@ -363,6 +383,7 @@ function buildPresentation(
       [rec.estimatedImpact],
       ...(basis ? [[basis]] : []),
       ...(economics.length > 0 ? [economics] : []),
+      ...(sourceCells.length > 0 ? [sourceCells] : []),
       [`Learning phase: ${rec.learningPhaseImpact}`],
     ],
     acceptToast: found.accept,

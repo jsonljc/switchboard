@@ -56,7 +56,6 @@ export interface CampaignDecisionInput {
   marginBasis: MarginBasis;
   targetROAS: number;
   nextCycleDate: string;
-  sourceComparison?: Parameters<typeof generateRecommendations>[0]["sourceComparison"];
   /**
    * Phase-A Gate 1: when `false`, an account-wide conversion-denominator
    * step-change is suspected (an attribution-window/action-type reporting shift,
@@ -158,7 +157,6 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
       // only `clicks`/`conversions` actually gate the evidence floor.
       days: 7,
     },
-    ...(input.sourceComparison ? { sourceComparison: input.sourceComparison } : {}),
   });
 
   for (const item of campaignRecs) {
