@@ -387,6 +387,51 @@ describe("PlatformLifecycle", () => {
       // Audit ledger recorded the approval and execution events
       expect(stores.ledger.record).toHaveBeenCalled();
     });
+
+    it("records a queued (async-dispatched) outcome as a non-failure", async () => {
+      const { approvalId } = stores.seed();
+
+      // A workflow handler that hands off to async execution returns outcome:"queued"
+      // (e.g. creative.job.publish dispatching its dead-lettered Inngest function). That
+      // is a success, not a failure.
+      vi.mocked(stores.modeRegistry.dispatch).mockResolvedValueOnce({
+        workUnitId: "wu-queued",
+        outcome: "queued",
+        summary: "Queued paused Meta draft package creation",
+        outputs: {},
+        mode: "workflow",
+        durationMs: 1,
+        traceId: "trace-queued",
+      } as never);
+
+      const result = await lifecycle.respondToApproval({
+        approvalId,
+        action: "approve",
+        respondedBy: "approver-1",
+        bindingHash: BINDING_HASH,
+      });
+
+      // Queued is a success.
+      expect(result.executionResult!.success).toBe(true);
+      // Envelope gets the dedicated "queued" status, never "failed".
+      const envStatuses = vi
+        .mocked(stores.envelopeStore.update)
+        .mock.calls.map((c) => (c[1] as { status?: string }).status);
+      expect(envStatuses).toContain("queued");
+      expect(envStatuses).not.toContain("failed");
+      // Audit records action.queued, never action.failed.
+      const auditEvents = vi
+        .mocked(stores.ledger.record)
+        .mock.calls.map((c) => (c[0] as { eventType?: string }).eventType);
+      expect(auditEvents).toContain("action.queued");
+      expect(auditEvents).not.toContain("action.failed");
+      // Trace outcome reflects queued.
+      expect(stores.traceStore.update).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ outcome: "queued" }),
+        expect.anything(),
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
