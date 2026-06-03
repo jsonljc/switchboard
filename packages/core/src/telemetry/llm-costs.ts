@@ -135,3 +135,42 @@ export function getModelCost(modelId: string): ModelCostEntry | null {
 export function listModelCosts(): ModelCostEntry[] {
   return Object.values(LLM_COST_TABLE);
 }
+
+/**
+ * Map a concrete (possibly versioned) model id to a LLM_COST_TABLE key.
+ * The router emits ids like "claude-sonnet-4-6" / "claude-haiku-4-5-20251001";
+ * the table is keyed by family ("claude-sonnet-4"). Prefix-match the family.
+ */
+function normalizeModelId(modelId: string): string {
+  if (modelId.includes("opus")) return "claude-opus-4";
+  if (modelId.includes("sonnet")) return "claude-sonnet-4";
+  if (modelId.includes("haiku")) return "claude-haiku-4";
+  return modelId; // GPT ids and exact table keys pass through unchanged
+}
+
+// Anthropic cache-token pricing multipliers relative to base input price.
+const CACHE_READ_MULTIPLIER = 0.1;
+const CACHE_WRITE_MULTIPLIER = 1.25;
+
+/**
+ * Compute the USD cost for a single skill execution, including prompt-cache tokens.
+ * Cache reads are billed at 0.1x the base input rate; cache writes at 1.25x.
+ */
+export function computeExecutionCostUSD(input: {
+  model?: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+}): { totalCost: number; modelId: string } {
+  const key = normalizeModelId(input.model ?? DEFAULT_MODEL_ID);
+  const entry = LLM_COST_TABLE[key] ?? LLM_COST_TABLE[DEFAULT_MODEL_ID]!;
+  const inPerTok = entry.inputCostPer1K / 1000;
+  const outPerTok = entry.outputCostPer1K / 1000;
+  const totalCost =
+    input.inputTokens * inPerTok +
+    input.outputTokens * outPerTok +
+    (input.cacheReadTokens ?? 0) * inPerTok * CACHE_READ_MULTIPLIER +
+    (input.cacheCreationTokens ?? 0) * inPerTok * CACHE_WRITE_MULTIPLIER;
+  return { totalCost, modelId: input.model ?? DEFAULT_MODEL_ID };
+}
