@@ -40,6 +40,8 @@ import {
   type CanonicalSubmitRequest,
   type DeploymentContext,
   type SubmitWorkResponse,
+  type ExecutionConstraints,
+  type GovernanceDecision,
 } from "@switchboard/core/platform";
 import type { WorkTrace, WorkTraceStore, WorkTraceReadResult } from "@switchboard/core/platform";
 import { evaluate, resolveIdentity } from "@switchboard/core";
@@ -303,6 +305,7 @@ function buildCreativeStores(jobs: CreativeJobRow[]): CreativeConceptDraftDeps {
 interface FullLoopHarness {
   ingress: PlatformIngress;
   submitChildWork: (req: ChildWorkRequest) => Promise<SubmitWorkResponse>;
+  modeRegistry: ExecutionModeRegistry;
   jobs: CreativeJobRow[];
 }
 
@@ -350,7 +353,7 @@ function buildHarness(policies: Policy[]): FullLoopHarness {
   });
   ref.ingress = ingress;
 
-  return { ingress, submitChildWork, jobs };
+  return { ingress, submitChildWork, modeRegistry, jobs };
 }
 
 // ── Synthetic Meta insight that yields a refresh_creative recommendation ──
@@ -570,8 +573,11 @@ describe("Riley cron -> Mira handoff (FULL loop: synthetic insight to /mira read
     expect(parked).toHaveLength(1);
     const { req } = parked[0]!;
 
-    // Post-approval dispatch: the lifecycle hands the parked WorkUnit to its handler.
-    // Drive that with the REAL handler + REAL submitChildWork (re-enters the ingress).
+    // Post-approval dispatch: production approves the parked WorkUnit then dispatches
+    // it via modeRegistry.dispatch("workflow", ...) (platform-lifecycle executeAfterApproval).
+    // Drive that SAME path through the REAL ExecutionModeRegistry so a missing/renamed
+    // "adoptimizer.recommendation.handoff" handler REGISTRATION would fail here
+    // (WorkflowMode returns WORKFLOW_NOT_REGISTERED), not just a hand-called factory.
     const parkedWorkUnit = {
       id: "wu-handoff",
       organizationId: ORG,
@@ -581,9 +587,12 @@ describe("Riley cron -> Mira handoff (FULL loop: synthetic insight to /mira read
       trigger: "internal",
       priority: "normal",
     } as WorkUnit;
-    const result = await buildRecommendationHandoffWorkflow().execute(parkedWorkUnit, {
-      submitChildWork: h.submitChildWork,
-    });
+    const result = await h.modeRegistry.dispatch(
+      "workflow",
+      parkedWorkUnit,
+      {} as ExecutionConstraints,
+      { traceId: "trace-handoff", governanceDecision: {} as GovernanceDecision },
+    );
 
     expect(result.outcome).toBe("completed");
     const jobId = (result.outputs as { jobId?: string }).jobId;
@@ -612,9 +621,14 @@ describe("Riley cron -> Mira handoff (FULL loop: synthetic insight to /mira read
     // A submit is still attempted (Riley does not abstain), but the gate default-denies.
     expect(parked).toHaveLength(1);
     const { res } = parked[0]!;
-    const isParked = res.ok && "approvalRequired" in res && res.approvalRequired === true;
-    const isCompleted = res.ok && res.result.outcome === "completed";
-    expect(isParked).toBe(false);
-    expect(isCompleted).toBe(false);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Specifically a GOVERNANCE default-deny, not an intent/deployment setup failure:
+    // the deny path returns a failed result with the "Denied by governance" summary and
+    // NO approvalRequired flag (so it neither parks nor auto-executes). Asserting the
+    // reason keeps the control from passing vacuously on an unrelated ok:false setup error.
+    expect("approvalRequired" in res).toBe(false);
+    expect(res.result.outcome).toBe("failed");
+    expect(res.result.summary).toBe("Denied by governance");
   });
 });
