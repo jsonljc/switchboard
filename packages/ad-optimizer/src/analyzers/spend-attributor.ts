@@ -25,6 +25,30 @@ function isFullyAttributed(attributed: number, total: number): boolean {
 }
 
 /**
+ * Fraction of total campaign spend that the source-reallocation decision requires to be
+ * ad-set-attributed (vs the synthetic lead-share fallback) before the per-source trueROAS
+ * comparison is trusted to move budget. A coverage threshold, not mere presence (#851 named
+ * this refinement). Conservative by construction: a campaign mixing a tracked (CTWA /
+ * instant-form) ad set with an untracked (e.g. WEBSITE) one is NOT fully attributed, so it
+ * contributes 0 to the numerator (whole-campaign fallback). 0.7 is tuned against the
+ * currently-mapped destinations (ON_AD / WHATSAPP, see `destinationTypeToSource`); revisit
+ * once a real account's `destination_type` distribution is observed. Eval-tunable — never
+ * change silently.
+ */
+export const SPEND_ATTRIBUTION_COVERAGE_FLOOR = 0.7;
+
+export interface SpendAttributionResult {
+  /** Spend attributed to each source (real ad-set attribution where a campaign is fully
+   * attributed; synthetic lead-share otherwise). */
+  spendBySource: Record<string, number>;
+  /** Fraction of total campaign spend that came from ad-set destination attribution (the
+   * spend of fully-attributed campaigns ÷ total spend). 0 when there is no spend. Both
+   * numerator and denominator are insights-side, so ad sets referencing a campaign absent
+   * from `insights` never inflate it. */
+  attributedFraction: number;
+}
+
+/**
  * Compute spend attributed to each source. Strategy (Option B per Task 13 review):
  *   1. Tally matched ad-set spend per campaign by destination_type.
  *   2. A campaign is "fully attributed" only if matched-ad-set spend ≈ total
@@ -42,7 +66,7 @@ export function computeSpendBySource(
   insights: CampaignInsight[],
   bySource: Record<string, SourceFunnel>,
   adSetData: AdSetLearningInput[] | null,
-): Record<string, number> {
+): SpendAttributionResult {
   const sources = Object.keys(bySource);
   const spendBySource: Record<string, number> = Object.fromEntries(sources.map((s) => [s, 0]));
 
@@ -91,5 +115,14 @@ export function computeSpendBySource(
     }
   }
 
-  return spendBySource;
+  // Coverage: fraction of total spend that is REAL ad-set attribution (fully-attributed
+  // campaigns) vs the synthetic lead-share fallback. Strictly insights-side, so orphan ad
+  // sets (campaignId not in `insights`) cannot inflate it. Drives `spendAttributionTrusted`.
+  const totalSpend = insights.reduce((sum, i) => sum + i.spend, 0);
+  const attributedSpend = insights
+    .filter((i) => campaignsFullyAttributed.has(i.campaignId))
+    .reduce((sum, i) => sum + i.spend, 0);
+  const attributedFraction = totalSpend > 0 ? attributedSpend / totalSpend : 0;
+
+  return { spendBySource, attributedFraction };
 }

@@ -7,7 +7,7 @@ import type {
 import type { SourceComparisonRow, CampaignEconomicsRow } from "./source-comparator.js";
 import type { SourceFunnel, CampaignFunnel } from "../crm-data-provider/real-provider.js";
 import { compareSources, compareCampaigns } from "./source-comparator.js";
-import { computeSpendBySource, destinationTypeToSource } from "./spend-attributor.js";
+import { computeSpendBySource, SPEND_ATTRIBUTION_COVERAGE_FLOOR } from "./spend-attributor.js";
 import { resetsLearningFor, learningPhaseImpactText } from "../action-reset-classification.js";
 import { meetsEvidenceFloor } from "../evidence-floor.js";
 
@@ -246,16 +246,19 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
   let reallocation: RecommendationOutput | WatchOutput | null = null;
   const { bySource } = input;
   if (bySource && Object.keys(bySource).length > 0) {
-    const spendBySource = computeSpendBySource(input.currentInsights, bySource, input.adSetData);
+    const { spendBySource, attributedFraction } = computeSpendBySource(
+      input.currentInsights,
+      bySource,
+      input.adSetData,
+    );
     sourceComparison = compareSources({ bySource, spendBySource });
-    // Per-source spend is trustworthy only when ad-set destination data attributes it;
-    // otherwise computeSpendBySource allocated it by lead share (synthetic). Gate the
-    // DECISION on real attribution (the comparison still feeds the report). The current
-    // weekly cron does not wire getAdSetInsights, so this abstains in production until
-    // ad-set attribution is wired; a coverage threshold (vs mere presence) is a refinement
-    // to land WITH that wiring.
-    const spendAttributionTrusted =
-      input.adSetData?.some((a) => destinationTypeToSource(a.destinationType) !== null) ?? false;
+    // Per-source spend is trustworthy only when a sufficient FRACTION of total spend is
+    // ad-set-attributed (coverage), not on mere ad-set presence; below the floor the
+    // trueROAS comparison rests too heavily on the synthetic lead-share fallback to move
+    // budget. Gate the DECISION on coverage (the comparison still feeds the report's
+    // display). With ad-set attribution now wired into the weekly cron, this fires in
+    // production when coverage clears the floor and abstains (honest-null) when it does not.
+    const spendAttributionTrusted = attributedFraction >= SPEND_ATTRIBUTION_COVERAGE_FLOOR;
     reallocation = decideSourceReallocation({
       sourceComparison,
       bySource,

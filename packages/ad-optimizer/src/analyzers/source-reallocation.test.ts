@@ -6,7 +6,10 @@ import {
 } from "./source-reallocation.js";
 import type { SourceComparisonRow } from "./source-comparator.js";
 import type { SourceFunnel } from "../crm-data-provider/real-provider.js";
-import type { CampaignInsightSchema as CampaignInsight } from "@switchboard/schemas";
+import type {
+  CampaignInsightSchema as CampaignInsight,
+  AdSetLearningInput,
+} from "@switchboard/schemas";
 
 const funnel = (over: Partial<SourceFunnel>): SourceFunnel => ({
   received: 40,
@@ -172,6 +175,74 @@ describe("computeAuditEconomicsSections", () => {
         ctwa: funnel({ received: 40, booked: 10, paid: 12, revenue: 38000 }),
         instant_form: funnel({ received: 30, booked: 6, paid: 3, revenue: 10000 }),
       },
+      byCampaign: undefined,
+    });
+    expect(out.sourceComparison?.rows.length).toBe(2);
+    expect(out.reallocation).toBeNull();
+  });
+
+  const adSet = (
+    campaignId: string,
+    adSetId: string,
+    destinationType: string,
+    spend: number,
+  ): AdSetLearningInput => ({
+    adSetId,
+    adSetName: adSetId,
+    campaignId,
+    learningStageStatus: "SUCCESS",
+    frequency: 0,
+    spend,
+    conversions: 0,
+    cpa: 0,
+    roas: 0,
+    inlineLinkClickCtr: 0,
+    destinationType,
+  });
+  const winnerBySource = {
+    ctwa: funnel({ received: 40, booked: 10, paid: 12, revenue: 38000 }),
+    instant_form: funnel({ received: 30, booked: 6, paid: 3, revenue: 10000 }),
+  };
+
+  it("FIRES the reallocation when ad-set attribution coverage clears the floor (real attribution)", async () => {
+    // Two single-source campaigns, each fully ad-set-attributed → coverage 1.0 ≥ floor.
+    // Per-source spend (ctwa 100 / instant_form 100) yields trueROAS 3.8 vs 1.0 → clear winner.
+    const out = await computeAuditEconomicsSections({
+      ...sectionBase,
+      currentInsights: [
+        insight({ campaignId: "c_ctwa", spend: 100, inlineLinkClicks: 200, conversions: 20 }),
+        insight({ campaignId: "c_if", spend: 100, inlineLinkClicks: 200, conversions: 20 }),
+      ],
+      adSetData: [
+        adSet("c_ctwa", "as_ctwa", "WHATSAPP", 100),
+        adSet("c_if", "as_if", "ON_AD", 100),
+      ],
+      bySource: winnerBySource,
+      byCampaign: undefined,
+    });
+    expect(out.reallocation?.type).toBe("recommendation");
+    expect(out.reallocation && "action" in out.reallocation && out.reallocation.action).toBe(
+      "shift_budget_to_source",
+    );
+  });
+
+  it("ABSTAINS (null) when coverage is below the floor even though a clear winner exists", async () => {
+    // Same two attributed campaigns PLUS a large WEBSITE-only campaign (unmapped → lead-share).
+    // Coverage = 200/500 = 0.4 < floor. The website spend inflates both sources proportionally,
+    // so ctwa still wins clearly (gates 1-2 pass) — the COVERAGE gate is what abstains.
+    const out = await computeAuditEconomicsSections({
+      ...sectionBase,
+      currentInsights: [
+        insight({ campaignId: "c_ctwa", spend: 100, inlineLinkClicks: 200, conversions: 20 }),
+        insight({ campaignId: "c_if", spend: 100, inlineLinkClicks: 200, conversions: 20 }),
+        insight({ campaignId: "c_web", spend: 300, inlineLinkClicks: 200, conversions: 20 }),
+      ],
+      adSetData: [
+        adSet("c_ctwa", "as_ctwa", "WHATSAPP", 100),
+        adSet("c_if", "as_if", "ON_AD", 100),
+        adSet("c_web", "as_web", "WEBSITE", 300),
+      ],
+      bySource: winnerBySource,
       byCampaign: undefined,
     });
     expect(out.sourceComparison?.rows.length).toBe(2);
