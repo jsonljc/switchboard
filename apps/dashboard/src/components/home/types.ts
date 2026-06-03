@@ -1,14 +1,6 @@
 import type { AgentKey } from "@switchboard/schemas";
 import type { AgentActivity } from "@/components/agent-avatar/agent-status-visual";
 
-/** One agent in the Team Pulse chip ribbon. `setUp` false ⇒ greyed/coming-soon chip. */
-export interface TeamPulseAgent {
-  key: AgentKey;
-  name: string;
-  status: "working" | "idle";
-  setUp: boolean;
-}
-
 /** One agent in the hero crew band. `status` is the REAL per-agent activity
  *  (idle for agents with no role row, e.g. Mira). `setupLoading` true while
  *  Mira's enablement probe is unresolved (never show "Not set up" then). */

@@ -223,77 +223,6 @@
 }
 
 /* =========================================================
-   TEAM PULSE — chip ribbon
-   ========================================================= */
-.pulseRibbon {
-  display: flex;
-  gap: 8px;
-  padding: 2px 18px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -18px;
-}
-.pulseRibbon::-webkit-scrollbar {
-  display: none;
-}
-@media (min-width: 768px) {
-  .pulseRibbon {
-    margin: 0;
-    padding: 2px;
-  }
-}
-.agentChip {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 14px 8px 8px;
-  border-radius: 9999px;
-  background: hsl(var(--surface));
-  border: 1px solid var(--hair-soft);
-  box-shadow: var(--shadow-card);
-  transition:
-    transform 200ms var(--ease-home),
-    border-color 200ms ease;
-  cursor: pointer;
-}
-.agentChip:hover {
-  transform: translateY(-1px);
-  border-color: var(--hair);
-}
-.agentChip:focus-visible {
-  outline: 2px solid hsl(var(--action));
-  outline-offset: 2px;
-}
-.agentChip[data-disabled="true"] {
-  opacity: 0.65;
-}
-.agentChipName {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
-  letter-spacing: -0.005em;
-}
-.agentChipStatus {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink-4);
-  flex-shrink: 0;
-}
-.agentChipStatus[data-on="true"] {
-  background: hsl(var(--agent-active));
-  box-shadow: 0 0 0 3px hsl(var(--agent-active) / 0.18);
-}
-.agentChipNotSetUp {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-/* =========================================================
    NEEDS YOU — decision cards live here (stack container)
    ========================================================= */
 .needsSection {
@@ -475,7 +404,7 @@
 }
 
 /* =========================================================
-   TEAM BAND — the crew onstage at hero scale (replaces the ribbon)
+   TEAM BAND: the crew onstage at hero scale (replaces the ribbon)
    Identity hues live on the portrait only (PrintedPortraitAvatar):
    the tile chrome (border, hover, focus ring) is neutral/amber, never
    an agent color. Heading is NOT italic (the shared .moduleH h2 is).

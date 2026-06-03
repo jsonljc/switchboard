@@ -20,25 +20,39 @@ import { Verdict } from "./verdict";
 import { composeVerdict } from "./compose-verdict";
 import { NeedsYou } from "./needs-you";
 import { NeedsYouCard } from "./needs-you-card";
-import { TeamPulse } from "./team-pulse";
+import { TeamBand } from "./team-band";
 import { ThisWeek } from "./this-week";
 import { WhileYouSlept } from "./while-you-slept";
 import { WorkInProgress } from "./work-in-progress";
 import { Permissions } from "./permissions";
 import type {
   PermissionsModel,
-  TeamPulseAgent,
+  TeamBandAgent,
   ThisWeekModel,
   VerdictSignals,
   WhileYouSleptRow,
   WorkInProgressItem,
 } from "./types";
+import type { AgentActivity } from "@/components/agent-avatar/agent-status-visual";
+import type { DerivedAgentStateEntry } from "@/lib/api-client-types";
 import { HomeModuleBoundary } from "./home-module-boundary";
 import styles from "./home.module.css";
 
-// Working statuses, per lib/agent-status.ts. An agent is only "working" with
-// positive evidence (and never while the org is halted).
-const WORKING_STATUSES = new Set(["working", "analyzing"]);
+/** Canonical key -> legacy agentRole used by /api/agents/state (mira has no row). */
+const AGENT_ROLE_FOR_KEY: Partial<Record<AgentKey, string>> = {
+  alex: "responder",
+  riley: "optimizer",
+};
+
+/** Real per-agent activity. Mira (no role row) is never inferred working here. */
+function statusForAgent(
+  key: AgentKey,
+  states: DerivedAgentStateEntry[] | undefined,
+): AgentActivity {
+  const role = AGENT_ROLE_FOR_KEY[key];
+  if (!role) return "idle";
+  return states?.find((s) => s.agentRole === role)?.activityStatus ?? "idle";
+}
 
 /** First name only — the verdict salutation is warm, not formal. */
 function firstName(full: string | null | undefined): string | undefined {
@@ -102,7 +116,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   // Signal is in HOURS — convert to minutes so the "min" copy is honest.
   const oldestWaitMin = oldestHours.length > 0 ? Math.round(Math.max(...oldestHours) * 60) : null;
 
-  // ── Team Pulse (canonical alex/riley/mira from the registry) ───────────────
+  // ── Team Band (canonical alex/riley/mira from the registry) ────────────────
   // Presence (`setUp`) reflects REAL per-agent enablement: alex/riley derive it
   // from mission core-completion (e.g. inbox / Meta connected), so an org that
   // hasn't connected an agent's core channel sees it honestly "Not set up" —
@@ -110,41 +124,42 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   // gated mission endpoint: 2xx ⇒ enabled, non-2xx ⇒ not enabled). When a mission hook is
   // loading or errored, fall back to launchTier rather than flipping to a
   // transient "Not set up".
-  // Working status needs positive evidence we can attribute to a canonical
-  // agent; the legacy state rows give none, so chips stay idle (never a
-  // fabricated "working") and any halt forces idle.
+  // Working status is attributed PER AGENT via the legacy state rows (keyed by
+  // agentRole — alex=responder, riley=optimizer). Mira has no role row, so it is
+  // never inferred working from this endpoint. The TeamBand renders "Asleep" on
+  // halt; here we keep the raw per-agent status and let the band + the
+  // working-count clause below apply the halt gate.
   const rosterStateAvailable =
     (!roster.isError && roster.data !== undefined) ||
     (!agentState.isError && agentState.data !== undefined);
-  const hasWorkingState =
-    !isHalted &&
-    Boolean(agentState.data?.states?.some((s) => WORKING_STATUSES.has(s.activityStatus)));
 
-  const teamPulseAgents: TeamPulseAgent[] = (Object.keys(AGENT_REGISTRY) as AgentKey[]).map(
-    (key) => {
-      const entry = AGENT_REGISTRY[key];
-      let setUp: boolean;
-      if (key === "alex" && alexMission.data) {
-        setUp = !coreSetupIncomplete(alexMission.data, "alex");
-      } else if (key === "riley" && rileyMission.data) {
-        setUp = !coreSetupIncomplete(rileyMission.data, "riley");
-      } else if (key === "mira") {
-        // Real per-org enablement (probe). Loading/unknown → not set up (Mira is
-        // day-thirty), so we never flash a transient wrong state.
-        setUp = miraEnabled.enabled === true;
-      } else {
-        setUp = entry.launchTier === "day-one";
-      }
-      return {
-        key,
-        name: entry.displayName,
-        status: setUp && hasWorkingState ? "working" : "idle",
-        setUp,
-      };
-    },
-  );
-  const setUpCount = teamPulseAgents.filter((a) => a.setUp).length;
-  const workingCount = teamPulseAgents.filter((a) => a.status === "working").length;
+  const teamBandAgents: TeamBandAgent[] = (Object.keys(AGENT_REGISTRY) as AgentKey[]).map((key) => {
+    const entry = AGENT_REGISTRY[key];
+    let setUp: boolean;
+    let setupLoading = false;
+    if (key === "alex" && alexMission.data) {
+      setUp = !coreSetupIncomplete(alexMission.data, "alex");
+    } else if (key === "riley" && rileyMission.data) {
+      setUp = !coreSetupIncomplete(rileyMission.data, "riley");
+    } else if (key === "mira") {
+      setUp = miraEnabled.enabled === true;
+      setupLoading = miraEnabled.enabled === undefined; // probe unresolved: never flash "Not set up"
+    } else {
+      setUp = entry.launchTier === "day-one";
+    }
+    return {
+      key,
+      name: entry.displayName,
+      setUp,
+      setupLoading,
+      status: statusForAgent(key, agentState.data?.states),
+      halted: isHalted,
+    };
+  });
+  const setUpCount = teamBandAgents.filter((a) => a.setUp).length;
+  const workingCount = teamBandAgents.filter(
+    (a) => a.setUp && !a.halted && (a.status === "working" || a.status === "analyzing"),
+  ).length;
 
   // ── Verdict signals (honest; fallback when core signals are unavailable) ───
   // The verdict shape (active/calm/fallback) depends ONLY on the decision feed.
@@ -236,7 +251,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   );
   const teamPulseNode = (
     <HomeModuleBoundary key="team-pulse">
-      <TeamPulse agents={teamPulseAgents} onOpenAgent={setPanelAgent} />
+      <TeamBand agents={teamBandAgents} onOpenAgent={setPanelAgent} />
     </HomeModuleBoundary>
   );
   const thisWeekNode = (
@@ -260,8 +275,8 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
     </HomeModuleBoundary>
   );
 
-  // ACTIVE: Verdict → NeedsYou → TeamPulse → ThisWeek → WhileYouSlept → WIP → Permissions
-  // CALM:   Verdict → ThisWeek (promoted) → TeamPulse → WhileYouSlept → WIP → Permissions
+  // ACTIVE: Verdict → NeedsYou → TeamBand → ThisWeek → WhileYouSlept → WIP → Permissions
+  // CALM:   Verdict → ThisWeek (promoted) → TeamBand → WhileYouSlept → WIP → Permissions
   //         (NeedsYou is not rendered when empty)
   const modules = isCalm
     ? [
@@ -285,7 +300,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   // Bento split (desktop only — display:contents below lg keeps the flat mobile order):
   // hero = verdict (modules[0]); main = next N "active" modules; rail = the quiet remainder.
   const [heroNode, ...restNodes] = modules;
-  const mainCount = isCalm ? 2 : 3; // active: NeedsYou, TeamPulse, ThisWeek · calm: ThisWeek, TeamPulse
+  const mainCount = isCalm ? 2 : 3; // active: NeedsYou, TeamBand, ThisWeek · calm: ThisWeek, TeamBand
   const mainNodes = restNodes.slice(0, mainCount);
   const railNodes = restNodes.slice(mainCount);
 

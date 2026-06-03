@@ -7,7 +7,7 @@
 /* Avatar trigger in the card head — resets button defaults so the avatar
    still looks like an avatar, not a native button.
    :focus-visible ring matches the project pattern:
-     .agentChip:focus-visible (home.module.css)
+     .teamMate:focus-visible (home.module.css)
      .agentChipBtn:focus-visible (results.module.css)
    WCAG 2.4.7: visible keyboard focus indicator required. */
 .inbox-agent-btn {
