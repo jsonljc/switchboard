@@ -51,14 +51,14 @@ export function MiraCreativeFeed() {
   if (isError) {
     return (
       <div style={{ padding: 28, color: "#777" }}>
-        Couldn&apos;t load your drafts — pull to refresh.
+        Couldn&apos;t load your drafts. Pull to refresh.
       </div>
     );
   }
   if (jobs.length === 0) {
     return (
       <div style={{ padding: 28, color: "#777" }}>
-        No drafts to review yet — Mira&apos;s drafts will appear here as they generate.
+        No drafts to review yet. Mira&apos;s drafts will appear here as she drafts them.
       </div>
     );
   }

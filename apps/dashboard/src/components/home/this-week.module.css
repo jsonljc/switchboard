@@ -120,12 +120,6 @@
   letter-spacing: -0.005em;
   font-weight: 400;
 }
-.weeknoteSignoff::before {
-  content: "—";
-  color: var(--ink-3);
-  margin-right: 2px;
-  font-style: normal;
-}
 .weeknoteSignoffMark {
   font-family: var(--font-home-serif);
   font-style: italic;
@@ -165,4 +159,7 @@
   outline: 2px solid hsl(var(--action));
   outline-offset: 2px;
 }
-.weeknote:hover { transform: translateY(-2px); border-color: var(--hair); }
+.weeknote:hover {
+  transform: translateY(-2px);
+  border-color: var(--hair);
+}

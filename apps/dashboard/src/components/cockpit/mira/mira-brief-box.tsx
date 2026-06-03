@@ -122,7 +122,7 @@ export function MiraBriefBox() {
           </div>
           {create.isError && (
             <p style={{ margin: "8px 0 0", fontSize: 12, color: T.red }}>
-              Couldn&apos;t start the draft — try again.
+              Couldn&apos;t start the draft. Try again.
             </p>
           )}
         </div>
@@ -207,7 +207,7 @@ export function MiraBriefBox() {
             )}
             {phase === "submitted" && (
               <span style={{ fontSize: 13, color: MIRA_ACCENT.base }}>
-                Mira is on it — she started a draft. You&apos;ll review it before anything goes
+                Mira is on it. She started a draft. You&apos;ll review it before anything goes
                 further.
               </span>
             )}

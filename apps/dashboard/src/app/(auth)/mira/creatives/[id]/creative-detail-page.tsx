@@ -18,7 +18,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
 
   if (jobQ.isLoading) return <div style={{ padding: 28 }}>Loading draft…</div>;
   if (jobQ.isError)
-    return <div style={{ padding: 28 }}>Couldn&apos;t load this draft — try again.</div>;
+    return <div style={{ padding: 28 }}>Couldn&apos;t load this draft. Try again.</div>;
   if (!job) return <div style={{ padding: 28 }}>Draft not found.</div>;
 
   const videoUrl = job.draft?.videoUrl;
@@ -34,7 +34,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
           fontSize: 13,
         }}
       >
-        Draft only — not published. Nothing goes live without you.
+        Draft only. Not published. Nothing goes live without you.
       </div>
 
       <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em", color: T.ink }}>
@@ -50,12 +50,12 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
           style={{ width: "100%", borderRadius: 10 }}
         />
       ) : (
-        <div style={{ color: T.ink3 }}>No draft clip yet — still generating.</div>
+        <div style={{ color: T.ink3 }}>No draft clip yet. Still drafting.</div>
       )}
 
       <div style={{ fontSize: 13, color: T.ink3 }}>
         {job.status === "draft_ready"
-          ? "Draft completed — ready for your review."
+          ? "Draft completed. Ready for your review."
           : job.status === "stopped"
             ? "This draft was stopped."
             : job.status === "awaiting_review"
@@ -99,8 +99,8 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               )}
               <span style={{ fontSize: 12, color: T.ink3 }}>
                 {estimateQ.data
-                  ? `Continue runs the next generation step (~$${estimateQ.data.basic.cost}). Stop is free but can't be undone.`
-                  : "Continue runs the next generation step (a real cost). Stop is free but can't be undone."}
+                  ? `Continue runs the next render step (~$${estimateQ.data.basic.cost}). Stop is free but can't be undone.`
+                  : "Continue runs the next render step (a real cost). Stop is free but can't be undone."}
               </span>
             </div>
           )}
@@ -118,9 +118,9 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               }}
             >
               <span style={{ fontSize: 13, color: T.ink2 }}>
-                Continue draft? Runs the next generation step. This may create provider cost
-                {estimateQ.data ? ` (about $${estimateQ.data.basic.cost})` : ""}. It stays a draft —
-                nothing is published.
+                Continue draft? Runs the next render step. This may create provider cost
+                {estimateQ.data ? ` (about $${estimateQ.data.basic.cost})` : ""}. It stays a draft.
+                Nothing is published.
               </span>
               {estimateQ.data ? (
                 <div
@@ -263,13 +263,13 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
 
           {approve.isError && (
             <span style={{ color: T.red, fontSize: 12 }}>
-              Couldn&apos;t update the draft — try again.
+              Couldn&apos;t update the draft. Try again.
             </span>
           )}
 
           {approve.data?.pendingApproval && (
             <span style={{ color: T.ink2, fontSize: 12 }}>
-              Queued for your approval — this render is over the auto-spend limit, so it needs your
+              Queued for your approval. This render is over the auto-spend limit, so it needs your
               sign-off. Nothing ran or was charged.
             </span>
           )}
