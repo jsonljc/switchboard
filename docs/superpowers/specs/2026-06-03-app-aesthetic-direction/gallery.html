@@ -1,0 +1,51 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Switchboard — 6 aesthetic directions</title>
+<style>
+  :root{--ink:#1a1408;--mut:#6b5d49;--line:#e3ddd0}
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9e9ec;color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto}
+  header{padding:34px 28px 10px;max-width:1320px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--mut);margin:0;max-width:760px}
+  .grid{max-width:1320px;margin:0 auto;padding:18px 22px 60px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  @media(max-width:1080px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 26px rgba(20,16,8,.05)}
+  .thumb{height:340px;overflow:hidden;background:#f4efe6;border-bottom:1px solid var(--line);position:relative}
+  .thumb img{width:100%;display:block}
+  .body{padding:14px 16px 16px}
+  .nm{font-size:17px;font-weight:650;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+  .rec{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#9e6320;border-radius:999px;padding:3px 8px}
+  .th{color:var(--mut);font-size:13.5px;margin:6px 0 12px;min-height:38px}
+  .open{display:inline-block;font-weight:600;color:#9a5b05;text-decoration:none;border:1px solid #e7cf9f;background:#fdf6e7;padding:8px 12px;border-radius:9px;font-size:13.5px}
+  .open:hover{background:#fbeccb}
+  footer{max-width:1320px;margin:0 auto;padding:0 28px 50px;color:var(--mut);font-size:13px}
+</style></head><body>
+<header>
+  <h1>Switchboard — six aesthetic directions</h1>
+  <p class="sub">Each is a fully-resolved take on the product app, built with the real 8-bit Alex/Riley sprites (Mira proposed). Same screens & copy in every one, so they compare apples-to-apples. Scroll the thumbnail, or open the full mockup to see Home · Inbox · the money-moment · a “meet your team” hero · desktop · a dark variant.</p>
+</header>
+<div class="grid" id="grid"></div>
+<footer>Files: <code>/tmp/sb-aesthetic-fanout/mockups/&lt;slug&gt;/index.html</code> · screenshots in <code>/tmp/sb-aesthetic-fanout/shots/</code></footer>
+<script>
+  const items = [
+    {slug:"fused", nm:"The Fusion — balanced", rec:true, th:"The chosen direction: Quiet-Modern calm + sober money screens, Your Team's lovable crew at the hero, Warm-Riso printed-portrait texture. Distinct Mira. The build target."},
+    {slug:"your-team", nm:"Your Team", th:"A lovable pixel crew you bond with, wrapped in calm, Stripe-grade money UI. The avatars are the hero."},
+    {slug:"quiet-modern", nm:"Quiet Modern", th:"Serene Linear/Things-grade minimalism; the pixel face is the one warm wink. Safest premium, ages best, calmest money screen."},
+    {slug:"liquid-warmth", nm:"Liquid Warmth", th:"Apple ‘liquid glass’, warmed — agents glow behind frosted glass; mono labels, no italics. Your earlier north star, executed."},
+    {slug:"broadsheet", nm:"The Broadsheet", th:"A private evening newspaper your agents publish you — pixel cameos, editorial serif, drop-cap weeknote. Highest taste ceiling."},
+    {slug:"operator-console", nm:"Operator Console", th:"Warm mission-control — your crew on watch under status lights, mono-forward. The most ‘agentic’ read."},
+    {slug:"warm-riso", nm:"Warm Risograph", th:"Printed in limited warm inks with registration-offset charm; pixels look struck in the same press. The most ownable."},
+  ];
+  document.getElementById("grid").innerHTML = items.map(i=>`
+    <div class="card">
+      <a class="thumb" href="mockups/${i.slug}/index.html"><img src="shots/${i.slug}.png" alt="${i.nm}"></a>
+      <div class="body">
+        <p class="nm">${i.nm} ${i.rec?'<span class="rec">Build target</span>':''}</p>
+        <p class="th">${i.th}</p>
+        <a class="open" href="mockups/${i.slug}/index.html">Open full mockup ↗</a>
+      </div>
+    </div>`).join("");
+</script>
+</body></html>

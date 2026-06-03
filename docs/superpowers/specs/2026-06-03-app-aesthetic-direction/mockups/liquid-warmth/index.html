@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Switchboard — Liquid Warmth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   SWITCHBOARD — "LIQUID WARMTH"
+   Apple Liquid-Glass, warm. Frosted cards floating over warm
+   ambient light; each agent glows behind glass in a lightwell.
+   Decision surfaces stay SOLID + AA-legible. No italics.
+   ============================================================ */
+
+:root{
+  /* --- warm canvas + ambient --- */
+  --sand:        #F6F1E8;
+  --sand-deep:   #EFE6D7;
+  --cream:       #FFFAF2;
+  --peach:       #F7D9B5;
+  --rose:        #F3C9C4;
+  --amber-bloom: #F4C77E;
+
+  /* --- ink --- */
+  --ink:         #211A12;   /* 15.3:1 on sand */
+  --ink-2:       #4A3F30;
+  --ink-mute:    #6B5D49;   /* 5.7:1 — secondary */
+  --ink-faint:   #8C7D66;
+
+  /* --- the ONE action color (amber) --- */
+  --amber-ink:   #9A5E1C;   /* 4.68:1 — amber AS TEXT on sand */
+  --amber-fill:  #99611C;   /* white text = 5.15:1 — amber AS FILL */
+  --amber-fill-2:#82511A;   /* pressed */
+  --amber-hi:    #C98A3E;   /* glow / highlight only, never text */
+
+  /* --- risk / status --- */
+  --rust:        #9A3B22;   /* HIGH RISK — 6.2:1 */
+  --rust-bg:     #FBEAD9;
+  --moss:        #3E6B3A;   /* low risk / good */
+  --moss-bg:     #E8F0E2;
+
+  /* --- agent identity hues (IDENTITY ONLY — never an action) --- */
+  --alex:        #A8502A;   /* amber-coral, text-grade */
+  --alex-glow:   #F4A463;
+  --riley:       #6B5DB0;   /* lavender-indigo */
+  --riley-glow:  #B7A6E6;
+  --mira:        #7A4FB5;   /* violet */
+  --mira-glow:   #C79BE6;
+
+  /* --- frosted glass --- */
+  --glass:       rgba(255,250,242,0.62);
+  --glass-soft:  rgba(255,250,242,0.46);
+  --glass-strong:rgba(255,251,244,0.78);
+  --glass-line:  rgba(255,255,255,0.85);   /* top light-catch */
+  --glass-edge:  rgba(120,95,55,0.14);     /* hairline border */
+  --blur:        blur(22px) saturate(1.35);
+  --blur-lite:   blur(12px) saturate(1.25);
+
+  /* --- solid decision panel (commit moment) --- */
+  --panel:       #FFFCF6;
+  --panel-line:  #EBDFCC;
+
+  --shadow-soft: 0 1px 0 rgba(255,255,255,.7) inset, 0 18px 40px -22px rgba(74,52,20,.30), 0 4px 14px -8px rgba(74,52,20,.18);
+  --shadow-lift: 0 1px 0 rgba(255,255,255,.85) inset, 0 28px 60px -26px rgba(74,52,20,.42), 0 8px 22px -10px rgba(74,52,20,.24);
+
+  --r-xl: 30px;
+  --r-lg: 22px;
+  --r-md: 16px;
+  --r-sm: 11px;
+}
+
+*{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0;
+  background:#e9e9ec;            /* neutral grey OUTSIDE the frames */
+  color:var(--ink);
+  font-family:"Inter", system-ui, sans-serif;
+  font-feature-settings:"cv05" 1, "ss01" 1, "tnum" 0;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  font-size:16px;
+  line-height:1.5;
+}
+
+/* ---- gallery scaffolding (the grey board) ---- */
+.board{ max-width:1280px; margin:0 auto; padding:54px 26px 120px; }
+.board-head{ text-align:center; margin:6px auto 46px; max-width:760px; }
+.board-head .kicker{
+  font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:600;
+  letter-spacing:.22em; text-transform:uppercase; color:#6a6a72;
+}
+.board-head h1{
+  font-size:30px; font-weight:800; letter-spacing:-.02em; margin:.5rem 0 .35rem; color:#26262b;
+}
+.board-head p{ color:#74747c; font-size:14.5px; margin:0; line-height:1.55; }
+.swatches{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:18px; }
+.swatch{ width:30px; height:30px; border-radius:9px; box-shadow:0 2px 8px -3px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.04) inset; }
+
+.section{ margin:0 auto 60px; }
+.section > .cap{
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  max-width:392px; margin:0 auto 16px;
+}
+.section.wide > .cap{ max-width:1100px; }
+.cap .tag{
+  font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:700;
+  letter-spacing:.16em; text-transform:uppercase; color:#3b3b42;
+  background:#fbfbfc; border:1px solid #dededf; border-radius:7px; padding:4px 9px;
+}
+.cap .desc{ font-size:13px; color:#74747c; }
+
+/* ---- the phone frame ---- */
+.phone{
+  width:392px; margin:0 auto; border-radius:46px; padding:11px;
+  background:linear-gradient(150deg,#2c2722,#191510);
+  box-shadow:0 50px 90px -40px rgba(40,28,10,.62), 0 0 0 1px rgba(0,0,0,.5), 0 0 0 7px rgba(255,255,255,.05);
+  position:relative;
+}
+.screen{
+  position:relative; border-radius:36px; overflow:hidden;
+  background:var(--sand);
+  height:844px;
+}
+.screen.tall{ height:auto; min-height:844px; }
+.screen.scrolls{ overflow-y:auto; }
+.notch{
+  position:absolute; top:9px; left:50%; transform:translateX(-50%);
+  width:118px; height:28px; border-radius:16px; background:#15110c; z-index:60;
+}
+
+/* ===== AMBIENT WARM LIGHT — the blooms behind the glass ===== */
+.ambient{ position:absolute; inset:0; overflow:hidden; z-index:0; }
+.bloom{ position:absolute; border-radius:50%; filter:blur(46px); opacity:.9; }
+.bloom.peach { width:300px; height:300px; background:radial-gradient(circle, var(--peach) 0%, rgba(247,217,181,0) 68%); top:-70px; right:-80px; }
+.bloom.amber { width:340px; height:340px; background:radial-gradient(circle, var(--amber-bloom) 0%, rgba(244,199,126,0) 66%); top:120px; left:-120px; opacity:.65; }
+.bloom.rose  { width:280px; height:280px; background:radial-gradient(circle, var(--rose) 0%, rgba(243,201,196,0) 70%); bottom:-40px; right:-70px; opacity:.6; }
+.grain{
+  position:absolute; inset:0; opacity:.04; pointer-events:none; mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.app{ position:relative; z-index:2; height:100%; display:flex; flex-direction:column; }
+.scroll{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 16px 30px; }
+.scroll::-webkit-scrollbar{ width:0; }
+
+/* ===== MASTHEAD (frosted top chrome) ===== */
+.masthead{
+  position:sticky; top:0; z-index:40;
+  padding:46px 16px 12px;
+  background:linear-gradient(180deg, rgba(246,241,232,.92), rgba(246,241,232,.62) 70%, rgba(246,241,232,0));
+  backdrop-filter:var(--blur-lite); -webkit-backdrop-filter:var(--blur-lite);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.wordmark{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:15.5px; letter-spacing:-.01em; }
+.wordmark .dot{ width:9px; height:9px; border-radius:50%; background:var(--amber-fill); box-shadow:0 0 0 3px rgba(153,97,28,.16), 0 0 10px rgba(201,138,62,.7); }
+.statuspill{
+  display:flex; align-items:center; gap:7px; margin-left:11px;
+  font-family:"JetBrains Mono", monospace; font-size:10.5px; font-weight:500; letter-spacing:.04em;
+  color:var(--ink-mute);
+  background:var(--glass); border:1px solid var(--glass-edge); border-radius:20px; padding:4px 10px;
+  backdrop-filter:var(--blur-lite); -webkit-backdrop-filter:var(--blur-lite);
+}
+.statuspill .live{ width:6px; height:6px; border-radius:50%; background:var(--moss); box-shadow:0 0 7px var(--moss); animation:pulse 2.6s ease-in-out infinite; }
+.statuspill .sep{ color:var(--ink-faint); }
+.statuspill .halt{ color:var(--rust); font-weight:600; }
+.acct{
+  width:34px; height:34px; border-radius:50%; display:grid; place-items:center;
+  font-weight:700; font-size:14px; color:#fff;
+  background:linear-gradient(150deg,#7a5cc0,#5a3e8f);
+  box-shadow:0 1px 0 rgba(255,255,255,.4) inset, 0 6px 14px -6px rgba(74,52,20,.5);
+}
+@keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+/* ===== eyebrow + verdict hero ===== */
+.eyebrow{
+  font-family:"JetBrains Mono", monospace; font-size:10.5px; font-weight:600;
+  letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint);
+  margin:8px 2px 14px;
+}
+.greet{ font-size:16px; font-weight:600; color:var(--ink-mute); margin:0 2px 6px; }
+.verdict{
+  font-size:30px; line-height:1.12; font-weight:800; letter-spacing:-.025em;
+  color:var(--ink); margin:0 2px 12px; max-width:330px;
+}
+.verdict .name{ color:var(--alex); position:relative; white-space:nowrap; }
+.verdict .name::after{
+  content:""; position:absolute; left:0; right:0; bottom:.06em; height:.28em;
+  background:linear-gradient(90deg, rgba(244,164,99,.42), rgba(244,164,99,0));
+  border-radius:4px; z-index:-1;
+}
+.subline{
+  font-size:13.5px; color:var(--ink-mute); margin:0 2px 22px;
+  font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+}
+.subline .d{ width:3px; height:3px; border-radius:50%; background:var(--ink-faint); }
+
+/* ===== section label ===== */
+.lbl{
+  font-family:"JetBrains Mono", monospace; font-size:10.5px; font-weight:700;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--ink-faint);
+  margin:6px 4px 11px; display:flex; align-items:center; gap:9px;
+}
+.lbl .count{
+  background:var(--amber-fill); color:#fff; border-radius:20px;
+  font-size:10px; padding:1px 7px; letter-spacing:.04em; font-weight:600;
+}
+.lbl .line{ flex:1; height:1px; background:linear-gradient(90deg, var(--glass-edge), transparent); }
+
+/* ===== GLASS CARD (the floating frosted surface) ===== */
+.glass{
+  position:relative; border-radius:var(--r-lg);
+  background:var(--glass);
+  border:1px solid var(--glass-edge);
+  box-shadow:var(--shadow-soft);
+  backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+  overflow:hidden;
+}
+.glass::before{ /* top light-catch highlight */
+  content:""; position:absolute; left:14px; right:14px; top:0; height:1px;
+  background:linear-gradient(90deg, transparent, var(--glass-line) 30%, var(--glass-line) 70%, transparent);
+}
+.glass::after{ /* faint inner vignette so glass reads as material */
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  box-shadow:0 -30px 40px -34px rgba(120,95,55,.4) inset;
+}
+
+/* needs-you card */
+.needs{ display:flex; flex-direction:column; gap:13px; margin-bottom:6px; }
+.ncard{ padding:15px 15px 14px; }
+.ncard .top{ display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+.kind{
+  font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:700;
+  letter-spacing:.13em; text-transform:uppercase; color:var(--ink-2);
+  background:var(--glass-strong); border:1px solid var(--glass-edge);
+  border-radius:6px; padding:3px 7px;
+}
+.byline{ display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--ink-2); }
+.risk{
+  margin-left:auto; font-family:"JetBrains Mono", monospace; font-size:9.5px; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase; padding:3px 8px; border-radius:20px;
+  display:flex; align-items:center; gap:5px;
+}
+.risk.high{ color:var(--rust); background:var(--rust-bg); border:1px solid rgba(154,59,34,.2); }
+.risk.low{ color:var(--moss); background:var(--moss-bg); border:1px solid rgba(62,107,58,.2); }
+.risk .rd{ width:5px; height:5px; border-radius:50%; background:currentColor; }
+.ncard .body{ font-size:15px; line-height:1.4; font-weight:600; color:var(--ink); margin:0 0 13px; letter-spacing:-.006em; }
+.ncard .body b{ font-weight:700; }
+.ncard .meta{ font-size:12px; color:var(--ink-mute); margin:-6px 0 13px; font-variant-numeric:tabular-nums; }
+
+/* ===== buttons ===== */
+.row{ display:flex; gap:9px; align-items:center; }
+.btn{
+  appearance:none; border:0; cursor:pointer; font-family:inherit; font-weight:600;
+  font-size:13.5px; letter-spacing:-.005em; border-radius:13px; padding:11px 15px;
+  transition:transform .14s cubic-bezier(.2,.8,.2,1), box-shadow .14s, background .14s, filter .14s;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px; line-height:1;
+}
+.btn:active{ transform:translateY(1px) scale(.99); }
+.btn:focus-visible{ outline:2.5px solid var(--amber-fill); outline-offset:2px; }
+/* THE ONE ACTION COLOR — solid amber, AA */
+.btn-primary{
+  background:linear-gradient(180deg,#A86A23,var(--amber-fill)); color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.32) inset, 0 10px 22px -10px rgba(153,97,28,.7), 0 2px 6px -2px rgba(120,80,20,.5);
+  font-weight:700;
+}
+.btn-primary:hover{ filter:brightness(1.05); box-shadow:0 1px 0 rgba(255,255,255,.4) inset, 0 14px 26px -10px rgba(153,97,28,.78); }
+.btn-primary:active{ background:var(--amber-fill-2); }
+.btn-ghost{
+  background:var(--glass-strong); color:var(--ink); border:1px solid var(--glass-edge);
+  backdrop-filter:var(--blur-lite); -webkit-backdrop-filter:var(--blur-lite);
+}
+.btn-ghost:hover{ background:#fff; box-shadow:0 6px 16px -8px rgba(74,52,20,.3); }
+.btn.full{ flex:1; }
+.swipehint{ font-family:"JetBrains Mono", monospace; font-size:10px; letter-spacing:.06em; color:var(--ink-faint); margin-top:9px; }
+
+.seeall{
+  display:flex; align-items:center; justify-content:center; gap:7px; width:100%;
+  margin:16px 0 4px; padding:11px; font-size:13px; font-weight:600; color:var(--amber-ink);
+  background:transparent; border:1px dashed rgba(153,97,28,.32); border-radius:13px; cursor:pointer;
+  transition:background .15s, border-color .15s;
+}
+.seeall:hover{ background:rgba(247,217,181,.28); border-color:rgba(153,97,28,.5); }
+
+/* ===== LIGHTWELL avatar (crisp pixels inside frosted window + glow halo) ===== */
+.well{ position:relative; border-radius:14px; display:grid; place-items:center; flex:none; overflow:visible; }
+.well::before{ /* the agent-hue glow behind the glass */
+  content:""; position:absolute; inset:-3px; border-radius:18px; z-index:0; filter:blur(8px);
+  background:radial-gradient(circle at 50% 38%, var(--g, var(--amber-hi)) 0%, transparent 68%);
+  opacity:.85;
+}
+.well .pane{
+  position:relative; z-index:1; width:100%; height:100%; border-radius:13px; overflow:hidden;
+  background:linear-gradient(160deg, rgba(255,251,244,.85), rgba(255,247,236,.5));
+  border:1px solid var(--glass-line);
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset, 0 4px 10px -6px rgba(74,52,20,.4);
+  backdrop-filter:var(--blur-lite); -webkit-backdrop-filter:var(--blur-lite);
+  display:grid; place-items:center;
+}
+.well .pane > span{ display:block; }
+/* per-agent glow */
+.well.alex{ --g:var(--alex-glow); }
+.well.riley{ --g:var(--riley-glow); }
+.well.mira{ --g:var(--mira-glow); }
+/* avatar sits a touch low so the cropped portrait centers nicely */
+.well .pane [data-sb-avatar]{ width:118%; height:118%; transform:translateY(9%); }
+
+/* small inline byline avatar (chip) */
+.chip{ position:relative; width:26px; height:26px; border-radius:8px; flex:none; }
+.chip::before{ content:""; position:absolute; inset:-2px; border-radius:10px; filter:blur(5px); z-index:0;
+  background:radial-gradient(circle, var(--g,var(--amber-hi)) 0%, transparent 70%); opacity:.8; }
+.chip .pane{ position:relative; z-index:1; width:100%; height:100%; border-radius:8px; overflow:hidden;
+  background:linear-gradient(160deg, rgba(255,251,244,.9), rgba(255,247,236,.55));
+  border:1px solid var(--glass-line); box-shadow:0 1px 0 rgba(255,255,255,.9) inset; }
+.chip .pane [data-sb-avatar]{ width:120%; height:120%; transform:translateY(10%); display:block; }
+.chip.alex{ --g:var(--alex-glow);} .chip.riley{ --g:var(--riley-glow);} .chip.mira{ --g:var(--mira-glow);}
+
+/* ===== TEAM roster ===== */
+.team{ padding:6px; margin-bottom:6px; }
+.trow{ display:flex; align-items:center; gap:13px; padding:11px 10px; border-radius:14px; transition:background .14s; }
+.trow:hover{ background:rgba(255,251,244,.5); }
+.trow + .trow{ border-top:1px solid var(--glass-edge); }
+.twell{ width:46px; height:46px; }
+.tinfo{ flex:1; min-width:0; }
+.tname{ font-weight:700; font-size:14.5px; letter-spacing:-.01em; display:flex; align-items:center; gap:8px; }
+.tname .hue{ width:7px; height:7px; border-radius:50%; }
+.tname.alex .hue{ background:var(--alex);} .tname.riley .hue{ background:var(--riley);} .tname.mira .hue{ background:var(--mira); }
+.tstatus{ font-size:12.5px; color:var(--ink-mute); margin-top:2px; display:flex; align-items:center; gap:7px; }
+.tstatus .wd{ width:6px; height:6px; border-radius:50%; flex:none; }
+.wd.work{ background:var(--moss); box-shadow:0 0 6px var(--moss); animation:pulse 2.6s ease-in-out infinite; }
+.wd.watch{ background:var(--amber-hi); }
+.wd.ready{ background:var(--mira); }
+.tmeta{ font-family:"JetBrains Mono", monospace; font-size:10px; color:var(--ink-faint); letter-spacing:.04em; }
+
+/* ===== value strip ===== */
+.valuestrip{ padding:16px 16px 15px; margin-bottom:6px; }
+.valuestrip .vh{ font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:600; letter-spacing:.17em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:12px; }
+.vgrid{ display:flex; align-items:stretch; gap:6px; }
+.vcell{ flex:1; text-align:center; }
+.vcell .n{ font-size:23px; font-weight:800; letter-spacing:-.02em; color:var(--ink); font-variant-numeric:tabular-nums; line-height:1; }
+.vcell .n.amber{ color:var(--amber-ink); }
+.vcell .k{ font-size:10.5px; color:var(--ink-mute); margin-top:5px; line-height:1.25; }
+.vsep{ width:1px; background:var(--glass-edge); margin:2px 0; }
+
+/* ===== Week-so-far letter ===== */
+.letter{ padding:20px 19px 18px; margin-bottom:8px; }
+.letter .lh{ display:flex; align-items:center; gap:9px; margin-bottom:13px; }
+.letter .lh .tt{ font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:600; letter-spacing:.17em; text-transform:uppercase; color:var(--ink-faint); }
+.letter p{ font-size:14.5px; line-height:1.62; color:var(--ink-2); margin:0; letter-spacing:-.003em; }
+.letter p .drop{
+  float:left; font-size:46px; line-height:.78; font-weight:800; color:var(--alex);
+  padding:4px 9px 0 0; margin-top:2px;
+}
+.letter .sig{ margin-top:14px; display:flex; align-items:center; gap:9px; font-size:13px; font-weight:700; color:var(--alex); }
+
+/* =========================================================
+   INBOX
+   ========================================================= */
+.inbox-title{ display:flex; align-items:center; gap:11px; margin:6px 2px 4px; }
+.inbox-title h2{ font-size:27px; font-weight:800; letter-spacing:-.03em; margin:0; }
+.inbox-title .live2{
+  font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:600; letter-spacing:.02em; color:var(--ink-mute);
+  display:flex; align-items:center; gap:7px;
+}
+.inbox-title .live2 .live{ width:6px; height:6px; border-radius:50%; background:var(--moss); box-shadow:0 0 7px var(--moss); }
+.filters{ display:flex; gap:8px; margin:14px 2px 18px; }
+.fchip{
+  display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--ink-mute);
+  background:var(--glass); border:1px solid var(--glass-edge); border-radius:20px; padding:6px 12px 6px 10px;
+  backdrop-filter:var(--blur-lite); -webkit-backdrop-filter:var(--blur-lite); cursor:pointer; transition:.14s;
+}
+.fchip .av{ width:20px; height:20px; }
+.fchip .num{ font-family:"JetBrains Mono", monospace; font-size:11px; }
+.fchip.on{ color:#fff; background:linear-gradient(180deg,#2c2722,#1a160f); border-color:transparent; box-shadow:0 8px 18px -10px rgba(40,28,10,.6); }
+.fchip.on .num{ color:var(--amber-hi); }
+.fchip:not(.on):hover{ background:#fff; }
+
+.dcard{ padding:15px; margin-bottom:13px; }
+.dcard .dtop{ display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+.dcard .agent{ display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--ink-2); }
+.dcard .kind2{ font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-mute); }
+.dcard .ts{ margin-left:auto; font-family:"JetBrains Mono", monospace; font-size:10.5px; color:var(--ink-faint); }
+.dcard .ts.over{ color:var(--rust); font-weight:600; }
+.dcard .body2{ font-size:14.5px; line-height:1.42; font-weight:600; color:var(--ink); margin:0 0 13px; letter-spacing:-.006em; }
+.dcard .foot{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.forwho{ font-family:"JetBrains Mono", monospace; font-size:10px; letter-spacing:.06em; color:var(--ink-mute); background:var(--glass-strong); border:1px solid var(--glass-edge); border-radius:6px; padding:3px 8px; }
+.cta{ margin-left:auto; font-family:"JetBrains Mono", monospace; font-size:10.5px; font-weight:700; letter-spacing:.08em; color:var(--amber-ink); display:flex; align-items:center; gap:5px; }
+.riskmini{ font-family:"JetBrains Mono", monospace; font-size:9.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; padding:3px 8px; border-radius:20px; display:flex; align-items:center; gap:5px; }
+.riskmini.high{ color:var(--rust); background:var(--rust-bg); } .riskmini.high .rd{ width:5px;height:5px;border-radius:50%;background:currentColor;}
+.riskmini.low{ color:var(--moss); background:var(--moss-bg); } .riskmini.low .rd{ width:5px;height:5px;border-radius:50%;background:currentColor;}
+
+/* =========================================================
+   COMMIT MOMENT — SOLID warm panel, AA-legible. NO glass behind money.
+   ========================================================= */
+.sheet-wrap{ position:absolute; inset:0; z-index:50; display:flex; flex-direction:column; justify-content:flex-end; }
+.scrim{ position:absolute; inset:0; background:rgba(33,26,18,.34); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+.sheet{
+  position:relative; z-index:2;
+  background:var(--panel);                      /* SOLID */
+  border-radius:30px 30px 36px 36px;
+  border-top:1px solid #fff;
+  box-shadow:0 -30px 70px -20px rgba(40,28,10,.5), 0 -1px 0 rgba(255,255,255,.9) inset;
+  padding:10px 18px 22px;
+  max-height:96%; overflow-y:auto;
+}
+.grab{ width:42px; height:5px; border-radius:3px; background:#E2D6C2; margin:4px auto 16px; }
+.sheet .shead{ display:flex; align-items:center; gap:11px; margin-bottom:16px; }
+.sheet .shead .sw{ width:42px; height:42px; }
+.sheet .shead .si{ flex:1; }
+.sheet .shead .sname{ font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; }
+.sheet .shead .sname .hue{ width:7px; height:7px; border-radius:50%; background:var(--alex); }
+.sheet .shead .skind{ font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:600; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-mute); margin-top:3px; }
+.sheet .shead .risk{ margin:0; }
+
+.proposal{
+  background:#FFFDF9; border:1px solid var(--panel-line); border-radius:18px; padding:4px 16px; margin-bottom:14px;
+  box-shadow:0 2px 8px -6px rgba(74,52,20,.2);
+}
+.prow{ display:flex; align-items:center; gap:12px; padding:13px 0; }
+.prow + .prow{ border-top:1px solid var(--panel-line); }
+.prow .pk{ font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); width:74px; flex:none; }
+.prow .pv{ font-size:14.5px; font-weight:600; color:var(--ink); flex:1; letter-spacing:-.005em; }
+.prow .pv.big{ font-size:17px; font-weight:800; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.prow .pv .val{ color:var(--amber-ink); font-weight:800; }
+
+.whatlbl{ font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-faint); margin:18px 2px 10px; }
+.riskchips{ display:flex; flex-direction:column; gap:9px; margin-bottom:6px; }
+.rchip{ display:flex; align-items:center; gap:11px; padding:12px 14px; border-radius:14px; background:#FBF3E8; border:1px solid #EFE0CB; font-size:13.5px; font-weight:600; color:var(--ink-2); }
+.rchip .ico{ width:30px; height:30px; border-radius:9px; display:grid; place-items:center; flex:none; background:#fff; border:1px solid #EFE0CB; }
+.rchip .ico svg{ width:16px; height:16px; }
+
+.changes{ background:#FFFDF9; border:1px solid var(--panel-line); border-radius:16px; padding:14px 16px; margin:14px 0 6px; }
+.changes .ch-h{ font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:600; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:11px; }
+.chrow{ display:flex; align-items:center; gap:10px; font-size:13.5px; padding:6px 0; color:var(--ink); }
+.chrow .ck{ color:var(--ink-mute); width:92px; flex:none; }
+.chrow .cv{ font-weight:700; font-variant-numeric:tabular-nums; }
+.chrow .check{ margin-left:auto; color:var(--moss); display:flex; }
+.chnote{ font-size:12px; color:var(--ink-faint); margin-top:9px; line-height:1.45; display:flex; gap:7px; }
+.chnote svg{ flex:none; margin-top:2px; }
+
+.sheet-actions{ display:flex; gap:10px; margin-top:18px; }
+.sheet-actions .btn-primary{ flex:2; font-size:15px; padding:15px; border-radius:16px; }
+.sheet-actions .btn-ghost{ flex:1; padding:15px; border-radius:16px; }
+.assure{ text-align:center; font-size:11.5px; color:var(--ink-faint); margin-top:12px; display:flex; align-items:center; justify-content:center; gap:6px; }
+
+/* the Undo toast (branded) */
+.postlbl{
+  position:absolute; left:0; right:0; top:58px; z-index:56; text-align:center;
+  font-family:"JetBrains Mono", monospace; font-size:9px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:rgba(255,250,242,.78);
+  text-shadow:0 1px 4px rgba(0,0,0,.5);
+}
+.undo{
+  position:absolute; left:16px; right:16px; bottom:20px; z-index:55;
+  display:flex; align-items:center; gap:12px; padding:13px 14px 13px 15px;
+  background:linear-gradient(180deg,#2c2722,#1a160f); color:#F6EEDF; border-radius:16px;
+  box-shadow:0 18px 40px -16px rgba(40,28,10,.7), 0 0 0 1px rgba(255,255,255,.06) inset;
+}
+.undo .tick{ width:24px; height:24px; border-radius:50%; background:rgba(62,107,58,.25); border:1px solid rgba(120,200,120,.4); display:grid; place-items:center; flex:none; color:#9FE0A0; }
+.undo .ut{ font-size:13px; font-weight:600; flex:1; line-height:1.3; }
+.undo .ut .who{ color:var(--amber-hi); font-weight:700; }
+.undo .ub{
+  font-family:"JetBrains Mono", monospace; font-size:12px; font-weight:700; letter-spacing:.04em;
+  color:#fff; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18);
+  border-radius:11px; padding:8px 12px; cursor:pointer; display:flex; align-items:center; gap:7px; transition:.14s;
+}
+.undo .ub:hover{ background:rgba(255,255,255,.2); }
+.undo .ring{ position:relative; width:15px; height:15px; }
+.undo .ring svg{ transform:rotate(-90deg); }
+.undo .ring circle{ fill:none; stroke-width:2.4; }
+.undo .ring .bg{ stroke:rgba(255,255,255,.22); }
+.undo .ring .fg{ stroke:var(--amber-hi); stroke-linecap:round; stroke-dasharray:38; stroke-dashoffset:9; animation:countdown 12s linear forwards; }
+@keyframes countdown{ to{ stroke-dashoffset:38; } }
+
+/* ---- signature motion: ONE orchestrated first-paint reveal (calm budget) ---- */
+@keyframes rise{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+.scroll > .glass, .scroll > .needs > .glass{ animation:rise .6s cubic-bezier(.2,.8,.2,1) both; }
+.scroll > .needs > .glass:nth-child(1){ animation-delay:.05s; }
+.scroll > .needs > .glass:nth-child(2){ animation-delay:.12s; }
+.scroll > .glass:nth-of-type(1){ animation-delay:.18s; }
+.scroll > .glass:nth-of-type(2){ animation-delay:.24s; }
+.scroll > .glass:nth-of-type(3){ animation-delay:.30s; }
+.verdict{ animation:rise .65s cubic-bezier(.2,.8,.2,1) both; }
+.orb{ animation:rise .7s cubic-bezier(.2,.8,.2,1) both; }
+.orb.alex{ animation-delay:.06s; } .orb.riley{ animation-delay:.16s; } .orb.mira{ animation-delay:.26s; }
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
+  .scroll > .glass, .verdict, .orb{ opacity:1 !important; transform:none !important; }
+}
+
+/* =========================================================
+   MEET YOUR TEAM — hero orbs
+   ========================================================= */
+.team-hero{ width:392px; }
+.team-hero .screen{ height:auto; min-height:680px; padding-bottom:34px; }
+.hero-inner{ position:relative; z-index:2; padding:64px 22px 30px; text-align:center; }
+.hero-eyebrow{ font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-faint); }
+.hero-title{ font-size:30px; font-weight:800; letter-spacing:-.025em; margin:12px 0 8px; line-height:1.1; }
+.hero-sub{ font-size:14px; color:var(--ink-mute); max-width:280px; margin:0 auto 40px; line-height:1.5; }
+.orbs{ display:flex; align-items:flex-start; justify-content:center; gap:14px; margin-bottom:8px; }
+.orb{ flex:1; max-width:108px; }
+.orb .glassorb{ position:relative; width:100%; aspect-ratio:1; border-radius:28px; margin-bottom:14px; }
+.orb .glassorb::before{ content:""; position:absolute; inset:-8px; border-radius:36px; filter:blur(15px); z-index:0;
+  background:radial-gradient(circle at 50% 42%, var(--g) 0%, transparent 66%); opacity:.9; animation:breathe 5.5s ease-in-out infinite; }
+.orb .glassorb .pane{ position:relative; z-index:1; width:100%; height:100%; border-radius:26px; overflow:hidden;
+  background:linear-gradient(165deg, rgba(255,251,244,.82), rgba(255,246,234,.46));
+  border:1px solid var(--glass-line);
+  box-shadow:0 1px 0 rgba(255,255,255,.95) inset, 0 16px 34px -18px rgba(74,52,20,.5), 0 0 0 1px var(--glass-edge);
+  backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); display:grid; place-items:center; }
+.orb .glassorb .pane::after{ content:""; position:absolute; left:16%; right:16%; top:6px; height:14px; border-radius:50%;
+  background:linear-gradient(180deg, rgba(255,255,255,.7), transparent); filter:blur(2px); }
+.orb .glassorb .pane [data-sb-avatar]{ width:122%; height:122%; transform:translateY(11%); display:block; }
+.orb.alex .glassorb{ --g:var(--alex-glow);} .orb.riley .glassorb{ --g:var(--riley-glow);} .orb.mira .glassorb{ --g:var(--mira-glow); }
+.orb.alex .glassorb::before{ animation-delay:0s; } .orb.riley .glassorb::before{ animation-delay:-1.8s; } .orb.mira .glassorb::before{ animation-delay:-3.6s; }
+.orb .oname{ font-size:16px; font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; justify-content:center; gap:7px; }
+.orb .oname .hue{ width:7px; height:7px; border-radius:50%; }
+.orb.alex .oname .hue{ background:var(--alex);} .orb.riley .oname .hue{ background:var(--riley);} .orb.mira .oname .hue{ background:var(--mira); }
+.orb .orole{ font-family:"JetBrains Mono", monospace; font-size:9.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); margin-top:5px; }
+.orb .odesc{ font-size:11.5px; color:var(--ink-mute); margin-top:8px; line-height:1.4; }
+@keyframes breathe{ 0%,100%{ opacity:.78; transform:scale(1);} 50%{ opacity:1; transform:scale(1.06);} }
+.hero-foot{ position:relative; z-index:2; margin-top:30px; padding:0 22px; }
+.hero-foot .btn-primary{ width:100%; padding:14px; font-size:14.5px; border-radius:15px; }
+
+/* =========================================================
+   DESKTOP composition
+   ========================================================= */
+.desk{
+  width:1100px; margin:0 auto; border-radius:24px; overflow:hidden; position:relative;
+  background:var(--sand); height:720px;
+  box-shadow:0 50px 100px -40px rgba(40,28,10,.5), 0 0 0 1px rgba(120,95,55,.16), 0 0 0 8px rgba(255,255,255,.5);
+}
+.desk .ambient .bloom.peach{ width:520px; height:520px; top:-160px; right:-120px; }
+.desk .ambient .bloom.amber{ width:560px; height:560px; top:120px; left:-220px; }
+.desk .ambient .bloom.rose{ width:420px; height:420px; bottom:-120px; right:8%; }
+.desk-grid{ position:relative; z-index:2; display:grid; grid-template-columns:230px 1fr; height:100%; }
+/* sidebar */
+.dside{ padding:24px 18px; border-right:1px solid var(--glass-edge); background:linear-gradient(180deg, rgba(255,250,242,.4), rgba(255,250,242,.1)); backdrop-filter:var(--blur-lite); -webkit-backdrop-filter:var(--blur-lite); display:flex; flex-direction:column; }
+.dside .wordmark{ font-size:16px; margin-bottom:26px; }
+.dnav{ display:flex; flex-direction:column; gap:3px; }
+.dnav a{ display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:12px; font-size:14px; font-weight:600; color:var(--ink-mute); text-decoration:none; transition:.14s; }
+.dnav a .ic{ width:17px; height:17px; opacity:.7; }
+.dnav a:hover{ background:rgba(255,251,244,.6); color:var(--ink); }
+.dnav a.active{ background:var(--glass); border:1px solid var(--glass-edge); color:var(--ink); box-shadow:var(--shadow-soft); }
+.dnav a.active .ic{ opacity:1; color:var(--amber-ink); }
+.dnav a .badge{ margin-left:auto; font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:600; background:var(--amber-fill); color:#fff; border-radius:20px; padding:1px 7px; }
+.dteam{ margin-top:auto; padding-top:18px; border-top:1px solid var(--glass-edge); display:flex; flex-direction:column; gap:11px; }
+.dteam .dt-h{ font-family:"JetBrains Mono", monospace; font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); }
+.dtmem{ display:flex; align-items:center; gap:10px; }
+.dtmem .w{ width:30px; height:30px; }
+.dtmem .nm{ font-size:12.5px; font-weight:600; }
+.dtmem .st{ font-size:10.5px; color:var(--ink-mute); display:flex; align-items:center; gap:5px; }
+.dtmem .st .wd{ width:5px; height:5px; border-radius:50%; }
+
+/* main */
+.dmain{ padding:26px 30px; overflow-y:auto; }
+.dmain-head{ display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:22px; }
+.dmain-head .eyebrow{ margin:0 0 9px; }
+.dmain-head h1{ font-size:27px; font-weight:800; letter-spacing:-.025em; margin:0; max-width:480px; line-height:1.14; }
+.dmain-head h1 .name{ color:var(--alex); }
+.dmain-head .right{ display:flex; align-items:center; gap:10px; }
+.bento{ display:grid; grid-template-columns:1.5fr 1fr; gap:16px; }
+.bento .span2{ grid-column:1 / -1; }
+.dcard-lg{ padding:18px; }
+.dcard-lg .hd{ display:flex; align-items:center; gap:9px; margin-bottom:13px; }
+.dval{ display:flex; gap:8px; }
+.dval .cell{ flex:1; background:rgba(255,251,244,.45); border:1px solid var(--glass-edge); border-radius:14px; padding:13px; }
+.dval .cell .n{ font-size:24px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.dval .cell .n.amber{ color:var(--amber-ink); }
+.dval .cell .k{ font-size:11px; color:var(--ink-mute); margin-top:4px; }
+
+/* responsive: let the desktop block scale on smaller boards */
+@media (max-width:1180px){
+  .desk{ width:100%; }
+  .desk-grid{ grid-template-columns:200px 1fr; }
+}
+@media (max-width:760px){
+  .board{ padding:30px 12px 80px; }
+  .desk{ height:auto; }
+  .desk-grid{ grid-template-columns:1fr; }
+  .dside{ border-right:0; border-bottom:1px solid var(--glass-edge); }
+  .dteam{ display:none; }
+  .bento{ grid-template-columns:1fr; }
+}
+
+/* =========================================================
+   DARK "DIM" variant — flagship, warm near-black
+   ========================================================= */
+.dim{ width:392px; }
+.dim .screen{ background:#161210; height:auto; min-height:560px; }
+.dim .ambient .bloom.peach{ background:radial-gradient(circle, rgba(244,164,99,.55) 0%, rgba(244,164,99,0) 66%); opacity:.7; }
+.dim .ambient .bloom.amber{ background:radial-gradient(circle, rgba(201,138,62,.5) 0%, rgba(201,138,62,0) 64%); opacity:.55; }
+.dim .ambient .bloom.rose{ background:radial-gradient(circle, rgba(190,120,150,.4) 0%, rgba(190,120,150,0) 70%); opacity:.45; }
+.dim .grain{ opacity:.06; mix-blend-mode:overlay; }
+.dim .masthead{ background:linear-gradient(180deg, rgba(22,18,16,.92), rgba(22,18,16,.5) 70%, rgba(22,18,16,0)); }
+.dim .wordmark{ color:#F3E9DA; }
+.dim .wordmark .dot{ background:var(--amber-hi); box-shadow:0 0 0 3px rgba(201,138,62,.2), 0 0 14px rgba(201,138,62,.9); }
+.dim .statuspill{ color:#C8BBA6; background:rgba(255,250,242,.07); border-color:rgba(255,255,255,.1); }
+.dim .statuspill .halt{ color:#E5876A; }
+.dim .acct{ box-shadow:0 1px 0 rgba(255,255,255,.2) inset, 0 6px 16px -6px rgba(0,0,0,.6); }
+.dim .eyebrow{ color:#9C8E78; }
+.dim .greet{ color:#B6A78F; }
+.dim .verdict{ color:#F4ECDD; }
+.dim .verdict .name{ color:#F0A463; }
+.dim .verdict .name::after{ background:linear-gradient(90deg, rgba(240,164,99,.5), rgba(240,164,99,0)); }
+.dim .subline{ color:#B6A78F; }
+.dim .subline .d{ background:#7c6f5b; }
+.dim .lbl{ color:#8B7E68; }
+.dim .lbl .line{ background:linear-gradient(90deg, rgba(255,255,255,.1), transparent); }
+/* dark glass */
+.dim .glass{ background:rgba(40,34,28,.5); border-color:rgba(255,255,255,.08); box-shadow:0 1px 0 rgba(255,255,255,.07) inset, 0 18px 44px -22px rgba(0,0,0,.7); }
+.dim .glass::before{ background:linear-gradient(90deg, transparent, rgba(255,255,255,.22) 30%, rgba(255,255,255,.22) 70%, transparent); }
+.dim .glass::after{ box-shadow:0 -30px 44px -34px rgba(0,0,0,.6) inset; }
+.dim .kind{ color:#D8CBB6; background:rgba(255,250,242,.07); border-color:rgba(255,255,255,.1); }
+.dim .byline{ color:#C8BBA6; }
+.dim .ncard .body{ color:#F2EADC; }
+.dim .ncard .body b{ color:#fff; }
+.dim .ncard .meta{ color:#A89B85; }
+.dim .risk.high{ color:#F0A089; background:rgba(154,59,34,.24); border-color:rgba(240,140,110,.3); }
+.dim .btn-ghost{ background:rgba(255,250,242,.08); color:#EFE6D6; border-color:rgba(255,255,255,.12); }
+.dim .btn-ghost:hover{ background:rgba(255,250,242,.16); }
+.dim .swipehint{ color:#8B7E68; }
+.dim .well .pane{ background:linear-gradient(160deg, rgba(60,52,42,.7), rgba(40,34,28,.5)); border-color:rgba(255,255,255,.16); box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 4px 12px -6px rgba(0,0,0,.6); }
+.dim .well::before{ opacity:1; }
+.dim .seeall{ color:#F0A463; border-color:rgba(240,164,99,.35); }
+.dim .seeall:hover{ background:rgba(240,164,99,.12); }
+/* dark team */
+.dim .trow:hover{ background:rgba(255,250,242,.05); }
+.dim .trow + .trow{ border-color:rgba(255,255,255,.07); }
+.dim .tname{ color:#F2EADC; }
+.dim .tstatus{ color:#A89B85; }
+.dim .tmeta{ color:#7c6f5b; }
+.dim .chip .pane{ background:linear-gradient(160deg, rgba(60,52,42,.8), rgba(40,34,28,.55)); border-color:rgba(255,255,255,.16); }
+.dim-cap{ color:#F3E9DA !important; }
+
+/* small print under boards */
+.foot-note{ text-align:center; color:#8a8a92; font-size:12px; margin-top:8px; }
+.foot-note code{ font-family:"JetBrains Mono", monospace; background:#fff; border:1px solid #ddd; border-radius:5px; padding:1px 6px; color:#555; }
+</style>
+</head>
+<body>
+<div class="board">
+
+  <header class="board-head">
+    <div class="kicker">Switchboard · aesthetic direction</div>
+    <h1>Liquid Warmth</h1>
+    <p>Frosted glass cards floating over warm ambient light — each teammate glowing softly behind glass.
+       Premium, luminous, modern-but-cozy. Crisp 8-bit pixels inside soft frosted panels is the deliberate signature.
+       The money-moment stays solid and rock-legible.</p>
+    <div class="swatches" aria-hidden="true">
+      <span class="swatch" style="background:#F6F1E8"></span>
+      <span class="swatch" style="background:#F7D9B5"></span>
+      <span class="swatch" style="background:#F3C9C4"></span>
+      <span class="swatch" style="background:#211A12"></span>
+      <span class="swatch" style="background:#99611C"></span>
+      <span class="swatch" style="background:#A8502A"></span>
+      <span class="swatch" style="background:#6B5DB0"></span>
+      <span class="swatch" style="background:#7A4FB5"></span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       A) HOME — evening briefing
+       ============================================================ -->
+  <section class="section">
+    <div class="cap"><span class="tag">A · Home</span><span class="desc">the evening briefing — verdict hero, Needs-You first, team, letter</span></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen scrolls">
+        <div class="ambient"><span class="bloom peach"></span><span class="bloom amber"></span><span class="bloom rose"></span></div>
+        <div class="grain"></div>
+
+        <div class="app">
+          <div class="masthead">
+            <div style="display:flex;align-items:center">
+              <div class="wordmark"><span class="dot"></span>Switchboard</div>
+              <div class="statuspill"><span class="live"></span>Live<span class="sep">·</span>Inbox 3<span class="sep">·</span><span class="halt">Halt</span></div>
+            </div>
+            <div class="acct">D</div>
+          </div>
+
+          <div class="scroll">
+            <div class="eyebrow">Tuesday, Jun 2 · 7:18 PM</div>
+            <div class="greet">Good evening, Dev</div>
+            <h1 class="verdict">Three things need you — start with <span class="name">Alex</span>.</h1>
+            <div class="subline">2 open leads<span class="d"></span>oldest waiting ~5 days<span class="d"></span>0 of 1 working</div>
+
+            <!-- NEEDS YOU -->
+            <div class="lbl">Needs you<span class="count">2</span><span class="line"></span></div>
+            <div class="needs">
+
+              <!-- handoff -->
+              <div class="glass ncard">
+                <div class="top">
+                  <span class="kind">Handoff</span>
+                  <span class="byline"><span class="chip alex"><span class="pane"><span data-sb-avatar="alex"></span></span></span> Sarah Tan</span>
+                  <span class="risk low" style="background:transparent;border-color:transparent;color:var(--ink-mute)">due 5d</span>
+                </div>
+                <p class="body"><b>Sarah Tan asked to talk to a human</b> about their consultation.</p>
+                <div class="row">
+                  <button class="btn btn-primary full">Take this one</button>
+                  <button class="btn btn-ghost">Snooze</button>
+                </div>
+              </div>
+
+              <!-- approval -->
+              <div class="glass ncard">
+                <div class="top">
+                  <span class="kind">Approval</span>
+                  <span class="byline"><span class="chip alex"><span class="pane"><span data-sb-avatar="alex"></span></span></span> Alex</span>
+                  <span class="risk high"><span class="rd"></span>High risk</span>
+                </div>
+                <p class="body"><b>Offer Priya a complimentary touch-up</b> to resolve her concern about uneven volume.</p>
+                <div class="row">
+                  <button class="btn btn-primary full">Approve offer</button>
+                  <button class="btn btn-ghost">Adjust</button>
+                </div>
+                <div class="swipehint">SWIPE PRIMES · TAP TO COMMIT</div>
+              </div>
+            </div>
+
+            <button class="seeall">See all in Inbox <span>→</span></button>
+
+            <!-- YOUR TEAM -->
+            <div class="lbl">Your team<span class="line"></span></div>
+            <div class="glass team">
+              <div class="trow">
+                <div class="well alex twell"><span class="pane"><span data-sb-avatar="alex"></span></span></div>
+                <div class="tinfo">
+                  <div class="tname alex"><span class="hue"></span>Alex</div>
+                  <div class="tstatus"><span class="wd work"></span>Working · drafting Priya's offer</div>
+                </div>
+                <div class="tmeta">OPS</div>
+              </div>
+              <div class="trow">
+                <div class="well riley twell"><span class="pane"><span data-sb-avatar="riley"></span></span></div>
+                <div class="tinfo">
+                  <div class="tname riley"><span class="hue"></span>Riley</div>
+                  <div class="tstatus"><span class="wd watch"></span>Watching · 3 ad sets</div>
+                </div>
+                <div class="tmeta">ADS</div>
+              </div>
+              <div class="trow">
+                <div class="well mira twell"><span class="pane"><span data-sb-avatar="mira"></span></span></div>
+                <div class="tinfo">
+                  <div class="tname mira"><span class="hue"></span>Mira</div>
+                  <div class="tstatus"><span class="wd ready"></span>2 drafts ready</div>
+                </div>
+                <div class="tmeta">UGC</div>
+              </div>
+            </div>
+
+            <!-- SINCE YOU HIRED -->
+            <div class="lbl">Since you hired your team<span class="line"></span></div>
+            <div class="glass valuestrip">
+              <div class="vh">Cumulative</div>
+              <div class="vgrid">
+                <div class="vcell"><div class="n">14</div><div class="k">leads<br>answered</div></div>
+                <div class="vsep"></div>
+                <div class="vcell"><div class="n">9</div><div class="k">consults<br>booked</div></div>
+                <div class="vsep"></div>
+                <div class="vcell"><div class="n amber">S$7,388</div><div class="k">saved</div></div>
+              </div>
+            </div>
+
+            <!-- WEEK LETTER -->
+            <div class="lbl">Week so far<span class="line"></span></div>
+            <div class="glass letter">
+              <div class="lh">
+                <span class="chip alex" style="width:30px;height:30px"><span class="pane"><span data-sb-avatar="alex"></span></span></span>
+                <span class="tt">A note from Alex</span>
+              </div>
+              <p><span class="drop">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned through budget. Priya's still waiting on the touch-up call — that's the one I'd look at first. Everything else is handled.</p>
+              <div class="sig"><span style="width:18px;height:1px;background:var(--alex);display:inline-block"></span>Alex</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       B) INBOX
+       ============================================================ -->
+  <section class="section">
+    <div class="cap"><span class="tag">B · Inbox</span><span class="desc">the queue — filterable decision cards, glass over warm light</span></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen scrolls">
+        <div class="ambient"><span class="bloom peach"></span><span class="bloom amber"></span><span class="bloom rose"></span></div>
+        <div class="grain"></div>
+
+        <div class="app">
+          <div class="masthead">
+            <div style="display:flex;align-items:center">
+              <div class="wordmark"><span class="dot"></span>Switchboard</div>
+              <div class="statuspill"><span class="live"></span>Live<span class="sep">·</span>Inbox 3<span class="sep">·</span><span class="halt">Halt</span></div>
+            </div>
+            <div class="acct">D</div>
+          </div>
+
+          <div class="scroll">
+            <div class="inbox-title">
+              <h2>Inbox</h2>
+              <span class="live2"><span class="live"></span>3 things need you</span>
+            </div>
+            <div class="filters">
+              <button class="fchip on">All <span class="num">3</span></button>
+              <button class="fchip"><span class="chip alex av"><span class="pane"><span data-sb-avatar="alex"></span></span></span>Alex <span class="num">2</span></button>
+              <button class="fchip"><span class="chip riley av"><span class="pane"><span data-sb-avatar="riley"></span></span></span>Riley <span class="num">0</span></button>
+            </div>
+
+            <!-- card 1: handoff overdue -->
+            <div class="glass dcard">
+              <div class="dtop">
+                <span class="chip alex"><span class="pane"><span data-sb-avatar="alex"></span></span></span>
+                <span class="agent">Alex</span>
+                <span class="kind2">· Handoff</span>
+                <span class="ts over">Overdue</span>
+              </div>
+              <p class="body2">Sarah Tan asked to talk to a human about their consultation.</p>
+              <div class="foot">
+                <span class="forwho">FOR SARAH TAN</span>
+                <span class="cta">TAP TO OPEN <span>→</span></span>
+              </div>
+            </div>
+
+            <!-- card 2: high-risk approval -->
+            <div class="glass dcard">
+              <div class="dtop">
+                <span class="chip alex"><span class="pane"><span data-sb-avatar="alex"></span></span></span>
+                <span class="agent">Alex</span>
+                <span class="kind2">· Approval</span>
+                <span class="ts">5d ago</span>
+              </div>
+              <p class="body2">Offer Priya a complimentary touch-up to resolve her concern about uneven volume.</p>
+              <div class="foot">
+                <span class="riskmini high"><span class="rd"></span>High risk</span>
+                <span class="forwho">FOR PRIYA NAIR</span>
+                <span class="cta">TAP TO REVIEW <span>→</span></span>
+              </div>
+            </div>
+
+            <!-- card 3: low-risk approval -->
+            <div class="glass dcard">
+              <div class="dtop">
+                <span class="chip alex"><span class="pane"><span data-sb-avatar="alex"></span></span></span>
+                <span class="agent">Alex</span>
+                <span class="kind2">· Approval</span>
+                <span class="ts">5d ago</span>
+              </div>
+              <p class="body2">Send Maya a warm day-3 check-in while her lip filler settles.</p>
+              <div class="foot">
+                <span class="riskmini low"><span class="rd"></span>Low risk</span>
+                <span class="forwho">FOR MAYA LIM</span>
+                <span class="cta">SWIPE <span>→</span></span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       C) COMMIT MOMENT — SOLID surface (most finished)
+       ============================================================ -->
+  <section class="section">
+    <div class="cap"><span class="tag">C · Commit moment</span><span class="desc">Priya's approval — SOLID warm panel, AA-legible, honest "what changes," + Undo</span></div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <!-- dimmed home behind -->
+        <div class="ambient"><span class="bloom peach"></span><span class="bloom amber"></span><span class="bloom rose"></span></div>
+        <div class="grain"></div>
+        <div class="app" style="filter:saturate(.9)">
+          <div class="masthead">
+            <div style="display:flex;align-items:center">
+              <div class="wordmark"><span class="dot"></span>Switchboard</div>
+            </div>
+            <div class="acct">D</div>
+          </div>
+          <div class="scroll" style="opacity:.5">
+            <div class="eyebrow">Tuesday, Jun 2 · 7:18 PM</div>
+            <h1 class="verdict">Three things need you — start with <span class="name">Alex</span>.</h1>
+          </div>
+        </div>
+
+        <!-- the SOLID sheet -->
+        <div class="sheet-wrap">
+          <div class="scrim"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="shead">
+              <div class="well alex sw"><span class="pane"><span data-sb-avatar="alex"></span></span></div>
+              <div class="si">
+                <div class="sname"><span class="hue"></span>Alex</div>
+                <div class="skind">Approval</div>
+              </div>
+              <span class="risk high"><span class="rd"></span>High risk</span>
+            </div>
+
+            <!-- proposal (solid) -->
+            <div class="proposal">
+              <div class="prow">
+                <span class="pk">Offer</span>
+                <span class="pv big">Complimentary touch-up <span class="val">· $480 value</span></span>
+              </div>
+              <div class="prow">
+                <span class="pk">Reason</span>
+                <span class="pv">Client flagged uneven volume</span>
+              </div>
+              <div class="prow">
+                <span class="pk">Channel</span>
+                <span class="pv">WhatsApp · to Priya Nair</span>
+              </div>
+            </div>
+
+            <div class="whatlbl">What this changes</div>
+            <div class="riskchips">
+              <div class="rchip">
+                <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#9A5E1C" stroke-width="1.9"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke-linecap="round"/></svg></span>
+                Spends from your budget
+              </div>
+              <div class="rchip">
+                <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#9A5E1C" stroke-width="1.9"><path d="M21 11.5a8.4 8.4 0 0 1-11.9 7.6L3 21l1.9-6.1A8.5 8.5 0 1 1 21 11.5Z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                Messages a client directly
+              </div>
+            </div>
+
+            <!-- honest "what's known" — no placeholder grid -->
+            <div class="changes">
+              <div class="ch-h">Confirmed before you commit</div>
+              <div class="chrow"><span class="ck">Value</span><span class="cv">$480</span><span class="check"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+              <div class="chrow"><span class="ck">Channel</span><span class="cv">WhatsApp</span><span class="check"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+              <div class="chrow"><span class="ck">Recipient</span><span class="cv">Priya Nair</span><span class="check"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+              <div class="chnote">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C7D66" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01" stroke-linecap="round"/></svg>
+                Alex will send the message and log the spend. Redemption timing is up to Priya — I'll let you know when she books.
+              </div>
+            </div>
+
+            <div class="sheet-actions">
+              <button class="btn btn-primary">Approve offer · $480</button>
+              <button class="btn btn-ghost">Adjust</button>
+            </div>
+            <div class="assure">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8C7D66" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" stroke-linejoin="round"/></svg>
+              You can undo for 12 seconds after sending
+            </div>
+          </div>
+        </div>
+
+        <!-- Undo toast concept — the post-commit state, shown floating above the sheet so
+             the live sheet's Alex identity stays visible. -->
+        <div class="postlbl">After you commit ↓</div>
+        <div class="undo" style="bottom:auto;top:78px">
+          <span class="tick"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 12.5l4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="ut">Approved — sent to <span class="who">Priya</span></span>
+          <button class="ub"><span class="ring"><svg width="15" height="15" viewBox="0 0 15 15"><circle class="bg" cx="7.5" cy="7.5" r="6"/><circle class="fg" cx="7.5" cy="7.5" r="6"/></svg></span>Undo · 12s</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       E) MEET YOUR TEAM — hero orbs
+       ============================================================ -->
+  <section class="section">
+    <div class="cap"><span class="tag">E · Meet your team</span><span class="desc">three glowing glass orbs = "your team" — the emotional peak</span></div>
+    <div class="phone team-hero">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="ambient"><span class="bloom peach"></span><span class="bloom amber"></span><span class="bloom rose"></span></div>
+        <div class="grain"></div>
+        <div class="hero-inner">
+          <div class="hero-eyebrow">Your team</div>
+          <h1 class="hero-title">Three teammates,<br>always on.</h1>
+          <p class="hero-sub">Each handles their lane and reports back. You approve the moves that spend money or touch a client.</p>
+
+          <div class="orbs">
+            <div class="orb alex">
+              <div class="glassorb"><div class="pane"><span data-sb-avatar="alex"></span></div></div>
+              <div class="oname"><span class="hue"></span>Alex</div>
+              <div class="orole">Ops · Leads</div>
+              <div class="odesc">Answers leads, books consults, drafts offers.</div>
+            </div>
+            <div class="orb riley">
+              <div class="glassorb"><div class="pane"><span data-sb-avatar="riley"></span></div></div>
+              <div class="oname"><span class="hue"></span>Riley</div>
+              <div class="orole">Ads · Spend</div>
+              <div class="odesc">Runs and optimizes your campaigns.</div>
+            </div>
+            <div class="orb mira">
+              <div class="glassorb"><div class="pane"><span data-sb-avatar="mira"></span></div></div>
+              <div class="oname"><span class="hue"></span>Mira</div>
+              <div class="orole">Creative · UGC</div>
+              <div class="odesc">Makes short-form video and creative.</div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-foot">
+          <button class="btn btn-primary">Meet your team</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       D) DESKTOP — Home bento
+       ============================================================ -->
+  <section class="section wide">
+    <div class="cap"><span class="tag">D · Desktop</span><span class="desc">~1100px — sidebar + bento Home; glass chrome, solid decision cards</span></div>
+    <div class="desk">
+      <div class="ambient"><span class="bloom peach"></span><span class="bloom amber"></span><span class="bloom rose"></span></div>
+      <div class="grain"></div>
+      <div class="desk-grid">
+
+        <!-- sidebar -->
+        <aside class="dside">
+          <div class="wordmark"><span class="dot"></span>Switchboard</div>
+          <nav class="dnav">
+            <a href="#" class="active">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Home
+            </a>
+            <a href="#">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 0 3-3h12l3 3M8 12h8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Inbox <span class="badge">3</span>
+            </a>
+            <a href="#">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 19V5m0 14h16M8 19v-6m4 6V9m4 10V7m4 12v-9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Results
+            </a>
+            <a href="#">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.8-3.6 3.7-5.5 7-5.5S18.2 16.4 19 20" stroke-linecap="round"/></svg>
+              Team
+            </a>
+            <a href="#">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2" stroke-linecap="round"/></svg>
+              Settings
+            </a>
+          </nav>
+          <div class="dteam">
+            <div class="dt-h">Working now</div>
+            <div class="dtmem">
+              <div class="well alex w"><span class="pane"><span data-sb-avatar="alex"></span></span></div>
+              <div><div class="nm">Alex</div><div class="st"><span class="wd" style="background:var(--moss);box-shadow:0 0 6px var(--moss)"></span>drafting Priya's offer</div></div>
+            </div>
+            <div class="dtmem">
+              <div class="well riley w"><span class="pane"><span data-sb-avatar="riley"></span></span></div>
+              <div><div class="nm">Riley</div><div class="st"><span class="wd" style="background:var(--amber-hi)"></span>watching 3 ad sets</div></div>
+            </div>
+            <div class="dtmem">
+              <div class="well mira w"><span class="pane"><span data-sb-avatar="mira"></span></span></div>
+              <div><div class="nm">Mira</div><div class="st"><span class="wd" style="background:var(--mira)"></span>2 drafts ready</div></div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- main -->
+        <main class="dmain">
+          <div class="dmain-head">
+            <div>
+              <div class="eyebrow">Tuesday, Jun 2 · 7:18 PM</div>
+              <h1>Good evening, Dev. Three things need you — start with <span class="name">Alex</span>.</h1>
+            </div>
+            <div class="right">
+              <div class="statuspill"><span class="live"></span>Live<span class="sep">·</span><span class="halt">Halt</span></div>
+              <div class="acct">D</div>
+            </div>
+          </div>
+
+          <div class="bento">
+            <!-- the high-risk decision: SOLID, not glass -->
+            <div class="span2" style="background:var(--panel);border:1px solid var(--panel-line);border-radius:20px;padding:18px 20px;box-shadow:var(--shadow-soft)">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                <span class="chip alex" style="width:30px;height:30px"><span class="pane"><span data-sb-avatar="alex"></span></span></span>
+                <span style="font-weight:700;font-size:13.5px">Alex</span>
+                <span class="kind2" style="color:var(--ink-mute)">· Approval</span>
+                <span class="risk high" style="margin-left:auto"><span class="rd"></span>High risk</span>
+              </div>
+              <p style="font-size:17px;font-weight:700;line-height:1.36;margin:0 0 6px;letter-spacing:-.01em;max-width:560px">Offer Priya a complimentary touch-up to resolve her concern about uneven volume.</p>
+              <p style="font-size:13px;color:var(--ink-mute);margin:0 0 16px;font-variant-numeric:tabular-nums">Complimentary touch-up · <b style="color:var(--amber-ink)">$480 value</b> · WhatsApp to Priya Nair · waiting 5 days</p>
+              <div class="row">
+                <button class="btn btn-primary">Approve offer · $480</button>
+                <button class="btn btn-ghost">Adjust</button>
+                <button class="btn btn-ghost">Open thread</button>
+              </div>
+            </div>
+
+            <!-- needs you / handoff (glass) -->
+            <div class="glass dcard-lg">
+              <div class="hd"><span class="kind">Handoff</span><span class="ts over" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10.5px">Overdue</span></div>
+              <p style="font-size:15px;font-weight:600;line-height:1.4;margin:0 0 14px">Sarah Tan asked to talk to a human about their consultation.</p>
+              <div class="row"><button class="btn btn-primary full">Take this one</button><button class="btn btn-ghost">Snooze</button></div>
+            </div>
+
+            <!-- value strip (glass) -->
+            <div class="glass dcard-lg">
+              <div class="hd"><span class="vh" style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)">Since you hired your team</span></div>
+              <div class="dval">
+                <div class="cell"><div class="n">14</div><div class="k">leads answered</div></div>
+                <div class="cell"><div class="n">9</div><div class="k">consults booked</div></div>
+                <div class="cell"><div class="n amber">S$7,388</div><div class="k">saved</div></div>
+              </div>
+            </div>
+
+            <!-- letter (glass, full) -->
+            <div class="glass letter span2">
+              <div class="lh">
+                <span class="chip alex" style="width:30px;height:30px"><span class="pane"><span data-sb-avatar="alex"></span></span></span>
+                <span class="tt">A note from Alex · week so far</span>
+              </div>
+              <p style="max-width:780px"><span class="drop">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned through budget. Priya's still waiting on the touch-up call — that's the one I'd look at first. Everything else is handled, and Riley's keeping an eye on the spend.</p>
+              <div class="sig"><span style="width:18px;height:1px;background:var(--alex);display:inline-block"></span>Alex</div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       F) DARK "DIM" variant
+       ============================================================ -->
+  <section class="section">
+    <div class="cap"><span class="tag dim-cap" style="background:#1a160f;border-color:#3a342c;color:#F3E9DA">F · Dark "Dim"</span><span class="desc" style="color:#8a8a92">flagship dark — warm near-black, glass + glows lifted</span></div>
+    <div class="phone dim">
+      <div class="notch"></div>
+      <div class="screen scrolls">
+        <div class="ambient"><span class="bloom peach"></span><span class="bloom amber"></span><span class="bloom rose"></span></div>
+        <div class="grain"></div>
+        <div class="app">
+          <div class="masthead">
+            <div style="display:flex;align-items:center">
+              <div class="wordmark"><span class="dot"></span>Switchboard</div>
+              <div class="statuspill"><span class="live"></span>Live<span class="sep">·</span>Inbox 3<span class="sep">·</span><span class="halt">Halt</span></div>
+            </div>
+            <div class="acct">D</div>
+          </div>
+          <div class="scroll">
+            <div class="eyebrow">Tuesday, Jun 2 · 7:18 PM</div>
+            <div class="greet">Good evening, Dev</div>
+            <h1 class="verdict">Three things need you — start with <span class="name">Alex</span>.</h1>
+            <div class="subline">2 open leads<span class="d"></span>oldest waiting ~5 days<span class="d"></span>0 of 1 working</div>
+
+            <div class="lbl">Needs you<span class="count">2</span><span class="line"></span></div>
+            <div class="glass ncard" style="margin-bottom:13px">
+              <div class="top">
+                <span class="kind">Approval</span>
+                <span class="byline"><span class="chip alex"><span class="pane"><span data-sb-avatar="alex"></span></span></span> Alex</span>
+                <span class="risk high"><span class="rd"></span>High risk</span>
+              </div>
+              <p class="body"><b>Offer Priya a complimentary touch-up</b> to resolve her concern about uneven volume.</p>
+              <div class="row">
+                <button class="btn btn-primary full">Approve offer</button>
+                <button class="btn btn-ghost">Adjust</button>
+              </div>
+              <div class="swipehint">SWIPE PRIMES · TAP TO COMMIT</div>
+            </div>
+
+            <div class="glass team" style="margin-top:4px">
+              <div class="trow">
+                <div class="well alex twell"><span class="pane"><span data-sb-avatar="alex"></span></span></div>
+                <div class="tinfo"><div class="tname alex"><span class="hue"></span>Alex</div><div class="tstatus"><span class="wd work"></span>Working · drafting Priya's offer</div></div>
+                <div class="tmeta">OPS</div>
+              </div>
+              <div class="trow">
+                <div class="well riley twell"><span class="pane"><span data-sb-avatar="riley"></span></span></div>
+                <div class="tinfo"><div class="tname riley"><span class="hue"></span>Riley</div><div class="tstatus"><span class="wd watch"></span>Watching · 3 ad sets</div></div>
+                <div class="tmeta">ADS</div>
+              </div>
+              <div class="trow">
+                <div class="well mira twell"><span class="pane"><span data-sb-avatar="mira"></span></span></div>
+                <div class="tinfo"><div class="tname mira"><span class="hue"></span>Mira</div><div class="tstatus"><span class="wd ready"></span>2 drafts ready</div></div>
+                <div class="tmeta">UGC</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="foot-note">All six sections render offline from one file · avatars inlined · <code>liquid-warmth/index.html</code></p>
+  </section>
+
+</div>
+
+<!-- =========================================================
+     INLINED avatars.js (self-contained, offline)
+     ========================================================= -->
+<script>
+// Switchboard agent pixel sprites — tiny self-hydrating renderer.
+(function(){
+  var DATA = {"alex":{"pal":{"K":"#1a1108","H":"#5a3418","E":"#7a4a26","S":"#f5c79a","D":"#cd8a5a","G":"#dceeff","M":"#2a1408","C":"#dc8474","B":"#2d4a78","L":"#4a6c98","W":"#f1e7ce","T":"#c0533c","R":"#1a1108","N":"#bfb29a","Z":"#7c6a48","Y":"#f3d24e","P":"#ffffff"},"grid":["........................","........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHHHHHHHHHK......",".....KHHEHHHHHHEHHK.....",".....KHHHHHHHHHHHHK.....",".....KHSSSSSSSSSSHK.....","...KK.KSSSSSSSSSS.KK....","..KRRK.KSGGSSSGGSK.KRRK.","..KRRK.KSGMGSGMGSK.KRRK.","..KRRK.KSGGSSSGGSK.KRRK.","...KK.KSCSSSSSSCSK.KK...","......KSSSSMMMMSSK.K....","......KSSSSSSSSSSK.K....",".......KSSSSSSSSK..N....","........KSSSSSSK........","....KKBBBBWWWWBBBBKK....","...KBBBBBLWTTWLBBBBBK...","..KBBBBBBBWTTWBBBBBBBK..",".KBBBBBBBLWTTWLBBBBBBBK.","KBBBBBBBBBWTTWBBBBBBBBBK","KBBBBBBBBBBWTWBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},"riley":{"pal":{"K":"#1a1108","H":"#3a1e10","E":"#6a3018","S":"#f5c79a","D":"#cd8a5a","G":"#e6f2ff","M":"#1a0c06","C":"#dc7a6a","B":"#9d8ac8","L":"#bba6e0","W":"#f5ebd6","T":"#f0d885","Z":"#7c6a48","Y":"#f1c34a","P":"#ffffff","X":"#3a8a5a","Q":"#c0533c"},"grid":["........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHEHHHHEHHK......",".....KHHHHHHHHHHHHK.....","....KHHHHHHHHHHHHHHK....","...KHHHSSSSSSSSSSHHHK...","..KHHHSSSSSSSSSSSSHHHK..","..KHHSSSSSSSSSSSSSSHHK..","..HHKKGGGGSSSSGGGGKKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKKGGGGSSSSGGGGKKHH..","..HHKSCSSSSCCSSCSKHH....","...HHKSSSSSSSSSSSSKHH...","...HHHKSSSSSSSSSSKHHH...","....HHKSSSSSSSSKHH......","....KKBBBBBWWWWBBBBKK...","...KBBLBBBBKTKBBBBLBBK..","..KBBBBBBLBBBBBLBBBBBBK.",".KBBBBLBBBBBBBBBBBLBBBK.","KBLBBBBBBBLBBBLBBBBBBBLK","KBBBBBBBBBBBBBBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},"mira":{"pal":{"K":"#1a1108","H":"#241433","E":"#3c2456","S":"#f5c79a","D":"#cd8a5a","G":"#efe7ff","M":"#1a0c06","C":"#d98fb0","B":"#7a5cc0","L":"#9b80d8","W":"#f5ebd6","T":"#e7b8e0","Z":"#7c6a48","Y":"#f1c34a","P":"#ffffff","X":"#3a8a5a","Q":"#c0533c"},"grid":["........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHEHHHHEHHK......",".....KHHHHHHHHHHHHK.....","....KHHHHHHHHHHHHHHK....","...KHHHSSSSSSSSSSHHHK...","..KHHHSSSSSSSSSSSSHHHK..","..KHHSSSSSSSSSSSSSSHHK..","..HHKKGGGGSSSSGGGGKKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKKGGGGSSSSGGGGKKHH..","..HHKSCSSSSCCSSCSKHH....","...HHKSSSSSSSSSSSSKHH...","...HHHKSSSSSSSSSSKHHH...","....HHKSSSSSSSSKHH......","....KKBBBBBWWWWBBBBKK...","...KBBLBBBBKTKBBBBLBBK..","..KBBBBBBLBBBBBLBBBBBBK.",".KBBBBLBBBBBBBBBBBLBBBK.","KBLBBBBBBBLBBBLBBBBBBBLK","KBBBBBBBBBBBBBBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]}};
+  function svg(name){
+    var d = DATA[name]; if(!d) return "";
+    var r = "";
+    for(var y=0;y<24;y++){ var row=d.grid[y]||"";
+      for(var x=0;x<24;x++){ var c=row[x];
+        if(!c||c==="."||c===" ") continue;
+        var col=d.pal[c]; if(!col) continue;
+        r+='<rect x="'+x+'" y="'+y+'" width="1.02" height="1.02" fill="'+col+'"/>';
+      } }
+    return '<svg viewBox="0 0 24 24" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="width:100%;height:100%;display:block">'+r+'</svg>';
+  }
+  window.sbAvatar = svg;
+  function hydrate(){ var els=document.querySelectorAll("[data-sb-avatar]");
+    for(var i=0;i<els.length;i++){ els[i].innerHTML = svg(els[i].getAttribute("data-sb-avatar")); } }
+  if(document.readyState!=="loading") hydrate();
+  else document.addEventListener("DOMContentLoaded", hydrate);
+})();
+</script>
+</body>
+</html>

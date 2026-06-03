@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Switchboard — Operator Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   SWITCHBOARD · OPERATOR CONSOLE
+   Warm mission-control. Parchment + brass. Mono-forward.
+   A beautiful warm instrument for a non-technical clinic owner.
+   ============================================================ */
+
+:root{
+  /* --- canvas / ink (warm, matte, parchment) --- */
+  --paper:        #F2ECDF;   /* oat parchment base */
+  --paper-2:      #EDE6D6;   /* recessed well */
+  --card:         #FBF6EC;   /* raised instrument face */
+  --card-2:       #F6F0E2;
+  --ink:          #1C1610;   /* near-black warm ink */
+  --ink-2:        #3A3024;   /* secondary ink */
+  --muted:        #6B5D49;   /* labels, captions (AA 5.4) */
+  --muted-2:      #8A7B62;   /* faint meta */
+  --hair:         #DED3BB;   /* hairline rule */
+  --hair-strong:  #CDBE9F;   /* stronger rule */
+  --grid:         rgba(28,22,16,.045); /* structural grid */
+  --scan:         rgba(28,22,16,.018); /* scanline texture */
+
+  /* --- the ONE action color (operator-amber) --- */
+  --amber:        #D98A2B;   /* action fill */
+  --amber-hi:     #E8A53F;   /* light edge */
+  --amber-lo:     #B96F1C;   /* shadow edge */
+  --amber-hover:  #C67A1F;   /* ink text stays AA */
+  --on-amber:     #231A10;   /* ink ON amber = 6.2:1 */
+
+  /* --- STATUS-LIGHT system (instrument LEDs) --- */
+  --led-on:       #3E9156;   /* green — online / working */
+  --led-on-glow:  #5DBE76;
+  --led-need:     #D98A2B;   /* amber — needs you */
+  --led-sleep:    #B3A88F;   /* soft grey — asleep / idle */
+  --on-ink:       #2E6B3E;   /* "online" text on paper (5.4) */
+  --need-ink:     #9A5A12;   /* "needs you" text (4.6) */
+
+  /* --- agent identity hues (IDENTITY ONLY — never an action) --- */
+  --alex:         #C8643A;   /* coral — sprite frame / dot */
+  --alex-ink:     #9E4F23;   /* coral as TEXT (AA 4.96) */
+  --riley:        #6E5FB0;   /* lavender/indigo */
+  --riley-ink:    #5A4F9E;   /* AA 5.85 */
+  --mira:         #8E5DC4;   /* violet */
+  --mira-ink:     #7A4FB0;   /* AA 4.99 */
+
+  /* --- risk / alert (warm red, not error-red) --- */
+  --risk:         #A33523;
+  --risk-bg:      #F6E3D8;
+
+  /* --- shadows: matte hardware, low + warm --- */
+  --sh-1: 0 1px 0 rgba(255,251,242,.7) inset, 0 1px 2px rgba(40,28,14,.06);
+  --sh-2: 0 1px 0 rgba(255,251,242,.8) inset, 0 2px 6px rgba(40,28,14,.08), 0 8px 22px rgba(40,28,14,.06);
+  --sh-press: inset 0 2px 5px rgba(40,28,14,.14);
+
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --sans: "Spline Sans", ui-sans-serif, system-ui, sans-serif;
+  --serif:"Newsreader", Georgia, serif;
+}
+
+/* ===== reset ===== */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:#e9e9ec;          /* neutral grey OUTSIDE the frames */
+  color:var(--ink);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  padding:40px 18px 96px;
+}
+img{max-width:100%}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+/* ===== page scaffold (the comparison board) ===== */
+.board{max-width:1180px;margin:0 auto}
+.board-head{
+  text-align:center;margin:6px 0 30px;font-family:var(--mono);
+}
+.board-head .brand{
+  display:inline-flex;align-items:center;gap:9px;
+  font-weight:700;font-size:13px;letter-spacing:.18em;color:#2a2620;
+}
+.board-head .brand .knob{width:11px;height:11px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #ffd98a, var(--amber) 60%, #8a531a);
+  box-shadow:0 0 0 2px #d9d4c4, 0 0 8px rgba(217,138,43,.5)}
+.board-head .sub{margin-top:8px;font-size:10.5px;letter-spacing:.26em;color:#7c776c;text-transform:uppercase}
+
+.caption{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;
+  color:#5d584d;margin:40px auto 12px;max-width:1100px;display:flex;align-items:center;gap:10px;
+}
+.caption::before{content:"";width:18px;height:1px;background:#9a948690}
+.caption .num{color:#8a857a;font-weight:700}
+.caption .grow{flex:1;height:1px;background:linear-gradient(90deg,#bdb8ac55,transparent)}
+
+.stack{display:flex;flex-direction:column;align-items:center;gap:0}
+.row{display:flex;flex-wrap:wrap;gap:26px;justify-content:center;align-items:flex-start}
+
+/* ============================================================
+   DEVICE FRAMES
+   ============================================================ */
+.phone{
+  width:390px;border-radius:30px;background:#cfc8b6;
+  padding:8px;
+  box-shadow:0 2px 2px rgba(40,28,14,.10), 0 22px 50px rgba(40,28,14,.20), 0 0 0 1px rgba(40,28,14,.12);
+  position:relative;
+}
+.phone::before{ /* side button hint */
+  content:"";position:absolute;right:-2px;top:120px;width:3px;height:54px;border-radius:2px;
+  background:linear-gradient(#bcb39f,#a89e86);
+}
+.screen{
+  position:relative;border-radius:23px;overflow:hidden;background:var(--paper);
+  height:838px;
+  box-shadow:inset 0 0 0 1px rgba(40,28,14,.10);
+  display:flex;flex-direction:column;
+}
+.screen.tall{height:1180px}
+.desktop{
+  width:1120px;border-radius:16px;background:#cfc8b6;padding:7px;
+  box-shadow:0 2px 2px rgba(40,28,14,.10), 0 28px 64px rgba(40,28,14,.22), 0 0 0 1px rgba(40,28,14,.12);
+}
+.desktop .screen{border-radius:11px;height:760px}
+
+/* the instrument texture: faint grid + scanlines, warm + matte */
+.console-bg{
+  position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    repeating-linear-gradient(0deg, var(--scan) 0 2px, transparent 2px 4px);
+  background-size: 26px 26px, 26px 26px, 100% 4px;
+  mask-image:linear-gradient(180deg, rgba(0,0,0,.9), rgba(0,0,0,.55) 60%, rgba(0,0,0,.7));
+}
+.scroll{position:relative;z-index:1;flex:1;overflow:hidden}  /* mock: no real scroll */
+
+/* ============================================================
+   APP CHROME — the titlebar with status dots (window-chrome)
+   ============================================================ */
+.titlebar{
+  position:relative;z-index:3;display:flex;align-items:center;gap:10px;
+  padding:11px 14px 10px;background:var(--card-2);
+  border-bottom:1px solid var(--hair-strong);
+  box-shadow:0 1px 0 rgba(255,251,242,.7) inset, 0 1px 4px rgba(40,28,14,.05);
+}
+.tb-dots{display:flex;gap:6px}
+.tb-dots i{width:9px;height:9px;border-radius:50%;display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.tb-dots i:nth-child(1){background:#cf6b54}
+.tb-dots i:nth-child(2){background:var(--amber)}
+.tb-dots i:nth-child(3){background:var(--led-on)}
+.brandmark{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-weight:700;
+  font-size:12.5px;letter-spacing:.1em;color:var(--ink)}
+.brandmark .knob{width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #ffd98a, var(--amber) 62%, #8a531a);
+  box-shadow:0 0 7px rgba(217,138,43,.6)}
+.tb-status{
+  margin-left:auto;display:flex;align-items:center;gap:0;
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--muted);
+  background:var(--paper);border:1px solid var(--hair);border-radius:7px;overflow:hidden;
+}
+.tb-status span{padding:4px 8px;border-right:1px solid var(--hair);display:flex;align-items:center;gap:5px}
+.tb-status span:last-child{border-right:none}
+.tb-status .live{color:var(--on-ink);font-weight:600}
+.tb-status .halt{color:var(--risk);font-weight:600;background:#fbeee7}
+.led{width:7px;height:7px;border-radius:50%;display:inline-block;position:relative}
+.led.g{background:var(--led-on);box-shadow:0 0 0 1px rgba(255,255,255,.5), 0 0 6px var(--led-on-glow)}
+.led.a{background:var(--led-need);box-shadow:0 0 0 1px rgba(255,255,255,.5), 0 0 6px rgba(217,138,43,.7)}
+.led.s{background:var(--led-sleep);box-shadow:0 0 0 1px rgba(255,255,255,.5)}
+.led.r{background:var(--risk);box-shadow:0 0 0 1px rgba(255,255,255,.5), 0 0 6px rgba(163,53,35,.6)}
+.account{
+  width:30px;height:30px;border-radius:9px;flex:none;
+  background:linear-gradient(150deg,#f7efdd,#e7dcc4);
+  border:1px solid var(--hair-strong);font-family:var(--mono);font-weight:700;font-size:12px;
+  color:var(--ink-2);display:grid;place-items:center;
+  box-shadow:var(--sh-1);
+}
+
+/* ============================================================
+   HOME
+   ============================================================ */
+.pad{padding:18px 16px 30px}
+.eyebrow{
+  font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--muted);display:flex;align-items:center;gap:8px;
+}
+.eyebrow .blink{width:6px;height:6px;border-radius:50%;background:var(--led-on);
+  box-shadow:0 0 6px var(--led-on-glow);animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* the verdict hero — biggest type, but in a precise readout frame */
+.verdict{margin-top:14px}
+.verdict .hello{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:9px;
+}
+.verdict h1{
+  margin:0;font-family:var(--mono);font-weight:700;
+  font-size:26.5px;line-height:1.24;letter-spacing:-.014em;color:var(--ink);
+}
+.verdict h1 b{color:var(--alex-ink);font-weight:800;
+  box-shadow:inset 0 -.32em 0 rgba(200,100,58,.16);padding:0 .02em}
+.verdict .sub{
+  margin-top:13px;display:flex;flex-wrap:wrap;gap:0;font-family:var(--mono);font-size:11px;
+  color:var(--muted);background:var(--card);border:1px solid var(--hair);border-radius:9px;
+  overflow:hidden;box-shadow:var(--sh-1);
+}
+.verdict .sub span{padding:7px 10px;border-right:1px solid var(--hair)}
+.verdict .sub span:last-child{border-right:none}
+.verdict .sub b{color:var(--ink-2);font-weight:700}
+
+/* section label — like a panel header */
+.sec-label{
+  display:flex;align-items:center;gap:9px;margin:24px 2px 11px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+}
+.sec-label .tick{font-size:9px;color:var(--amber-lo)}
+.sec-label .ct{margin-left:auto;font-weight:700;color:var(--ink-2);
+  background:var(--paper-2);border:1px solid var(--hair);border-radius:6px;padding:2px 7px}
+.sec-label .line{flex:1;height:1px;background:repeating-linear-gradient(90deg,var(--hair) 0 4px,transparent 4px 8px)}
+
+/* ===== NEEDS-YOU cards (instrument tiles) ===== */
+.card{
+  position:relative;background:var(--card);border:1px solid var(--hair-strong);border-radius:13px;
+  box-shadow:var(--sh-2);overflow:hidden;
+}
+.card + .card{margin-top:12px}
+.card .cardbar{
+  display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card-2);
+  border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);
+}
+.tag{font-family:var(--mono);font-weight:700;font-size:9.5px;letter-spacing:.14em;
+  padding:3px 7px;border-radius:5px;text-transform:uppercase}
+.tag.handoff{color:#1f5a8a;background:#e2eef7;border:1px solid #c6ddee}
+.tag.approval{color:var(--need-ink);background:#f8edda;border:1px solid #ecd8b4}
+.tag.high{color:#fff;background:var(--risk);border:1px solid #8c2c1d}
+.tag.low{color:var(--on-ink);background:#e4f0e6;border:1px solid #c9e1cd}
+.cardbar .meta{margin-left:auto;color:var(--muted-2);letter-spacing:.08em}
+.cardbar .by{display:flex;align-items:center;gap:6px;color:var(--ink-2);font-weight:600;letter-spacing:.06em}
+
+/* avatar monitor cell (small) */
+.cell{
+  position:relative;border-radius:7px;background:
+    linear-gradient(180deg,#fffdf7,#f3edde);
+  border:1px solid var(--hair-strong);box-shadow:inset 0 0 0 1px rgba(255,255,255,.55), var(--sh-1);
+  display:grid;place-items:center;overflow:hidden;flex:none;
+}
+.cell::after{ /* glass curve sheen on the monitor */
+  content:"";position:absolute;inset:0;border-radius:6px;pointer-events:none;
+  background:linear-gradient(155deg, rgba(255,255,255,.45), transparent 42%);
+}
+.cell .pix{position:relative;z-index:1}
+.cell.a-alex{box-shadow:inset 0 0 0 1px rgba(200,100,58,.28), var(--sh-1)}
+.cell.a-riley{box-shadow:inset 0 0 0 1px rgba(110,95,176,.28), var(--sh-1)}
+.cell.a-mira{box-shadow:inset 0 0 0 1px rgba(142,93,196,.28), var(--sh-1)}
+.cell.sz-24{width:24px;height:24px}
+.cell .pix.sz-24{width:22px;height:22px}
+
+.card .body{padding:12px 13px 13px}
+.card .body .lead{
+  font-family:var(--sans);font-size:15px;line-height:1.42;color:var(--ink);font-weight:500;letter-spacing:-.005em;
+}
+.card .body .lead b{font-weight:700}
+.card .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.chip{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--muted);
+  background:var(--paper);border:1px solid var(--hair);border-radius:6px;padding:4px 8px;display:flex;align-items:center;gap:5px}
+.chip.risk{color:var(--risk);background:var(--risk-bg);border-color:#e9c8bb}
+.chip b{color:var(--ink-2);font-weight:700}
+
+/* action row */
+.actions{display:flex;gap:8px;margin-top:13px;align-items:center}
+.btn{
+  font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.04em;
+  border-radius:9px;padding:11px 14px;display:inline-flex;align-items:center;gap:8px;justify-content:center;
+  transition:transform .12s ease, box-shadow .12s ease, background .12s ease;border:1px solid transparent;
+}
+.btn:active{transform:translateY(1px)}
+.btn.primary{ /* THE ONE ACTION COLOR */
+  background:linear-gradient(180deg,var(--amber-hi),var(--amber) 55%,var(--amber-lo));
+  color:var(--on-amber);
+  border:1px solid #a8631a;
+  box-shadow:0 1px 0 rgba(255,236,200,.6) inset, 0 1px 2px rgba(120,70,10,.35), 0 4px 12px rgba(185,111,28,.32);
+}
+.btn.primary:hover{background:linear-gradient(180deg,var(--amber-hi),var(--amber-hover) 60%,#a86417);box-shadow:0 1px 0 rgba(255,236,200,.6) inset, 0 2px 4px rgba(120,70,10,.4), 0 6px 18px rgba(185,111,28,.4)}
+.btn.primary:focus-visible{outline:none;box-shadow:0 0 0 2px #fff, 0 0 0 4px var(--amber-lo)}
+.btn.ghost{background:var(--card);color:var(--ink-2);border:1px solid var(--hair-strong);box-shadow:var(--sh-1)}
+.btn.ghost:hover{background:#fff;border-color:var(--muted-2)}
+.btn.ghost:focus-visible{outline:none;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--hair-strong)}
+.btn.block{flex:1}
+.hint{margin-top:9px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--muted-2);display:flex;align-items:center;gap:6px}
+.hint .arr{color:var(--amber-lo)}
+
+.seeall{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;padding:11px 13px;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--ink-2);font-weight:600;
+  background:var(--card);border:1px dashed var(--hair-strong);border-radius:11px;transition:background .12s;
+}
+.seeall:hover{background:#fff}
+.seeall .x{color:var(--amber-lo)}
+
+/* ===== TEAM ROSTER (crew on watch) ===== */
+.roster{background:var(--card);border:1px solid var(--hair-strong);border-radius:13px;box-shadow:var(--sh-2);overflow:hidden}
+.roster .rhead{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card-2);
+  border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted)}
+.roster .rhead .on{margin-left:auto;color:var(--on-ink);font-weight:700;display:flex;align-items:center;gap:5px}
+.crew{display:flex;align-items:center;gap:12px;padding:12px 13px}
+.crew + .crew{border-top:1px solid var(--hair)}
+.crew .cell.sz-44{width:44px;height:44px;border-radius:9px}
+.crew .cell .pix.sz-44{width:40px;height:40px}
+.crew .who{flex:1;min-width:0}
+.crew .callsign{font-family:var(--mono);font-weight:700;font-size:12.5px;letter-spacing:.08em;color:var(--ink);display:flex;align-items:center;gap:7px}
+.crew .callsign .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.crew.alex .callsign .dot{background:var(--alex)}
+.crew.riley .callsign .dot{background:var(--riley)}
+.crew.mira .callsign .dot{background:var(--mira)}
+.crew .stat{margin-top:4px;font-family:var(--sans);font-size:12.5px;color:var(--muted);line-height:1.35}
+.crew .stat b{color:var(--ink-2);font-weight:600}
+.crew .ledbox{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;border:1px solid var(--hair);background:var(--paper);flex:none}
+.crew .ledbox.on{color:var(--on-ink)}
+.crew .ledbox.watch{color:var(--need-ink)}
+.crew .ledbox.ready{color:var(--mira-ink)}
+
+/* ===== VALUE STRIP (cumulative trust anchor) ===== */
+.value{
+  margin-top:14px;background:linear-gradient(180deg,#fbf5e9,#f4eddd);
+  border:1px solid var(--hair-strong);border-radius:13px;box-shadow:var(--sh-2);overflow:hidden;
+}
+.value .vh{padding:9px 12px;border-bottom:1px solid var(--hair);font-family:var(--mono);
+  font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);background:var(--card-2)}
+.value .vgrid{display:grid;grid-template-columns:repeat(3,1fr)}
+.value .vcell{padding:14px 10px;text-align:center;border-right:1px solid var(--hair)}
+.value .vcell:last-child{border-right:none}
+.value .vnum{font-family:var(--mono);font-weight:800;font-size:21px;letter-spacing:-.01em;color:var(--ink);font-variant-numeric:tabular-nums}
+.value .vnum.save{color:var(--amber-lo)}
+.value .vlab{margin-top:5px;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* ===== WEEK-SO-FAR (Alex's signed note — the editorial moment) ===== */
+.note{
+  margin-top:14px;position:relative;background:var(--card);border:1px solid var(--hair-strong);
+  border-radius:13px;box-shadow:var(--sh-2);overflow:hidden;
+}
+.note .nh{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card-2);
+  border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted)}
+.note .nbody{padding:15px 16px 16px;position:relative}
+.note p{margin:0;font-family:var(--serif);font-size:16px;line-height:1.62;color:var(--ink-2)}
+.note p .drop{float:left;font-family:var(--mono);font-weight:800;font-size:40px;line-height:.82;
+  margin:4px 9px 0 0;color:var(--alex-ink)}
+.note .sig{margin-top:12px;display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.06em;color:var(--alex-ink);font-weight:700}
+.note .sig .cell{width:22px;height:22px;border-radius:6px}
+.note .sig .cell .pix{width:20px;height:20px}
+
+/* ============================================================
+   INBOX
+   ============================================================ */
+.inbox-title{display:flex;align-items:baseline;gap:12px;margin-top:6px}
+.inbox-title h2{margin:0;font-family:var(--mono);font-weight:800;font-size:30px;letter-spacing:-.02em;color:var(--ink);text-transform:lowercase}
+.inbox-title .need{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--need-ink);font-weight:600;display:flex;align-items:center;gap:6px}
+.filters{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.fchip{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;
+  padding:7px 11px;border-radius:8px;border:1px solid var(--hair-strong);background:var(--card);color:var(--muted);box-shadow:var(--sh-1);transition:.12s}
+.fchip .n{font-weight:700;color:var(--ink-2)}
+.fchip.active{background:var(--ink);color:#f2ece0;border-color:var(--ink)}
+.fchip.active .n{color:var(--amber-hi)}
+.fchip .cell{width:18px;height:18px;border-radius:5px}
+.fchip .cell .pix{width:16px;height:16px}
+.fchip:hover:not(.active){border-color:var(--muted-2)}
+
+/* inbox decision rows */
+.qrow{margin-top:13px;background:var(--card);border:1px solid var(--hair-strong);border-radius:13px;box-shadow:var(--sh-2);overflow:hidden;transition:transform .14s ease, box-shadow .14s ease}
+.qrow:hover{transform:translateY(-1px);box-shadow:0 1px 0 rgba(255,251,242,.8) inset, 0 4px 10px rgba(40,28,14,.10), 0 14px 30px rgba(40,28,14,.08)}
+.qrow.overdue{border-color:#dca58f}
+.qrow.overdue::before{content:"";position:absolute}
+.qrow .qbar{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card-2);border-bottom:1px solid var(--hair);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+.qrow .qbar .by{display:flex;align-items:center;gap:7px;color:var(--ink-2);font-weight:700;letter-spacing:.06em}
+.qrow .qbar .ts{margin-left:auto;color:var(--muted-2);letter-spacing:.06em}
+.qrow .qbar .ovd{color:var(--risk);font-weight:700;background:#fbeee7;border:1px solid #ecccbf;padding:2px 6px;border-radius:5px}
+.qrow .qbody{padding:11px 13px 13px}
+.qrow .qbody .qlead{font-family:var(--sans);font-size:14.5px;line-height:1.42;color:var(--ink);font-weight:500}
+.qrow .qmeta{display:flex;align-items:center;gap:8px;margin-top:11px;flex-wrap:wrap}
+.qrow .qmeta .for{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--muted);
+  background:var(--paper);border:1px solid var(--hair);border-radius:6px;padding:4px 8px}
+.qrow .qmeta .for b{color:var(--ink-2);font-weight:700}
+.qrow .qmeta .go{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;
+  color:var(--amber-lo);display:flex;align-items:center;gap:6px}
+.qrow .qmeta .risk-led{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;display:flex;align-items:center;gap:5px;text-transform:uppercase}
+.qrow .qmeta .risk-led.high{color:var(--risk)}
+.qrow .qmeta .risk-led.low{color:var(--on-ink)}
+
+/* ============================================================
+   COMMIT MOMENT — Priya approval (the most finished surface)
+   ============================================================ */
+.sheet-scrim{position:absolute;inset:0;z-index:5;background:rgba(34,24,12,.30);
+  backdrop-filter:saturate(1.05);display:flex;align-items:flex-end}
+.sheet{
+  width:100%;background:var(--card);border-top-left-radius:22px;border-top-right-radius:22px;
+  border-top:1px solid var(--hair-strong);
+  box-shadow:0 -10px 40px rgba(40,28,14,.28);
+  max-height:97%;display:flex;flex-direction:column;overflow:hidden;
+}
+.sheet .grabber{width:38px;height:4px;border-radius:3px;background:var(--hair-strong);margin:9px auto 2px}
+.sheet .shead{display:flex;align-items:center;gap:10px;padding:10px 16px 12px;border-bottom:1px solid var(--hair)}
+.sheet .shead .cell{width:38px;height:38px;border-radius:9px}
+.sheet .shead .cell .pix{width:34px;height:34px}
+.sheet .shead .id{flex:1;min-width:0}
+.sheet .shead .id .cs{font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.08em;color:var(--ink);display:flex;align-items:center;gap:7px}
+.sheet .shead .id .cs .dot{width:7px;height:7px;border-radius:50%;background:var(--alex)}
+.sheet .shead .id .sub{margin-top:3px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:7px}
+.sheet .shead .riskpill{font-family:var(--mono);font-weight:700;font-size:9.5px;letter-spacing:.12em;color:#fff;background:var(--risk);border:1px solid #8c2c1d;border-radius:6px;padding:5px 8px;display:flex;align-items:center;gap:5px}
+.sheet .sbody{padding:14px 16px 12px;overflow:hidden}
+
+/* the proposal — a precise instrument readout */
+.readout{background:var(--paper);border:1px solid var(--hair-strong);border-radius:12px;overflow:hidden;box-shadow:var(--sh-1)}
+.readout .rtitle{padding:13px 14px;border-bottom:1px solid var(--hair);background:linear-gradient(180deg,#fbf5e9,#f3edde)}
+.readout .rtitle .lab{font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.readout .rtitle .val{margin-top:6px;font-family:var(--sans);font-size:16.5px;font-weight:600;color:var(--ink);line-height:1.35}
+.readout .rtitle .val .amt{font-family:var(--mono);font-weight:800;color:var(--amber-lo);font-variant-numeric:tabular-nums}
+.kv{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:12px}
+.kv:last-child{border-bottom:none}
+.kv .k{flex:none;width:78px;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.kv .v{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:7px}
+.kv .v.amt{color:var(--ink)}
+.kv .v .amt2{color:var(--amber-lo);font-weight:800}
+
+/* risk chips — plain english */
+.risk-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+.rchip{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.02em;
+  color:var(--ink-2);background:var(--risk-bg);border:1px solid #e8c6b8;border-radius:8px;padding:8px 10px;font-weight:500}
+.rchip .ic{width:14px;height:14px;flex:none;color:var(--risk)}
+
+/* what-this-changes — honest, no placeholder grid */
+.changes{margin-top:13px;background:var(--paper);border:1px solid var(--hair);border-radius:11px;overflow:hidden}
+.changes .ch{padding:9px 13px;font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--hair);background:var(--card-2)}
+.changes .crow{display:flex;align-items:flex-start;gap:10px;padding:10px 13px;border-bottom:1px solid var(--hair)}
+.changes .crow:last-child{border-bottom:none}
+.changes .crow .ic{width:15px;height:15px;flex:none;margin-top:1px;color:var(--on-ink)}
+.changes .crow .ctxt{font-family:var(--sans);font-size:13px;line-height:1.4;color:var(--ink-2)}
+.changes .crow .ctxt b{color:var(--ink);font-weight:700}
+.changes .note-omit{padding:9px 13px;font-family:var(--mono);font-size:10px;letter-spacing:.02em;color:var(--muted);display:flex;align-items:center;gap:7px;background:var(--card-2)}
+
+/* sticky footer — the commit */
+.sfoot{padding:13px 16px calc(13px + env(safe-area-inset-bottom));border-top:1px solid var(--hair);background:var(--card);
+  box-shadow:0 -4px 14px rgba(40,28,14,.05)}
+.sfoot .commit{display:flex;gap:9px}
+.sfoot .btn.primary{flex:1;font-size:13.5px;padding:14px 14px}
+.sfoot .reassure{margin-top:10px;text-align:center;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:7px}
+
+/* post-commit UNDO toast */
+.toast-wrap{position:absolute;left:0;right:0;bottom:18px;z-index:6;display:flex;justify-content:center;padding:0 16px}
+.toast{
+  width:100%;max-width:360px;display:flex;align-items:center;gap:11px;
+  background:linear-gradient(180deg,#241d12,#1b150d);color:#f3ecdd;border:1px solid #4a3c26;
+  border-radius:13px;padding:12px 13px;box-shadow:0 14px 34px rgba(20,12,4,.4);
+  font-family:var(--mono);
+}
+.toast .ok{width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;
+  background:radial-gradient(circle at 40% 35%, #5dbe76, #2f7a45);box-shadow:0 0 12px rgba(93,190,118,.5);color:#0d2614}
+.toast .ttxt{flex:1;min-width:0}
+.toast .ttxt .t1{font-size:11.5px;font-weight:700;letter-spacing:.04em}
+.toast .ttxt .t2{font-size:9.5px;letter-spacing:.06em;color:#bdb09a;margin-top:2px}
+.toast .undo{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.06em;color:var(--amber-hi);
+  border:1px solid #6a5736;background:#2c2316;border-radius:8px;padding:8px 11px;display:flex;align-items:center;gap:7px}
+.toast .undo .ring{width:15px;height:15px}
+.toast .undo:hover{background:#37291a;border-color:#8a6f44}
+
+/* ============================================================
+   MEET YOUR TEAM — hero status board
+   ============================================================ */
+.hero{padding:22px 16px 26px}
+.hero .hlabel{font-family:var(--mono);font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);text-align:center;display:flex;align-items:center;gap:10px;justify-content:center}
+.hero .hlabel .l{width:30px;height:1px;background:repeating-linear-gradient(90deg,var(--hair-strong) 0 4px,transparent 4px 8px)}
+.hero h2{margin:12px 0 4px;text-align:center;font-family:var(--mono);font-weight:800;font-size:24px;letter-spacing:-.01em;color:var(--ink)}
+.hero .hsub{text-align:center;font-family:var(--sans);font-size:13.5px;color:var(--muted);max-width:300px;margin:0 auto 20px;line-height:1.5}
+.board-grid{display:grid;gap:13px}
+.station{
+  position:relative;background:var(--card);border:1px solid var(--hair-strong);border-radius:15px;
+  box-shadow:var(--sh-2);overflow:hidden;
+}
+.station .sbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card-2);border-bottom:1px solid var(--hair);
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.station .sbar .sled{margin-left:auto;display:flex;align-items:center;gap:5px;font-weight:700}
+.station .sin{display:flex;align-items:center;gap:15px;padding:15px 15px}
+.station .mon{
+  position:relative;flex:none;width:86px;height:86px;border-radius:13px;overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 12%, #fffdf7, #efe7d6 75%, #e6dcc7);
+  border:1px solid var(--hair-strong);
+  display:grid;place-items:center;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.6), inset 0 -10px 22px rgba(40,28,14,.06), var(--sh-1);
+}
+.station .mon::before{ /* faint scanline inside the monitor */
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:12px;z-index:2;
+  background:repeating-linear-gradient(0deg, rgba(28,22,16,.05) 0 2px, transparent 2px 4px);
+  mask-image:radial-gradient(120% 120% at 50% 20%, #000, transparent 80%);
+}
+.station .mon::after{ /* curved glass sheen */
+  content:"";position:absolute;inset:0;border-radius:12px;z-index:3;pointer-events:none;
+  background:linear-gradient(155deg, rgba(255,255,255,.5), transparent 40%);
+}
+.station .mon .pix{position:relative;z-index:1;width:74px;height:74px}
+.station.alex .mon{box-shadow:inset 0 0 0 1px rgba(200,100,58,.35), inset 0 -10px 22px rgba(40,28,14,.06), var(--sh-1)}
+.station.riley .mon{box-shadow:inset 0 0 0 1px rgba(110,95,176,.35), inset 0 -10px 22px rgba(40,28,14,.06), var(--sh-1)}
+.station.mira .mon{box-shadow:inset 0 0 0 1px rgba(142,93,196,.35), inset 0 -10px 22px rgba(40,28,14,.06), var(--sh-1)}
+.station .meta{flex:1;min-width:0}
+.station .cs{font-family:var(--mono);font-weight:800;font-size:16px;letter-spacing:.05em;color:var(--ink);display:flex;align-items:center;gap:8px}
+.station .cs .hue{width:9px;height:9px;border-radius:50%}
+.station.alex .cs .hue{background:var(--alex)}
+.station.riley .cs .hue{background:var(--riley)}
+.station.mira .cs .hue{background:var(--mira)}
+.station .role{margin-top:5px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.station .desc{margin-top:9px;font-family:var(--sans);font-size:13px;line-height:1.46;color:var(--ink-2)}
+.station .ministat{margin-top:10px;display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;
+  border:1px solid var(--hair);background:var(--paper);border-radius:7px;padding:5px 9px}
+.station.alex .ministat{color:var(--on-ink)}
+.station.riley .ministat{color:var(--on-ink)}
+.station.mira .ministat{color:var(--mira-ink)}
+
+/* ============================================================
+   DESKTOP composition
+   ============================================================ */
+.dweb{display:grid;grid-template-columns:232px 1fr;height:100%}
+.dnav{background:var(--card-2);border-right:1px solid var(--hair-strong);padding:14px 12px;display:flex;flex-direction:column;gap:3px}
+.dnav .dbrand{display:flex;align-items:center;gap:9px;padding:6px 8px 14px;font-family:var(--mono);font-weight:700;font-size:14px;letter-spacing:.06em;color:var(--ink)}
+.dnav .dbrand .knob{width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffd98a,var(--amber) 62%,#8a531a);box-shadow:0 0 8px rgba(217,138,43,.55)}
+.dnav .navi{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted);transition:.12s}
+.dnav .navi .ic{width:15px;height:15px;opacity:.8}
+.dnav .navi .ct{margin-left:auto;font-size:9.5px;font-weight:700;color:var(--ink-2);background:var(--paper-2);border:1px solid var(--hair);border-radius:5px;padding:1px 6px}
+.dnav .navi.on{background:var(--ink);color:#f2ece0}
+.dnav .navi.on .ic{opacity:1}
+.dnav .navi.on .ct{background:#0000;border-color:#5a4c34;color:var(--amber-hi)}
+.dnav .navi:not(.on):hover{background:var(--paper);color:var(--ink-2)}
+.dnav .crewmini{margin-top:auto;border-top:1px solid var(--hair);padding-top:12px}
+.dnav .cml{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted-2);padding:0 8px 8px}
+.dnav .cmrow{display:flex;align-items:center;gap:9px;padding:6px 8px}
+.dnav .cmrow .cell{width:22px;height:22px;border-radius:6px}
+.dnav .cmrow .cell .pix{width:20px;height:20px}
+.dnav .cmrow .nm{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-2);font-weight:600}
+.dnav .cmrow .st{margin-left:auto}
+
+.dmain{position:relative;overflow:hidden;display:flex;flex-direction:column}
+.dtop{display:flex;align-items:center;gap:12px;padding:13px 20px;border-bottom:1px solid var(--hair-strong);background:var(--card);z-index:2}
+.dtop .deyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.dtop .dstatus{margin-left:auto;display:flex;align-items:center;font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--paper);border:1px solid var(--hair);border-radius:7px;overflow:hidden}
+.dtop .dstatus span{padding:5px 9px;border-right:1px solid var(--hair);display:flex;align-items:center;gap:5px}
+.dtop .dstatus span:last-child{border-right:none}
+.dtop .dstatus .live{color:var(--on-ink);font-weight:600}
+.dtop .acc{width:30px;height:30px;border-radius:9px;background:linear-gradient(150deg,#f7efdd,#e7dcc4);border:1px solid var(--hair-strong);display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:12px;color:var(--ink-2)}
+.dgrid{position:relative;z-index:1;flex:1;display:grid;grid-template-columns:1.55fr 1fr;gap:16px;padding:18px 20px;overflow:hidden}
+.dverdict{grid-column:1 / -1;display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+.dverdict h1{margin:0;font-family:var(--mono);font-weight:700;font-size:26px;line-height:1.25;letter-spacing:-.012em;color:var(--ink)}
+.dverdict h1 b{color:var(--alex-ink);font-weight:800}
+.dverdict .dsub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px}
+.dverdict .dsub b{color:var(--ink-2)}
+.dval{display:flex;gap:0;border:1px solid var(--hair-strong);border-radius:11px;overflow:hidden;background:var(--card);box-shadow:var(--sh-1);flex:none}
+.dval .dvc{padding:10px 16px;text-align:center;border-right:1px solid var(--hair)}
+.dval .dvc:last-child{border-right:none}
+.dval .dvn{font-family:var(--mono);font-weight:800;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+.dval .dvn.save{color:var(--amber-lo)}
+.dval .dvl{font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.dcol{display:flex;flex-direction:column;gap:13px;min-width:0}
+
+/* responsive: stack desktop on small screens just in case */
+@media (max-width:1180px){ .desktop{width:100%;max-width:1120px} }
+
+/* reduced motion strips the only continuous animation */
+@media (prefers-reduced-motion: reduce){
+  .eyebrow .blink, .led, .toast .ok{animation:none !important}
+  *{transition:none !important}
+}
+
+.foot-note{max-width:1100px;margin:46px auto 0;font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:#7c776c;text-align:center;line-height:1.7}
+.foot-note b{color:#54504699}
+</style>
+</head>
+<body>
+
+<div class="board">
+
+  <div class="board-head">
+    <div class="brand"><span class="knob"></span> SWITCHBOARD · OPERATOR CONSOLE</div>
+    <div class="sub">Mission control for your clinic — warm instrument, calm crew on watch</div>
+  </div>
+
+  <!-- ============================================================ A) HOME ============================================================ -->
+  <div class="caption"><span class="num">A</span> Home · the evening briefing <span class="grow"></span> <span>390 × mobile</span></div>
+  <div class="stack">
+    <div class="phone">
+      <div class="screen tall">
+        <div class="console-bg"></div>
+
+        <!-- titlebar / masthead with status dots -->
+        <div class="titlebar">
+          <div class="tb-dots"><i></i><i></i><i></i></div>
+          <div class="brandmark"><span class="knob"></span> Switchboard</div>
+          <div class="tb-status">
+            <span class="live"><span class="led g"></span>LIVE</span>
+            <span><span class="led a"></span>INBOX 3</span>
+            <span class="halt">HALT</span>
+          </div>
+          <div class="account">D</div>
+        </div>
+
+        <div class="scroll">
+          <div class="pad">
+
+            <div class="eyebrow"><span class="blink"></span> TUESDAY, JUN 2 · 7:18 PM</div>
+
+            <div class="verdict">
+              <div class="hello">GOOD EVENING, DEV</div>
+              <h1>Three things need you — start with <b>Alex.</b></h1>
+              <div class="sub">
+                <span><b>2</b> open leads</span>
+                <span>oldest waiting <b>~5 days</b></span>
+                <span><b>0 of 1</b> working</span>
+              </div>
+            </div>
+
+            <!-- NEEDS YOU -->
+            <div class="sec-label"><span class="tick">▍</span> NEEDS YOU <span class="line"></span> <span class="ct">2</span></div>
+
+            <!-- card 1: handoff -->
+            <div class="card">
+              <div class="cardbar">
+                <span class="tag handoff">Handoff</span>
+                <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> Alex</span>
+                <span class="meta">DUE 5d</span>
+              </div>
+              <div class="body">
+                <div class="lead"><b>Sarah Tan</b> asked to talk to a human about their consultation.</div>
+                <div class="actions">
+                  <button class="btn ghost block">Snooze</button>
+                  <button class="btn ghost block" style="flex:1.4;background:var(--ink);color:#f2ece0;border-color:var(--ink)">Take this one</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- card 2: approval HIGH RISK (the money preview) -->
+            <div class="card">
+              <div class="cardbar">
+                <span class="tag approval">Approval</span>
+                <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> Alex</span>
+                <span class="tag high" style="margin-left:auto"><span class="led r" style="width:6px;height:6px"></span> HIGH RISK</span>
+              </div>
+              <div class="body">
+                <div class="lead">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</div>
+                <div class="chips">
+                  <span class="chip"><b>$480</b> value</span>
+                  <span class="chip">WhatsApp</span>
+                </div>
+                <div class="actions">
+                  <button class="btn primary block">Approve offer</button>
+                  <button class="btn ghost">Adjust</button>
+                </div>
+                <div class="hint"><span class="arr">→</span> Swipe primes · tap to commit</div>
+              </div>
+            </div>
+
+            <div class="seeall">See all in Inbox <span class="x">→</span></div>
+
+            <!-- YOUR TEAM roster -->
+            <div class="sec-label"><span class="tick">▍</span> YOUR TEAM · ON WATCH <span class="line"></span></div>
+            <div class="roster">
+              <div class="rhead">CREW STATUS <span class="on"><span class="led g"></span> 1 WORKING</span></div>
+
+              <div class="crew alex">
+                <span class="cell sz-44 a-alex"><span class="pix sz-44" data-sb-avatar="alex"></span></span>
+                <div class="who">
+                  <div class="callsign"><span class="dot"></span> ALEX</div>
+                  <div class="stat">Working · <b>drafting Priya's offer</b></div>
+                </div>
+                <div class="ledbox on"><span class="led g"></span> Online</div>
+              </div>
+
+              <div class="crew riley">
+                <span class="cell sz-44 a-riley"><span class="pix sz-44" data-sb-avatar="riley"></span></span>
+                <div class="who">
+                  <div class="callsign"><span class="dot"></span> RILEY</div>
+                  <div class="stat">Watching · <b>3 ad sets</b></div>
+                </div>
+                <div class="ledbox on"><span class="led g"></span> Online</div>
+              </div>
+
+              <div class="crew mira">
+                <span class="cell sz-44 a-mira"><span class="pix sz-44" data-sb-avatar="mira"></span></span>
+                <div class="who">
+                  <div class="callsign"><span class="dot"></span> MIRA</div>
+                  <div class="stat"><b>2 drafts ready</b> for review</div>
+                </div>
+                <div class="ledbox ready"><span class="led" style="background:var(--mira);box-shadow:0 0 0 1px rgba(255,255,255,.5),0 0 6px rgba(142,93,196,.6)"></span> Ready</div>
+              </div>
+            </div>
+
+            <!-- VALUE STRIP -->
+            <div class="sec-label"><span class="tick">▍</span> SINCE YOU HIRED YOUR TEAM <span class="line"></span></div>
+            <div class="value">
+              <div class="vh">CUMULATIVE · ALL TIME</div>
+              <div class="vgrid">
+                <div class="vcell"><div class="vnum">14</div><div class="vlab">leads<br>answered</div></div>
+                <div class="vcell"><div class="vnum">9</div><div class="vlab">consults<br>booked</div></div>
+                <div class="vcell"><div class="vnum save">~S$7,388</div><div class="vlab">budget<br>saved</div></div>
+              </div>
+            </div>
+
+            <!-- WEEK SO FAR — Alex's signed note -->
+            <div class="note">
+              <div class="nh">WEEK SO FAR · A NOTE FROM ALEX</div>
+              <div class="nbody">
+                <p><span class="drop">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned through the budget. Priya's the only one I need you on — her case is above my limit, so it's yours to call.</p>
+                <div class="sig"><span class="cell a-alex"><span class="pix" data-sb-avatar="alex"></span></span> — ALEX · ON STATION</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ B) INBOX ============================================================ -->
+  <div class="caption"><span class="num">B</span> Inbox · the queue <span class="grow"></span> <span>390 × mobile</span></div>
+  <div class="stack">
+    <div class="phone">
+      <div class="screen">
+        <div class="console-bg"></div>
+
+        <div class="titlebar">
+          <div class="tb-dots"><i></i><i></i><i></i></div>
+          <div class="brandmark"><span class="knob"></span> Switchboard</div>
+          <div class="tb-status">
+            <span class="live"><span class="led g"></span>LIVE</span>
+            <span><span class="led a"></span>INBOX 3</span>
+            <span class="halt">HALT</span>
+          </div>
+          <div class="account">D</div>
+        </div>
+
+        <div class="scroll">
+          <div class="pad">
+            <div class="inbox-title">
+              <h2>inbox</h2>
+              <div class="need"><span class="led a"></span> 3 THINGS NEED YOU</div>
+            </div>
+
+            <div class="filters">
+              <div class="fchip active">ALL <span class="n">3</span></div>
+              <div class="fchip"><span class="cell a-alex"><span class="pix" data-sb-avatar="alex"></span></span> ALEX <span class="n">2</span></div>
+              <div class="fchip"><span class="cell a-riley"><span class="pix" data-sb-avatar="riley"></span></span> RILEY <span class="n">0</span></div>
+            </div>
+
+            <!-- row 1: overdue handoff -->
+            <div class="qrow overdue">
+              <div class="qbar">
+                <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> ALEX</span>
+                · <span style="color:var(--muted)">HANDOFF</span>
+                <span class="ts"><span class="ovd">OVERDUE</span></span>
+              </div>
+              <div class="qbody">
+                <div class="qlead">Sarah Tan asked to talk to a human about their consultation.</div>
+                <div class="qmeta">
+                  <span class="for">FOR <b>Sarah Tan</b></span>
+                  <span class="go">TAP TO OPEN →</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- row 2: high risk approval -->
+            <div class="qrow">
+              <div class="qbar">
+                <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> ALEX</span>
+                · <span style="color:var(--muted)">APPROVAL</span>
+                <span class="ts">5d ago</span>
+              </div>
+              <div class="qbody">
+                <div class="qlead">Offer Priya a complimentary touch-up to resolve her concern about uneven volume.</div>
+                <div class="qmeta">
+                  <span class="risk-led high"><span class="led r"></span> HIGH RISK</span>
+                  <span class="for">FOR <b>Priya Nair</b></span>
+                  <span class="go">TAP TO REVIEW →</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- row 3: low risk approval (swipe) -->
+            <div class="qrow">
+              <div class="qbar">
+                <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> ALEX</span>
+                · <span style="color:var(--muted)">APPROVAL</span>
+                <span class="ts">5d ago</span>
+              </div>
+              <div class="qbody">
+                <div class="qlead">Send Maya a warm day-3 check-in while her lip filler settles.</div>
+                <div class="qmeta">
+                  <span class="risk-led low"><span class="led g"></span> LOW RISK</span>
+                  <span class="for">FOR <b>Maya Lim</b></span>
+                  <span class="go">SWIPE →</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:18px;text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted-2)">— END OF QUEUE · INBOX ZERO IS CLOSE —</div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ C) COMMIT MOMENT ============================================================ -->
+  <div class="caption"><span class="num">C</span> The commit moment · Priya's approval — the most finished surface <span class="grow"></span> <span>390 × sheet</span></div>
+  <div class="stack">
+    <div class="row">
+
+      <!-- the approval sheet -->
+      <div class="phone">
+        <div class="screen">
+          <div class="console-bg"></div>
+          <!-- dim home behind -->
+          <div class="titlebar" style="filter:saturate(.8) brightness(.99)">
+            <div class="tb-dots"><i></i><i></i><i></i></div>
+            <div class="brandmark"><span class="knob"></span> Switchboard</div>
+            <div class="tb-status"><span class="live"><span class="led g"></span>LIVE</span><span><span class="led a"></span>INBOX 3</span><span class="halt">HALT</span></div>
+            <div class="account">D</div>
+          </div>
+
+          <div class="sheet-scrim">
+            <div class="sheet">
+              <div class="grabber"></div>
+              <div class="shead">
+                <span class="cell"><span class="pix" data-sb-avatar="alex"></span></span>
+                <div class="id">
+                  <div class="cs"><span class="dot"></span> ALEX</div>
+                  <div class="sub">APPROVAL · FOR PRIYA NAIR</div>
+                </div>
+                <div class="riskpill"><span class="led r" style="width:6px;height:6px"></span> HIGH RISK</div>
+              </div>
+
+              <div class="sbody">
+
+                <!-- THE PROPOSAL — instrument readout -->
+                <div class="readout">
+                  <div class="rtitle">
+                    <div class="lab">THE PROPOSAL</div>
+                    <div class="val">Complimentary touch-up · <span class="amt">$480 value</span></div>
+                  </div>
+                  <div class="kv"><div class="k">Reason</div><div class="v">Client flagged uneven volume</div></div>
+                  <div class="kv"><div class="k">Channel</div><div class="v"><span class="led g" style="width:6px;height:6px"></span> WhatsApp · direct</div></div>
+                  <div class="kv"><div class="k">Recipient</div><div class="v">Priya Nair</div></div>
+                </div>
+
+                <!-- plain-english risk chips -->
+                <div class="risk-row">
+                  <span class="rchip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Spends from your budget</span>
+                  <span class="rchip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.3 7.9L3 21l1.6-6.7A8.4 8.4 0 1 1 21 11.5Z"/></svg> Messages a client directly</span>
+                </div>
+
+                <!-- WHAT THIS CHANGES — honest, only what's known -->
+                <div class="changes">
+                  <div class="ch">WHAT THIS CHANGES — CONFIRMED</div>
+                  <div class="crow">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <div class="ctxt"><b>$480</b> comes off your budget as a goodwill credit.</div>
+                  </div>
+                  <div class="crow">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <div class="ctxt">Alex sends <b>Priya</b> the offer over <b>WhatsApp</b>.</div>
+                  </div>
+                  <div class="note-omit"><span style="color:var(--muted-2)">○</span> Nothing else changes until she replies — I'll bring her answer back to you.</div>
+                </div>
+
+              </div>
+
+              <!-- COMMIT footer -->
+              <div class="sfoot">
+                <div class="commit">
+                  <button class="btn primary">Approve offer · $480</button>
+                  <button class="btn ghost">Adjust</button>
+                </div>
+                <div class="reassure"><span class="led g" style="width:6px;height:6px"></span> You can undo for 12 seconds after sending.</div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- post-commit UNDO state -->
+      <div class="phone">
+        <div class="screen">
+          <div class="console-bg"></div>
+          <div class="titlebar">
+            <div class="tb-dots"><i></i><i></i><i></i></div>
+            <div class="brandmark"><span class="knob"></span> Switchboard</div>
+            <div class="tb-status"><span class="live"><span class="led g"></span>LIVE</span><span><span class="led g"></span>INBOX 2</span><span class="halt">HALT</span></div>
+            <div class="account">D</div>
+          </div>
+          <div class="scroll">
+            <div class="pad">
+              <div class="eyebrow"><span class="blink"></span> TUESDAY, JUN 2 · 7:19 PM</div>
+              <div class="verdict">
+                <div class="hello">GOOD EVENING, DEV</div>
+                <h1>Two things left — nice work clearing <b style="color:var(--ink)">Priya.</b></h1>
+                <div class="sub">
+                  <span><b>1</b> open lead</span>
+                  <span>handoff <b>waiting</b></span>
+                  <span><b>1 of 1</b> working</span>
+                </div>
+              </div>
+
+              <div class="sec-label"><span class="tick">▍</span> JUST NOW <span class="line"></span></div>
+              <!-- a settled, confirmed card -->
+              <div class="card" style="border-color:#cfe0d0">
+                <div class="cardbar" style="background:#eef6ef;border-color:#d6e7d8">
+                  <span class="tag low"><span class="led g" style="width:6px;height:6px"></span> SENT</span>
+                  <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> Alex</span>
+                  <span class="meta">7:19 PM</span>
+                </div>
+                <div class="body">
+                  <div class="lead">Offer delivered to <b>Priya Nair</b> — <b>$480</b> touch-up, over WhatsApp. I'll bring her reply straight to you.</div>
+                </div>
+              </div>
+
+              <div style="height:380px"></div>
+            </div>
+          </div>
+
+          <!-- the branded UNDO toast -->
+          <div class="toast-wrap">
+            <div class="toast">
+              <div class="ok">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              </div>
+              <div class="ttxt">
+                <div class="t1">Approved — sent to Priya</div>
+                <div class="t2">$480 touch-up · WhatsApp</div>
+              </div>
+              <button class="undo">
+                <svg class="ring" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/></svg>
+                UNDO · 12s
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================ E) MEET YOUR TEAM HERO ============================================================ -->
+  <div class="caption"><span class="num">E</span> Meet your team · the crew roster / status board <span class="grow"></span> <span>390 × hero</span></div>
+  <div class="stack">
+    <div class="phone">
+      <div class="screen tall" style="height:1010px">
+        <div class="console-bg"></div>
+        <div class="titlebar">
+          <div class="tb-dots"><i></i><i></i><i></i></div>
+          <div class="brandmark"><span class="knob"></span> Switchboard</div>
+          <div class="tb-status"><span class="live"><span class="led g"></span>LIVE</span><span>CREW 3</span></div>
+          <div class="account">D</div>
+        </div>
+
+        <div class="scroll">
+          <div class="hero">
+            <div class="hlabel"><span class="l"></span> CREW ROSTER <span class="l"></span></div>
+            <h2>Meet your team</h2>
+            <p class="hsub">Three teammates on watch, around the clock. You make the calls that matter; they handle the rest and report back.</p>
+
+            <div class="board-grid">
+
+              <!-- ALEX station -->
+              <div class="station alex">
+                <div class="sbar">STATION 01 · FRONT DESK <span class="sled" style="color:var(--on-ink)"><span class="led g"></span> ONLINE</span></div>
+                <div class="sin">
+                  <div class="mon"><span class="pix" data-sb-avatar="alex"></span></div>
+                  <div class="meta">
+                    <div class="cs"><span class="hue"></span> ALEX</div>
+                    <div class="role">LEADS · CONSULTS · CLIENT CHAT</div>
+                    <div class="desc">"I answer your leads, book consults, and draft offers — and I'll always pause and ask before I do anything risky."</div>
+                    <span class="ministat"><span class="led g"></span> WORKING · DRAFTING PRIYA'S OFFER</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- RILEY station -->
+              <div class="station riley">
+                <div class="sbar">STATION 02 · AD ROOM <span class="sled" style="color:var(--on-ink)"><span class="led g"></span> ONLINE</span></div>
+                <div class="sin">
+                  <div class="mon"><span class="pix" data-sb-avatar="riley"></span></div>
+                  <div class="meta">
+                    <div class="cs"><span class="hue"></span> RILEY</div>
+                    <div class="role">CAMPAIGNS · BUDGET · OPTIMIZATION</div>
+                    <div class="desc">"I run and tune your ad campaigns. I watch every dollar and I'll pause a set before it wastes your budget."</div>
+                    <span class="ministat"><span class="led g"></span> WATCHING · 3 AD SETS</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- MIRA station -->
+              <div class="station mira">
+                <div class="sbar">STATION 03 · STUDIO <span class="sled" style="color:var(--mira-ink)"><span class="led" style="background:var(--mira);box-shadow:0 0 0 1px rgba(255,255,255,.5),0 0 6px rgba(142,93,196,.6)"></span> READY</span></div>
+                <div class="sin">
+                  <div class="mon"><span class="pix" data-sb-avatar="mira"></span></div>
+                  <div class="meta">
+                    <div class="cs"><span class="hue"></span> MIRA</div>
+                    <div class="role">CREATIVE · SHORT-FORM VIDEO · UGC</div>
+                    <div class="desc">"I make the videos and creative that bring people in. Two drafts are ready for your eyes whenever you are."</div>
+                    <span class="ministat"><span class="led" style="background:var(--mira);box-shadow:0 0 0 1px rgba(255,255,255,.5),0 0 6px rgba(142,93,196,.6)"></span> 2 DRAFTS READY</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div style="margin-top:18px;padding:12px 14px;border:1px dashed var(--hair-strong);border-radius:12px;background:var(--card);font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--muted);text-align:center;line-height:1.7">
+              <span style="color:var(--ink-2);font-weight:700">ONE HALT, WHOLE CREW.</span><br>The big red switch stops everyone at once — you're always in command.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ D) DESKTOP ============================================================ -->
+  <div class="caption"><span class="num">D</span> Desktop · the operator station (~1100px) <span class="grow"></span> <span>1120 × desktop</span></div>
+  <div class="stack">
+    <div class="desktop">
+      <div class="screen">
+        <div class="console-bg"></div>
+        <div class="dweb">
+
+          <!-- left nav -->
+          <aside class="dnav">
+            <div class="dbrand"><span class="knob"></span> Switchboard</div>
+            <a class="navi on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11 12 3l9 8M5 9v11h14V9"/></svg> HOME</a>
+            <a class="navi"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H7l-3 3z"/></svg> INBOX <span class="ct">3</span></a>
+            <a class="navi"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5m5 14V9m5 10V12m5 7V7"/></svg> RESULTS</a>
+            <a class="navi"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg> CLIENTS</a>
+            <a class="navi"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg> SETTINGS</a>
+
+            <div class="crewmini">
+              <div class="cml">CREW · ON WATCH</div>
+              <div class="cmrow"><span class="cell a-alex"><span class="pix" data-sb-avatar="alex"></span></span><span class="nm">ALEX</span><span class="st led g"></span></div>
+              <div class="cmrow"><span class="cell a-riley"><span class="pix" data-sb-avatar="riley"></span></span><span class="nm">RILEY</span><span class="st led g"></span></div>
+              <div class="cmrow"><span class="cell a-mira"><span class="pix" data-sb-avatar="mira"></span></span><span class="nm">MIRA</span><span class="st led" style="background:var(--mira);box-shadow:0 0 0 1px rgba(255,255,255,.5),0 0 5px rgba(142,93,196,.6)"></span></div>
+            </div>
+          </aside>
+
+          <!-- main -->
+          <div class="dmain">
+            <div class="dtop">
+              <div>
+                <div class="deyebrow">TUESDAY, JUN 2 · 7:18 PM · OPERATOR DECK</div>
+              </div>
+              <div class="dstatus">
+                <span class="live"><span class="led g"></span> LIVE</span>
+                <span><span class="led a"></span> INBOX 3</span>
+                <span style="color:var(--risk);font-weight:600;background:#fbeee7"><span class="led r"></span> HALT</span>
+              </div>
+              <div class="acc">D</div>
+            </div>
+
+            <div class="dgrid">
+              <div class="dverdict">
+                <div>
+                  <h1>Good evening, Dev — three things need you,<br>start with <b>Alex.</b></h1>
+                  <div class="dsub"><b>2</b> open leads · oldest waiting <b>~5 days</b> · <b>0 of 1</b> working · crew all on station</div>
+                </div>
+                <div class="dval">
+                  <div class="dvc"><div class="dvn">14</div><div class="dvl">ANSWERED</div></div>
+                  <div class="dvc"><div class="dvn">9</div><div class="dvl">BOOKED</div></div>
+                  <div class="dvc"><div class="dvn save">~S$7,388</div><div class="dvl">SAVED</div></div>
+                </div>
+              </div>
+
+              <!-- left column: needs-you queue -->
+              <div class="dcol">
+                <div class="sec-label" style="margin:2px 0 0"><span class="tick">▍</span> NEEDS YOU <span class="line"></span> <span class="ct">2</span></div>
+
+                <div class="card">
+                  <div class="cardbar">
+                    <span class="tag handoff">Handoff</span>
+                    <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> Alex</span>
+                    <span class="meta" style="margin-left:auto">DUE 5d · <span style="color:var(--risk)">OVERDUE</span></span>
+                  </div>
+                  <div class="body">
+                    <div class="lead"><b>Sarah Tan</b> asked to talk to a human about their consultation.</div>
+                    <div class="actions">
+                      <button class="btn ghost" style="background:var(--ink);color:#f2ece0;border-color:var(--ink)">Take this one</button>
+                      <button class="btn ghost">Snooze</button>
+                      <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted)">FOR Sarah Tan</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="cardbar">
+                    <span class="tag approval">Approval</span>
+                    <span class="by"><span class="cell sz-24 a-alex"><span class="pix sz-24" data-sb-avatar="alex"></span></span> Alex</span>
+                    <span class="tag high" style="margin-left:auto"><span class="led r" style="width:6px;height:6px"></span> HIGH RISK</span>
+                  </div>
+                  <div class="body">
+                    <div class="lead">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</div>
+                    <div class="chips"><span class="chip"><b>$480</b> value</span><span class="chip">WhatsApp</span><span class="chip">FOR <b>Priya Nair</b></span></div>
+                    <div class="actions">
+                      <button class="btn primary">Approve offer · $480</button>
+                      <button class="btn ghost">Adjust</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- right column: crew + note -->
+              <div class="dcol">
+                <div class="sec-label" style="margin:2px 0 0"><span class="tick">▍</span> CREW <span class="line"></span></div>
+                <div class="roster">
+                  <div class="crew alex" style="padding:10px 12px">
+                    <span class="cell sz-44 a-alex" style="width:38px;height:38px"><span class="pix sz-44" data-sb-avatar="alex" style="width:34px;height:34px"></span></span>
+                    <div class="who"><div class="callsign"><span class="dot"></span> ALEX</div><div class="stat">Working · <b>Priya's offer</b></div></div>
+                    <div class="ledbox on"><span class="led g"></span> ON</div>
+                  </div>
+                  <div class="crew riley" style="padding:10px 12px">
+                    <span class="cell sz-44 a-riley" style="width:38px;height:38px"><span class="pix sz-44" data-sb-avatar="riley" style="width:34px;height:34px"></span></span>
+                    <div class="who"><div class="callsign"><span class="dot"></span> RILEY</div><div class="stat">Watching · <b>3 ad sets</b></div></div>
+                    <div class="ledbox on"><span class="led g"></span> ON</div>
+                  </div>
+                  <div class="crew mira" style="padding:10px 12px">
+                    <span class="cell sz-44 a-mira" style="width:38px;height:38px"><span class="pix sz-44" data-sb-avatar="mira" style="width:34px;height:34px"></span></span>
+                    <div class="who"><div class="callsign"><span class="dot"></span> MIRA</div><div class="stat"><b>2 drafts</b> ready</div></div>
+                    <div class="ledbox ready"><span class="led" style="background:var(--mira);box-shadow:0 0 0 1px rgba(255,255,255,.5),0 0 5px rgba(142,93,196,.6)"></span> READY</div>
+                  </div>
+                </div>
+
+                <div class="note" style="margin-top:0">
+                  <div class="nh">WEEK SO FAR · FROM ALEX</div>
+                  <div class="nbody" style="padding:13px 14px">
+                    <p style="font-size:14px;line-height:1.55"><span class="drop" style="font-size:32px">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned budget.</p>
+                    <div class="sig" style="margin-top:9px">— ALEX · ON STATION</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ F) DARK VARIANT ============================================================ -->
+  <div class="caption"><span class="num">F</span> Warm-dark panel · the night watch (verdict hero) <span class="grow"></span> <span>390 × dark</span></div>
+  <div class="stack">
+    <div class="phone" style="background:#2a2218">
+      <div class="screen" style="height:560px;background:#1b150d">
+        <!-- dark console texture -->
+        <div class="console-bg" style="background-image:linear-gradient(rgba(255,240,210,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,240,210,.04) 1px,transparent 1px),repeating-linear-gradient(0deg,rgba(255,240,210,.018) 0 2px,transparent 2px 4px);background-size:26px 26px,26px 26px,100% 4px"></div>
+
+        <div class="titlebar" style="background:#241d12;border-color:#3a3020">
+          <div class="tb-dots"><i></i><i></i><i></i></div>
+          <div class="brandmark" style="color:#efe7d6"><span class="knob"></span> Switchboard</div>
+          <div class="tb-status" style="background:#1b150d;border-color:#3a3020;color:#a99a82">
+            <span style="border-color:#3a3020;color:#6dbf83"><span class="led g"></span>LIVE</span>
+            <span style="border-color:#3a3020"><span class="led a"></span>INBOX 3</span>
+            <span style="color:#e08a72;background:#2c1a12">HALT</span>
+          </div>
+          <div class="account" style="background:linear-gradient(150deg,#352b1c,#241d12);border-color:#4a3c26;color:#efe7d6">D</div>
+        </div>
+
+        <div class="scroll">
+          <div class="pad">
+            <div class="eyebrow" style="color:#a99a82"><span class="blink"></span> TUESDAY, JUN 2 · 11:42 PM · NIGHT WATCH</div>
+            <div class="verdict">
+              <div class="hello" style="color:#a99a82">GOOD EVENING, DEV</div>
+              <h1 style="color:#efe7d6">Three things need you — start with <b style="color:#e89a5e">Alex.</b></h1>
+              <div class="sub" style="background:#241d12;border-color:#3a3020;color:#a99a82">
+                <span style="border-color:#3a3020"><b style="color:#efe7d6">2</b> open leads</span>
+                <span style="border-color:#3a3020">oldest <b style="color:#efe7d6">~5 days</b></span>
+                <span><b style="color:#efe7d6">0 of 1</b> working</span>
+              </div>
+            </div>
+
+            <div class="sec-label" style="color:#a99a82;margin-top:22px"><span class="tick" style="color:var(--amber-hi)">▍</span> NEEDS YOU <span class="line" style="background:repeating-linear-gradient(90deg,#3a3020 0 4px,transparent 4px 8px)"></span> <span class="ct" style="background:#241d12;border-color:#3a3020;color:#efe7d6">2</span></div>
+
+            <!-- dark approval card -->
+            <div class="card" style="background:#241d12;border-color:#3a3020;box-shadow:0 1px 0 rgba(255,240,210,.05) inset,0 8px 22px rgba(0,0,0,.4)">
+              <div class="cardbar" style="background:#1f1810;border-color:#3a3020;color:#a99a82">
+                <span class="tag approval" style="color:#e8b56a;background:#2c2316;border-color:#4a3c26">Approval</span>
+                <span class="by" style="color:#efe7d6"><span class="cell sz-24" style="background:#2c2316;border-color:#4a3c26"><span class="pix sz-24" data-sb-avatar="alex"></span></span> Alex</span>
+                <span class="tag high" style="margin-left:auto"><span class="led r" style="width:6px;height:6px"></span> HIGH RISK</span>
+              </div>
+              <div class="body">
+                <div class="lead" style="color:#efe7d6">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</div>
+                <div class="chips">
+                  <span class="chip" style="background:#1f1810;border-color:#3a3020;color:#a99a82"><b style="color:#efe7d6">$480</b> value</span>
+                  <span class="chip" style="background:#1f1810;border-color:#3a3020;color:#a99a82">WhatsApp</span>
+                </div>
+                <div class="actions">
+                  <button class="btn primary block">Approve offer</button>
+                  <button class="btn ghost" style="background:#2c2316;color:#efe7d6;border-color:#4a3c26">Adjust</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;display:flex;align-items:center;gap:9px;padding:11px 13px;border:1px solid #3a3020;border-radius:12px;background:#241d12;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:#a99a82">
+              <span class="led g"></span> <span style="color:#efe7d6;font-weight:700">CREW ON STATION.</span> Alex working · Riley watching · Mira ready.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-note">
+    SWITCHBOARD · OPERATOR CONSOLE — warm mission-control · parchment + brass · status-light crew<br>
+    <b>ONE action color (operator-amber, AA on ink) · agent hues identity-only · honest readouts · undo at the money moment</b>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     AVATARS — inlined self-hydrating sprite renderer (self-contained)
+     ============================================================ -->
+<script>
+(function(){
+  var DATA = {"alex":{"pal":{"K":"#1a1108","H":"#5a3418","E":"#7a4a26","S":"#f5c79a","D":"#cd8a5a","G":"#dceeff","M":"#2a1408","C":"#dc8474","B":"#2d4a78","L":"#4a6c98","W":"#f1e7ce","T":"#c0533c","R":"#1a1108","N":"#bfb29a","Z":"#7c6a48","Y":"#f3d24e","P":"#ffffff"},"grid":["........................","........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHHHHHHHHHK......",".....KHHEHHHHHHEHHK.....",".....KHHHHHHHHHHHHK.....",".....KHSSSSSSSSSSHK.....","...KK.KSSSSSSSSSS.KK....","..KRRK.KSGGSSSGGSK.KRRK.","..KRRK.KSGMGSGMGSK.KRRK.","..KRRK.KSGGSSSGGSK.KRRK.","...KK.KSCSSSSSSCSK.KK...","......KSSSSMMMMSSK.K....","......KSSSSSSSSSSK.K....",".......KSSSSSSSSK..N....","........KSSSSSSK........","....KKBBBBWWWWBBBBKK....","...KBBBBBLWTTWLBBBBBK...","..KBBBBBBBWTTWBBBBBBBK..",".KBBBBBBBLWTTWLBBBBBBBK.","KBBBBBBBBBWTTWBBBBBBBBBK","KBBBBBBBBBBWTWBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},"riley":{"pal":{"K":"#1a1108","H":"#3a1e10","E":"#6a3018","S":"#f5c79a","D":"#cd8a5a","G":"#e6f2ff","M":"#1a0c06","C":"#dc7a6a","B":"#9d8ac8","L":"#bba6e0","W":"#f5ebd6","T":"#f0d885","Z":"#7c6a48","Y":"#f1c34a","P":"#ffffff","X":"#3a8a5a","Q":"#c0533c"},"grid":["........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHEHHHHEHHK......",".....KHHHHHHHHHHHHK.....","....KHHHHHHHHHHHHHHK....","...KHHHSSSSSSSSSSHHHK...","..KHHHSSSSSSSSSSSSHHHK..","..KHHSSSSSSSSSSSSSSHHK..","..HHKKGGGGSSSSGGGGKKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKKGGGGSSSSGGGGKKHH..","..HHKSCSSSSCCSSCSKHH....","...HHKSSSSSSSSSSSSKHH...","...HHHKSSSSSSSSSSKHHH...","....HHKSSSSSSSSKHH......","....KKBBBBBWWWWBBBBKK...","...KBBLBBBBKTKBBBBLBBK..","..KBBBBBBLBBBBBLBBBBBBK.",".KBBBBLBBBBBBBBBBBLBBBK.","KBLBBBBBBBLBBBLBBBBBBBLK","KBBBBBBBBBBBBBBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},"mira":{"pal":{"K":"#1a1108","H":"#241433","E":"#3c2456","S":"#f5c79a","D":"#cd8a5a","G":"#efe7ff","M":"#1a0c06","C":"#d98fb0","B":"#7a5cc0","L":"#9b80d8","W":"#f5ebd6","T":"#e7b8e0","Z":"#7c6a48","Y":"#f1c34a","P":"#ffffff","X":"#3a8a5a","Q":"#c0533c"},"grid":["........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHEHHHHEHHK......",".....KHHHHHHHHHHHHK.....","....KHHHHHHHHHHHHHHK....","...KHHHSSSSSSSSSSHHHK...","..KHHHSSSSSSSSSSSSHHHK..","..KHHSSSSSSSSSSSSSSHHK..","..HHKKGGGGSSSSGGGGKKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKKGGGGSSSSGGGGKKHH..","..HHKSCSSSSCCSSCSKHH....","...HHKSSSSSSSSSSSSKHH...","...HHHKSSSSSSSSSSKHHH...","....HHKSSSSSSSSKHH......","....KKBBBBBWWWWBBBBKK...","...KBBLBBBBKTKBBBBLBBK..","..KBBBBBBLBBBBBLBBBBBBK.",".KBBBBLBBBBBBBBBBBLBBBK.","KBLBBBBBBBLBBBLBBBBBBBLK","KBBBBBBBBBBBBBBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]}};
+  function svg(name){
+    var d = DATA[name]; if(!d) return "";
+    var r = "";
+    for(var y=0;y<24;y++){ var row=d.grid[y]||"";
+      for(var x=0;x<24;x++){ var c=row[x];
+        if(!c||c==="."||c===" ") continue;
+        var col=d.pal[c]; if(!col) continue;
+        r+='<rect x="'+x+'" y="'+y+'" width="1.02" height="1.02" fill="'+col+'"/>';
+      } }
+    return '<svg viewBox="0 0 24 24" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="width:100%;height:100%;display:block">'+r+'</svg>';
+  }
+  window.sbAvatar = svg;
+  function hydrate(){ var els=document.querySelectorAll("[data-sb-avatar]");
+    for(var i=0;i<els.length;i++){ els[i].innerHTML = svg(els[i].getAttribute("data-sb-avatar")); } }
+  if(document.readyState!=="loading") hydrate();
+  else document.addEventListener("DOMContentLoaded", hydrate);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Switchboard — Warm Risograph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,500&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   SWITCHBOARD — "WARM RISOGRAPH"
+   Tactile print-craft: limited warm inks on cream, paper grain,
+   the charming 1px registration-offset of riso. Pixel art is a
+   native sibling — honest, limited-palette, hard-edged.
+   ============================================================ */
+
+:root{
+  /* --- paper / canvas --- */
+  --paper:        #F3ECDD;   /* newsprint cream base */
+  --paper-2:      #EFE6D2;   /* warmer inset panel */
+  --paper-chip:   #F7F1E4;   /* raised stock */
+  --paper-edge:   #E4D9BF;   /* deckle / hairline */
+
+  /* --- inks --- */
+  --ink:          #2A2118;   /* warm near-black text (13.4:1 on paper) */
+  --ink-soft:     #5C4F3C;   /* secondary text */
+  --ink-faint:    #897A60;   /* tertiary / meta */
+
+  /* THE one action ink */
+  --amber:        #E8943A;   /* marigold action FILL (ink-on-amber = 6.6:1) */
+  --amber-deep:   #C9742A;   /* pressed / overprint halo */
+  --amber-ink:    #B5621E;   /* amber used AS small-caps label text (3.8:1) */
+  --amber-tint:   #F6D9A8;   /* amber chip fill (ink text = 11.6:1) */
+
+  /* agent identity inks (IDENTITY ONLY — never an action) */
+  --ox:           #A63D2E;   /* Alex — oxblood/ink-brown (5.4:1) */
+  --ox-deep:      #8C3022;   /* Alex overprint halo */
+  --ox-tint:      #F3D8CB;
+  --plum:         #6E4A8E;   /* Riley — plum-violet (5.9:1) */
+  --plum-deep:    #583A72;
+  --plum-tint:    #E6DCEE;
+  --violet:       #7A52C0;   /* Mira — violet (4.6:1 large) */
+  --violet-deep:  #5F3DA0;
+  --violet-tint:  #E7DEF6;
+
+  --good:         #3F7A4E;   /* booked / positive ink */
+  --good-tint:    #DCE9D9;
+
+  --shadow-ink:   rgba(42,33,24,.92);
+
+  --r-sticker: 14px;
+  --r-card:    18px;
+  --r-chip:    9px;
+  --maxcol: 390px;
+  --ease: cubic-bezier(.22,.61,.36,1);
+}
+
+*{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0;
+  background:#e9e9ec;            /* neutral grey OUTSIDE device frames */
+  color:var(--ink);
+  font-family:"Spline Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  font-feature-settings:"ss01","cv05";
+}
+::selection{ background:var(--amber-tint); color:var(--ink); }
+
+/* ---------- shared print furniture ---------- */
+
+/* the page-grain texture: subtle riso paper tooth */
+.grain{ position:absolute; inset:0; pointer-events:none; opacity:.5; mix-blend-mode:multiply; }
+
+/* tabular numerals everywhere money/counts live */
+.tnum{ font-feature-settings:"tnum","lnum"; font-variant-numeric:tabular-nums lining-nums; }
+
+/* a "second-ink" registration offset — the riso signature.
+   Implemented as an offset box-shadow in an ink color (no blur). */
+.reg-ink   { box-shadow: 3px 3px 0 0 var(--ink); }
+.reg-amber { box-shadow: 3px 3px 0 0 var(--amber-deep); }
+.reg-ox    { box-shadow: 3px 3px 0 0 var(--ox-deep); }
+.reg-plum  { box-shadow: 3px 3px 0 0 var(--plum-deep); }
+
+/* =========================================================
+   PAGE SCAFFOLD (the gallery)
+   ========================================================= */
+.gallery{
+  max-width:1280px;
+  margin:0 auto;
+  padding:46px 22px 100px;
+}
+.gallery-head{
+  text-align:center;
+  margin:8px auto 50px;
+  max-width:760px;
+}
+.gallery-kicker{
+  display:inline-flex; align-items:center; gap:9px;
+  font:600 11px/1 "Spline Sans";
+  letter-spacing:.26em; text-transform:uppercase;
+  color:var(--ink-soft);
+  background:var(--paper);
+  border:1.5px solid var(--ink);
+  border-radius:999px;
+  padding:8px 16px 8px 13px;
+  box-shadow:2px 2px 0 0 var(--amber-deep);
+}
+.gallery-kicker .dot{ width:9px;height:9px;border-radius:50%;background:var(--amber);box-shadow:inset 0 0 0 1.5px var(--ink); }
+.gallery-head h1{
+  font:900 clamp(40px,7vw,76px)/.94 "Fraunces";
+  font-optical-sizing:auto;
+  letter-spacing:-.02em;
+  margin:.42em 0 .12em;
+  color:var(--ink);
+}
+.gallery-head h1 .ink-amber{ color:var(--amber-deep); }
+.gallery-head p{
+  font:400 17px/1.55 "Spline Sans";
+  color:var(--ink-soft);
+  margin:0 auto;
+  max-width:560px;
+}
+
+/* section captions */
+.caption{
+  display:flex; align-items:baseline; gap:14px;
+  max-width:1100px; margin:64px auto 18px; padding:0 4px;
+}
+.caption .num{
+  font:700 13px/1 "Spline Sans";
+  letter-spacing:.04em;
+  color:var(--paper);
+  background:var(--ink);
+  border-radius:7px;
+  padding:6px 9px;
+  box-shadow:2px 2px 0 0 var(--amber-deep);
+}
+.caption h2{
+  font:600 22px/1.1 "Fraunces"; font-optical-sizing:auto;
+  letter-spacing:-.01em; margin:0; color:var(--ink);
+}
+.caption .sub{ font:400 14px/1.4 "Spline Sans"; color:var(--ink-faint); margin-left:auto; max-width:46%; text-align:right; }
+
+.stack{ display:flex; flex-direction:column; align-items:center; }
+.row-wrap{ display:flex; flex-wrap:wrap; gap:34px; justify-content:center; align-items:flex-start; }
+
+/* =========================================================
+   THE PHONE  (mobile device frame, 390 column)
+   ========================================================= */
+.phone{
+  width:var(--maxcol);
+  max-width:92vw;
+  background:var(--paper);
+  border-radius:42px;
+  border:2px solid var(--ink);
+  box-shadow:
+     8px 10px 0 0 rgba(42,33,24,.16),
+     0 26px 60px -28px rgba(42,33,24,.5);
+  padding:11px;
+  position:relative;
+}
+.phone .screen{
+  position:relative;
+  background:var(--paper);
+  border-radius:32px;
+  overflow:hidden;
+  border:1.5px solid var(--paper-edge);
+}
+.phone .notch{
+  position:absolute; top:11px; left:50%; transform:translateX(-50%);
+  width:122px; height:24px; background:var(--ink); border-radius:0 0 13px 13px; z-index:40;
+}
+.scr-pad{ padding:18px 16px 26px; position:relative; z-index:2; }
+
+/* status bar (fake OS) */
+.osbar{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:13px 18px 5px; font:600 13px/1 "Spline Sans";
+  color:var(--ink); letter-spacing:.01em; position:relative; z-index:3;
+}
+.osbar .right{ display:flex; gap:6px; align-items:center; }
+.osbar svg{ display:block; }
+
+/* =========================================================
+   MASTHEAD
+   ========================================================= */
+.masthead{
+  display:flex; align-items:center; gap:10px;
+  padding-bottom:13px; margin-bottom:14px;
+  border-bottom:1.5px solid var(--ink);
+  position:relative;
+}
+/* printed rule with offset second-ink line */
+.masthead::after{
+  content:""; position:absolute; left:0; right:0; bottom:-4px; height:1.5px;
+  background:var(--amber-deep); opacity:.55;
+}
+.wordmark{
+  display:inline-flex; align-items:center; gap:8px;
+  font:800 17px/1 "Fraunces"; font-optical-sizing:auto; letter-spacing:-.01em;
+}
+.wordmark .bug{
+  width:13px;height:13px;border-radius:50%;background:var(--amber);
+  box-shadow:inset 0 0 0 2px var(--ink), 2px 2px 0 0 var(--ox);
+}
+.status-pill{
+  display:inline-flex; align-items:center; gap:7px;
+  font:600 10.5px/1 "Spline Sans"; letter-spacing:.04em;
+  color:var(--ink-soft);
+  border:1.5px solid var(--ink);
+  background:var(--paper-chip);
+  border-radius:999px; padding:5px 9px;
+}
+.status-pill .live{ width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 2px var(--good-tint); }
+.status-pill b{ color:var(--ink); font-weight:700; }
+.status-pill .sep{ color:var(--paper-edge); }
+.status-pill .halt{ color:var(--ox); font-weight:700; }
+.acct{
+  margin-left:auto; width:34px; height:34px; flex:0 0 34px;
+  border-radius:50%; display:grid; place-items:center;
+  font:700 14px/1 "Fraunces"; color:var(--paper);
+  background:var(--ink);
+  box-shadow:2px 2px 0 0 var(--amber); cursor:pointer;
+}
+
+/* =========================================================
+   EYEBROW + VERDICT HERO
+   ========================================================= */
+.eyebrow{
+  font:600 11px/1 "Spline Sans"; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--ink-faint); margin:6px 0 12px; display:flex; align-items:center; gap:8px;
+}
+.eyebrow .tick{ width:18px; height:1.5px; background:var(--ink-faint); }
+
+.hello{ font:500 19px/1.2 "Fraunces"; font-optical-sizing:auto; color:var(--ink-soft); margin:0 0 6px; }
+.verdict{
+  font:700 clamp(29px,8.5vw,34px)/1.06 "Fraunces"; font-optical-sizing:auto;
+  letter-spacing:-.018em; color:var(--ink); margin:0 0 12px;
+}
+.verdict .who{
+  color:var(--ox); position:relative; white-space:nowrap;
+  text-shadow:1.5px 1.5px 0 var(--ox-tint);
+}
+.verdict .who::after{
+  content:""; position:absolute; left:-1px; right:-1px; bottom:.03em; height:.5em;
+  background:var(--ox-tint); z-index:-1; border-radius:2px; opacity:.7;
+}
+.subline{
+  font:500 13.5px/1.45 "Spline Sans"; color:var(--ink-soft);
+  display:flex; flex-wrap:wrap; gap:5px 9px; align-items:center; margin-bottom:20px;
+}
+.subline .pip{ width:4px;height:4px;border-radius:50%;background:var(--ink-faint); }
+
+/* section label (printed tab) */
+.sec-label{
+  display:inline-flex; align-items:center; gap:8px;
+  font:700 11px/1 "Spline Sans"; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink); margin:24px 0 12px;
+}
+.sec-label .tag{
+  background:var(--ink); color:var(--paper); border-radius:6px; padding:5px 8px;
+  box-shadow:2px 2px 0 0 var(--amber-deep);
+}
+.sec-label .count{
+  font-family:"Fraunces"; font-weight:700; color:var(--ox);
+}
+
+/* =========================================================
+   AVATAR CHIP — the printed "spot illustration"
+   ========================================================= */
+.chip{
+  position:relative; display:inline-block; border-radius:11px; flex:none;
+  background:var(--ink-color, var(--plum));
+  box-shadow:inset 0 0 0 1.5px var(--ink);
+  overflow:visible;
+}
+/* the offset "second-ink halo": a duplicated colored plate behind, nudged */
+.chip::before{
+  content:""; position:absolute; inset:0; border-radius:11px;
+  background:var(--halo, var(--plum-deep));
+  transform:translate(2.5px,2.5px); z-index:-1; opacity:.9;
+}
+.chip .plate{
+  position:absolute; inset:0; border-radius:10px; overflow:hidden;
+  display:grid; place-items:end center;
+}
+.chip .plate > span{ width:100%; height:100%; display:block; }
+.chip .plate svg{ image-rendering:pixelated; }
+
+/* tints per agent */
+.chip.alex{  --ink-color:var(--ox-tint);    --halo:var(--ox);     }
+.chip.riley{ --ink-color:var(--plum-tint);  --halo:var(--plum);   }
+.chip.mira{  --ink-color:var(--violet-tint);--halo:var(--violet); }
+
+/* small byline chip helper */
+.byline{ display:flex; align-items:center; gap:9px; }
+.byline .chip{ width:30px; height:30px; }
+.byline .who{
+  font:700 12px/1 "Spline Sans"; letter-spacing:.02em; color:var(--ink);
+  display:flex; align-items:center; gap:7px;
+}
+.byline .who .role{ font-weight:500; color:var(--ink-faint); }
+
+/* =========================================================
+   NEEDS-YOU CARDS (sticker cards)
+   ========================================================= */
+.card{
+  position:relative;
+  background:var(--paper-chip);
+  border:1.5px solid var(--ink);
+  border-radius:var(--r-card);
+  padding:16px 16px 15px;
+  margin-bottom:16px;
+}
+/* card registration offset (subtle, ink) */
+.card{ box-shadow:3px 3px 0 0 rgba(42,33,24,.14); }
+.card.lift{ box-shadow:3px 3px 0 0 var(--ink); }
+
+.card-top{ display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+.tape{
+  font:700 9.5px/1 "Spline Sans"; letter-spacing:.13em; text-transform:uppercase;
+  padding:5px 8px; border-radius:6px; border:1.5px solid var(--ink); color:var(--ink);
+  background:var(--paper);
+}
+.tape.handoff{ background:var(--plum-tint); }
+.tape.approval{ background:var(--ox-tint); }
+.tape.risk-high{
+  background:var(--amber-tint); color:var(--ink);
+  display:inline-flex; align-items:center; gap:5px;
+}
+.tape.risk-high .spark{ width:7px;height:7px;background:var(--amber-deep);border-radius:50%;box-shadow:inset 0 0 0 1px var(--ink); }
+.tape.risk-low{ background:var(--good-tint); color:var(--ink); display:inline-flex;align-items:center;gap:5px; }
+.tape.risk-low .spark{ width:7px;height:7px;background:var(--good);border-radius:50%; }
+.tape.overdue{ background:var(--ox); color:var(--paper-chip); border-color:var(--ox-deep); }
+
+.card-meta-right{ margin-left:auto; font:600 11px/1 "Spline Sans"; color:var(--ink-faint); letter-spacing:.02em; }
+
+.card-body{
+  font:500 15.5px/1.4 "Fraunces"; font-optical-sizing:auto;
+  color:var(--ink); margin:2px 0 14px;
+}
+.card-body b{ font-weight:700; }
+.card-for{
+  display:inline-flex; align-items:center; gap:6px;
+  font:600 11px/1 "Spline Sans"; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--ink-soft); margin-bottom:13px;
+}
+.card-for .lbl{ color:var(--ink-faint); }
+
+.actions{ display:flex; gap:9px; align-items:center; }
+
+/* THE one action color — printed amber button, dark ink text (6.6:1) */
+.btn{
+  font:700 13.5px/1 "Spline Sans"; letter-spacing:.01em;
+  border-radius:11px; padding:13px 16px; cursor:pointer; border:1.5px solid var(--ink);
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  transition:transform .12s var(--ease), box-shadow .12s var(--ease), background .15s;
+  -webkit-tap-highlight-color:transparent; user-select:none;
+}
+.btn-primary{
+  background:var(--amber); color:var(--ink);
+  box-shadow:3px 3px 0 0 var(--amber-deep);
+}
+.btn-primary:hover{ transform:translate(-1px,-1px); box-shadow:4px 4px 0 0 var(--amber-deep); background:#EE9D45; }
+.btn-primary:active{ transform:translate(2px,2px); box-shadow:1px 1px 0 0 var(--amber-deep); }
+.btn-primary:focus-visible{ outline:3px solid var(--ink); outline-offset:2px; }
+
+.btn-ghost{
+  background:var(--paper); color:var(--ink);
+  box-shadow:3px 3px 0 0 rgba(42,33,24,.18);
+}
+.btn-ghost:hover{ transform:translate(-1px,-1px); box-shadow:4px 4px 0 0 rgba(42,33,24,.22); background:#fff; }
+.btn-ghost:active{ transform:translate(2px,2px); box-shadow:1px 1px 0 0 rgba(42,33,24,.18); }
+.btn-sm{ padding:11px 13px; font-size:12.5px; }
+.btn-icon{ padding:12px; }
+
+.swipe-hint{
+  font:500 10.5px/1 "Spline Sans"; color:var(--ink-faint); letter-spacing:.04em;
+  margin-left:auto; display:inline-flex; align-items:center; gap:6px;
+}
+.swipe-hint .arrows{ letter-spacing:-1px; color:var(--amber-deep); font-weight:700; }
+
+.see-all{
+  display:flex; align-items:center; justify-content:space-between;
+  font:600 13px/1 "Spline Sans"; color:var(--ink); text-decoration:none;
+  padding:13px 4px 6px; cursor:pointer;
+}
+.see-all .arrow{ color:var(--amber-deep); font-weight:700; transition:transform .15s var(--ease); }
+.see-all:hover .arrow{ transform:translateX(4px); }
+
+/* =========================================================
+   TEAM ROSTER
+   ========================================================= */
+.roster{ display:flex; flex-direction:column; gap:11px; }
+.crew{
+  display:flex; align-items:center; gap:12px;
+  background:var(--paper-chip); border:1.5px solid var(--ink); border-radius:var(--r-sticker);
+  padding:11px 13px; box-shadow:3px 3px 0 0 rgba(42,33,24,.13);
+  transition:transform .14s var(--ease), box-shadow .14s var(--ease);
+}
+.crew:hover{ transform:translate(-1px,-1px); box-shadow:4px 4px 0 0 rgba(42,33,24,.18); }
+.crew .chip{ width:46px; height:46px; }
+.crew .meta{ min-width:0; }
+.crew .nm{ font:700 15px/1.1 "Fraunces"; font-optical-sizing:auto; color:var(--ink); display:flex; align-items:center; gap:8px; }
+.crew .nm .state{
+  font:600 9px/1 "Spline Sans"; letter-spacing:.1em; text-transform:uppercase;
+  padding:3px 6px; border-radius:5px; border:1.5px solid var(--ink);
+}
+.crew .nm .state.work{ background:var(--ox-tint); color:var(--ink); }
+.crew .nm .state.watch{ background:var(--plum-tint); color:var(--ink); }
+.crew .nm .state.ready{ background:var(--violet-tint); color:var(--ink); }
+.crew .doing{ font:500 12.5px/1.35 "Spline Sans"; color:var(--ink-soft); margin-top:3px; }
+.crew .pulse{
+  margin-left:auto; flex:none; width:9px;height:9px;border-radius:50%;
+  background:var(--amber); box-shadow:inset 0 0 0 1.5px var(--ink);
+}
+.crew.is-live .pulse{ animation:beat 2.6s var(--ease) infinite; }
+@keyframes beat{ 0%,100%{ transform:scale(1); opacity:1;} 50%{ transform:scale(1.45); opacity:.65;} }
+
+/* =========================================================
+   VALUE STRIP — cumulative trust anchor (printed ribbon)
+   ========================================================= */
+.ribbon{
+  position:relative; margin:22px 0 8px; padding:16px 16px 15px;
+  background:var(--ink); color:var(--paper);
+  border-radius:var(--r-card); border:1.5px solid var(--ink);
+  box-shadow:4px 4px 0 0 var(--amber);
+}
+.ribbon .label{
+  font:600 10px/1 "Spline Sans"; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--amber); margin-bottom:13px; display:flex; align-items:center; gap:8px;
+}
+.ribbon .label .rule{ flex:1; height:1px; background:rgba(243,236,221,.22); }
+.ribbon .stats{ display:flex; justify-content:space-between; gap:8px; text-align:center; }
+.ribbon .stat{ flex:1; }
+.ribbon .stat .v{ font:700 23px/1 "Fraunces"; font-optical-sizing:auto; color:var(--paper); letter-spacing:-.01em; }
+.ribbon .stat .v.money{ color:var(--amber); }
+.ribbon .stat .k{ font:500 10.5px/1.25 "Spline Sans"; color:rgba(243,236,221,.7); margin-top:6px; letter-spacing:.02em; }
+.ribbon .divid{ width:1.5px; background:rgba(243,236,221,.18); align-self:stretch; }
+
+/* =========================================================
+   WEEK-SO-FAR — Alex's signed letter (the editorial moment)
+   ========================================================= */
+.letter{
+  position:relative; margin-top:22px; padding:20px 18px 18px;
+  background:var(--paper-2); border:1.5px solid var(--ink); border-radius:var(--r-card);
+  box-shadow:3px 3px 0 0 var(--ox);
+}
+.letter .stamp{
+  position:absolute; top:-14px; right:16px;
+  display:flex; align-items:center; gap:8px;
+  background:var(--paper-chip); border:1.5px solid var(--ink); border-radius:999px;
+  padding:5px 11px 5px 6px; box-shadow:2px 2px 0 0 var(--ox);
+}
+.letter .stamp .chip{ width:24px; height:24px; }
+.letter .stamp .nm{ font:700 10px/1 "Spline Sans"; letter-spacing:.1em; text-transform:uppercase; color:var(--ink); }
+.letter .head{
+  font:600 11px/1 "Spline Sans"; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--ink-faint); margin-bottom:11px;
+}
+.letter p{
+  font:400 16px/1.55 "Fraunces"; font-optical-sizing:auto; color:var(--ink); margin:0;
+  text-wrap:pretty;
+}
+.letter p .drop{
+  float:left; font:900 50px/.78 "Fraunces"; font-optical-sizing:auto;
+  color:var(--ox); margin:4px 9px -4px 0; text-shadow:2px 2px 0 var(--ox-tint);
+}
+.letter .sign{
+  font:500 italic 17px/1 "Fraunces"; font-optical-sizing:auto; color:var(--ox-deep);
+  margin-top:14px; display:flex; align-items:center; gap:8px;
+}
+.letter .sign .line{ width:26px; height:1.5px; background:var(--ox); }
+
+/* =========================================================
+   INBOX
+   ========================================================= */
+.inbox-title{
+  display:flex; align-items:flex-end; justify-content:space-between; margin:2px 0 14px;
+}
+.inbox-title h2{
+  font:900 38px/.9 "Fraunces"; font-optical-sizing:auto; letter-spacing:-.02em;
+  margin:0; color:var(--ink);
+}
+.inbox-title .need{
+  font:600 11.5px/1 "Spline Sans"; color:var(--ink-soft); letter-spacing:.02em;
+  display:inline-flex; align-items:center; gap:7px; padding-bottom:6px;
+}
+.inbox-title .need .d{ width:8px;height:8px;border-radius:50%;background:var(--ox);box-shadow:0 0 0 2px var(--ox-tint); }
+
+.chips{ display:flex; gap:9px; margin-bottom:18px; flex-wrap:wrap; }
+.fchip{
+  display:inline-flex; align-items:center; gap:7px;
+  font:600 12px/1 "Spline Sans"; color:var(--ink);
+  border:1.5px solid var(--ink); border-radius:999px; padding:7px 12px 7px 9px;
+  background:var(--paper-chip); cursor:pointer;
+  transition:transform .12s var(--ease), box-shadow .12s var(--ease);
+  box-shadow:2px 2px 0 0 rgba(42,33,24,.15);
+}
+.fchip:hover{ transform:translate(-1px,-1px); box-shadow:3px 3px 0 0 rgba(42,33,24,.2); }
+.fchip.on{ background:var(--ink); color:var(--paper); box-shadow:2px 2px 0 0 var(--amber); }
+.fchip .chip{ width:20px; height:20px; }
+.fchip .n{ font-family:"Fraunces"; font-weight:700; }
+.fchip.on .n{ color:var(--amber); }
+.fchip .n.zero{ color:var(--ink-faint); }
+
+/* inbox decision rows reuse .card; add tap affordance */
+.taprow{ display:flex; align-items:center; justify-content:space-between; margin-top:13px; }
+.taprow .go{
+  font:700 11px/1 "Spline Sans"; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink); display:inline-flex; align-items:center; gap:7px;
+}
+.taprow .go .arrow{ color:var(--amber-deep); transition:transform .15s var(--ease); }
+.card:hover .taprow .go .arrow{ transform:translateX(4px); }
+.taprow .go.swipe{ color:var(--ink-soft); }
+
+/* =========================================================
+   COMMIT MOMENT — the printed receipt
+   ========================================================= */
+.sheet-wrap{
+  width:var(--maxcol); max-width:92vw;
+}
+.sheet{
+  position:relative;
+  background:var(--paper-chip);
+  border:2px solid var(--ink);
+  border-radius:26px;
+  overflow:hidden;
+  box-shadow:8px 10px 0 0 rgba(42,33,24,.16), 0 26px 60px -28px rgba(42,33,24,.5);
+}
+.sheet .grab{ width:42px;height:5px;border-radius:3px;background:var(--paper-edge);margin:11px auto 0; }
+.sheet-inner{ padding:8px 20px 22px; position:relative; z-index:2; }
+
+.receipt-top{ display:flex; align-items:center; gap:11px; padding:14px 0 16px; border-bottom:2px dashed var(--paper-edge); }
+.receipt-top .who{ font:700 14px/1.1 "Fraunces"; font-optical-sizing:auto; color:var(--ink); }
+.receipt-top .who small{ display:block; font:500 11px/1.2 "Spline Sans"; color:var(--ink-faint); margin-top:3px; }
+
+.receipt-title{
+  font:600 11px/1 "Spline Sans"; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--ink-faint); margin:18px 0 7px;
+}
+.proposal{
+  font:600 21px/1.22 "Fraunces"; font-optical-sizing:auto; color:var(--ink);
+  letter-spacing:-.01em; margin:0 0 16px; text-wrap:balance;
+}
+.proposal .val{ color:var(--ox); white-space:nowrap; }
+
+/* the ledger — honest "what this changes" */
+.ledger{ border:1.5px solid var(--ink); border-radius:13px; overflow:hidden; background:var(--paper); margin-bottom:16px; }
+.lrow{ display:flex; align-items:center; gap:12px; padding:13px 14px; border-bottom:1.5px dashed var(--paper-edge); }
+.lrow:last-child{ border-bottom:none; }
+.lrow .k{ font:600 11px/1 "Spline Sans"; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); flex:0 0 96px; }
+.lrow .v{ font:600 15px/1.25 "Fraunces"; font-optical-sizing:auto; color:var(--ink); margin-left:auto; text-align:right; }
+.lrow .v.amt{ font-weight:700; color:var(--ox); }
+.lrow .v .chan{ display:inline-flex; align-items:center; gap:6px; }
+.lrow .v .wa{ width:14px;height:14px;border-radius:4px;background:var(--good);display:inline-block; }
+
+.risk-row{ display:flex; flex-wrap:wrap; gap:9px; margin-bottom:18px; }
+.rchip{
+  display:inline-flex; align-items:center; gap:8px;
+  font:600 12px/1.2 "Spline Sans"; color:var(--ink);
+  background:var(--amber-tint); border:1.5px solid var(--ink); border-radius:10px;
+  padding:9px 12px;
+}
+.rchip .ic{ width:18px;height:18px;flex:none;display:grid;place-items:center; }
+.rchip .ic svg{ display:block; }
+
+.commit-cta{ display:flex; gap:10px; margin-top:4px; }
+.btn-commit{
+  flex:1; font:700 15px/1 "Spline Sans";
+  padding:16px 18px; border-radius:13px;
+  background:var(--amber); color:var(--ink); border:1.5px solid var(--ink);
+  box-shadow:4px 4px 0 0 var(--amber-deep);
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  cursor:pointer; transition:transform .12s var(--ease), box-shadow .12s var(--ease), background .15s;
+}
+.btn-commit .price{ font-family:"Fraunces"; font-weight:700; }
+.btn-commit:hover{ transform:translate(-1px,-1px); box-shadow:5px 5px 0 0 var(--amber-deep); background:#EE9D45; }
+.btn-commit:active{ transform:translate(3px,3px); box-shadow:1px 1px 0 0 var(--amber-deep); }
+.btn-commit:focus-visible{ outline:3px solid var(--ink); outline-offset:3px; }
+.btn-adjust{
+  flex:0 0 auto; font:700 14px/1 "Spline Sans"; padding:16px 18px; border-radius:13px;
+  background:var(--paper); color:var(--ink); border:1.5px solid var(--ink);
+  box-shadow:4px 4px 0 0 rgba(42,33,24,.2); cursor:pointer;
+  transition:transform .12s var(--ease), box-shadow .12s var(--ease), background .15s;
+}
+.btn-adjust:hover{ transform:translate(-1px,-1px); box-shadow:5px 5px 0 0 rgba(42,33,24,.25); background:#fff; }
+.btn-adjust:active{ transform:translate(3px,3px); box-shadow:1px 1px 0 0 rgba(42,33,24,.2); }
+
+.fineprint{
+  display:flex; align-items:center; gap:8px; justify-content:center;
+  font:500 11px/1.3 "Spline Sans"; color:var(--ink-faint); margin-top:14px; text-align:center;
+}
+.fineprint .lock{ width:13px;height:13px; flex:none; }
+
+/* perforation edge at the bottom of the receipt */
+.perf{
+  height:14px; background:
+    radial-gradient(circle at 9px 14px, transparent 7px, var(--paper-chip) 7.5px) 0 0 / 18px 14px repeat-x;
+  border-top:1.5px dashed var(--paper-edge);
+}
+
+/* POST-COMMIT — the Undo toast (branded printed receipt-stub) */
+.toast{
+  width:var(--maxcol); max-width:92vw; margin-top:18px;
+  display:flex; align-items:center; gap:13px;
+  background:var(--ink); color:var(--paper);
+  border:1.5px solid var(--ink); border-radius:16px; padding:14px 14px 14px 16px;
+  box-shadow:4px 4px 0 0 var(--good);
+}
+.toast .ok{
+  width:30px;height:30px;flex:none;border-radius:50%;
+  background:var(--good); display:grid; place-items:center; box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.25);
+}
+.toast .txt{ font:600 13.5px/1.3 "Spline Sans"; }
+.toast .txt b{ font-weight:700; color:#fff; }
+.toast .txt small{ display:block; color:rgba(243,236,221,.72); font-weight:500; margin-top:2px; font-size:11.5px; }
+.toast .undo{
+  margin-left:auto; flex:none;
+  font:700 12.5px/1 "Spline Sans"; letter-spacing:.04em;
+  color:var(--ink); background:var(--amber); border:1.5px solid var(--amber-deep);
+  border-radius:10px; padding:10px 13px; cursor:pointer;
+  display:inline-flex; align-items:center; gap:8px;
+  transition:transform .1s var(--ease);
+}
+.toast .undo:hover{ transform:translateY(-1px); }
+.toast .undo .ring{
+  --p:78; width:16px;height:16px;border-radius:50%; flex:none;
+  background:conic-gradient(var(--ink-color,var(--ox)) calc(var(--p)*1%), rgba(42,33,24,.25) 0);
+  -webkit-mask:radial-gradient(circle, transparent 4px, #000 4.5px);
+          mask:radial-gradient(circle, transparent 4px, #000 4.5px);
+}
+.toast .undo .ring{ animation:drain 12s linear forwards; }
+@keyframes drain{ from{ --p:100; } to{ --p:0; } }
+@property --p{ syntax:'<number>'; inherits:false; initial-value:78; }
+
+/* =========================================================
+   MEET YOUR TEAM — the printed poster (hero)
+   ========================================================= */
+.poster-wrap{ width:min(560px,94vw); }
+.poster{
+  position:relative; background:var(--paper-2);
+  border:2px solid var(--ink); border-radius:24px; overflow:hidden;
+  box-shadow:8px 10px 0 0 rgba(42,33,24,.18), 0 30px 70px -34px rgba(42,33,24,.55);
+}
+.poster .pinner{ padding:30px 28px 32px; position:relative; z-index:2; }
+.poster .deck{
+  text-align:center; margin-bottom:26px;
+}
+.poster .deck .k{
+  font:600 11px/1 "Spline Sans"; letter-spacing:.26em; text-transform:uppercase;
+  color:var(--amber-ink); display:inline-flex; align-items:center; gap:9px;
+}
+.poster .deck .k .star{ color:var(--ox); }
+.poster .deck h3{
+  font:900 clamp(34px,7vw,46px)/.96 "Fraunces"; font-optical-sizing:auto;
+  letter-spacing:-.02em; margin:.28em 0 .2em; color:var(--ink);
+}
+.poster .deck p{ font:400 14.5px/1.5 "Spline Sans"; color:var(--ink-soft); margin:0 auto; max-width:380px; }
+
+.portraits{ display:flex; gap:18px; justify-content:center; align-items:flex-end; }
+.portrait{ text-align:center; flex:1; max-width:160px; }
+.portrait .frame{
+  position:relative; width:100%; aspect-ratio:1; border-radius:18px; margin:0 auto 12px;
+  border:2px solid var(--ink); overflow:visible;
+  background:var(--p-stock, var(--plum-tint));
+}
+/* offset second-ink plate behind each portrait */
+.portrait .frame::before{
+  content:""; position:absolute; inset:0; border-radius:18px;
+  background:var(--p-halo, var(--plum)); transform:translate(5px,5px); z-index:-1; opacity:.9;
+}
+.portrait .frame .inner{
+  position:absolute; inset:6px; border-radius:12px; overflow:hidden;
+  display:grid; place-items:end center; background:transparent;
+}
+.portrait .frame .inner > span{ width:106%; height:106%; display:block; }
+.portrait .frame .inner svg{ image-rendering:pixelated; }
+.portrait.alex  .frame{ --p-stock:var(--ox-tint);     --p-halo:var(--ox);     }
+.portrait.riley .frame{ --p-stock:var(--plum-tint);   --p-halo:var(--plum);   }
+.portrait.mira  .frame{ --p-stock:var(--violet-tint); --p-halo:var(--violet); }
+.portrait .nm{ font:700 17px/1 "Fraunces"; font-optical-sizing:auto; color:var(--ink); }
+.portrait .role{ font:500 12px/1.35 "Spline Sans"; color:var(--ink-soft); margin-top:5px; }
+.portrait .role b{ color:var(--ink); font-weight:700; }
+
+/* the middle portrait sits a touch taller (poster composition) */
+.portrait.featured{ transform:translateY(-14px); max-width:172px; }
+
+.poster .footline{
+  margin-top:26px; padding-top:18px; border-top:2px dashed var(--paper-edge);
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  font:600 11px/1 "Spline Sans"; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint);
+}
+.poster .footline .bug{ width:11px;height:11px;border-radius:50%;background:var(--amber);box-shadow:inset 0 0 0 1.5px var(--ink); }
+
+/* =========================================================
+   DESKTOP COMPOSITION (~1100)
+   ========================================================= */
+.desk{
+  width:min(1100px,96vw);
+  background:var(--paper);
+  border:2px solid var(--ink); border-radius:24px; overflow:hidden;
+  box-shadow:8px 12px 0 0 rgba(42,33,24,.14), 0 40px 90px -40px rgba(42,33,24,.5);
+}
+.desk .browserbar{
+  display:flex; align-items:center; gap:8px; padding:13px 18px;
+  border-bottom:1.5px solid var(--ink); background:var(--paper-2);
+}
+.desk .browserbar .dots{ display:flex; gap:7px; }
+.desk .browserbar .dots i{ width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ink);display:block; }
+.desk .browserbar .dots i:nth-child(1){ background:var(--ox); }
+.desk .browserbar .dots i:nth-child(2){ background:var(--amber); }
+.desk .browserbar .dots i:nth-child(3){ background:var(--good); }
+.desk .browserbar .url{
+  margin:0 auto; font:600 12px/1 "Spline Sans"; color:var(--ink-soft);
+  background:var(--paper-chip); border:1.5px solid var(--paper-edge); border-radius:8px; padding:7px 16px;
+  letter-spacing:.02em;
+}
+.desk-grid{ display:grid; grid-template-columns:220px 1fr; min-height:560px; }
+
+/* sidebar */
+.side{ border-right:1.5px solid var(--ink); background:var(--paper-2); padding:22px 16px; display:flex; flex-direction:column; gap:6px; }
+.side .brand{ display:flex; align-items:center; gap:9px; font:800 18px/1 "Fraunces"; font-optical-sizing:auto; padding:2px 6px 18px; }
+.side .brand .bug{ width:14px;height:14px;border-radius:50%;background:var(--amber);box-shadow:inset 0 0 0 2px var(--ink),2px 2px 0 0 var(--ox); }
+.navlink{
+  display:flex; align-items:center; gap:11px; padding:11px 12px; border-radius:11px;
+  font:600 13.5px/1 "Spline Sans"; color:var(--ink-soft); cursor:pointer; border:1.5px solid transparent;
+  transition:background .12s, color .12s;
+}
+.navlink:hover{ background:var(--paper-chip); color:var(--ink); }
+.navlink.on{ background:var(--paper-chip); color:var(--ink); border-color:var(--ink); box-shadow:2px 2px 0 0 var(--amber-deep); }
+.navlink .ic{ width:18px;height:18px;flex:none; display:grid; place-items:center; }
+.navlink .badge{ margin-left:auto; font:700 10px/1 "Fraunces"; background:var(--ox); color:var(--paper); border-radius:6px; padding:3px 6px; }
+.side .spacer{ flex:1; }
+.side .mini-crew{ display:flex; flex-direction:column; gap:8px; padding-top:14px; border-top:1.5px solid var(--paper-edge); }
+.side .mini-crew .mc{ display:flex; align-items:center; gap:9px; font:600 12px/1 "Spline Sans"; color:var(--ink); }
+.side .mini-crew .mc .chip{ width:26px;height:26px; }
+.side .mini-crew .mc small{ display:block; color:var(--ink-faint); font-weight:500; margin-top:2px; }
+
+/* desktop main — bento */
+.dmain{ padding:26px 28px; }
+.dhead{ display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px; }
+.dhead .eyebrow{ margin:0; }
+.dverdict{ font:700 34px/1.05 "Fraunces"; font-optical-sizing:auto; letter-spacing:-.018em; margin:8px 0 4px; color:var(--ink); }
+.dverdict .who{ color:var(--ox); text-shadow:1.5px 1.5px 0 var(--ox-tint); }
+.dsub{ font:500 13.5px/1.4 "Spline Sans"; color:var(--ink-soft); margin-bottom:22px; display:flex; gap:9px; align-items:center; }
+.dsub .pip{ width:4px;height:4px;border-radius:50%;background:var(--ink-faint); }
+
+.bento{ display:grid; grid-template-columns:1.5fr 1fr; gap:16px; }
+.bento .col{ display:flex; flex-direction:column; gap:16px; }
+.bento .card{ margin-bottom:0; }
+.bento .ribbon{ margin:0; }
+.bento .letter{ margin:0; }
+.bento .roster{ gap:10px; }
+.panel-h{ font:700 11px/1 "Spline Sans"; letter-spacing:.16em; text-transform:uppercase; color:var(--ink); margin:0 0 12px; display:flex; align-items:center; gap:8px; }
+.panel-h .tag{ background:var(--ink); color:var(--paper); border-radius:6px; padding:5px 8px; box-shadow:2px 2px 0 0 var(--amber-deep); }
+.panel-h .count{ font-family:"Fraunces"; font-weight:700; color:var(--ox); }
+
+/* =========================================================
+   DARK / DIM variant
+   ========================================================= */
+.night{
+  --paper:#211B14; --paper-2:#262017; --paper-chip:#2D2519; --paper-edge:#3A3120;
+  --ink:#F1E7CE; --ink-soft:#C9BC9E; --ink-faint:#9C8E6E;
+  --ox-tint:#3A241C; --plum-tint:#2C2438; --violet-tint:#2E2542; --good-tint:#243024;
+  --amber-tint:#4A3418;
+}
+.night .phone{ background:var(--paper); border-color:#0E0A05; box-shadow:8px 10px 0 0 rgba(0,0,0,.4), 0 26px 60px -28px rgba(0,0,0,.8); }
+.night .phone .screen{ background:var(--paper); }
+.night .phone .notch{ background:#0E0A05; }
+.night .masthead{ border-color:var(--ink-faint); }
+.night .masthead::after{ background:var(--amber); opacity:.5; }
+.night .card{ background:var(--paper-chip); box-shadow:3px 3px 0 0 rgba(0,0,0,.4); }
+.night .verdict .who::after{ opacity:.45; }
+.night .ribbon{ background:#161108; box-shadow:4px 4px 0 0 var(--amber); }
+.night .acct{ box-shadow:2px 2px 0 0 var(--amber); }
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width:760px){
+  .caption{ flex-wrap:wrap; }
+  .caption .sub{ margin-left:34px; text-align:left; max-width:100%; }
+  .desk-grid{ grid-template-columns:1fr; }
+  .side{ display:none; }
+  .bento{ grid-template-columns:1fr; }
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{ animation:none !important; transition-duration:.001ms !important; }
+}
+
+/* footer */
+.gfoot{ text-align:center; margin-top:70px; font:500 12px/1.6 "Spline Sans"; color:var(--ink-faint); }
+.gfoot b{ color:var(--ink-soft); font-weight:700; }
+</style>
+</head>
+<body>
+
+<!-- ====== global paper grain (subtle riso tooth), applied per-frame ====== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="paperGrain">
+    <feTurbulence type="fractalNoise" baseFrequency="0.86" numOctaves="2" stitchTiles="stitch" seed="7"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 0.16  0 0 0 0 0.13  0 0 0 0 0.09  0 0 0 .9 0"/>
+  </filter>
+  <filter id="paperGrainSoft">
+    <feTurbulence type="fractalNoise" baseFrequency="0.92" numOctaves="2" stitchTiles="stitch" seed="11"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 0.16  0 0 0 0 0.13  0 0 0 0 0.09  0 0 0 .7 0"/>
+  </filter>
+</svg>
+
+<div class="gallery">
+
+  <header class="gallery-head">
+    <span class="gallery-kicker"><span class="dot"></span> Switchboard · aesthetic direction</span>
+    <h1>Warm <span class="ink-amber">Risograph</span></h1>
+    <p>Limited warm inks printed on cream newsprint — paper tooth, confident shapes, and the
+       charming registration-offset of riso. Pixel art is a native sibling, so the cast feels
+       printed in the same pass as everything else.</p>
+  </header>
+
+  <!-- =================================================================
+       A) HOME — evening briefing
+       ================================================================= -->
+  <div class="caption">
+    <span class="num">A</span>
+    <h2>Home — the evening briefing</h2>
+    <span class="sub">Mobile · 390px. Verdict-first, honest sub-line, the cast as a printed roster.</span>
+  </div>
+
+  <div class="stack">
+    <div class="phone">
+      <div class="screen">
+        <svg class="grain" aria-hidden="true"><rect width="100%" height="100%" filter="url(#paperGrain)"/></svg>
+        <div class="notch"></div>
+
+        <div class="osbar">
+          <span>7:18</span>
+          <span class="right">
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="7" width="3" height="4" rx="1" fill="#2A2118"/><rect x="4.3" y="4.5" width="3" height="6.5" rx="1" fill="#2A2118"/><rect x="8.6" y="2" width="3" height="9" rx="1" fill="#2A2118"/><rect x="12.9" y="0" width="3" height="11" rx="1" fill="#2A2118" opacity=".35"/></svg>
+            <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><path d="M8 2.2C5.1 2.2 2.6 3.3.8 5L0 4C2 2 4.8.8 8 .8S14 2 16 4l-.8 1C13.4 3.3 10.9 2.2 8 2.2Z" fill="#2A2118"/><path d="M8 5.6c-1.6 0-3 .6-4 1.6l.9.9C5.6 7.4 6.7 7 8 7s2.4.4 3.1 1.1l.9-.9c-1-1-2.4-1.6-4-1.6Z" fill="#2A2118"/><circle cx="8" cy="9.6" r="1.3" fill="#2A2118"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="1" y="1" width="20" height="10" rx="2.6" stroke="#2A2118" stroke-width="1.3"/><rect x="22.4" y="4" width="1.8" height="4" rx="1" fill="#2A2118"/><rect x="2.8" y="2.8" width="14" height="6.4" rx="1.2" fill="#2A2118"/></svg>
+          </span>
+        </div>
+
+        <div class="scr-pad">
+
+          <!-- masthead -->
+          <div class="masthead">
+            <span class="wordmark"><span class="bug"></span> Switchboard</span>
+            <span class="status-pill">
+              <span class="live"></span> Live <span class="sep">·</span> <b>Inbox 3</b> <span class="sep">·</span> <span class="halt">Halt</span>
+            </span>
+            <span class="acct">D</span>
+          </div>
+
+          <!-- eyebrow + verdict -->
+          <div class="eyebrow"><span class="tick"></span> Tuesday, Jun 2 · 7:18 PM</div>
+          <p class="hello">Good evening, Dev</p>
+          <h1 class="verdict">Three things need you — start with <span class="who">Alex</span>.</h1>
+          <div class="subline tnum">
+            <span>2 open leads</span><span class="pip"></span>
+            <span>oldest waiting ~5 days</span><span class="pip"></span>
+            <span>0 of 1 working</span>
+          </div>
+
+          <!-- NEEDS YOU -->
+          <div class="sec-label"><span class="tag">Needs you</span> <span class="count">2</span></div>
+
+          <!-- card 1: handoff -->
+          <div class="card lift">
+            <div class="card-top">
+              <span class="tape handoff">Handoff</span>
+              <span class="byline"><span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span></span>
+              <span class="card-meta-right">Sarah Tan · due 5d</span>
+            </div>
+            <p class="card-body"><b>Sarah Tan asked to talk to a human</b> about their consultation.</p>
+            <div class="actions">
+              <button class="btn btn-primary">Take this one</button>
+              <button class="btn btn-ghost btn-sm">Snooze</button>
+            </div>
+          </div>
+
+          <!-- card 2: approval HIGH RISK -->
+          <div class="card lift">
+            <div class="card-top">
+              <span class="tape approval">Approval</span>
+              <span class="byline">
+                <span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                <span class="who">Alex</span>
+              </span>
+              <span class="tape risk-high" style="margin-left:auto"><span class="spark"></span> High risk</span>
+            </div>
+            <p class="card-body">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</p>
+            <div class="actions">
+              <button class="btn btn-primary">Approve offer</button>
+              <button class="btn btn-ghost btn-sm">Adjust</button>
+              <span class="swipe-hint">Swipe primes <span class="arrows">›</span> tap to commit</span>
+            </div>
+          </div>
+
+          <a class="see-all">See all in Inbox <span class="arrow">→</span></a>
+
+          <!-- YOUR TEAM -->
+          <div class="sec-label"><span class="tag">Your team</span></div>
+          <div class="roster">
+
+            <div class="crew is-live">
+              <span class="chip alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+              <span class="meta">
+                <span class="nm">Alex <span class="state work">Working</span></span>
+                <span class="doing">Drafting Priya’s offer</span>
+              </span>
+              <span class="pulse"></span>
+            </div>
+
+            <div class="crew">
+              <span class="chip riley"><span class="plate"><span data-sb-avatar="riley"></span></span></span>
+              <span class="meta">
+                <span class="nm">Riley <span class="state watch">Watching</span></span>
+                <span class="doing tnum">3 ad sets · holding steady</span>
+              </span>
+            </div>
+
+            <div class="crew">
+              <span class="chip mira"><span class="plate"><span data-sb-avatar="mira"></span></span></span>
+              <span class="meta">
+                <span class="nm">Mira <span class="state ready">Ready</span></span>
+                <span class="doing tnum">2 drafts ready for review</span>
+              </span>
+            </div>
+
+          </div>
+
+          <!-- VALUE STRIP -->
+          <div class="ribbon">
+            <div class="label">Since you hired your team <span class="rule"></span></div>
+            <div class="stats tnum">
+              <div class="stat"><div class="v">14</div><div class="k">leads answered</div></div>
+              <div class="divid"></div>
+              <div class="stat"><div class="v">9</div><div class="k">consults booked</div></div>
+              <div class="divid"></div>
+              <div class="stat"><div class="v money">~S$7,388</div><div class="k">saved</div></div>
+            </div>
+          </div>
+
+          <!-- WEEK-SO-FAR LETTER -->
+          <div class="letter">
+            <div class="stamp">
+              <span class="chip alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+              <span class="nm">From Alex</span>
+            </div>
+            <div class="head">Week so far</div>
+            <p><span class="drop">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned through budget. Priya’s touch-up is the one call I’d like you to make tonight.</p>
+            <div class="sign"><span class="line"></span> — Alex</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================
+       B) INBOX
+       ================================================================= -->
+  <div class="caption">
+    <span class="num">B</span>
+    <h2>Inbox — the queue</h2>
+    <span class="sub">Mobile · 390px. Three decision cards; printed filter chips with the cast inline.</span>
+  </div>
+
+  <div class="stack">
+    <div class="phone">
+      <div class="screen">
+        <svg class="grain" aria-hidden="true"><rect width="100%" height="100%" filter="url(#paperGrain)"/></svg>
+        <div class="notch"></div>
+
+        <div class="osbar">
+          <span>7:19</span>
+          <span class="right">
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="7" width="3" height="4" rx="1" fill="#2A2118"/><rect x="4.3" y="4.5" width="3" height="6.5" rx="1" fill="#2A2118"/><rect x="8.6" y="2" width="3" height="9" rx="1" fill="#2A2118"/><rect x="12.9" y="0" width="3" height="11" rx="1" fill="#2A2118" opacity=".35"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="1" y="1" width="20" height="10" rx="2.6" stroke="#2A2118" stroke-width="1.3"/><rect x="22.4" y="4" width="1.8" height="4" rx="1" fill="#2A2118"/><rect x="2.8" y="2.8" width="14" height="6.4" rx="1.2" fill="#2A2118"/></svg>
+          </span>
+        </div>
+
+        <div class="scr-pad">
+
+          <div class="masthead">
+            <span class="wordmark"><span class="bug"></span> Switchboard</span>
+            <span class="status-pill"><span class="live"></span> Live <span class="sep">·</span> <b>Inbox 3</b></span>
+            <span class="acct">D</span>
+          </div>
+
+          <div class="inbox-title">
+            <h2>inbox</h2>
+            <span class="need"><span class="d"></span> 3 things need you</span>
+          </div>
+
+          <div class="chips">
+            <span class="fchip on">All <span class="n">3</span></span>
+            <span class="fchip"><span class="chip alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span> Alex <span class="n">2</span></span>
+            <span class="fchip"><span class="chip riley"><span class="plate"><span data-sb-avatar="riley"></span></span></span> Riley <span class="n zero">0</span></span>
+          </div>
+
+          <!-- row 1 -->
+          <div class="card lift">
+            <div class="card-top">
+              <span class="byline"><span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="who">Alex <span class="role">· Handoff</span></span></span>
+              <span class="tape overdue" style="margin-left:auto">Overdue</span>
+            </div>
+            <p class="card-body">Sarah Tan asked to talk to a human about their consultation.</p>
+            <div class="card-for"><span class="lbl">For</span> Sarah Tan</div>
+            <div class="taprow">
+              <span></span>
+              <span class="go">Tap to open <span class="arrow">→</span></span>
+            </div>
+          </div>
+
+          <!-- row 2 -->
+          <div class="card lift">
+            <div class="card-top">
+              <span class="byline"><span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="who">Alex <span class="role">· Approval</span></span></span>
+              <span class="card-meta-right">5d ago</span>
+            </div>
+            <p class="card-body">Offer Priya a complimentary touch-up to resolve her concern about uneven volume.</p>
+            <div class="card-top" style="margin:0 0 0; gap:10px">
+              <span class="tape risk-high"><span class="spark"></span> High risk</span>
+              <span class="card-for" style="margin:0"><span class="lbl">For</span> Priya Nair</span>
+            </div>
+            <div class="taprow">
+              <span></span>
+              <span class="go">Tap to review <span class="arrow">→</span></span>
+            </div>
+          </div>
+
+          <!-- row 3 -->
+          <div class="card lift">
+            <div class="card-top">
+              <span class="byline"><span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="who">Alex <span class="role">· Approval</span></span></span>
+              <span class="card-meta-right">5d ago</span>
+            </div>
+            <p class="card-body">Send Maya a warm day-3 check-in while her lip filler settles.</p>
+            <div class="card-top" style="margin:0 0 0; gap:10px">
+              <span class="tape risk-low"><span class="spark"></span> Low risk</span>
+              <span class="card-for" style="margin:0"><span class="lbl">For</span> Maya Lim</span>
+            </div>
+            <div class="taprow">
+              <span></span>
+              <span class="go swipe">Swipe <span class="arrow">→</span></span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================
+       C) COMMIT MOMENT — the printed receipt
+       ================================================================= -->
+  <div class="caption">
+    <span class="num">C</span>
+    <h2>The commit moment — Priya’s approval</h2>
+    <span class="sub">The most finished surface. A confident, honest printed receipt — solid stock, ink-on-amber AA, nothing placeheld.</span>
+  </div>
+
+  <div class="stack">
+    <div class="sheet-wrap">
+      <div class="sheet">
+        <svg class="grain" aria-hidden="true" style="opacity:.4"><rect width="100%" height="100%" filter="url(#paperGrainSoft)"/></svg>
+        <div class="grab"></div>
+        <div class="sheet-inner">
+
+          <div class="receipt-top">
+            <span class="chip alex" style="width:44px;height:44px"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+            <span class="who">Alex<small>Approval requested · for your sign-off</small></span>
+            <span class="tape risk-high" style="margin-left:auto"><span class="spark"></span> High risk</span>
+          </div>
+
+          <div class="receipt-title">The proposal</div>
+          <p class="proposal">Complimentary touch-up for Priya — <span class="val tnum">$480 value</span></p>
+
+          <!-- honest ledger: known facts only, nothing placeheld -->
+          <div class="ledger">
+            <div class="lrow">
+              <span class="k">Value</span>
+              <span class="v amt tnum">$480</span>
+            </div>
+            <div class="lrow">
+              <span class="k">Reason</span>
+              <span class="v">Client flagged uneven volume</span>
+            </div>
+            <div class="lrow">
+              <span class="k">Channel</span>
+              <span class="v"><span class="chan"><span class="wa"></span> WhatsApp</span></span>
+            </div>
+            <div class="lrow">
+              <span class="k">To</span>
+              <span class="v">Priya Nair</span>
+            </div>
+          </div>
+
+          <div class="receipt-title">What this changes</div>
+          <div class="risk-row">
+            <span class="rchip">
+              <span class="ic"><svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M8.5 1l2 2.2 2.9-.4.5 2.9 2.6 1.4L15 9.5l1 2.8-2.6 1.4-.5 2.9-2.9-.4-2 2.2-2-2.2-2.9.4-.5-2.9L-.5 12.3 1 9.5-.5 6.7 2.1 5.3l.5-2.9 2.9.4 2-2.2Z" transform="translate(.5)" fill="#C9742A" stroke="#2A2118" stroke-width="1"/><text x="8.5" y="11.4" font-family="Fraunces,serif" font-size="8" font-weight="700" fill="#2A2118" text-anchor="middle">$</text></svg></span>
+              Spends from your budget
+            </span>
+            <span class="rchip">
+              <span class="ic"><svg width="17" height="15" viewBox="0 0 17 15" fill="none"><path d="M2 1.2h13a1.5 1.5 0 0 1 1.5 1.5v7.6A1.5 1.5 0 0 1 15 11.8H6.5L3 14.2v-2.4H2A1.5 1.5 0 0 1 .5 10.3V2.7A1.5 1.5 0 0 1 2 1.2Z" fill="#F6D9A8" stroke="#2A2118" stroke-width="1.1"/><circle cx="5" cy="6.4" r="1" fill="#2A2118"/><circle cx="8.5" cy="6.4" r="1" fill="#2A2118"/><circle cx="12" cy="6.4" r="1" fill="#2A2118"/></svg></span>
+              Messages a client directly
+            </span>
+          </div>
+
+          <div class="commit-cta">
+            <button class="btn-commit">Approve offer <span class="price tnum">· $480</span></button>
+            <button class="btn-adjust">Adjust</button>
+          </div>
+
+          <div class="fineprint">
+            <svg class="lock" width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1.6" y="5.6" width="9.8" height="6.4" rx="1.6" fill="#897A60"/><path d="M3.6 5.6V4a2.9 2.9 0 0 1 5.8 0v1.6" stroke="#897A60" stroke-width="1.3"/><circle cx="6.5" cy="8.6" r="1" fill="#F7F1E4"/></svg>
+            You’re approving one message and one $480 credit. Undo for 12 seconds after sending.
+          </div>
+
+        </div>
+        <div class="perf"></div>
+      </div>
+    </div>
+
+    <!-- POST-COMMIT — the Undo toast -->
+    <div class="toast" role="status">
+      <span class="ok"><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 8l3.5 3.5L13 3.5" stroke="#F3ECDD" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="txt"><b>Approved — sent to Priya.</b><small>$480 touch-up offer · WhatsApp · just now</small></span>
+      <button class="undo"><span class="ring"></span> Undo <span class="tnum">12s</span></button>
+    </div>
+  </div>
+
+  <!-- =================================================================
+       E) MEET YOUR TEAM — the printed poster
+       ================================================================= -->
+  <div class="caption">
+    <span class="num">E</span>
+    <h2>Meet your team — the poster</h2>
+    <span class="sub">The emotional peak. Three pixel portraits printed as spot illustrations, each on its own ink chip with an offset halo.</span>
+  </div>
+
+  <div class="stack">
+    <div class="poster-wrap">
+      <div class="poster">
+        <svg class="grain" aria-hidden="true" style="opacity:.45"><rect width="100%" height="100%" filter="url(#paperGrain)"/></svg>
+        <div class="pinner">
+          <div class="deck">
+            <span class="k"><span class="star">✦</span> The crew you hired <span class="star">✦</span></span>
+            <h3>Meet your team</h3>
+            <p>Three teammates, printed in one pass. They handle the work — you make the calls that matter.</p>
+          </div>
+
+          <div class="portraits">
+            <div class="portrait alex">
+              <div class="frame"><div class="inner"><span data-sb-avatar="alex"></span></div></div>
+              <div class="nm">Alex</div>
+              <div class="role"><b>Front desk.</b> Answers leads, books consults.</div>
+            </div>
+            <div class="portrait riley featured">
+              <div class="frame"><div class="inner"><span data-sb-avatar="riley"></span></div></div>
+              <div class="nm">Riley</div>
+              <div class="role"><b>The analyst.</b> Runs &amp; protects the ad spend.</div>
+            </div>
+            <div class="portrait mira">
+              <div class="frame"><div class="inner"><span data-sb-avatar="mira"></span></div></div>
+              <div class="nm">Mira</div>
+              <div class="role"><b>The maker.</b> Crafts short-form video.</div>
+            </div>
+          </div>
+
+          <div class="footline"><span class="bug"></span> Switchboard · governed by you</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================
+       D) DESKTOP composition
+       ================================================================= -->
+  <div class="caption">
+    <span class="num">D</span>
+    <h2>Desktop — Home at the press</h2>
+    <span class="sub">~1100px. Printed sidebar, bento Home; the same inks scale up without losing the tooth.</span>
+  </div>
+
+  <div class="stack">
+    <div class="desk">
+      <div class="browserbar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="url">app.switchboard.co / home</span>
+        <span style="width:54px"></span>
+      </div>
+      <div class="desk-grid">
+
+        <!-- sidebar -->
+        <aside class="side">
+          <div class="brand"><span class="bug"></span> Switchboard</div>
+          <div class="navlink on"><span class="ic"><svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M2 8 8.5 2 15 8v6.5a1 1 0 0 1-1 1h-3v-4H7v4H4a1 1 0 0 1-1-1V8Z" stroke="#2A2118" stroke-width="1.4" fill="#F3ECDD"/></svg></span> Home</div>
+          <div class="navlink"><span class="ic"><svg width="17" height="17" viewBox="0 0 17 17" fill="none"><rect x="2" y="3" width="13" height="11" rx="1.6" stroke="#5C4F3C" stroke-width="1.4"/><path d="M2.6 4l5.9 4.4L14.4 4" stroke="#5C4F3C" stroke-width="1.4"/></svg></span> Inbox <span class="badge">3</span></div>
+          <div class="navlink"><span class="ic"><svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M2 13l3.2-4 2.4 2.8L10.4 7l4.6 6" stroke="#5C4F3C" stroke-width="1.4" fill="none" stroke-linejoin="round"/><circle cx="4" cy="4.4" r="1.6" stroke="#5C4F3C" stroke-width="1.4"/></svg></span> Results</div>
+          <div class="navlink"><span class="ic"><svg width="17" height="17" viewBox="0 0 17 17" fill="none"><circle cx="8.5" cy="6" r="3" stroke="#5C4F3C" stroke-width="1.4"/><path d="M3 14.5c.7-2.8 2.9-4 5.5-4s4.8 1.2 5.5 4" stroke="#5C4F3C" stroke-width="1.4"/></svg></span> Clients</div>
+
+          <div class="spacer"></div>
+
+          <div class="mini-crew">
+            <div class="mc"><span class="chip alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span> <span>Alex<small>Working</small></span></div>
+            <div class="mc"><span class="chip riley"><span class="plate"><span data-sb-avatar="riley"></span></span></span> <span>Riley<small>Watching</small></span></div>
+            <div class="mc"><span class="chip mira"><span class="plate"><span data-sb-avatar="mira"></span></span></span> <span>Mira<small>2 ready</small></span></div>
+          </div>
+        </aside>
+
+        <!-- main bento -->
+        <main class="dmain">
+          <div class="dhead">
+            <div>
+              <div class="eyebrow"><span class="tick"></span> Tuesday, Jun 2 · 7:18 PM</div>
+              <h1 class="dverdict">Three things need you — start with <span class="who">Alex</span>.</h1>
+            </div>
+            <span class="status-pill"><span class="live"></span> Live <span class="sep">·</span> <b>Inbox 3</b> <span class="sep">·</span> <span class="halt">Halt</span></span>
+          </div>
+          <div class="dsub tnum">
+            <span>2 open leads</span><span class="pip"></span>
+            <span>oldest waiting ~5 days</span><span class="pip"></span>
+            <span>0 of 1 working</span>
+          </div>
+
+          <div class="bento">
+            <!-- left column: needs-you -->
+            <div class="col">
+              <div>
+                <div class="panel-h"><span class="tag">Needs you</span> <span class="count">2</span></div>
+
+                <div class="card lift">
+                  <div class="card-top">
+                    <span class="tape handoff">Handoff</span>
+                    <span class="byline"><span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="who">Alex</span></span>
+                    <span class="card-meta-right">Sarah Tan · due 5d</span>
+                  </div>
+                  <p class="card-body"><b>Sarah Tan asked to talk to a human</b> about their consultation.</p>
+                  <div class="actions">
+                    <button class="btn btn-primary">Take this one</button>
+                    <button class="btn btn-ghost btn-sm">Snooze</button>
+                  </div>
+                </div>
+
+                <div class="card lift" style="margin-bottom:0">
+                  <div class="card-top">
+                    <span class="tape approval">Approval</span>
+                    <span class="byline"><span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="who">Alex</span></span>
+                    <span class="tape risk-high" style="margin-left:auto"><span class="spark"></span> High risk</span>
+                  </div>
+                  <p class="card-body">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</p>
+                  <div class="actions">
+                    <button class="btn btn-primary">Approve offer</button>
+                    <button class="btn btn-ghost btn-sm">Adjust</button>
+                    <span class="swipe-hint">tap to commit</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- right column: value + letter + roster -->
+            <div class="col">
+              <div class="ribbon">
+                <div class="label">Since you hired your team <span class="rule"></span></div>
+                <div class="stats tnum">
+                  <div class="stat"><div class="v">14</div><div class="k">leads answered</div></div>
+                  <div class="divid"></div>
+                  <div class="stat"><div class="v">9</div><div class="k">consults booked</div></div>
+                  <div class="divid"></div>
+                  <div class="stat"><div class="v money">~S$7,388</div><div class="k">saved</div></div>
+                </div>
+              </div>
+
+              <div class="letter">
+                <div class="head">Week so far · from Alex</div>
+                <p><span class="drop">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned budget.</p>
+                <div class="sign"><span class="line"></span> — Alex</div>
+              </div>
+
+              <div>
+                <div class="panel-h"><span class="tag">Your team</span></div>
+                <div class="roster">
+                  <div class="crew is-live">
+                    <span class="chip alex" style="width:40px;height:40px"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                    <span class="meta"><span class="nm">Alex <span class="state work">Working</span></span><span class="doing">Drafting Priya’s offer</span></span>
+                    <span class="pulse"></span>
+                  </div>
+                  <div class="crew">
+                    <span class="chip riley" style="width:40px;height:40px"><span class="plate"><span data-sb-avatar="riley"></span></span></span>
+                    <span class="meta"><span class="nm">Riley <span class="state watch">Watching</span></span><span class="doing tnum">3 ad sets · steady</span></span>
+                  </div>
+                  <div class="crew">
+                    <span class="chip mira" style="width:40px;height:40px"><span class="plate"><span data-sb-avatar="mira"></span></span></span>
+                    <span class="meta"><span class="nm">Mira <span class="state ready">Ready</span></span><span class="doing tnum">2 drafts ready</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================
+       F) DARK / DIM variant
+       ================================================================= -->
+  <div class="caption">
+    <span class="num">F</span>
+    <h2>Dim press — the dark variant</h2>
+    <span class="sub">Cream inks on warm-charcoal stock for the late-evening check. Same inks, same offset; money stays high-contrast.</span>
+  </div>
+
+  <div class="stack">
+    <div class="night">
+      <div class="phone">
+        <div class="screen">
+          <svg class="grain" aria-hidden="true" style="opacity:.32"><rect width="100%" height="100%" filter="url(#paperGrainSoft)"/></svg>
+          <div class="notch"></div>
+
+          <div class="osbar">
+            <span style="color:#F1E7CE">7:42</span>
+            <span class="right">
+              <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="1" y="1" width="20" height="10" rx="2.6" stroke="#F1E7CE" stroke-width="1.3"/><rect x="22.4" y="4" width="1.8" height="4" rx="1" fill="#F1E7CE"/><rect x="2.8" y="2.8" width="13" height="6.4" rx="1.2" fill="#F1E7CE"/></svg>
+            </span>
+          </div>
+
+          <div class="scr-pad">
+            <div class="masthead">
+              <span class="wordmark"><span class="bug"></span> Switchboard</span>
+              <span class="status-pill"><span class="live"></span> Live <span class="sep">·</span> <b>Inbox 3</b> <span class="sep">·</span> <span class="halt">Halt</span></span>
+              <span class="acct">D</span>
+            </div>
+
+            <div class="eyebrow"><span class="tick"></span> Tuesday, Jun 2 · 7:42 PM</div>
+            <p class="hello">Good evening, Dev</p>
+            <h1 class="verdict">Three things need you — start with <span class="who">Alex</span>.</h1>
+            <div class="subline tnum">
+              <span>2 open leads</span><span class="pip"></span>
+              <span>oldest waiting ~5 days</span><span class="pip"></span>
+              <span>0 of 1 working</span>
+            </div>
+
+            <div class="sec-label"><span class="tag">Needs you</span> <span class="count">2</span></div>
+
+            <div class="card lift">
+              <div class="card-top">
+                <span class="tape approval">Approval</span>
+                <span class="byline"><span class="chip alex" style="width:26px;height:26px"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="who">Alex</span></span>
+                <span class="tape risk-high" style="margin-left:auto"><span class="spark"></span> High risk</span>
+              </div>
+              <p class="card-body">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</p>
+              <div class="actions">
+                <button class="btn btn-primary">Approve offer</button>
+                <button class="btn btn-ghost btn-sm">Adjust</button>
+              </div>
+            </div>
+
+            <div class="ribbon">
+              <div class="label">Since you hired your team <span class="rule"></span></div>
+              <div class="stats tnum">
+                <div class="stat"><div class="v">14</div><div class="k">leads answered</div></div>
+                <div class="divid"></div>
+                <div class="stat"><div class="v">9</div><div class="k">consults booked</div></div>
+                <div class="divid"></div>
+                <div class="stat"><div class="v money">~S$7,388</div><div class="k">saved</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="gfoot">
+    <b>Warm Risograph</b> — one self-contained page · Fraunces + Spline Sans · cream + 3 warm inks · amber is the one action color.<br>
+    Pixel cast printed on ink chips with a registration-offset halo, so the avatars belong to the press.
+  </p>
+
+</div>
+
+<!-- ================== inlined avatars.js (self-contained) ================== -->
+<script>
+// Switchboard agent pixel sprites — tiny self-hydrating renderer.
+(function(){
+  var DATA = {"alex":{"pal":{"K":"#1a1108","H":"#5a3418","E":"#7a4a26","S":"#f5c79a","D":"#cd8a5a","G":"#dceeff","M":"#2a1408","C":"#dc8474","B":"#2d4a78","L":"#4a6c98","W":"#f1e7ce","T":"#c0533c","R":"#1a1108","N":"#bfb29a","Z":"#7c6a48","Y":"#f3d24e","P":"#ffffff"},"grid":["........................","........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHHHHHHHHHK......",".....KHHEHHHHHHEHHK.....",".....KHHHHHHHHHHHHK.....",".....KHSSSSSSSSSSHK.....","...KK.KSSSSSSSSSS.KK....","..KRRK.KSGGSSSGGSK.KRRK.","..KRRK.KSGMGSGMGSK.KRRK.","..KRRK.KSGGSSSGGSK.KRRK.","...KK.KSCSSSSSSCSK.KK...","......KSSSSMMMMSSK.K....","......KSSSSSSSSSSK.K....",".......KSSSSSSSSK..N....","........KSSSSSSK........","....KKBBBBWWWWBBBBKK....","...KBBBBBLWTTWLBBBBBK...","..KBBBBBBBWTTWBBBBBBBK..",".KBBBBBBBLWTTWLBBBBBBBK.","KBBBBBBBBBWTTWBBBBBBBBBK","KBBBBBBBBBBWTWBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},"riley":{"pal":{"K":"#1a1108","H":"#3a1e10","E":"#6a3018","S":"#f5c79a","D":"#cd8a5a","G":"#e6f2ff","M":"#1a0c06","C":"#dc7a6a","B":"#9d8ac8","L":"#bba6e0","W":"#f5ebd6","T":"#f0d885","Z":"#7c6a48","Y":"#f1c34a","P":"#ffffff","X":"#3a8a5a","Q":"#c0533c"},"grid":["........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHEHHHHEHHK......",".....KHHHHHHHHHHHHK.....","....KHHHHHHHHHHHHHHK....","...KHHHSSSSSSSSSSHHHK...","..KHHHSSSSSSSSSSSSHHHK..","..KHHSSSSSSSSSSSSSSHHK..","..HHKKGGGGSSSSGGGGKKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKKGGGGSSSSGGGGKKHH..","..HHKSCSSSSCCSSCSKHH....","...HHKSSSSSSSSSSSSKHH...","...HHHKSSSSSSSSSSKHHH...","....HHKSSSSSSSSKHH......","....KKBBBBBWWWWBBBBKK...","...KBBLBBBBKTKBBBBLBBK..","..KBBBBBBLBBBBBLBBBBBBK.",".KBBBBLBBBBBBBBBBBLBBBK.","KBLBBBBBBBLBBBLBBBBBBBLK","KBBBBBBBBBBBBBBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},"mira":{"pal":{"K":"#1a1108","H":"#241433","E":"#3c2456","S":"#f5c79a","D":"#cd8a5a","G":"#efe7ff","M":"#1a0c06","C":"#d98fb0","B":"#7a5cc0","L":"#9b80d8","W":"#f5ebd6","T":"#e7b8e0","Z":"#7c6a48","Y":"#f1c34a","P":"#ffffff","X":"#3a8a5a","Q":"#c0533c"},"grid":["........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHEHHHHEHHK......",".....KHHHHHHHHHHHHK.....","....KHHHHHHHHHHHHHHK....","...KHHHSSSSSSSSSSHHHK...","..KHHHSSSSSSSSSSSSHHHK..","..KHHSSSSSSSSSSSSSSHHK..","..HHKKGGGGSSSSGGGGKKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKKGGGGSSSSGGGGKKHH..","..HHKSCSSSSCCSSCSKHH....","...HHKSSSSSSSSSSSSKHH...","...HHHKSSSSSSSSSSKHHH...","....HHKSSSSSSSSKHH......","....KKBBBBBWWWWBBBBKK...","...KBBLBBBBKTKBBBBLBBK..","..KBBBBBBLBBBBBLBBBBBBK.",".KBBBBLBBBBBBBBBBBLBBBK.","KBLBBBBBBBLBBBLBBBBBBBLK","KBBBBBBBBBBBBBBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]}};
+  function svg(name){
+    var d = DATA[name]; if(!d) return "";
+    var r = "";
+    for(var y=0;y<24;y++){ var row=d.grid[y]||"";
+      for(var x=0;x<24;x++){ var c=row[x];
+        if(!c||c==="."||c===" ") continue;
+        var col=d.pal[c]; if(!col) continue;
+        r+='<rect x="'+x+'" y="'+y+'" width="1.02" height="1.02" fill="'+col+'"/>';
+      } }
+    return '<svg viewBox="0 0 24 24" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="width:100%;height:100%;display:block">'+r+'</svg>';
+  }
+  window.sbAvatar = svg;
+  function hydrate(){ var els=document.querySelectorAll("[data-sb-avatar]");
+    for(var i=0;i<els.length;i++){ els[i].innerHTML = svg(els[i].getAttribute("data-sb-avatar")); } }
+  if(document.readyState!=="loading") hydrate();
+  else document.addEventListener("DOMContentLoaded", hydrate);
+})();
+</script>
+
+</body>
+</html>

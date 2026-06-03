@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Switchboard - Fused (Quiet Modern · Your Team · Warm Riso)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Fraunces (upright-optical display, NO italics) for the printed-zine warmth at the masthead / verdict / poster.
+     Geist: the clean modern grotesk workhorse for body, money & data (tabular numerics). -->
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=Geist:wght@300;400;450;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   SWITCHBOARD - THE FUSION  ·  "balanced", with a clear hierarchy
+   ----------------------------------------------------------------------------
+   The calm of Things/Linear, printed like a warm riso zine, starring a pixel
+   crew you love. Three ingredients, each kept to one job so they never fight:
+
+   • BASE + ALL MONEY/DECISION SURFACES  = QUIET MODERN (restraint).
+       warm off-white, hairlines, barely-there depth, generous air, AA always.
+       NO grain · NO ink-offset · NO cushions · NO heavy color on these.
+   • HERO / EMOTIONAL PEAKS              = YOUR TEAM (character).
+       crew celebrated large on soft identity grounds; cumulative value strip;
+       the DISTINCT Mira sprite. Agents stay small + serious in the money flow.
+   • IDENTITY & TEXTURE THROUGH-LINE     = WARM RISO (the signature, restrained).
+       (a) subtle paper grain over the CANVAS only (off in dark + reduced-motion);
+       (b) the unifying "printed portrait" avatar - crisp pixel face on an
+           identity-hue INK chip with a faint 1px ink-offset halo;
+       (c) limited warm-ink identity palette; ONE amber is the only action color.
+   ========================================================================== */
+
+:root{
+  /* --- canvas & ink (QUIET MODERN - warm, almost-monochrome) --- */
+  --paper:        #F7F4EE;   /* soft warm off-white - the page inside frames */
+  --paper-sunk:   #F1EDE4;   /* faintly recessed wells */
+  --card:         #FFFFFF;   /* pristine card surface (money lives here) */
+  --card-2:       #FCFBF7;   /* second-level card */
+
+  --ink:          #1C1A16;   /* near-black, warm - primary text (13.8:1 on paper) */
+  --ink-2:        #54504789; /* placeholder, overwritten below */
+  --ink-2:        #544F47;   /* secondary text */
+  --ink-3:        #877F71;   /* tertiary / meta */
+  --ink-4:        #B0A795;   /* faintest labels */
+
+  /* --- hairlines (warm grey, never pure black) --- */
+  --line:         #E6E0D5;   /* default hairline */
+  --line-soft:    #EEE9DF;   /* softest divider */
+  --line-strong:  #DAD3C5;   /* slightly stronger edge */
+
+  /* --- THE ONE ACTION COLOR: operator amber (AA on white & on paper) --- */
+  --amber:        #985905;   /* text/icon amber - labels, ~6.1:1 on white */
+  --amber-btn:    #A25C00;   /* button fill - white text = 5.5:1 (AA) */
+  --amber-btn-hi: #B56A07;   /* hover */
+  --amber-press:  #8A5200;   /* active */
+  --amber-wash:   #FBF0E0;   /* faint amber field */
+  --amber-edge:   #EFD8B4;   /* amber hairline */
+
+  /* --- AGENT IDENTITY INKS (identity ONLY - never an action) ---
+     each: a TEXT-safe ink (AA on paper) + a soft GROUND for the portrait chip
+     + a deep HALO ink for the riso registration offset. */
+  --alex:         #A4571F;   /* Alex - amber-coral/oxblood (text, 4.9:1 on paper) */
+  --alex-ground:  #F6E6D6;   /* Alex portrait ground */
+  --alex-halo:    #8A4517;   /* Alex offset ink */
+  --alex-edge:    #EAD4BF;
+
+  --riley:        #5A53B4;   /* Riley - plum-indigo (text, 5.2:1 on paper) */
+  --riley-ground: #E8E5F6;
+  --riley-halo:   #443D96;
+  --riley-edge:   #D9D4EF;
+
+  --mira:         #6E4FB8;   /* Mira - violet (text, 5.0:1 on paper) */
+  --mira-ground:  #E9E1F6;
+  --mira-halo:    #553A9C;
+  --mira-edge:    #DCD0F0;
+
+  /* --- semantic (muted, calm) --- */
+  --good:         #3C7A52;   /* booked / settled green, desaturated (calm) */
+  --good-tint:    #E6F0E7;
+  --good-edge:    #D2E3D6;
+  --risk:         #A2493A;   /* HIGH risk - calm dusty terracotta, NOT alarm-red */
+  --risk-tint:    #F5E8E3;
+  --risk-edge:    #ECCFC6;
+
+  /* --- soft modern depth: barely-there shadows (QUIET MODERN) --- */
+  --sh-1: 0 1px 2px rgba(28,26,22,.04), 0 1px 1px rgba(28,26,22,.03);
+  --sh-2: 0 1px 2px rgba(28,26,22,.04), 0 4px 12px rgba(28,26,22,.05);
+  --sh-3: 0 2px 4px rgba(28,26,22,.04), 0 10px 30px rgba(28,26,22,.08), 0 2px 8px rgba(28,26,22,.04);
+  --sh-amber: 0 1px 2px rgba(120,72,8,.10), 0 6px 18px rgba(120,72,8,.16);
+
+  --r-xs: 8px;  --r-sm: 11px;  --r-md: 14px;  --r-lg: 18px;  --r-xl: 24px;  --r-pill: 999px;
+
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --ease-soft: cubic-bezier(.33,.1,.25,1);
+
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-body: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+*{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0;
+  background:#e9e9ec;                 /* neutral grey OUTSIDE the device frames, per brief */
+  font-family:var(--font-body);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  line-height:1.5;
+}
+h1,h2,h3,h4,p{ margin:0; }
+button{ font-family:inherit; cursor:pointer; }
+.tnum{ font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1, "cv01" 1; }
+.mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+/* display face - used ONLY for masthead / verdict hero / poster titles / big numerics */
+.disp{ font-family:var(--font-display); font-optical-sizing:auto; }
+
+/* avatars: keep pixels crisp, never blur */
+[data-sb-avatar] svg{ image-rendering:pixelated; }
+
+/* ============================================================================
+   THE PRINTED PORTRAIT  ·  the single avatar through-line (WARM RISO, restrained)
+   crisp pixel face → identity-hue INK ground → faint 1px ink-offset halo.
+   Works at small (chip/byline 24–28px) AND hero (96–120px) scale.
+   ========================================================================== */
+.pp{
+  position:relative; display:inline-block; flex:none;
+  border-radius:8px;
+  background:var(--pp-ground, var(--paper-sunk));
+  box-shadow:inset 0 0 0 1px var(--pp-edge, var(--line));
+  padding:2px;                         /* breathing room so the sprite doesn't kiss the edge */
+}
+/* the ink-offset "registration" halo - a duplicated identity plate, nudged 1px */
+.pp::before{
+  content:""; position:absolute; inset:0; border-radius:8px;
+  background:var(--pp-halo, var(--line-strong));
+  transform:translate(1px,1px); z-index:-1; opacity:.85;
+}
+.pp .plate{
+  position:relative; width:100%; height:100%; border-radius:6px; overflow:hidden;
+  display:grid; place-items:end center;
+}
+.pp .plate > span{ width:100%; height:100%; display:block; }
+/* identity grounds + halos */
+.pp.alex { --pp-ground:var(--alex-ground);  --pp-halo:var(--alex-halo);  --pp-edge:var(--alex-edge);  }
+.pp.riley{ --pp-ground:var(--riley-ground); --pp-halo:var(--riley-halo); --pp-edge:var(--riley-edge); }
+.pp.mira { --pp-ground:var(--mira-ground);  --pp-halo:var(--mira-halo);  --pp-edge:var(--mira-edge);  }
+/* larger radii scale at hero sizes */
+.pp.lg, .pp.lg::before{ border-radius:20px; }
+.pp.lg{ padding:7px; box-shadow:inset 0 0 0 1.5px var(--pp-edge, var(--line)); }
+.pp.lg::before{ transform:translate(2px,2px); }
+.pp.lg .plate{ border-radius:14px; }
+
+/* ============================================================================
+   PAGE SCAFFOLD - gallery of stacked, captioned sections
+   ========================================================================== */
+.gallery{ max-width:1260px; margin:0 auto; padding:54px 24px 120px; }
+.gallery-head{ text-align:center; margin-bottom:14px; }
+.gallery-head .kick{
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:11px; letter-spacing:.2em; text-transform:uppercase;
+  color:#5f5f66; font-weight:600; margin-bottom:16px;
+  background:#fff; border:1px solid #d9d9de; border-radius:var(--r-pill); padding:7px 14px 7px 11px;
+}
+.gallery-head .kick .bug{ width:9px; height:9px; border-radius:50%; background:radial-gradient(circle at 32% 30%,#C97A12,#8A5200); box-shadow:0 0 0 3px #f1e6d3; }
+.gallery-head h1{
+  font-family:var(--font-display); font-optical-sizing:auto;
+  font-size:clamp(34px,6vw,52px); font-weight:600; letter-spacing:-.02em; color:#23232a; line-height:1.0;
+}
+.gallery-head h1 .a{ color:var(--alex); } .gallery-head h1 .r{ color:var(--riley); } .gallery-head h1 .m{ color:var(--mira); }
+.gallery-head p{ margin:14px auto 0; color:#62626a; font-size:15px; max-width:620px; line-height:1.55; }
+
+.section{ margin-top:60px; }
+.caption{ text-align:center; margin-bottom:20px; }
+.caption .t{ font-family:var(--font-display); font-optical-sizing:auto; font-size:15px; font-weight:600; color:#34343b; letter-spacing:-.005em; }
+.caption .t .ix{ font-family:var(--font-mono); font-size:11px; font-weight:600; color:#fff; background:#33333a; border-radius:5px; padding:2px 6px; margin-right:9px; letter-spacing:.02em; vertical-align:2px; }
+.caption .d{ font-size:12.5px; color:#78787f; margin-top:6px; }
+.frames{ display:flex; flex-wrap:wrap; gap:34px; justify-content:center; align-items:flex-start; }
+
+/* ============================================================================
+   PHONE FRAME
+   ========================================================================== */
+.phone{
+  width:390px; flex:0 0 390px;
+  background:var(--paper);
+  border-radius:42px;
+  border:1px solid #d9d9de;
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 30px 60px rgba(20,20,28,.16), 0 8px 20px rgba(20,20,28,.10);
+  padding:10px; position:relative;
+}
+.phone::before{ /* speaker pill */
+  content:""; position:absolute; top:20px; left:50%; transform:translateX(-50%);
+  width:96px; height:6px; border-radius:99px; background:rgba(28,26,22,.10); z-index:6; pointer-events:none;
+}
+.screen{
+  background:var(--paper); border-radius:33px; overflow:hidden; position:relative;
+  height:860px; display:flex; flex-direction:column;
+}
+.screen.auto{ height:auto; min-height:860px; }
+.scroll{ overflow:hidden; flex:1; }
+
+/* the subtle paper grain - CANVAS ONLY. Never on cards / money surfaces / buttons.
+   Off in dark + reduced-motion (see overrides). */
+.grain{ position:absolute; inset:0; pointer-events:none; opacity:.42; mix-blend-mode:multiply; z-index:0; }
+.screen > *{ position:relative; z-index:1; }
+
+/* ---------- masthead ---------- */
+.mast{
+  position:sticky; top:0; z-index:5;
+  background:rgba(247,244,238,.82);
+  backdrop-filter:saturate(140%) blur(14px); -webkit-backdrop-filter:saturate(140%) blur(14px);
+  border-bottom:1px solid var(--line-soft);
+  padding:38px 22px 13px; display:flex; align-items:center; justify-content:space-between;
+}
+.wordmark{ display:flex; align-items:center; gap:9px; }
+.wordmark .dot{ width:9px; height:9px; border-radius:50%; background:radial-gradient(circle at 32% 30%, #C97A12, #8A5200); box-shadow:0 0 0 3px var(--amber-wash); }
+.wordmark .name{ font-family:var(--font-display); font-optical-sizing:auto; font-size:16px; font-weight:600; letter-spacing:-.01em; }
+.status{ display:flex; align-items:center; gap:0; font-size:11.5px; color:var(--ink-3); font-weight:450; }
+.status .seg{ display:inline-flex; align-items:center; gap:5px; padding:0 9px; position:relative; }
+.status .seg + .seg::before{ content:""; position:absolute; left:0; top:50%; transform:translateY(-50%); width:1px; height:11px; background:var(--line-strong); }
+.status .live{ color:var(--good); font-weight:500; }
+.status .pulse{ width:6px; height:6px; border-radius:50%; background:var(--good); box-shadow:0 0 0 0 rgba(60,122,82,.5); animation:pulse 2.6s var(--ease) infinite; }
+.status .halt{ color:var(--risk); font-weight:500; }
+@keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(60,122,82,.45)} 70%{box-shadow:0 0 0 7px rgba(60,122,82,0)} 100%{box-shadow:0 0 0 0 rgba(60,122,82,0)} }
+.acct{
+  width:30px; height:30px; border-radius:50%; flex:0 0 30px;
+  background:linear-gradient(160deg,#EDE8DF,#E2DCD0); border:1px solid var(--line-strong);
+  display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:var(--ink-2);
+}
+
+/* ---------- body container ---------- */
+.body{ padding:22px 22px 40px; }
+.eyebrow{ font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-4); font-weight:600; margin-bottom:18px; }
+
+/* ---------- verdict hero (DISPLAY face, the printed-zine warmth) ---------- */
+.greet{ font-family:var(--font-display); font-optical-sizing:auto; font-size:18px; color:var(--ink-2); font-weight:500; margin-bottom:8px; letter-spacing:-.01em; }
+.greet .wave{ color:var(--ink-3); }
+.verdict{
+  font-family:var(--font-display); font-optical-sizing:auto;
+  font-size:32px; line-height:1.1; font-weight:600; letter-spacing:-.02em; color:var(--ink);
+}
+.verdict .who{ color:var(--alex); font-weight:700; position:relative; white-space:nowrap; }
+.verdict .who::after{ content:""; position:absolute; left:-1px; right:-1px; bottom:.04em; height:.42em; background:var(--alex-ground); z-index:-1; border-radius:3px; opacity:.7; }
+.subline{ margin-top:14px; font-size:13.5px; color:var(--ink-3); font-weight:450; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.subline .sep{ width:3px; height:3px; border-radius:50%; background:var(--ink-4); }
+.subline b{ color:var(--ink-2); font-weight:500; }
+
+/* ---------- section label ---------- */
+.lab{ display:flex; align-items:baseline; justify-content:space-between; margin:30px 2px 13px; }
+.lab .l{ font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--ink-3); font-weight:600; }
+.lab .r{ font-size:12.5px; color:var(--amber); font-weight:500; text-decoration:none; }
+.lab .r:hover{ text-decoration:underline; text-underline-offset:2px; }
+
+/* ============================================================================
+   DECISION CARDS - QUIET MODERN restraint (money/trust surface)
+   white card · hairline · barely-there shadow · NO grain/offset/heavy color
+   ========================================================================== */
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
+  box-shadow:var(--sh-1); padding:17px 17px 16px;
+  transition:box-shadow .25s var(--ease), border-color .25s var(--ease), transform .25s var(--ease);
+}
+.card + .card{ margin-top:12px; }
+.card:hover{ box-shadow:var(--sh-2); border-color:var(--line-strong); transform:translateY(-1px); }
+
+.card-top{ display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+.tag{ font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:600; color:var(--ink-3); padding:3px 8px; border-radius:var(--r-pill); background:var(--paper-sunk); border:1px solid var(--line-soft); }
+.tag.handoff{ color:#7a5a2a; background:#F6EFE2; border-color:#ECDFC6; }
+.byline{ display:flex; align-items:center; gap:8px; }
+.byline .pp{ width:26px; height:26px; }
+.byline .nm{ font-size:13px; font-weight:550; color:var(--ink); }
+.byline .nm.alex{ color:var(--alex); } .byline .nm.riley{ color:var(--riley); } .byline .nm.mira{ color:var(--mira); }
+.spacer{ flex:1; }
+.when{ font-size:11.5px; color:var(--ink-4); font-weight:450; }
+.when.over{ color:var(--risk); font-weight:550; }
+
+.risk-pill{ display:inline-flex; align-items:center; gap:5px; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; font-weight:600; padding:3px 8px 3px 7px; border-radius:var(--r-pill); }
+.risk-pill .d{ width:6px; height:6px; border-radius:50%; }
+.risk-pill.high{ color:#8a3b2e; background:var(--risk-tint); border:1px solid var(--risk-edge); }
+.risk-pill.high .d{ background:var(--risk); }
+.risk-pill.low{ color:#3c6650; background:var(--good-tint); border:1px solid var(--good-edge); }
+.risk-pill.low .d{ background:var(--good); }
+
+.card .body-txt{ font-size:14.5px; line-height:1.46; color:var(--ink); font-weight:450; letter-spacing:-.006em; }
+.card .body-txt b{ font-weight:600; }
+.card .meta{ margin-top:12px; display:flex; align-items:center; gap:10px; font-size:11.5px; color:var(--ink-3); font-weight:450; }
+.card .meta .for{ color:var(--ink-2); font-weight:500; }
+.card .meta .arrow{ margin-left:auto; color:var(--ink-4); font-weight:500; display:inline-flex; gap:4px; align-items:center; }
+
+/* card actions */
+.actions{ display:flex; gap:9px; margin-top:14px; }
+.btn{
+  flex:1; height:42px; border-radius:var(--r-md); font-size:14px; font-weight:550; letter-spacing:-.01em;
+  border:1px solid var(--line-strong); background:var(--card-2); color:var(--ink);
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  transition:transform .12s var(--ease), box-shadow .2s var(--ease), background .2s, border-color .2s;
+}
+.btn:hover{ background:var(--paper); border-color:#cfc8ba; }
+.btn:active{ transform:translateY(1px); }
+.btn:focus-visible{ outline:2.5px solid var(--amber-btn); outline-offset:2px; }
+.btn.ghost{ flex:0 0 auto; padding:0 16px; }
+.btn.secondary{ flex:0 0 auto; padding:0 18px; }
+/* THE one action color */
+.btn.primary{ background:var(--amber-btn); color:#fff; border:1px solid transparent; box-shadow:var(--sh-amber); font-weight:600; }
+.btn.primary:hover{ background:var(--amber-btn-hi); }
+.btn.primary:active{ background:var(--amber-press); transform:translateY(1px); }
+.swipe-hint{ margin-top:9px; font-size:11px; color:var(--ink-4); font-weight:450; display:flex; align-items:center; gap:6px; }
+.swipe-hint .tk{ font-family:var(--font-mono); font-size:10px; color:var(--ink-3); }
+
+/* ============================================================================
+   TEAM ROSTER (Home) - warm but still calm; identity grounds whisper
+   ========================================================================== */
+.roster{ background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1); overflow:hidden; }
+.tmember{ display:flex; align-items:center; gap:13px; padding:14px 16px; position:relative; }
+.tmember + .tmember{ border-top:1px solid var(--line-soft); }
+.tmember .pp{ width:46px; height:46px; }
+.tinfo{ flex:1; min-width:0; }
+.tinfo .row1{ display:flex; align-items:center; gap:8px; }
+.tinfo .nm{ font-family:var(--font-display); font-optical-sizing:auto; font-size:15px; font-weight:600; letter-spacing:-.01em; }
+.tinfo .nm.alex{ color:var(--alex); } .tinfo .nm.riley{ color:var(--riley); } .tinfo .nm.mira{ color:var(--mira); }
+.statedot{ width:6px; height:6px; border-radius:50%; }
+.statedot.work{ background:var(--alex); animation:breathe 2.8s var(--ease) infinite; }
+.statedot.watch{ background:var(--riley); }
+.statedot.ready{ background:var(--mira); }
+@keyframes breathe{ 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:.45; transform:scale(.85)} }
+.tinfo .st{ font-size:12.5px; color:var(--ink-3); font-weight:450; margin-top:2px; }
+.tinfo .st b{ color:var(--ink-2); font-weight:500; }
+.tstate{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:600; color:var(--ink-3); padding:3px 9px; border-radius:var(--r-pill); background:var(--paper-sunk); border:1px solid var(--line-soft); white-space:nowrap; }
+.tmember.alex .tstate{ color:var(--alex); background:var(--alex-ground); border-color:var(--alex-edge); }
+.tmember.riley .tstate{ color:var(--riley); background:var(--riley-ground); border-color:var(--riley-edge); }
+.tmember.mira .tstate{ color:var(--mira); background:var(--mira-ground); border-color:var(--mira-edge); }
+
+/* ============================================================================
+   VALUE STRIP - cumulative trust anchor (calm; big numerics in DISPLAY)
+   ========================================================================== */
+.value{ margin-top:30px; background:linear-gradient(180deg,#FFFFFF, #FCFBF7); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1); padding:20px 18px 18px; }
+.value .vh{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-4); font-weight:600; margin-bottom:15px; display:flex; align-items:center; gap:8px; }
+.value .vh .rule{ flex:1; height:1px; background:var(--line-soft); }
+.value .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.value .stat{ text-align:left; position:relative; padding-right:8px; }
+.value .stat + .stat{ padding-left:16px; border-left:1px solid var(--line-soft); }
+.value .num{ font-family:var(--font-display); font-optical-sizing:auto; font-size:26px; font-weight:600; letter-spacing:-.02em; color:var(--ink); line-height:1; }
+.value .num .cur{ font-size:14px; color:var(--ink-3); font-weight:500; }
+.value .lbl{ font-size:11.5px; color:var(--ink-3); margin-top:8px; line-height:1.3; font-weight:450; }
+.value .stat.save .num{ color:var(--amber); }
+
+/* ============================================================================
+   WEEK-SO-FAR - Alex's signed letter (the love-worthy editorial moment)
+   serif body for warmth; drop-cap in identity ink; signed "- Alex" (no italics)
+   ========================================================================== */
+.letter{ margin-top:18px; background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1); padding:20px 20px 18px; position:relative; }
+.letter .lh{ display:flex; align-items:center; gap:9px; margin-bottom:13px; }
+.letter .lh .pp{ width:26px; height:26px; }
+.letter .lh .ltitle{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-4); font-weight:600; }
+.letter p{ font-family:var(--font-display); font-optical-sizing:auto; font-size:15.5px; line-height:1.62; color:var(--ink-2); font-weight:400; letter-spacing:0; text-wrap:pretty; }
+.letter p .drop{ float:left; font-family:var(--font-display); font-size:44px; line-height:.78; font-weight:700; color:var(--alex); margin:5px 9px -2px 0; letter-spacing:-.02em; }
+.letter .sign{ margin-top:14px; font-family:var(--font-display); font-optical-sizing:auto; font-size:15px; color:var(--alex); font-weight:600; letter-spacing:-.01em; display:flex; align-items:center; gap:8px; }
+.letter .sign .line{ width:24px; height:1.5px; background:var(--alex); opacity:.6; }
+.letter .sign .by{ color:var(--ink-4); font-weight:450; font-family:var(--font-body); font-size:13px; }
+
+/* ============================================================================
+   INBOX
+   ========================================================================== */
+.inbox-title{ display:flex; align-items:baseline; gap:11px; }
+.inbox-title h2{ font-family:var(--font-display); font-optical-sizing:auto; font-size:30px; font-weight:700; letter-spacing:-.025em; }
+.inbox-title .need{ font-size:12.5px; color:var(--risk); font-weight:500; display:inline-flex; align-items:center; gap:6px; }
+.inbox-title .need .d{ width:6px; height:6px; border-radius:50%; background:var(--risk); }
+.chips{ display:flex; gap:8px; margin:18px 0 6px; }
+.fchip{ display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 13px 0 10px; border-radius:var(--r-pill); font-size:13px; font-weight:500; color:var(--ink-2); background:var(--card); border:1px solid var(--line); box-shadow:var(--sh-1); transition:border-color .2s, background .2s; }
+.fchip:hover{ border-color:var(--line-strong); }
+.fchip.on{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.fchip.on .ct{ color:rgba(255,255,255,.6); }
+.fchip .ct{ color:var(--ink-4); font-weight:500; }
+.fchip .pp{ width:20px; height:20px; }
+.fchip.on .pp{ box-shadow:inset 0 0 0 1px rgba(255,255,255,.3); }
+
+/* ============================================================================
+   COMMIT SHEET - THE MOST IMPORTANT SURFACE (pure QUIET MODERN)
+   ========================================================================== */
+.sheet-wrap{ background:linear-gradient(180deg, rgba(28,26,22,.16), rgba(28,26,22,.30)); border-radius:33px; height:860px; position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; }
+.sheet-bg-hint{ position:absolute; inset:0; padding:34px 22px; opacity:.5; filter:saturate(.7); }
+.sheet-bg-hint .ghost{ height:70px; background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); margin-bottom:12px; box-shadow:var(--sh-1); }
+.sheet{ position:relative; background:var(--paper); border-radius:30px 30px 33px 33px; box-shadow:0 -10px 40px rgba(20,20,28,.22), 0 -2px 0 rgba(255,255,255,.5) inset; padding:10px 22px 24px; max-height:92%; }
+.grab{ width:38px; height:5px; border-radius:99px; background:var(--line-strong); margin:0 auto 16px; }
+
+.sheet-head{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.sheet-head .pp{ width:30px; height:30px; }
+.sheet-head .nm{ font-family:var(--font-display); font-optical-sizing:auto; font-size:14px; font-weight:600; color:var(--alex); }
+.sheet-head .ty{ font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); font-weight:600; }
+
+.sheet h3{ font-family:var(--font-display); font-optical-sizing:auto; font-size:22px; font-weight:600; letter-spacing:-.018em; line-height:1.26; color:var(--ink); margin:14px 0 4px; text-wrap:balance; }
+.sheet .said{ font-size:13px; color:var(--ink-3); font-weight:450; margin-bottom:18px; display:flex; align-items:center; gap:7px; }
+.sheet .said .pp{ width:18px; height:18px; }
+
+/* proposal block - the calm core */
+.proposal{ background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-1); overflow:hidden; margin-bottom:14px; }
+.prow{ display:flex; align-items:center; gap:12px; padding:14px 16px; }
+.prow + .prow{ border-top:1px solid var(--line-soft); }
+.prow .k{ font-size:13px; color:var(--ink-3); font-weight:450; width:78px; flex:0 0 78px; }
+.prow .v{ font-size:14.5px; color:var(--ink); font-weight:500; flex:1; letter-spacing:-.008em; }
+.prow.headline{ background:linear-gradient(180deg,#FFFFFF,#FDFBF6); }
+.prow.headline .v{ font-size:16px; font-weight:600; }
+.prow .val-amt{ color:var(--amber); font-weight:600; }
+.prow .chan{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--good); background:var(--good-tint); border:1px solid var(--good-edge); padding:3px 9px 3px 7px; border-radius:var(--r-pill); font-weight:500; }
+.prow .chan .d{ width:6px; height:6px; border-radius:50%; background:var(--good); }
+
+/* plain-english risk chips */
+.risk-row{ display:flex; gap:9px; margin-bottom:16px; }
+.rchip{ flex:1; display:flex; align-items:center; gap:9px; background:var(--card-2); border:1px solid var(--line); border-radius:var(--r-md); padding:11px 12px; box-shadow:var(--sh-1); }
+.rchip .ic{ width:28px; height:28px; flex:0 0 28px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:var(--amber-wash); color:var(--amber); }
+.rchip.client .ic{ background:var(--good-tint); color:var(--good); }
+.rchip .tx{ font-size:12.5px; color:var(--ink-2); font-weight:450; line-height:1.3; letter-spacing:-.006em; }
+.rchip .tx b{ color:var(--ink); font-weight:550; display:block; font-size:12.5px; }
+
+/* what this changes - honest, only-known facts */
+.changes{ background:var(--amber-wash); border:1px solid var(--amber-edge); border-radius:var(--r-md); padding:14px 15px; margin-bottom:20px; }
+.changes .ch-h{ font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:#7a5410; font-weight:700; margin-bottom:11px; }
+.changes ul{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+.changes li{ display:flex; align-items:flex-start; gap:10px; font-size:13.5px; color:var(--ink); font-weight:450; line-height:1.4; }
+.changes li .tick{ width:18px; height:18px; flex:0 0 18px; border-radius:50%; margin-top:1px; background:#fff; border:1.5px solid var(--amber-edge); color:var(--amber); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+.changes li b{ font-weight:600; }
+
+/* primary commit row */
+.commit{ display:flex; gap:10px; }
+.commit .btn.primary{ flex:1; height:54px; font-size:16px; border-radius:var(--r-md); letter-spacing:-.01em; }
+.commit .btn.primary .amt{ font-variant-numeric:tabular-nums; margin-left:2px; opacity:.92; font-weight:600; }
+.commit .btn.secondary{ height:54px; font-size:15px; border-radius:var(--r-md); }
+.reassure{ text-align:center; font-size:11.5px; color:var(--ink-4); font-weight:450; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:7px; }
+.reassure .lk{ color:var(--ink-3); }
+
+/* undo toast (post-commit concept) */
+.toast{ margin-top:18px; background:var(--ink); color:#fff; border-radius:var(--r-md); padding:13px 14px 13px 15px; display:flex; align-items:center; gap:11px; box-shadow:0 10px 30px rgba(20,20,28,.28); }
+.toast .ok{ width:24px; height:24px; flex:0 0 24px; border-radius:50%; background:rgba(255,255,255,.12); color:#9FE0B6; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+.toast .msg{ font-size:13px; font-weight:450; color:rgba(255,255,255,.92); flex:1; line-height:1.3; }
+.toast .msg b{ color:#fff; font-weight:600; }
+.toast .undo{ font-size:13px; font-weight:600; color:#F2C68A; background:transparent; border:1px solid rgba(242,198,138,.35); border-radius:var(--r-pill); padding:6px 13px; display:flex; align-items:center; gap:7px; }
+.toast .undo:hover{ background:rgba(242,198,138,.12); }
+.toast .ring{ position:relative; width:18px; height:18px; flex:0 0 18px; }
+.toast .ring svg{ transform:rotate(-90deg); }
+.toast .ring .tk{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:600; color:#F2C68A; font-family:var(--font-mono); }
+
+/* ============================================================================
+   MEET YOUR TEAM - the poster (YOUR TEAM scale + RISO printed portraits)
+   ========================================================================== */
+.poster-card{
+  width:430px; flex:0 0 430px;
+  background:var(--paper); border-radius:30px; border:1px solid #d9d9de;
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 30px 60px rgba(20,20,28,.16), 0 8px 20px rgba(20,20,28,.10);
+  padding:10px; position:relative;
+}
+.poster-inner{
+  position:relative; border-radius:22px; padding:38px 28px 30px; text-align:center; overflow:hidden;
+  background:
+    radial-gradient(120% 70% at 16% -6%, var(--alex-ground) 0%, transparent 42%),
+    radial-gradient(120% 70% at 50% -6%, var(--riley-ground) 0%, transparent 42%),
+    radial-gradient(120% 70% at 84% -6%, var(--mira-ground) 0%, transparent 42%),
+    linear-gradient(180deg, #FFFDF9, var(--paper));
+  border:1px solid var(--line-soft);
+}
+.poster-inner .grain{ opacity:.34; border-radius:22px; }
+.poster-inner .kick{ position:relative; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--amber); font-weight:600; display:inline-flex; align-items:center; gap:9px; }
+.poster-inner .kick .star{ color:var(--alex); }
+.poster-inner h2{ position:relative; font-family:var(--font-display); font-optical-sizing:auto; font-size:34px; font-weight:700; letter-spacing:-.025em; margin-top:12px; line-height:1.05; }
+.poster-inner .sub{ position:relative; font-size:14px; color:var(--ink-3); font-weight:450; margin:11px auto 0; max-width:320px; line-height:1.5; }
+.portraits{ position:relative; display:flex; justify-content:center; gap:16px; align-items:flex-end; margin:30px 0 8px; }
+.portrait{ flex:1; max-width:124px; display:flex; flex-direction:column; align-items:center; }
+.portrait .pp{ width:104px; height:104px; transition:transform .35s var(--ease); }
+.portrait:hover .pp{ transform:translateY(-4px); }
+.portrait.featured{ transform:translateY(-12px); }
+.portrait.featured .pp{ width:112px; height:112px; }
+.portrait .nm{ font-family:var(--font-display); font-optical-sizing:auto; font-size:17px; font-weight:700; letter-spacing:-.012em; margin-top:14px; }
+.portrait.alex .nm{ color:var(--alex); } .portrait.riley .nm{ color:var(--riley); } .portrait.mira .nm{ color:var(--mira); }
+.portrait .role{ font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; margin-top:4px; }
+.portrait.alex .role{ color:var(--alex); opacity:.78; } .portrait.riley .role{ color:var(--riley); opacity:.78; } .portrait.mira .role{ color:var(--mira); opacity:.78; }
+.portrait .blurb{ font-size:11.5px; color:var(--ink-3); margin-top:6px; line-height:1.4; }
+.poster-foot{ position:relative; margin-top:26px; padding-top:18px; border-top:1px solid var(--line-soft); display:flex; align-items:center; justify-content:center; gap:8px; font-size:11.5px; color:var(--ink-4); font-weight:450; }
+.poster-foot .em{ color:var(--amber); font-weight:600; }
+
+/* ============================================================================
+   DESKTOP composition (~1100px)
+   ========================================================================== */
+.desk{ width:1100px; flex:0 0 1100px; max-width:100%; background:var(--paper); border-radius:20px; border:1px solid #d9d9de; box-shadow:0 30px 70px rgba(20,20,28,.14), 0 8px 24px rgba(20,20,28,.08); overflow:hidden; position:relative; }
+.desk .grain{ opacity:.34; }
+.desk-bar{ position:relative; height:48px; display:flex; align-items:center; gap:8px; padding:0 18px; border-bottom:1px solid var(--line-soft); background:rgba(247,244,238,.7); }
+.desk-bar .tl{ display:flex; gap:7px; }
+.desk-bar .tl i{ width:11px; height:11px; border-radius:50%; display:block; }
+.desk-bar .tl i:nth-child(1){ background:#E6A29A; } .desk-bar .tl i:nth-child(2){ background:#EBCF95; } .desk-bar .tl i:nth-child(3){ background:#A9CBA9; }
+.desk-bar .url{ margin-left:14px; font-size:12.5px; color:var(--ink-3); font-family:var(--font-mono); background:#fff; border:1px solid var(--line); border-radius:var(--r-pill); padding:5px 14px; font-weight:450; }
+.desk-grid{ position:relative; display:grid; grid-template-columns:236px 1fr 322px; min-height:700px; }
+
+/* sidebar */
+.dside{ border-right:1px solid var(--line-soft); padding:22px 16px; background:linear-gradient(180deg,#FCFBF7,#F7F4EE); }
+.dside .wm{ display:flex; align-items:center; gap:9px; margin-bottom:26px; padding:0 8px; }
+.dside .wm .dot{ width:9px; height:9px; border-radius:50%; background:radial-gradient(circle at 32% 30%,#C97A12,#8A5200); box-shadow:0 0 0 3px var(--amber-wash); }
+.dside .wm .name{ font-family:var(--font-display); font-optical-sizing:auto; font-size:15px; font-weight:600; letter-spacing:-.014em; }
+.nav{ display:flex; flex-direction:column; gap:2px; }
+.nav a{ display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:var(--r-sm); font-size:13.5px; color:var(--ink-2); font-weight:450; text-decoration:none; transition:background .18s, color .18s; }
+.nav a:hover{ background:var(--paper-sunk); }
+.nav a.on{ background:var(--card); color:var(--ink); font-weight:550; box-shadow:var(--sh-1); border:1px solid var(--line); }
+.nav a .gi{ width:16px; height:16px; flex:0 0 16px; color:var(--ink-3); display:flex; }
+.nav a.on .gi{ color:var(--amber); }
+.nav a .ct{ margin-left:auto; font-size:11.5px; color:#fff; background:var(--risk); border-radius:99px; padding:1px 7px; font-weight:600; }
+.nav-h{ font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-4); font-weight:600; padding:0 11px; margin:22px 0 8px; }
+.dside .mini-team{ margin-top:8px; display:flex; flex-direction:column; gap:7px; }
+.dside .mt{ display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:var(--r-sm); }
+.dside .mt:hover{ background:var(--paper-sunk); }
+.dside .mt .pp{ width:26px; height:26px; }
+.dside .mt .n{ font-size:12.5px; font-weight:550; }
+.dside .mt.alex .n{ color:var(--alex); } .dside .mt.riley .n{ color:var(--riley); } .dside .mt.mira .n{ color:var(--mira); }
+.dside .mt .s{ font-size:11px; color:var(--ink-4); margin-left:auto; display:inline-flex; align-items:center; gap:5px; }
+.dside .mt .s .p{ width:6px; height:6px; border-radius:50%; }
+.dside .mt.alex .s .p{ background:var(--alex); } .dside .mt.riley .s .p{ background:var(--riley); } .dside .mt.mira .s .p{ background:var(--mira); }
+
+/* center column */
+.dmain{ padding:30px 32px; overflow:hidden; }
+.dmain .eyebrow{ margin-bottom:14px; }
+.dmain .verdict{ font-size:30px; }
+.dmain .subline{ margin-bottom:8px; }
+.dmain .lab{ margin-top:26px; }
+.dgrid2{ display:grid; grid-template-columns:1fr; gap:12px; }
+
+/* right rail */
+.drail{ border-left:1px solid var(--line-soft); padding:28px 22px; background:linear-gradient(180deg,#FCFBF7,#F7F4EE); }
+.drail .rh{ font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-4); font-weight:600; margin-bottom:14px; }
+.drail .value{ margin-top:0; }
+.drail .letter{ margin-top:16px; }
+
+/* ============================================================================
+   DARK / DIM variant  (grain OFF; amber + cast still carry warmth)
+   ========================================================================== */
+.phone.dark{ background:#16140E; border-color:#2a261f; box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 30px 60px rgba(0,0,0,.4), 0 8px 20px rgba(0,0,0,.3); }
+.phone.dark::before{ background:rgba(255,255,255,.12); }
+.dk{
+  --paper:#16140E; --paper-sunk:#1E1B14; --card:#211E17; --card-2:#1B1812;
+  --ink:#F4F0E7; --ink-2:#BDB7AA; --ink-3:#897F71; --ink-4:#5F5950;
+  --line:#2D2920; --line-soft:#262219; --line-strong:#393428;
+  --amber:#E5A24A; --amber-btn:#C77F1E; --amber-btn-hi:#D88E2A; --amber-press:#B0700F;
+  --amber-wash:#2A2113; --amber-edge:#473615;
+  --alex:#D98A5A; --alex-ground:#2A1E14; --alex-halo:#7a4517; --alex-edge:#473218;
+  --riley:#9A8EE0; --riley-ground:#221F38; --riley-halo:#443d96; --riley-edge:#332e52;
+  --mira:#B187E0; --mira-ground:#251D3A; --mira-halo:#553a9c; --mira-edge:#382e52;
+  --good:#5FB07E; --good-tint:#16241A; --good-edge:#24382a; --risk:#D77E6B; --risk-tint:#2A1A15; --risk-edge:#43251f;
+  background:var(--paper); border-radius:33px; overflow:hidden;
+}
+.dk .mast{ background:rgba(22,20,14,.8); border-color:var(--line-soft); }
+.dk .acct{ background:linear-gradient(160deg,#2A261F,#211E17); border-color:var(--line-strong); color:var(--ink-2); }
+.dk .verdict .who::after{ opacity:.45; }
+.dk .greet, .dk .verdict .who{ }
+
+@media (max-width:520px){
+  .gallery{ padding:30px 10px 80px; }
+  .frames{ gap:24px; }
+}
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important; }
+  .grain{ display:none !important; }   /* grain off when motion is reduced */
+}
+.caption{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="gallery">
+  <header class="gallery-head">
+    <span class="kick"><span class="bug"></span>Switchboard · Fused Direction</span>
+    <h1>The calm of Linear, printed like a riso zine,<br>starring a crew you love.</h1>
+    <p>A balanced synthesis with a clear hierarchy: <b>Quiet Modern</b> holds every money &amp; decision surface, <b>Your Team</b> owns the emotional peaks, and a restrained <b>Warm Riso</b> through-line. Paper grain on the canvas, the printed-portrait avatar, and one amber action tie it together.</p>
+  </header>
+
+  <!-- ===================================== E) MEET YOUR TEAM (lead with the love) -->
+  <section class="section">
+    
+    <div class="frames">
+      <div class="poster-card">
+        <div class="poster-inner">
+          <svg class="grain" aria-hidden="true"><rect width="100%" height="100%" filter="url(#paperGrain)"/></svg>
+          <div class="kick"><span class="star">✦</span> The crew you hired <span class="star">✦</span></div>
+          <h2>Three teammates,<br>working for you.</h2>
+          <div class="sub">They handle the leads, the ads, and the creative. You approve the moves that matter.</div>
+          <div class="portraits">
+            <div class="portrait alex">
+              <span class="pp alex lg"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+              <div class="nm">Alex</div>
+              <div class="role">Front desk</div>
+              <div class="blurb">Answers leads &amp; books consults</div>
+            </div>
+            <div class="portrait riley featured">
+              <span class="pp riley lg"><span class="plate"><span data-sb-avatar="riley"></span></span></span>
+              <div class="nm">Riley</div>
+              <div class="role">Ad analyst</div>
+              <div class="blurb">Runs &amp; protects the spend</div>
+            </div>
+            <div class="portrait mira">
+              <span class="pp mira lg"><span class="plate"><span data-sb-avatar="mira"></span></span></span>
+              <div class="nm">Mira</div>
+              <div class="role">The maker</div>
+              <div class="blurb">Crafts your short-form video</div>
+            </div>
+          </div>
+          <div class="poster-foot">They work for you. You say yes to the <span class="em">big moves</span>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================== A) HOME - the evening briefing -->
+  <section class="section">
+    
+    <div class="frames">
+      <div class="phone">
+        <div class="screen">
+          <svg class="grain" aria-hidden="true"><rect width="100%" height="100%" filter="url(#paperGrain)"/></svg>
+          <!-- masthead -->
+          <div class="mast">
+            <div class="wordmark"><span class="dot"></span><span class="name">Switchboard</span></div>
+            <div class="status">
+              <span class="seg live"><span class="pulse"></span>Live</span>
+              <span class="seg">Inbox 3</span>
+              <span class="seg halt">Halt</span>
+            </div>
+            <div class="acct">D</div>
+          </div>
+
+          <div class="scroll">
+            <div class="body">
+              <div class="eyebrow">Tuesday, Jun 2 · 7:18 PM</div>
+
+              <!-- verdict hero (display face) -->
+              <div class="greet"><span class="wave">Good evening,</span> Dev</div>
+              <h1 class="verdict">Three things need you. Start&nbsp;with <span class="who">Alex</span>.</h1>
+              <div class="subline">
+                <b>2</b> open leads <span class="sep"></span> oldest waiting <b>~5 days</b> <span class="sep"></span> <b>0 of 1</b> working
+              </div>
+
+              <!-- Needs you -->
+              <div class="lab"><span class="l">Needs you</span></div>
+
+              <!-- card 1: handoff -->
+              <div class="card">
+                <div class="card-top">
+                  <span class="tag handoff">Handoff</span>
+                  <div class="byline">
+                    <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                    <span class="nm">Sarah Tan</span>
+                  </div>
+                  <span class="spacer"></span>
+                  <span class="when over">due 5d</span>
+                </div>
+                <div class="body-txt"><b>Sarah Tan</b> asked to talk to a human about their consultation.</div>
+                <div class="actions">
+                  <button class="btn primary">Take this one</button>
+                  <button class="btn ghost">Snooze</button>
+                </div>
+              </div>
+
+              <!-- card 2: approval high risk -->
+              <div class="card">
+                <div class="card-top">
+                  <span class="tag">Approval</span>
+                  <div class="byline">
+                    <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                    <span class="nm alex">Alex</span>
+                  </div>
+                  <span class="spacer"></span>
+                  <span class="risk-pill high"><span class="d"></span>High risk</span>
+                </div>
+                <div class="body-txt">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</div>
+                <div class="actions">
+                  <button class="btn primary">Approve offer</button>
+                  <button class="btn secondary">Adjust</button>
+                </div>
+                <div class="swipe-hint"><span class="tk">›</span> Swipe primes · tap to commit</div>
+              </div>
+
+              <div class="lab"><span class="l"></span><a class="r" href="#inbox">See all in Inbox →</a></div>
+
+              <!-- your team -->
+              <div class="lab"><span class="l">Your team</span></div>
+              <div class="roster">
+                <div class="tmember alex">
+                  <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                  <div class="tinfo">
+                    <div class="row1"><span class="nm alex">Alex</span><span class="statedot work"></span></div>
+                    <div class="st">drafting <b>Priya's offer</b></div>
+                  </div>
+                  <span class="tstate">Working</span>
+                </div>
+                <div class="tmember riley">
+                  <span class="pp riley"><span class="plate"><span data-sb-avatar="riley"></span></span></span>
+                  <div class="tinfo">
+                    <div class="row1"><span class="nm riley">Riley</span><span class="statedot watch"></span></div>
+                    <div class="st">watching <b>3 ad sets</b></div>
+                  </div>
+                  <span class="tstate">Watching</span>
+                </div>
+                <div class="tmember mira">
+                  <span class="pp mira"><span class="plate"><span data-sb-avatar="mira"></span></span></span>
+                  <div class="tinfo">
+                    <div class="row1"><span class="nm mira">Mira</span><span class="statedot ready"></span></div>
+                    <div class="st"><b>2 drafts</b> ready to review</div>
+                  </div>
+                  <span class="tstate">Ready</span>
+                </div>
+              </div>
+
+              <!-- value strip -->
+              <div class="value">
+                <div class="vh">Since you hired your team <span class="rule"></span></div>
+                <div class="grid">
+                  <div class="stat"><div class="num tnum">14</div><div class="lbl">leads answered</div></div>
+                  <div class="stat"><div class="num tnum">9</div><div class="lbl">consults booked</div></div>
+                  <div class="stat save"><div class="num tnum"><span class="cur">~S$</span>7,388</div><div class="lbl">saved</div></div>
+                </div>
+              </div>
+
+              <!-- letter -->
+              <div class="letter">
+                <div class="lh">
+                  <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                  <span class="ltitle">Your week, so far</span>
+                </div>
+                <p><span class="drop">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned through its budget. Sarah's still waiting on a human. I've kept her warm, but she's yours when you're ready.</p>
+                <div class="sign"><span class="line"></span>Alex <span class="by">· your ops teammate</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================== B) INBOX -->
+  <section class="section" id="inbox">
+    
+    <div class="frames">
+      <div class="phone">
+        <div class="screen">
+          <svg class="grain" aria-hidden="true"><rect width="100%" height="100%" filter="url(#paperGrain)"/></svg>
+          <div class="mast">
+            <div class="wordmark"><span class="dot"></span><span class="name">Switchboard</span></div>
+            <div class="status">
+              <span class="seg live"><span class="pulse"></span>Live</span>
+              <span class="seg">Inbox 3</span>
+              <span class="seg halt">Halt</span>
+            </div>
+            <div class="acct">D</div>
+          </div>
+          <div class="scroll">
+            <div class="body">
+              <div class="inbox-title">
+                <h2>inbox</h2>
+                <span class="need"><span class="d"></span>3 things need you</span>
+              </div>
+
+              <div class="chips">
+                <span class="fchip on">All <span class="ct">3</span></span>
+                <span class="fchip"><span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>Alex <span class="ct">2</span></span>
+                <span class="fchip"><span class="pp riley"><span class="plate"><span data-sb-avatar="riley"></span></span></span>Riley <span class="ct">0</span></span>
+              </div>
+
+              <div style="margin-top:14px;"></div>
+
+              <!-- inbox card 1 -->
+              <div class="card">
+                <div class="card-top">
+                  <div class="byline">
+                    <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                    <span class="nm alex">Alex</span>
+                  </div>
+                  <span class="tag handoff" style="margin-left:8px;">Handoff</span>
+                  <span class="spacer"></span>
+                  <span class="when over">Overdue</span>
+                </div>
+                <div class="body-txt">Sarah Tan asked to talk to a human about their consultation.</div>
+                <div class="meta">
+                  <span class="for">For Sarah Tan</span>
+                  <span class="arrow">Tap to open →</span>
+                </div>
+              </div>
+
+              <!-- inbox card 2 -->
+              <div class="card">
+                <div class="card-top">
+                  <div class="byline">
+                    <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                    <span class="nm alex">Alex</span>
+                  </div>
+                  <span class="tag" style="margin-left:8px;">Approval</span>
+                  <span class="spacer"></span>
+                  <span class="when">5d ago</span>
+                </div>
+                <div class="body-txt">Offer Priya a complimentary touch-up to resolve her concern about uneven volume.</div>
+                <div class="meta">
+                  <span class="risk-pill high"><span class="d"></span>High risk</span>
+                  <span class="for">For Priya Nair</span>
+                  <span class="arrow">Tap to review →</span>
+                </div>
+              </div>
+
+              <!-- inbox card 3 -->
+              <div class="card">
+                <div class="card-top">
+                  <div class="byline">
+                    <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                    <span class="nm alex">Alex</span>
+                  </div>
+                  <span class="tag" style="margin-left:8px;">Approval</span>
+                  <span class="spacer"></span>
+                  <span class="when">5d ago</span>
+                </div>
+                <div class="body-txt">Send Maya a warm day-3 check-in while her lip filler settles.</div>
+                <div class="meta">
+                  <span class="risk-pill low"><span class="d"></span>Low risk</span>
+                  <span class="for">For Maya Lim</span>
+                  <span class="arrow">Swipe →</span>
+                </div>
+              </div>
+
+              <div style="text-align:center;margin:18px 0 4px;font-size:12px;color:var(--ink-4);">That's everything. Nicely done.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================== C) THE COMMIT MOMENT -->
+  <section class="section">
+    
+    <div class="frames">
+      <div class="phone">
+        <div class="screen" style="padding:0;">
+          <div class="sheet-wrap">
+            <!-- faint inbox behind -->
+            <div class="sheet-bg-hint" aria-hidden="true">
+              <div class="ghost"></div><div class="ghost"></div><div class="ghost"></div>
+            </div>
+
+            <div class="sheet">
+              <div class="grab"></div>
+              <div class="sheet-head">
+                <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                <span class="nm">Alex</span>
+                <span class="ty">· Approval</span>
+                <span class="spacer" style="flex:1"></span>
+                <span class="risk-pill high"><span class="d"></span>High risk</span>
+              </div>
+
+              <h3>Offer Priya a complimentary touch-up to resolve her concern about uneven volume.</h3>
+              <div class="said">
+                <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                Drafted by Alex · waiting on your okay
+              </div>
+
+              <!-- proposal -->
+              <div class="proposal">
+                <div class="prow headline">
+                  <span class="k">Offer</span>
+                  <span class="v">Complimentary touch-up <span class="val-amt">· $480 value</span></span>
+                </div>
+                <div class="prow">
+                  <span class="k">Reason</span>
+                  <span class="v" style="font-weight:450;">Client flagged uneven volume</span>
+                </div>
+                <div class="prow">
+                  <span class="k">Channel</span>
+                  <span class="v"><span class="chan"><span class="d"></span>WhatsApp</span></span>
+                </div>
+              </div>
+
+              <!-- plain-english risk chips -->
+              <div class="risk-row">
+                <div class="rchip spend">
+                  <span class="ic">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  </span>
+                  <span class="tx"><b>Spends</b> from your budget</span>
+                </div>
+                <div class="rchip client">
+                  <span class="ic">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  </span>
+                  <span class="tx"><b>Messages</b> a client directly</span>
+                </div>
+              </div>
+
+              <!-- what this changes - honest, only known facts -->
+              <div class="changes">
+                <div class="ch-h">What this changes</div>
+                <ul>
+                  <li><span class="tick">$</span><span>Sends <b>$480</b> in value from your budget</span></li>
+                  <li><span class="tick">›</span><span>Messages <b>Priya Nair</b> on <b>WhatsApp</b></span></li>
+                  <li><span class="tick">✓</span><span>Logs the offer to her record, nothing else changes</span></li>
+                </ul>
+              </div>
+
+              <!-- commit -->
+              <div class="commit">
+                <button class="btn primary">Approve offer <span class="amt tnum">· $480</span></button>
+                <button class="btn secondary">Adjust</button>
+              </div>
+              <div class="reassure"><span class="lk">You stay in control</span>. Nothing sends until you tap.</div>
+
+              <!-- undo toast (post-commit concept) -->
+              <div class="toast">
+                <span class="ok">✓</span>
+                <span class="msg"><b>Approved</b>. Sent to Priya on WhatsApp.</span>
+                <button class="undo">
+                  <span class="ring">
+                    <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" fill="none" stroke="rgba(242,198,138,.25)" stroke-width="2"/><circle cx="9" cy="9" r="7.5" fill="none" stroke="#F2C68A" stroke-width="2" stroke-linecap="round" stroke-dasharray="47" stroke-dashoffset="9"/></svg>
+                    <span class="tk">12</span>
+                  </span>
+                  Undo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================== D) DESKTOP -->
+  <section class="section">
+    
+    <div class="frames">
+      <div class="desk">
+        <svg class="grain" aria-hidden="true"><rect width="100%" height="100%" filter="url(#paperGrain)"/></svg>
+        <div class="desk-bar">
+          <div class="tl"><i></i><i></i><i></i></div>
+          <div class="url">app.switchboard.co/home</div>
+        </div>
+        <div class="desk-grid">
+          <!-- sidebar -->
+          <aside class="dside">
+            <div class="wm"><span class="dot"></span><span class="name">Switchboard</span></div>
+            <nav class="nav">
+              <a class="on" href="#"><span class="gi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg></span>Home</a>
+              <a href="#"><span class="gi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.5 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.5A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.5z"/></svg></span>Inbox <span class="ct">3</span></a>
+              <a href="#"><span class="gi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg></span>Results</a>
+              <a href="#"><span class="gi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Clients</a>
+            </nav>
+            <div class="nav-h">Your team</div>
+            <div class="mini-team">
+              <div class="mt alex"><span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="n">Alex</span><span class="s"><span class="p"></span>Working</span></div>
+              <div class="mt riley"><span class="pp riley"><span class="plate"><span data-sb-avatar="riley"></span></span></span><span class="n">Riley</span><span class="s"><span class="p"></span>Watching</span></div>
+              <div class="mt mira"><span class="pp mira"><span class="plate"><span data-sb-avatar="mira"></span></span></span><span class="n">Mira</span><span class="s"><span class="p"></span>2 ready</span></div>
+            </div>
+          </aside>
+
+          <!-- center -->
+          <main class="dmain">
+            <div class="eyebrow">Tuesday, Jun 2 · 7:18 PM</div>
+            <div class="greet"><span class="wave">Good evening,</span> Dev</div>
+            <h1 class="verdict">Three things need you. Start with <span class="who">Alex</span>.</h1>
+            <div class="subline"><b>2</b> open leads <span class="sep"></span> oldest waiting <b>~5 days</b> <span class="sep"></span> <b>0 of 1</b> working</div>
+
+            <div class="lab"><span class="l">Needs you</span><a class="r" href="#">See all in Inbox →</a></div>
+            <div class="dgrid2">
+              <div class="card">
+                <div class="card-top">
+                  <span class="tag handoff">Handoff</span>
+                  <div class="byline"><span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="nm">Sarah Tan</span></div>
+                  <span class="spacer"></span><span class="when over">due 5d</span>
+                </div>
+                <div class="body-txt"><b>Sarah Tan</b> asked to talk to a human about their consultation.</div>
+                <div class="actions"><button class="btn primary" style="max-width:170px;">Take this one</button><button class="btn ghost">Snooze</button></div>
+              </div>
+              <div class="card">
+                <div class="card-top">
+                  <span class="tag">Approval</span>
+                  <div class="byline"><span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="nm alex">Alex</span></div>
+                  <span class="spacer"></span><span class="risk-pill high"><span class="d"></span>High risk</span>
+                </div>
+                <div class="body-txt">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</div>
+                <div class="actions"><button class="btn primary" style="max-width:170px;">Approve offer</button><button class="btn secondary">Adjust</button></div>
+              </div>
+            </div>
+
+            <div class="lab"><span class="l">Your team</span></div>
+            <div class="roster">
+              <div class="tmember alex">
+                <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                <div class="tinfo"><div class="row1"><span class="nm alex">Alex</span><span class="statedot work"></span></div><div class="st">drafting <b>Priya's offer</b></div></div>
+                <span class="tstate">Working</span>
+              </div>
+              <div class="tmember riley">
+                <span class="pp riley"><span class="plate"><span data-sb-avatar="riley"></span></span></span>
+                <div class="tinfo"><div class="row1"><span class="nm riley">Riley</span><span class="statedot watch"></span></div><div class="st">watching <b>3 ad sets</b></div></div>
+                <span class="tstate">Watching</span>
+              </div>
+              <div class="tmember mira">
+                <span class="pp mira"><span class="plate"><span data-sb-avatar="mira"></span></span></span>
+                <div class="tinfo"><div class="row1"><span class="nm mira">Mira</span><span class="statedot ready"></span></div><div class="st"><b>2 drafts</b> ready to review</div></div>
+                <span class="tstate">Ready</span>
+              </div>
+            </div>
+          </main>
+
+          <!-- right rail -->
+          <aside class="drail">
+            <div class="rh">This week</div>
+            <div class="value">
+              <div class="vh">Since you hired your team <span class="rule"></span></div>
+              <div class="grid">
+                <div class="stat"><div class="num tnum">14</div><div class="lbl">leads answered</div></div>
+                <div class="stat"><div class="num tnum">9</div><div class="lbl">consults booked</div></div>
+                <div class="stat save"><div class="num tnum"><span class="cur">~S$</span>7,388</div><div class="lbl">saved</div></div>
+              </div>
+            </div>
+            <div class="letter">
+              <div class="lh"><span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="ltitle">Your week, so far</span></div>
+              <p><span class="drop">T</span>wo consults booked, four leads answered, and I paused one ad set before it burned through its budget.</p>
+              <div class="sign"><span class="line"></span>Alex <span class="by">· your ops teammate</span></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================== F) DARK VARIANT -->
+  <section class="section">
+    
+    <div class="frames">
+      <div class="phone dark">
+        <div class="screen dk">
+          <div class="mast">
+            <div class="wordmark"><span class="dot"></span><span class="name">Switchboard</span></div>
+            <div class="status">
+              <span class="seg live"><span class="pulse"></span>Live</span>
+              <span class="seg">Inbox 3</span>
+              <span class="seg halt">Halt</span>
+            </div>
+            <div class="acct">D</div>
+          </div>
+          <div class="scroll">
+            <div class="body">
+              <div class="eyebrow">Tuesday, Jun 2 · 7:42 PM</div>
+              <div class="greet"><span class="wave">Good evening,</span> Dev</div>
+              <h1 class="verdict">Three things need you. Start&nbsp;with <span class="who">Alex</span>.</h1>
+              <div class="subline"><b>2</b> open leads <span class="sep"></span> oldest waiting <b>~5 days</b> <span class="sep"></span> <b>0 of 1</b> working</div>
+
+              <div class="lab"><span class="l">Needs you</span></div>
+              <div class="card">
+                <div class="card-top">
+                  <span class="tag">Approval</span>
+                  <div class="byline"><span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span><span class="nm alex">Alex</span></div>
+                  <span class="spacer"></span><span class="risk-pill high"><span class="d"></span>High risk</span>
+                </div>
+                <div class="body-txt">Offer <b>Priya</b> a complimentary touch-up to resolve her concern about uneven volume.</div>
+                <div class="actions"><button class="btn primary">Approve offer</button><button class="btn secondary">Adjust</button></div>
+                <div class="swipe-hint"><span class="tk">›</span> Swipe primes · tap to commit</div>
+              </div>
+
+              <div class="lab"><span class="l">Your team</span></div>
+              <div class="roster">
+                <div class="tmember alex">
+                  <span class="pp alex"><span class="plate"><span data-sb-avatar="alex"></span></span></span>
+                  <div class="tinfo"><div class="row1"><span class="nm alex">Alex</span><span class="statedot work"></span></div><div class="st">drafting <b>Priya's offer</b></div></div>
+                  <span class="tstate">Working</span>
+                </div>
+                <div class="tmember mira">
+                  <span class="pp mira"><span class="plate"><span data-sb-avatar="mira"></span></span></span>
+                  <div class="tinfo"><div class="row1"><span class="nm mira">Mira</span><span class="statedot ready"></span></div><div class="st"><b>2 drafts</b> ready to review</div></div>
+                  <span class="tstate">Ready</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============================ paper grain filter (riso tooth) ============================ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="paperGrain">
+    <feTurbulence type="fractalNoise" baseFrequency="0.88" numOctaves="2" stitchTiles="stitch" seed="7"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 0.16  0 0 0 0 0.13  0 0 0 0 0.09  0 0 0 .85 0"/>
+  </filter>
+</svg>
+
+<!-- ============================ inline avatars.js (with DISTINCT Mira) ============================ -->
+<script>
+// Switchboard agent pixel sprites - tiny self-hydrating renderer.
+// alex + riley = the real shipped sprites. mira = the DISTINCT creative/UGC character
+// (short violet bob + blunt bangs, NO ponytail/glasses, bright eyes, viewfinder accent),
+// harvested from the "Your Team" mockup so all three agents read as different people.
+(function(){
+  var DATA = {
+  "alex":{"pal":{"K":"#1a1108","H":"#5a3418","E":"#7a4a26","S":"#f5c79a","D":"#cd8a5a","G":"#dceeff","M":"#2a1408","C":"#dc8474","B":"#2d4a78","L":"#4a6c98","W":"#f1e7ce","T":"#c0533c","R":"#1a1108","N":"#bfb29a","Z":"#7c6a48","Y":"#f3d24e","P":"#ffffff"},"grid":["........................","........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHHHHHHHHHK......",".....KHHEHHHHHHEHHK.....",".....KHHHHHHHHHHHHK.....",".....KHSSSSSSSSSSHK.....","...KK.KSSSSSSSSSS.KK....","..KRRK.KSGGSSSGGSK.KRRK.","..KRRK.KSGMGSGMGSK.KRRK.","..KRRK.KSGGSSSGGSK.KRRK.","...KK.KSCSSSSSSCSK.KK...","......KSSSSMMMMSSK.K....","......KSSSSSSSSSSK.K....",".......KSSSSSSSSK..N....","........KSSSSSSK........","....KKBBBBWWWWBBBBKK....","...KBBBBBLWTTWLBBBBBK...","..KBBBBBBBWTTWBBBBBBBK..",".KBBBBBBBLWTTWLBBBBBBBK.","KBBBBBBBBBWTTWBBBBBBBBBK","KBBBBBBBBBBWTWBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},
+  "riley":{"pal":{"K":"#1a1108","H":"#3a1e10","E":"#6a3018","S":"#f5c79a","D":"#cd8a5a","G":"#e6f2ff","M":"#1a0c06","C":"#dc7a6a","B":"#9d8ac8","L":"#bba6e0","W":"#f5ebd6","T":"#f0d885","Z":"#7c6a48","Y":"#f1c34a","P":"#ffffff","X":"#3a8a5a","Q":"#c0533c"},"grid":["........................","........KKKKKKKK........",".......KHHHHHHHHK.......","......KHHEHHHHEHHK......",".....KHHHHHHHHHHHHK.....","....KHHHHHHHHHHHHHHK....","...KHHHSSSSSSSSSSHHHK...","..KHHHSSSSSSSSSSSSHHHK..","..KHHSSSSSSSSSSSSSSHHK..","..HHKKGGGGSSSSGGGGKKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKGGMMGSSSSGMMGGKHH..","..HHKKGGGGSSSSGGGGKKHH..","..HHKSCSSSSCCSSCSKHH....","...HHKSSSSSSSSSSSSKHH...","...HHHKSSSSSSSSSSKHHH...","....HHKSSSSSSSSKHH......","....KKBBBBBWWWWBBBBKK...","...KBBLBBBBKTKBBBBLBBK..","..KBBBBBBLBBBBBLBBBBBBK.",".KBBBBLBBBBBBBBBBBLBBBK.","KBLBBBBBBBLBBBLBBBBBBBLK","KBBBBBBBBBBBBBBBBBBBBBBK","KBBBBBBBBBBBBBBBBBBBBBBK"]},
+  /* === DISTINCT MIRA - creative/UGC agent. Short violet bob + blunt bangs (NO ponytail/glasses), bright eyes, viewfinder accent on a violet creative top. === */
+  "mira":{"pal":{"K":"#1a1108","H":"#3a2a5a","E":"#4a3568","S":"#f3c49a","D":"#cd8a5a","G":"#efe7ff","M":"#1a0c06","C":"#e39bb8","B":"#7a5cc0","L":"#a98fe0","W":"#f5ebd6","V":"#2a1c44","P":"#ffffff","T":"#e7b8e0"},"grid":[
+  "........................",
+  "........KKKKKKKK........",
+  ".......KHHHHHHHHK.......",
+  "......KHHHHHHHHHHK......",
+  ".....KHHHHHHHHHHHHK.....",
+  ".....KHHEEHHHHEEHHK.....",
+  ".....KHSSSSSSSSSSHK.....",
+  "....KHSSSSSSSSSSSSHK....",
+  "....KHSSSSSSSSSSSSHK....",
+  "....KHSGGSSSSSSGGSHK....",
+  "....KHSGMPSSSSGMPSHK....",
+  "....KHSGGSSSSSSGGSHK....",
+  "....KHSSSCSSSSCSSSHK....",
+  "....KHSSSSSMMSSSSSHK....",
+  ".....KHSSSSSSSSSSHK.....",
+  "......KHSSSSSSSSHK......",
+  ".......KKSSSSSSKK.......",
+  "......KKBBBBBBBBKK......",
+  ".....KBBLWVVVVWLBBK.....",
+  "....KBBBBWVPPVWBBBBK....",
+  "...KBBBBLBWVVWBLBBBBK...",
+  "..KBBBBBBBBWWBBBBBBBBK..",
+  ".KBBBBBBBBBBBBBBBBBBBBK.",
+  "KBBBBBBBBBBBBBBBBBBBBBBK"
+  ]}};
+  function svg(name){
+    var d = DATA[name]; if(!d) return "";
+    var r = "";
+    for(var y=0;y<24;y++){ var row=d.grid[y]||"";
+      for(var x=0;x<24;x++){ var c=row[x];
+        if(!c||c==="."||c===" ") continue;
+        var col=d.pal[c]; if(!col) continue;
+        r+='<rect x="'+x+'" y="'+y+'" width="1.02" height="1.02" fill="'+col+'"/>';
+      } }
+    return '<svg viewBox="0 0 24 24" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="width:100%;height:100%;display:block">'+r+'</svg>';
+  }
+  window.sbAvatar = svg;
+  function hydrate(){ var els=document.querySelectorAll("[data-sb-avatar]");
+    for(var i=0;i<els.length;i++){ els[i].innerHTML = svg(els[i].getAttribute("data-sb-avatar")); } }
+  if(document.readyState!=="loading") hydrate();
+  else document.addEventListener("DOMContentLoaded", hydrate);
+})();
+</script>
+</body>
+</html>
