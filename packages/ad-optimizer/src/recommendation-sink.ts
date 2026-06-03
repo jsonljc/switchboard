@@ -182,6 +182,10 @@ function humanizeRecommendation(rec: RecommendationOutput): string {
   }
 }
 
+// Tier nouns for the basis line. EconomicTier is a closed enum so this map is total;
+// in practice a cpc-tier rec never reaches buildPresentation carrying a targetSource
+// (only fix_signal_health survives cpc, and it bypasses applyTier), so the cpc phrase
+// is a defensive default — `account` fallbacks legitimately carry booked_cac or cpl.
 const TIER_PHRASE: Record<EconomicTier, string> = {
   booked_cac: "booked-CAC",
   cpl: "cost-per-lead",
@@ -189,22 +193,27 @@ const TIER_PHRASE: Record<EconomicTier, string> = {
 };
 
 /**
- * Operator-facing one-liner naming WHICH target judged this recommendation —
- * the campaign's own booking-calibrated target (Tier-1, `targetSource:"campaign"`)
- * vs the account-level fallback (Tier-2, `targetSource:"account"`) — qualified by
- * the economic tier. Surface-agnostic (no UI ref). Returns null when targetSource
- * is absent (back-compat / honest-null) so pre-Gate-4 recs add no line. No "$":
- * `estimateRisk` scrapes only `estimatedImpact`, and the on-rec calibrated target
- * is a CPL-equivalent (not the raw booked-CAC), so printing it would mislead.
+ * Operator-facing one-liner naming the SOURCE of the target this recommendation was
+ * judged against — the campaign's own booking-calibrated target (Tier-1,
+ * `targetSource:"campaign"`) vs the account-level fallback (Tier-2,
+ * `targetSource:"account"`). The rec's `estimatedImpact` (dataLine[0]) already states
+ * the tier basis (and discloses thin-data for cpl/cpc via applyTier's basisNote), so
+ * this line deliberately adds ONLY the source the operator can't otherwise see — it
+ * does not re-state "judged on … basis". Surface-agnostic (no UI ref). Returns null
+ * when targetSource is absent (back-compat / honest-null) so pre-Gate-4 recs add no
+ * line. No "$": `estimateRisk` scrapes only `estimatedImpact`, and the on-rec
+ * calibrated target is a CPL-equivalent (not the raw booked-CAC), so printing it would
+ * mislead.
  */
 export function economicBasisLine(rec: {
   economicTier?: EconomicTier;
   targetSource?: TargetSource;
 }): string | null {
   if (!rec.targetSource) return null;
-  const phrase = rec.economicTier ? TIER_PHRASE[rec.economicTier] : "configured";
-  const owner = rec.targetSource === "campaign" ? "this campaign's own" : "the account-level";
-  return `Judged against ${owner} ${phrase} target.`;
+  const phrase = rec.economicTier ? TIER_PHRASE[rec.economicTier] : "target";
+  return rec.targetSource === "campaign"
+    ? `Target: this campaign's own ${phrase}.`
+    : `Target: account-level fallback (${phrase}).`;
 }
 
 function fmtDollars(n: number): string {

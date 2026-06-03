@@ -54,9 +54,9 @@ All changes live in `packages/ad-optimizer` (Layer 2, surface-agnostic).
 
 - `economicBasisLine(rec): string | null`
   - Derived from `rec.targetSource` + `rec.economicTier`. Returns `null` when `targetSource` is absent (back-compat / honest-null).
-  - `targetSource="campaign"` → "Judged against this campaign's own {tier-phrase} target." (Tier-1)
-  - `targetSource="account"` → "Judged against the account-level {tier-phrase} target." (Tier-2)
-  - tier-phrase: `booked_cac` → "booked-CAC"; `cpl` → "cost-per-lead (booking data thin)"; `cpc` → "cost-per-click (signal thin)".
+  - `targetSource="campaign"` (Tier-1; always `booked_cac` per the resolver invariant) → "Target: this campaign's own {tier-phrase}."
+  - `targetSource="account"` (Tier-2) → "Target: account-level fallback ({tier-phrase})."
+  - tier-phrase: `booked_cac` → "booked-CAC"; `cpl` → "cost-per-lead"; `cpc` → "cost-per-click". Deliberately terse: the rec's `estimatedImpact` (dataLine[0]) already states the tier basis and discloses thin-data for cpl/cpc (via `applyTier`'s `basisNote`), so this line adds only the campaign-vs-account SOURCE and does not re-state "judged on … basis" or double-state thinness.
 - `economicsCells(row: CampaignEconomicsRow | undefined): string[]`
   - Returns the per-campaign metric cells, honest-null per field; `[]` when no row or all-null.
   - `cpl` non-null → `"CPL $<n>"`; `costPerBooked` non-null → `"$<n>/booked"`; `trueRoas` non-null → `"<n>x true ROAS"`, **null → "true ROAS not yet attributed"** (canonical honest-null — never a fabricated `$0`).

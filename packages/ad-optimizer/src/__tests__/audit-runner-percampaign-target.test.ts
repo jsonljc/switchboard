@@ -367,7 +367,7 @@ describe("AuditRunner PR2 Gate-4 — economic basis + per-campaign economics rea
       l.join(" · "),
     );
     // (a) basis: the campaign's own target judged it (Tier-1)
-    expect(flat).toContain("Judged against this campaign's own booked-CAC target.");
+    expect(flat).toContain("Target: this campaign's own booked-CAC.");
     // (b) per-campaign economics: CPL 6000/30, cost-per-booked 6000/12, trueROAS 2.0
     expect(flat).toContain("CPL $200 · $500/booked · 2.0x true ROAS");
   });

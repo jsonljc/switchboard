@@ -327,20 +327,20 @@ describe("sink invariant: resetsLearning:'yes' is never swipe-approvable", () =>
 describe("economicBasisLine", () => {
   it("names this campaign's own target for targetSource=campaign (Tier-1)", () => {
     expect(economicBasisLine({ economicTier: "booked_cac", targetSource: "campaign" })).toBe(
-      "Judged against this campaign's own booked-CAC target.",
+      "Target: this campaign's own booked-CAC.",
     );
   });
-  it("names the account-level target for targetSource=account (Tier-2)", () => {
+  it("names the account-level fallback for targetSource=account (Tier-2)", () => {
     expect(economicBasisLine({ economicTier: "booked_cac", targetSource: "account" })).toBe(
-      "Judged against the account-level booked-CAC target.",
+      "Target: account-level fallback (booked-CAC).",
     );
   });
-  it("adapts the phrase per economic tier", () => {
-    expect(economicBasisLine({ economicTier: "cpl", targetSource: "campaign" })).toBe(
-      "Judged against this campaign's own cost-per-lead target.",
+  it("adapts the tier phrase on the account fallback (which can carry cpl/cpc)", () => {
+    expect(economicBasisLine({ economicTier: "cpl", targetSource: "account" })).toBe(
+      "Target: account-level fallback (cost-per-lead).",
     );
     expect(economicBasisLine({ economicTier: "cpc", targetSource: "account" })).toBe(
-      "Judged against the account-level cost-per-click target.",
+      "Target: account-level fallback (cost-per-click).",
     );
   });
   it("returns null (honest-null/back-compat) when targetSource is absent", () => {
@@ -411,7 +411,7 @@ describe("runRecommendationSink — economic basis + per-campaign economics in d
     });
     const lines = captured[0]!.presentation.dataLines as unknown as string[][];
     const flat = lines.map((l) => l.join(" · "));
-    expect(flat).toContain("Judged against this campaign's own booked-CAC target.");
+    expect(flat).toContain("Target: this campaign's own booked-CAC.");
     expect(flat).toContain("CPL $12 · $48.50/booked · 2.3x true ROAS");
     // does not leak another campaign's economics
     expect(flat.some((l) => l.includes("$2/booked"))).toBe(false);
