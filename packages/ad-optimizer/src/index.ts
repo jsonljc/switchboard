@@ -138,10 +138,7 @@ export type {
   HandoffAbstentionInput,
   HandoffAbstentionReason,
 } from "./recommendation-handoff-abstention.js";
-export { buildHandoffCandidate } from "./recommendation-handoff-dispatch.js";
-export type {
-  HandoffCampaignContext,
-  HandoffEmittedRecommendation,
-  RecommendationHandoffCandidate,
-  RecommendationHandoffSubmitter,
-} from "./recommendation-handoff-dispatch.js";
+// Only the submit-callback type crosses the package boundary (apps/api wires the
+// callback). The candidate/context/dispatch helpers stay package-internal (relative
+// imports), so they are deliberately NOT re-exported from the barrel.
+export type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";

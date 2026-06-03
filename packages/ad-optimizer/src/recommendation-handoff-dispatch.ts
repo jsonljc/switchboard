@@ -45,7 +45,9 @@ export function handoffContextFromInsight(
  */
 export interface RecommendationHandoffCandidate {
   organizationId: string;
-  /** The org's active ad-optimizer (Riley) deployment id — the submit's targetHint. */
+  /** The org's active ad-optimizer (Riley) deployment id, carried as the submit's
+   *  targetHint. Note the top-level resolver keys on the skillSlug ("ad-optimizer"),
+   *  not this id; it is provenance, and avoids the intent-prefix slug bite. */
   deploymentId: string;
   recommendationId: string;
   actionType: AdRecommendationAction;
