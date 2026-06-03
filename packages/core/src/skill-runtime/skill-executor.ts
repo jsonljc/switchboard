@@ -288,9 +288,9 @@ export class SkillExecutorImpl implements SkillExecutor {
     const requestCtx = this.buildRequestContext(params);
     const runtimeTools = this.materializeRuntimeTools(requestCtx);
 
-    // Hook context for the isolated execution-trace recorder (built once; the
-    // recorder is invoked directly at the success-return / on a thrown turn —
-    // never via runAfterSkillHooks, so the governance afterSkill gates stay dormant).
+    // Hook context shared by the afterSkill governance gates (run via runAfterSkillHooks
+    // at the success-return seam) and the isolated execution-trace recorder (a separate
+    // arg, invoked directly at the success-return / on a thrown turn — not via the runner).
     const hookCtx: SkillHookContext = {
       deploymentId: params.deploymentId,
       orgId: params.orgId,
@@ -636,8 +636,9 @@ export class SkillExecutorImpl implements SkillExecutor {
     } catch (err) {
       // Isolated telemetry recorder for the error path — FIRE-AND-FORGET (NOT
       // awaited), then re-throw the ORIGINAL error immediately so a slow trace write
-      // never delays surfacing the failure. Mirrors the success-path afterSkill;
-      // never via runAfterSkillHooks, so the governance afterSkill gates stay dormant.
+      // never delays surfacing the failure. This is the SEPARATE trace-recorder arg
+      // (invoked directly, not via runAfterSkillHooks) — a throwing afterSkill gate
+      // reaches this catch and re-throws, so skill-mode emits the neutral fallback.
       // The partial threads the burned tokens/latency so a budget-busting turn is
       // recorded with real cost, not a zero fallback.
       if (this.executionTraceHook?.onError) {

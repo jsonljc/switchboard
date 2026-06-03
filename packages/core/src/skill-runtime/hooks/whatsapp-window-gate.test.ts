@@ -474,6 +474,37 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
     expect(result.response).toBe(""); // genuine resolver error with no cached posture → fail-closed blank
   });
 
+  it("status:'error' (invalid config) with a cached posture → proceeds via the cache, not a blank", async () => {
+    // status:"error" (Zod-invalid config) differs from a resolver throw: resolveConfig
+    // consults the cache and proceeds with the cached posture rather than failing closed.
+    const deps = makeDeps({
+      governanceConfigResolver: vi
+        .fn()
+        .mockResolvedValue({ status: "error", error: new Error("invalid governanceConfig") }),
+      postureCache: {
+        lastKnown: vi.fn().mockReturnValue({
+          enabled: true,
+          mode: "enforce",
+          jurisdiction: "SG",
+          clinicType: "medical",
+          allowMarketingTemplateSubstitution: false,
+        }),
+        remember: vi.fn(),
+      },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    // Inside the 24h window (makeDeps threadStore = 1h ago) → allow, response untouched.
+    expect(result.response).toBe(before);
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "allow" }),
+    );
+  });
+
   it("uses cached posture when resolver errors", async () => {
     const deps = makeDeps({
       governanceConfigResolver: vi.fn().mockRejectedValue(new Error("boom")),
