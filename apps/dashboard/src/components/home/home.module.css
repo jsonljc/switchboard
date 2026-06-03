@@ -473,3 +473,67 @@
 .btnSecondary:hover {
   background: hsl(var(--surface));
 }
+
+/* =========================================================
+   TEAM BAND — the crew onstage at hero scale (replaces the ribbon)
+   Identity hues live on the portrait only (PrintedPortraitAvatar):
+   the tile chrome (border, hover, focus ring) is neutral/amber, never
+   an agent color. Heading is NOT italic (the shared .moduleH h2 is).
+   ========================================================= */
+.teamBand {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.teamBandHeading {
+  font-style: normal; /* never italic (the shared .moduleH h2 is) */
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+.teamBandGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.teamMate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 150px; /* reserve geometry so status-text wrap never shifts the row */
+  padding: 14px 6px;
+  background: var(--canvas-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    transform 200ms var(--ease-home),
+    border-color 200ms ease;
+}
+.teamMate:hover {
+  transform: translateY(-1px);
+  border-color: var(--hair);
+}
+.teamMate:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+.teamMate[data-disabled="true"] {
+  opacity: 0.72;
+}
+.teamMateName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.teamMateStatus {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
