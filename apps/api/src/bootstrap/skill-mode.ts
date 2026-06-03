@@ -306,9 +306,17 @@ export async function bootstrapSkillMode(
         outboxEvent: {
           create(args: { data: Record<string, unknown> }): Promise<unknown>;
         };
+        opportunity: {
+          updateMany(args: {
+            where: Record<string, unknown>;
+            data: Record<string, unknown>;
+          }): Promise<{ count: number }>;
+        };
       }) => Promise<unknown>,
     ) =>
-      prismaClient.$transaction((tx) => fn({ booking: tx.booking, outboxEvent: tx.outboxEvent })),
+      prismaClient.$transaction((tx) =>
+        fn({ booking: tx.booking, outboxEvent: tx.outboxEvent, opportunity: tx.opportunity }),
+      ),
     failureHandler,
     defaultCurrency: "SGD",
   });

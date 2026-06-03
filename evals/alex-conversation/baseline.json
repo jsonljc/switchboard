@@ -1338,6 +1338,30 @@
           "sentence": "What the consultation does is give you an honest, personalised picture from the doctor — what's realistic for your specific situation, not a general promise."
         }
       ]
+    },
+    {
+      "id": "post-sg-filler-cancel",
+      "deterministicPass": true,
+      "judgeScore": 0,
+      "requiredBehaviorsMet": [],
+      "violations": [],
+      "claimWarnings": []
+    },
+    {
+      "id": "err-sg-slot-just-taken-reoffer",
+      "deterministicPass": true,
+      "judgeScore": 0,
+      "requiredBehaviorsMet": [],
+      "violations": [],
+      "claimWarnings": []
+    },
+    {
+      "id": "book-sg-governed-close-pending",
+      "deterministicPass": true,
+      "judgeScore": 0,
+      "requiredBehaviorsMet": [],
+      "violations": [],
+      "claimWarnings": []
     }
   ]
 }

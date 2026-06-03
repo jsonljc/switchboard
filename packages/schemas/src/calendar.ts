@@ -97,3 +97,27 @@ export interface CalendarProvider {
   getBooking(bookingId: string): Promise<Booking | null>;
   healthCheck(): Promise<CalendarHealthCheck>;
 }
+
+/**
+ * Thrown by the durable booking write when a NEW booking would overlap an
+ * existing LIVE booking (status not in failed/cancelled) for the same org.
+ * Detected structurally across the core/db package boundary via the `code`
+ * field (mirrors the P2002 detection in calendar-book.ts), so an `instanceof`
+ * mismatch between duplicate schema builds cannot silently swallow it.
+ */
+export class BookingSlotConflictError extends Error {
+  readonly code = "SLOT_CONFLICT" as const;
+  constructor(public readonly conflictingBookingId: string) {
+    super("An overlapping booking already exists for this slot.");
+    this.name = "BookingSlotConflictError";
+  }
+}
+
+export function isBookingSlotConflictError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "SLOT_CONFLICT"
+  );
+}
