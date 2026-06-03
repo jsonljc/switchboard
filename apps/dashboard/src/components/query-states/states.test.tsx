@@ -17,6 +17,8 @@ describe("ConnectionTrouble", () => {
     expect(screen.getByText(/nothing you've approved is lost/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(onRetry).toHaveBeenCalledOnce();
+    // A genuine failure is announced assertively (house convention: inbox-error-state).
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
   it("offline: hold-decisions copy, no retry button", () => {
     setOnline(false);
@@ -24,6 +26,7 @@ describe("ConnectionTrouble", () => {
     expect(screen.getByText(/you're offline/i)).toBeInTheDocument();
     expect(screen.getByText(/hold your decisions/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).toBeNull();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
     setOnline(true);
   });
   it("names a specific agent", () => {
@@ -34,10 +37,12 @@ describe("ConnectionTrouble", () => {
 });
 
 describe("AllClear", () => {
-  it("default all-clear copy", () => {
+  it("default all-clear copy (calm status role, not an alert)", () => {
     render(<AllClear />);
     expect(screen.getByText(/all caught up/i)).toBeInTheDocument();
     expect(screen.getByText(/on top of it/i)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
   it("override sub-line", () => {
     render(<AllClear sub="Nothing waiting from Mira." />);
@@ -50,5 +55,6 @@ describe("AgentPaused", () => {
     render(<AgentPaused agentName="Mira" />);
     expect(screen.getByText(/Mira is paused/i)).toBeInTheDocument();
     expect(screen.getByText(/nothing new will go out/i)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
   });
 });
