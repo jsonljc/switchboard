@@ -3,6 +3,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRileyCases } from "./load-fixtures.js";
 import { decideForCase } from "./decide.js";
+import {
+  loadSourceReallocationCases,
+  decideSourceReallocationForCase,
+} from "./source-reallocation-eval.js";
 
 /**
  * Riley-recommendation eval runner.
@@ -17,6 +21,7 @@ import { decideForCase } from "./decide.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "fixtures");
+const SR_FIXTURES_DIR = join(FIXTURES_DIR, "source-reallocation");
 
 function main(): void {
   const cases = loadRileyCases(FIXTURES_DIR);
@@ -50,13 +55,29 @@ function main(): void {
     }
   }
 
+  const srCases = loadSourceReallocationCases(SR_FIXTURES_DIR);
+  console.warn(`Loaded ${srCases.length} source-reallocation cases from ${SR_FIXTURES_DIR}`);
+  for (const c of srCases) {
+    const decision = decideSourceReallocationForCase(c);
+    if (decision.outcome !== c.expectedOutcome) {
+      mismatches.push(`${c.id}: expected ${c.expectedOutcome}, got ${decision.outcome}`);
+    }
+    if (c.expectedWatchPattern && decision.watchPattern !== c.expectedWatchPattern) {
+      mismatches.push(
+        `${c.id}: expected watch ${c.expectedWatchPattern}, got ${decision.watchPattern ?? "none"}`,
+      );
+    }
+  }
+
   if (mismatches.length > 0) {
     console.error(`\n${mismatches.length} MISMATCH(es):`);
     for (const m of mismatches) console.error(`  - ${m}`);
     process.exit(1);
   }
 
-  console.warn(`\nAll ${cases.length} Riley recommendation cases match decideForCampaign.`);
+  console.warn(
+    `\nAll ${cases.length} decideForCampaign + ${srCases.length} source-reallocation cases match.`,
+  );
 }
 
 main();
