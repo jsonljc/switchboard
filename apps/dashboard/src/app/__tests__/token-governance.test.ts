@@ -443,6 +443,20 @@ describe("token governance — paper grain (GR1)", () => {
     expect(decl).toContain("filter%3D%22url(%23g)%22");
   });
 
+  it("bakes the grain intensity within the calibrated subtle band", () => {
+    // The feColorMatrix alpha row scalar is the grain's intensity knob. Guard a
+    // subtle band so an accidental heavy value (e.g. the spec's literal 0.85,
+    // which reads as a gray cast and dents canvas-text contrast) is caught, while
+    // fine tuning inside the calibrated 0.22 to 0.28 sweet spot stays green.
+    const m = grainRule().match(/feColorMatrix[^>]*?values%3D%22(.+?)%22%2F%3E/);
+    expect(m, "feColorMatrix values must be present in the grain data URI").not.toBeNull();
+    const nums = decodeURIComponent(m![1]).trim().split(/\s+/).map(Number);
+    expect(nums).toHaveLength(20); // a 4x5 color matrix
+    const alpha = nums[18]; // row 4 (alpha out), column 4 = coefficient on input alpha
+    expect(alpha).toBeGreaterThanOrEqual(0.12);
+    expect(alpha).toBeLessThanOrEqual(0.32);
+  });
+
   it("keeps the canvas rule free of raw hex (ink lives in feColorMatrix decimals)", () => {
     expect(grainRule()).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
