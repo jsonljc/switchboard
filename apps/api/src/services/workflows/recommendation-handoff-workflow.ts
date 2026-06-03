@@ -115,10 +115,35 @@ export function buildRecommendationHandoffWorkflow(): WorkflowHandler {
         };
       }
 
+      // A "completed" child is not necessarily a created draft: the draft workflow
+      // returns completed + { skipped: true } (no jobId) when Mira is not enabled
+      // for the org. Require the child jobId so an approved handoff never reports a
+      // phantom draft that does not exist.
+      const childOutputs = child.result.outputs as
+        | { jobId?: unknown; reason?: unknown }
+        | undefined;
+      const childJobId = typeof childOutputs?.jobId === "string" ? childOutputs.jobId : null;
+      if (!childJobId) {
+        return {
+          outcome: "completed",
+          summary: "Handoff approved but no creative draft was created (child produced no job)",
+          outputs: {
+            recommendationId: input.recommendationId,
+            skipped: true,
+            reason:
+              typeof childOutputs?.reason === "string" ? childOutputs.reason : "child_no_draft",
+          },
+        };
+      }
+
       return {
         outcome: "completed",
         summary: "Routed Riley recommendation to a Mira creative draft",
-        outputs: { recommendationId: input.recommendationId, child: child.workUnit?.id },
+        outputs: {
+          recommendationId: input.recommendationId,
+          child: child.workUnit?.id,
+          jobId: childJobId,
+        },
       };
     },
   };

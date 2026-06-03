@@ -12,9 +12,14 @@ const base = {
   brief: { productDescription: "Botox refresh", targetAudience: "women 30-45" },
 };
 
+// Riley's cron resolves its own per-org deployment and passes it (required): the
+// top-level resolver uses targetHint.skillSlug and does not fall back to api-direct,
+// so the deployment must be threaded or the submit fails before governance.
+const dep = { deploymentId: "dep_riley", skillSlug: "ad-optimizer" };
+
 describe("buildRecommendationHandoffSubmitRequest", () => {
   it("returns a submit request with the SEEDED system principal (verbatim)", () => {
-    const req = buildRecommendationHandoffSubmitRequest(base, null);
+    const req = buildRecommendationHandoffSubmitRequest(base, dep);
     expect(req).not.toBeNull();
     expect(req!.actor).toEqual({ id: "system", type: "system" });
     expect(req!.intent).toBe("adoptimizer.recommendation.handoff");
@@ -25,17 +30,17 @@ describe("buildRecommendationHandoffSubmitRequest", () => {
   it("returns null (do NOT submit) when the recommendation should abstain", () => {
     const req = buildRecommendationHandoffSubmitRequest(
       { ...base, evidence: { clicks: 1, conversions: 0, days: 1 } },
-      null,
+      dep,
     );
     expect(req).toBeNull();
   });
 
   it("returns null for a non-creative (unroutable) action", () => {
-    const req = buildRecommendationHandoffSubmitRequest({ ...base, actionType: "pause" }, null);
+    const req = buildRecommendationHandoffSubmitRequest({ ...base, actionType: "pause" }, dep);
     expect(req).toBeNull();
   });
 
-  it("threads a deployment targetHint when provided", () => {
+  it("always threads the resolved deployment as the targetHint", () => {
     const req = buildRecommendationHandoffSubmitRequest(base, {
       deploymentId: "dep_1",
       skillSlug: "ad-optimizer",
@@ -44,7 +49,7 @@ describe("buildRecommendationHandoffSubmitRequest", () => {
   });
 
   it("carries the brief and rationale into the parameters", () => {
-    const req = buildRecommendationHandoffSubmitRequest(base, null);
+    const req = buildRecommendationHandoffSubmitRequest(base, dep);
     const params = req!.parameters as {
       brief: { productDescription: string };
       rationale: string;

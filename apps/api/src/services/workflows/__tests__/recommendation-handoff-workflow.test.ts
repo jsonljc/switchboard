@@ -116,4 +116,21 @@ describe("buildRecommendationHandoffWorkflow", () => {
     expect(res.outputs?.reason).toBe("learning_locked");
     expect(submitChildWork).not.toHaveBeenCalled();
   });
+
+  it("does not report a created draft when the child completed but skipped (no jobId)", async () => {
+    // The draft workflow returns completed + { skipped: true } (no jobId) when Mira
+    // is not enabled for the org. The handoff must report the skip honestly, never a
+    // phantom "routed" success.
+    const submitChildWork = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outcome: "completed", outputs: { skipped: true, reason: "mira_not_enabled" } },
+      workUnit: { id: "wu_child" },
+    });
+    const handler = buildRecommendationHandoffWorkflow();
+    const res = await handler.execute(wu(goodParams), { submitChildWork });
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs?.skipped).toBe(true);
+    expect(res.outputs?.reason).toBe("mira_not_enabled");
+    expect((res.outputs as { jobId?: string }).jobId).toBeUndefined();
+  });
 });
