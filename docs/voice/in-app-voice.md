@@ -57,4 +57,4 @@ The Home weeknote is fully de-em-dashed and is in the guard corpus: its prose, i
 1. an em-dash anywhere in copy, except the lone no-data glyph, and
 2. the "generate" verb stem.
 
-The corpus is a V1 seed. Grow it surface by surface as more copy is brought onto the honest voice. Rules 1, 3, and 4 stay review-enforced until a robust check exists; widening them, and adding a CSS generated-content scan, are documented growth paths.
+The corpus is a V1 seed. Grow it surface by surface as more copy is brought onto the honest voice. Rules 1, 3, and 4 stay review-enforced until a robust check exists; widening them, and adding a CSS generated-content scan, are documented growth paths. Two known caveats to tighten before the corpus grows to cover code-dense files: the generate check matches any word-boundaried "generate", so a future generate-shaped className, route, or test id would need an allowlist; and an em-dash written as an HTML entity reference is not yet caught (the app uses the raw glyph today).
