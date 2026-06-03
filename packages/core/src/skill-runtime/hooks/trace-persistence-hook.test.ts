@@ -112,6 +112,28 @@ describe("TracePersistenceHook", () => {
     expect(created[0]!.inputParametersHash).toBe("h2");
   });
 
+  it("discriminates onError status by error.name (budget_exceeded vs error)", async () => {
+    const created: SkillExecutionTrace[] = [];
+    const hook = new TracePersistenceHook(
+      {
+        create: async (t: SkillExecutionTrace) => {
+          created.push(t);
+        },
+      },
+      { trigger: "chat_message" },
+    );
+    // A plain Error (name "Error") → generic "error" status.
+    await hook.onError(baseCtx({}), new Error("boom"));
+    // A SkillExecutionBudgetError (by name) → "budget_exceeded".
+    await hook.onError(
+      baseCtx({}),
+      Object.assign(new Error("over budget"), { name: "SkillExecutionBudgetError" }),
+    );
+    expect(created.map((t) => t.status)).toEqual(["error", "budget_exceeded"]);
+    expect(created[0]!.error).toBe("boom");
+    expect(created[1]!.error).toBe("over budget");
+  });
+
   it("records the burned tokens + a non-zero cost when onError is given a partial", async () => {
     const created: SkillExecutionTrace[] = [];
     const hook = new TracePersistenceHook(
