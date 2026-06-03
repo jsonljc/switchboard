@@ -120,10 +120,12 @@ function escapeSentinel(value: string): string {
 }
 
 /**
- * Stable, non-cryptographic hash (djb2) of the invocation's input parameters,
- * stamped onto the execution trace for telemetry de-duplication / grouping. Not
- * a security primitive — just a compact, deterministic fingerprint of the param
- * bag. Returns an 8-char lowercase hex string.
+ * Coarse, key-order-sensitive grouping fingerprint of the invocation's input
+ * parameters (djb2 over JSON.stringify), stamped onto the execution trace for
+ * telemetry grouping. NOT a uniqueness key — the trace id is a cuid; this only
+ * buckets like-shaped invocations and is not a security primitive. Returns up to
+ * 8 lowercase hex chars (`(h >>> 0).toString(16)` is not zero-padded, so shorter
+ * for small hash values).
  */
 function stableParamsHash(parameters: unknown): string {
   const s = JSON.stringify(parameters ?? {});
