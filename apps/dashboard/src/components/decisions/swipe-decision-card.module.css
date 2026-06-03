@@ -247,11 +247,7 @@
 .btnPrimary {
   background: hsl(var(--action));
   color: hsl(var(--action-foreground));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(80, 40, 0, 0.2),
-    0 2px 4px rgba(168, 101, 15, 0.25),
-    0 6px 16px rgba(201, 123, 26, 0.18);
+  box-shadow: var(--shadow-action-gloss);
 }
 .btnPrimary:hover {
   background: hsl(var(--action-hover));
@@ -266,12 +262,14 @@
 @keyframes armPulse {
   0%,
   100% {
+    /* shadow-allow: bespoke animated amber arm-pulse ring, not elevation */
     box-shadow:
       0 1px 0 rgba(80, 40, 0, 0.18),
       0 2px 8px rgba(201, 123, 26, 0.25),
       0 0 0 0 hsl(var(--action) / 0.5);
   }
   50% {
+    /* shadow-allow: bespoke animated amber arm-pulse ring, not elevation */
     box-shadow:
       0 1px 0 rgba(80, 40, 0, 0.18),
       0 2px 8px rgba(201, 123, 26, 0.25),
