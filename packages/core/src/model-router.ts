@@ -27,7 +27,10 @@ export interface ResolveOptions {
 }
 
 export interface TierContext {
-  messageIndex: number;
+  /** Total user+assistant messages in the conversation incl. the current turn
+   *  (≈ how deep the back-and-forth is). The tier baseline keys on this — NOT the
+   *  intra-invocation LLM-loop counter (T2.9 fix). */
+  conversationDepth: number;
   toolCount: number;
   hasHighRiskTools: boolean;
   previousTurnUsedTools: boolean;
@@ -107,22 +110,19 @@ export class ModelRouter {
 
   resolveTier(context: TierContext): ModelSlot {
     let slot: ModelSlot;
-    if (context.messageIndex === 0)
-      slot = "default"; // Rule 1: greetings
-    else if (context.toolCount === 0)
-      slot = "default"; // Rule 2: conversational
-    else if (context.previousTurnEscalated)
-      slot = "critical"; // Rule 3: escalation
+    if (context.previousTurnEscalated)
+      slot = "critical"; // escalation → strong, any depth
     else if (context.previousTurnUsedTools)
-      slot = "premium"; // Rule 4: tool follow-up
-    else if (context.hasHighRiskTools)
-      slot = "premium"; // Rule 5: high risk
-    else slot = "default"; // Rule 6: default
+      slot = "premium"; // processing a tool result → strong
+    else if (context.conversationDepth <= 1)
+      slot = "default"; // first-contact greeting → cheap
+    else if (context.toolCount === 0)
+      slot = "default"; // tool-less skill → cheap even when deep
+    else slot = "premium"; // engaged, tool-bearing conversation → strong
 
-    // Stage-aware escalation: take the higher of the rule slot and the stage
-    // slot so a high-stakes turn (objection/closing/fear) is never under-served.
-    // The merge is a rank-max, so this can only ever raise the tier — never lower
-    // it — and is a no-op when no stage is present.
+    // Stage-aware escalation (rank-max; only ever raises). Depth enters the
+    // baseline ABOVE this merge, so a deep emotional turn still resolves strong:
+    // the stage can lift the tier but never lower it, and is a no-op when absent.
     const stageSlot = this.stageToSlot(context.currentStage);
     if (stageSlot) slot = this.maxSlot(slot, stageSlot);
 

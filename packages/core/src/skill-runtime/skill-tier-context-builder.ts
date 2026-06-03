@@ -2,7 +2,9 @@ import type { TierContext, ModelSlot, DialogueStage } from "../model-router.js";
 import type { SkillTool } from "./types.js";
 
 export interface TierContextInput {
-  turnCount: number;
+  /** Total user+assistant messages in the conversation incl. the current turn
+   *  (≈ conversation depth). Maps straight to `TierContext.conversationDepth`. */
+  conversationDepth: number;
   declaredToolIds: string[];
   tools: Map<string, SkillTool>;
   previousTurnHadToolUse: boolean;
@@ -25,7 +27,7 @@ export function buildTierContext(input: TierContextInput): TierContext {
   });
 
   return {
-    messageIndex: input.turnCount,
+    conversationDepth: input.conversationDepth,
     toolCount: input.declaredToolIds.length,
     hasHighRiskTools,
     previousTurnUsedTools: input.previousTurnHadToolUse,

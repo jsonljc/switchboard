@@ -7,7 +7,7 @@ describe("ModelRouter.resolveTier", () => {
 
   function ctx(overrides: Partial<TierContext> = {}): TierContext {
     return {
-      messageIndex: 5,
+      conversationDepth: 5,
       toolCount: 1,
       hasHighRiskTools: false,
       previousTurnUsedTools: false,
@@ -17,32 +17,46 @@ describe("ModelRouter.resolveTier", () => {
     };
   }
 
-  it("Rule 1: first message → default", () => {
-    expect(router.resolveTier(ctx({ messageIndex: 0 }))).toBe("default");
+  it("routes a first-contact greeting to default (Haiku)", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 4, hasHighRiskTools: true })),
+    ).toBe("default");
   });
 
-  it("Rule 2: no tools → default", () => {
-    expect(router.resolveTier(ctx({ toolCount: 0 }))).toBe("default");
+  it("routes a deep engaged tool-bearing turn to premium (Sonnet), NOT default", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 6, toolCount: 4, hasHighRiskTools: true })),
+    ).toBe("premium");
   });
 
-  it("Rule 3: previous turn escalated → critical", () => {
-    expect(router.resolveTier(ctx({ previousTurnEscalated: true }))).toBe("critical");
+  it("a tool-less skill stays default even when deep", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 6, toolCount: 0, hasHighRiskTools: false })),
+    ).toBe("default");
   });
 
-  it("Rule 4: previous turn used tools → premium", () => {
-    expect(router.resolveTier(ctx({ previousTurnUsedTools: true }))).toBe("premium");
+  it("escalation raises to critical at any depth", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 6, toolCount: 4, previousTurnEscalated: true })),
+    ).toBe("critical");
   });
 
-  it("Rule 5: has high risk tools → premium", () => {
-    expect(router.resolveTier(ctx({ hasHighRiskTools: true }))).toBe("premium");
+  it("escalation raises a first-contact greeting to critical", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 4, previousTurnEscalated: true })),
+    ).toBe("critical");
   });
 
-  it("Rule 6: default for everything else", () => {
-    expect(router.resolveTier(ctx())).toBe("default");
+  it("previous turn used tools → premium", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 4, previousTurnUsedTools: true })),
+    ).toBe("premium");
   });
 
   it("modelFloor overrides when resolved tier is lower", () => {
-    expect(router.resolveTier(ctx({ messageIndex: 0, modelFloor: "premium" }))).toBe("premium");
+    expect(router.resolveTier(ctx({ conversationDepth: 1, modelFloor: "premium" }))).toBe(
+      "premium",
+    );
   });
 
   it("modelFloor does not downgrade", () => {
@@ -58,20 +72,28 @@ describe("ModelRouter.resolveTier", () => {
     expect(config.temperature).toBe(0.3);
   });
 
-  it("Stage: objection raises a no-tools turn to premium", () => {
-    expect(router.resolveTier(ctx({ toolCount: 0, currentStage: "objection" }))).toBe("premium");
+  it("Stage: objection raises a tool-less turn to premium", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 0, currentStage: "objection" })),
+    ).toBe("premium");
   });
 
-  it("Stage: closing raises a no-tools turn to premium", () => {
-    expect(router.resolveTier(ctx({ toolCount: 0, currentStage: "closing" }))).toBe("premium");
+  it("Stage: closing raises a tool-less turn to premium", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 0, currentStage: "closing" })),
+    ).toBe("premium");
   });
 
   it("Stage: fear raises to critical", () => {
-    expect(router.resolveTier(ctx({ toolCount: 0, currentStage: "fear" }))).toBe("critical");
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 0, currentStage: "fear" })),
+    ).toBe("critical");
   });
 
-  it("Stage: fear raises even the first-message greeting to critical", () => {
-    expect(router.resolveTier(ctx({ messageIndex: 0, currentStage: "fear" }))).toBe("critical");
+  it("fear raises even a first-contact greeting to critical", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 4, currentStage: "fear" })),
+    ).toBe("critical");
   });
 
   it("Stage never lowers: escalated + objection stays critical", () => {
@@ -86,15 +108,15 @@ describe("ModelRouter.resolveTier", () => {
     );
   });
 
-  it("Stage raises a premium rule slot: tool-followup (Rule 4) + fear → critical", () => {
+  it("Stage raises a premium rule slot: tool-followup + fear → critical", () => {
     expect(router.resolveTier(ctx({ previousTurnUsedTools: true, currentStage: "fear" }))).toBe(
       "critical",
     );
   });
 
-  it("Stage no-op on equal rank: high-risk (Rule 5) premium + objection stays premium", () => {
-    expect(router.resolveTier(ctx({ hasHighRiskTools: true, currentStage: "objection" }))).toBe(
-      "premium",
-    );
+  it("Stage no-op on equal rank: deep engaged premium + objection stays premium", () => {
+    expect(
+      router.resolveTier(ctx({ conversationDepth: 6, toolCount: 4, currentStage: "objection" })),
+    ).toBe("premium");
   });
 });
