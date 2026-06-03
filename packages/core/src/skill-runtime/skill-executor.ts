@@ -160,6 +160,7 @@ export class SkillExecutorImpl implements SkillExecutor {
   private resolveProfile(
     params: SkillExecutionParams,
     turnCount: number,
+    conversationDepth: number,
     toolCallRecords: ToolCallRecord[],
     currentStage: DialogueStage | undefined,
     governanceHook?: GovernanceHook,
@@ -168,7 +169,7 @@ export class SkillExecutorImpl implements SkillExecutor {
 
     const logs: GovernanceLogEntry[] = governanceHook?.getGovernanceLogs() ?? [];
     const tierCtx = buildTierContext({
-      turnCount: turnCount - 1,
+      conversationDepth,
       declaredToolIds: params.skill.tools,
       tools: this.tools,
       previousTurnHadToolUse: turnCount > 1 && toolCallRecords.length > 0,
@@ -255,6 +256,13 @@ export class SkillExecutorImpl implements SkillExecutor {
     // Guarded by `this.router` so there is zero overhead when routing is disabled.
     const currentStage = this.router ? this.deriveCurrentStage(params.messages) : undefined;
 
+    // Conversation depth ≈ how deep the back-and-forth is. Derived ONCE from the
+    // immutable inbound transcript (NEVER the executor-local `messages` array,
+    // which grows during the tool loop and would re-contaminate the tier). Feeds
+    // resolveProfile, which short-circuits when the router is off — so this is
+    // unused (and harmless) on the router-OFF path.
+    const conversationDepth = params.messages.length;
+
     try {
       while (turnCount < this.policy.maxLlmTurns) {
         turnCount++;
@@ -262,6 +270,7 @@ export class SkillExecutorImpl implements SkillExecutor {
         const profile = this.resolveProfile(
           params,
           turnCount,
+          conversationDepth,
           toolCallRecords,
           currentStage,
           governanceHook,

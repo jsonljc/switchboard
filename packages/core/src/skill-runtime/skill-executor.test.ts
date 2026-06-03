@@ -19,6 +19,7 @@ import {
   DEFAULT_SKILL_RUNTIME_POLICY,
 } from "./types.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
+import { ModelRouter } from "../model-router.js";
 import { ok } from "./tool-result.js";
 
 const mockSkill: SkillDefinition = {
@@ -715,6 +716,109 @@ describe("SkillExecutorImpl", () => {
     await expect(exec.execute(traceBaseParams())).rejects.toThrow(SkillExecutionBudgetError);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toBeInstanceOf(SkillExecutionBudgetError);
+  });
+
+  // --- B2: conversation-depth tiering (router ON) ---
+
+  // Records the profile.model the executor resolved for each LLM call.
+  const recordingAdapter = (seen: Array<string | undefined>): ToolCallingLLMAdapter => ({
+    chatWithTools: vi.fn().mockImplementation((p: { profile?: { model?: string } }) => {
+      seen.push(p.profile?.model);
+      return Promise.resolve({
+        content: [{ type: "text", text: "ok" }],
+        stopReason: "end_turn",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      });
+    }),
+  });
+
+  // An Alex-shaped tool map: a single high-risk tool (external_mutation) so
+  // buildTierContext's hasHighRiskTools is true and toolCount > 0.
+  const alexLikeTools = (): Map<string, SkillTool> =>
+    new Map<string, SkillTool>([
+      [
+        "calendar-book",
+        {
+          id: "calendar-book",
+          operations: {
+            "booking.create": {
+              description: "Book an appointment.",
+              effectCategory: "external_mutation" as const,
+              idempotent: false,
+              inputSchema: { type: "object", properties: {}, required: [] },
+              execute: async () => ok({}),
+            },
+          },
+        },
+      ],
+    ]);
+
+  const alexLikeSkill: SkillDefinition = {
+    ...mockSkill,
+    parameters: [],
+    tools: ["calendar-book"],
+    body: "Help the customer book.",
+  };
+
+  // 8 alternating user/assistant messages; the FINAL user message is neutral —
+  // no price/trust/timing/fear/comparison keyword and no ready-now phrasing — so
+  // classifyEmotionalSignal yields no stage. This proves the conversation-DEPTH
+  // re-key (not the stage-raise) is what routes a deep turn to Sonnet.
+  const deepNeutralMessages = (
+    count: number,
+  ): Array<{ role: "user" | "assistant"; content: string }> => {
+    const msgs: Array<{ role: "user" | "assistant"; content: string }> = [];
+    for (let i = 0; i < count - 1; i++) {
+      msgs.push({
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: i % 2 === 0 ? "Tell me about the treatment options." : "Here are the options.",
+      });
+    }
+    msgs.push({ role: "user", content: "ok, and what would the next step look like for me?" });
+    return msgs;
+  };
+
+  it("routes a deep neutral turn to Sonnet (premium), not Haiku, when the router is ON", async () => {
+    const seen: Array<string | undefined> = [];
+    const exec = new SkillExecutorImpl(
+      recordingAdapter(seen),
+      alexLikeTools(),
+      new ModelRouter(),
+      [],
+    );
+    await exec.execute({
+      skill: alexLikeSkill,
+      parameters: {},
+      messages: deepNeutralMessages(8),
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 100,
+      trustLevel: "autonomous",
+      sessionId: "s1",
+    });
+    expect(seen[0]).toBe("claude-sonnet-4-6");
+    expect(seen[0]).not.toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("routes a first-contact greeting to Haiku (default) when the router is ON", async () => {
+    const seen: Array<string | undefined> = [];
+    const exec = new SkillExecutorImpl(
+      recordingAdapter(seen),
+      alexLikeTools(),
+      new ModelRouter(),
+      [],
+    );
+    await exec.execute({
+      skill: alexLikeSkill,
+      parameters: {},
+      messages: [{ role: "user", content: "hi there" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 100,
+      trustLevel: "autonomous",
+      sessionId: "s1",
+    });
+    expect(seen[0]).toBe("claude-haiku-4-5-20251001");
   });
 });
 
