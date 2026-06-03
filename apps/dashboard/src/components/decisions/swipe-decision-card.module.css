@@ -262,18 +262,10 @@
 @keyframes armPulse {
   0%,
   100% {
-    /* shadow-allow: bespoke animated amber arm-pulse ring, not elevation */
-    box-shadow:
-      0 1px 0 rgba(80, 40, 0, 0.18),
-      0 2px 8px rgba(201, 123, 26, 0.25),
-      0 0 0 0 hsl(var(--action) / 0.5);
+    box-shadow: var(--shadow-arm-base), 0 0 0 0 hsl(var(--action) / 0.5);
   }
   50% {
-    /* shadow-allow: bespoke animated amber arm-pulse ring, not elevation */
-    box-shadow:
-      0 1px 0 rgba(80, 40, 0, 0.18),
-      0 2px 8px rgba(201, 123, 26, 0.25),
-      0 0 0 10px hsl(var(--action) / 0);
+    box-shadow: var(--shadow-arm-base), 0 0 0 10px hsl(var(--action) / 0);
   }
 }
 @media (prefers-reduced-motion: reduce) {

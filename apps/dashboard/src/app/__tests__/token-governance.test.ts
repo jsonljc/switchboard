@@ -324,8 +324,8 @@ describe("token governance — elevation ladder single-source (EL1)", () => {
 describe("token governance — no literal-color box-shadow outside globals.css (EL1)", () => {
   const files = collectGovernedFiles();
   const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
-  // Blank /* ... */ comments but PRESERVE newlines so line numbers stay stable:
-  // the shadow-allow marker lives in a comment we must still be able to read.
+  // Blank /* ... */ comments (newlines preserved) so a commented-out box-shadow
+  // never false-positives.
   const blankComments = (s: string): string =>
     s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
   // A single spread-only ring (0 0 0 Npx <color>) is a focus ring / status halo
@@ -350,20 +350,66 @@ describe("token governance — no literal-color box-shadow outside globals.css (
     const offenders: string[] = [];
     for (const { path: p, content: raw } of files) {
       const scan = blankComments(raw);
-      const rawLines = raw.split("\n");
+      // CSS `box-shadow:`, plus JSX `boxShadow:` / imperative `boxShadow =` in
+      // quotes or backticks — every value form a literal color can hide in.
       const decls = [
         ...scan.matchAll(/box-shadow\s*:\s*([^;]+);/g),
-        ...scan.matchAll(/boxShadow\s*:\s*["']([^"']+)["']/g),
+        ...scan.matchAll(/boxShadow\s*[:=]\s*["'`]([^"'`]+)["'`]/g),
       ];
       for (const m of decls) {
         const value = m[1].trim();
         if (!LITERAL_SHADOW_COLOR.test(value)) continue; // token / var / none → ok
         if (isRing(value)) continue; // focus ring / halo / pulse → not elevation
-        const lineNo = scan.slice(0, m.index ?? 0).split("\n").length - 1;
-        const marked = [rawLines[lineNo], rawLines[lineNo - 1]].some(
-          (l) => l != null && /shadow-allow:/.test(l),
-        );
-        if (!marked) offenders.push(`${rel(p)}: ${value.replace(/\s+/g, " ").slice(0, 90)}`);
+        offenders.push(`${rel(p)}: ${value.replace(/\s+/g, " ").slice(0, 90)}`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});
+
+// Tailwind shadow utilities are a literal-color vector the CSS sweep cannot see
+// (they are class names, not `box-shadow:` declarations). Govern them too.
+describe("token governance — Tailwind shadow utilities use the ladder (EL1)", () => {
+  const tsxFiles = collectGovernedFiles().filter((f) => /\.tsx?$/.test(f.path));
+  const relTsx = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+
+  // Built-in Tailwind elevation utilities default to cool rgb(0 0 0). They are a
+  // documented EL1 residual on these out-of-scope surfaces ONLY (marketing
+  // landing, the flag-hidden operator-chat widget #825, settings #826, the
+  // dev-only panel, and small non-overlay primitives). New authed surfaces must
+  // use the ladder via shadow-[var(--shadow-N)].
+  const BUILTIN_RESIDUALS = [
+    "components/landing/",
+    "components/onboarding/",
+    "components/dev/",
+    "app/(auth)/settings/",
+    "components/operator-chat/",
+    "components/ui/switch.tsx",
+    "components/ui/tabs.tsx",
+  ];
+  const LANDING = "components/landing/";
+  const BUILTIN = /(?<![\w-])shadow-(?:sm|md|lg|xl|2xl)(?![\w-])/;
+  const ARBITRARY = /(?<![\w-])shadow-\[([^\]]*)\]/g;
+
+  it("no built-in Tailwind elevation shadow outside the documented residuals", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content } of tsxFiles) {
+      const r = relTsx(p);
+      if (BUILTIN_RESIDUALS.some((a) => r.includes(a))) continue;
+      if (BUILTIN.test(content)) offenders.push(r);
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("no arbitrary shadow-[...] carries a literal color outside marketing landing", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content } of tsxFiles) {
+      const r = relTsx(p);
+      if (r.includes(LANDING)) continue;
+      for (const m of content.matchAll(ARBITRARY)) {
+        if (LITERAL_SHADOW_COLOR.test(m[1])) {
+          offenders.push(`${r}: shadow-[${m[1].slice(0, 50)}]`);
+        }
       }
     }
     expect(offenders, offenders.join("\n")).toEqual([]);

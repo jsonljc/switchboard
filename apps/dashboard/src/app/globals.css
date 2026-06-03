@@ -268,6 +268,9 @@
       inset 0 -1px 0 rgba(80, 40, 0, 0.2),
       0 2px 4px rgba(168, 101, 15, 0.25),
       0 6px 16px rgba(201, 123, 26, 0.18);
+    /* Static base layers for the armed-button arm-pulse keyframe (amber brand
+       material, composed with a live var() ring in swipe-decision-card). */
+    --shadow-arm-base: 0 1px 0 rgba(80, 40, 0, 0.18), 0 2px 8px rgba(201, 123, 26, 0.25);
     --ease-home: cubic-bezier(0.22, 1, 0.36, 1);
     /* Home editorial font stacks (wired in layout.tsx) */
     --font-home-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
