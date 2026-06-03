@@ -3,7 +3,11 @@ import { Inngest } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 import { AuditRunner } from "./audit-runner.js";
-import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
+import type {
+  AdsClientInterface,
+  AuditConfig,
+  BookedValueByCampaignProvider,
+} from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
 import type { RecommendationEmitter } from "./recommendation-sink.js";
@@ -71,6 +75,13 @@ export interface CronDependencies {
     deploymentId: string,
     creds: DeploymentCredentials,
   ) => { validate(q: { orgId: string; accountId: string }): Promise<CoverageReport> };
+  /**
+   * Optional. Per-campaign booked-VALUE (cents) provider for the weekly audit's
+   * trueROAS reporting (`campaignEconomics`). A singleton keyed on orgId — no
+   * per-deployment creds. Wired in apps/api/src/bootstrap/inngest.ts with
+   * PrismaConversionRecordStore. Absent ⇒ trueROAS reported null (graceful).
+   */
+  bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
 }
 
 interface StepTools {
@@ -175,6 +186,9 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         config,
         ...(signalHealthChecker ? { signalHealthChecker } : {}),
         ...(coverageValidator ? { coverageValidator } : {}),
+        ...(deps.bookedValueByCampaignProvider
+          ? { bookedValueByCampaignProvider: deps.bookedValueByCampaignProvider }
+          : {}),
         ...(deps.recommendationEmitter
           ? {
               recommendationEmitter: deps.recommendationEmitter,

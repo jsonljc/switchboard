@@ -21,7 +21,12 @@ export {
 } from "./campaign-decision.js";
 export type { CampaignDecisionInput, CampaignDecisionResult } from "./campaign-decision.js";
 export { AuditRunner } from "./audit-runner.js";
-export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
+export type {
+  AuditDependencies,
+  AuditConfig,
+  AdsClientInterface,
+  BookedValueByCampaignProvider,
+} from "./audit-runner.js";
 export {
   createWeeklyAuditCron,
   createDailyCheckCron,
