@@ -1,4 +1,5 @@
 import type { AgentKey } from "@switchboard/schemas";
+import { PrintedPortraitAvatar } from "@/components/agent-avatar/printed-portrait-avatar";
 import type { TeamPulseAgent } from "./types";
 import styles from "./home.module.css";
 
@@ -19,6 +20,7 @@ interface TeamPulseProps {
  * as visible text. Set-up agents show a live/idle dot.
  */
 export function TeamPulse({ agents, onOpenAgent }: TeamPulseProps) {
+  const firstWorkingKey = agents.find((a) => a.setUp && a.status === "working")?.key;
   return (
     <div className={styles.pulseRibbon} role="list" aria-label="Team Pulse">
       {agents.map((agent) => {
@@ -35,9 +37,13 @@ export function TeamPulse({ agents, onOpenAgent }: TeamPulseProps) {
               data-testid={`agent-chip-${key}`}
               onClick={() => onOpenAgent?.(key)}
             >
-              <span className={styles.agentChipAv} aria-hidden="true">
-                {name[0]}
-              </span>
+              <PrintedPortraitAvatar
+                agentKey={key}
+                size={30}
+                status={setUp ? status : "idle"}
+                allowMotion={key === firstWorkingKey}
+                showPip={false}
+              />
               <span className={styles.agentChipName}>{name}</span>
               {setUp ? (
                 <span
