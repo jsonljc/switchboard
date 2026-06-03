@@ -1,5 +1,11 @@
-import type { RecommendationInput, RecommendationSurface } from "@switchboard/schemas";
+import type {
+  RecommendationInput,
+  RecommendationSurface,
+  EconomicTierSchema as EconomicTier,
+  TargetSourceSchema as TargetSource,
+} from "@switchboard/schemas";
 import type { RecommendationOutput } from "./recommendation-engine.js";
+import type { CampaignEconomicsRow } from "./analyzers/source-comparator.js";
 
 /**
  * Sink that bridges ad-optimizer's RecommendationOutput[] (audit-runner output)
@@ -62,6 +68,12 @@ export interface RunRecommendationSinkArgs {
   recommendations: RecommendationOutput[];
   emit: RecommendationEmitter;
   emissionContext: EmissionContext;
+  /**
+   * PR2 Gate-4: per-campaign economics (audit-runner output), matched by
+   * campaignId so each rec's approval card shows its own CPL / cost-per-booked /
+   * true ROAS. Optional — absent for analysis-only callers (unchanged behavior).
+   */
+  campaignEconomics?: { rows: CampaignEconomicsRow[] };
 }
 
 export interface RunRecommendationSinkResult {
@@ -170,6 +182,63 @@ function humanizeRecommendation(rec: RecommendationOutput): string {
   }
 }
 
+// Tier nouns for the basis line. EconomicTier is a closed enum so this map is total;
+// in practice a cpc-tier rec never reaches buildPresentation carrying a targetSource
+// (only fix_signal_health survives cpc, and it bypasses applyTier), so the cpc phrase
+// is a defensive default — `account` fallbacks legitimately carry booked_cac or cpl.
+const TIER_PHRASE: Record<EconomicTier, string> = {
+  booked_cac: "booked-CAC",
+  cpl: "cost-per-lead",
+  cpc: "cost-per-click",
+};
+
+/**
+ * Operator-facing one-liner naming the SOURCE of the target this recommendation was
+ * judged against — the campaign's own booking-calibrated target (Tier-1,
+ * `targetSource:"campaign"`) vs the account-level fallback (Tier-2,
+ * `targetSource:"account"`). The rec's `estimatedImpact` (dataLine[0]) already states
+ * the tier basis (and discloses thin-data for cpl/cpc via applyTier's basisNote), so
+ * this line deliberately adds ONLY the source the operator can't otherwise see — it
+ * does not re-state "judged on … basis". Surface-agnostic (no UI ref). Returns null
+ * when targetSource is absent (back-compat / honest-null) so pre-Gate-4 recs add no
+ * line. No "$": `estimateRisk` scrapes only `estimatedImpact`, and the on-rec
+ * calibrated target is a CPL-equivalent (not the raw booked-CAC), so printing it would
+ * mislead.
+ */
+export function economicBasisLine(rec: {
+  economicTier?: EconomicTier;
+  targetSource?: TargetSource;
+}): string | null {
+  if (!rec.targetSource) return null;
+  const phrase = rec.economicTier ? TIER_PHRASE[rec.economicTier] : "target";
+  return rec.targetSource === "campaign"
+    ? `Target: this campaign's own ${phrase}.`
+    : `Target: account-level fallback (${phrase}).`;
+}
+
+function fmtDollars(n: number): string {
+  return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
+}
+
+/**
+ * Per-campaign economics cells for the approval-moment dataLines. Honest-null:
+ * cpl/costPerBooked cells appear only when non-null; trueRoas renders
+ * "true ROAS not yet attributed" when null but other signal exists (never a
+ * fabricated 0), and an all-null row yields []. Units are formatted as-is —
+ * cpl/costPerBooked are dollars, trueRoas is already major; nothing is
+ * re-divided. bookedValueCents (CENTS) is not shown directly (it is the trueRoas
+ * numerator).
+ */
+export function economicsCells(row: CampaignEconomicsRow | undefined): string[] {
+  if (!row) return [];
+  const cells: string[] = [];
+  if (row.cpl !== null) cells.push(`CPL ${fmtDollars(row.cpl)}`);
+  if (row.costPerBooked !== null) cells.push(`${fmtDollars(row.costPerBooked)}/booked`);
+  if (row.trueRoas !== null) cells.push(`${row.trueRoas.toFixed(1)}x true ROAS`);
+  else if (cells.length > 0) cells.push("true ROAS not yet attributed");
+  return cells;
+}
+
 /**
  * Surface-agnostic presentation. Defines the canonical button labels, data
  * lines, and optional first-person toast copy that any surface (queue card,
@@ -179,8 +248,14 @@ function humanizeRecommendation(rec: RecommendationOutput): string {
  * acceptToast / declineToast are first-person Riley voice. Honest-impact
  * language: they describe what Riley did with the operator's instruction,
  * never causal claims about metric improvement.
+ *
+ * `economicsRow` (optional) is this rec's matching per-campaign economics; when
+ * present its CPL / cost-per-booked / true ROAS render as one dataLines entry.
  */
-function buildPresentation(rec: RecommendationOutput): {
+function buildPresentation(
+  rec: RecommendationOutput,
+  economicsRow?: CampaignEconomicsRow,
+): {
   primaryLabel: string;
   secondaryLabel: string;
   dismissLabel: string;
@@ -278,11 +353,18 @@ function buildPresentation(rec: RecommendationOutput): {
     },
   };
   const found = labels[rec.action];
+  const basis = economicBasisLine(rec);
+  const economics = economicsCells(economicsRow);
   return {
     primaryLabel: found.primary,
     secondaryLabel: found.secondary,
     dismissLabel: "Dismiss",
-    dataLines: [[rec.estimatedImpact], [`Learning phase: ${rec.learningPhaseImpact}`]],
+    dataLines: [
+      [rec.estimatedImpact],
+      ...(basis ? [[basis]] : []),
+      ...(economics.length > 0 ? [economics] : []),
+      [`Learning phase: ${rec.learningPhaseImpact}`],
+    ],
     acceptToast: found.accept,
     declineToast: found.decline,
   };
@@ -306,6 +388,12 @@ export async function runRecommendationSink(
   let routedQueue = 0;
   let routedShadow = 0;
   let dropped = 0;
+
+  // Match each rec to its campaign's economics row once (O(n)); absent input ⇒
+  // empty map ⇒ no economics line (analysis-only callers are unaffected).
+  const economicsByCampaign = new Map<string, CampaignEconomicsRow>();
+  for (const row of args.campaignEconomics?.rows ?? [])
+    economicsByCampaign.set(row.campaignId, row);
 
   for (const rec of args.recommendations) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
@@ -341,7 +429,7 @@ export async function runRecommendationSink(
         // already reads `spendAmount`/`budgetChange`/`newBudget`, so it is ready to
         // consume such a structured field once a producer supplies it.
         parameters: { ...((rec as { params?: Record<string, unknown> }).params ?? {}) },
-        presentation: buildPresentation(rec),
+        presentation: buildPresentation(rec, economicsByCampaign.get(rec.campaignId)),
         targetEntities: { campaignId: rec.campaignId, campaignName: rec.campaignName },
         expiresAt,
         sourceWorkflow: args.auditRunId,

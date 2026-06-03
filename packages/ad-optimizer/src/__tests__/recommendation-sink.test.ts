@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { runRecommendationSink } from "../recommendation-sink.js";
+import {
+  runRecommendationSink,
+  economicBasisLine,
+  economicsCells,
+} from "../recommendation-sink.js";
 import type { EmitOutcome, RecommendationEmitter } from "../recommendation-sink.js";
 import type { RecommendationOutput } from "../recommendation-engine.js";
+import type { CampaignEconomicsRow } from "../analyzers/source-comparator.js";
 import { resetsLearningFor } from "../action-reset-classification.js";
 import { AdRecommendationActionSchema } from "@switchboard/schemas";
 import type { RecommendationInput } from "@switchboard/schemas";
@@ -317,4 +322,115 @@ describe("sink invariant: resetsLearning:'yes' is never swipe-approvable", () =>
       expect(payload.externalEffect || payload.financialEffect).toBe(true);
     },
   );
+});
+
+describe("economicBasisLine", () => {
+  it("names this campaign's own target for targetSource=campaign (Tier-1)", () => {
+    expect(economicBasisLine({ economicTier: "booked_cac", targetSource: "campaign" })).toBe(
+      "Target: this campaign's own booked-CAC.",
+    );
+  });
+  it("names the account-level fallback for targetSource=account (Tier-2)", () => {
+    expect(economicBasisLine({ economicTier: "booked_cac", targetSource: "account" })).toBe(
+      "Target: account-level fallback (booked-CAC).",
+    );
+  });
+  it("adapts the tier phrase on the account fallback (which can carry cpl/cpc)", () => {
+    expect(economicBasisLine({ economicTier: "cpl", targetSource: "account" })).toBe(
+      "Target: account-level fallback (cost-per-lead).",
+    );
+    expect(economicBasisLine({ economicTier: "cpc", targetSource: "account" })).toBe(
+      "Target: account-level fallback (cost-per-click).",
+    );
+  });
+  it("returns null (honest-null/back-compat) when targetSource is absent", () => {
+    expect(economicBasisLine({ economicTier: "booked_cac" })).toBeNull();
+    expect(economicBasisLine({})).toBeNull();
+  });
+});
+
+describe("economicsCells", () => {
+  const row = (o: Partial<CampaignEconomicsRow> = {}): CampaignEconomicsRow => ({
+    campaignId: "c-1",
+    cpl: 12,
+    costPerBooked: 48.5,
+    bookedValueCents: 30000,
+    trueRoas: 2.3,
+    ...o,
+  });
+  it("formats CPL (dollars), cost-per-booked (dollars), true ROAS (major) without re-division", () => {
+    expect(economicsCells(row())).toEqual(["CPL $12", "$48.50/booked", "2.3x true ROAS"]);
+  });
+  it("renders null trueRoas as 'not yet attributed' (never a fabricated $0)", () => {
+    expect(economicsCells(row({ trueRoas: null, bookedValueCents: null }))).toEqual([
+      "CPL $12",
+      "$48.50/booked",
+      "true ROAS not yet attributed",
+    ]);
+  });
+  it("omits null cpl / costPerBooked cells", () => {
+    expect(economicsCells(row({ cpl: null, costPerBooked: null }))).toEqual(["2.3x true ROAS"]);
+  });
+  it("returns [] when there is no row and when every metric is null", () => {
+    expect(economicsCells(undefined)).toEqual([]);
+    expect(
+      economicsCells(
+        row({ cpl: null, costPerBooked: null, bookedValueCents: null, trueRoas: null }),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("runRecommendationSink — economic basis + per-campaign economics in dataLines", () => {
+  it("attaches the matching campaign's basis + economics lines to the emitted presentation", async () => {
+    const captured: RecommendationInput[] = [];
+    const emit: RecommendationEmitter = vi.fn(async (input) => {
+      captured.push(input);
+      return { surface: "queue" as const };
+    });
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-econ",
+      recommendations: [
+        baseRec({ campaignId: "c-1", economicTier: "booked_cac", targetSource: "campaign" }),
+      ],
+      emit,
+      emissionContext: { cronId: "cron" },
+      campaignEconomics: {
+        rows: [
+          {
+            campaignId: "c-1",
+            cpl: 12,
+            costPerBooked: 48.5,
+            bookedValueCents: 30000,
+            trueRoas: 2.3,
+          },
+          { campaignId: "c-other", cpl: 1, costPerBooked: 2, bookedValueCents: 3, trueRoas: 4 },
+        ],
+      },
+    });
+    const lines = captured[0]!.presentation.dataLines as unknown as string[][];
+    const flat = lines.map((l) => l.join(" · "));
+    expect(flat).toContain("Target: this campaign's own booked-CAC.");
+    expect(flat).toContain("CPL $12 · $48.50/booked · 2.3x true ROAS");
+    // does not leak another campaign's economics
+    expect(flat.some((l) => l.includes("$2/booked"))).toBe(false);
+  });
+
+  it("omits both lines when targetSource/economics are absent (back-compat unchanged)", async () => {
+    const captured: RecommendationInput[] = [];
+    const emit: RecommendationEmitter = vi.fn(async (input) => {
+      captured.push(input);
+      return { surface: "queue" as const };
+    });
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-plain",
+      recommendations: [baseRec({ campaignId: "c-1", estimatedImpact: "saves $40/day" })],
+      emit,
+      emissionContext: { cronId: "cron" },
+    });
+    const lines = captured[0]!.presentation.dataLines as unknown as string[][];
+    expect(lines).toEqual([["saves $40/day"], ["Learning phase: no impact"]]);
+  });
 });
