@@ -5,7 +5,7 @@ import type { GreetingViewModel } from "@/lib/agent-home/types";
 import type { MetricsViewModelWire } from "@/lib/cockpit/metrics-types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 import type { ActivityRow } from "@/components/cockpit/types";
-import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
+import type { AgentRosterEntry, DerivedAgentStateEntry } from "@/lib/api-client-types";
 
 // ── Mutable mock state (house pattern: flip per test in beforeEach/body) ──────
 
@@ -28,8 +28,29 @@ let rosterState: { data?: { roster: AgentRosterEntry[] }; isError: boolean } = {
   data: { roster: [] },
   isError: false,
 };
-let agentStateState: { data?: { states: AgentStateEntry[] }; isError: boolean } = {
-  data: { states: [] },
+// /api/agents/state returns DerivedAgentStateEntry rows keyed by agentRole
+// (alex = "responder", riley = "optimizer"; Mira has no row). Default: Alex is
+// genuinely working, Riley idle — so per-agent attribution is exercised (and the
+// honest working-count is 1, not "all set-up agents").
+function makeStateEntry(
+  agentRole: string,
+  activityStatus: DerivedAgentStateEntry["activityStatus"],
+): DerivedAgentStateEntry {
+  return {
+    agentRole,
+    activityStatus,
+    currentTask: null,
+    lastActionAt: null,
+    lastActionSummary: null,
+    metrics: { actionsToday: 0 },
+  };
+}
+const DEFAULT_AGENT_STATES: DerivedAgentStateEntry[] = [
+  makeStateEntry("responder", "working"),
+  makeStateEntry("optimizer", "idle"),
+];
+let agentStateState: { data?: { states: DerivedAgentStateEntry[] }; isError: boolean } = {
+  data: { states: DEFAULT_AGENT_STATES },
   isError: false,
 };
 
@@ -232,7 +253,7 @@ function resetState() {
   alexGreetingState = { data: undefined, isLoading: false, isError: false };
   rileyGreetingState = { data: undefined, isLoading: false, isError: false };
   rosterState = { data: { roster: [] }, isError: false };
-  agentStateState = { data: { states: [] }, isError: false };
+  agentStateState = { data: { states: DEFAULT_AGENT_STATES }, isError: false };
   metricsState = { data: undefined, isError: false, error: null };
   activityState = { data: { rows: [] }, isError: false };
   missionState = { data: undefined, isError: false };
@@ -269,7 +290,7 @@ describe("HomePage", () => {
 
     const { container } = render(<HomePage />);
 
-    // ACTIVE order: Verdict, Needs You, (Team Pulse), This Week, While You Slept, Work in Progress
+    // ACTIVE order: Verdict, Needs You, (Team Band), This Week, While You Slept, Work in Progress
     expect(modulesInOrder(container)).toEqual([
       "verdict",
       "Needs you",
@@ -278,20 +299,20 @@ describe("HomePage", () => {
       "Work in progress",
     ]);
 
-    // Team Pulse sits between Needs You and This Week — assert via the chip ribbon
+    // Team Band sits between Needs You and This Week: assert via an agent tile's
     // position relative to the Needs You and This Week landmarks.
     const needsYou = screen.getByLabelText("Needs you");
-    const teamChip = screen.getByTestId("agent-chip-alex");
+    const teamTile = screen.getByTestId("team-mate-alex");
     const thisWeek = screen.getByLabelText("This week note");
     expect(
-      needsYou.compareDocumentPosition(teamChip) & Node.DOCUMENT_POSITION_FOLLOWING,
+      needsYou.compareDocumentPosition(teamTile) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      teamChip.compareDocumentPosition(thisWeek) & Node.DOCUMENT_POSITION_FOLLOWING,
+      teamTile.compareDocumentPosition(thisWeek) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
-  it("renders the CALM order with zero decisions — Needs You absent, This Week before Team Pulse", () => {
+  it("renders the CALM order with zero decisions — Needs You absent, This Week before Team Band", () => {
     decisionFeedState = {
       data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
       isLoading: false,
@@ -306,7 +327,7 @@ describe("HomePage", () => {
     // Needs You must be absent.
     expect(screen.queryByLabelText("Needs you")).not.toBeInTheDocument();
 
-    // CALM order: Verdict, This Week (promoted), then Team Pulse below.
+    // CALM order: Verdict, This Week (promoted), then Team Band below.
     expect(modulesInOrder(container)).toEqual([
       "verdict",
       "This week note",
@@ -314,11 +335,11 @@ describe("HomePage", () => {
       "Work in progress",
     ]);
 
-    // This Week appears BEFORE Team Pulse (promoted).
+    // This Week appears BEFORE Team Band (promoted).
     const thisWeek = screen.getByLabelText("This week note");
-    const teamChip = screen.getByTestId("agent-chip-alex");
+    const teamTile = screen.getByTestId("team-mate-alex");
     expect(
-      thisWeek.compareDocumentPosition(teamChip) & Node.DOCUMENT_POSITION_FOLLOWING,
+      thisWeek.compareDocumentPosition(teamTile) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
     // Verdict shows the calm all-clear.
@@ -341,10 +362,10 @@ describe("HomePage", () => {
 
     expect(() => render(<HomePage />)).not.toThrow();
 
-    // Verdict, Needs You, Team Pulse all present despite the metrics failure.
+    // Verdict, Needs You, Team Band all present despite the metrics failure.
     expect(screen.getByLabelText("verdict")).toBeInTheDocument();
     expect(screen.getByLabelText("Needs you")).toBeInTheDocument();
-    expect(screen.getByTestId("agent-chip-alex")).toBeInTheDocument();
+    expect(screen.getByTestId("team-mate-alex")).toBeInTheDocument();
 
     // This Week renders its skeleton copy (no fabricated numbers).
     expect(screen.getByText(/still being tallied/i)).toBeInTheDocument();
@@ -390,6 +411,28 @@ describe("HomePage", () => {
     expect(verdictEl.textContent).not.toMatch(/working/i);
   });
 
+  it("agent-state unavailable → no 'Working' status and no breathing avatar (honest floor)", () => {
+    // Feed is live so the page renders the ACTIVE layout, and mission reports the
+    // core complete so agents are genuinely set up — but /api/agents/state is
+    // unavailable. statusForAgent must return "idle" for every agent, so NO tile
+    // shows "Working" and NO avatar breathes (data-playing="true").
+    decisionFeedState = {
+      data: {
+        decisions: [makeDecision({ id: "d1" })],
+        counts: { total: 1, approval: 1, handoff: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    };
+    missionState = { data: makeMission(true), isError: false };
+    agentStateState = { data: undefined, isError: true };
+
+    const { container } = render(<HomePage />);
+
+    expect(container.querySelector('[data-playing="true"]')).toBeNull();
+    expect(screen.queryByText("Working")).not.toBeInTheDocument();
+  });
+
   it("auto-opens the agent panel for a deep-linked initialAgent (no interaction)", () => {
     // /?agent=alex deep-link → server passes initialAgent → panel is open on mount.
     render(<HomePage initialAgent="alex" />);
@@ -402,20 +445,20 @@ describe("HomePage", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("clicking a Team Pulse chip opens the agent panel for that agent", () => {
+  it("clicking a Team Band tile opens the agent panel for that agent", () => {
     // Panel is absent before interaction.
     render(<HomePage />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    // Click the alex chip → panel should appear.
-    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    // Click the alex tile → panel should appear.
+    fireEvent.click(screen.getByTestId("team-mate-alex"));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
   });
 
-  it("clicking the mira chip opens the agent panel for mira (honest not-set-up panel)", () => {
+  it("clicking the mira tile opens the agent panel for mira (honest not-set-up panel)", () => {
     render(<HomePage />);
-    fireEvent.click(screen.getByTestId("agent-chip-mira"));
+    fireEvent.click(screen.getByTestId("team-mate-mira"));
     expect(screen.getByTestId("mock-agent-panel-mira")).toBeInTheDocument();
   });
 
@@ -423,12 +466,12 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     // Open alex panel first.
-    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    fireEvent.click(screen.getByTestId("team-mate-alex"));
     expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
     expect(screen.queryByTestId("mock-agent-panel-riley")).not.toBeInTheDocument();
 
-    // Click riley chip → riley panel appears, alex panel is gone.
-    fireEvent.click(screen.getByTestId("agent-chip-riley"));
+    // Click riley tile → riley panel appears, alex panel is gone.
+    fireEvent.click(screen.getByTestId("team-mate-riley"));
     expect(screen.getByTestId("mock-agent-panel-riley")).toBeInTheDocument();
     expect(screen.queryByTestId("mock-agent-panel-alex")).not.toBeInTheDocument();
   });
@@ -437,7 +480,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     // Open a panel first.
-    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    fireEvent.click(screen.getByTestId("team-mate-alex"));
     expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
 
     // Trigger the See All button wired to onSeeAll.
@@ -449,7 +492,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     // Open a panel first.
-    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    fireEvent.click(screen.getByTestId("team-mate-alex"));
     expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
 
     // Trigger the Open Decision button wired to onOpenDecision.
@@ -461,7 +504,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     // Open a panel first.
-    fireEvent.click(screen.getByTestId("agent-chip-alex"));
+    fireEvent.click(screen.getByTestId("team-mate-alex"));
     expect(screen.getByTestId("mock-agent-panel-alex")).toBeInTheDocument();
 
     // Trigger the Activate button wired to onActivate.
@@ -469,7 +512,7 @@ describe("HomePage", () => {
     expect(pushMock).toHaveBeenCalledWith("/settings/channels");
   });
 
-  it("Team Pulse setUp reflects real mission enablement, not static launchTier", () => {
+  it("Team Band setUp reflects real mission enablement, not static launchTier", () => {
     // Mission reports the core channel NOT connected → agents are honestly
     // "Not set up", even though launchTier marks alex/riley day-one. The old
     // static launchTier read would have shown them set up.
@@ -477,17 +520,17 @@ describe("HomePage", () => {
 
     render(<HomePage />);
 
-    expect(screen.getByTestId("agent-chip-alex")).toHaveAttribute("data-disabled", "true");
-    expect(screen.getByTestId("agent-chip-riley")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("team-mate-alex")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("team-mate-riley")).toHaveAttribute("data-disabled", "true");
   });
 
-  it("Team Pulse shows agents set up when the mission core is complete", () => {
+  it("Team Band shows agents set up when the mission core is complete", () => {
     missionState = { data: makeMission(true), isError: false };
 
     render(<HomePage />);
 
-    expect(screen.getByTestId("agent-chip-alex")).toHaveAttribute("data-disabled", "false");
-    expect(screen.getByTestId("agent-chip-riley")).toHaveAttribute("data-disabled", "false");
+    expect(screen.getByTestId("team-mate-alex")).toHaveAttribute("data-disabled", "false");
+    expect(screen.getByTestId("team-mate-riley")).toHaveAttribute("data-disabled", "false");
   });
 
   it("falls back to launchTier when mission is unavailable (no fabricated 'Not set up')", () => {
@@ -497,7 +540,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     // alex/riley day-one → set up via fallback; mira day-thirty → not set up.
-    expect(screen.getByTestId("agent-chip-alex")).toHaveAttribute("data-disabled", "false");
-    expect(screen.getByTestId("agent-chip-mira")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("team-mate-alex")).toHaveAttribute("data-disabled", "false");
+    expect(screen.getByTestId("team-mate-mira")).toHaveAttribute("data-disabled", "true");
   });
 });
