@@ -9,7 +9,7 @@ import { useMiraDesk } from "@/hooks/use-mira-desk";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { MIRA_ACCENT, MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
-import { QueryStates, ConnectionTrouble, AllClear, AgentPaused } from "@/components/query-states";
+import { QueryStates, ConnectionTrouble } from "@/components/query-states";
 import { MiraReadyToReview } from "./mira-ready-to-review";
 import { MiraInProductionTray } from "./mira-in-production-tray";
 import { MiraBriefBox } from "./mira-brief-box";
@@ -63,20 +63,14 @@ export function MiraDeskPage() {
       </div>
 
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* No empty slot: an empty desk still renders the modules — crucially the
+            MiraBriefBox, the operator's only way to request a first draft. The
+            trays/hero own their own empty copy. (Reviewed: gating the whole desk
+            on emptiness hid the brief box for new orgs.) Halt shows in the header. */}
         <QueryStates
           query={deskQ}
           loading={<MiraDeskSkeleton />}
           error={<ConnectionTrouble agentName="Mira" onRetry={deskQ.refetch} />}
-          empty={
-            haltCtx.halted ? (
-              <AgentPaused agentName="Mira" />
-            ) : (
-              <AllClear sub="Mira has nothing waiting for you." />
-            )
-          }
-          isEmpty={(d) =>
-            d.readyToReviewCount === 0 && d.inProduction.length === 0 && d.keptDrafts.length === 0
-          }
         >
           {(desk) => (
             <>

@@ -75,4 +75,20 @@ describe("MiraDeskPage", () => {
     const { container } = render(<MiraDeskPage />);
     expect(container.textContent ?? "").not.toMatch(FORBIDDEN);
   });
+
+  it("keeps the brief box CTA on an empty desk (does not swap it for a generic all-clear)", () => {
+    // Regression guard: gating the whole desk on emptiness hid MiraBriefBox — the
+    // operator's only way to request a first draft — for brand-new orgs.
+    deskMock.mockReturnValue({
+      data: { inProduction: [], readyToReviewCount: 0, keptDrafts: [], counts, isEmpty: true },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const { container } = render(<MiraDeskPage />);
+    // The brief box's promoting field must still be present.
+    expect(container.querySelector("#mira-brief-promoting")).not.toBeNull();
+    // And we must NOT have replaced the desk with the generic empty panel.
+    expect(screen.queryByText(/you're all caught up/i)).toBeNull();
+  });
 });

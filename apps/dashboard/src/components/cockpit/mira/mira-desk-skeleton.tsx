@@ -1,5 +1,7 @@
+import { type CSSProperties } from "react";
+
 const block = "animate-pulse";
-const blockStyle: React.CSSProperties = { background: "var(--canvas-3)", borderRadius: 10 };
+const blockStyle: CSSProperties = { background: "var(--canvas-3)", borderRadius: 10 };
 
 /** Layout-matched skeleton for Mira's desk (hero CTA + in-production tray rows). Shared by the route shell. */
 export function MiraDeskSkeleton() {
