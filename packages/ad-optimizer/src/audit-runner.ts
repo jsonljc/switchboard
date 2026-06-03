@@ -70,6 +70,12 @@ export interface AdsClientInterface {
   /** Optional: per-ad-set learning status from `learning_stage_info`. Used by
    * MetaCampaignInsightsProvider to derive campaign-level learning phase; absent → false. */
   getAdSetLearningInputs?(campaignId: string): Promise<AdSetLearningInput[]>;
+  /** Optional: ALL account ad sets (no campaign filter) with destination_type + learning
+   * state + spend, for the weekly audit's per-source spend attribution. Read-only. */
+  getAccountAdSetLearningInputs?(dateRange: {
+    since: string;
+    until: string;
+  }): Promise<AdSetLearningInput[]>;
 }
 
 export interface AuditConfig {
@@ -124,7 +130,7 @@ export interface AuditDependencies {
   getAdSetInsights?(params: {
     dateRange: { since: string; until: string };
     fields: string[];
-  }): Promise<AdSetLearningInput[]>;
+  }): Promise<AdSetLearningInput[] | null>;
   getTrendData?(params: { accountId: string }): Promise<{
     day30: MetricSnapshot;
     day60: MetricSnapshot;

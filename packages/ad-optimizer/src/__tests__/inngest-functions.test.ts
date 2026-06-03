@@ -248,6 +248,55 @@ describe("executeWeeklyAudit", () => {
         }),
     ).toThrow(/recommendationEmissionContext is required/);
   });
+
+  it("wires real account ad-set attribution into the runner when the ads client supports it", async () => {
+    const getAccountAdSetLearningInputs = vi.fn().mockResolvedValue([]);
+    deps.createAdsClient = vi.fn().mockReturnValue({
+      getCampaignInsights: vi.fn().mockResolvedValue([]),
+      getAdSetInsights: vi.fn().mockResolvedValue([]),
+      getAccountSummary: vi.fn().mockResolvedValue({
+        accountId: "act_123",
+        accountName: "Test",
+        currency: "USD",
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        activeCampaigns: 0,
+      }),
+      getAccountAdSetLearningInputs,
+    });
+
+    await executeWeeklyAudit(step as never, deps);
+
+    // The runner invokes the wired getAdSetInsights callback, which calls through to the
+    // account-level fetch — proving the cron threaded it (once per deployment).
+    expect(getAccountAdSetLearningInputs).toHaveBeenCalledTimes(2);
+  });
+
+  it("degrades to no-attribution (does not throw, audit still saved) when the ad-set fetch fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const getAccountAdSetLearningInputs = vi.fn().mockRejectedValue(new Error("Graph 500"));
+    deps.createAdsClient = vi.fn().mockReturnValue({
+      getCampaignInsights: vi.fn().mockResolvedValue([]),
+      getAdSetInsights: vi.fn().mockResolvedValue([]),
+      getAccountSummary: vi.fn().mockResolvedValue({
+        accountId: "act_123",
+        accountName: "Test",
+        currency: "USD",
+        totalSpend: 0,
+        totalImpressions: 0,
+        totalClicks: 0,
+        activeCampaigns: 0,
+      }),
+      getAccountAdSetLearningInputs,
+    });
+
+    // The audit must complete for BOTH deployments despite the fetch error (honest abstain,
+    // never a crashed weekly run).
+    await expect(executeWeeklyAudit(step as never, deps)).resolves.toBeUndefined();
+    expect(deps.saveAuditReport).toHaveBeenCalledTimes(2);
+    warnSpy.mockRestore();
+  });
 });
 
 describe("executeDailyCheck", () => {
