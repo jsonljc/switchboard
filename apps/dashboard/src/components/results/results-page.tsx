@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { QueryStates } from "@/components/query-states";
 import { useReportWindow } from "@/app/(auth)/(mercury)/reports/hooks/use-report-window";
 import { useReportData } from "@/app/(auth)/(mercury)/reports/hooks/use-report-data";
 import { useConnections } from "@/hooks/use-connections";
@@ -27,7 +28,7 @@ export function ResultsPage() {
   const router = useRouter();
   const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
   const { window: w, setWindow } = useReportWindow();
-  const { data, isLoading, isFetching, error, refresh } = useReportData(w);
+  const { data, isFetching, error, refresh } = useReportData(w);
   const liveMode = isMercuryToolLive("reports");
 
   // ── Cache-age state machine (mirrors reports-page.tsx §4.2) ───────────────
@@ -72,42 +73,55 @@ export function ResultsPage() {
     return () => mq.removeEventListener("change", handleChange);
   }, []);
 
-  // ── Body rendering (avoid inline IIFE — local fn for readability) ─────────
+  // ── Body rendering ─────────────────────────────────────────────────────────
+  // QueryStates derives its branch from {data, error} only, so the live-mode
+  // keys-pending window (data:undefined, error:null) resolves to "loading" and
+  // shows the skeleton — not the old `if (!data) … FirstRunNote` false-empty.
+  // The ErrorBanner above already explains a fetch failure, so the error branch
+  // renders nothing (empty fragment — `error={null}` would NOT suppress the
+  // ConnectionTrouble default, since `null ?? x === x`).
   function renderBody() {
-    if (isLoading) return <ResultsSkeleton />;
-    // On an initial fetch error there is no data; the ErrorBanner above explains it.
-    // Don't fall through to FirstRunNote — that would imply "no data yet" rather than "fetch failed".
-    if (!data) return error ? null : <FirstRunNote />;
-
-    const model = buildResultsModel(data);
-    const firstRun = model.attribution.total === 0 && model.bookings === 0;
-    if (firstRun) return <FirstRunNote />;
-
     return (
-      <>
-        <VerdictLine pullquote={model.pullquote} />
-        <HeroOutcomes model={model} />
-        <WhatsWorking model={model} />
-        <AgentContribution attribution={model.attribution} onOpenAgent={setPanelAgent} />
-        <WorthIt cost={model.cost} narrative={model.costNarrative} />
-        {/* No-Meta hides BOTH funnel and campaigns (spec §State-coverage); hide the
-            whole disclosure when there's nothing left to reveal. */}
-        {(!showNoMeta || model.managedComparison) && (
-          <DetailsDisclosure>
-            {!showNoMeta && (
-              <FunnelSection funnel={model.funnel} narrative={model.funnelNarrative} />
-            )}
-            {!showNoMeta && <CampaignsSection campaigns={model.campaigns} layout={layout} />}
-            {model.managedComparison && <ManagedComparison data={model.managedComparison} />}
-          </DetailsDisclosure>
-        )}
-        <Colophon
-          period={model.period}
-          label={model.window}
-          isLive={liveMode}
-          generatedAt={new Date()}
-        />
-      </>
+      <QueryStates
+        query={{ data, error }}
+        loading={<ResultsSkeleton />}
+        error={<></>}
+        empty={<FirstRunNote />}
+        isEmpty={(d) => {
+          const m = buildResultsModel(d);
+          return m.attribution.total === 0 && m.bookings === 0;
+        }}
+      >
+        {(d) => {
+          const model = buildResultsModel(d);
+          return (
+            <>
+              <VerdictLine pullquote={model.pullquote} />
+              <HeroOutcomes model={model} />
+              <WhatsWorking model={model} />
+              <AgentContribution attribution={model.attribution} onOpenAgent={setPanelAgent} />
+              <WorthIt cost={model.cost} narrative={model.costNarrative} />
+              {/* No-Meta hides BOTH funnel and campaigns (spec §State-coverage); hide the
+                  whole disclosure when there's nothing left to reveal. */}
+              {(!showNoMeta || model.managedComparison) && (
+                <DetailsDisclosure>
+                  {!showNoMeta && (
+                    <FunnelSection funnel={model.funnel} narrative={model.funnelNarrative} />
+                  )}
+                  {!showNoMeta && <CampaignsSection campaigns={model.campaigns} layout={layout} />}
+                  {model.managedComparison && <ManagedComparison data={model.managedComparison} />}
+                </DetailsDisclosure>
+              )}
+              <Colophon
+                period={model.period}
+                label={model.window}
+                isLive={liveMode}
+                generatedAt={new Date()}
+              />
+            </>
+          );
+        }}
+      </QueryStates>
     );
   }
 
