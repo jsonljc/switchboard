@@ -279,3 +279,15 @@ describe("token governance — governed-source drift sweep (generalized)", () =>
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });
+
+describe("token governance — query-states layer carries no literal color", () => {
+  it("query-states/* sources contain no hex literal", () => {
+    const dir = path.resolve(process.cwd(), "src/components/query-states");
+    const HEX = /#[0-9a-fA-F]{3,8}\b/;
+    for (const name of readdirSync(dir)) {
+      if (!/\.(ts|tsx)$/.test(name) || /\.test\./.test(name)) continue;
+      const content = readFileSync(`${dir}/${name}`, "utf8");
+      expect(HEX.test(content), `hex literal in query-states/${name}`).toBe(false);
+    }
+  });
+});

@@ -23,5 +23,6 @@ export function useMiraDesk() {
     isLoading: query.isLoading,
     isError: query.isError,
     error: (query.error as Error | null) ?? null,
+    refetch: query.refetch,
   };
 }

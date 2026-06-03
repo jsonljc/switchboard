@@ -74,10 +74,24 @@ let weekIsLoading = false;
 
 vi.mock("@/hooks/use-agent-metrics", () => ({
   useAgentMetrics: vi.fn((_agentKey: string, metricWindow: "week" | "all" = "week") => {
+    // Surface a real error object when isError is true, mirroring the live hook
+    // (query.error is non-null on failure). KeyResult's keys-pending guard derives
+    // state from {data, error}; an errored query must have error != null to be
+    // distinguishable from keys-pending (data:undefined, error:null).
     if (metricWindow === "all") {
-      return { data: allData, isError: allIsError, isLoading: allIsLoading, error: null };
+      return {
+        data: allData,
+        isError: allIsError,
+        isLoading: allIsLoading,
+        error: allIsError ? new Error("metrics (all) error") : null,
+      };
     }
-    return { data: weekData, isError: weekIsError, isLoading: weekIsLoading, error: null };
+    return {
+      data: weekData,
+      isError: weekIsError,
+      isLoading: weekIsLoading,
+      error: weekIsError ? new Error("metrics (week) error") : null,
+    };
   }),
 }));
 
@@ -106,7 +120,10 @@ vi.mock("@/hooks/use-decision-feed", () => ({
     data: feedData,
     isLoading: feedIsLoading,
     isError: feedIsError,
-    error: null,
+    // Surface a real error when isError is true — OpenDecisions routes through
+    // <QueryStates>, which only shows the error slot when error != null
+    // (keys-pending is data:undefined, error:null → loading).
+    error: feedIsError ? new Error("decisions error") : null,
   }),
 }));
 

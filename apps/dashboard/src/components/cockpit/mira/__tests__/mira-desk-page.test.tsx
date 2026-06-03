@@ -53,10 +53,16 @@ describe("MiraDeskPage", () => {
     expect(screen.getByText(/generating draft/i)).toBeInTheDocument();
   });
 
-  it("shows a loading state while keys are pending (data undefined, no error)", () => {
+  it("shows the skeleton while keys are pending (data undefined, no error)", () => {
+    // Keys-pending query is disabled (isLoading false, data undefined); QueryStates
+    // derives "loading" from {data,error} only. See feedback_react_query_enabled_false_isloading.
     deskMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, error: null });
     render(<MiraDeskPage />);
-    expect(screen.getByText(/loading/i)).toBeInTheDocument(); // gated on !data && !error, not isLoading
+    expect(screen.getByRole("status", { name: /loading mira/i })).toBeInTheDocument();
+    // Not the data modules, not an error.
+    expect(screen.queryByText(/drafts ready/i)).toBeNull();
+    expect(screen.queryByText(/generating draft/i)).toBeNull();
+    expect(screen.queryByText(/can't reach mira/i)).toBeNull();
   });
 
   it("never renders a forbidden Phase-4/5 word", () => {
@@ -68,5 +74,21 @@ describe("MiraDeskPage", () => {
     });
     const { container } = render(<MiraDeskPage />);
     expect(container.textContent ?? "").not.toMatch(FORBIDDEN);
+  });
+
+  it("keeps the brief box CTA on an empty desk (does not swap it for a generic all-clear)", () => {
+    // Regression guard: gating the whole desk on emptiness hid MiraBriefBox — the
+    // operator's only way to request a first draft — for brand-new orgs.
+    deskMock.mockReturnValue({
+      data: { inProduction: [], readyToReviewCount: 0, keptDrafts: [], counts, isEmpty: true },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const { container } = render(<MiraDeskPage />);
+    // The brief box's promoting field must still be present.
+    expect(container.querySelector("#mira-brief-promoting")).not.toBeNull();
+    // And we must NOT have replaced the desk with the generic empty panel.
+    expect(screen.queryByText(/you're all caught up/i)).toBeNull();
   });
 });

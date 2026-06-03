@@ -9,13 +9,16 @@ let feedData:
   | undefined = undefined;
 let feedIsLoading = false;
 let feedIsError = false;
+// Real error object surfaced when isError is true — <QueryStates> derives state
+// from {data, error}, so the error branch only fires when error != null.
+let feedError: unknown = null;
 
 vi.mock("@/hooks/use-decision-feed", () => ({
   useDecisionFeed: () => ({
     data: feedData,
     isLoading: feedIsLoading,
     isError: feedIsError,
-    error: null,
+    error: feedError,
   }),
 }));
 
@@ -61,6 +64,7 @@ describe("OpenDecisions slot", () => {
     feedData = undefined;
     feedIsLoading = false;
     feedIsError = false;
+    feedError = null;
   });
 
   // ── Loading ──────────────────────────────────────────────────────────────────
@@ -81,6 +85,7 @@ describe("OpenDecisions slot", () => {
 
   it("error → 'Couldn't load decisions', never 'Nothing waiting' or '0'", () => {
     feedIsError = true;
+    feedError = new Error("boom");
     feedData = undefined;
     render(<OpenDecisions agentKey="alex" onOpenDecision={vi.fn()} />);
     expect(screen.getByText("Couldn't load decisions")).toBeInTheDocument();
@@ -88,12 +93,20 @@ describe("OpenDecisions slot", () => {
     expect(screen.queryByText(/^0/)).not.toBeInTheDocument();
   });
 
-  it("data is undefined (no error, no loading) → 'Couldn't load decisions' (treat as error guard)", () => {
+  // Keys-pending: the hook is `enabled: !!keys`, so before the session resolves
+  // orgId React Query reports isLoading:false, data:undefined, error:null. The
+  // <QueryStates> {data, error} rule must treat this as LOADING (skeleton), never
+  // a false error/empty flash.
+  it("keys-pending (data undefined, error null, isLoading false) → loading skeleton, not error or empty", () => {
     feedIsError = false;
     feedIsLoading = false;
+    feedError = null;
     feedData = undefined;
-    render(<OpenDecisions agentKey="alex" onOpenDecision={vi.fn()} />);
-    expect(screen.getByText("Couldn't load decisions")).toBeInTheDocument();
+    const { container } = render(<OpenDecisions agentKey="alex" onOpenDecision={vi.fn()} />);
+    expect(container.querySelector("[data-kind='loading']")).not.toBeNull();
+    expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
+    expect(screen.queryByText("Couldn't load decisions")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing waiting on you from/i)).not.toBeInTheDocument();
   });
 
   // ── Empty ─────────────────────────────────────────────────────────────────────
