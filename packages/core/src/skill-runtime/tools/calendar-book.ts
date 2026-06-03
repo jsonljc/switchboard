@@ -11,6 +11,7 @@ import {
 import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
+import { buildRescheduleOperations } from "./calendar-reschedule.js";
 
 interface BookingStoreSubset {
   create(input: {
@@ -33,6 +34,25 @@ interface BookingStoreSubset {
     service: string,
     startsAt: Date,
   ): Promise<{ id: string } | null>;
+  findUpcomingByContact(
+    orgId: string,
+    contactId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      calendarEventId: string | null;
+      service: string;
+      startsAt: Date;
+      endsAt: Date;
+      status: string;
+    }>
+  >;
+  reschedule(
+    orgId: string,
+    bookingId: string,
+    slot: { startsAt: Date; endsAt: Date },
+  ): Promise<unknown>;
+  cancel(orgId: string, bookingId: string): Promise<unknown>;
 }
 
 interface OpportunityStoreSubset {
@@ -413,6 +433,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           );
         },
       },
+      ...buildRescheduleOperations(ctx, deps),
     },
   });
 }
