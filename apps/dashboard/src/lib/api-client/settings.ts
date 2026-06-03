@@ -84,6 +84,13 @@ export class SwitchboardSettingsClient extends SwitchboardGovernanceClient {
     });
   }
 
+  async setMetaPageId(id: string, pageId: string) {
+    return this.request<{ connection: unknown }>(`/api/connections/${id}/meta-page-id`, {
+      method: "PUT",
+      body: JSON.stringify({ pageId }),
+    });
+  }
+
   // Organization Config
   async getOrgConfig(orgId: string) {
     return this.request<{ config: unknown }>(`/api/organizations/${orgId}/config`);
