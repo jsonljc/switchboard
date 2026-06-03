@@ -115,6 +115,41 @@ export class PrismaConnectionStore {
       throw new Error(`Connection not found or tenant mismatch: ${id}`);
     }
   }
+
+  /**
+   * Org-scoped read-modify-write of the encrypted credentials blob. Merges `patch`
+   * into the existing credentials (preserving other keys) and re-encrypts. Decrypts
+   * only after confirming the row is the caller's org AND the expected service, so a
+   * cross-org / wrong-service request never touches secret material. Returns:
+   *  - "updated"       merged and written
+   *  - "not_found"     no row for (id, organizationId), or deleted before the write
+   *  - "wrong_service" the row exists but is a different serviceId
+   */
+  async mergeCredentialsById(
+    id: string,
+    organizationId: string | null,
+    expectedServiceId: string,
+    patch: Record<string, unknown>,
+  ): Promise<"updated" | "not_found" | "wrong_service"> {
+    const row = await this.prisma.connection.findFirst({
+      where: { id, organizationId },
+      select: { id: true, serviceId: true, credentials: true },
+    });
+    if (!row) return "not_found";
+    if (row.serviceId !== expectedServiceId) return "wrong_service";
+
+    const current =
+      typeof row.credentials === "string"
+        ? decryptCredentials(row.credentials)
+        : (row.credentials as Record<string, unknown>);
+
+    const result = await this.prisma.connection.updateMany({
+      where: { id: row.id, organizationId },
+      data: { credentials: encryptCredentials({ ...current, ...patch }) },
+    });
+    if (result.count === 0) return "not_found";
+    return "updated";
+  }
 }
 
 function toConnectionRecord(row: {

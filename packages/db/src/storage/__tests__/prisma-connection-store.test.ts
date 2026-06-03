@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaConnectionStore } from "../prisma-connection-store.js";
+import { decryptCredentials } from "../../crypto/credentials.js";
 
 // Mock the crypto module
 vi.mock("../../crypto/credentials.js", () => ({
@@ -157,5 +158,77 @@ describe("PrismaConnectionStore", () => {
     prisma.connection.deleteMany.mockResolvedValue({ count: 0 });
 
     await expect(store.delete("conn_1", "org_X")).rejects.toThrow(/not found or tenant mismatch/);
+  });
+
+  describe("mergeCredentialsById", () => {
+    it("merges the patch into existing credentials, preserving other keys", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        id: "conn_1",
+        serviceId: "meta-ads",
+        credentials: JSON.stringify({ accessToken: "tok", accountId: "act_1" }),
+      });
+      prisma.connection.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await store.mergeCredentialsById("conn_1", "org_1", "meta-ads", {
+        pageId: "123456789012345",
+      });
+
+      expect(result).toBe("updated");
+      // org-scoped on both legs
+      expect(prisma.connection.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "conn_1", organizationId: "org_1" } }),
+      );
+      const updateArgs = prisma.connection.updateMany.mock.calls[0]![0];
+      expect(updateArgs.where).toEqual({ id: "conn_1", organizationId: "org_1" });
+      // the merged blob keeps accessToken/accountId and adds pageId (crypto mock round-trips via JSON)
+      expect(JSON.parse(updateArgs.data.credentials)).toEqual({
+        accessToken: "tok",
+        accountId: "act_1",
+        pageId: "123456789012345",
+      });
+    });
+
+    it("returns not_found when no row matches the org (cross-org)", async () => {
+      prisma.connection.findFirst.mockResolvedValue(null);
+
+      const result = await store.mergeCredentialsById("conn_1", "org_other", "meta-ads", {
+        pageId: "123456789012345",
+      });
+
+      expect(result).toBe("not_found");
+      expect(prisma.connection.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("returns wrong_service without decrypting when serviceId mismatches", async () => {
+      vi.mocked(decryptCredentials).mockClear();
+      prisma.connection.findFirst.mockResolvedValue({
+        id: "conn_1",
+        serviceId: "stripe",
+        credentials: JSON.stringify({ secretKey: "sk_1" }),
+      });
+
+      const result = await store.mergeCredentialsById("conn_1", "org_1", "meta-ads", {
+        pageId: "123456789012345",
+      });
+
+      expect(result).toBe("wrong_service");
+      expect(decryptCredentials).not.toHaveBeenCalled();
+      expect(prisma.connection.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("returns not_found when the row is deleted between read and write", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        id: "conn_1",
+        serviceId: "meta-ads",
+        credentials: JSON.stringify({ accessToken: "tok" }),
+      });
+      prisma.connection.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await store.mergeCredentialsById("conn_1", "org_1", "meta-ads", {
+        pageId: "123456789012345",
+      });
+
+      expect(result).toBe("not_found");
+    });
   });
 });
