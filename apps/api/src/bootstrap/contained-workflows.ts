@@ -127,7 +127,6 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { buildCreativePublishWorkflow } =
     await import("../services/workflows/creative-publish-workflow.js");
-  const { assertPublishable } = await import("../services/creative-publish-preconditions.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
   const {
     PrismaLeadIntakeStore,
@@ -135,9 +134,8 @@ export async function bootstrapContainedWorkflows(
     PrismaCreativeJobStore,
     PrismaDeploymentStore,
     PrismaOrgAgentEnablementStore,
-    decryptCredentials,
   } = await import("@switchboard/db");
-  const { InstantFormAdapter, MetaAdsClient } = await import("@switchboard/ad-optimizer");
+  const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
 
   // Single source of truth for Contact creation from leads (CTWA + Instant Form).
   // The meta.lead.intake workflow orchestrates the IF webhook (Graph fetch +
@@ -274,31 +272,14 @@ export async function bootstrapContainedWorkflows(
     allowMarketingTemplate: false,
   });
 
-  // creative.job.publish — create a self-contained PAUSED Meta draft package on
-  // mandatory human approval. assertPublishable is the shared pre-flight (also run
-  // by the route); makeAdsClient/fetchAsset are injected so the handler is testable
-  // and respects layering (MetaAdsClient stays in ad-optimizer).
-  const prismaForPublish = prismaClient as import("@switchboard/db").PrismaClient;
+  // creative.job.publish: a thin dispatcher. It validates ownership, short-circuits an
+  // already-parked job, then hands the rate-limited Meta chain to the dead-lettered
+  // `creative-publish` Inngest function (deps wired in bootstrap/inngest.ts). The handler
+  // needs only the job store for the lookup + short-circuit.
   const creativePublishWorkflow = buildCreativePublishWorkflow({
     jobStore: new PrismaCreativeJobStore(
       prismaClient as ConstructorParameters<typeof PrismaCreativeJobStore>[0],
     ),
-    assertPublishable: (organizationId, jobId) =>
-      assertPublishable(
-        { prisma: prismaForPublish, decrypt: (e) => decryptCredentials(e as string) },
-        organizationId,
-        jobId,
-      ),
-    makeAdsClient: (cfg) => new MetaAdsClient(cfg),
-    fetchAsset: async (url) => {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`asset fetch failed: ${res.status}`);
-      const buffer = Buffer.from(await res.arrayBuffer());
-      const type = (res.headers.get("content-type") ?? "").startsWith("image/")
-        ? ("image" as const)
-        : ("video" as const);
-      return { buffer, type };
-    },
   });
 
   const handlers = new Map<string, WorkflowHandler>([

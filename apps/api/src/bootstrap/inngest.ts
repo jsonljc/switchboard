@@ -79,6 +79,11 @@ import type { RecommendationHandoffSubmitInput } from "../services/workflows/rec
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
+  createCreativePublishFunction,
+  type CreativePublishFunctionDeps,
+} from "../services/creative-publish-function.js";
+import { assertPublishable } from "../services/creative-publish-preconditions.js";
+import {
   buildRunReconciliation,
   createReconciliationCron,
   createStripeReconciliationCron,
@@ -387,6 +392,36 @@ export async function registerInngest(
     auditLedger: app.auditLedger,
     operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
     inngest: { send: (e) => inngestClient.send(e) },
+  };
+
+  // creative-publish: the dead-lettered Inngest function that runs the rate-limited Meta
+  // draft chain off the approval-response path (go-live blocker #3). Deps mirror the
+  // former inline-handler wiring; assertPublishable re-resolves fresh credentials inside
+  // the function (never serialized into Inngest step state).
+  const creativePublishFunctionDeps: CreativePublishFunctionDeps = {
+    jobStore: new PrismaCreativeJobStore(
+      app.prisma as unknown as ConstructorParameters<typeof PrismaCreativeJobStore>[0],
+    ),
+    assertPublishable: (organizationId, jobId) =>
+      assertPublishable(
+        {
+          prisma: app.prisma as unknown as import("@switchboard/db").PrismaClient,
+          decrypt: (e) => decryptCredentials(e as string),
+        },
+        organizationId,
+        jobId,
+      ),
+    makeAdsClient: (cfg) => new MetaAdsClient(cfg),
+    fetchAsset: async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`asset fetch failed: ${res.status}`);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const type = (res.headers.get("content-type") ?? "").startsWith("image/")
+        ? ("image" as const)
+        : ("video" as const);
+      return { buffer, type };
+    },
+    failure: asyncFailure,
   };
 
   const dailyPatternDecayCron = inngestClient.createFunction(
@@ -908,6 +943,7 @@ export async function registerInngest(
       ),
       dailyPatternDecayCron,
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
+      createCreativePublishFunction(creativePublishFunctionDeps),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
