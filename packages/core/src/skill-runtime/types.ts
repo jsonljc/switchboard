@@ -318,7 +318,19 @@ export interface SkillRuntimePolicy {
   maxToolCalls: number;
   maxLlmTurns: number;
   maxTotalTokens: number;
+  /**
+   * Whole-conversation wall-clock budget across every LLM call + tool turn in a
+   * single `execute()`. The executor also bounds each individual LLM call by
+   * `maxLlmCallMs` (per-call abort deadline), so this larger ceiling does not
+   * weaken runaway protection — the loop is already capped by turn/tool limits.
+   */
   maxRuntimeMs: number;
+  /**
+   * Per-LLM-call wall-clock deadline. The executor aborts the in-flight call when
+   * this (or `profile.timeoutMs`, whichever is smaller, clamped to the remaining
+   * whole-conversation budget) fires — stopping the output-token-burn leak.
+   */
+  maxLlmCallMs: number;
   maxWritesPerExecution: number;
   maxWritesPerHour: number;
   trustLevel: "supervised" | "guided" | "autonomous";
@@ -332,7 +344,8 @@ export const DEFAULT_SKILL_RUNTIME_POLICY: SkillRuntimePolicy = {
   maxToolCalls: 5,
   maxLlmTurns: 6,
   maxTotalTokens: 64_000,
-  maxRuntimeMs: 30_000,
+  maxRuntimeMs: 120_000,
+  maxLlmCallMs: 30_000,
   maxWritesPerExecution: 5,
   maxWritesPerHour: 20,
   trustLevel: "guided",

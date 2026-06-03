@@ -57,6 +57,15 @@ function createMockAdapter(
   };
 }
 
+describe("DEFAULT_SKILL_RUNTIME_POLICY budget split (C2)", () => {
+  it("splits per-call vs whole-conversation budget", () => {
+    // Per-call deadline (30s) bounds any single hung LLM call; the whole-
+    // conversation ceiling (120s) gives a legitimate multi-tool booking room.
+    expect(DEFAULT_SKILL_RUNTIME_POLICY.maxLlmCallMs).toBe(30_000);
+    expect(DEFAULT_SKILL_RUNTIME_POLICY.maxRuntimeMs).toBe(120_000);
+  });
+});
+
 describe("SkillExecutorImpl", () => {
   it("interpolates params and calls adapter with governance constraints", async () => {
     const adapter = createMockAdapter([

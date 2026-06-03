@@ -43,6 +43,8 @@ export interface TierContext {
   currentStage?: DialogueStage;
 }
 
+// Fallback when a slot config somehow lacks a per-tier timeout (defensive; every
+// SLOT_CONFIGS entry now sets one explicitly). Kept Haiku-shaped intentionally.
 const DEFAULT_TIMEOUT_MS = 8000;
 
 const SLOT_RANK: Record<ModelSlot, number> = {
@@ -52,30 +54,38 @@ const SLOT_RANK: Record<ModelSlot, number> = {
   embedding: -1,
 };
 
-const SLOT_CONFIGS: Record<ModelSlot, Omit<ModelConfig, "fallbackSlot" | "timeoutMs">> = {
+// Per-tier request timeouts (ms). Replaces the old single Haiku-shaped 8s default:
+// stronger models legitimately take longer per call, so the slot carries its own
+// budget. Only consulted when the router is ON (the executor passes profile.timeoutMs);
+// an explicit ResolveOptions.timeoutMs still overrides the slot value.
+const SLOT_CONFIGS: Record<ModelSlot, Omit<ModelConfig, "fallbackSlot">> = {
   default: {
     slot: "default",
     modelId: "claude-haiku-4-5-20251001",
     maxTokens: 1024,
     temperature: 0.7,
+    timeoutMs: 15_000,
   },
   premium: {
     slot: "premium",
     modelId: "claude-sonnet-4-6",
     maxTokens: 2048,
     temperature: 0.5,
+    timeoutMs: 25_000,
   },
   critical: {
     slot: "critical",
     modelId: "claude-opus-4-6",
     maxTokens: 4096,
     temperature: 0.3,
+    timeoutMs: 30_000,
   },
   embedding: {
     slot: "embedding",
     modelId: "voyage-3-large",
     maxTokens: 0,
     temperature: 0,
+    timeoutMs: 8_000,
   },
 };
 
@@ -88,7 +98,10 @@ export class ModelRouter {
 
     const base = SLOT_CONFIGS[effectiveSlot];
     if (!base) {
-      return { ...SLOT_CONFIGS.default, timeoutMs: timeoutMs ?? DEFAULT_TIMEOUT_MS };
+      return {
+        ...SLOT_CONFIGS.default,
+        timeoutMs: timeoutMs ?? SLOT_CONFIGS.default.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      };
     }
 
     // Determine fallback
@@ -103,7 +116,9 @@ export class ModelRouter {
 
     return {
       ...base,
-      timeoutMs: timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      // Explicit option wins; otherwise the per-tier slot value; DEFAULT_TIMEOUT_MS
+      // is a last-resort guard (every slot config now sets timeoutMs).
+      timeoutMs: timeoutMs ?? base.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       fallbackSlot,
     };
   }
